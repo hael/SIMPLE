@@ -186,33 +186,36 @@ Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis f
 - `manual_state`, where `manual_state > 0` is the reference accepted class;
 - `hard_reject`. For legacy analysis files, learn-mode also infers the current hard resolution and geometry vetoes from raw diagnostic columns when they are present.
 
-The learner first derives suggested feature weights. For each feature, all training rows across all datasets are pooled, feature AUC is computed against the manual labels, and the suggested feature weight is:
+Hard-rejected rows are not part of model fitting. They are excluded from suggested feature-weight AUCs, candidate-model scoring, feature-drop diagnostics, and leave-one-dataset-out feature-group screens. They remain in the report as hard-rejection diagnostics, especially `hard_rejected_manual_good`, because those cases indicate that the upstream validity gate may need attention rather than that the learned model should move its boundary.
+
+The learner first derives suggested feature weights. For each feature, all non-hard-rejected training rows across all datasets are pooled, feature AUC is computed against the manual labels, and the suggested feature weight is:
 
 ```text
 max(0, AUC - 0.5)
 ```
 
-The suggested weights are normalized to sum to one. Features with AUC below chance are not inverted; they receive zero weight. If all suggested weights are zero, the learner falls back to the default weights.
+The suggested weights are normalized to sum to one. Features with AUC below chance are not inverted; they receive zero weight. If all suggested weights are zero, the feature-policy candidates use uniform weights over their active features.
 
-The learner then searches a fixed grid. Candidate weights are interpolated between the base model weights and the suggested weights:
+The learner then searches a fixed grid. Candidate weights are not blended with the base model. For each feature-policy candidate, the learner starts from the data-derived suggested weights, zeroes the excluded features, and renormalizes the active weights:
 
 ```text
-candidate_weights = (1 - alpha) * base_weights + alpha * suggested_weights
+candidate_weights = normalize(policy_mask * suggested_weights)
 ```
+
+If every active feature has chance-level AUC and the masked weight sum is zero, the candidate receives uniform weights over the active policy features. This is a neutral fallback, not a return to the historical base weights.
 
 The current grid searches:
 
 - feature-policy candidate;
-- feature-weight interpolation alpha;
 - minimum score separation;
 - boundary margin;
 - pool minimum accepted fraction, only when the base model context is `pool`.
 
 The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and geometry-pruned full-feature variants such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
 
-Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
+Each candidate is evaluated by running the full model classifier on every training dataset, then scoring only the non-hard-rejected rows. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets with trainable rows, so each informative dataset contributes equally.
 
-The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the selected feature policy, the top candidates, all best-score ties, suggested weights, and per-dataset confusion metrics.
+The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the selected feature policy, the top candidates, all best-score ties, suggested weights, and per-dataset confusion metrics. The per-dataset rows include both `n_classes` and `n_trainable`; the reported confusion metrics are computed over `n_trainable`, while hard-rejected classes are summarized separately.
 
 The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
 
@@ -223,9 +226,9 @@ Warnings in this section do not mean the learned model is invalid. They mean the
 
 The report also includes feature-screen diagnostics for deciding what to try next:
 
-- `feature_signal` gives pooled AUC, mean/min/max per-dataset AUC, inversion count, base weight, suggested weight, and learned weight for every scalar feature.
-- `feature_drop` reruns the learned model with one scalar feature weight set to zero; negative `delta_vs_learned` means the feature helped the learned model on the training set.
-- `feature_group_lodo` performs leave-one-dataset-out scalar scoring for fixed feature groups. These rows are a separability screen, not a promoted model: weights are learned from all other datasets, then the held-out dataset is scored by AUC and by an optimistic best-threshold balanced accuracy.
+- `feature_signal` gives pooled AUC, mean/min/max per-dataset AUC, inversion count, base weight, suggested weight, and learned weight for every scalar feature, using only non-hard-rejected rows.
+- `feature_drop` reruns the learned model with one scalar feature weight set to zero; negative `delta_vs_learned` means the feature helped the learned model on the non-hard-rejected training set.
+- `feature_group_lodo` performs leave-one-dataset-out scalar scoring for fixed feature groups. These rows are a separability screen, not a promoted model: weights are learned from non-hard-rejected rows in all other datasets, then the non-hard-rejected rows of the held-out dataset are scored by AUC and by an optimistic best-threshold balanced accuracy.
 
 ## Basic Instruction Manual
 
@@ -369,8 +372,8 @@ For streaming integration, validate the promoted chunk model in two passes:
 
 ## Current Limitations and Future Directions
 
-The current learner searches only a limited set of model parameters. It inherits behavior flags such as Otsu use and cluster rescue from the base model. That is deliberate for now. The learn report flags when those inherited controls are active on datasets that still have false positives or false negatives, which is the cue to consider searching those flags explicitly.
+The current learner searches only a limited set of model parameters. It learns feature weights from the training set ab initio, but still inherits behavior flags such as Otsu use and cluster rescue from the base model. That is deliberate for now. The learn report flags when those inherited controls are active on datasets that still have false positives or false negatives, which is the cue to consider searching those flags explicitly.
 
 The accept-all behavior is currently implicit through the single-cluster fallback and `min_score_separation`. A future model version may make accept-all behavior an explicit learned operating mode.
 
-Feature weights are currently suggested by independent AUC scoring and then blended with the base weights. A linear SVM or regularized logistic regression could be added later as an alternative way to propose multivariate weights, while still keeping the explicit SIMPLE decision model around the learned coefficients.
+Feature weights are currently suggested by independent AUC scoring on non-hard-rejected rows. A linear SVM or regularized logistic regression could be added later as an alternative way to propose multivariate weights, while still keeping the explicit SIMPLE decision model around the learned coefficients.

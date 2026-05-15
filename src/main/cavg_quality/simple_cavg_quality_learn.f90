@@ -7,7 +7,7 @@ use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, I_MASK_INSIDE, &
     I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_HIST_ENTROPY, I_CC_AREA_FRAC, I_PRESENCE, &
     I_LOG_CONTRAST, I_LOG_HIST_VARIANCE
-use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, cavg_quality_model
+use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
@@ -19,7 +19,6 @@ public :: learn_cavg_quality_model
 
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
 integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 9
-real, parameter :: LEARN_WEIGHT_ALPHAS(5) = [0.0, 0.25, 0.50, 0.75, 1.0]
 real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
@@ -38,8 +37,8 @@ contains
         type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
-        real :: score, best_score, alpha
-        integer :: i, ia, ipol, im, isep, ifrac, max_grid, n_grid, n_top, n_best_ties
+        real :: score, best_score
+        integer :: i, ipol, im, isep, ifrac, max_grid, n_grid, n_top, n_best_ties
         if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
         allocate(dsets(size(analysis_files)))
         do i = 1, size(analysis_files)
@@ -54,38 +53,34 @@ contains
         n_top       = 0
         n_grid      = 0
         n_best_ties = 0
-        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_WEIGHT_ALPHAS) * size(LEARN_MINSEPS) * &
-                   size(LEARN_MARGINS)
+        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_MINSEPS) * size(LEARN_MARGINS)
         if( model_is_pool_context(learned_model) ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
         do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
-            do ia = 1, size(LEARN_WEIGHT_ALPHAS)
-                alpha = LEARN_WEIGHT_ALPHAS(ia)
-                candidate_spec = base_spec
-                candidate_spec%feature_policy = feature_policy_name(ipol)
-                candidate_spec%weights = (1.0 - alpha) * base_spec%weights + alpha * suggested_weights
-                call apply_feature_policy(ipol, candidate_spec%weights)
-                do isep = 1, size(LEARN_MINSEPS)
-                    candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
-                    do im = 1, size(LEARN_MARGINS)
-                        candidate_spec%boundary_margin = LEARN_MARGINS(im)
-                        if( model_is_pool_context(learned_model) )then
-                            do ifrac = 1, size(LEARN_POOL_FRACS)
-                                candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
-                                call candidate%init_spec(candidate_spec)
-                                score = macro_balacc_for_model(dsets, candidate)
-                                n_grid = n_grid + 1
-                                call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
-                                    best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
-                            end do
-                        else
+            candidate_spec = base_spec
+            candidate_spec%feature_policy = feature_policy_name(ipol)
+            candidate_spec%weights = suggested_weights
+            call apply_feature_policy(ipol, candidate_spec%weights)
+            do isep = 1, size(LEARN_MINSEPS)
+                candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
+                do im = 1, size(LEARN_MARGINS)
+                    candidate_spec%boundary_margin = LEARN_MARGINS(im)
+                    if( model_is_pool_context(learned_model) )then
+                        do ifrac = 1, size(LEARN_POOL_FRACS)
+                            candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
                             call candidate%init_spec(candidate_spec)
                             score = macro_balacc_for_model(dsets, candidate)
                             n_grid = n_grid + 1
                             call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
                                 best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
-                        endif
-                    end do
+                        end do
+                    else
+                        call candidate%init_spec(candidate_spec)
+                        score = macro_balacc_for_model(dsets, candidate)
+                        n_grid = n_grid + 1
+                        call consider_model_candidate(candidate%get_spec(), score, best_spec, best_score, &
+                            best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+                    endif
                 end do
             end do
         end do
@@ -387,45 +382,53 @@ contains
         real,                                intent(out) :: weights(CAVG_QUALITY_NFEATS)
         real,    allocatable :: vals(:)
         integer, allocatable :: refs(:)
-        integer :: nall, ids, i, j, off
+        integer :: nall, ids, j, off, nfit
         nall = 0
         do ids = 1, size(dsets)
-            nall = nall + dsets(ids)%ncls
+            nall = nall + count_trainable_classes(dsets(ids))
         end do
+        if( nall == 0 ) THROW_HARD('calc_suggested_training_weights: no non-hard-rejected training rows')
         allocate(vals(nall), source=0.0)
         allocate(refs(nall), source=0)
         weights = 0.0
         do j = 1, CAVG_QUALITY_NFEATS
             off = 0
             do ids = 1, size(dsets)
-                do i = 1, dsets(ids)%ncls
-                    vals(off+i) = dsets(ids)%features(i,j)
-                    refs(off+i) = dsets(ids)%manual_states(i)
-                end do
-                off = off + dsets(ids)%ncls
+                nfit = count_trainable_classes(dsets(ids))
+                if( nfit == 0 ) cycle
+                vals(off+1:off+nfit) = pack(dsets(ids)%features(:,j), .not. dsets(ids)%hard_reject)
+                refs(off+1:off+nfit) = pack(dsets(ids)%manual_states, .not. dsets(ids)%hard_reject)
+                off = off + nfit
             end do
             weights(j) = max(0.0, auc_for_values(vals, refs) - 0.5)
         end do
-        if( sum(weights) > EPS )then
-            weights = weights / sum(weights)
-        else
-            weights = CAVG_QUALITY_DEFAULT_WEIGHTS
-        endif
+        if( sum(weights) > EPS ) weights = weights / sum(weights)
         deallocate(vals, refs)
     end subroutine calc_suggested_training_weights
+
+    integer function count_trainable_classes( dset )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        ! Hard rejects are upstream validity-gate failures. They stay visible
+        ! in diagnostics, but the learned boundary is fit only on rescuable rows.
+        count_trainable_classes = count(.not. dset%hard_reject)
+    end function count_trainable_classes
 
     real function macro_balacc_for_model( dsets, model )
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: model
-        integer :: ids, tp, fp, tn, fn
+        integer :: ids, tp, fp, tn, fn, nused
         real :: precision, recall, specificity, f1, balacc, accuracy
         macro_balacc_for_model = 0.0
+        nused = 0
         do ids = 1, size(dsets)
+            if( count_trainable_classes(dsets(ids)) == 0 ) cycle
             call classify_training_dataset(dsets(ids), model, tp, fp, tn, fn)
             call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
             macro_balacc_for_model = macro_balacc_for_model + balacc
+            nused = nused + 1
         end do
-        macro_balacc_for_model = macro_balacc_for_model / real(size(dsets))
+        if( nused == 0 ) THROW_HARD('macro_balacc_for_model: no non-hard-rejected training rows')
+        macro_balacc_for_model = macro_balacc_for_model / real(nused)
     end function macro_balacc_for_model
 
     subroutine consider_model_candidate( spec, score, best_spec, best_score, best_tie_specs, n_best_ties, &
@@ -495,13 +498,22 @@ contains
         type(cavg_quality_result),           intent(inout) :: quality
         integer,                             intent(out)   :: tp, fp, tn, fn
         logical, allocatable :: pred(:), ref(:)
+        integer :: nfit
         call quality%kill()
         quality%features    = dset%features
         quality%hard_reject = dset%hard_reject
         call model%classify(quality)
-        allocate(pred(dset%ncls), ref(dset%ncls))
-        pred = quality%states > 0
-        ref  = dset%manual_states > 0
+        nfit = count_trainable_classes(dset)
+        if( nfit == 0 )then
+            tp = 0
+            fp = 0
+            tn = 0
+            fn = 0
+            return
+        endif
+        allocate(pred(nfit), ref(nfit))
+        pred = pack(quality%states > 0, .not. dset%hard_reject)
+        ref  = pack(dset%manual_states > 0, .not. dset%hard_reject)
         call calc_confusion(pred, ref, tp, fp, tn, fn)
         deallocate(pred, ref)
     end subroutine classify_training_dataset_detail
@@ -532,8 +544,9 @@ contains
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
         write(funit,'(A)') 'note=scalar_feature_space_only_pairwise_distance_matrices_removed'
         write(funit,'(A)') 'note=legacy_raw_resolution_and_geometry_failures_are_honored_as_hard_rejects_when_present'
+        write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
+        write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
         call write_feature_policy_grid(funit)
-        call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_real_list(funit, 'grid_boundary_margins=', LEARN_MARGINS)
         if( model_is_pool_context(learned_model) ) &
@@ -545,7 +558,7 @@ contains
         end do
         write(funit,*)
         write(funit,'(A)') ''
-        call write_learn_search_diagnostics(funit, base_model, suggested_weights, learned_model, diag)
+        call write_learn_search_diagnostics(funit, learned_model, diag)
         call write_feature_screen_diagnostics(funit, dsets, base_model, suggested_weights, learned_model, best_score)
         write(funit,'(A)') ''
         call write_candidate_table_header(funit, 'top_candidate_header=')
@@ -558,15 +571,15 @@ contains
             call write_candidate_row(funit, 'best_tie', i, best_score, best_tie_specs(i))
         end do
         write(funit,'(A)') ''
-        write(funit,'(A)') 'dataset,n_classes,tp,fp,tn,fn,precision,recall,specificity,f1,'//&
+        write(funit,'(A)') 'dataset,n_classes,n_trainable,tp,fp,tn,fn,precision,recall,specificity,f1,'//&
             'balanced_accuracy,accuracy,hard_rejected_manual_good'
         do ids = 1, size(dsets)
             call classify_training_dataset(dsets(ids), learned_model, tp, fp, tn, fn)
             call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
-            write(funit,'(A,A,I0,A,I0,A,I0,A,I0,A,I0,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,I0)') &
-                trim(dsets(ids)%dataset_id), ',', dsets(ids)%ncls, ',', tp, ',', fp, ',', tn, ',', fn, ',', &
-                precision, ',', recall, ',', specificity, ',', f1, ',', balacc, ',', accuracy, ',', &
-                count(dsets(ids)%hard_reject .and. (dsets(ids)%manual_states > 0))
+            write(funit,'(A,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,I0)') &
+                trim(dsets(ids)%dataset_id), ',', dsets(ids)%ncls, ',', count_trainable_classes(dsets(ids)), ',', &
+                tp, ',', fp, ',', tn, ',', fn, ',', precision, ',', recall, ',', specificity, ',', f1, ',', &
+                balacc, ',', accuracy, ',', count(dsets(ids)%hard_reject .and. (dsets(ids)%manual_states > 0))
         end do
         close(funit)
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
@@ -612,33 +625,54 @@ contains
         integer,                             intent(in)  :: ifeat
         real,                                intent(out) :: pooled_auc, mean_auc, min_auc, max_auc
         integer,                             intent(out) :: inverted_datasets
-        integer :: ids
+        integer :: ids, nused
         real    :: auc
         pooled_auc        = pooled_feature_auc(dsets, ifeat, 0)
         mean_auc          = 0.0
         min_auc           = huge(1.0)
         max_auc           = -huge(1.0)
         inverted_datasets = 0
+        nused             = 0
         do ids = 1, size(dsets)
-            auc = auc_for_values(dsets(ids)%features(:,ifeat), dsets(ids)%manual_states)
+            if( count_trainable_classes(dsets(ids)) == 0 ) cycle
+            auc = dataset_feature_auc(dsets(ids), ifeat)
             mean_auc = mean_auc + auc
             min_auc  = min(min_auc, auc)
             max_auc  = max(max_auc, auc)
             if( auc < 0.5 - EPS ) inverted_datasets = inverted_datasets + 1
+            nused = nused + 1
         end do
-        if( size(dsets) > 0 ) mean_auc = mean_auc / real(size(dsets))
-        if( size(dsets) == 0 )then
+        if( nused > 0 ) mean_auc = mean_auc / real(nused)
+        if( nused == 0 )then
             min_auc = 0.5
             max_auc = 0.5
         endif
     end subroutine feature_auc_summary
+
+    real function dataset_feature_auc( dset, ifeat )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        integer,                             intent(in) :: ifeat
+        real,    allocatable :: vals(:)
+        integer, allocatable :: refs(:)
+        integer :: nfit
+        nfit = count_trainable_classes(dset)
+        if( nfit == 0 )then
+            dataset_feature_auc = 0.5
+            return
+        endif
+        allocate(vals(nfit), refs(nfit))
+        vals = pack(dset%features(:,ifeat), .not. dset%hard_reject)
+        refs = pack(dset%manual_states, .not. dset%hard_reject)
+        dataset_feature_auc = auc_for_values(vals, refs)
+        deallocate(vals, refs)
+    end function dataset_feature_auc
 
     real function pooled_feature_auc( dsets, ifeat, skip_dataset )
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         integer,                             intent(in) :: ifeat, skip_dataset
         real,    allocatable :: vals(:)
         integer, allocatable :: refs(:)
-        integer :: ids, nall, off
+        integer :: ids, nall, off, nfit
         nall = count_nclasses_except(dsets, skip_dataset)
         if( nall == 0 )then
             pooled_feature_auc = 0.5
@@ -648,9 +682,11 @@ contains
         off = 0
         do ids = 1, size(dsets)
             if( ids == skip_dataset ) cycle
-            vals(off+1:off+dsets(ids)%ncls) = dsets(ids)%features(:,ifeat)
-            refs(off+1:off+dsets(ids)%ncls) = dsets(ids)%manual_states
-            off = off + dsets(ids)%ncls
+            nfit = count_trainable_classes(dsets(ids))
+            if( nfit == 0 ) cycle
+            vals(off+1:off+nfit) = pack(dsets(ids)%features(:,ifeat), .not. dsets(ids)%hard_reject)
+            refs(off+1:off+nfit) = pack(dsets(ids)%manual_states, .not. dsets(ids)%hard_reject)
+            off = off + nfit
         end do
         pooled_feature_auc = auc_for_values(vals, refs)
         deallocate(vals, refs)
@@ -663,7 +699,7 @@ contains
         count_nclasses_except = 0
         do ids = 1, size(dsets)
             if( ids == skip_dataset ) cycle
-            count_nclasses_except = count_nclasses_except + dsets(ids)%ncls
+            count_nclasses_except = count_nclasses_except + count_trainable_classes(dsets(ids))
         end do
     end function count_nclasses_except
 
@@ -734,8 +770,9 @@ contains
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         integer,                             intent(in) :: feat_inds(:)
         real, allocatable :: weights(:), scores(:)
+        integer, allocatable :: refs(:)
         real :: auc, balacc, sum_auc, sum_balacc, min_auc, min_balacc
-        integer :: holdout, tp, fp, tn, fn, total_tp, total_fp, total_tn, total_fn
+        integer :: holdout, tp, fp, tn, fn, total_tp, total_fp, total_tn, total_fn, nused
         integer :: low_auc_id, low_balacc_id
         character(len=LONGSTRLEN) :: low_auc_name, low_balacc_name
         if( size(dsets) == 0 .or. size(feat_inds) == 0 ) return
@@ -744,6 +781,7 @@ contains
         sum_balacc = 0.0
         min_auc = huge(1.0)
         min_balacc = huge(1.0)
+        nused = 0
         low_auc_id = 1
         low_balacc_id = 1
         total_tp = 0
@@ -751,10 +789,11 @@ contains
         total_tn = 0
         total_fn = 0
         do holdout = 1, size(dsets)
+            if( count_trainable_classes(dsets(holdout)) == 0 ) cycle
             call lodo_group_weights(dsets, holdout, feat_inds, weights)
-            call score_dataset_feature_group(dsets(holdout), feat_inds, weights, scores)
-            auc = auc_for_values(scores, dsets(holdout)%manual_states)
-            call best_score_threshold_balacc(scores, dsets(holdout)%manual_states, balacc, tp, fp, tn, fn)
+            call score_dataset_feature_group(dsets(holdout), feat_inds, weights, scores, refs)
+            auc = auc_for_values(scores, refs)
+            call best_score_threshold_balacc(scores, refs, balacc, tp, fp, tn, fn)
             sum_auc = sum_auc + auc
             sum_balacc = sum_balacc + balacc
             if( auc < min_auc )then
@@ -769,15 +808,23 @@ contains
             total_fp = total_fp + fp
             total_tn = total_tn + tn
             total_fn = total_fn + fn
+            nused = nused + 1
+            if( allocated(scores) ) deallocate(scores)
+            if( allocated(refs)   ) deallocate(refs)
         end do
+        if( nused == 0 )then
+            deallocate(weights)
+            return
+        endif
         low_auc_name = dataset_short_name(dsets(low_auc_id))
         low_balacc_name = dataset_short_name(dsets(low_balacc_id))
         write(funit,'(A,A,A,I0,A,F10.5,A,F10.5,A,A,A,F10.5,A,F10.5,A,A,A,I0,A,I0,A,I0,A,I0)') &
-            'feature_group_lodo,', trim(group_name), ',', size(feat_inds), ',', sum_auc / real(size(dsets)), ',', &
-            min_auc, ',', trim(low_auc_name), ',', sum_balacc / real(size(dsets)), ',', min_balacc, ',', &
+            'feature_group_lodo,', trim(group_name), ',', size(feat_inds), ',', sum_auc / real(nused), ',', &
+            min_auc, ',', trim(low_auc_name), ',', sum_balacc / real(nused), ',', min_balacc, ',', &
             trim(low_balacc_name), ',', total_tp, ',', total_fp, ',', total_tn, ',', total_fn
         deallocate(weights)
         if( allocated(scores) ) deallocate(scores)
+        if( allocated(refs)   ) deallocate(refs)
     end subroutine write_lodo_group_row
 
     subroutine lodo_group_weights( dsets, holdout, feat_inds, weights )
@@ -799,20 +846,27 @@ contains
         endif
     end subroutine lodo_group_weights
 
-    subroutine score_dataset_feature_group( dset, feat_inds, weights, scores )
+    subroutine score_dataset_feature_group( dset, feat_inds, weights, scores, refs )
         type(cavg_quality_training_dataset), intent(in)  :: dset
         integer,                             intent(in)  :: feat_inds(:)
         real,                                intent(in)  :: weights(:)
         real, allocatable,                   intent(out) :: scores(:)
-        integer :: i, j
+        integer, allocatable,                intent(out) :: refs(:)
+        integer :: i, j, nfit, ifit
         if( size(feat_inds) /= size(weights) ) THROW_HARD('score_dataset_feature_group: invalid weight size')
-        allocate(scores(dset%ncls), source=0.0)
+        nfit = count_trainable_classes(dset)
+        allocate(scores(nfit), refs(nfit))
+        scores = 0.0
+        refs = 0
+        ifit = 0
         do i = 1, dset%ncls
+            if( dset%hard_reject(i) ) cycle
+            ifit = ifit + 1
+            refs(ifit) = dset%manual_states(i)
             do j = 1, size(feat_inds)
-                scores(i) = scores(i) + weights(j) * dset%features(i, feat_inds(j))
+                scores(ifit) = scores(ifit) + weights(j) * dset%features(i, feat_inds(j))
             end do
         end do
-        where( dset%hard_reject ) scores = -CLIP_Z
     end subroutine score_dataset_feature_group
 
     subroutine best_score_threshold_balacc( scores, refs, best_balacc, tp, fp, tn, fn )
@@ -829,7 +883,10 @@ contains
         fp = 0
         tn = 0
         fn = 0
-        if( size(scores) == 0 ) return
+        if( size(scores) == 0 )then
+            best_balacc = 0.5
+            return
+        endif
         allocate(pred(size(scores)), ref(size(scores)))
         ref = refs > 0
         call test_threshold(minval(scores) - EPS)
@@ -952,15 +1009,15 @@ contains
         min_accept_fraction_looks_active = quality%threshold_margin > model%boundary_margin + 1.0e-4
     end function min_accept_fraction_looks_active
 
-    subroutine write_learn_search_diagnostics( funit, base_model, suggested_weights, learned_model, diag )
+    subroutine write_learn_search_diagnostics( funit, learned_model, diag )
         integer,                             intent(in) :: funit
-        type(cavg_quality_model),            intent(in) :: base_model, learned_model
-        real,                                intent(in) :: suggested_weights(:)
+        type(cavg_quality_model),            intent(in) :: learned_model
         type(cavg_quality_learn_diagnostics),intent(in) :: diag
         write(funit,'(A)') 'search_diagnostic_header=level,parameter,status,detail'
         call write_search_diagnostic(funit, 'note', 'feature_policy', trim(learned_model%feature_policy), &
             'selected_policy_encoded_by_zeroed_model_weights')
-        call write_weight_alpha_diagnostic(funit, base_model%weights, suggested_weights, learned_model%weights)
+        call write_search_diagnostic(funit, 'note', 'feature_weights', 'data_auc_no_base_blending', &
+            'learned_weights_are_derived_abinitio_from_non_hard_rejected_training_rows')
         call write_grid_position_diagnostic(funit, 'min_score_separation', learned_model%min_score_separation, &
             LEARN_MINSEPS, 'best_at_lowest_value_consider_lower_if_accept_all_remains_too_common', &
             'best_at_highest_value_consider_higher_if_unstable_splits_remain')
@@ -977,31 +1034,6 @@ contains
         endif
         call write_policy_parameter_diagnostics(funit, learned_model, diag)
     end subroutine write_learn_search_diagnostics
-
-    subroutine write_weight_alpha_diagnostic( funit, base_weights, suggested_weights, learned_weights )
-        integer, intent(in) :: funit
-        real,    intent(in) :: base_weights(:), suggested_weights(:), learned_weights(:)
-        if( weights_close(base_weights, suggested_weights) )then
-            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'suggested_equals_base', &
-                'AUC_suggested_weights_match_base_weights_no_alpha_range_signal')
-        else if( weights_close(learned_weights, base_weights) )then
-            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'best_at_base_edge', &
-                'best_candidate_used_alpha_zero_suggested_weights_did_not_help')
-        else if( weights_close(learned_weights, suggested_weights) )then
-            call write_search_diagnostic(funit, 'warning', 'feature_weight_alpha', 'best_at_suggested_edge', &
-                'best_candidate_used_alpha_one_consider_alternative_weight_proposal_if_validation_fails')
-        else
-            call write_search_diagnostic(funit, 'note', 'feature_weight_alpha', 'interior', &
-                'best_candidate_used_a_blend_of_base_and_suggested_weights')
-        endif
-    end subroutine write_weight_alpha_diagnostic
-
-    logical function weights_close( a, b )
-        real, intent(in) :: a(:), b(:)
-        weights_close = .false.
-        if( size(a) /= size(b) ) return
-        weights_close = maxval(abs(a - b)) <= 1.0e-5
-    end function weights_close
 
     subroutine write_grid_position_diagnostic( funit, param, val, grid, low_status, high_status )
         integer,          intent(in) :: funit
