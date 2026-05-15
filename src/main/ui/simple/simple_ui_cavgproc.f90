@@ -4,7 +4,7 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: cluster_cavgs
-type(ui_program), target :: cluster_cavgs_quality
+type(ui_program), target :: model_cavgs_rejection
 type(ui_program), target :: cluster_cavgs_selection
 type(ui_program), target :: cluster_stack
 type(ui_program), target :: match_cavgs
@@ -16,7 +16,7 @@ contains
     subroutine construct_cavgproc_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
         call new_cluster_cavgs(prgtab)
-        call new_cluster_cavgs_quality(prgtab)
+        call new_model_cavgs_rejection(prgtab)
         call new_cluster_cavgs_selection(prgtab)
         call new_cluster_stack(prgtab)
         call new_match_cavgs(prgtab)
@@ -28,7 +28,7 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLASS AVERAGE PROCESSING:', C_UNDERLINED)
         write(logfhandle,'(A)') cluster_cavgs%name%to_char()
-        write(logfhandle,'(A)') cluster_cavgs_quality%name%to_char()
+        write(logfhandle,'(A)') model_cavgs_rejection%name%to_char()
         write(logfhandle,'(A)') cluster_cavgs_selection%name%to_char()
         write(logfhandle,'(A)') cluster_stack%name%to_char()
         write(logfhandle,'(A)') match_cavgs%name%to_char()
@@ -67,31 +67,31 @@ contains
         call add_ui_program('cluster_cavgs', cluster_cavgs, prgtab)
     end subroutine new_cluster_cavgs
 
-    subroutine new_cluster_cavgs_quality( prgtab )
+    subroutine new_model_cavgs_rejection( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call cluster_cavgs_quality%new(&
-        &'cluster_cavgs_quality',&                                               ! name
-        &'Quality-vector clustering of class averages',&                         ! descr_short
-        &'is a program for automatic class-average selection using normalized quality feature vectors',& ! descr_long
+        call model_cavgs_rejection%new(&
+        &'model_cavgs_rejection',&                                               ! name
+        &'Model-driven rejection of class averages',&                            ! descr_short
+        &'is a program for automatic class-average rejection using normalized quality feature vectors',& ! descr_long
         &'simple_exec',&                                                         ! executable
         &.true.)                                                                 ! requires sp_project except quality_mode=learn|promote
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster_cavgs_quality%add_input(UI_PARM, quality_mode)
-        call cluster_cavgs_quality%add_input(UI_PARM, quality_model)
-        call cluster_cavgs_quality%add_input(UI_PARM, prune)
+        call model_cavgs_rejection%add_input(UI_PARM, quality_mode)
+        call model_cavgs_rejection%add_input(UI_PARM, quality_model)
+        call model_cavgs_rejection%add_input(UI_PARM, prune)
         ! alternative inputs
-        call cluster_cavgs_quality%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &
+        call model_cavgs_rejection%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &
         &'File table of cavgs_quality_analysis.txt files for quality_mode=learn', &
         &'e.g. cavgs_quality_analyses.txt', .false., '', gui_active_flags='quality_mode=learn')
-        call cluster_cavgs_quality%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
+        call model_cavgs_rejection%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
         &'Optional learned quality model file for apply/analyze or promotion-code generation', &
         &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', &
         &gui_active_flags='quality_mode=apply|analyze|promote')
-        call cluster_cavgs_quality%add_input(UI_ALT, 'fname', 'file', 'Quality model output', &
+        call model_cavgs_rejection%add_input(UI_ALT, 'fname', 'file', 'Quality model output', &
         &'Output quality model file or promotion-code snippet for quality_mode=learn|promote', &
         &'e.g. cavgs_quality_model_chunk_learned.txt or cavgs_quality_model_builtin_code.txt', .false., '', &
         &gui_active_flags='quality_mode=learn|promote')
@@ -100,12 +100,12 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call cluster_cavgs_quality%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze')
+        call model_cavgs_rejection%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze')
         ! computer controls
-        call cluster_cavgs_quality%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn')
+        call model_cavgs_rejection%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn')
         ! add to ui_hash
-        call add_ui_program('cluster_cavgs_quality', cluster_cavgs_quality, prgtab)
-    end subroutine new_cluster_cavgs_quality
+        call add_ui_program('model_cavgs_rejection', model_cavgs_rejection, prgtab)
+    end subroutine new_model_cavgs_rejection
 
     subroutine new_cluster_cavgs_selection( prgtab )    
         class(ui_hash), intent(inout) :: prgtab

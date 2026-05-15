@@ -41,6 +41,7 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
 ! Batch-trained chunk default promoted from the representative batch10chunk
@@ -51,12 +52,15 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! soft geometry flags duplicate hard geometry rejection or were inconsistent
 ! across the representative chunk set. Pairwise distance matrices and unstable
 ! spectrum, ice, and foreground/background ratio diagnostics have been removed
-! from the default scalar model space.
+! from the default scalar model space. The appended internal-detail diagnostics
+! are currently zero-weighted so they can be validated in analyze mode before
+! changing the promoted decision boundary.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     8.404870E-02, 1.065039E-01, 0.000000E+00, 3.393937E-02, &
     8.439852E-02, 8.831557E-02, 0.000000E+00, 1.135785E-01, &
     6.035764E-02, 7.611332E-02, 0.000000E+00, 5.907804E-02, &
-    9.650873E-02, 1.008953E-01, 9.626245E-02 ]
+    9.650873E-02, 1.008953E-01, 9.626245E-02, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.10
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
@@ -248,7 +252,7 @@ contains
         character(len=*),          intent(in) :: fname
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# cluster_cavgs_quality model'
+        write(funit,'(A)') '# model_cavgs_rejection model'
         write(funit,'(A)') 'model_version=2'
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'family=', trim(self%family)
@@ -283,7 +287,7 @@ contains
         func_name  = trim(symbol)//'_model_spec'
         const_name = 'CAVG_QUALITY_MODEL_'//trim(uppercase(symbol))
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '! cluster_cavgs_quality built-in model promotion snippet'
+        write(funit,'(A)') '! model_cavgs_rejection built-in model promotion snippet'
         write(funit,'(A)') '! Generated from learned model: '//trim(model%name)
         write(funit,'(A)') '! Review the validation report before adding this preset to the library.'
         write(funit,'(A)') ''

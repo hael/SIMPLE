@@ -1,7 +1,7 @@
 # Microchunk Quality Refactor Notes
 
 **Date:** May 15, 2026
-**Context:** Follow-up to the `cluster_cavgs_quality` experiments on difficult real-world stream partitions, now focused on integrating the current `chunk_default_v2` model into `cluster2D_microchunked` without disturbing Joe's streaming/microchunk orchestration.
+**Context:** Follow-up to the `model_cavgs_rejection` experiments on difficult real-world stream partitions, now focused on integrating the current `chunk_default_v2` model into `cluster2D_microchunked` without disturbing Joe's streaming/microchunk orchestration.
 
 ## Short Summary
 
@@ -63,7 +63,7 @@ This was important. Aggressive hard rejections are difficult to recover from bec
 
 The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
 
-The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch9chunk learning cycle with the `all15_no_geom_softs` policy, which zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and also zeros `cc_area_frac` because it was inconsistent across the representative chunk set.
+The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. It also now emits zero-weighted internal-detail diagnostics from a broad 20-6 A band-pass so ApoF-like smooth-blob failures can be evaluated without changing the promoted decision boundary. The current chunk default was promoted from the representative batch10chunk learning cycle with the `all15_no_geom_softs` policy, which zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and also zeros `cc_area_frac` because it was inconsistent across the representative chunk set.
 
 ### 5. The Current Best General Profile Is Still Local-Signal Heavy
 
@@ -77,7 +77,7 @@ The practical interpretation is:
 - centering helps catch pathological classes without becoming a hard rule
 - background/local context is useful when combined with foreground signal
 
-On the representative stream-chunk learning set in batch9chunk, this became the promoted `chunk_default_v2` profile.
+On the representative stream-chunk learning set in batch10chunk, this became the promoted `chunk_default_v2` profile.
 
 ### 6. The Boundary Margin Should Remain Internal
 
@@ -137,7 +137,7 @@ This should make the change low-risk: the scheduler sees the same class states a
 
 ### Stage 1: Share Project Update Code
 
-Right now `exec_cluster_cavgs_quality` and `microchunked2D%reject_cavgs` each know how to propagate class-average decisions into project state. Extract the common state-mapping work into a small helper module or module procedure.
+Right now `exec_model_cavgs_rejection` and `microchunked2D%reject_cavgs` each know how to propagate class-average decisions into project state. Extract the common state-mapping work into a small helper module or module procedure.
 
 Candidate responsibilities:
 
@@ -199,7 +199,7 @@ This would avoid two diverging definitions of "bad class average."
 
 ### Stage 5: Standardize Diagnostics
 
-The most useful diagnostic outputs from `cluster_cavgs_quality` were:
+The most useful diagnostic outputs from `model_cavgs_rejection` were:
 
 - `cavgs_quality_features.txt`
 - `cavgs_quality_reference_summary.txt`

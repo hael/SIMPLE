@@ -6,7 +6,8 @@ use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, I_MASK_INSIDE, &
     I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_HIST_ENTROPY, I_CC_AREA_FRAC, I_PRESENCE, &
-    I_LOG_CONTRAST, I_LOG_HIST_VARIANCE
+    I_LOG_CONTRAST, I_LOG_HIST_VARIANCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
@@ -635,7 +636,7 @@ contains
         real :: precision, recall, specificity, f1, balacc, accuracy
         call collect_learn_diagnostics(dsets, learned_model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# cluster_cavgs_quality learn report'
+        write(funit,'(A)') '# model_cavgs_rejection learn report'
         write(funit,'(A,A)') 'context=', trim(learned_model%context)
         write(funit,'(A,A)') 'base_model=', trim(base_model%name)
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
@@ -884,6 +885,9 @@ contains
         group_inds(1:6) = [I_LOCVAR_FG, I_LOCVAR_BG, I_HIST_ENTROPY, I_PRESENCE, &
                            I_LOG_CONTRAST, I_LOG_HIST_VARIANCE]
         call write_lodo_group_row(funit, 'cheap_scalar6', dsets, group_inds(1:6))
+        group_inds(1:4) = [I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+                           I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY]
+        call write_lodo_group_row(funit, 'internal_detail4', dsets, group_inds(1:4))
     end subroutine write_lodo_group_screen
 
     subroutine append_feature_except( inds, ninds, excluded_feature )

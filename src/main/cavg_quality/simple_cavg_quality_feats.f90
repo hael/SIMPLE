@@ -30,6 +30,10 @@ public :: I_CC_DIAMETER_NORM
 public :: I_PRESENCE
 public :: I_LOG_CONTRAST
 public :: I_LOG_HIST_VARIANCE
+public :: I_LOG_DETAIL_BG_SNR
+public :: I_LOG_DETAIL_SIGNAL_RATIO
+public :: I_DETAIL_COVERAGE
+public :: I_DETAIL_EDGE_DENSITY
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -45,6 +49,8 @@ public :: CAVG_RES_HARD_REJECT_A
 real,    parameter :: LOG_EPS             = 1.0e-12
 real,    parameter :: FOREGROUND_SEG_LP   = 30.0
 real,    parameter :: SIGNAL_METRIC_LP    = 10.0
+real,    parameter :: DETAIL_BAND_HP_A    = 20.0
+real,    parameter :: DETAIL_BAND_LP_A    =  6.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A = 40.0
 integer, parameter :: LOCVAR_WINDOW       = 10
 integer, parameter :: NHISTBINS           = 128
@@ -65,6 +71,10 @@ integer, parameter :: I_CC_DIAMETER_NORM  = 12
 integer, parameter :: I_PRESENCE          = 13
 integer, parameter :: I_LOG_CONTRAST      = 14
 integer, parameter :: I_LOG_HIST_VARIANCE = 15
+integer, parameter :: I_LOG_DETAIL_BG_SNR = 16
+integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 17
+integer, parameter :: I_DETAIL_COVERAGE   = 18
+integer, parameter :: I_DETAIL_EDGE_DENSITY = 19
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -96,7 +106,15 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('log_contrast', 'diagnostic', &
         'log full-image intensity standard deviation after edge background subtraction'), &
     cavg_quality_feature_def('log_hist_variance', 'diagnostic', &
-        'log masked intensity-histogram variance') ]
+        'log masked intensity-histogram variance'), &
+    cavg_quality_feature_def('log_detail_bg_snr', 'diagnostic', &
+        'log in-mask band-passed detail RMS relative to outside-mask detail RMS'), &
+    cavg_quality_feature_def('log_detail_signal_ratio', 'diagnostic', &
+        'log in-mask band-passed detail RMS relative to in-mask total signal RMS'), &
+    cavg_quality_feature_def('detail_coverage', 'diagnostic', &
+        'fraction of in-mask pixels with band-passed detail above local background and image-scale thresholds'), &
+    cavg_quality_feature_def('detail_edge_density', 'diagnostic', &
+        'fraction of in-mask pixels with band-passed gradient magnitude above background and image-scale thresholds') ]
 
 contains
 
@@ -146,6 +164,7 @@ contains
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac, cc_diameter_norm
         real                 :: center_edge_snr, presence_score, contrast
+        real                 :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         integer              :: nccs_valid, ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
         ncls = size(imgs)
@@ -185,7 +204,8 @@ contains
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& contrast,cc_area_frac,cc_diameter_norm)&
+        !$omp& contrast,cc_area_frac,cc_diameter_norm,detail_bg_snr,detail_signal_ratio,&
+        !$omp& detail_coverage,detail_edge_density)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
             ithr = omp_get_thread_num() + 1
@@ -203,13 +223,18 @@ contains
                 center_edge_snr  = 0.0
                 presence_score   = 0.0
                 contrast         = 0.0
+                detail_bg_snr    = 0.0
+                detail_signal_ratio = 0.0
+                detail_coverage  = 0.0
+                detail_edge_density = 0.0
             else
                 call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
                                                       rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
                                                       centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, &
                                                       no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, contrast)
+                                                presence_score, contrast, detail_bg_snr, detail_signal_ratio, &
+                                                detail_coverage, detail_edge_density)
             endif
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)   = resolution_feature(res(i))
@@ -224,6 +249,10 @@ contains
             raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
             raw(i, I_PRESENCE)      = presence_score
             raw(i, I_LOG_CONTRAST)  = log(max(contrast, LOG_EPS))
+            raw(i, I_LOG_DETAIL_BG_SNR) = detail_bg_snr
+            raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
+            raw(i, I_DETAIL_COVERAGE) = detail_coverage
+            raw(i, I_DETAIL_EDGE_DENSITY) = detail_edge_density
             ! Resolution and geometry failures are hard validity rejects; the
             ! model should not rescue classes with a very poor stored class
             ! resolution estimate or foreground outside the mask.
@@ -378,11 +407,13 @@ contains
     end subroutine measure_cavg_foreground_geometry
 
     subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
-                                           contrast )
+                                           contrast, detail_bg_snr, detail_signal_ratio, detail_coverage, &
+                                           detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
         real,         intent(out)   :: presence_score, contrast
+        real,         intent(out)   :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         type(image)       :: img, img_bin
         real, allocatable :: bin_mask(:,:,:)
         integer           :: ldim(3)
@@ -391,6 +422,8 @@ contains
         presence_score = img%presence()
         contrast       = img%contrast()
         center_edge_snr = img%center_edge_snr(rad_px)
+        call measure_cavg_detail_metrics(img, rad_px, detail_bg_snr, detail_signal_ratio, &
+                                         detail_coverage, detail_edge_density)
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
@@ -402,6 +435,118 @@ contains
         call img%kill()
         call img_bin%kill()
     end subroutine measure_cavg_image_metrics
+
+    subroutine measure_cavg_detail_metrics( img_src, rad_px, detail_bg_snr, detail_signal_ratio, &
+                                            detail_coverage, detail_edge_density )
+        class(image), intent(inout) :: img_src
+        real,         intent(in)    :: rad_px
+        real,         intent(out)   :: detail_bg_snr, detail_signal_ratio
+        real,         intent(out)   :: detail_coverage, detail_edge_density
+        type(image) :: detail_img
+        real, allocatable :: orig(:,:,:), detail(:,:,:)
+        integer :: ldim(3), cx, cy, ix, iy
+        integer :: n_in, n_bg, n_grad_in, n_grad_bg, n_cov, n_edge
+        real :: dx, dy, r2, rad2, val, grad, detail_rms_in, detail_rms_bg
+        real :: signal_rms_in, grad_rms_in, grad_rms_bg, detail_thr, grad_thr
+        real(8) :: detail_s2_in, detail_s2_bg, signal_s2_in, grad_s2_in, grad_s2_bg
+        detail_bg_snr       = 0.0
+        detail_signal_ratio = 0.0
+        detail_coverage     = 0.0
+        detail_edge_density = 0.0
+        ldim = img_src%get_ldim()
+        if( ldim(3) /= 1 ) THROW_HARD('measure_cavg_detail_metrics: 2D only')
+        cx   = ldim(1) / 2 + 1
+        cy   = ldim(2) / 2 + 1
+        rad2 = rad_px**2
+        if( rad2 <= EPS ) return
+        detail_img = img_src
+        ! The detail diagnostics are deliberately cheap scalar probes: one
+        ! broad 20-6 A band-pass, then real-space in-mask/background ratios
+        ! and coverage estimates. They stay zero-weighted in the built-ins
+        ! until validation shows whether they capture the missing
+        ! "molecular texture versus smooth ice blob" axis.
+        call detail_img%bp(DETAIL_BAND_HP_A, DETAIL_BAND_LP_A)
+        orig   = img_src%get_rmat()
+        detail = detail_img%get_rmat()
+        detail_s2_in = 0.0d0
+        detail_s2_bg = 0.0d0
+        signal_s2_in = 0.0d0
+        grad_s2_in   = 0.0d0
+        grad_s2_bg   = 0.0d0
+        n_in         = 0
+        n_bg         = 0
+        n_grad_in    = 0
+        n_grad_bg    = 0
+        do iy = 1, ldim(2)
+            dy = real(iy - cy)
+            do ix = 1, ldim(1)
+                dx  = real(ix - cx)
+                r2  = dx * dx + dy * dy
+                val = detail(ix,iy,1)
+                if( r2 <= rad2 )then
+                    detail_s2_in = detail_s2_in + real(val,kind=8)**2
+                    signal_s2_in = signal_s2_in + real(orig(ix,iy,1),kind=8)**2
+                    n_in = n_in + 1
+                else
+                    detail_s2_bg = detail_s2_bg + real(val,kind=8)**2
+                    n_bg = n_bg + 1
+                endif
+                if( ix <= 1 .or. ix >= ldim(1) .or. iy <= 1 .or. iy >= ldim(2) ) cycle
+                grad = sqrt(0.25 * (detail(ix+1,iy,1) - detail(ix-1,iy,1))**2 + &
+                            0.25 * (detail(ix,iy+1,1) - detail(ix,iy-1,1))**2)
+                if( r2 <= rad2 )then
+                    grad_s2_in = grad_s2_in + real(grad,kind=8)**2
+                    n_grad_in = n_grad_in + 1
+                else
+                    grad_s2_bg = grad_s2_bg + real(grad,kind=8)**2
+                    n_grad_bg = n_grad_bg + 1
+                endif
+            end do
+        end do
+        if( n_in <= 0 )then
+            call detail_img%kill()
+            deallocate(orig, detail)
+            return
+        endif
+        detail_rms_in = sqrt(real(detail_s2_in / real(max(n_in, 1),kind=8)))
+        signal_rms_in = sqrt(real(signal_s2_in / real(max(n_in, 1),kind=8)))
+        if( n_bg > 0 )then
+            detail_rms_bg = sqrt(real(detail_s2_bg / real(n_bg,kind=8)))
+        else
+            detail_rms_bg = detail_rms_in
+        endif
+        if( n_grad_in > 0 )then
+            grad_rms_in = sqrt(real(grad_s2_in / real(n_grad_in,kind=8)))
+        else
+            grad_rms_in = 0.0
+        endif
+        if( n_grad_bg > 0 )then
+            grad_rms_bg = sqrt(real(grad_s2_bg / real(n_grad_bg,kind=8)))
+        else
+            grad_rms_bg = grad_rms_in
+        endif
+        detail_bg_snr       = log(max(detail_rms_in / max(detail_rms_bg, LOG_EPS), LOG_EPS))
+        detail_signal_ratio = log(max(detail_rms_in / max(signal_rms_in, LOG_EPS), LOG_EPS))
+        detail_thr = max(2.0 * detail_rms_bg, 0.5 * detail_rms_in)
+        grad_thr   = max(2.0 * grad_rms_bg,   0.5 * grad_rms_in)
+        n_cov  = 0
+        n_edge = 0
+        do iy = 2, ldim(2) - 1
+            dy = real(iy - cy)
+            do ix = 2, ldim(1) - 1
+                dx = real(ix - cx)
+                if( dx * dx + dy * dy > rad2 ) cycle
+                if( abs(detail(ix,iy,1)) > detail_thr ) n_cov = n_cov + 1
+                grad = sqrt(0.25 * (detail(ix+1,iy,1) - detail(ix-1,iy,1))**2 + &
+                            0.25 * (detail(ix,iy+1,1) - detail(ix,iy-1,1))**2)
+                if( grad > grad_thr ) n_edge = n_edge + 1
+            end do
+        end do
+        detail_coverage     = real(n_cov)  / real(max(n_grad_in, 1))
+        detail_edge_density = real(n_edge) / real(max(n_grad_in, 1))
+        call detail_img%kill()
+        deallocate(orig, detail)
+    end subroutine measure_cavg_detail_metrics
 
     real function resolution_feature( res )
         real, intent(in) :: res

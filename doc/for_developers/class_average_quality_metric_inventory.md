@@ -2,11 +2,11 @@
 
 **Date:** May 14, 2026
 **Status:** Developer inventory / future feature planning
-**Scope:** Existing SIMPLE routines that can support scalar features for `cluster_cavgs_quality`.
+**Scope:** Existing SIMPLE routines that can support scalar features for `model_cavgs_rejection`.
 
 ## Purpose
 
-This note inventories image-processing, class-average, and clustering routines already present in SIMPLE that can be reused when extending the `cluster_cavgs_quality` feature bank. The goal is to keep quality selection interpretable and reproducible: every feature should have a clear source, a documented direction, and a diagnostic raw value in the analysis table.
+This note inventories image-processing, class-average, and clustering routines already present in SIMPLE that can be reused when extending the `model_cavgs_rejection` feature bank. The goal is to keep quality selection interpretable and reproducible: every feature should have a clear source, a documented direction, and a diagnostic raw value in the analysis table.
 
 The current implementation treats class-average quality as a feature-vector and model-selection problem:
 
@@ -28,7 +28,7 @@ The refactored code lives under `src/main/cavg_quality`:
 - `simple_cavg_quality_analysis.f90`: `apply`/`analyze` evaluation and reporting.
 - `simple_cavg_quality_learn.f90`: analysis-table reader and grid search over interpretable model parameters.
 
-The command entry point is `exec_cluster_cavgs_quality` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
+The command entry point is `exec_model_cavgs_rejection` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
 
 The current application modes are:
 
@@ -58,10 +58,16 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 13 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
 | 14 | `log_contrast` | `image%contrast` | diagnostic | Log full-image intensity standard deviation after edge background subtraction. |
 | 15 | `log_hist_variance` | `histogram%variance` | diagnostic | Log masked intensity-histogram variance. |
+| 16 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
+| 17 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
+| 18 | `detail_coverage` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with detail above background and image-scale thresholds. |
+| 19 | `detail_edge_density` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with band-passed gradient above background and image-scale thresholds. |
 
 Pairwise histogram and rotational-spectrum matrices are no longer part of the default model infrastructure. The active histogram features are scalar entropy and variance only. The earlier `hist_knn` scalar was removed because nearest-neighbor histogram density did not have a stable quality direction across datasets.
 
 The representative chunk runs also removed `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` from the feature bank. Those signals were either weak, redundant with retained scalar features, or inverted on some datasets.
+
+The internal-detail features are zero-weighted in the current built-in defaults. They are meant to answer a specific validation question: whether smooth ice/blob-like class averages that pass the scalar geometry and contrast checks are separable by direct measurements of organized in-mask molecular texture.
 
 Resolution and mask-geometry validity are deliberately outside the learned model. The feature extractor hard rejects class averages when `cls2D res > 40 A`, when the Otsu/connected-component pass finds no valid foreground component, when any foreground-component centroid lies outside the mask radius, or when more than 10 pixels of the largest component lie outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
 
@@ -69,7 +75,7 @@ Resolution and mask-geometry validity are deliberately outside the learned model
 
 The built-in models are complete `linear_boundary` presets:
 
-- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch9chunk learning cycle with the `all15_no_geom_softs` feature policy.
+- `chunk_default_v2`: current default chunk/stream behavior, promoted from the representative batch10chunk learning cycle with the `all15_no_geom_softs` feature policy.
 - `chunk_default_v1`: legacy chunk/stream behavior retained for comparison.
 - `pool_default_v1`: recall-preserving behavior for larger pooled/batch datasets.
 
@@ -83,7 +89,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature-weight interpolation, minimum score separation, boundary margin, and pool minimum accepted fraction. The candidate policies include geometry-pruned full-feature options such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction. It deliberately inherits the higher-level policy flags from the base model.
+The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The candidate policies include geometry-pruned full-feature options such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
 
 ## Reusable Existing Routines
 

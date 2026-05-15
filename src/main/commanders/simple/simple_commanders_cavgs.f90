@@ -22,10 +22,10 @@ type, extends(commander_base) :: commander_cluster_cavgs
         procedure :: execute      => exec_cluster_cavgs
 end type commander_cluster_cavgs
 
-type, extends(commander_base) :: commander_cluster_cavgs_quality
+type, extends(commander_base) :: commander_model_cavgs_rejection
     contains
-        procedure :: execute      => exec_cluster_cavgs_quality
-end type commander_cluster_cavgs_quality
+        procedure :: execute      => exec_model_cavgs_rejection
+end type commander_model_cavgs_rejection
 
 type, extends(commander_base) :: commander_cluster_cavgs_selection
     contains
@@ -307,8 +307,8 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
     end subroutine exec_cluster_cavgs
 
-    subroutine exec_cluster_cavgs_quality( self, cline )
-        class(commander_cluster_cavgs_quality), intent(inout) :: self
+    subroutine exec_model_cavgs_rejection( self, cline )
+        class(commander_model_cavgs_rejection), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)          :: params
         type(sp_project)          :: spproj
@@ -340,7 +340,7 @@ contains
             case('promote')
                 quality_mode = QUALITY_MODE_PROMOTE
             case default
-                THROW_HARD('cluster_cavgs_quality: quality_mode must be apply, analyze, learn or promote')
+                THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn or promote')
         end select
         if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
             call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
@@ -352,17 +352,17 @@ contains
         if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
             call model%read(params%infile%to_char())
         if( quality_mode == QUALITY_MODE_PROMOTE )then
-            if( .not. cline%defined('infile') ) THROW_HARD('cluster_cavgs_quality quality_mode=promote requires infile')
+            if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
             model_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
             call write_cavg_quality_model_builtin_code(model, trim(model_fname))
             write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(model_fname)
-            call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY PROMOTE NORMAL STOP ****', &
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
                 verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
             return
         endif
         if( quality_mode == QUALITY_MODE_LEARN )then
-            if( .not. cline%defined('filetab') ) THROW_HARD('cluster_cavgs_quality quality_mode=learn requires filetab')
+            if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             call read_filetable(params%filetab, analysis_files)
             model_fname = 'cavgs_quality_model_'//trim(model%context)//'_learned.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
@@ -370,18 +370,18 @@ contains
             call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
             write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
             if( allocated(analysis_files) ) deallocate(analysis_files)
-            call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY LEARN NORMAL STOP ****', &
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
                 verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
             return
         endif
-        if( trim(params%projfile%to_char()) == '' ) THROW_HARD('cluster_cavgs_quality apply/analyze requires projfile')
-        if( .not. cline%defined('mskdiam') ) THROW_HARD('cluster_cavgs_quality apply/analyze requires mskdiam')
+        if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze requires projfile')
+        if( .not. cline%defined('mskdiam') ) THROW_HARD('model_cavgs_rejection apply/analyze requires mskdiam')
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
-        if( ncls == 0 ) THROW_HARD('cluster_cavgs_quality: project has no cls2D entries')
+        if( ncls == 0 ) THROW_HARD('model_cavgs_rejection: project has no cls2D entries')
         call spproj%get_cavgs_stk(stkname, ncls, smpd)
         cavg_imgs = read_cavgs_into_imgarr(spproj)
-        if( size(cavg_imgs) /= ncls ) THROW_HARD('cluster_cavgs_quality: # cavgs /= # cls2D entries')
+        if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
         call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
         nsel = count(quality%states > 0)
@@ -414,7 +414,7 @@ contains
         endif
         call spproj%kill()
         call dealloc_imgarr(cavg_imgs)
-        call simple_end('**** SIMPLE_CLUSTER_CAVGS_QUALITY NORMAL STOP ****', &
+        call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
@@ -448,7 +448,7 @@ contains
             write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
         end subroutine write_quality_stack
 
-    end subroutine exec_cluster_cavgs_quality
+    end subroutine exec_model_cavgs_rejection
 
     ! to create medoid representatives of good/bad selection in cls2D field for fast matching later
     subroutine exec_cluster_cavgs_selection( self, cline )
