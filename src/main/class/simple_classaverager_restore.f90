@@ -319,17 +319,17 @@ contains
     module subroutine cavger_update_sums( nptcls, ptcl_imgs )
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
-        real, parameter :: KB2 = KBALPHA**2
+        real,   parameter :: KB2 = KBALPHA**2
         type(fplane_type) :: fplanes(nthr_glob)
+        real, allocatable :: wx(:,:), wy(:,:), hvec(:), kvec(:)
         complex :: fcomp
         real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
         real    :: m11, m12, m21, m22, hrow(2)
-        real, allocatable :: wx(:,:), wy(:,:)
         integer :: win(2,2), flims_crop(3,2), phys(2)
         integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: h,k,hh,kk,hp,kp,l,m, icls, nyq_crop
-        integer :: iptcl, i, iwinsz, wdim, ithr, h_sq, nyq_disk
-        real    :: eps_norm, inv_wdim
+        integer :: hh,kk,hp,kp,l,m, icls, nyq_crop, nhvec,nkvec,a,b
+        integer :: iptcl, i, iwinsz, wdim, ithr, nyq_disk
+        real    :: eps_norm, inv_wdim, rh,rk, h_sq
         logical :: l_conjg
         ! Interpolation parameters
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
@@ -351,9 +351,14 @@ contains
             sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
         end if
+        ! setting up denser sampling for shells < 2
+        call dense_sampling_near_zero( flims_crop(1,1), flims_crop(1,2), 2, OSMPL_PAD_FAC, hvec )
+        call dense_sampling_near_zero( flims_crop(2,1), flims_crop(2,2), 2, OSMPL_PAD_FAC, kvec )
+        nhvec = size(hvec)
+        nkvec = size(kvec)
         !$omp parallel default(shared) proc_bind(close) &
-        !$omp private(i,ithr,iptcl,win,mat,h,k,hh,kk,l,m,loc,hp,kp,phys,w,tvalsq,l_conjg,fcomp,&
-        !$omp& h_sq,hrow,m11,m12,m21,m22)
+        !$omp private(i,ithr,iptcl,win,mat,hh,kk,l,m,loc,hp,kp,phys,w,tvalsq,l_conjg,fcomp,&
+        !$omp& h_sq,hrow,m11,m12,m21,m22,a,b,rh,rk)
         !$omp do schedule(static)
         do i = 1, nptcls
             iptcl = precs(i)%pind
@@ -384,18 +389,20 @@ contains
             interp_cmats(:,:,i) = CMPLX_ZERO
             interp_rhos(:,:,i)  = 0.0
             ! loop over cropped original image limits
-            do h = flims_crop(1,1), flims_crop(1,2)
-                h_sq = h*h
-                if( h_sq > nyq_disk ) cycle
-                hp = h * OSMPL_PAD_FAC
-                hrow(1) = real(h) * m11
-                hrow(2) = real(h) * m12
-                do k = flims_crop(2,1), flims_crop(2,2)
-                    if( h_sq + k*k > nyq_disk ) cycle
-                    kp = k * OSMPL_PAD_FAC
+            do a = 1,nhvec
+                rh   = hvec(a)
+                h_sq = rh*rh
+                if( h_sq > real(nyq_disk) ) cycle
+                hp = int(rh * real(OSMPL_PAD_FAC))
+                hrow(1) = rh * m11
+                hrow(2) = rh * m12
+                do b = 1,nkvec
+                    rk = kvec(b)
+                    if( h_sq + rk*rk > real(nyq_disk) ) cycle
+                    kp = int(rk * real(OSMPL_PAD_FAC))
                     ! rotation on original lattice
-                    loc(1) = hrow(1) + real(k) * m21
-                    loc(2) = hrow(2) + real(k) * m22
+                    loc(1) = hrow(1) + rk * m21
+                    loc(2) = hrow(2) + rk * m22
                     ! interpolation window limits on original lattice
                     win(1,:) = nint(loc)
                     win(2,:) = win(1,:) + iwinsz
@@ -453,7 +460,7 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-        deallocate(wx, wy)
+        deallocate(wx, wy, hvec, kvec)
     contains
 
         pure subroutine kb_apod_vecs_2d_fast( loc, wx, wy )
@@ -481,6 +488,46 @@ contains
                 wy = inv_wdim
             endif
         end subroutine kb_apod_vecs_2d_fast
+
+        !>   generate a vector of Fourier coordinates with unit sampling then
+        !>   increase by steps of 1/osmpl_fac in the [-near;near] range
+        subroutine dense_sampling_near_zero( lb, ub, near, osmpl_fac, vec)
+            integer,           intent(in)   :: lb, ub, near, osmpl_fac
+            real, allocatable, intent(inout):: vec(:)
+            real    :: r
+            integer :: n
+            if( allocated(vec) ) deallocate(vec)
+            ! determine vector size
+            r = real(lb)
+            n = 1
+            do while( r < real(ub)+0.001 )
+                n = n + 1
+                if( r < 0. )then
+                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)+0.001)
+                else
+                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)-0.001)
+                endif
+            end do
+            ! generate vector
+            allocate(vec(n),source=0.)
+            r = real(lb)
+            n = 1
+            do while( r < real(ub)+0.001 )
+                vec(n) = r
+                n      = n + 1
+                if( r < 0. )then
+                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)+0.001)
+                else
+                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)-0.001)
+                endif
+            end do
+            n = n - 1
+            if( nint(vec(1)) /= lb .or. nint(vec(n)) /= ub ) then
+                THROW_HARD('Error in dense_sampling_near_zero: generated limits differ from requested ones.')
+                print *, 'Generated vector: ', vec
+                error stop
+            end if
+        end subroutine dense_sampling_near_zero
 
     end subroutine cavger_update_sums
 
