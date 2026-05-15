@@ -5,28 +5,21 @@ use simple_error,              only: simple_exception
 use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
-use simple_cavg_quality_types, only: CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, &
-    EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: CAVG_REJECTION_CHUNK
-public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_DEFAULT_WEIGHTS
-public :: CAVG_QUALITY_MODEL_DEFAULT
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
-public :: cavg_rejection_type_from_name
-public :: cavg_rejection_type_name
 public :: write_cavg_quality_model_builtin_code
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
-character(len=*), parameter :: CAVG_QUALITY_MODEL_DEFAULT       = 'default'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1 = 'chunk_default_v1'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
@@ -50,28 +43,29 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
-! Batch-trained chunk default promoted from the representative batch8chunk
+! Batch-trained chunk default promoted from the representative batch9chunk
 ! learning round after resolution and foreground-geometry hard rejects were
 ! moved out of the learned model. The selected policy keeps the cheap scalar
-! diagnostics that generalized best on stream chunks, while zeroing only
-! mask_inside and single_component because those soft geometry flags duplicate
-! the hard connected-component rejection. Pairwise distance matrices and
-! unstable spectrum, ice, and foreground/background ratio diagnostics have been
-! removed from the default scalar model space.
+! diagnostics that generalized best on stream chunks, while zeroing mask_inside
+! and single_component because those soft geometry flags duplicate the hard
+! connected-component rejection. The cc_area_frac diagnostic is also left out of
+! the promoted boundary because it was inconsistent across the representative
+! chunk set. Pairwise distance matrices and unstable spectrum, ice, and
+! foreground/background ratio diagnostics have been removed from the default
+! scalar model space.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    8.561891E-02, 1.044087E-01, 0.000000E+00, 5.221575E-02, &
-    9.054721E-02, 9.160046E-02, 0.000000E+00, 1.081142E-01, &
-    7.333785E-02, 8.167230E-02, 4.118001E-02, 6.675764E-02, &
-    6.300857E-02, 6.470357E-02, 7.683478E-02 ]
+    8.802998E-02, 1.059870E-01, 0.000000E+00, 5.479104E-02, &
+    9.194691E-02, 9.329647E-02, 0.000000E+00, 1.097729E-01, &
+    7.518790E-02, 8.378069E-02, 0.000000E+00, 6.965444E-02, &
+    7.154126E-02, 7.346579E-02, 8.254565E-02 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
-real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.05
+real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = 'all_features_no_mask_single'
-    integer           :: rejection_type          = CAVG_REJECTION_CHUNK
+    character(len=32) :: feature_policy          = 'all15_no_geom_softs'
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -84,7 +78,6 @@ type :: cavg_quality_model
     logical           :: use_cluster_rescue      = .false.
     logical           :: enforce_min_accept_frac = .false.
 contains
-    procedure :: init_default
     procedure :: init_preset
     procedure :: init_spec
     procedure :: get_spec
@@ -96,13 +89,6 @@ contains
 end type cavg_quality_model
 
 contains
-
-    subroutine init_default( self, rejection_type )
-        class(cavg_quality_model), intent(inout) :: self
-        integer,                   intent(in)    :: rejection_type
-        call assert_valid_rejection_type(rejection_type)
-        call self%init_preset(default_name(rejection_type))
-    end subroutine init_default
 
     subroutine init_preset( self, preset_name )
         class(cavg_quality_model), intent(inout) :: self
@@ -135,29 +121,16 @@ contains
         names = BUILTIN_MODEL_NAMES
     end function builtin_names
 
-    function default_name( rejection_type ) result( name )
-        integer, intent(in) :: rejection_type
-        character(len=64) :: name
-        call assert_valid_rejection_type(rejection_type)
-        select case(rejection_type)
-            case(CAVG_REJECTION_CHUNK)
-                name = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
-            case(CAVG_REJECTION_POOL)
-                name = CAVG_QUALITY_MODEL_POOL_DEFAULT
-        end select
-    end function default_name
-
     subroutine init_spec( self, spec )
         class(cavg_quality_model),     intent(inout) :: self
         type(cavg_quality_model_spec), intent(in)    :: spec
-        call assert_valid_rejection_type(spec%rejection_type)
         if( trim(spec%family) /= 'linear_boundary' ) &
             THROW_HARD('unsupported class-average quality model family: '//trim(spec%family))
         self%name                    = trim(spec%name)
         self%family                  = trim(spec%family)
-        self%context                 = trim(spec%context)
+        self%context                 = lowercase(trim(spec%context))
+        call assert_valid_model_context(self%context)
         self%feature_policy          = trim(spec%feature_policy)
-        self%rejection_type          = spec%rejection_type
         self%weights                 = spec%weights
         self%boundary_margin         = spec%boundary_margin
         self%min_score_separation    = spec%min_score_separation
@@ -179,7 +152,6 @@ contains
         spec%family                  = self%family
         spec%context                 = self%context
         spec%feature_policy          = self%feature_policy
-        spec%rejection_type          = self%rejection_type
         spec%weights                 = self%weights
         spec%boundary_margin         = self%boundary_margin
         spec%min_score_separation    = self%min_score_separation
@@ -198,8 +170,7 @@ contains
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'all_features_no_mask_single'
-        spec%rejection_type          = CAVG_REJECTION_CHUNK
+        spec%feature_policy          = 'all15_no_geom_softs'
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -219,7 +190,6 @@ contains
         spec%family                  = 'linear_boundary'
         spec%context                 = 'chunk'
         spec%feature_policy          = 'legacy_core'
-        spec%rejection_type          = CAVG_REJECTION_CHUNK
         spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
         spec%boundary_margin         = -CHUNK_BOUNDARY_OFFSET
         spec%min_score_separation    = MIN_SCORE_SEPARATION
@@ -239,7 +209,6 @@ contains
         spec%family                  = 'linear_boundary'
         spec%context                 = 'pool'
         spec%feature_policy          = 'legacy_core'
-        spec%rejection_type          = CAVG_REJECTION_POOL
         spec%weights                 = CAVG_QUALITY_DEFAULT_WEIGHTS
         spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
         spec%min_score_separation    = MIN_SCORE_SEPARATION
@@ -268,7 +237,6 @@ contains
         type(cavg_quality_result), intent(inout) :: quality
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
-        quality%rejection_type = self%rejection_type
         quality%model_name     = self%name
         quality%model_context  = self%context
         call apply_linear_boundary(quality, self)
@@ -285,7 +253,6 @@ contains
         write(funit,'(A,A)') 'family=', trim(self%family)
         write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
-        write(funit,'(A,I0)') 'rejection_type=', self%rejection_type
         write(funit,'(A)', advance='no') 'feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ','
@@ -350,7 +317,6 @@ contains
         write(funit,'(A,A)') '        spec%family                  = ', trim(fortran_quote(model%family))
         write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
-        write(funit,'(A,A)') '        spec%rejection_type          = ', trim(rejection_type_constant(model%rejection_type))
         call write_weights_assignment(funit, model%weights)
         write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
         write(funit,'(A,ES14.6)') '        spec%min_score_separation    = ', model%min_score_separation
@@ -459,29 +425,16 @@ contains
         endif
     end function fortran_logical
 
-    function rejection_type_constant( rejection_type ) result( literal )
-        integer, intent(in) :: rejection_type
-        character(len=32) :: literal
-        select case(rejection_type)
-            case(CAVG_REJECTION_CHUNK)
-                literal = 'CAVG_REJECTION_CHUNK'
-            case(CAVG_REJECTION_POOL)
-                literal = 'CAVG_REJECTION_POOL'
-            case default
-                THROW_HARD('rejection_type_constant: invalid class-average rejection type')
-        end select
-    end function rejection_type_constant
-
     subroutine read_model( self, fname )
         class(cavg_quality_model), intent(inout) :: self
         character(len=*),          intent(in)    :: fname
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: key, val, preset_name
-        integer :: funit, ios, parse_ios, rej_type
+        integer :: funit, ios, parse_ios
         logical :: have_preset, ok_line
         ! Model files are complete model definitions. Start from chunk defaults,
         ! apply any preset found in the file, then apply explicit key overrides.
-        call self%init_default(CAVG_REJECTION_CHUNK)
+        call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
         if( ios /= 0 ) THROW_HARD('read_model: failed to open '//trim(fname))
         have_preset = .false.
@@ -511,14 +464,9 @@ contains
                 case('family')
                     self%family = trim(val)
                 case('context')
-                    self%context = trim(val)
-                    self%rejection_type = cavg_rejection_type_from_name(trim(val))
+                    self%context = lowercase(trim(val))
                 case('feature_policy')
                     self%feature_policy = trim(val)
-                case('rejection_type')
-                    read(val,*,iostat=parse_ios) rej_type
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse rejection_type')
-                    self%rejection_type = rej_type
                 case('feature_weights')
                     call read_feature_weights(val, self%weights)
                 case('boundary_margin')
@@ -550,10 +498,9 @@ contains
             end select
         end do
         close(funit)
-        call assert_valid_rejection_type(self%rejection_type)
         if( trim(self%family) /= 'linear_boundary' ) &
             THROW_HARD('read_model: unsupported model family: '//trim(self%family))
-        self%context = cavg_rejection_type_name(self%rejection_type)
+        call assert_valid_model_context(self%context)
         call self%normalize()
     end subroutine read_model
 
@@ -618,7 +565,7 @@ contains
 
     subroutine reset_model( self )
         class(cavg_quality_model), intent(inout) :: self
-        call self%init_default(CAVG_REJECTION_CHUNK)
+        call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
     end subroutine reset_model
 
     subroutine apply_linear_boundary( quality, model )
@@ -635,7 +582,6 @@ contains
         ncls = size(quality%features, dim=1)
         if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_linear_boundary: invalid feature count')
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_linear_boundary: invalid mask size')
-        call assert_valid_rejection_type(model%rejection_type)
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
@@ -650,7 +596,6 @@ contains
         quality%separation       = 0.0
         quality%nclust           = 0
         quality%good_label       = 0
-        quality%rejection_type   = model%rejection_type
         quality%used_threshold   = .false.
         quality%model_name       = model%name
         quality%model_context    = model%context
@@ -823,40 +768,15 @@ contains
         endif
     end subroutine choose_tied_good_label
 
-    integer function cavg_rejection_type_from_name( name )
-        character(len=*), intent(in) :: name
-        select case(trim(name))
-            case('chunk')
-                cavg_rejection_type_from_name = CAVG_REJECTION_CHUNK
-            case('pool')
-                cavg_rejection_type_from_name = CAVG_REJECTION_POOL
-            case default
-                THROW_HARD('invalid class-average rejection type name: '//trim(name))
-        end select
-    end function cavg_rejection_type_from_name
-
-    function cavg_rejection_type_name( rejection_type ) result( name )
-        integer, intent(in) :: rejection_type
-        character(len=16)   :: name
-        select case(rejection_type)
-            case(CAVG_REJECTION_CHUNK)
-                name = 'chunk'
-            case(CAVG_REJECTION_POOL)
-                name = 'pool'
-            case default
-                THROW_HARD('invalid class-average rejection type')
-        end select
-    end function cavg_rejection_type_name
-
-    subroutine assert_valid_rejection_type( rejection_type )
-        integer, intent(in) :: rejection_type
-        select case(rejection_type)
-            case(CAVG_REJECTION_CHUNK, CAVG_REJECTION_POOL)
+    subroutine assert_valid_model_context( context )
+        character(len=*), intent(in) :: context
+        select case(trim(context))
+            case('chunk', 'pool')
                 return
             case default
-                THROW_HARD('invalid class-average rejection type')
+                THROW_HARD('invalid class-average quality model context: '//trim(context))
         end select
-    end subroutine assert_valid_rejection_type
+    end subroutine assert_valid_model_context
 
     subroutine otsu_score_threshold( scores, threshold, separation, ok )
         real,    intent(in)  :: scores(:)

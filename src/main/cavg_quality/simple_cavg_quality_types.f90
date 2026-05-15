@@ -4,8 +4,6 @@ use simple_defs, only: LONGSTRLEN
 implicit none
 private
 
-public :: CAVG_REJECTION_CHUNK
-public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_NFEATS
 public :: EPS
 public :: CLIP_Z
@@ -16,8 +14,6 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_REJECTION_CHUNK = 1
-integer, parameter :: CAVG_REJECTION_POOL  = 2
 integer, parameter :: CAVG_QUALITY_NFEATS  = 15
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
@@ -33,7 +29,6 @@ type :: cavg_quality_model_spec
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
     character(len=32) :: feature_policy          = 'all_features'
-    integer           :: rejection_type          = CAVG_REJECTION_CHUNK
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
     real              :: boundary_margin         = 0.0
     real              :: min_score_separation    = 0.0
@@ -61,7 +56,6 @@ type :: cavg_quality_result
     real                 :: separation       = 0.0
     integer              :: nclust           = 0
     integer              :: good_label       = 0
-    integer              :: rejection_type   = CAVG_REJECTION_CHUNK
     logical              :: used_threshold   = .false.
     character(len=64)    :: model_name       = ''
     character(len=32)    :: model_context    = ''
@@ -116,7 +110,6 @@ contains
         quality%separation       = 0.0
         quality%nclust           = 0
         quality%good_label       = 0
-        quality%rejection_type   = CAVG_REJECTION_CHUNK
         quality%used_threshold   = .false.
         quality%model_name       = ''
         quality%model_context    = ''

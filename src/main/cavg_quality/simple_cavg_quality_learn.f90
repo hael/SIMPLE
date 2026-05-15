@@ -9,7 +9,7 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_RE
     I_LOG_CONTRAST, I_LOG_HIST_VARIANCE
 use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
-use simple_cavg_quality_types, only: CAVG_REJECTION_POOL, CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 implicit none
 private
@@ -56,7 +56,7 @@ contains
         n_best_ties = 0
         max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_WEIGHT_ALPHAS) * size(LEARN_MINSEPS) * &
                    size(LEARN_MARGINS)
-        if( learned_model%rejection_type == CAVG_REJECTION_POOL ) max_grid = max_grid * size(LEARN_POOL_FRACS)
+        if( model_is_pool_context(learned_model) ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
         do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
             do ia = 1, size(LEARN_WEIGHT_ALPHAS)
@@ -69,7 +69,7 @@ contains
                     candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
                     do im = 1, size(LEARN_MARGINS)
                         candidate_spec%boundary_margin = LEARN_MARGINS(im)
-                        if( learned_model%rejection_type == CAVG_REJECTION_POOL )then
+                        if( model_is_pool_context(learned_model) )then
                             do ifrac = 1, size(LEARN_POOL_FRACS)
                                 candidate_spec%min_accept_frac = LEARN_POOL_FRACS(ifrac)
                                 call candidate%init_spec(candidate_spec)
@@ -98,6 +98,11 @@ contains
         deallocate(best_tie_specs)
         deallocate(dsets)
     end subroutine learn_cavg_quality_model
+
+    logical function model_is_pool_context( model )
+        type(cavg_quality_model), intent(in) :: model
+        model_is_pool_context = trim(model%context) == 'pool'
+    end function model_is_pool_context
 
     function feature_policy_name( ipolicy ) result( name )
         integer, intent(in) :: ipolicy
@@ -531,7 +536,7 @@ contains
         call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_real_list(funit, 'grid_boundary_margins=', LEARN_MARGINS)
-        if( learned_model%rejection_type == CAVG_REJECTION_POOL ) &
+        if( model_is_pool_context(learned_model) ) &
             call write_real_list(funit, 'grid_pool_min_accept_fracs=', LEARN_POOL_FRACS)
         write(funit,'(A)', advance='no') 'suggested_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -962,7 +967,7 @@ contains
         call write_grid_position_diagnostic(funit, 'boundary_margin', learned_model%boundary_margin, &
             LEARN_MARGINS, 'best_at_lowest_value_consider_more_negative_if_junk_leaks_after_validation', &
             'best_at_highest_value_consider_more_positive_if_good_classes_are_rejected')
-        if( learned_model%rejection_type == CAVG_REJECTION_POOL )then
+        if( model_is_pool_context(learned_model) )then
             call write_grid_position_diagnostic(funit, 'min_accept_frac', learned_model%min_accept_frac, &
                 LEARN_POOL_FRACS, 'best_at_lowest_value_consider_lower_if_pool_model_keeps_too_much_junk', &
                 'best_at_highest_value_consider_higher_if_pool_model_rejects_good_classes')
@@ -1088,7 +1093,7 @@ contains
         character(len=8) :: level
         if( model%enforce_min_accept_frac )then
             level = policy_level(diag%n_min_accept_like, diag%min_accept_like_fp, diag%min_accept_like_fn)
-        else if( diag%total_fn > 0 .and. model%rejection_type == CAVG_REJECTION_POOL )then
+        else if( diag%total_fn > 0 .and. model_is_pool_context(model) )then
             level = 'warning'
         else
             level = 'note'

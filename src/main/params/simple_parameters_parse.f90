@@ -165,7 +165,6 @@ contains
         call reg%add_char('qsys_partition2D', self%qsys_partition2D)
         call reg%add_char('quality_mode', self%quality_mode)
         call reg%add_char('quality_model', self%quality_model)
-        call reg%add_char('rejection_type', self%rejection_type)
         call reg%add_char('randomise', self%randomise)
         call reg%add_char('rank_cavgs', self%rank_cavgs)
         call reg%add_char('ranked_parts', self%ranked_parts)

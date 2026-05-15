@@ -1,7 +1,7 @@
 # Microchunk Quality Refactor Notes
 
-**Date:** May 13, 2026  
-**Context:** Follow-up to the `cluster_cavgs_quality` experiments on difficult real-world stream partitions, with an eye toward improving `cluster2D_microchunked` without disturbing Joe's streaming/microchunk orchestration.
+**Date:** May 15, 2026
+**Context:** Follow-up to the `cluster_cavgs_quality` experiments on difficult real-world stream partitions, now focused on integrating the current `chunk_default_v2` model into `cluster2D_microchunked` without disturbing Joe's streaming/microchunk orchestration.
 
 ## Short Summary
 
@@ -16,7 +16,16 @@ The new `simple_cavg_quality` implementation gives us a better quality decision 
 - derive an automatic score threshold from the cluster means
 - preserve raw and normalized feature tables for validation
 
-The main refactor opportunity is therefore to keep the microchunk lifecycle as-is and replace or wrap only the class-average rejection policy.
+The main refactor opportunity is therefore to keep the microchunk lifecycle as-is and replace or wrap only the class-average rejection policy. This should be controlled by a single internal logical flag in the microchunk implementation, not by a new command-line option and not by a second rejection-type abstraction.
+
+The intended new backend is the current chunk model:
+
+- instantiate `cavg_quality_model`
+- initialize it with `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, currently `chunk_default_v2`
+- call `evaluate_cavg_quality`
+- propagate `quality%states`, `quality%scores`, and cluster annotations into the same project fields the scalar rejector updates today
+
+The selected model owns the decision boundary, feature policy, hard-reject behavior, and any later retrained chunk default. The microchunk code should only decide whether to use the quality backend or the legacy scalar backend during the transition.
 
 ## What We Learned From The Experiments
 
@@ -54,7 +63,7 @@ This was important. Aggressive hard rejections are difficult to recover from bec
 
 The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
 
-The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch8chunk learning cycle with the `all_features_no_mask_single` policy, which zeros only `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection.
+The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. The current chunk default was promoted from the representative batch9chunk learning cycle with the `all15_no_geom_softs` policy, which zeros `mask_inside` and `single_component` because those soft geometry flags duplicate the hard connected-component rejection, and also zeros `cc_area_frac` because it was inconsistent across the representative chunk set.
 
 ### 5. The Current Best General Profile Is Still Local-Signal Heavy
 
@@ -68,7 +77,7 @@ The practical interpretation is:
 - centering helps catch pathological classes without becoming a hard rule
 - background/local context is useful when combined with foreground signal
 
-On the representative stream-chunk learning set in batch8chunk, this became the promoted `chunk_default_v2` profile.
+On the representative stream-chunk learning set in batch9chunk, this became the promoted `chunk_default_v2` profile.
 
 ### 6. The Boundary Margin Should Remain Internal
 
@@ -92,17 +101,27 @@ These are orchestration strengths. The quality-vector work should not be used as
 
 Refactor class-average rejection in `simple_microchunked2D` so that the decision source is `simple_cavg_quality`, while the microchunk lifecycle remains unchanged.
 
+The backend choice should be a module-local logical constant or private logical field, for example:
+
+```text
+USE_CAVG_QUALITY_BACKEND = .true.
+```
+
+When this flag is `.true.`, `microchunked2D%reject_cavgs` should use the current chunk model. When it is `.false.`, the existing scalar cascade remains available as a short-term fallback for debugging and side-by-side validation. This switch should not be exposed in the UI.
+
 Concretely:
 
 1. Add a small internal helper, for example `apply_cavg_quality_to_chunk`, that:
    - reads the chunk project and class-average stack
+   - initializes a `cavg_quality_model` with `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`
    - calls `evaluate_cavg_quality`
    - maps `quality%states` to `cls2D`, `cls3D`, and particle state/class fields
+   - records `quality_score`, `quality_cluster`, model name, and model context where the project schema already supports it
    - writes selected/rejected class-average stacks
    - optionally writes a compact feature table for analysis/debug builds
    - updates `chunk%nptcls_selected`
 
-2. Replace the current scalar cascade inside `microchunked2D%reject_cavgs` with that helper.
+2. Route `microchunked2D%reject_cavgs` through the helper when `USE_CAVG_QUALITY_BACKEND` is `.true.`.
 
 3. Keep the existing sentinel behavior:
    - `REJECTION_FINISHED` on success
@@ -110,7 +129,7 @@ Concretely:
    - refchunk still captures `self%refs` and `self%box`
    - match chunks still update accepted/rejected particle counters
 
-4. Keep `cluster2D_rejector` temporarily as a fallback or comparison backend until the batch-mode validation confirms easy-dataset behavior.
+4. Keep `cluster2D_rejector` only behind the `.false.` branch of the logical backend flag until stream validation confirms that the quality model is stable enough to remove the old path.
 
 This should make the change low-risk: the scheduler sees the same class states and particle-state side effects as before, but those states come from the validated feature-space selector.
 
@@ -129,43 +148,37 @@ Candidate responsibilities:
 
 This reduces risk before changing the actual selection policy.
 
-### Stage 2: Add A Quality Backend To Microchunk Rejection
+### Stage 2: Add A Logical Quality Backend Switch
 
-Introduce a local policy choice inside `simple_microchunked2D`, not a user-facing CLI parameter. For example:
-
-```text
-MICROCHUNK_REJECTION_BACKEND = 'quality_vector'
-```
-
-or, better, use a logical/module constant during transition:
+Introduce a local logical choice inside `simple_microchunked2D`, not a user-facing CLI parameter:
 
 ```text
-USE_QUALITY_VECTOR_REJECTION = .true.
+USE_CAVG_QUALITY_BACKEND = .true.
 ```
 
-This lets us keep the old scalar backend nearby for a short validation period without exposing another knob.
+This keeps the transition explicit and cheap to reverse during validation without adding another operational knob. The true branch should use `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`; it should not reintroduce `rejection_type`, and it should not carry a separate set of scalar thresholds in the microchunk layer.
 
-### Stage 3: Use Stage-Aware Profiles Only If Evidence Requires It
+### Stage 3: Let The Current Chunk Model Be The First Integrated Profile
 
-The current quality profile was tuned on difficult stream partitions and should be the default first integration candidate. However, microchunk tiers differ:
+The current `chunk_default_v2` profile was tuned on difficult stream partitions and should be the default first integration candidate. However, microchunk tiers differ:
 
 - pass-1 chunks are smaller and noisier
 - pass-2 chunks have already passed one quality gate
 - refchunk quality is high-impact because it seeds all match chunks
 - match chunks need stable, comparable decisions against a fixed reference
 
-If validation shows the same profile is too strict for pass-1 or too permissive for ref/match, introduce stage-aware internal profiles in `simple_cavg_quality`, not scattered thresholds in `simple_microchunked2D`.
+If validation shows the same profile is too strict for pass-1 or too permissive for ref/match, introduce stage-aware internal models in `simple_cavg_quality`, not scattered thresholds in `simple_microchunked2D`.
 
 For example:
 
 ```text
-CAVG_QUALITY_PROFILE_PASS1
-CAVG_QUALITY_PROFILE_PASS2
-CAVG_QUALITY_PROFILE_REF
-CAVG_QUALITY_PROFILE_MATCH
+CAVG_QUALITY_MODEL_CHUNK_PASS1
+CAVG_QUALITY_MODEL_CHUNK_PASS2
+CAVG_QUALITY_MODEL_CHUNK_REF
+CAVG_QUALITY_MODEL_CHUNK_MATCH
 ```
 
-Each profile should specify weights, boundary margin, and minimum score separation. The extraction and normalization code should remain shared.
+Each model should specify weights, boundary margin, minimum score separation, feature policy, and hard-reject behavior through the normal model machinery. The extraction and normalization code should remain shared.
 
 ### Stage 4: Replace Duplicate Metric Code
 
@@ -219,11 +232,12 @@ write selected/rejected stacks
 touch REJECTION_FINISHED
 ```
 
-Proposed:
+Proposed with the logical backend flag enabled:
 
 ```text
 read chunk project
 read class averages
+model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
 evaluate_cavg_quality
 map quality%states to project state
 annotate quality fields
@@ -231,7 +245,7 @@ write selected/rejected stacks
 touch REJECTION_FINISHED
 ```
 
-The outer microchunk flow does not need to change.
+With the flag disabled, the current scalar rejector path remains available temporarily. The outer microchunk flow does not need to change in either branch.
 
 ## Open Validation Questions
 
@@ -243,6 +257,6 @@ The outer microchunk flow does not need to change.
 
 ## Recommended Next Step
 
-After the easy batch-mode validation finishes, integrate `simple_cavg_quality` into `microchunked2D%reject_cavgs` behind an internal backend constant and run the same difficult stream partitions again. If the state propagation and sentinel behavior remain unchanged, this should be a local refactor rather than a scheduler rewrite.
+Integrate `simple_cavg_quality` into `microchunked2D%reject_cavgs` behind the internal `USE_CAVG_QUALITY_BACKEND` logical flag and run the same difficult stream partitions again. The enabled path should initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, so future retraining and promotion of `chunk_default_v2` automatically changes the stream behavior without touching microchunk code. If the state propagation and sentinel behavior remain unchanged, this should be a local refactor rather than a scheduler rewrite.
 
 The safest initial target is refchunk and match rejection, because those tiers most closely resemble the real-world validation sets. Pass-1/pass-2 can follow once we know the quality-vector behavior is stable on smaller chunks.

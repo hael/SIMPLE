@@ -2,9 +2,11 @@
 
 ## Overview
 
-`cluster_cavgs_quality` is the SIMPLE class-average quality selection program. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
+`cluster_cavgs_quality` is the SIMPLE class-average quality selection program and the validation harness for the class-average quality library. It replaces a field of scalar rejection thresholds with an explicit, interpretable multivariate model. The program evaluates every 2D class average, applies hard validity rejects for non-negotiable failures, measures a fixed inventory of quality features, normalizes those features within the dataset, and applies an instantiable quality model that partitions the remaining class averages into accepted and rejected sets.
 
-The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, threshold controls, and policy flags for chunk-like or pool-like behavior. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
+The current implementation is intentionally not a black-box classifier. A model is a named `linear_boundary` specification with feature weights, threshold controls, policy flags, and a context label such as `chunk` or `pool`. Learned models can be used directly from a model file, and a separate promotion mode can emit the Fortran code needed to add a validated learned model as a built-in library option.
+
+There is one user-facing selector: `quality_model`. If no `quality_model` is provided, SIMPLE initializes `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, currently `chunk_default_v2`. There is no separate `rejection_type` parameter and no user-visible `default` model name; chunk/pool behavior is encoded by the selected model itself.
 
 ## Main Files
 
@@ -18,6 +20,8 @@ The current implementation lives under `src/main/cavg_quality`:
 - `simple_cavg_quality_learn.f90`: training-table reader and model search.
 
 The command entry point is `exec_cluster_cavgs_quality` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
+
+Other SIMPLE workflows should treat `simple_cavg_quality` as a library backend. The intended streaming integration is for `simple_microchunked2D` to use an internal logical flag, for example `USE_CAVG_QUALITY_BACKEND`, to choose between the new quality backend and the legacy scalar cascade during transition. When enabled, that backend should instantiate `cavg_quality_model`, initialize `CAVG_QUALITY_MODEL_CHUNK_DEFAULT`, call `evaluate_cavg_quality`, and map the resulting states and scores through the same project fields currently updated by the scalar rejector.
 
 ## Quality Modes
 
@@ -73,7 +77,6 @@ The current model family is `linear_boundary`. A model contains:
 - `family`
 - `context`
 - `feature_policy`
-- `rejection_type`
 - `weights(CAVG_QUALITY_NFEATS)`
 - `boundary_margin`
 - `min_score_separation`
@@ -86,7 +89,7 @@ The current model family is `linear_boundary`. A model contains:
 - `use_cluster_rescue`
 - `enforce_min_accept_frac`
 
-`quality_model` is the primary selector for built-in presets. `rejection_type` is retained as a legacy hint for choosing a default model when no explicit model is requested.
+`quality_model` is the selector for built-in presets. When no explicit `quality_model` is provided, SIMPLE uses `chunk_default_v2`; pool-style behavior is selected by requesting a pool model such as `pool_default_v1` or by passing a model file through `infile=`.
 
 The current built-in presets are:
 
@@ -94,17 +97,37 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch8chunk learning cycle after resolution and foreground-geometry failures were moved into hard rejection. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `all_features_no_mask_single`, which leaves `mask_inside` and `single_component` at zero weight because those soft geometry diagnostics duplicate the hard connected-component rejection, while keeping `cc_area_frac`, `presence`, `log_contrast`, and masked histogram variance available to the scalar score and clustering distance. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the representative batch9chunk learning cycle after resolution and foreground-geometry failures were moved into hard rejection. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. The promoted feature policy is `all15_no_geom_softs`, which leaves `mask_inside` and `single_component` at zero weight because those soft geometry diagnostics duplicate the hard connected-component rejection, and also leaves `cc_area_frac` at zero weight because it was inconsistent across the representative chunk set. `presence`, `log_contrast`, and masked histogram variance remain available to the scalar score and clustering distance.
+
+The current chunk model uses `boundary_margin=0.05`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement enabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is retained as the legacy chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
 
 ## Feature Space
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set includes population/resolution support, foreground geometry, local signal variance, class statistics, center-edge signal, bounded histogram entropy, two connected-component shape diagnostics, central presence, full-image contrast, and masked histogram variance. A former scalar histogram-neighborhood feature, pairwise histogram/spectrum distance matrices, `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` were removed because representative chunk training showed they were weak, unstable, or redundant for the default scalar model.
+The current feature set has 15 scalar features:
+
+- `log_pop`
+- `neg_log_res`
+- `mask_inside`
+- `centered`
+- `log_locvar_fg`
+- `log_locvar_bg`
+- `single_component`
+- `corr_frc_proxy`
+- `log_center_edge_snr`
+- `hist_entropy`
+- `cc_area_frac`
+- `cc_diameter_norm`
+- `presence`
+- `log_contrast`
+- `log_hist_variance`
+
+A former scalar histogram-neighborhood feature, pairwise histogram/spectrum distance matrices, `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` were removed because representative chunk training showed they were weak, unstable, or redundant for the default scalar model.
 
 Resolution and foreground geometry also contribute hard validity rejects before the learned model is fit. Following the microchunk rejection principle, a class with stored `cls2D` resolution worse than `40 A` is hard rejected. After Otsu segmentation and connected-component cleanup, a class is also hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar resolution and geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 
-The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering.
+The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering. The current default intentionally keeps the backend scalar-only: pairwise histogram and spectrum matrices are not part of the model search or classification path.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -155,7 +178,7 @@ Hard rejects are still final. A class with `hard_reject=.true.` remains rejected
 
 ## Training Method
 
-Training is an explicit grid search over the existing interpretable model. It is not a black-box optimizer.
+Training is an explicit grid search over the existing interpretable model. It is not a black-box optimizer. The model selected by `quality_model` or `infile=` is the base model for learning; if neither is supplied, learn mode starts from `chunk_default_v2`.
 
 Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis file, the learner reads:
 
@@ -183,9 +206,9 @@ The current grid searches:
 - feature-weight interpolation alpha;
 - minimum score separation;
 - boundary margin;
-- pool minimum accepted fraction, only for pool models.
+- pool minimum accepted fraction, only when the base model context is `pool`.
 
-The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and an `all_features_no_mask_single` middle ground that keeps the newer scalar diagnostics while excluding the two soft geometry flags most duplicated by hard geometry rejection.
+The feature-policy candidates are hand-curated masks over the scalar feature bank. They include the original base scalar subsets, histogram-variance variants, full-feature variants, and geometry-pruned full-feature variants such as `all15_no_geom_softs`, which keeps the newer scalar diagnostics while excluding the soft geometry flags most duplicated by hard geometry rejection and the unstable connected-component area fraction.
 
 Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
 
@@ -208,7 +231,7 @@ The report also includes feature-screen diagnostics for deciding what to try nex
 
 ### 1. Generate Analysis Files
 
-Run `analyze` on each dataset with a trusted manual selection already encoded in `cls2D` state.
+Run `analyze` on each dataset with a trusted manual selection already encoded in `cls2D` state. For chunk/stream data, `quality_model` may be omitted because `chunk_default_v2` is the default; specifying it explicitly can be useful for reproducible command logs.
 
 ```bash
 simple_exec prg=cluster_cavgs_quality quality_mode=analyze \
@@ -238,7 +261,7 @@ Create a text file with one analysis file path per line:
 /path/to/dataset_003/cavgs_quality_analysis.txt
 ```
 
-Use separate file tables for chunk and pool training unless deliberately testing cross-context behavior.
+Use separate file tables for chunk and pool training unless deliberately testing cross-context behavior. The model context is carried by the model, not by a separate rejection-type parameter.
 
 ### 3. Learn a New Model
 
@@ -284,7 +307,7 @@ simple_exec prg=cluster_cavgs_quality quality_mode=analyze \
   infile=cavgs_quality_model_chunk_learned.txt
 ```
 
-Compare the new analysis file and accepted/rejected stacks against the original manual selection and against the previous default model.
+Compare the new analysis file and accepted/rejected stacks against the original manual selection and against the previous promoted model.
 
 ### 5. Apply the Learned Model
 
@@ -317,7 +340,7 @@ The generated text file contains:
 - the full `*_model_spec()` function;
 - notes about updating the UI/help option lists.
 
-Review the code, paste it into `simple_cavg_quality_model.f90`, update the user-visible `quality_model` option lists, rebuild, and then test the promoted model by name:
+Review the code, paste it into `simple_cavg_quality_model.f90`, update `BUILTIN_MODEL_NAMES` and the user-visible `quality_model` option lists, rebuild, and then test the promoted model by name:
 
 ```bash
 simple_exec prg=cluster_cavgs_quality quality_mode=analyze \
@@ -338,6 +361,11 @@ For every candidate learned model, check:
 - whether the best model is unique or one of many ties;
 - whether balanced accuracy hides unacceptable false negatives;
 - whether the model behaves sensibly on a dataset not used for learning.
+
+For streaming integration, validate the promoted chunk model in two passes:
+
+- first through `cluster_cavgs_quality quality_mode=analyze`, where trusted manual selections can be compared directly;
+- then through the microchunk backend guarded by the internal `USE_CAVG_QUALITY_BACKEND` flag, where the important checks are unchanged sentinel behavior, identical project-state propagation, and acceptable selected/rejected class-average stacks.
 
 ## Current Limitations and Future Directions
 

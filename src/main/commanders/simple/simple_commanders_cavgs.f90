@@ -4,8 +4,8 @@ use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_DEFAULT, &
-    cavg_quality_model, cavg_rejection_type_from_name, write_cavg_quality_model_builtin_code
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
+    write_cavg_quality_model_builtin_code
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
@@ -342,17 +342,13 @@ contains
             case default
                 THROW_HARD('cluster_cavgs_quality: quality_mode must be apply, analyze, learn or promote')
         end select
-        if( trim(params%quality_model) == '' .or. trim(params%quality_model) == CAVG_QUALITY_MODEL_DEFAULT )then
-            if( cline%defined('rejection_type') )then
-                call model%init_default(cavg_rejection_type_from_name(params%rejection_type))
-            else
-                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-            endif
+        if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
+            call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         else
             call model%init_preset(params%quality_model)
         endif
         ! Precedence: preset/default first, model file last.
-        ! infile is a complete model and wins over the legacy hint.
+        ! infile is a complete model and wins over the built-in preset.
         if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
             call model%read(params%infile%to_char())
         if( quality_mode == QUALITY_MODE_PROMOTE )then
