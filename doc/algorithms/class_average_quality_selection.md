@@ -102,7 +102,7 @@ The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature 
 
 The current feature set includes population/resolution support, foreground geometry, local signal variance, class statistics, center-edge signal, bounded histogram entropy, two connected-component shape diagnostics, central presence, full-image contrast, and masked histogram variance. A former scalar histogram-neighborhood feature, pairwise histogram/spectrum distance matrices, `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` were removed because representative chunk training showed they were weak, unstable, or redundant for the default scalar model.
 
-Foreground geometry also contributes hard validity rejects before the learned model is fit. After Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic outside-mask density is not left for the model to rescue.
+Resolution and foreground geometry also contribute hard validity rejects before the learned model is fit. Following the microchunk rejection principle, a class with stored `cls2D` resolution worse than `40 A` is hard rejected. After Otsu segmentation and connected-component cleanup, a class is also hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar resolution and geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 
 The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering.
 
@@ -118,7 +118,7 @@ For one dataset, the model classifies as follows:
    score = sum(z_feature_i * weight_i)
    ```
 
-2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition. Hard rejects include empty/dead classes and foreground geometry failures outside the expected mask.
+2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition. Hard rejects include empty/dead classes, `cls2D res > 40 A`, and foreground geometry failures outside the expected mask.
 
 3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors, using only features whose model weight is nonzero.
 
@@ -161,7 +161,7 @@ Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis f
 
 - the normalized `z_*` feature columns by name;
 - `manual_state`, where `manual_state > 0` is the reference accepted class;
-- `hard_reject`.
+- `hard_reject`. For legacy analysis files, learn-mode also infers the current hard resolution and geometry vetoes from raw diagnostic columns when they are present.
 
 The learner first derives suggested feature weights. For each feature, all training rows across all datasets are pooled, feature AUC is computed against the manual labels, and the suggested feature weight is:
 

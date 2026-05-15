@@ -4,7 +4,7 @@ use simple_defs,               only: logfhandle, LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
-use simple_cavg_quality_feats, only: cavg_quality_feature_name, I_LOG_POP, I_NEG_LOG_RES, I_MASK_INSIDE, &
+use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, I_MASK_INSIDE, &
     I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_HIST_ENTROPY, I_CC_AREA_FRAC, I_PRESENCE, &
     I_LOG_CONTRAST, I_LOG_HIST_VARIANCE
 use simple_cavg_quality_model, only: CAVG_QUALITY_DEFAULT_WEIGHTS, cavg_quality_model
@@ -205,7 +205,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
         integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS)
-        integer :: raw_mask_inside_col, raw_centered_col
+        integer :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
         logical :: have_feature_header
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
@@ -225,13 +225,14 @@ contains
         feat_col = 0
         raw_mask_inside_col = 0
         raw_centered_col    = 0
+        raw_neg_log_res_col = 0
         have_feature_header = .false.
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
             if( is_analysis_header_line(line) )then
                 call map_analysis_feature_columns(line, feat_col)
-                call map_analysis_raw_geometry_columns(line, raw_mask_inside_col, raw_centered_col)
+                call map_analysis_raw_hard_reject_columns(line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col)
                 call require_analysis_feature_columns(feat_col, trim(fname))
                 have_feature_header = .true.
                 cycle
@@ -242,7 +243,7 @@ contains
             if( irow == 1 ) dset%dataset_id = trim(field)
             field = csv_field(line, 6)
             dset%hard_reject(irow) = str_is_true(field)
-            if( analysis_row_geometry_hard_reject(line, raw_mask_inside_col, raw_centered_col) ) &
+            if( analysis_row_legacy_hard_reject(line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col) ) &
                 dset%hard_reject(irow) = .true.
             field = csv_field(line, 9)
             dset%manual_states(irow) = str2int(trim(field))
@@ -299,50 +300,62 @@ contains
         end do
     end subroutine map_analysis_feature_columns
 
-    subroutine map_analysis_raw_geometry_columns( line, raw_mask_inside_col, raw_centered_col )
+    subroutine map_analysis_raw_hard_reject_columns( line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col )
         character(len=*), intent(in)  :: line
-        integer,          intent(out) :: raw_mask_inside_col, raw_centered_col
+        integer,          intent(out) :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
         character(len=LONGSTRLEN) :: field
         integer :: icol
         raw_mask_inside_col = 0
         raw_centered_col    = 0
+        raw_neg_log_res_col = 0
         do icol = 1, 512
             field = csv_field(line, icol)
             if( len_trim(field) == 0 ) exit
             select case(trim(field))
+                case('raw_neg_log_res')
+                    raw_neg_log_res_col = icol
                 case('raw_mask_inside')
                     raw_mask_inside_col = icol
                 case('raw_centered')
                     raw_centered_col = icol
             end select
         end do
-    end subroutine map_analysis_raw_geometry_columns
+    end subroutine map_analysis_raw_hard_reject_columns
 
-    logical function analysis_row_geometry_hard_reject( line, raw_mask_inside_col, raw_centered_col )
+    logical function analysis_row_legacy_hard_reject( line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col )
         character(len=*), intent(in) :: line
-        integer,          intent(in) :: raw_mask_inside_col, raw_centered_col
+        integer,          intent(in) :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
         character(len=LONGSTRLEN) :: field
-        real :: raw_mask_inside, raw_centered
+        real :: raw_mask_inside, raw_centered, raw_neg_log_res
         ! Legacy analysis records lack the exact largest-CC outside-pixel count,
         ! but they do carry the raw mask/centroid diagnostics from the same
-        ! segmentation pass. Use them to keep obvious mask failures out of the
+        ! segmentation pass. They also predate the hard resolution veto. Use
+        ! these raw diagnostics to keep obvious validity failures out of the
         ! learned quality model when retraining from existing analysis files.
-        analysis_row_geometry_hard_reject = .false.
+        analysis_row_legacy_hard_reject = .false.
+        if( raw_neg_log_res_col > 0 )then
+            field = csv_field(line, raw_neg_log_res_col)
+            if( len_trim(field) > 0 )then
+                raw_neg_log_res = str2real(trim(field))
+                if( raw_neg_log_res < -log(CAVG_RES_HARD_REJECT_A) - EPS ) &
+                    analysis_row_legacy_hard_reject = .true.
+            endif
+        endif
         if( raw_centered_col > 0 )then
             field = csv_field(line, raw_centered_col)
             if( len_trim(field) > 0 )then
                 raw_centered = str2real(trim(field))
-                if( raw_centered < -1.0 - EPS ) analysis_row_geometry_hard_reject = .true.
+                if( raw_centered < -1.0 - EPS ) analysis_row_legacy_hard_reject = .true.
             endif
         endif
         if( raw_mask_inside_col > 0 )then
             field = csv_field(line, raw_mask_inside_col)
             if( len_trim(field) > 0 )then
                 raw_mask_inside = str2real(trim(field))
-                if( raw_mask_inside < -EPS ) analysis_row_geometry_hard_reject = .true.
+                if( raw_mask_inside < -EPS ) analysis_row_legacy_hard_reject = .true.
             endif
         endif
-    end function analysis_row_geometry_hard_reject
+    end function analysis_row_legacy_hard_reject
 
     subroutine require_analysis_feature_columns( feat_col, fname )
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
@@ -507,7 +520,7 @@ contains
         write(funit,'(A,I0)') 'best_tie_count=', n_best_ties
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
         write(funit,'(A)') 'note=scalar_feature_space_only_pairwise_distance_matrices_removed'
-        write(funit,'(A)') 'note=legacy_raw_geometry_mask_failures_are_honored_as_hard_rejects_when_present'
+        write(funit,'(A)') 'note=legacy_raw_resolution_and_geometry_failures_are_honored_as_hard_rejects_when_present'
         call write_feature_policy_grid(funit)
         call write_real_list(funit, 'grid_weight_alphas=', LEARN_WEIGHT_ALPHAS)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)

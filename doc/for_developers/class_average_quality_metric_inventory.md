@@ -44,7 +44,7 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | Index | Feature | Source | Direction | Notes |
 | --- | --- | --- | --- | --- |
 | 1 | `log_pop` | `cls2D` `pop` | higher is better | Log population support. |
-| 2 | `neg_log_res` | `cls2D` `res` | higher is better | Lower Angstrom resolution maps to a larger score. |
+| 2 | `neg_log_res` | `cls2D` `res` | higher is better | Lower Angstrom resolution maps to a larger score; `res > 40 A` is hard rejected before modeling. |
 | 3 | `mask_inside` | Otsu foreground CC vs. mask disc | higher is better | Negative outside-mask fraction of the main segmented component. Extreme failures are hard rejected before modeling. |
 | 4 | `centered` | Otsu CC mass centers | higher is better | Negative normalized centroid displacement. Component centroids outside the mask are hard rejected before modeling. |
 | 5 | `log_locvar_fg` | `image%loc_var_masked` | higher is better | Foreground local variance after low-pass filtering and Otsu masking. |
@@ -63,7 +63,7 @@ Pairwise histogram and rotational-spectrum matrices are no longer part of the de
 
 The representative chunk runs also removed `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` from the feature bank. Those signals were either weak, redundant with retained scalar features, or inverted on some datasets.
 
-Mask-geometry validity is deliberately outside the learned model. The feature extractor hard rejects class averages when the Otsu/connected-component pass finds no valid foreground component, any foreground-component centroid outside the mask radius, or more than 10 pixels of the largest component outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
+Resolution and mask-geometry validity are deliberately outside the learned model. The feature extractor hard rejects class averages when `cls2D res > 40 A`, when the Otsu/connected-component pass finds no valid foreground component, when any foreground-component centroid lies outside the mask radius, or when more than 10 pixels of the largest component lie outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
 
 ## Current Model Controls
 

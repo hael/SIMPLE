@@ -42,6 +42,7 @@ This made feature values comparable across datasets with different particle coun
 The new quality module only hard-rejects pathological cases:
 
 - zero population
+- stored class resolution worse than 40 A
 - no valid connected component after foreground segmentation
 - foreground-component centroids outside the mask radius
 - more than 10 pixels of the largest foreground component outside the mask disc

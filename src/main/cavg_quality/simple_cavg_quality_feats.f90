@@ -38,12 +38,14 @@ public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: calc_histogram_quality_scalars
+public :: CAVG_RES_HARD_REJECT_A
 
 #include "simple_local_flags.inc"
 
 real,    parameter :: LOG_EPS             = 1.0e-12
 real,    parameter :: FOREGROUND_SEG_LP   = 30.0
 real,    parameter :: SIGNAL_METRIC_LP    = 10.0
+real,    parameter :: CAVG_RES_HARD_REJECT_A = 40.0
 integer, parameter :: LOCVAR_WINDOW       = 10
 integer, parameter :: NHISTBINS           = 128
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS = 10
@@ -222,9 +224,11 @@ contains
             raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
             raw(i, I_PRESENCE)      = presence_score
             raw(i, I_LOG_CONTRAST)  = log(max(contrast, LOG_EPS))
-            ! Geometry failures are hard validity rejects; the model should not
-            ! rescue classes whose segmented foreground lies outside the mask.
-            hard_reject(i) = pop(i) <= 0 .or. bad_pixels .or. no_component .or. mask_hard_reject .or. &
+            ! Resolution and geometry failures are hard validity rejects; the
+            ! model should not rescue classes with a very poor stored class
+            ! resolution estimate or foreground outside the mask.
+            hard_reject(i) = pop(i) <= 0 .or. res(i) > CAVG_RES_HARD_REJECT_A .or. bad_pixels .or. &
+                                              no_component .or. mask_hard_reject .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
         end do
         !$omp end parallel do
