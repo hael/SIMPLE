@@ -6,7 +6,7 @@ use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, &
     I_MASK_INSIDE, I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_CENTER_EDGE_SNR, I_CC_AREA_FRAC, &
-    I_DETAIL_TEXTURE, I_PRESENCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+    I_INTERIOR_CURVATURE, I_PRESENCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
     I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, apply_cavg_quality_model_feature_exclusions, &
     apply_cavg_quality_model_mask_exclusions
 use simple_cavg_quality_model, only: cavg_quality_model
@@ -20,7 +20,7 @@ private
 public :: learn_cavg_quality_model
 
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 7
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 8
 real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
 real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                               -0.05, 0.0, 0.05, 0.10, 0.20]
@@ -182,6 +182,8 @@ contains
                 name = 'full_no_soft_geom'
             case(7)
                 name = 'full_geom_pruned'
+            case(8)
+                name = 'base_plus_curvature'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
         end select
@@ -194,22 +196,22 @@ contains
         select case(ipolicy)
             case(1)
                 mask(1:12) = .true.
-                mask(I_DETAIL_TEXTURE) = .false.
+                mask(I_INTERIOR_CURVATURE) = .false.
             case(2)
                 mask(1:12) = .true.
                 mask(I_MASK_INSIDE) = .false.
                 mask(I_CC_SINGLE)   = .false.
-                mask(I_DETAIL_TEXTURE) = .false.
+                mask(I_INTERIOR_CURVATURE) = .false.
             case(3)
                 mask(1:12) = .true.
                 mask(I_CC_AREA_FRAC) = .false.
-                mask(I_DETAIL_TEXTURE) = .false.
+                mask(I_INTERIOR_CURVATURE) = .false.
             case(4)
                 mask(1:12) = .true.
                 mask(I_MASK_INSIDE) = .false.
                 mask(I_CC_SINGLE)   = .false.
                 mask(I_CC_AREA_FRAC) = .false.
-                mask(I_DETAIL_TEXTURE) = .false.
+                mask(I_INTERIOR_CURVATURE) = .false.
             case(5)
                 mask = .true.
             case(6)
@@ -221,6 +223,8 @@ contains
                 mask(I_MASK_INSIDE) = .false.
                 mask(I_CC_SINGLE)   = .false.
                 mask(I_CC_AREA_FRAC) = .false.
+            case(8)
+                mask(1:12) = .true.
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select
@@ -879,7 +883,7 @@ contains
         call write_lodo_group_row(funit, 'support_res_corr', dsets, group_inds(1:3))
         group_inds(1:4) = [I_LOCVAR_FG, I_LOCVAR_BG, I_CENTER_EDGE_SNR, I_PRESENCE]
         call write_lodo_group_row(funit, 'local_signal4', dsets, group_inds(1:4))
-        group_inds(1:5) = [I_DETAIL_TEXTURE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
+        group_inds(1:5) = [I_INTERIOR_CURVATURE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
                            I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY]
         call write_lodo_group_row(funit, 'internal_detail5', dsets, group_inds(1:5))
     end subroutine write_lodo_group_screen

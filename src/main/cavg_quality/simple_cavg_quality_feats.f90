@@ -24,7 +24,7 @@ public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
 public :: I_CC_AREA_FRAC
-public :: I_DETAIL_TEXTURE
+public :: I_INTERIOR_CURVATURE
 public :: I_PRESENCE
 public :: I_LOG_DETAIL_BG_SNR
 public :: I_LOG_DETAIL_SIGNAL_RATIO
@@ -64,7 +64,7 @@ integer, parameter :: I_CC_SINGLE         = 7
 integer, parameter :: I_CORR_FRC          = 8
 integer, parameter :: I_CENTER_EDGE_SNR   = 9
 integer, parameter :: I_CC_AREA_FRAC      = 10
-integer, parameter :: I_DETAIL_TEXTURE    = 11
+integer, parameter :: I_INTERIOR_CURVATURE = 11
 integer, parameter :: I_PRESENCE          = 12
 integer, parameter :: I_LOG_DETAIL_BG_SNR = 13
 integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
@@ -92,8 +92,8 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
         'log central signal variance relative to edge variance in the class average', 'center_edge_signal'), &
     cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
         'main connected-component area divided by the expected circular mask area', 'foreground_geometry'), &
-    cavg_quality_feature_def('detail_texture', 'higher_is_better', &
-        '20-6 A local texture heterogeneity and radial-residual detail', 'internal_detail'), &
+    cavg_quality_feature_def('interior_curvature', 'higher_is_better', &
+        'edge-suppressed 20-6 A Laplacian energy in the central mask', 'internal_detail'), &
     cavg_quality_feature_def('presence', 'higher_is_better', &
         'central signal excess relative to border background noise', 'presence'), &
     cavg_quality_feature_def('log_detail_bg_snr', 'diagnostic', &
@@ -191,7 +191,7 @@ contains
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac
         real                 :: center_edge_snr, presence_score
-        real                 :: detail_texture, detail_bg_snr, detail_signal_ratio, detail_coverage
+        real                 :: interior_curvature, detail_bg_snr, detail_signal_ratio, detail_coverage
         real                 :: detail_edge_density
         integer              :: nccs_valid, ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
@@ -232,7 +232,7 @@ contains
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& cc_area_frac,detail_texture,detail_bg_snr,detail_signal_ratio,&
+        !$omp& cc_area_frac,interior_curvature,detail_bg_snr,detail_signal_ratio,&
         !$omp& detail_coverage,detail_edge_density)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
@@ -249,7 +249,7 @@ contains
                 locvar_bg        = 0.0
                 center_edge_snr  = 0.0
                 presence_score   = 0.0
-                detail_texture   = 0.0
+                interior_curvature = 0.0
                 detail_bg_snr    = 0.0
                 detail_signal_ratio = 0.0
                 detail_coverage  = 0.0
@@ -260,7 +260,7 @@ contains
                                                       centroid_norm, cc_area_frac, nccs_valid, &
                                                       no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, detail_texture, detail_bg_snr, detail_signal_ratio, &
+                                                presence_score, interior_curvature, detail_bg_snr, detail_signal_ratio, &
                                                 detail_coverage, detail_edge_density)
             endif
             raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
@@ -273,7 +273,7 @@ contains
             raw(i, I_CORR_FRC)      = corr(i)
             raw(i, I_CENTER_EDGE_SNR) = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_CC_AREA_FRAC)  = cc_area_frac
-            raw(i, I_DETAIL_TEXTURE) = detail_texture
+            raw(i, I_INTERIOR_CURVATURE) = interior_curvature
             raw(i, I_PRESENCE)      = presence_score
             raw(i, I_LOG_DETAIL_BG_SNR) = detail_bg_snr
             raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
@@ -382,13 +382,13 @@ contains
     end subroutine measure_cavg_foreground_geometry
 
     subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
-                                           detail_texture, detail_bg_snr, detail_signal_ratio, detail_coverage, &
+                                           interior_curvature, detail_bg_snr, detail_signal_ratio, detail_coverage, &
                                            detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
         real,         intent(out)   :: presence_score
-        real,         intent(out)   :: detail_texture
+        real,         intent(out)   :: interior_curvature
         real,         intent(out)   :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         type(image)       :: img, img_bin
         real, allocatable :: bin_mask(:,:,:)
@@ -397,7 +397,7 @@ contains
         call img%zero_edgeavg()
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
-        call measure_cavg_detail_metrics(img, rad_px, detail_texture, detail_bg_snr, detail_signal_ratio, &
+        call measure_cavg_detail_metrics(img, rad_px, interior_curvature, detail_bg_snr, detail_signal_ratio, &
                                          detail_coverage, detail_edge_density)
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
@@ -411,26 +411,23 @@ contains
         call img_bin%kill()
     end subroutine measure_cavg_image_metrics
 
-    subroutine measure_cavg_detail_metrics( img_src, rad_px, detail_texture, detail_bg_snr, detail_signal_ratio, &
+    subroutine measure_cavg_detail_metrics( img_src, rad_px, interior_curvature, detail_bg_snr, detail_signal_ratio, &
                                             detail_coverage, detail_edge_density )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
-        real,         intent(out)   :: detail_texture, detail_bg_snr, detail_signal_ratio
+        real,         intent(out)   :: interior_curvature, detail_bg_snr, detail_signal_ratio
         real,         intent(out)   :: detail_coverage, detail_edge_density
         type(image) :: detail_img
         real, allocatable :: orig(:,:,:), detail(:,:,:)
-        real(8), allocatable :: ring_sum(:), ring_mean(:), block_energy(:,:)
-        integer, allocatable :: ring_count(:), block_count(:,:)
-        integer :: ldim(3), cx, cy, ix, iy, ir, nrings
-        integer :: ib, jb, nxblocks, nyblocks, block_size, nblocks
-        integer :: n_in, n_bg, n_grad_in, n_grad_bg, n_cov, n_edge
-        real :: dx, dy, r2, rad2, core_rad2, val, grad, detail_rms_in, detail_rms_bg
+        integer :: ldim(3), cx, cy, ix, iy
+        integer :: n_in, n_bg, n_grad_in, n_grad_bg, n_cov, n_edge, n_curv_core, n_curv_bg
+        real :: dx, dy, r2, rad2, core_rad2, val, grad, lap, edge_weight
+        real :: detail_rms_in, detail_rms_bg, curv_rms_core, curv_rms_bg
         real :: signal_rms_in, grad_rms_in, grad_rms_bg, detail_thr, grad_thr
-        real :: block_cv, residual_frac
+        real :: grad_ref
         real(8) :: detail_s2_in, detail_s2_bg, signal_s2_in, grad_s2_in, grad_s2_bg
-        real(8) :: residual_s2_in, resid
-        real(8) :: block_mean, block_mean_all, block_var_all
-        detail_texture      = 0.0
+        real(8) :: curv_s2_core, curv_s2_bg
+        interior_curvature = 0.0
         detail_bg_snr       = 0.0
         detail_signal_ratio = 0.0
         detail_coverage     = 0.0
@@ -444,37 +441,28 @@ contains
         detail_img = img_src
         ! The detail diagnostics are deliberately cheap scalar probes: one
         ! broad 20-6 A band-pass, then real-space in-mask/background ratios,
-        ! coverage estimates, and a texture score. The texture score removes
-        ! the radial mean first, then combines coarse local residual-energy
-        ! heterogeneity in the core mask with total radial-residual signal.
-        ! This avoids punishing symmetric top views merely for being radially
-        ! organized, while still asking for non-flat local variance that
-        ! smooth ice blobs should lack.
+        ! coverage estimates, edge density, and an interior-curvature score.
+        ! The curvature score is a 4-neighbor Laplacian RMS in a shrunken
+        ! central mask, with high first-derivative pixels softly downweighted.
+        ! This targets internal extrema/detail while reducing the influence of
+        ! a smooth blob's sharp outer contour.
         call detail_img%bp(DETAIL_BAND_HP_A, DETAIL_BAND_LP_A)
         orig   = img_src%get_rmat()
         detail = detail_img%get_rmat()
-        nrings    = max(1, int(rad_px) + 2)
-        block_size = max(4, int(rad_px / 4.0))
-        nxblocks  = (ldim(1) + block_size - 1) / block_size
-        nyblocks  = (ldim(2) + block_size - 1) / block_size
-        core_rad2 = (0.85 * rad_px)**2
-        allocate(ring_sum(nrings), ring_mean(nrings), ring_count(nrings))
-        allocate(block_energy(nxblocks, nyblocks), block_count(nxblocks, nyblocks))
-        ring_sum   = 0.0d0
-        ring_mean  = 0.0d0
-        ring_count = 0
-        block_energy = 0.0d0
-        block_count  = 0
+        core_rad2 = (0.80 * rad_px)**2
         detail_s2_in = 0.0d0
         detail_s2_bg = 0.0d0
         signal_s2_in = 0.0d0
         grad_s2_in   = 0.0d0
         grad_s2_bg   = 0.0d0
-        residual_s2_in = 0.0d0
+        curv_s2_core = 0.0d0
+        curv_s2_bg   = 0.0d0
         n_in         = 0
         n_bg         = 0
         n_grad_in    = 0
         n_grad_bg    = 0
+        n_curv_core  = 0
+        n_curv_bg    = 0
         do iy = 1, ldim(2)
             dy = real(iy - cy)
             do ix = 1, ldim(1)
@@ -482,9 +470,6 @@ contains
                 r2  = dx * dx + dy * dy
                 val = detail(ix,iy,1)
                 if( r2 <= rad2 )then
-                    ir = min(nrings, int(sqrt(r2)) + 1)
-                    ring_sum(ir)   = ring_sum(ir) + real(val,kind=8)
-                    ring_count(ir) = ring_count(ir) + 1
                     detail_s2_in = detail_s2_in + real(val,kind=8)**2
                     signal_s2_in = signal_s2_in + real(orig(ix,iy,1),kind=8)**2
                     n_in = n_in + 1
@@ -506,59 +491,9 @@ contains
         end do
         if( n_in <= 0 )then
             call detail_img%kill()
-            deallocate(orig, detail, ring_sum, ring_mean, ring_count, block_energy, block_count)
+            deallocate(orig, detail)
             return
         endif
-        do ir = 1, nrings
-            if( ring_count(ir) > 0 ) ring_mean(ir) = ring_sum(ir) / real(ring_count(ir),kind=8)
-        end do
-        do iy = 1, ldim(2)
-            dy = real(iy - cy)
-            do ix = 1, ldim(1)
-                dx = real(ix - cx)
-                r2 = dx * dx + dy * dy
-                if( r2 > rad2 ) cycle
-                ir = min(nrings, int(sqrt(r2)) + 1)
-                resid = real(detail(ix,iy,1),kind=8) - ring_mean(ir)
-                residual_s2_in = residual_s2_in + resid**2
-                if( r2 <= core_rad2 )then
-                    ib = min(nxblocks, (ix - 1) / block_size + 1)
-                    jb = min(nyblocks, (iy - 1) / block_size + 1)
-                    block_energy(ib,jb) = block_energy(ib,jb) + resid**2
-                    block_count(ib,jb)  = block_count(ib,jb) + 1
-                endif
-            end do
-        end do
-        nblocks = 0
-        block_mean_all = 0.0d0
-        do jb = 1, nyblocks
-            do ib = 1, nxblocks
-                if( block_count(ib,jb) <= 0 ) cycle
-                block_energy(ib,jb) = block_energy(ib,jb) / real(block_count(ib,jb),kind=8)
-                block_mean_all = block_mean_all + block_energy(ib,jb)
-                nblocks = nblocks + 1
-            end do
-        end do
-        block_cv = 0.0
-        if( nblocks > 1 )then
-            block_mean_all = block_mean_all / real(nblocks,kind=8)
-            block_var_all = 0.0d0
-            do jb = 1, nyblocks
-                do ib = 1, nxblocks
-                    if( block_count(ib,jb) <= 0 ) cycle
-                    block_mean = block_energy(ib,jb)
-                    block_var_all = block_var_all + (block_mean - block_mean_all)**2
-                end do
-            end do
-            block_cv = sqrt(real(block_var_all / real(nblocks - 1,kind=8))) / &
-                       max(real(block_mean_all), LOG_EPS)
-        endif
-        if( detail_s2_in > 0.0d0 )then
-            residual_frac = sqrt(real(residual_s2_in / detail_s2_in))
-        else
-            residual_frac = 0.0
-        endif
-        detail_texture = log(max(block_cv + residual_frac, LOG_EPS))
         detail_rms_in = sqrt(real(detail_s2_in / real(max(n_in, 1),kind=8)))
         signal_rms_in = sqrt(real(signal_s2_in / real(max(n_in, 1),kind=8)))
         if( n_bg > 0 )then
@@ -580,23 +515,43 @@ contains
         detail_signal_ratio = log(max(detail_rms_in / max(signal_rms_in, LOG_EPS), LOG_EPS))
         detail_thr = max(2.0 * detail_rms_bg, 0.5 * detail_rms_in)
         grad_thr   = max(2.0 * grad_rms_bg,   0.5 * grad_rms_in)
+        grad_ref   = max(max(grad_rms_bg, 0.25 * grad_rms_in), LOG_EPS)
         n_cov  = 0
         n_edge = 0
         do iy = 2, ldim(2) - 1
             dy = real(iy - cy)
             do ix = 2, ldim(1) - 1
                 dx = real(ix - cx)
-                if( dx * dx + dy * dy > rad2 ) cycle
-                if( abs(detail(ix,iy,1)) > detail_thr ) n_cov = n_cov + 1
+                r2 = dx * dx + dy * dy
                 grad = sqrt(0.25 * (detail(ix+1,iy,1) - detail(ix-1,iy,1))**2 + &
                             0.25 * (detail(ix,iy+1,1) - detail(ix,iy-1,1))**2)
-                if( grad > grad_thr ) n_edge = n_edge + 1
+                lap = detail(ix-1,iy,1) + detail(ix+1,iy,1) + detail(ix,iy-1,1) + &
+                      detail(ix,iy+1,1) - 4.0 * detail(ix,iy,1)
+                if( r2 <= rad2 )then
+                    if( abs(detail(ix,iy,1)) > detail_thr ) n_cov = n_cov + 1
+                    if( grad > grad_thr ) n_edge = n_edge + 1
+                    if( r2 <= core_rad2 )then
+                        edge_weight = 1.0 / (1.0 + (grad / grad_ref)**2)
+                        curv_s2_core = curv_s2_core + real(edge_weight * lap * lap, kind=8)
+                        n_curv_core = n_curv_core + 1
+                    endif
+                else
+                    curv_s2_bg = curv_s2_bg + real(lap * lap, kind=8)
+                    n_curv_bg = n_curv_bg + 1
+                endif
             end do
         end do
+        curv_rms_core = sqrt(real(curv_s2_core / real(max(n_curv_core, 1),kind=8)))
+        if( n_curv_bg > 0 )then
+            curv_rms_bg = sqrt(real(curv_s2_bg / real(n_curv_bg,kind=8)))
+        else
+            curv_rms_bg = curv_rms_core
+        endif
+        interior_curvature = log(max(curv_rms_core / max(curv_rms_bg, LOG_EPS), LOG_EPS))
         detail_coverage     = real(n_cov)  / real(max(n_grad_in, 1))
         detail_edge_density = real(n_edge) / real(max(n_grad_in, 1))
         call detail_img%kill()
-        deallocate(orig, detail, ring_sum, ring_mean, ring_count, block_energy, block_count)
+        deallocate(orig, detail)
     end subroutine measure_cavg_detail_metrics
 
     real function resolution_feature( res )

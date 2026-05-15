@@ -119,7 +119,7 @@ The current feature set has 16 scalar features:
 - `corr_frc_proxy`
 - `log_center_edge_snr`
 - `cc_area_frac`
-- `detail_texture`
+- `interior_curvature`
 - `presence`
 - `log_detail_bg_snr`
 - `log_detail_signal_ratio`
@@ -128,7 +128,7 @@ The current feature set has 16 scalar features:
 
 The current model path is scalar-only. Pairwise histogram/spectrum distance matrices, relational quality matrices, histogram-neighborhood density, and global intensity-softness descriptors are not part of the active feature bank.
 
-The internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, band-passed edge density, and a `detail_texture` score. `detail_texture` subtracts the radial mean before combining coarse local residual-energy heterogeneity in the central mask with total radial-residual signal. This is meant to penalize smooth ice blobs without punishing legitimate symmetric top views merely because their signal is radially organized. These are scalar diagnostics rather than pairwise distances.
+The internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, band-passed edge density, and an `interior_curvature` score. `interior_curvature` measures 4-neighbor Laplacian RMS in a shrunken central mask after softly downweighting pixels dominated by first-derivative edge response. This is meant to penalize smooth ice blobs whose signal is mostly a sharp contour, while preserving signal from true internal extrema/detail. These are scalar diagnostics rather than pairwise distances.
 
 Resolution has a dual role. The continuous `neg_log_res` feature is part of the learned model and contributes to both the linear score and the feature-space distance whenever its learned weight is nonzero. Only catastrophic resolution failure is outside the learned boundary: a class with stored `cls2D` resolution worse than `40 A` is hard rejected before fitting. Foreground geometry is handled more conservatively; after Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 

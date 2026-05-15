@@ -64,8 +64,8 @@ real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 
 ! Previous chunk_default_v2 backup before batch_train1 promotion. This is
-! retained only as historical reference; slot 11 is now a 20-6 A detail
-! texture diagnostic rather than the old cc_diameter_norm geometry scalar.
+! retained only as historical reference; slot 11 is now an edge-suppressed
+! 20-6 A interior-curvature diagnostic rather than the old geometry scalar.
 ! real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 !     1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
 !     1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &
