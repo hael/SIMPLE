@@ -16,31 +16,20 @@ public :: CAVG_QUALITY_NFEATS
 public :: LOG_EPS
 public :: I_LOG_POP
 public :: I_NEG_LOG_RES
-public :: I_MASK_INSIDE
 public :: I_CENTERED
 public :: I_LOCVAR_FG
 public :: I_LOCVAR_BG
-public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
 public :: I_CC_AREA_FRAC
-public :: I_INTERIOR_CURVATURE
 public :: I_PRESENCE
-public :: I_LOG_DETAIL_BG_SNR
-public :: I_LOG_DETAIL_SIGNAL_RATIO
-public :: I_DETAIL_COVERAGE
-public :: I_DETAIL_EDGE_DENSITY
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
 public :: cavg_quality_feature_direction
-public :: cavg_quality_feature_family
-public :: cavg_quality_feature_model_eligible
 public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
-public :: apply_cavg_quality_model_feature_exclusions
-public :: apply_cavg_quality_model_mask_exclusions
 public :: CAVG_RES_HARD_REJECT_A
 
 #include "simple_local_flags.inc"
@@ -48,87 +37,41 @@ public :: CAVG_RES_HARD_REJECT_A
 real,    parameter :: LOG_EPS                   = 1.0e-12
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
-real,    parameter :: DETAIL_BAND_HP_A          = 20.0
-real,    parameter :: DETAIL_BAND_LP_A          =  6.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 
 integer, parameter :: I_LOG_POP                 = 1
 integer, parameter :: I_NEG_LOG_RES             = 2
-integer, parameter :: I_MASK_INSIDE             = 3
-integer, parameter :: I_CENTERED                = 4
-integer, parameter :: I_LOCVAR_FG               = 5
-integer, parameter :: I_LOCVAR_BG               = 6
-integer, parameter :: I_CC_SINGLE               = 7
-integer, parameter :: I_CORR_FRC                = 8
-integer, parameter :: I_CENTER_EDGE_SNR         = 9
-integer, parameter :: I_CC_AREA_FRAC            = 10
-integer, parameter :: I_INTERIOR_CURVATURE      = 11
-integer, parameter :: I_PRESENCE                = 12
-integer, parameter :: I_LOG_DETAIL_BG_SNR       = 13
-integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
-integer, parameter :: I_DETAIL_COVERAGE         = 15
-integer, parameter :: I_DETAIL_EDGE_DENSITY     = 16
+integer, parameter :: I_CENTERED                = 3
+integer, parameter :: I_LOCVAR_FG               = 4
+integer, parameter :: I_LOCVAR_BG               = 5
+integer, parameter :: I_CORR_FRC                = 6
+integer, parameter :: I_CENTER_EDGE_SNR         = 7
+integer, parameter :: I_CC_AREA_FRAC            = 8
+integer, parameter :: I_PRESENCE                = 9
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
-        'log class population; larger classes have more particle support', 'population_support'), &
+        'log class population; larger classes have more particle support'), &
     cavg_quality_feature_def('neg_log_res', 'higher_is_better', &
-        'negative log class resolution estimate; higher values indicate better nominal resolution', 'resolution'), &
-    cavg_quality_feature_def('mask_inside', 'higher_is_better', &
-        'negative outside-mask fraction for the main segmented component', 'foreground_geometry'), &
+        'negative log class resolution estimate; higher values indicate better nominal resolution'), &
     cavg_quality_feature_def('centered', 'higher_is_better', &
-        'negative normalized centroid displacement of segmented class-average signal', 'foreground_geometry'), &
+        'negative normalized centroid displacement of segmented class-average signal'), &
     cavg_quality_feature_def('log_locvar_fg', 'higher_is_better', &
-        'log local variance measured in the foreground Otsu mask', 'local_variance'), &
+        'log local variance measured in the foreground Otsu mask'), &
     cavg_quality_feature_def('log_locvar_bg', 'higher_is_better', &
-        'log local variance measured in the complementary background mask', 'local_variance'), &
-    cavg_quality_feature_def('single_component', 'higher_is_better', &
-        'negative distance from exactly one valid connected component', 'foreground_geometry'), &
+        'log local variance measured in the complementary background mask'), &
     cavg_quality_feature_def('corr_frc_proxy', 'higher_is_better', &
-        'stored class correlation or FRC-like score when available in cls2D metadata', 'quality_proxy'), &
+        'stored class correlation or FRC-like score when available in cls2D metadata'), &
     cavg_quality_feature_def('log_center_edge_snr', 'higher_is_better', &
-        'log central signal variance relative to edge variance in the class average', 'center_edge_signal'), &
-    cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
-        'main connected-component area divided by the expected circular mask area', 'foreground_geometry'), &
-    cavg_quality_feature_def('interior_curvature', 'higher_is_better', &
-        'edge-suppressed central 20-6 A Laplacian energy normalized by outside-mask noise', &
-        'internal_detail'), &
+        'log central signal variance relative to edge variance in the class average'), &
+    cavg_quality_feature_def('cc_area_frac', 'higher_is_better', &
+        'main connected-component area divided by the expected circular mask area'), &
     cavg_quality_feature_def('presence', 'higher_is_better', &
-        'central signal excess relative to border background noise', 'presence'), &
-    cavg_quality_feature_def('log_detail_bg_snr', 'diagnostic', &
-        'log in-mask band-passed detail RMS relative to outside-mask detail RMS', 'internal_detail'), &
-    cavg_quality_feature_def('log_detail_signal_ratio', 'diagnostic', &
-        'log in-mask band-passed detail RMS relative to in-mask total signal RMS', 'internal_detail'), &
-    cavg_quality_feature_def('detail_coverage', 'diagnostic', &
-        'fraction of in-mask pixels with band-passed detail above local background and image-scale thresholds', &
-        'internal_detail'), &
-    cavg_quality_feature_def('detail_edge_density', 'diagnostic', &
-        'fraction of in-mask pixels with band-passed gradient magnitude above background and image-scale thresholds', &
-        'internal_detail') ]
+        'central signal excess relative to border background noise') ]
 
 contains
-
-    subroutine apply_cavg_quality_model_feature_exclusions( weights )
-        real, intent(inout) :: weights(:)
-        integer :: ifeat
-        if( size(weights) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('apply_cavg_quality_model_feature_exclusions: invalid weight vector size')
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( .not. cavg_quality_feature_model_eligible(ifeat) ) weights(ifeat) = 0.0
-        end do
-    end subroutine apply_cavg_quality_model_feature_exclusions
-
-    subroutine apply_cavg_quality_model_mask_exclusions( mask )
-        logical, intent(inout) :: mask(:)
-        integer :: ifeat
-        if( size(mask) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('apply_cavg_quality_model_mask_exclusions: invalid feature mask size')
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( .not. cavg_quality_feature_model_eligible(ifeat) ) mask(ifeat) = .false.
-        end do
-    end subroutine apply_cavg_quality_model_mask_exclusions
 
     function cavg_quality_feature_name( i ) result( name )
         integer, intent(in) :: i
@@ -151,29 +94,13 @@ contains
         direction = FEATURE_DEFS(i)%direction
     end function cavg_quality_feature_direction
 
-    function cavg_quality_feature_family( i ) result( family )
-        integer, intent(in) :: i
-        character(len=32)   :: family
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        family = FEATURE_DEFS(i)%family
-    end function cavg_quality_feature_family
-
-    logical function cavg_quality_feature_model_eligible( i )
-        integer, intent(in) :: i
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        ! Model eligibility is family-based so genuinely misleading feature
-        ! families can be excluded in one place. The current inventory contains
-        ! only hard-reject diagnostics and active scalar model candidates.
-        cavg_quality_feature_model_eligible = .true.
-    end function cavg_quality_feature_model_eligible
-
     subroutine write_cavg_quality_feature_inventory( funit )
         integer, intent(in) :: funit
         integer :: i
-        write(funit,'(A)') '# feature_inventory_header=index,name,direction,family,description'
+        write(funit,'(A)') '# feature_inventory_header=index,name,direction,description'
         do i = 1, CAVG_QUALITY_NFEATS
-            write(funit,'(A,I0,A,A,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
-                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%family), ',', trim(FEATURE_DEFS(i)%description)
+            write(funit,'(A,I0,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
+                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%description)
         end do
     end subroutine write_cavg_quality_feature_inventory
 
@@ -189,13 +116,10 @@ contains
         real                 :: smpd, rad_px
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
-        real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
+        real                 :: centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac
         real                 :: center_edge_snr, presence_score
-        real                 :: interior_curvature
-        real                 :: detail_bg_snr, detail_signal_ratio, detail_coverage
-        real                 :: detail_edge_density
-        integer              :: nccs_valid, ithr
+        integer              :: ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
         ncls = size(imgs)
         if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
@@ -232,55 +156,38 @@ contains
             call disc_img(ithr)%get_rmat_sub(rmat_disc(:,:,:,ithr))
             disc_area(ithr) = count(rmat_disc(:,:,:,ithr) > 0.0)
         end do
-        !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
+        !$omp parallel do default(shared) private(i,ithr,centroid_norm,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& cc_area_frac,interior_curvature,detail_bg_snr,detail_signal_ratio,&
-        !$omp& detail_coverage,detail_edge_density)&
+        !$omp& cc_area_frac)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
             ithr = omp_get_thread_num() + 1
             bad_pixels = imgs(i)%contains_nans()
             if( bad_pixels )then
-                outside_frac        = 1.0
                 centroid_norm       = 2.0
                 cc_area_frac        = 0.0
-                nccs_valid          = 0
                 no_component        = .true.
                 mask_hard_reject    = .true.
                 locvar_fg           = 0.0
                 locvar_bg           = 0.0
                 center_edge_snr     = 0.0
                 presence_score      = 0.0
-                interior_curvature  = 0.0
-                detail_bg_snr       = 0.0
-                detail_signal_ratio = 0.0
-                detail_coverage     = 0.0
-                detail_edge_density = 0.0
             else
                 call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
-                                                      rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
-                                                      centroid_norm, cc_area_frac, nccs_valid, &
-                                                      no_component, mask_hard_reject)
+                                                      rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, &
+                                                      centroid_norm, cc_area_frac, no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, interior_curvature, &
-                                                detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density)
+                                                presence_score)
             endif
             raw(i, I_LOG_POP)                 = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)             = resolution_feature(res(i))
-            raw(i, I_MASK_INSIDE)             = -outside_frac
             raw(i, I_CENTERED)                = -centroid_norm
             raw(i, I_LOCVAR_FG)               = log(max(locvar_fg, LOG_EPS))
             raw(i, I_LOCVAR_BG)               = log(max(locvar_bg, LOG_EPS))
-            raw(i, I_CC_SINGLE)               = -abs(real(nccs_valid - 1))
             raw(i, I_CORR_FRC)                = corr(i)
             raw(i, I_CENTER_EDGE_SNR)         = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_CC_AREA_FRAC)            = cc_area_frac
-            raw(i, I_INTERIOR_CURVATURE)      = interior_curvature
             raw(i, I_PRESENCE)                = presence_score
-            raw(i, I_LOG_DETAIL_BG_SNR)       = detail_bg_snr
-            raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
-            raw(i, I_DETAIL_COVERAGE)         = detail_coverage
-            raw(i, I_DETAIL_EDGE_DENSITY)     = detail_edge_density
             ! Catastrophic resolution and geometry failures are hard validity
             ! rejects; ordinary resolution variation remains an active scalar
             ! model feature through neg_log_res.
@@ -328,22 +235,19 @@ contains
         end do
     end subroutine normalize_cavg_quality_features
 
-    subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, outside_frac, &
-                                                 centroid_norm, cc_area_frac, nccs_valid, no_component, &
-                                                 mask_hard_reject )
+    subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, &
+                                                 centroid_norm, cc_area_frac, no_component, mask_hard_reject )
         class(image),     intent(inout) :: img
         type(image_bin),  intent(inout) :: bin_img, cc_img
         real,             intent(inout) :: rmat_cc(:,:,:)
         real,             intent(in)    :: rmat_disc(:,:,:)
         integer,          intent(in)    :: disc_area
         real,             intent(in)    :: rad_px
-        real,             intent(out)   :: outside_frac, centroid_norm, cc_area_frac
-        integer,          intent(out)   :: nccs_valid
+        real,             intent(out)   :: centroid_norm, cc_area_frac
         logical,          intent(out)   :: no_component, mask_hard_reject
         real, allocatable :: ccsizes(:)
-        integer           :: j, loc, nccs, area, outside
+        integer           :: j, loc, nccs, nccs_valid, area, outside
         real              :: xy(2)
-        outside_frac  = 1.0
         centroid_norm = 2.0
         cc_area_frac  = 0.0
         nccs_valid    = 0
@@ -379,19 +283,14 @@ contains
         area    = count(rmat_cc > 0.0)
         outside = count(rmat_cc - rmat_disc > 0.0)
         cc_area_frac = real(area) / real(max(disc_area, 1))
-        outside_frac = real(outside) / real(max(area, 1))
         if( outside > MASK_HARD_OUTSIDE_PIXELS ) mask_hard_reject = .true.
     end subroutine measure_cavg_foreground_geometry
 
-    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
-                                           interior_curvature, detail_bg_snr, &
-                                           detail_signal_ratio, detail_coverage, detail_edge_density )
+    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
         real,         intent(out)   :: presence_score
-        real,         intent(out)   :: interior_curvature
-        real,         intent(out)   :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         type(image)       :: img, img_bin
         real, allocatable :: bin_mask(:,:,:)
         integer           :: ldim(3)
@@ -399,8 +298,6 @@ contains
         call img%zero_edgeavg()
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
-        call measure_cavg_detail_metrics(img, rad_px, interior_curvature, &
-                                         detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density)
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
@@ -412,157 +309,6 @@ contains
         call img%kill()
         call img_bin%kill()
     end subroutine measure_cavg_image_metrics
-
-    subroutine measure_cavg_detail_metrics( img_src, rad_px, interior_curvature, &
-                                            detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density )
-        class(image), intent(inout) :: img_src
-        real,         intent(in)    :: rad_px
-        real,         intent(out)   :: interior_curvature
-        real,         intent(out)   :: detail_bg_snr, detail_signal_ratio
-        real,         intent(out)   :: detail_coverage, detail_edge_density
-        type(image) :: detail_img
-        real, allocatable :: orig(:,:,:), detail(:,:,:)
-        integer :: ldim(3), cx, cy, ix, iy
-        integer :: n_in, n_bg, n_grad_in, n_grad_bg, n_cov, n_edge, n_curv_core
-        real :: dx, dy, r2, rad2, core_rad2, val, grad, lap, edge_weight
-        real :: detail_rms_in, detail_rms_bg, curv_rms_core
-        real :: signal_rms_in, grad_rms_in, grad_rms_bg, detail_thr, grad_thr
-        real :: bg_std
-        real :: grad_ref
-        real(8) :: detail_s2_in, detail_s2_bg, signal_s2_in, grad_s2_in, grad_s2_bg
-        real(8) :: curv_s2_core, bg_s1, bg_s2, bg_mean, bg_var
-        interior_curvature      = 0.0
-        detail_bg_snr       = 0.0
-        detail_signal_ratio = 0.0
-        detail_coverage     = 0.0
-        detail_edge_density = 0.0
-        ldim = img_src%get_ldim()
-        if( ldim(3) /= 1 ) THROW_HARD('measure_cavg_detail_metrics: 2D only')
-        cx   = ldim(1) / 2 + 1
-        cy   = ldim(2) / 2 + 1
-        rad2 = rad_px**2
-        if( rad2 <= EPS ) return
-        detail_img = img_src
-        ! The detail diagnostics are deliberately cheap scalar probes: one
-        ! broad 20-6 A band-pass, then real-space in-mask/background ratios,
-        ! coverage estimates, edge density, and an interior-curvature score.
-        ! The curvature score is a 4-neighbor Laplacian RMS in a shrunken
-        ! central mask, with high first-derivative pixels softly downweighted.
-        ! This targets internal extrema/detail while reducing the influence of
-        ! a smooth blob's sharp outer contour.
-        call detail_img%bp(DETAIL_BAND_HP_A, DETAIL_BAND_LP_A)
-        orig   = img_src%get_rmat()
-        detail = detail_img%get_rmat()
-        core_rad2 = (0.80 * rad_px)**2
-        detail_s2_in = 0.0d0
-        detail_s2_bg = 0.0d0
-        signal_s2_in = 0.0d0
-        grad_s2_in   = 0.0d0
-        grad_s2_bg   = 0.0d0
-        curv_s2_core = 0.0d0
-        bg_s1        = 0.0d0
-        bg_s2        = 0.0d0
-        n_in         = 0
-        n_bg         = 0
-        n_grad_in    = 0
-        n_grad_bg    = 0
-        n_curv_core  = 0
-        do iy = 1, ldim(2)
-            dy = real(iy - cy)
-            do ix = 1, ldim(1)
-                dx  = real(ix - cx)
-                r2  = dx * dx + dy * dy
-                val = detail(ix,iy,1)
-                if( r2 <= rad2 )then
-                    detail_s2_in = detail_s2_in + real(val,kind=8)**2
-                    signal_s2_in = signal_s2_in + real(orig(ix,iy,1),kind=8)**2
-                    n_in = n_in + 1
-                else
-                    detail_s2_bg = detail_s2_bg + real(val,kind=8)**2
-                    bg_s1        = bg_s1 + real(orig(ix,iy,1),kind=8)
-                    bg_s2        = bg_s2 + real(orig(ix,iy,1),kind=8)**2
-                    n_bg = n_bg + 1
-                endif
-                if( ix <= 1 .or. ix >= ldim(1) .or. iy <= 1 .or. iy >= ldim(2) ) cycle
-                grad = sqrt(0.25 * (detail(ix+1,iy,1) - detail(ix-1,iy,1))**2 + &
-                            0.25 * (detail(ix,iy+1,1) - detail(ix,iy-1,1))**2)
-                if( r2 <= rad2 )then
-                    grad_s2_in = grad_s2_in + real(grad,kind=8)**2
-                    n_grad_in = n_grad_in + 1
-                else
-                    grad_s2_bg = grad_s2_bg + real(grad,kind=8)**2
-                    n_grad_bg = n_grad_bg + 1
-                endif
-            end do
-        end do
-        if( n_in <= 0 )then
-            call detail_img%kill()
-            deallocate(orig, detail)
-            return
-        endif
-        detail_rms_in = sqrt(real(detail_s2_in / real(max(n_in, 1),kind=8)))
-        signal_rms_in = sqrt(real(signal_s2_in / real(max(n_in, 1),kind=8)))
-        if( n_bg > 0 )then
-            detail_rms_bg = sqrt(real(detail_s2_bg / real(n_bg,kind=8)))
-        else
-            detail_rms_bg = detail_rms_in
-        endif
-        if( n_grad_in > 0 )then
-            grad_rms_in = sqrt(real(grad_s2_in / real(n_grad_in,kind=8)))
-        else
-            grad_rms_in = 0.0
-        endif
-        if( n_grad_bg > 0 )then
-            grad_rms_bg = sqrt(real(grad_s2_bg / real(n_grad_bg,kind=8)))
-        else
-            grad_rms_bg = grad_rms_in
-        endif
-        if( n_bg > 1 )then
-            bg_mean = bg_s1 / real(n_bg,kind=8)
-            bg_var  = max(0.0d0, bg_s2 / real(n_bg,kind=8) - bg_mean**2)
-            bg_std  = sqrt(real(bg_var))
-        else
-            bg_std = detail_rms_bg
-        endif
-        bg_std = max(bg_std, detail_rms_bg, LOG_EPS)
-        detail_bg_snr       = log(max(detail_rms_in / max(detail_rms_bg, LOG_EPS), LOG_EPS))
-        detail_signal_ratio = log(max(detail_rms_in / max(signal_rms_in, LOG_EPS), LOG_EPS))
-        detail_thr = max(2.0 * detail_rms_bg, 0.5 * detail_rms_in)
-        grad_thr   = max(2.0 * grad_rms_bg,   0.5 * grad_rms_in)
-        grad_ref   = max(max(grad_rms_bg, 0.25 * grad_rms_in), LOG_EPS)
-        n_cov  = 0
-        n_edge = 0
-        do iy = 2, ldim(2) - 1
-            dy = real(iy - cy)
-            do ix = 2, ldim(1) - 1
-                dx = real(ix - cx)
-                r2 = dx * dx + dy * dy
-                grad = sqrt(0.25 * (detail(ix+1,iy,1) - detail(ix-1,iy,1))**2 + &
-                            0.25 * (detail(ix,iy+1,1) - detail(ix,iy-1,1))**2)
-                lap = detail(ix-1,iy,1) + detail(ix+1,iy,1) + detail(ix,iy-1,1) + &
-                      detail(ix,iy+1,1) - 4.0 * detail(ix,iy,1)
-                if( r2 <= rad2 )then
-                    if( abs(detail(ix,iy,1)) > detail_thr ) n_cov = n_cov + 1
-                    if( grad > grad_thr ) n_edge = n_edge + 1
-                    if( r2 <= core_rad2 )then
-                        edge_weight = 1.0 / (1.0 + (grad / grad_ref)**2)
-                        curv_s2_core = curv_s2_core + real(edge_weight * lap * lap, kind=8)
-                        n_curv_core = n_curv_core + 1
-                    endif
-                endif
-            end do
-        end do
-        curv_rms_core = sqrt(real(curv_s2_core / real(max(n_curv_core, 1),kind=8)))
-        ! The curvature score is intentionally normalized by the class-average
-        ! outside-mask noise scale, not by outside-mask curvature. In minimal
-        ! tests this made the feature less sensitive to sharp blob contours and
-        ! more directly tied to internal structure above the image background.
-        interior_curvature = log(max(curv_rms_core / bg_std, LOG_EPS))
-        detail_coverage     = real(n_cov)  / real(max(n_grad_in, 1))
-        detail_edge_density = real(n_edge) / real(max(n_grad_in, 1))
-        call detail_img%kill()
-        deallocate(orig, detail)
-    end subroutine measure_cavg_detail_metrics
 
     real function resolution_feature( res )
         real, intent(in) :: res

@@ -4,14 +4,10 @@ use simple_defs,               only: logfhandle, LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
-use simple_cavg_quality_feats, only: cavg_quality_feature_name, CAVG_RES_HARD_REJECT_A, I_LOG_POP, I_NEG_LOG_RES, &
-    I_MASK_INSIDE, I_LOCVAR_FG, I_LOCVAR_BG, I_CC_SINGLE, I_CORR_FRC, I_CENTER_EDGE_SNR, I_CC_AREA_FRAC, &
-    I_INTERIOR_CURVATURE, I_PRESENCE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
-    I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY, &
-    apply_cavg_quality_model_feature_exclusions, apply_cavg_quality_model_mask_exclusions
+use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 implicit none
 private
@@ -21,7 +17,6 @@ public :: learn_cavg_quality_model
 
 logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 5
 real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
 ! Positive margins deliberately over-select relative to the learned boundary.
 ! Keeping a resolved positive tail lets learn mode discover recall-favoring
@@ -48,7 +43,7 @@ contains
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
         real :: best_score
-        integer :: i, ipol, im, isep, ilow, iwin, iomin, iomax, max_grid, n_grid, n_top, n_best_ties
+        integer :: i, im, isep, ilow, iwin, iomin, iomax, max_grid, n_grid, n_top, n_best_ties
         if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
         allocate(dsets(size(analysis_files)))
         do i = 1, size(analysis_files)
@@ -63,42 +58,38 @@ contains
         n_top       = 0
         n_grid      = 0
         n_best_ties = 0
-        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_MINSEPS) * size(LEARN_MARGINS) * &
-            n_otsu_grid_combinations()
+        max_grid = size(LEARN_MINSEPS) * size(LEARN_MARGINS) * n_otsu_grid_combinations()
         if( model_is_pool_context(learned_model) ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
-        do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
-            candidate_spec = base_spec
-            candidate_spec%feature_policy = feature_policy_name(ipol)
-            candidate_spec%weights = suggested_weights
-            call apply_feature_policy(ipol, candidate_spec%weights)
-            do isep = 1, size(LEARN_MINSEPS)
-                candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
-                do im = 1, size(LEARN_MARGINS)
-                    candidate_spec%boundary_margin = LEARN_MARGINS(im)
-                    do ilow = 1, size(LEARN_OTSU_FLAGS)
-                        candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
-                        do iwin = 1, size(LEARN_OTSU_FLAGS)
-                            candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
-                            if( candidate_spec%use_otsu_window )then
-                                do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
-                                    candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
-                                    do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
-                                        candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
-                                        if( candidate_spec%otsu_max_offset <= candidate_spec%otsu_min_offset + EPS ) cycle
-                                        call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
-                                            n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
-                                            top_specs, top_scores, n_top)
-                                    end do
+        candidate_spec = base_spec
+        candidate_spec%weights = suggested_weights
+        call normalize_candidate_weights(candidate_spec%weights)
+        do isep = 1, size(LEARN_MINSEPS)
+            candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
+            do im = 1, size(LEARN_MARGINS)
+                candidate_spec%boundary_margin = LEARN_MARGINS(im)
+                do ilow = 1, size(LEARN_OTSU_FLAGS)
+                    candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
+                    do iwin = 1, size(LEARN_OTSU_FLAGS)
+                        candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
+                        if( candidate_spec%use_otsu_window )then
+                            do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
+                                candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
+                                do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
+                                    candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
+                                    if( candidate_spec%otsu_max_offset <= candidate_spec%otsu_min_offset + EPS ) cycle
+                                    call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
+                                        n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
+                                        top_specs, top_scores, n_top)
                                 end do
-                            else
-                                candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
-                                candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
-                                call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
-                                    n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
-                                    top_specs, top_scores, n_top)
-                            endif
-                        end do
+                            end do
+                        else
+                            candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
+                            candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
+                            call evaluate_candidate_spec(dsets, candidate_spec, model_is_pool_context(learned_model), &
+                                n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
+                                top_specs, top_scores, n_top)
+                        endif
                     end do
                 end do
             end do
@@ -169,96 +160,14 @@ contains
         endif
     end subroutine evaluate_candidate_spec
 
-    function feature_policy_name( ipolicy ) result( name )
-        integer, intent(in) :: ipolicy
-        character(len=32) :: name
-        select case(ipolicy)
-            case(1)
-                name = 'base_scalar'
-            case(2)
-                name = 'base_no_cc_area'
-            case(3)
-                name = 'base_geom_pruned'
-            case(4)
-                name = 'base_scalar_plus_curvature'
-            case(5)
-                name = 'full_geom_pruned'
-            case default
-                THROW_HARD('feature_policy_name: invalid feature policy')
-        end select
-    end function feature_policy_name
-
-    subroutine feature_policy_mask( ipolicy, mask )
-        integer, intent(in)  :: ipolicy
-        logical, intent(out) :: mask(CAVG_QUALITY_NFEATS)
-        mask = .false.
-        select case(ipolicy)
-            case(1)
-                ! Compact scalar bank used as the conservative baseline. The
-                ! ice-blob curvature probe is tested separately so its value
-                ! is visible in the search report.
-                mask(1:12) = .true.
-                mask(I_INTERIOR_CURVATURE) = .false.
-            case(2)
-                mask(1:12) = .true.
-                mask(I_CC_AREA_FRAC) = .false.
-                mask(I_INTERIOR_CURVATURE) = .false.
-            case(3)
-                mask(1:12) = .true.
-                mask(I_MASK_INSIDE)  = .false.
-                mask(I_CC_SINGLE)    = .false.
-                mask(I_CC_AREA_FRAC) = .false.
-                mask(I_INTERIOR_CURVATURE) = .false.
-            case(4)
-                ! Same compact scalar bank as base_scalar, but admits the
-                ! normalized interior-curvature probe for validation.
-                mask(1:12) = .true.
-            case(5)
-                mask = .true.
-                mask(I_MASK_INSIDE)  = .false.
-                mask(I_CC_SINGLE)    = .false.
-                mask(I_CC_AREA_FRAC) = .false.
-            case default
-                THROW_HARD('feature_policy_mask: invalid feature policy')
-        end select
-        call apply_cavg_quality_model_mask_exclusions(mask)
-    end subroutine feature_policy_mask
-
-    subroutine apply_feature_policy( ipolicy, weights )
-        integer, intent(in)    :: ipolicy
+    subroutine normalize_candidate_weights( weights )
         real,    intent(inout) :: weights(CAVG_QUALITY_NFEATS)
-        logical :: mask(CAVG_QUALITY_NFEATS)
-        integer :: n_active
-        call feature_policy_mask(ipolicy, mask)
-        where( .not. mask ) weights = 0.0
         if( sum(weights) > EPS )then
             weights = weights / sum(weights)
         else
-            n_active = count(mask)
-            if( n_active < 1 ) THROW_HARD('apply_feature_policy: empty feature policy')
-            where( mask )
-                weights = 1.0 / real(n_active)
-            elsewhere
-                weights = 0.0
-            end where
+            weights = 1.0 / real(CAVG_QUALITY_NFEATS)
         endif
-    end subroutine apply_feature_policy
-
-    subroutine feature_policy_indices( ipolicy, inds, ninds )
-        integer, intent(in)  :: ipolicy
-        integer, intent(out) :: inds(CAVG_QUALITY_NFEATS)
-        integer, intent(out) :: ninds
-        logical :: mask(CAVG_QUALITY_NFEATS)
-        integer :: ifeat
-        call feature_policy_mask(ipolicy, mask)
-        inds = 0
-        ninds = 0
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( .not. mask(ifeat) ) cycle
-            ninds = ninds + 1
-            inds(ninds) = ifeat
-        end do
-    end subroutine feature_policy_indices
+    end subroutine normalize_candidate_weights
 
     subroutine read_quality_training_dataset( fname, dset )
         character(len=*),                    intent(in)    :: fname
@@ -266,7 +175,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
         integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS)
-        integer :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
+        integer :: dataset_col, hard_reject_col, manual_state_col
         logical :: have_feature_header
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
@@ -284,37 +193,31 @@ contains
         rewind(funit)
         irow = 0
         feat_col = 0
-        raw_mask_inside_col = 0
-        raw_centered_col    = 0
-        raw_neg_log_res_col = 0
+        dataset_col     = 0
+        hard_reject_col = 0
+        manual_state_col = 0
         have_feature_header = .false.
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
             if( is_analysis_header_line(line) )then
-                call map_analysis_feature_columns(line, feat_col)
-                call map_analysis_raw_hard_reject_columns(line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col)
-                call require_analysis_feature_columns(feat_col, trim(fname))
+                call map_analysis_columns(line, dataset_col, hard_reject_col, manual_state_col, feat_col)
+                call require_analysis_columns(dataset_col, hard_reject_col, manual_state_col, feat_col, trim(fname))
                 have_feature_header = .true.
                 cycle
             endif
             if( .not. is_analysis_data_line(line) ) cycle
+            if( .not. have_feature_header ) &
+                THROW_HARD('read_quality_training_dataset: missing analysis header in '//trim(fname))
             irow = irow + 1
-            field = csv_field(line, 1)
+            field = csv_field(line, dataset_col)
             if( irow == 1 ) dset%dataset_id = trim(field)
-            field = csv_field(line, 6)
+            field = csv_field(line, hard_reject_col)
             dset%hard_reject(irow) = str_is_true(field)
-            if( analysis_row_legacy_hard_reject(line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col) ) &
-                dset%hard_reject(irow) = .true.
-            field = csv_field(line, 9)
+            field = csv_field(line, manual_state_col)
             dset%manual_states(irow) = str2int(trim(field))
             do ifeat = 1, CAVG_QUALITY_NFEATS
-                field = ''
-                if( feat_col(ifeat) > 0 )then
-                    field = csv_field(line, feat_col(ifeat))
-                else if( .not. have_feature_header )then
-                    field = csv_field(line, 10 + 2 * ifeat)
-                endif
+                field = csv_field(line, feat_col(ifeat))
                 if( len_trim(field) > 0 ) dset%features(irow, ifeat) = str2real(trim(field))
             end do
         end do
@@ -340,15 +243,27 @@ contains
         is_analysis_header_line = index(tmp, 'dataset_id,') == 1
     end function is_analysis_header_line
 
-    subroutine map_analysis_feature_columns( line, feat_col )
+    subroutine map_analysis_columns( line, dataset_col, hard_reject_col, manual_state_col, feat_col )
         character(len=*), intent(in)  :: line
+        integer,          intent(out) :: dataset_col, hard_reject_col, manual_state_col
         integer,          intent(out) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=LONGSTRLEN) :: field, name
         integer :: icol, ifeat
         feat_col = 0
+        dataset_col = 0
+        hard_reject_col = 0
+        manual_state_col = 0
         do icol = 1, 512
             field = csv_field(line, icol)
             if( len_trim(field) == 0 ) exit
+            select case(trim(field))
+                case('dataset_id')
+                    dataset_col = icol
+                case('hard_reject')
+                    hard_reject_col = icol
+                case('manual_state')
+                    manual_state_col = icol
+            end select
             if( len_trim(field) < 3 ) cycle
             if( field(1:2) /= 'z_' ) cycle
             name = adjustl(trim(field(3:)))
@@ -359,70 +274,19 @@ contains
                 endif
             end do
         end do
-    end subroutine map_analysis_feature_columns
+    end subroutine map_analysis_columns
 
-    subroutine map_analysis_raw_hard_reject_columns( line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col )
-        character(len=*), intent(in)  :: line
-        integer,          intent(out) :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
-        character(len=LONGSTRLEN) :: field
-        integer :: icol
-        raw_mask_inside_col = 0
-        raw_centered_col    = 0
-        raw_neg_log_res_col = 0
-        do icol = 1, 512
-            field = csv_field(line, icol)
-            if( len_trim(field) == 0 ) exit
-            select case(trim(field))
-                case('raw_neg_log_res')
-                    raw_neg_log_res_col = icol
-                case('raw_mask_inside')
-                    raw_mask_inside_col = icol
-                case('raw_centered')
-                    raw_centered_col = icol
-            end select
-        end do
-    end subroutine map_analysis_raw_hard_reject_columns
-
-    logical function analysis_row_legacy_hard_reject( line, raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col )
-        character(len=*), intent(in) :: line
-        integer,          intent(in) :: raw_mask_inside_col, raw_centered_col, raw_neg_log_res_col
-        character(len=LONGSTRLEN) :: field
-        real :: raw_mask_inside, raw_centered, raw_neg_log_res
-        ! Legacy analysis records lack the exact largest-CC outside-pixel count,
-        ! but they do carry the raw mask/centroid diagnostics from the same
-        ! segmentation pass. They also predate the hard resolution veto. Use
-        ! these raw diagnostics to keep obvious validity failures out of the
-        ! learned quality model when retraining from existing analysis files.
-        analysis_row_legacy_hard_reject = .false.
-        if( raw_neg_log_res_col > 0 )then
-            field = csv_field(line, raw_neg_log_res_col)
-            if( len_trim(field) > 0 )then
-                raw_neg_log_res = str2real(trim(field))
-                if( raw_neg_log_res < -log(CAVG_RES_HARD_REJECT_A) - EPS ) &
-                    analysis_row_legacy_hard_reject = .true.
-            endif
-        endif
-        if( raw_centered_col > 0 )then
-            field = csv_field(line, raw_centered_col)
-            if( len_trim(field) > 0 )then
-                raw_centered = str2real(trim(field))
-                if( raw_centered < -1.0 - EPS ) analysis_row_legacy_hard_reject = .true.
-            endif
-        endif
-        if( raw_mask_inside_col > 0 )then
-            field = csv_field(line, raw_mask_inside_col)
-            if( len_trim(field) > 0 )then
-                raw_mask_inside = str2real(trim(field))
-                if( raw_mask_inside < -EPS ) analysis_row_legacy_hard_reject = .true.
-            endif
-        endif
-    end function analysis_row_legacy_hard_reject
-
-    subroutine require_analysis_feature_columns( feat_col, fname )
+    subroutine require_analysis_columns( dataset_col, hard_reject_col, manual_state_col, feat_col, fname )
+        integer,          intent(in) :: dataset_col, hard_reject_col, manual_state_col
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=*), intent(in) :: fname
         character(len=LONGSTRLEN) :: errmsg
         integer :: ifeat
+        if( dataset_col == 0 ) THROW_HARD('read_quality_training_dataset: missing dataset_id column in '//trim(fname))
+        if( hard_reject_col == 0 ) &
+            THROW_HARD('read_quality_training_dataset: missing hard_reject column in '//trim(fname))
+        if( manual_state_col == 0 ) &
+            THROW_HARD('read_quality_training_dataset: missing manual_state column in '//trim(fname))
         do ifeat = 1, CAVG_QUALITY_NFEATS
             if( feat_col(ifeat) == 0 )then
                 errmsg = 'read_quality_training_dataset: missing z_'//trim(cavg_quality_feature_name(ifeat))//&
@@ -430,7 +294,7 @@ contains
                 THROW_HARD(trim(errmsg))
             endif
         end do
-    end subroutine require_analysis_feature_columns
+    end subroutine require_analysis_columns
 
     subroutine calc_suggested_training_weights( dsets, weights )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
@@ -457,7 +321,6 @@ contains
             end do
             weights(j) = max(0.0, auc_for_values(vals, refs) - 0.5)
         end do
-        call apply_cavg_quality_model_feature_exclusions(weights)
         if( sum(weights) > EPS ) weights = weights / sum(weights)
         deallocate(vals, refs)
     end subroutine calc_suggested_training_weights
@@ -637,11 +500,9 @@ contains
         write(funit,'(A,I0)') 'model_search_grid_n=', n_grid
         write(funit,'(A,I0)') 'best_tie_count=', n_best_ties
         write(funit,'(A,I0)') 'top_candidates_reported=', n_top
-        write(funit,'(A)') 'note=scalar_feature_space_only_pairwise_distance_matrices_removed'
-        write(funit,'(A)') 'note=legacy_raw_resolution_and_geometry_failures_are_honored_as_hard_rejects_when_present'
+        write(funit,'(A)') 'note=scalar_feature_space_only'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
         write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
-        call write_feature_policy_grid(funit)
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_real_list(funit, 'grid_boundary_margins=', LEARN_MARGINS)
         call write_logical_list(funit, 'grid_use_lowsep_otsu=', LEARN_OTSU_FLAGS)
@@ -720,13 +581,9 @@ contains
         real,                                intent(in) :: best_score
         write(funit,'(A)') ''
         write(funit,'(A)') '# feature-screen diagnostics'
-        write(funit,'(A)') &
-            'note=feature_group_lodo_rows_measure_holdout_separability_with_a_best_holdout_threshold_not_a_promoted_model'
         call write_feature_signal_diagnostics(funit, dsets, base_model, suggested_weights, learned_model)
         write(funit,'(A)') ''
         call write_feature_drop_diagnostics(funit, dsets, learned_model, best_score)
-        write(funit,'(A)') ''
-        call write_lodo_group_screen(funit, dsets)
     end subroutine write_feature_screen_diagnostics
 
     subroutine write_feature_signal_diagnostics( funit, dsets, base_model, suggested_weights, learned_model )
@@ -754,7 +611,7 @@ contains
         integer,                             intent(out) :: inverted_datasets
         integer :: ids, nused
         real    :: auc
-        pooled_auc        = pooled_feature_auc(dsets, ifeat, 0)
+        pooled_auc        = pooled_feature_auc(dsets, ifeat)
         mean_auc          = 0.0
         min_auc           = huge(1.0)
         max_auc           = -huge(1.0)
@@ -794,13 +651,13 @@ contains
         deallocate(vals, refs)
     end function dataset_feature_auc
 
-    real function pooled_feature_auc( dsets, ifeat, skip_dataset )
+    real function pooled_feature_auc( dsets, ifeat )
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        integer,                             intent(in) :: ifeat, skip_dataset
+        integer,                             intent(in) :: ifeat
         real,    allocatable :: vals(:)
         integer, allocatable :: refs(:)
         integer :: ids, nall, off, nfit
-        nall = count_nclasses_except(dsets, skip_dataset)
+        nall = count_trainable_classes_all(dsets)
         if( nall == 0 )then
             pooled_feature_auc = 0.5
             return
@@ -808,7 +665,6 @@ contains
         allocate(vals(nall), refs(nall))
         off = 0
         do ids = 1, size(dsets)
-            if( ids == skip_dataset ) cycle
             nfit = count_trainable_classes(dsets(ids))
             if( nfit == 0 ) cycle
             vals(off+1:off+nfit) = pack(dsets(ids)%features(:,ifeat), .not. dsets(ids)%hard_reject)
@@ -819,16 +675,14 @@ contains
         deallocate(vals, refs)
     end function pooled_feature_auc
 
-    integer function count_nclasses_except( dsets, skip_dataset )
+    integer function count_trainable_classes_all( dsets )
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        integer,                             intent(in) :: skip_dataset
         integer :: ids
-        count_nclasses_except = 0
+        count_trainable_classes_all = 0
         do ids = 1, size(dsets)
-            if( ids == skip_dataset ) cycle
-            count_nclasses_except = count_nclasses_except + count_trainable_classes(dsets(ids))
+            count_trainable_classes_all = count_trainable_classes_all + count_trainable_classes(dsets(ids))
         end do
-    end function count_nclasses_except
+    end function count_trainable_classes_all
 
     subroutine write_feature_drop_diagnostics( funit, dsets, learned_model, best_score )
         integer,                             intent(in) :: funit
@@ -850,195 +704,6 @@ contains
                 score - best_score
         end do
     end subroutine write_feature_drop_diagnostics
-
-    subroutine write_lodo_group_screen( funit, dsets )
-        integer,                             intent(in) :: funit
-        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        integer :: group_inds(CAVG_QUALITY_NFEATS)
-        integer :: i, ipol, ninds
-        write(funit,'(A)') 'feature_group_lodo_header=group,n_features,mean_auc,min_auc,min_auc_dataset,'//&
-            'mean_oracle_balacc,min_oracle_balacc,min_balacc_dataset,total_tp,total_fp,total_tn,total_fn'
-        do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
-            call feature_policy_indices(ipol, group_inds, ninds)
-            call write_lodo_group_row(funit, trim(feature_policy_name(ipol)), dsets, group_inds(1:ninds))
-        end do
-        ninds = 0
-        call append_feature_except(group_inds, ninds, I_CORR_FRC)
-        call write_lodo_group_row(funit, 'all_without_corr_frc', dsets, group_inds(1:ninds))
-        ninds = 0
-        do i = 1, CAVG_QUALITY_NFEATS
-            if( i == I_LOG_POP .or. i == I_NEG_LOG_RES .or. i == I_CORR_FRC ) cycle
-            ninds = ninds + 1
-            group_inds(ninds) = i
-        end do
-        call write_lodo_group_row(funit, 'general_image_no_pop_res_corr', dsets, group_inds(1:ninds))
-        group_inds(1:3) = [I_LOG_POP, I_NEG_LOG_RES, I_CORR_FRC]
-        call write_lodo_group_row(funit, 'support_res_corr', dsets, group_inds(1:3))
-        group_inds(1:4) = [I_LOCVAR_FG, I_LOCVAR_BG, I_CENTER_EDGE_SNR, I_PRESENCE]
-        call write_lodo_group_row(funit, 'local_signal4', dsets, group_inds(1:4))
-        group_inds(1:5) = [I_INTERIOR_CURVATURE, I_LOG_DETAIL_BG_SNR, I_LOG_DETAIL_SIGNAL_RATIO, &
-                           I_DETAIL_COVERAGE, I_DETAIL_EDGE_DENSITY]
-        call write_lodo_group_row(funit, 'internal_detail5', dsets, group_inds(1:5))
-    end subroutine write_lodo_group_screen
-
-    subroutine append_feature_except( inds, ninds, excluded_feature )
-        integer, intent(inout) :: inds(:)
-        integer, intent(inout) :: ninds
-        integer, intent(in)    :: excluded_feature
-        integer :: ifeat
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( ifeat == excluded_feature ) cycle
-            ninds = ninds + 1
-            inds(ninds) = ifeat
-        end do
-    end subroutine append_feature_except
-
-    subroutine write_lodo_group_row( funit, group_name, dsets, feat_inds )
-        integer,                             intent(in) :: funit
-        character(len=*),                    intent(in) :: group_name
-        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        integer,                             intent(in) :: feat_inds(:)
-        real, allocatable :: weights(:), scores(:)
-        integer, allocatable :: refs(:)
-        real :: auc, balacc, sum_auc, sum_balacc, min_auc, min_balacc
-        integer :: holdout, tp, fp, tn, fn, total_tp, total_fp, total_tn, total_fn, nused
-        integer :: low_auc_id, low_balacc_id
-        character(len=LONGSTRLEN) :: low_auc_name, low_balacc_name
-        if( size(dsets) == 0 .or. size(feat_inds) == 0 ) return
-        allocate(weights(size(feat_inds)), source=0.0)
-        sum_auc = 0.0
-        sum_balacc = 0.0
-        min_auc = huge(1.0)
-        min_balacc = huge(1.0)
-        nused = 0
-        low_auc_id = 1
-        low_balacc_id = 1
-        total_tp = 0
-        total_fp = 0
-        total_tn = 0
-        total_fn = 0
-        do holdout = 1, size(dsets)
-            if( count_trainable_classes(dsets(holdout)) == 0 ) cycle
-            call lodo_group_weights(dsets, holdout, feat_inds, weights)
-            call score_dataset_feature_group(dsets(holdout), feat_inds, weights, scores, refs)
-            auc = auc_for_values(scores, refs)
-            call best_score_threshold_balacc(scores, refs, balacc, tp, fp, tn, fn)
-            sum_auc = sum_auc + auc
-            sum_balacc = sum_balacc + balacc
-            if( auc < min_auc )then
-                min_auc = auc
-                low_auc_id = holdout
-            endif
-            if( balacc < min_balacc )then
-                min_balacc = balacc
-                low_balacc_id = holdout
-            endif
-            total_tp = total_tp + tp
-            total_fp = total_fp + fp
-            total_tn = total_tn + tn
-            total_fn = total_fn + fn
-            nused = nused + 1
-            if( allocated(scores) ) deallocate(scores)
-            if( allocated(refs)   ) deallocate(refs)
-        end do
-        if( nused == 0 )then
-            deallocate(weights)
-            return
-        endif
-        low_auc_name = dataset_short_name(dsets(low_auc_id))
-        low_balacc_name = dataset_short_name(dsets(low_balacc_id))
-        write(funit,'(A,A,A,I0,A,F10.5,A,F10.5,A,A,A,F10.5,A,F10.5,A,A,A,I0,A,I0,A,I0,A,I0)') &
-            'feature_group_lodo,', trim(group_name), ',', size(feat_inds), ',', sum_auc / real(nused), ',', &
-            min_auc, ',', trim(low_auc_name), ',', sum_balacc / real(nused), ',', min_balacc, ',', &
-            trim(low_balacc_name), ',', total_tp, ',', total_fp, ',', total_tn, ',', total_fn
-        deallocate(weights)
-        if( allocated(scores) ) deallocate(scores)
-        if( allocated(refs)   ) deallocate(refs)
-    end subroutine write_lodo_group_row
-
-    subroutine lodo_group_weights( dsets, holdout, feat_inds, weights )
-        type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
-        integer,                             intent(in)  :: holdout
-        integer,                             intent(in)  :: feat_inds(:)
-        real,                                intent(out) :: weights(:)
-        integer :: i
-        real    :: auc
-        if( size(weights) /= size(feat_inds) ) THROW_HARD('lodo_group_weights: invalid weight size')
-        do i = 1, size(feat_inds)
-            auc = pooled_feature_auc(dsets, feat_inds(i), holdout)
-            weights(i) = max(0.0, auc - 0.5)
-        end do
-        if( sum(weights) > EPS )then
-            weights = weights / sum(weights)
-        else
-            weights = 1.0 / real(size(weights))
-        endif
-    end subroutine lodo_group_weights
-
-    subroutine score_dataset_feature_group( dset, feat_inds, weights, scores, refs )
-        type(cavg_quality_training_dataset), intent(in)  :: dset
-        integer,                             intent(in)  :: feat_inds(:)
-        real,                                intent(in)  :: weights(:)
-        real, allocatable,                   intent(out) :: scores(:)
-        integer, allocatable,                intent(out) :: refs(:)
-        integer :: i, j, nfit, ifit
-        if( size(feat_inds) /= size(weights) ) THROW_HARD('score_dataset_feature_group: invalid weight size')
-        nfit = count_trainable_classes(dset)
-        allocate(scores(nfit), refs(nfit))
-        scores = 0.0
-        refs = 0
-        ifit = 0
-        do i = 1, dset%ncls
-            if( dset%hard_reject(i) ) cycle
-            ifit = ifit + 1
-            refs(ifit) = dset%manual_states(i)
-            do j = 1, size(feat_inds)
-                scores(ifit) = scores(ifit) + weights(j) * dset%features(i, feat_inds(j))
-            end do
-        end do
-    end subroutine score_dataset_feature_group
-
-    subroutine best_score_threshold_balacc( scores, refs, best_balacc, tp, fp, tn, fn )
-        real,    intent(in)  :: scores(:)
-        integer, intent(in)  :: refs(:)
-        real,    intent(out) :: best_balacc
-        integer, intent(out) :: tp, fp, tn, fn
-        logical, allocatable :: pred(:), ref(:)
-        integer :: i, cand_tp, cand_fp, cand_tn, cand_fn
-        real :: precision, recall, specificity, f1, balacc, accuracy
-        if( size(scores) /= size(refs) ) THROW_HARD('best_score_threshold_balacc: size mismatch')
-        best_balacc = -huge(1.0)
-        tp = 0
-        fp = 0
-        tn = 0
-        fn = 0
-        if( size(scores) == 0 )then
-            best_balacc = 0.5
-            return
-        endif
-        allocate(pred(size(scores)), ref(size(scores)))
-        ref = refs > 0
-        call test_threshold(minval(scores) - EPS)
-        do i = 1, size(scores)
-            call test_threshold(scores(i))
-        end do
-        call test_threshold(maxval(scores) + EPS)
-    contains
-        subroutine test_threshold( threshold )
-            real, intent(in) :: threshold
-            pred = scores >= threshold
-            call calc_confusion(pred, ref, cand_tp, cand_fp, cand_tn, cand_fn)
-            call calc_binary_metrics(cand_tp, cand_fp, cand_tn, cand_fn, precision, recall, specificity, f1, balacc, &
-                accuracy)
-            if( balacc > best_balacc + EPS )then
-                best_balacc = balacc
-                tp = cand_tp
-                fp = cand_fp
-                tn = cand_tn
-                fn = cand_fn
-            endif
-        end subroutine test_threshold
-    end subroutine best_score_threshold_balacc
 
     function dataset_short_name( dset ) result( name )
         type(cavg_quality_training_dataset), intent(in) :: dset
@@ -1145,8 +810,6 @@ contains
         type(cavg_quality_model_spec),       intent(in) :: best_tie_specs(:)
         integer,                             intent(in) :: n_best_ties
         write(funit,'(A)') 'search_diagnostic_header=level,parameter,status,detail'
-        call write_search_diagnostic(funit, 'note', 'feature_policy', trim(learned_model%feature_policy), &
-            'selected_policy_encoded_by_zeroed_model_weights')
         call write_search_diagnostic(funit, 'note', 'feature_weights', 'data_auc_no_base_blending', &
             'learned_weights_are_derived_abinitio_from_non_hard_rejected_training_rows')
         call write_minsep_diagnostic(funit, learned_model%min_score_separation, best_tie_specs, n_best_ties)
@@ -1358,22 +1021,11 @@ contains
         write(funit,*)
     end subroutine write_logical_list
 
-    subroutine write_feature_policy_grid( funit )
-        integer, intent(in) :: funit
-        integer :: ipol
-        write(funit,'(A)', advance='no') 'grid_feature_policies='
-        do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
-            if( ipol > 1 ) write(funit,'(A)', advance='no') ','
-            write(funit,'(A)', advance='no') trim(feature_policy_name(ipol))
-        end do
-        write(funit,*)
-    end subroutine write_feature_policy_grid
-
     subroutine write_candidate_table_header( funit, key )
         integer,          intent(in) :: funit
         character(len=*), intent(in) :: key
         write(funit,'(A)') trim(key)//&
-            'rank,balanced_accuracy,feature_policy,boundary_margin,min_score_separation,min_accept_frac,'//&
+            'rank,balanced_accuracy,boundary_margin,min_score_separation,min_accept_frac,'//&
             'use_lowsep_otsu,use_otsu_window,otsu_min_offset,otsu_max_offset,use_cluster_rescue,'//&
             'enforce_min_accept_frac,feature_weights_semicolon'
     end subroutine write_candidate_table_header
@@ -1384,10 +1036,10 @@ contains
         real,                          intent(in) :: score
         type(cavg_quality_model_spec), intent(in) :: spec
         integer :: i
-        write(funit,'(A,A,I0,A,F10.5,A,A,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,ES14.6,A,ES14.6,A,L1,A,L1,A)', &
+        write(funit,'(A,A,I0,A,F10.5,A,ES14.6,A,ES14.6,A,ES14.6,A,L1,A,L1,A,ES14.6,A,ES14.6,A,L1,A,L1,A)', &
             advance='no') &
-            trim(tag), ',', irank, ',', score, ',', trim(spec%feature_policy), ',', spec%boundary_margin, ',', &
-            spec%min_score_separation, ',', spec%min_accept_frac, ',', spec%use_lowsep_otsu, ',', &
+            trim(tag), ',', irank, ',', score, ',', spec%boundary_margin, ',', spec%min_score_separation, ',', &
+            spec%min_accept_frac, ',', spec%use_lowsep_otsu, ',', &
             spec%use_otsu_window, ',', spec%otsu_min_offset, ',', spec%otsu_max_offset, ',', &
             spec%use_cluster_rescue, ',', spec%enforce_min_accept_frac, ','
         do i = 1, CAVG_QUALITY_NFEATS

@@ -6,8 +6,7 @@ use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
     extract_cavg_quality_features, normalize_cavg_quality_features, &
-    write_cavg_quality_feature_inventory, &
-    apply_cavg_quality_model_feature_exclusions
+    write_cavg_quality_feature_inventory
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
@@ -63,17 +62,15 @@ contains
         do ifeat = 1, CAVG_QUALITY_NFEATS
             suggested_weights(ifeat) = max(0.0, auc_for_values(quality%features(:,ifeat), reference_states) - 0.5)
         end do
-        call apply_cavg_quality_model_feature_exclusions(suggested_weights)
         if( sum(suggested_weights) > EPS ) then
             suggested_weights = suggested_weights / sum(suggested_weights)
         else
             suggested_weights = model%weights
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=2'
+        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=3'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
-        write(funit,'(A,A)') '# model_family=', trim(model%family)
         write(funit,'(A,A)') '# model_context=', trim(model%context)
         write(funit,'(A,I0)') '# n_classes=', ncls
         write(funit,'(A,I0)') '# manual_selected=', ngood
@@ -163,7 +160,6 @@ contains
             write(funit,'(ES14.6)', advance='no') model%weights(i)
         end do
         write(funit,*)
-        write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A,ES14.6)') '# model_boundary_margin=', model%boundary_margin
         write(funit,'(A,ES14.6)') '# model_min_score_separation=', model%min_score_separation
         write(funit,'(A,ES14.6)') '# model_otsu_min_offset=', model%otsu_min_offset
