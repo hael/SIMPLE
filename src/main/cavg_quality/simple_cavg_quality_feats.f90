@@ -45,31 +45,31 @@ public :: CAVG_RES_HARD_REJECT_A
 
 #include "simple_local_flags.inc"
 
-real,    parameter :: LOG_EPS             = 1.0e-12
-real,    parameter :: FOREGROUND_SEG_LP   = 30.0
-real,    parameter :: SIGNAL_METRIC_LP    = 10.0
-real,    parameter :: DETAIL_BAND_HP_A    = 20.0
-real,    parameter :: DETAIL_BAND_LP_A    =  6.0
-real,    parameter :: CAVG_RES_HARD_REJECT_A = 40.0
-integer, parameter :: LOCVAR_WINDOW       = 10
-integer, parameter :: MASK_HARD_OUTSIDE_PIXELS = 10
+real,    parameter :: LOG_EPS                   = 1.0e-12
+real,    parameter :: FOREGROUND_SEG_LP         = 30.0
+real,    parameter :: SIGNAL_METRIC_LP          = 10.0
+real,    parameter :: DETAIL_BAND_HP_A          = 20.0
+real,    parameter :: DETAIL_BAND_LP_A          =  6.0
+real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
+integer, parameter :: LOCVAR_WINDOW             = 10
+integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 
-integer, parameter :: I_LOG_POP           = 1
-integer, parameter :: I_NEG_LOG_RES       = 2
-integer, parameter :: I_MASK_INSIDE       = 3
-integer, parameter :: I_CENTERED          = 4
-integer, parameter :: I_LOCVAR_FG         = 5
-integer, parameter :: I_LOCVAR_BG         = 6
-integer, parameter :: I_CC_SINGLE         = 7
-integer, parameter :: I_CORR_FRC          = 8
-integer, parameter :: I_CENTER_EDGE_SNR   = 9
-integer, parameter :: I_CC_AREA_FRAC      = 10
-integer, parameter :: I_INTERIOR_CURVATURE = 11
-integer, parameter :: I_PRESENCE          = 12
-integer, parameter :: I_LOG_DETAIL_BG_SNR = 13
+integer, parameter :: I_LOG_POP                 = 1
+integer, parameter :: I_NEG_LOG_RES             = 2
+integer, parameter :: I_MASK_INSIDE             = 3
+integer, parameter :: I_CENTERED                = 4
+integer, parameter :: I_LOCVAR_FG               = 5
+integer, parameter :: I_LOCVAR_BG               = 6
+integer, parameter :: I_CC_SINGLE               = 7
+integer, parameter :: I_CORR_FRC                = 8
+integer, parameter :: I_CENTER_EDGE_SNR         = 9
+integer, parameter :: I_CC_AREA_FRAC            = 10
+integer, parameter :: I_INTERIOR_CURVATURE      = 11
+integer, parameter :: I_PRESENCE                = 12
+integer, parameter :: I_LOG_DETAIL_BG_SNR       = 13
 integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
-integer, parameter :: I_DETAIL_COVERAGE   = 15
-integer, parameter :: I_DETAIL_EDGE_DENSITY = 16
+integer, parameter :: I_DETAIL_COVERAGE         = 15
+integer, parameter :: I_DETAIL_EDGE_DENSITY     = 16
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -239,20 +239,20 @@ contains
             ithr = omp_get_thread_num() + 1
             bad_pixels = imgs(i)%contains_nans()
             if( bad_pixels )then
-                outside_frac     = 1.0
-                centroid_norm    = 2.0
-                cc_area_frac     = 0.0
-                nccs_valid       = 0
-                no_component     = .true.
-                mask_hard_reject = .true.
-                locvar_fg        = 0.0
-                locvar_bg        = 0.0
-                center_edge_snr  = 0.0
-                presence_score   = 0.0
-                interior_curvature = 0.0
-                detail_bg_snr    = 0.0
+                outside_frac        = 1.0
+                centroid_norm       = 2.0
+                cc_area_frac        = 0.0
+                nccs_valid          = 0
+                no_component        = .true.
+                mask_hard_reject    = .true.
+                locvar_fg           = 0.0
+                locvar_bg           = 0.0
+                center_edge_snr     = 0.0
+                presence_score      = 0.0
+                interior_curvature  = 0.0
+                detail_bg_snr       = 0.0
                 detail_signal_ratio = 0.0
-                detail_coverage  = 0.0
+                detail_coverage     = 0.0
                 detail_edge_density = 0.0
             else
                 call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
@@ -263,22 +263,22 @@ contains
                                                 presence_score, interior_curvature, detail_bg_snr, detail_signal_ratio, &
                                                 detail_coverage, detail_edge_density)
             endif
-            raw(i, I_LOG_POP)       = log(real(max(pop(i), 0)) + 1.0)
-            raw(i, I_NEG_LOG_RES)   = resolution_feature(res(i))
-            raw(i, I_MASK_INSIDE)   = -outside_frac
-            raw(i, I_CENTERED)      = -centroid_norm
-            raw(i, I_LOCVAR_FG)     = log(max(locvar_fg, LOG_EPS))
-            raw(i, I_LOCVAR_BG)     = log(max(locvar_bg, LOG_EPS))
-            raw(i, I_CC_SINGLE)     = -abs(real(nccs_valid - 1))
-            raw(i, I_CORR_FRC)      = corr(i)
-            raw(i, I_CENTER_EDGE_SNR) = log(max(center_edge_snr, LOG_EPS))
-            raw(i, I_CC_AREA_FRAC)  = cc_area_frac
-            raw(i, I_INTERIOR_CURVATURE) = interior_curvature
-            raw(i, I_PRESENCE)      = presence_score
-            raw(i, I_LOG_DETAIL_BG_SNR) = detail_bg_snr
+            raw(i, I_LOG_POP)                 = log(real(max(pop(i), 0)) + 1.0)
+            raw(i, I_NEG_LOG_RES)             = resolution_feature(res(i))
+            raw(i, I_MASK_INSIDE)             = -outside_frac
+            raw(i, I_CENTERED)                = -centroid_norm
+            raw(i, I_LOCVAR_FG)               = log(max(locvar_fg, LOG_EPS))
+            raw(i, I_LOCVAR_BG)               = log(max(locvar_bg, LOG_EPS))
+            raw(i, I_CC_SINGLE)               = -abs(real(nccs_valid - 1))
+            raw(i, I_CORR_FRC)                = corr(i)
+            raw(i, I_CENTER_EDGE_SNR)         = log(max(center_edge_snr, LOG_EPS))
+            raw(i, I_CC_AREA_FRAC)            = cc_area_frac
+            raw(i, I_INTERIOR_CURVATURE)      = interior_curvature
+            raw(i, I_PRESENCE)                = presence_score
+            raw(i, I_LOG_DETAIL_BG_SNR)       = detail_bg_snr
             raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
-            raw(i, I_DETAIL_COVERAGE) = detail_coverage
-            raw(i, I_DETAIL_EDGE_DENSITY) = detail_edge_density
+            raw(i, I_DETAIL_COVERAGE)         = detail_coverage
+            raw(i, I_DETAIL_EDGE_DENSITY)     = detail_edge_density
             ! Catastrophic resolution and geometry failures are hard validity
             ! rejects; ordinary resolution variation remains an active scalar
             ! model feature through neg_log_res.

@@ -19,15 +19,15 @@ private
 
 public :: learn_cavg_quality_model
 
-integer, parameter :: CAVG_QUALITY_LEARN_TOP_K = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 8
-real, parameter :: LEARN_MINSEPS(5)       = [0.05, 0.10, 0.15, 0.20, 0.30]
-real, parameter :: LEARN_MARGINS(11)      = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
-                                              -0.05, 0.0, 0.05, 0.10, 0.20]
-real, parameter :: LEARN_POOL_FRACS(5)    = [0.50, 0.60, 0.65, 0.70, 0.80]
-logical, parameter :: LEARN_OTSU_FLAGS(2) = [.false., .true.]
-real, parameter :: LEARN_OTSU_MIN_OFFSETS(5) = [0.05, 0.10, 0.15, 0.25, 0.35]
-real, parameter :: LEARN_OTSU_MAX_OFFSETS(3) = [0.40, 0.50, 0.65]
+logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
+integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 5
+real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
+real,    parameter :: LEARN_MARGINS(11)             = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
+                                                       -0.05, 0.0, 0.05, 0.10, 0.20]
+real,    parameter :: LEARN_OTSU_MIN_OFFSETS(5)     = [0.05, 0.10, 0.15, 0.25, 0.35]
+real,    parameter :: LEARN_OTSU_MAX_OFFSETS(3)     = [0.40, 0.50, 0.65]
+real,    parameter :: LEARN_POOL_FRACS(5)           = [0.50, 0.60, 0.65, 0.70, 0.80]
 
 contains
 
@@ -171,19 +171,13 @@ contains
             case(1)
                 name = 'base_scalar'
             case(2)
-                name = 'base_no_soft_geom'
-            case(3)
                 name = 'base_no_cc_area'
-            case(4)
+            case(3)
                 name = 'base_geom_pruned'
+            case(4)
+                name = 'base_scalar_plus_curvature'
             case(5)
-                name = 'full_scalar'
-            case(6)
-                name = 'full_no_soft_geom'
-            case(7)
                 name = 'full_geom_pruned'
-            case(8)
-                name = 'base_plus_curvature'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
         end select
@@ -195,36 +189,30 @@ contains
         mask = .false.
         select case(ipolicy)
             case(1)
+                ! Compact scalar bank used as the conservative baseline. The
+                ! ice-blob curvature probe is tested separately so its value
+                ! is visible in the search report.
                 mask(1:12) = .true.
                 mask(I_INTERIOR_CURVATURE) = .false.
             case(2)
                 mask(1:12) = .true.
-                mask(I_MASK_INSIDE) = .false.
-                mask(I_CC_SINGLE)   = .false.
+                mask(I_CC_AREA_FRAC) = .false.
                 mask(I_INTERIOR_CURVATURE) = .false.
             case(3)
                 mask(1:12) = .true.
+                mask(I_MASK_INSIDE)  = .false.
+                mask(I_CC_SINGLE)    = .false.
                 mask(I_CC_AREA_FRAC) = .false.
                 mask(I_INTERIOR_CURVATURE) = .false.
             case(4)
+                ! Same compact scalar bank as base_scalar, but admits the
+                ! ice-blob-oriented interior-curvature probe for validation.
                 mask(1:12) = .true.
-                mask(I_MASK_INSIDE) = .false.
-                mask(I_CC_SINGLE)   = .false.
-                mask(I_CC_AREA_FRAC) = .false.
-                mask(I_INTERIOR_CURVATURE) = .false.
             case(5)
                 mask = .true.
-            case(6)
-                mask = .true.
-                mask(I_MASK_INSIDE) = .false.
-                mask(I_CC_SINGLE)   = .false.
-            case(7)
-                mask = .true.
-                mask(I_MASK_INSIDE) = .false.
-                mask(I_CC_SINGLE)   = .false.
+                mask(I_MASK_INSIDE)  = .false.
+                mask(I_CC_SINGLE)    = .false.
                 mask(I_CC_AREA_FRAC) = .false.
-            case(8)
-                mask(1:12) = .true.
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select

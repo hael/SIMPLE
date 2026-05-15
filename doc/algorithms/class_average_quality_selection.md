@@ -219,7 +219,7 @@ The current grid searches:
 - Otsu-window minimum and maximum offsets when Otsu-window thresholding is enabled;
 - pool minimum accepted fraction, only when the base model context is `pool`.
 
-The feature-policy candidates are hand-curated masks over the scalar feature bank. They include base scalar subsets, full-feature variants, and geometry-pruned variants such as `full_geom_pruned`.
+The feature-policy candidates are hand-curated masks over the scalar feature bank. The active grid is deliberately small: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, and `full_geom_pruned`. The first four test compact scalar policies and the new interior-curvature probe; `full_geom_pruned` is the only full internal-detail policy retained because hard-reject-adjacent geometry is already handled by the validity gate.
 
 Each candidate is evaluated by running the full model classifier on every training dataset, then scoring only the non-hard-rejected rows. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets with trainable rows, so each informative dataset contributes equally.
 

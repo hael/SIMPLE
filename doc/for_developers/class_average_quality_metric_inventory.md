@@ -88,7 +88,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid includes base, full, and geometry-pruned variants, including `full_geom_pruned`.
+The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid is intentionally compact: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, and `full_geom_pruned`.
 
 ## Reusable Existing Routines
 
