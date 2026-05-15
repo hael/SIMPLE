@@ -2,7 +2,7 @@
 
 **Date:** May 14, 2026
 **Status:** Developer inventory / future feature planning
-**Scope:** Existing SIMPLE routines that can support scalar and pairwise features for `cluster_cavgs_quality`.
+**Scope:** Existing SIMPLE routines that can support scalar features for `cluster_cavgs_quality`.
 
 ## Purpose
 
@@ -49,26 +49,21 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 4 | `centered` | Otsu CC mass centers | higher is better | Negative normalized centroid displacement. Component centroids outside the mask are hard rejected before modeling. |
 | 5 | `log_locvar_fg` | `image%loc_var_masked` | higher is better | Foreground local variance after low-pass filtering and Otsu masking. |
 | 6 | `log_locvar_bg` | `image%loc_var_masked` | higher is better | Complementary background local variance. |
-| 7 | `spectrum_dynrange` | `image%spectrum('sqrt')` | diagnostic | Retained for analysis; high values can be good signal or ring/ice pathology. |
-| 8 | `single_component` | `image_bin%find_ccs` | higher is better | Negative distance from exactly one valid component. |
-| 9 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
-| 10 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
-| 11 | `neg_ice_score` | class-average power spectrum near `ICE_BAND1` | higher is better | Negative 3.7 A ice-band excess score. |
-| 12 | `hist_entropy` | `histogram%entropy` | diagnostic | Bounded entropy from the masked histograms already built for Hellinger distances. |
-| 13 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
-| 14 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
-| 15 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
-| 16 | `log_contrast` | `image%contrast` | diagnostic | Log full-image intensity standard deviation after edge background subtraction. |
-| 17 | `log_hist_variance` | `histogram%variance` | diagnostic | Log masked intensity-histogram variance from the Hellinger histogram pass. |
-| 18 | `log_fg_bg_locvar_ratio` | `image%loc_var_masked` | higher is better | Log foreground/background local-variance ratio. |
+| 7 | `single_component` | `image_bin%find_ccs` | higher is better | Negative distance from exactly one valid component. |
+| 8 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
+| 9 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
+| 10 | `hist_entropy` | `histogram%entropy` | diagnostic | Bounded entropy from masked intensity histograms. |
+| 11 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
+| 12 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
+| 13 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
+| 14 | `log_contrast` | `image%contrast` | diagnostic | Log full-image intensity standard deviation after edge background subtraction. |
+| 15 | `log_hist_variance` | `histogram%variance` | diagnostic | Log masked intensity-histogram variance. |
 
-Histogram distances are retained as a pairwise matrix rather than as a scalar nearest-neighbor feature. The current `hist_dmat` uses the normalized Hellinger distance between masked class-average histograms. The active `hist_entropy` diagnostic is scalar, but it is derived from those same histograms and therefore does not add another histogram pass. The earlier `hist_knn` scalar was removed from the active feature bank because nearest-neighbor histogram density did not have a stable quality direction across datasets. New learn-mode searches treat histogram distance as an optional alternative to spectrum distance, always mixed with the scalar feature-space distance rather than replacing it.
+Pairwise histogram and rotational-spectrum matrices are no longer part of the default model infrastructure. The active histogram features are scalar entropy and variance only. The earlier `hist_knn` scalar was removed because nearest-neighbor histogram density did not have a stable quality direction across datasets.
 
-The seven features appended after `neg_ice_score` remain compatibility-friendly: old 11-weight model files and the previous 14-weight feature-bank model files load with zero weights for newly appended terms, and zero-weight appended diagnostics do not perturb feature-space clustering. The current `chunk_default_v2` gives the batch4chunk-connected-component and histogram-entropy diagnostics nonzero learned weights, while the newly appended scalar diagnostics default to zero until a new training round assigns them value.
+The representative chunk runs also removed `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` from the feature bank. Those signals were either weak, redundant with retained scalar features, or inverted on some datasets.
 
 Mask-geometry validity is deliberately outside the learned model. The feature extractor hard rejects class averages when the Otsu/connected-component pass finds no valid foreground component, any foreground-component centroid outside the mask radius, or more than 10 pixels of the largest component outside the mask disc. This mirrors the proven microchunk rejection concept without depending on the stream/microchunk modules.
-
-Rotationally averaged power-spectrum distances are also retained as a pairwise matrix. They follow the older `cluster_cavgs` signal-statistics idea: normalize and mask each class average, extract the square-root rotational spectrum over the `HP_SPEC` to `LP_SPEC` band, compute pairwise Euclidean distances between spectra, and min/max-normalize the resulting distance matrix. The model uses this only through `spec_dmat_weight`; it is not exposed as a scalar quality feature. Analysis files tag both pairwise matrix metrics so the learn report can warn if a nonzero learned matrix weight came from legacy files with unspecified or unexpected matrix provenance. The learner searches spectrum distance as an alternative to histogram distance, not together with it.
 
 ## Current Model Controls
 
@@ -80,16 +75,15 @@ The built-in models are complete `linear_boundary` presets:
 
 The important model controls are:
 
+- `feature_policy`: learn-mode candidate name describing which scalar features are allowed into the score and clustering distance; the model file encodes this by zeroing excluded weights.
 - `feature_weights`: nonnegative linear score coefficients, normalized to sum to one.
-- `hist_dmat_weight`: blend between feature-vector distances and Hellinger histogram distances for clustering. New training searches this as an alternative to spectrum distance; the current chunk default sets it to zero.
-- `spec_dmat_weight`: blend between feature-vector distances and rotational power-spectrum distances for clustering. New training searches this as an alternative to histogram distance; the current chunk default sets it to zero.
 - `boundary_margin`: shifts the decision threshold; more negative rejects more aggressively, more positive preserves more borderline classes.
 - `min_score_separation`: below this separation the model treats the partition as unreliable unless low-separation Otsu is enabled and acceptable.
 - `otsu_min_offset` and `otsu_max_offset`: constrain when an Otsu score threshold may replace the cluster-derived threshold.
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-weight interpolation, one optional pairwise family at a time, minimum score separation, boundary margin, and pool minimum accepted fraction. Histogram and rotational-spectrum pairwise distances are treated as alternatives, and a scalar feature-space distance component is always retained. The learner deliberately inherits the higher-level policy flags from the base model.
+The current learner searches feature-policy candidates, feature-weight interpolation, minimum score separation, boundary margin, and pool minimum accepted fraction. It deliberately inherits the higher-level policy flags from the base model.
 
 ## Reusable Existing Routines
 
@@ -138,7 +132,7 @@ Relevant routines and fields:
 - `clust_info%jointscore`
 - `clust_info%icescore`
 
-These routines are most valuable when quality is better judged by consistency with other class averages than by single-image statistics. They are also more expensive because some paths perform pairwise matching or cluster alignment. They are good candidates for optional analysis/learn experiments, not for an always-on stream default without timing measurements.
+These routines are most valuable when quality is better judged by consistency with other class averages than by single-image statistics. They are also more expensive because some paths perform class matching or cluster alignment. They are deferred experiments, not part of the scalar default model.
 
 ### FRC and Resolution Infrastructure
 
@@ -213,7 +207,7 @@ These are feasible first additions because they reuse existing per-image routine
 | `contrast` variants | `image%contrast` | Detects extremely weak or washed-out averages. | `log_contrast` is now active as a diagnostic; consider variants only if validation shows a more stable transform is needed. |
 | `presence` variants | `image%presence` | Direct particle-presence proxy. | `presence` is now active; inspect scale and sign across stream and pool datasets before assigning much model weight. |
 | `hist_variance` variants | `histogram%variance` | Complements local variance with global intensity spread. | `log_hist_variance` is now active and correlated with contrast and local variance. |
-| `fg_bg_locvar_ratio` variants | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | `log_fg_bg_locvar_ratio` is now active; do not replace the separate fg/bg terms without testing. |
+| `fg_bg_locvar_ratio` variants | `image%loc_var_masked` | Tests whether foreground texture exceeds background texture. | Removed from the default bank after inverted chunk behavior; only revisit with new evidence. |
 | `nan_or_bad_pixel_flag` | `image%contains_nans`, min/max checks | Hard diagnostic for corrupt inputs. | Should probably remain a hard reject or warning, not a learned soft feature. |
 
 ### Medium-Risk Spectral Features
@@ -228,18 +222,18 @@ These are plausible and cheap enough, but our experience with `spectrum_dynrange
 | `below_noise_fraction` | `image%fcomps_below_noise_power_stats` | Identifies weak averages with little usable Fourier signal. | Needs a stable noise definition for class averages. |
 | `frc_pspec_summary` | `image%frc_pspec` | May approximate consistency without full even/odd class FRC infrastructure. | Must verify the input assumptions for class-average images. |
 
-The pairwise rotational spectrum distance matrix is now active model infrastructure rather than a future scalar feature. If future validation shows it is useful, prefer promoting a learned nonzero `spec_dmat_weight` over converting spectrum-neighborhood density into a scalar score.
+Do not reintroduce spectrum-derived defaults casually. Representative chunk runs did not justify `spectrum_dynrange`, `neg_ice_score`, or rotational-spectrum pairwise distances.
 
-### Medium- to High-Cost Pairwise Features
+### Deferred High-Cost Relational Features
 
-These are attractive for difficult cases, especially when junk is statistically similar to good classes, but they add quadratic cost and sometimes alignment cost.
+These are attractive for difficult cases, especially when junk is statistically similar to good classes, but they add quadratic cost and sometimes alignment cost. They should not be reintroduced as pairwise matrices in the default model.
 
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
-| `sig_knn` | `calc_sigstats_dmats` | Could summarize the existing pairwise histogram/spectrum matrices as scalar neighborhood support. | Use only if the matrix formulation fails; scalar neighborhood density can invert across datasets. |
+| `sig_knn` | `calc_sigstats_dmats` | Could summarize signal-statistics neighborhoods as scalar support. | Scalar neighborhood density can invert across datasets. |
 | `cc_knn` | `calc_cc_and_res_dmats` | Good classes should correlate with nearby good classes after in-plane search. | Expensive for stream chunks; consider optional analyze/learn experiments. |
 | `res_knn` | `calc_cc_and_res_dmats` | Pairwise FRC/resolution consistency may catch overfit junk. | Depends on robust pairwise matching. |
-| `mixed_dmat_knn` | `calc_cluster_cavgs_dmat` | Reuses Joe's signal/correlation/resolution blend as scalar support. | Duplicates current model's distance matrix idea; should be integrated cleanly. |
+| `mixed_support_knn` | `calc_cluster_cavgs_dmat` | Reuses Joe's signal/correlation/resolution blend as scalar support. | Do not wire the matrix itself into the default model. |
 | `cluster_jointscore` | `align_and_score_cavg_clusters` | Converts cluster homogeneity/resolution into interpretable scores. | More invasive and too heavy for a default streaming path until timed. |
 
 ### FRC-Derived Features
@@ -270,12 +264,12 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, `cc_diameter_norm`, `presence`, `log_contrast`, `log_hist_variance`, and `log_fg_bg_locvar_ratio`.
-2. Inspect per-feature AUC and learned weights, especially whether any appended diagnostic receives nonzero weight across difficult chunk datasets.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `hist_entropy`, `cc_area_frac`, `cc_diameter_norm`, `presence`, `log_contrast`, and `log_hist_variance`.
+2. Inspect the learn report `feature_signal`, `feature_drop`, and `feature_group_lodo` rows. A feature should have stable per-dataset AUC, improve the one-feature-drop test, or improve leave-one-dataset-out group behavior before it is trusted as default-model signal.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
-4. Try spectral additions next, but keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
+4. Revisit spectral additions only if the scalar feature bank cannot solve a representative failure mode; keep them diagnostic until they prove they do not simply rediscover ice/ring artifacts.
 5. Consider automask or shape-ranking features only if the cheap scalar diagnostics are still insufficient.
-6. Evaluate pairwise alignment-derived features only as optional experiments because they may be too slow for streaming.
+6. Treat alignment-derived relational features as optional scalar experiments only; do not reintroduce pairwise matrices into the default model.
 
 For any new feature:
 
@@ -303,7 +297,7 @@ Some possible descriptors are available but should not be first-line additions:
 - Keep raw values in analysis files even if a feature has zero model weight.
 - Use per-dataset robust normalization over non-hard-rejected classes.
 - Treat hard rejection as exceptional and conservative. Most discrimination should happen through the model.
-- Preserve feature ordering compatibility carefully: model files contain one weight per `CAVG_QUALITY_NFEATS` entry.
-- Prefer appending candidate diagnostics over inserting them into the old feature order; default-zero appended diagnostics should not perturb existing built-in behavior.
+- Treat feature-order changes as breaking model-file changes: model files contain one weight per `CAVG_QUALITY_NFEATS` entry.
+- Prefer appending candidate diagnostics over inserting them into the established feature order, and treat any feature-order change as a deliberate model-version break.
 - When changing `CAVG_QUALITY_NFEATS`, update promotion snippets, docs, and any tests or analysis parsers that assume the feature count.
-- Benchmark any pairwise or alignment-derived feature on stream chunks before considering it for default use.
+- Benchmark any relational or alignment-derived scalar feature on stream chunks before considering it for default use.

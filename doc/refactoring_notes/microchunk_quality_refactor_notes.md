@@ -47,27 +47,15 @@ The new quality module only hard-rejects pathological cases:
 
 This was important. Aggressive hard rejections are difficult to recover from because they bypass the multivariate decision. Most real examples should enter feature-space scoring, even if they look weak by one scalar metric.
 
-### 4. Some Diagnostic Features Should Not Be Scored By Default
+### 4. Some Candidate Features Did Not Survive Representative Chunk Training
 
-The feature table still includes `mask_inside`, `spectrum_dynrange`, and `single_component`, but the current scoring profile gives them zero weight. This was not because they are useless. It is because, on the hard validation data, they either did not separate manual good/bad classes consistently or could be inverted by ring/ice artifacts.
+The current feature bank no longer includes `spectrum_dynrange`, `neg_ice_score`, or `log_fg_bg_locvar_ratio`, and the histogram/spectrum pairwise matrices have been removed from the model infrastructure. Those signals either failed to separate manual good/bad classes consistently, were redundant with retained scalar features, or inverted on difficult stream partitions.
 
-Keeping them in the feature table is still valuable for later diagnostics and for possible stage-specific profiles.
+The remaining feature table keeps cheap scalar diagnostics such as `mask_inside`, `single_component`, histogram entropy, connected-component shape, central presence, full-image contrast, and masked histogram variance. Some may receive little or no weight in a promoted model, but they are still cheap to report and useful for controlled feature-policy tests.
 
-### 5. The Current Best General Profile Is Local-Signal Heavy
+### 5. The Current Best General Profile Is Still Local-Signal Heavy
 
-The current internal profile is:
-
-```text
-log_pop           0.27
-neg_log_res       0.13
-mask_inside       0.00
-centered          0.15
-log_locvar_fg     0.30
-log_locvar_bg     0.15
-spectrum_dynrange 0.00
-single_component  0.00
-boundary_margin  -0.30
-```
+The chunk default has evolved into a scalar feature-space model with learned emphasis on population/resolution support, local foreground/background variance, correlation/FRC proxy, center-edge signal, histogram entropy, and connected-component diameter. The obsolete spectrum dynamic-range and ice-ring diagnostics are no longer part of the feature vector.
 
 The practical interpretation is:
 

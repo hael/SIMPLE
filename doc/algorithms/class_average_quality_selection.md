@@ -42,7 +42,7 @@ Important outputs:
 - `quality_selected_cavgs.mrc`
 - `quality_rejected_cavgs.mrc`
 
-The analysis file contains per-class model output, raw features, normalized `z_*` features, manual states, model parameters, feature summaries, threshold scans, and the Hellinger histogram distance matrix as comment records.
+The analysis file contains per-class model output, raw features, normalized `z_*` features, manual states, model parameters, feature summaries, and threshold scans.
 
 ### `quality_mode=learn`
 
@@ -72,12 +72,11 @@ The current model family is `linear_boundary`. A model contains:
 - `name`
 - `family`
 - `context`
+- `feature_policy`
 - `rejection_type`
 - `weights(CAVG_QUALITY_NFEATS)`
 - `boundary_margin`
 - `min_score_separation`
-- `hist_dmat_weight`
-- `spec_dmat_weight`
 - `otsu_min_offset`
 - `otsu_max_offset`
 - `cluster_rescue_margin`
@@ -95,17 +94,17 @@ The current built-in presets are:
 - `chunk_default_v1`
 - `pool_default_v1`
 
-`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature. The constrained batch4chunk learning round selected nonzero scalar weights for histogram entropy and connected-component shape diagnostics, but selected feature-space clustering without histogram or rotational-spectrum pairwise matrices. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
+`chunk_default_v2` is the default chunk/stream operating point promoted from the trusted batch-style learning cycles. Its current feature bank excludes the former scalar histogram-neighborhood feature, pairwise histogram/spectrum matrices, and unstable spectrum/ice/foreground-background ratio diagnostics. `chunk_default_v1` is retained as the legacy chunk preset. `pool` is the more recall-preserving operating point for larger pooled or batch sets.
 
 ## Feature Space
 
 The feature inventory is maintained in `simple_cavg_quality_feats.f90`. Feature extraction produces raw per-class values and a normalized feature matrix. The model uses the normalized `z_*` features, not the raw feature values.
 
-The current feature set includes population/resolution support, foreground geometry, local signal variance, spectrum shape, class statistics, center-edge signal, ice-score penalty, bounded histogram entropy, two connected-component shape diagnostics, central presence, full-image contrast, masked histogram variance, and a foreground/background local-variance ratio. Hellinger histogram distances and rotationally averaged power-spectrum distances are retained as pairwise class-average distance matrices and mixed into the model distance matrix through the learnable `hist_dmat_weight` and `spec_dmat_weight`. A former scalar histogram-neighborhood feature was removed because its direction was dataset-dependent: in some stream chunks histogram-dense neighborhoods were enriched for junk rather than good class averages.
+The current feature set includes population/resolution support, foreground geometry, local signal variance, class statistics, center-edge signal, bounded histogram entropy, two connected-component shape diagnostics, central presence, full-image contrast, and masked histogram variance. A former scalar histogram-neighborhood feature, pairwise histogram/spectrum distance matrices, `spectrum_dynrange`, `neg_ice_score`, and `log_fg_bg_locvar_ratio` were removed because representative chunk training showed they were weak, unstable, or redundant for the default scalar model.
 
 Foreground geometry also contributes hard validity rejects before the learned model is fit. After Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic outside-mask density is not left for the model to rescue.
 
-The appended diagnostics are emitted in analysis files and can be learned like the original scalar features. They are included in the feature-space clustering distance only after learning assigns them nonzero score weight, preserving compatibility for old zero-weight model files while allowing validated built-in models to use them.
+The feature policy is encoded by zeroing excluded weights. Nonzero-weight features contribute to both the linear score and the k-medoids feature-space distance; hard rejections remain outside the learned policy and are applied before clustering.
 
 Feature definitions should remain centralized in `simple_cavg_quality_feats.f90`, so future feature additions are visible in one inventory rather than being scattered through model code.
 
@@ -121,32 +120,17 @@ For one dataset, the model classifies as follows:
 
 2. Assign hard-rejected classes a low sentinel score and remove them from the fitted partition. Hard rejects include empty/dead classes and foreground geometry failures outside the expected mask.
 
-3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors. The original 11-dimensional bank is always included for compatibility; appended candidate diagnostics enter this distance only when their learned model weight is nonzero.
+3. Build a Euclidean distance matrix between non-hard-rejected normalized feature vectors, using only features whose model weight is nonzero.
 
 4. Normalize that feature distance matrix.
 
-5. If `hist_dmat_weight > 0` or `spec_dmat_weight > 0`, extract and normalize the requested pairwise distance matrices for the same class subset, then mix the valid components:
+5. Run two-cluster k-medoids on the distance matrix.
 
-   ```text
-   pairwise_weight = sum(weights for usable pairwise matrices)
-   feature_weight  = max(0, 1 - pairwise_weight)
+6. Identify the good cluster as the cluster with the higher mean linear score.
 
-   dmat = feature_weight       * feature_dmat
-        + usable_hist_weight   * hist_dmat
-        + usable_spec_weight   * spec_dmat
+7. Set the raw score threshold halfway between the good-cluster and bad-cluster mean scores.
 
-   dmat = dmat / sum(valid component weights)
-   ```
-
-6. Normalize the mixed distance matrix. If a requested pairwise matrix has no usable variation, it is ignored for that dataset and the valid components are renormalized.
-
-7. Run two-cluster k-medoids on the distance matrix.
-
-8. Identify the good cluster as the cluster with the higher mean linear score.
-
-9. Set the raw score threshold halfway between the good-cluster and bad-cluster mean scores.
-
-10. Apply model policy:
+8. Apply model policy:
 
     - If cluster score separation is too low, use low-separation Otsu only when enabled and sufficiently separated.
     - Otherwise apply `boundary_margin`.
@@ -177,10 +161,7 @@ Input is a file table of `cavgs_quality_analysis.txt` files. For each analysis f
 
 - the normalized `z_*` feature columns by name;
 - `manual_state`, where `manual_state > 0` is the reference accepted class;
-- `hard_reject`;
-- `# hist_dmat,i,j,distance` comment records.
-- `# hist_dmat_metric=hellinger` to document the histogram distance used in newly generated analysis files.
-- `# spec_dmat_metric=sqrt_rotational_spectrum_euclidean` to document the spectrum distance used in newly generated analysis files.
+- `hard_reject`.
 
 The learner first derives suggested feature weights. For each feature, all training rows across all datasets are pooled, feature AUC is computed against the manual labels, and the suggested feature weight is:
 
@@ -198,26 +179,28 @@ candidate_weights = (1 - alpha) * base_weights + alpha * suggested_weights
 
 The current grid searches:
 
+- feature-policy candidate;
 - feature-weight interpolation alpha;
-- one optional pairwise distance family: either Hellinger histogram distance or rotational power-spectrum distance;
-- the selected pairwise distance weight, capped below one so the scalar feature-vector distance remains part of clustering;
 - minimum score separation;
 - boundary margin;
 - pool minimum accepted fraction, only for pool models.
 
-Histogram and rotational-spectrum pairwise matrices are searched as alternatives, not as additive co-active families. Learn mode therefore evaluates feature-only, feature-plus-histogram, and feature-plus-spectrum candidates; it does not promote histogram-only, spectrum-only, histogram-plus-spectrum, or feature-plus-both models. This keeps localization and mask/geometry information in the scalar feature distance from being displaced by translation-invariant statistical distances.
-
 Each candidate is evaluated by running the full model classifier on every training dataset. The score is macro balanced accuracy: balanced accuracy is computed per dataset and then averaged across datasets, so each dataset contributes equally.
 
-The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the top candidates, all best-score ties, suggested weights, learned pairwise-distance weights, and per-dataset confusion metrics.
+The best candidate becomes the learned model and is written to the requested model file. The learn report also records the full search grid, the selected feature policy, the top candidates, all best-score ties, suggested weights, and per-dataset confusion metrics.
 
 The learn report includes a `search_diagnostic` section. These records flag two classes of follow-up:
 
-- searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, `hist_dmat_weight`, `spec_dmat_weight`, or pool `min_accept_frac`;
-- pairwise-matrix provenance, warning when a learned nonzero matrix weight was trained from legacy files with unspecified or unexpected matrix metrics;
+- searched parameters whose winning value is on the edge of the current grid, such as `boundary_margin`, `min_score_separation`, or pool `min_accept_frac`;
 - model policy controls that are currently inherited from the base preset rather than searched, such as Otsu-window settings, low-separation Otsu, cluster rescue, and minimum-accept enforcement.
 
 Warnings in this section do not mean the learned model is invalid. They mean the training set is touching one of the current search boundaries or inherited policy assumptions, so the next validation round should decide whether to broaden the grid or promote that policy control into the searched model space.
+
+The report also includes feature-screen diagnostics for deciding what to try next:
+
+- `feature_signal` gives pooled AUC, mean/min/max per-dataset AUC, inversion count, base weight, suggested weight, and learned weight for every scalar feature.
+- `feature_drop` reruns the learned model with one scalar feature weight set to zero; negative `delta_vs_learned` means the feature helped the learned model on the training set.
+- `feature_group_lodo` performs leave-one-dataset-out scalar scoring for fixed feature groups. These rows are a separability screen, not a promoted model: weights are learned from all other datasets, then the held-out dataset is scored by AUC and by an optimistic best-threshold balanced accuracy.
 
 ## Basic Instruction Manual
 
@@ -282,8 +265,9 @@ Inspect `cavgs_quality_learn_report.txt`. Pay attention to:
 - `top_candidate` rows;
 - per-dataset false positives and false negatives;
 - `hard_rejected_manual_good`;
-- the learned `hist_dmat_weight`.
-- the learned `spec_dmat_weight`.
+- `feature_signal` rows with low minimum AUC or inverted datasets;
+- `feature_drop` rows with large negative or positive `delta_vs_learned`;
+- `feature_group_lodo` rows, especially mean/min AUC and the weakest held-out dataset.
 
 Many tied models mean the current training set does not constrain the searched parameters strongly enough. That is not automatically bad, but it should be understood before promoting a model.
 

@@ -7,9 +7,6 @@ private
 public :: CAVG_REJECTION_CHUNK
 public :: CAVG_REJECTION_POOL
 public :: CAVG_QUALITY_NFEATS
-public :: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
-public :: CAVG_QUALITY_HIST_DMAT_METRIC
-public :: CAVG_QUALITY_SPEC_DMAT_METRIC
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -21,12 +18,9 @@ public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_REJECTION_CHUNK = 1
 integer, parameter :: CAVG_REJECTION_POOL  = 2
-integer, parameter :: CAVG_QUALITY_NFEATS  = 18
+integer, parameter :: CAVG_QUALITY_NFEATS  = 15
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
-character(len=*), parameter :: CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED = 'unspecified'
-character(len=*), parameter :: CAVG_QUALITY_HIST_DMAT_METRIC        = 'hellinger'
-character(len=*), parameter :: CAVG_QUALITY_SPEC_DMAT_METRIC        = 'sqrt_rotational_spectrum_euclidean'
 
 type :: cavg_quality_feature_def
     character(len=32)  :: name        = ''
@@ -38,12 +32,11 @@ type :: cavg_quality_model_spec
     character(len=64) :: name                    = ''
     character(len=32) :: family                  = 'linear_boundary'
     character(len=32) :: context                 = 'chunk'
+    character(len=32) :: feature_policy          = 'all_features'
     integer           :: rejection_type          = CAVG_REJECTION_CHUNK
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
     real              :: boundary_margin         = 0.0
     real              :: min_score_separation    = 0.0
-    real              :: hist_dmat_weight        = 0.0
-    real              :: spec_dmat_weight        = 0.0
     real              :: otsu_min_offset         = 0.0
     real              :: otsu_max_offset         = 0.0
     real              :: cluster_rescue_margin   = 0.0
@@ -62,8 +55,6 @@ type :: cavg_quality_result
     integer, allocatable :: labels(:)
     integer, allocatable :: medoids(:)
     logical, allocatable :: hard_reject(:)
-    real,    allocatable :: hist_dmat(:,:)
-    real,    allocatable :: spec_dmat(:,:)
     real                 :: threshold        = 0.0
     real                 :: raw_threshold    = 0.0
     real                 :: threshold_margin = 0.0
@@ -81,12 +72,8 @@ end type cavg_quality_result
 type :: cavg_quality_training_dataset
     character(len=LONGSTRLEN) :: fname      = ''
     character(len=LONGSTRLEN) :: dataset_id = ''
-    character(len=32)         :: hist_dmat_metric = CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
-    character(len=64)         :: spec_dmat_metric = CAVG_QUALITY_DMAT_METRIC_UNSPECIFIED
     integer                   :: ncls       = 0
     real,    allocatable      :: features(:,:)
-    real,    allocatable      :: hist_dmat(:,:)
-    real,    allocatable      :: spec_dmat(:,:)
     integer, allocatable      :: manual_states(:)
     logical, allocatable      :: hard_reject(:)
 end type cavg_quality_training_dataset
@@ -110,12 +97,6 @@ type :: cavg_quality_learn_diagnostics
     integer :: n_min_accept_like   = 0
     integer :: min_accept_like_fp  = 0
     integer :: min_accept_like_fn  = 0
-    integer :: n_hist_metric_expected = 0
-    integer :: n_hist_metric_unspecified = 0
-    integer :: n_hist_metric_other = 0
-    integer :: n_spec_metric_expected = 0
-    integer :: n_spec_metric_unspecified = 0
-    integer :: n_spec_metric_other = 0
 end type cavg_quality_learn_diagnostics
 
 contains
@@ -129,8 +110,6 @@ contains
         if( allocated(quality%labels)      ) deallocate(quality%labels)
         if( allocated(quality%medoids)     ) deallocate(quality%medoids)
         if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
-        if( allocated(quality%hist_dmat)   ) deallocate(quality%hist_dmat)
-        if( allocated(quality%spec_dmat)   ) deallocate(quality%spec_dmat)
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
         quality%threshold_margin = 0.0
