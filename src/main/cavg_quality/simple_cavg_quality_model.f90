@@ -43,17 +43,16 @@ real, parameter :: CAVG_QUALITY_FALLBACK_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     1.860465E-01, 2.093023E-01, 0.000000E+00, 0.000000E+00, &
     0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 
 ! Current chunk default, promoted from the batch_train4 chunk learning run.
 ! Resolution has two roles: catastrophic failures
 ! (res > CAVG_RES_HARD_REJECT_A) are hard rejects, while the continuous
 ! neg_log_res scalar remains active model evidence for all trainable rows.
 ! The selected policy keeps scalar features with stable quality direction,
-! includes edge-suppressed interior curvature as explicit internal-detail
-! evidence, and zeroes soft geometry fields that duplicate hard foreground
-! rejection.
+! includes outside-noise-normalized interior curvature as explicit
+! internal-detail evidence, and zeroes soft geometry fields that duplicate
+! hard foreground rejection.
 ! Misleading global intensity-softness descriptors are not part of the
 ! feature bank; diagnostic-only features should explain hard rejects or test
 ! an active quality hypothesis.
@@ -61,8 +60,7 @@ real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.080296E-01, 1.371388E-01, 0.000000E+00, 3.803330E-02, &
     1.113096E-01, 1.159168E-01, 0.000000E+00, 1.498871E-01, &
     7.516573E-02, 5.957574E-02, 7.828858E-02, 1.266548E-01, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.20
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
@@ -74,8 +72,7 @@ real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 !     1.104735E-01, 1.399886E-01, 0.000000E+00, 4.460987E-02, &
 !     1.109333E-01, 1.160819E-01, 0.000000E+00, 1.492875E-01, &
 !     7.933401E-02, 0.000000E+00, 0.000000E+00, 1.268510E-01, &
-!     6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02, &
-!     0.000000E+00 ]
+!     6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02 ]
 ! real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 ! real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 ! real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15

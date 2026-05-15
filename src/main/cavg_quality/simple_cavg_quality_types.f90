@@ -14,7 +14,7 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_NFEATS  = 17
+integer, parameter :: CAVG_QUALITY_NFEATS  = 16
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 

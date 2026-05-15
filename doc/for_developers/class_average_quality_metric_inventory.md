@@ -55,13 +55,12 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 8 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 9 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 10 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
-| 11 | `interior_curvature` | 20-6 A band-pass Laplacian | higher is better | Edge-suppressed central-mask second-derivative energy intended to detect true internal detail rather than blob outlines. |
+| 11 | `interior_curvature` | 20-6 A band-pass Laplacian plus outside-mask noise | higher is better | Edge-suppressed central-mask second-derivative energy normalized by outside-mask real-space noise; intended to detect true internal detail rather than blob outlines. |
 | 12 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
 | 13 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
 | 14 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
 | 15 | `detail_coverage` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with detail above background and image-scale thresholds. |
 | 16 | `detail_edge_density` | 20-6 A band-pass | diagnostic | Fraction of in-mask pixels with band-passed gradient above background and image-scale thresholds. |
-| 17 | `norm_interior_curvature` | 20-6 A band-pass Laplacian plus outside-mask noise | higher is better | Same edge-suppressed central curvature numerator as `interior_curvature`, normalized by outside-mask real-space noise rather than outside-mask curvature. |
 
 Pairwise histogram and rotational-spectrum matrices are outside the model infrastructure. Global intensity-softness descriptors are not part of the feature bank.
 
@@ -89,7 +88,7 @@ The important model controls are:
 - `cluster_rescue_margin`: lets pool-like models rescue good-cluster members close to threshold.
 - `min_accept_frac`: enforces a minimum accepted fraction for pool-like models.
 
-The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid is intentionally compact: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, `base_scalar_plus_norm_curvature`, `base_scalar_plus_curvatures`, and `full_geom_pruned`.
+The current learner searches feature-policy candidates, feature weights derived from the training data, minimum score separation, boundary margin, Otsu threshold controls, and pool minimum accepted fraction. The policy grid is intentionally compact: `base_scalar`, `base_no_cc_area`, `base_geom_pruned`, `base_scalar_plus_curvature`, and `full_geom_pruned`.
 
 ## Reusable Existing Routines
 
