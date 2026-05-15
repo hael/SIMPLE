@@ -22,9 +22,11 @@ public :: write_cavg_quality_model_builtin_code
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1 = 'chunk_default_v1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_EXP = 'chunk_exp'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
+    CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1//'|'//CAVG_QUALITY_MODEL_CHUNK_EXP//'|'//&
+    CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
@@ -107,6 +109,8 @@ contains
                 spec = chunk_default_v2_model_spec()
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT_V1)
                 spec = chunk_default_v1_model_spec()
+            case(CAVG_QUALITY_MODEL_CHUNK_EXP)
+                spec = chunk_exp_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
             case default
@@ -202,6 +206,29 @@ contains
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk_default_v1_model_spec
+
+    function chunk_exp_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_CHUNK_EXP
+        spec%family                  = 'linear_boundary'
+        spec%context                 = 'chunk'
+        spec%feature_policy          = 'all_features_no_mask_single'
+        spec%weights                 = [ &
+            8.064926E-02, 1.021962E-01, 0.000000E+00, 3.256666E-02, &
+            8.098494E-02, 8.474355E-02, 0.000000E+00, 1.089847E-01, &
+            5.791641E-02, 7.303484E-02, 4.044609E-02, 5.668857E-02, &
+            9.260533E-02, 9.681446E-02, 9.236902E-02 ]
+        spec%boundary_margin         =  5.000000E-02
+        spec%min_score_separation    =  5.000000E-02
+        spec%otsu_min_offset         =  2.500000E-01
+        spec%otsu_max_offset         =  5.000000E-01
+        spec%cluster_rescue_margin   =  2.000000E-01
+        spec%min_accept_frac         =  0.000000E+00
+        spec%use_lowsep_otsu         = .true.
+        spec%use_otsu_window         = .true.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function chunk_exp_model_spec
 
     function pool_default_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec

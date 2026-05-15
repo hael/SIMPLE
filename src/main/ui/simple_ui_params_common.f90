@@ -636,9 +636,9 @@ subroutine set_ui_params
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in quality model preset(chunk_default_v2|chunk_default_v1|'//&
-                                   'pool_default_v1){chunk_default_v2}', &
+                                   'chunk_exp|pool_default_v1){chunk_default_v2}', &
                                    'Class-average quality model preset(chunk_default_v2|chunk_default_v1|'//&
-                                   'pool_default_v1){chunk_default_v2}', .false., 'chunk_default_v2')
+                                   'chunk_exp|pool_default_v1){chunk_default_v2}', .false., 'chunk_default_v2')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|slurm|pbs|lsf)', &
