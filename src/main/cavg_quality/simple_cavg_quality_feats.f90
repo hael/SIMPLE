@@ -24,7 +24,7 @@ public :: I_CC_SINGLE
 public :: I_CORR_FRC
 public :: I_CENTER_EDGE_SNR
 public :: I_CC_AREA_FRAC
-public :: I_CC_DIAMETER_NORM
+public :: I_NONBLOB_DETAIL
 public :: I_PRESENCE
 public :: I_LOG_DETAIL_BG_SNR
 public :: I_LOG_DETAIL_SIGNAL_RATIO
@@ -64,7 +64,7 @@ integer, parameter :: I_CC_SINGLE         = 7
 integer, parameter :: I_CORR_FRC          = 8
 integer, parameter :: I_CENTER_EDGE_SNR   = 9
 integer, parameter :: I_CC_AREA_FRAC      = 10
-integer, parameter :: I_CC_DIAMETER_NORM  = 11
+integer, parameter :: I_NONBLOB_DETAIL    = 11
 integer, parameter :: I_PRESENCE          = 12
 integer, parameter :: I_LOG_DETAIL_BG_SNR = 13
 integer, parameter :: I_LOG_DETAIL_SIGNAL_RATIO = 14
@@ -92,8 +92,8 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
         'log central signal variance relative to edge variance in the class average', 'center_edge_signal'), &
     cavg_quality_feature_def('cc_area_frac', 'diagnostic', &
         'main connected-component area divided by the expected circular mask area', 'foreground_geometry'), &
-    cavg_quality_feature_def('cc_diameter_norm', 'diagnostic', &
-        'main connected-component diameter divided by the expected mask diameter', 'foreground_geometry'), &
+    cavg_quality_feature_def('nonblob_detail', 'higher_is_better', &
+        'structured 20-6 A detail relative to central blob-like presence', 'internal_detail'), &
     cavg_quality_feature_def('presence', 'higher_is_better', &
         'central signal excess relative to border background noise', 'presence'), &
     cavg_quality_feature_def('log_detail_bg_snr', 'diagnostic', &
@@ -189,7 +189,7 @@ contains
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: outside_frac, centroid_norm, locvar_fg, locvar_bg
-        real                 :: cc_area_frac, cc_diameter_norm
+        real                 :: cc_area_frac
         real                 :: center_edge_snr, presence_score
         real                 :: detail_bg_snr, detail_signal_ratio, detail_coverage, detail_edge_density
         integer              :: nccs_valid, ithr
@@ -231,7 +231,7 @@ contains
         end do
         !$omp parallel do default(shared) private(i,ithr,outside_frac,centroid_norm,nccs_valid,no_component,&
         !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
-        !$omp& cc_area_frac,cc_diameter_norm,detail_bg_snr,detail_signal_ratio,&
+        !$omp& cc_area_frac,detail_bg_snr,detail_signal_ratio,&
         !$omp& detail_coverage,detail_edge_density)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
@@ -241,7 +241,6 @@ contains
                 outside_frac     = 1.0
                 centroid_norm    = 2.0
                 cc_area_frac     = 0.0
-                cc_diameter_norm = 0.0
                 nccs_valid       = 0
                 no_component     = .true.
                 mask_hard_reject = .true.
@@ -256,7 +255,7 @@ contains
             else
                 call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
                                                       rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, outside_frac, &
-                                                      centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, &
+                                                      centroid_norm, cc_area_frac, nccs_valid, &
                                                       no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
                                                 presence_score, detail_bg_snr, detail_signal_ratio, &
@@ -272,7 +271,8 @@ contains
             raw(i, I_CORR_FRC)      = corr(i)
             raw(i, I_CENTER_EDGE_SNR) = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_CC_AREA_FRAC)  = cc_area_frac
-            raw(i, I_CC_DIAMETER_NORM) = cc_diameter_norm
+            raw(i, I_NONBLOB_DETAIL) = nonblob_detail_feature(presence_score, detail_bg_snr, &
+                                                              detail_coverage, detail_edge_density)
             raw(i, I_PRESENCE)      = presence_score
             raw(i, I_LOG_DETAIL_BG_SNR) = detail_bg_snr
             raw(i, I_LOG_DETAIL_SIGNAL_RATIO) = detail_signal_ratio
@@ -326,7 +326,7 @@ contains
     end subroutine normalize_cavg_quality_features
 
     subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, outside_frac, &
-                                                 centroid_norm, cc_area_frac, cc_diameter_norm, nccs_valid, no_component, &
+                                                 centroid_norm, cc_area_frac, nccs_valid, no_component, &
                                                  mask_hard_reject )
         class(image),     intent(inout) :: img
         type(image_bin),  intent(inout) :: bin_img, cc_img
@@ -334,18 +334,15 @@ contains
         real,             intent(in)    :: rmat_disc(:,:,:)
         integer,          intent(in)    :: disc_area
         real,             intent(in)    :: rad_px
-        real,             intent(out)   :: outside_frac, centroid_norm, cc_area_frac, cc_diameter_norm
+        real,             intent(out)   :: outside_frac, centroid_norm, cc_area_frac
         integer,          intent(out)   :: nccs_valid
         logical,          intent(out)   :: no_component, mask_hard_reject
         real, allocatable :: ccsizes(:)
         integer           :: j, loc, nccs, area, outside
-        integer           :: ldim(3)
-        real              :: cc_diam, xy(2)
-        ldim = img%get_ldim()
+        real              :: xy(2)
         outside_frac  = 1.0
         centroid_norm = 2.0
         cc_area_frac  = 0.0
-        cc_diameter_norm = 0.0
         nccs_valid    = 0
         no_component  = .false.
         mask_hard_reject = .false.
@@ -357,13 +354,6 @@ contains
         call bin_img%find_ccs(cc_img)
         call cc_img%get_nccs(nccs)
         nccs_valid = nccs
-        do j = 1, nccs
-            call cc_img%diameter_cc(j, cc_diam)
-            if( cc_diam > ldim(1) ) then
-                call cc_img%elim_cc(j, update=.false.)
-                nccs_valid = nccs_valid - 1
-            end if
-        end do
         if( nccs_valid <= 0 ) then
             no_component = .true.
             mask_hard_reject = .true.
@@ -381,8 +371,6 @@ contains
         ccsizes = cc_img%size_ccs()
         loc     = maxloc(ccsizes, dim=1)
         deallocate(ccsizes)
-        call cc_img%diameter_cc(loc, cc_diam)
-        cc_diameter_norm = cc_diam / max(2.0 * rad_px, 1.0)
         call cc_img%cc2bin(loc)
         call cc_img%get_rmat_sub(rmat_cc)
         area    = count(rmat_cc > 0.0)
@@ -532,6 +520,18 @@ contains
         call detail_img%kill()
         deallocate(orig, detail)
     end subroutine measure_cavg_detail_metrics
+
+    real function nonblob_detail_feature( presence_score, detail_bg_snr, detail_coverage, detail_edge_density )
+        real, intent(in) :: presence_score, detail_bg_snr, detail_coverage, detail_edge_density
+        real :: blob_signal, detail_signal
+        ! Featureless ice blobs can have strong central low-frequency presence
+        ! while lacking organized 20-6 A texture. Higher values mean that
+        ! detail/edge support keeps pace with blob-like central signal.
+        blob_signal   = max(max(presence_score, 0.0), 1.0)
+        detail_signal = max(0.0, detail_bg_snr) + max(0.0, detail_coverage) + &
+                        max(0.0, detail_edge_density)
+        nonblob_detail_feature = log(max(detail_signal, LOG_EPS)) - log(blob_signal)
+    end function nonblob_detail_feature
 
     real function resolution_feature( res )
         real, intent(in) :: res

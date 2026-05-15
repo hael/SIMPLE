@@ -55,7 +55,7 @@ The active inventory is centralized in `simple_cavg_quality_feats.f90` through `
 | 8 | `corr_frc_proxy` | optional `cls2D` `corr` | higher is better | Uses stored correlation/FRC-like metadata when present. |
 | 9 | `log_center_edge_snr` | `image%center_edge_snr` | higher is better | Central variance relative to edge variance. |
 | 10 | `cc_area_frac` | `image_bin%size_ccs` plus Otsu CC mask | diagnostic | Main connected-component area divided by the expected circular mask area. |
-| 11 | `cc_diameter_norm` | `image_bin%diameter_cc` | diagnostic | Main connected-component diameter divided by the expected mask diameter. |
+| 11 | `nonblob_detail` | 20-6 A band-pass plus `image%presence` | higher is better | Structured detail/edge support relative to central blob-like presence. |
 | 12 | `presence` | `image%presence` | higher is better | Central signal excess relative to border background noise. |
 | 13 | `log_detail_bg_snr` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to outside-mask detail RMS. |
 | 14 | `log_detail_signal_ratio` | 20-6 A band-pass | diagnostic | Log in-mask detail RMS relative to in-mask total signal RMS. |
@@ -172,7 +172,7 @@ Relevant routine:
 
 - `exec_shape_rank_cavgs`
 
-This path uses `automask2D`, integrated masked intensity, object diameter, and center shifts to rank class averages. Several of those outputs are attractive quality features if they can be computed without making quality selection too slow or too dependent on automask parameters.
+This path uses `automask2D`, integrated masked intensity, and center shifts to rank class averages. Several of those outputs are attractive quality features if they can be computed without making quality selection too slow or too dependent on automask parameters.
 
 ### Image-Level Primitives
 
@@ -192,7 +192,7 @@ Useful primitives include:
 - `image%fcomps_below_noise_power_stats`
 - `image%center_edge_snr`, `image%presence`, `image%contains_nans`
 - `image%corr`, `image%corr_shifted`, `image%real_corr`, `image%phase_corr`, `image%radial_cc`, `image%sqeuclid`
-- `image_bin%find_ccs`, `image_bin%size_ccs`, `image_bin%diameter_cc`, `image_bin%masscen_cc`
+- `image_bin%find_ccs`, `image_bin%size_ccs`, `image_bin%masscen_cc`
 - `automask2D`, `density_inoutside_mask`, `image%density_inoutside`
 
 ## Feasible Future Feature Extensions
@@ -252,7 +252,6 @@ These may help when class averages contain strong non-particle objects.
 | Candidate | Existing source | Why it may help | Caution |
 | --- | --- | --- | --- |
 | `automask_area_frac` | `automask2D` | Particle-like classes should occupy a plausible mask area. | Automask adds parameters and runtime. |
-| `automask_diameter_norm` | `automask2D` | Flags tiny specks and over-large blobs. | May reject unusual but real projections. |
 | `automask_shift_norm` | `automask2D` | Independent centering signal. | Correlated with current `centered` feature. |
 | `masked_integrated_intensity` | `exec_shape_rank_cavgs` pattern | Catches strong coherent particle density. | Contrast/sign conventions must be consistent. |
 
@@ -262,7 +261,7 @@ Do not add a large feature batch in one pass. The current learner can evaluate a
 
 A practical sequence is:
 
-1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `cc_area_frac`, `cc_diameter_norm`, `presence`, and the internal-detail features.
+1. Re-run `quality_mode=analyze` with the active cheap diagnostics: `cc_area_frac`, `nonblob_detail`, `presence`, and the internal-detail features.
 2. Inspect the learn report `feature_signal`, `feature_drop`, and `feature_group_lodo` rows. A feature should have stable per-dataset AUC, improve the one-feature-drop test, or improve leave-one-dataset-out group behavior before it is trusted as default-model signal.
 3. Promote only features that improve holdout behavior, especially on difficult chunk datasets, without damaging easy/manual-trusted cases.
 4. Revisit spectral additions only if the scalar feature bank cannot solve a well-defined failure mode; keep them diagnostic until they prove they do not simply rediscover periodic artifacts.

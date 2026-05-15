@@ -31,7 +31,7 @@ The feature bank evolved in three practical phases:
 
 ## Current Feature Behavior
 
-Current 16-feature bank, trainable rows in `batch_train1`:
+Current-at-analysis 16-feature bank, trainable rows in `batch_train1`:
 
 | Feature | Mean AUC | Min AUC | Inverted datasets | Learned weight | Drop delta |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -65,7 +65,8 @@ Interpretation:
 - `log_pop` is useful overall but can invert. It is a support prior, not a direct quality measurement.
 - `log_center_edge_snr` is powerful when correct, but it inverts on Not and TRPM4. It should remain
   a secondary feature.
-- `cc_diameter_norm` is a helpful weak geometry scalar. It has no inversions in the current batch.
+- `cc_diameter_norm` looked like a weak geometry scalar in aggregate, but it was removed after manual
+  inspection showed that it can reject compact good top views, notably MotAB classes 6 and 18.
 - `mask_inside` and `single_component` are flat in trainable rows because the catastrophic geometry
   cases are now handled as hard rejects. They should stay out of the learned model unless their
   continuous definitions become informative again.
@@ -194,6 +195,8 @@ ApoF:
 4. Internal-detail features capture something real, but they are not ready to be treated as generally safe.
 5. Hard rejects and learned model features should stay conceptually separate. Geometry and catastrophic
    resolution failures belong in hard rejection; the model should learn among remaining trainable rows.
+6. Connected-component diameter should not be model evidence. It can encode view geometry rather than
+   class-average quality and has been removed from the feature bank.
 
 ## Suggested Next Experiments
 
@@ -207,4 +210,3 @@ ApoF:
    TMEM16A, and they may guide a better future feature that is less sensitive to dataset-specific texture.
 4. If the goal is to catch featureless ice blobs specifically, design a targeted feature that measures
    organized internal structure relative to expected molecular scale, not just high-frequency detail power.
-

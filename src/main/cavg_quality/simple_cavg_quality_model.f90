@@ -54,16 +54,18 @@ real, parameter :: CAVG_QUALITY_DEFAULT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! feature bank; diagnostic-only features should explain hard rejects or test
 ! an active quality hypothesis.
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.025131E-01, 1.299015E-01, 0.000000E+00, 4.139543E-02, &
-    1.029398E-01, 1.077174E-01, 0.000000E+00, 1.385303E-01, &
-    7.361746E-02, 0.000000E+00, 7.205675E-02, 1.177105E-01, &
-    5.819838E-02, 0.000000E+00, 2.467390E-02, 3.074553E-02 ]
+    1.104735E-01, 1.399886E-01, 0.000000E+00, 4.460987E-02, &
+    1.109333E-01, 1.160819E-01, 0.000000E+00, 1.492875E-01, &
+    7.933401E-02, 0.000000E+00, 0.000000E+00, 1.268510E-01, &
+    6.271760E-02, 0.000000E+00, 2.658988E-02, 3.313298E-02 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.05
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.15
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 
-! Previous chunk_default_v2 backup before batch_train1 promotion:
+! Previous chunk_default_v2 backup before batch_train1 promotion. This is
+! retained only as historical reference because the old slot 11 feature
+! (cc_diameter_norm) has been removed from the feature bank.
 ! real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 !     1.156534E-01, 1.465524E-01, 0.000000E+00, 4.670155E-02, &
 !     1.161348E-01, 1.215248E-01, 0.000000E+00, 1.562873E-01, &

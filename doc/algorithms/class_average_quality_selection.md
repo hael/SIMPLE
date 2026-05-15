@@ -101,7 +101,7 @@ The current built-in presets are:
 
 `chunk_default_v2` is the default chunk/stream operating point. The current promoted feature policy is `full_geom_pruned`, which leaves `mask_inside`, `single_component`, and `cc_area_frac` at zero weight because foreground geometry is handled by the hard validity gate or is not stable enough as soft model evidence. Resolution remains active model evidence through the nonzero-weight `neg_log_res` feature.
 
-The current chunk model uses `boundary_margin=0.10`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement enabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is an alternate chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
+The current chunk model uses `boundary_margin=0.05`, `min_score_separation=0.15`, low-separation Otsu enabled, Otsu-window threshold replacement disabled, cluster rescue disabled, and minimum accepted fraction disabled. `chunk_default_v1` is an alternate chunk preset. `pool_default_v1` is the more recall-preserving operating point for larger pooled or batch sets and enables minimum-accepted-fraction behavior.
 
 ## Feature Space
 
@@ -119,7 +119,7 @@ The current feature set has 16 scalar features:
 - `corr_frc_proxy`
 - `log_center_edge_snr`
 - `cc_area_frac`
-- `cc_diameter_norm`
+- `nonblob_detail`
 - `presence`
 - `log_detail_bg_snr`
 - `log_detail_signal_ratio`
@@ -128,7 +128,7 @@ The current feature set has 16 scalar features:
 
 The current model path is scalar-only. Pairwise histogram/spectrum distance matrices, relational quality matrices, histogram-neighborhood density, and global intensity-softness descriptors are not part of the active feature bank.
 
-The four internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, and band-passed edge density. They are scalar diagnostics rather than pairwise distances.
+The internal-detail diagnostics measure organized in-mask molecular texture. They use one broad 20-6 A band-pass per class average and summarize detail relative to outside-mask background, detail relative to total in-mask signal, in-mask detail coverage, band-passed edge density, and a `nonblob_detail` score that asks whether detail/edge support keeps pace with strong central blob-like presence. They are scalar diagnostics rather than pairwise distances.
 
 Resolution has a dual role. The continuous `neg_log_res` feature is part of the learned model and contributes to both the linear score and the feature-space distance whenever its learned weight is nonzero. Only catastrophic resolution failure is outside the learned boundary: a class with stored `cls2D` resolution worse than `40 A` is hard rejected before fitting. Foreground geometry is handled more conservatively; after Otsu segmentation and connected-component cleanup, a class is hard rejected if no valid foreground component remains, if any foreground component centroid lies outside the mask radius, or if the largest foreground component has more than 10 pixels outside the mask disc. The scalar geometry features remain in the analysis table as diagnostics, but catastrophic low-resolution or outside-mask failures are not left for the model to rescue.
 
