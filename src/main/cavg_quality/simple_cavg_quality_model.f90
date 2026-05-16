@@ -2,7 +2,8 @@
 module simple_cavg_quality_model
 use simple_defs,               only: LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
-use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase
+use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase, &
+    fortran_symbol_from_string, fortran_quote, fortran_logical
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
@@ -19,8 +20,8 @@ public :: write_cavg_quality_model_builtin_code
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT    = 'chunk_default_v2'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT     = 'pool_default_v1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
@@ -52,6 +53,7 @@ real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: context                 = 'chunk'
+    character(len=32) :: feature_policy          = 'microchunk_plus_score_signal'
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -71,7 +73,7 @@ contains
     procedure :: classify
     procedure :: write => write_model
     procedure :: read  => read_model
-    procedure :: kill  => reset_model
+    procedure :: kill  => kill_model
 end type cavg_quality_model
 
 contains
@@ -111,6 +113,7 @@ contains
         self%name                    = trim(spec%name)
         self%context                 = lowercase(trim(spec%context))
         call assert_valid_model_context(self%context)
+        self%feature_policy          = trim(spec%feature_policy)
         self%weights                 = spec%weights
         self%boundary_margin         = spec%boundary_margin
         self%min_score_separation    = spec%min_score_separation
@@ -130,6 +133,7 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = self%name
         spec%context                 = self%context
+        spec%feature_policy          = self%feature_policy
         spec%weights                 = self%weights
         spec%boundary_margin         = self%boundary_margin
         spec%min_score_separation    = self%min_score_separation
@@ -147,6 +151,7 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%context                 = 'chunk'
+        spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -164,6 +169,7 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_POOL_DEFAULT
         spec%context                 = 'pool'
+        spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = CAVG_QUALITY_POOL_V1_WEIGHTS
         spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
         spec%min_score_separation    = MIN_SCORE_SEPARATION
@@ -204,9 +210,10 @@ contains
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
-        write(funit,'(A)') 'model_version=4'
+        write(funit,'(A)') 'model_version=5'
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'context=', trim(self%context)
+        write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
         write(funit,'(A)', advance='no') 'feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ','
@@ -232,7 +239,8 @@ contains
         character(len=64)  :: symbol, func_name
         character(len=128) :: const_name
         integer :: funit
-        symbol     = model_symbol_from_name(model%name)
+        symbol     = fortran_symbol_from_string(model%name, fallback='quality_model', &
+            prefix_if_invalid_start='model_', max_symbol_len=40)
         func_name  = trim(symbol)//'_model_spec'
         const_name = 'CAVG_QUALITY_MODEL_'//trim(uppercase(symbol))
         open(newunit=funit, file=trim(fname), status='replace', action='write')
@@ -269,6 +277,7 @@ contains
         write(funit,'(A)') '        type(cavg_quality_model_spec) :: spec'
         write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
         write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
+        write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
         call write_weights_assignment(funit, model%weights)
         write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
         write(funit,'(A,ES14.6)') '        spec%min_score_separation    = ', model%min_score_separation
@@ -299,83 +308,6 @@ contains
         end do
         write(funit,'(A)') ' ]'
     end subroutine write_weights_assignment
-
-    function model_symbol_from_name( name ) result( symbol )
-        character(len=*), intent(in) :: name
-        character(len=64) :: symbol
-        character(len=LONGSTRLEN) :: lower_name
-        character(len=1) :: ch
-        integer :: i, n
-        lower_name = lowercase(adjustl(trim(name)))
-        symbol = ''
-        n = 0
-        do i = 1, len_trim(lower_name)
-            ch = lower_name(i:i)
-            if( is_model_symbol_char(ch) )then
-                call append_symbol_char(symbol, n, ch)
-            else if( n > 0 .and. symbol(n:n) /= '_' )then
-                call append_symbol_char(symbol, n, '_')
-            endif
-        end do
-        do while( n > 1 .and. symbol(n:n) == '_' )
-            symbol(n:n) = ' '
-            n = n - 1
-        end do
-        if( n == 0 )then
-            symbol = 'quality_model'
-        else if( symbol(1:1) >= '0' .and. symbol(1:1) <= '9' )then
-            symbol = 'model_'//trim(symbol)
-        endif
-    end function model_symbol_from_name
-
-    subroutine append_symbol_char( symbol, n, ch )
-        character(len=*), intent(inout) :: symbol
-        integer,          intent(inout) :: n
-        character(len=1), intent(in)    :: ch
-        integer, parameter :: MAX_SYMBOL_LEN = 40
-        if( n >= min(len(symbol), MAX_SYMBOL_LEN) ) return
-        n = n + 1
-        symbol(n:n) = ch
-    end subroutine append_symbol_char
-
-    logical function is_model_symbol_char( ch )
-        character(len=1), intent(in) :: ch
-        is_model_symbol_char = (ch >= 'a' .and. ch <= 'z') .or. (ch >= '0' .and. ch <= '9') .or. ch == '_'
-    end function is_model_symbol_char
-
-    function fortran_quote( str ) result( quoted )
-        character(len=*), intent(in) :: str
-        character(len=XLONGSTRLEN) :: quoted
-        integer :: i, n
-        quoted = ''
-        n = 1
-        quoted(n:n) = ''''
-        do i = 1, len_trim(str)
-            if( n + 2 > len(quoted) ) exit
-            if( str(i:i) == '''' )then
-                quoted(n+1:n+2) = ''''''
-                n = n + 2
-            else
-                quoted(n+1:n+1) = str(i:i)
-                n = n + 1
-            endif
-        end do
-        if( n < len(quoted) )then
-            quoted(n+1:n+1) = ''''
-        else
-            quoted(n:n) = ''''
-        endif
-    end function fortran_quote
-
-    function fortran_logical( val ) result( literal )
-        logical, intent(in) :: val
-        character(len=8) :: literal
-        if( val )then
-            literal = '.true.'
-        else
-            literal = '.false.'
-        endif
-    end function fortran_logical
 
     subroutine read_model( self, fname )
         class(cavg_quality_model), intent(inout) :: self
@@ -409,12 +341,16 @@ contains
             call parse_model_key_value(line, key, val, ok_line)
             if( .not. ok_line ) cycle
             select case(trim(key))
+                case('model_version')
+                    cycle
                 case('preset')
                     cycle
                 case('name')
                     self%name = trim(val)
                 case('context')
                     self%context = lowercase(trim(val))
+                case('feature_policy', 'feature_family_set')
+                    self%feature_policy = trim(val)
                 case('feature_weights')
                     call read_feature_weights(val, self%weights)
                 case('boundary_margin')
@@ -455,7 +391,7 @@ contains
     subroutine read_feature_weights( val, weights )
         character(len=*), intent(in)    :: val
         real,             intent(inout) :: weights(CAVG_QUALITY_NFEATS)
-        character(len=LONGSTRLEN) :: field
+        character(len=LONGSTRLEN) :: field, errmsg
         integer :: ios, i, nvals
         real    :: parsed(CAVG_QUALITY_NFEATS)
         nvals = csv_weight_count(val)
@@ -469,9 +405,11 @@ contains
             weights = parsed
             return
         endif
+        if( nvals == 0 ) THROW_HARD('read_model: feature_weights has no values')
         if( nvals > 1 )then
-            if( nvals < CAVG_QUALITY_NFEATS ) THROW_HARD('read_model: feature_weights has too few values')
-            THROW_HARD('read_model: feature_weights has too many values')
+            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected ', CAVG_QUALITY_NFEATS, &
+                ' values, got ', nvals
+            THROW_HARD(trim(errmsg))
         endif
         parsed = weights
         read(val,*,iostat=ios) parsed
@@ -511,10 +449,23 @@ contains
         ok  = .true.
     end subroutine parse_model_key_value
 
-    subroutine reset_model( self )
+    subroutine kill_model( self )
         class(cavg_quality_model), intent(inout) :: self
-        call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-    end subroutine reset_model
+        self%name                    = ''
+        self%context                 = ''
+        self%feature_policy          = ''
+        self%weights                 = 0.0
+        self%boundary_margin         = 0.0
+        self%min_score_separation    = 0.0
+        self%otsu_min_offset         = 0.0
+        self%otsu_max_offset         = 0.0
+        self%cluster_rescue_margin   = 0.0
+        self%min_accept_frac         = 0.0
+        self%use_lowsep_otsu         = .false.
+        self%use_otsu_window         = .false.
+        self%use_cluster_rescue      = .false.
+        self%enforce_min_accept_frac = .false.
+    end subroutine kill_model
 
     subroutine apply_linear_boundary( quality, model )
         type(cavg_quality_result), intent(inout) :: quality
@@ -540,7 +491,7 @@ contains
         where( quality%hard_reject ) quality%scores = -CLIP_Z
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
-        quality%threshold_margin = 0.0
+        quality%threshold_offset = 0.0
         quality%separation       = 0.0
         quality%nclust           = 0
         quality%good_label       = 0
@@ -609,7 +560,9 @@ contains
             if( model%use_lowsep_otsu .and. otsu_ok .and. otsu_separation >= model%min_score_separation )then
                 quality%raw_threshold     = otsu_threshold
                 quality%threshold         = otsu_threshold
-                quality%threshold_margin  = 0.0
+                quality%threshold_offset  = 0.0
+                ! Low-separation Otsu bypasses the k-medoids boundary: labels
+                ! remain diagnostic, while states come only from the score cut.
                 do i = 1, nfit
                     if( quality%scores(inds(i)) >= quality%threshold ) quality%states(inds(i)) = 1
                 end do
@@ -639,7 +592,7 @@ contains
             if( model%enforce_min_accept_frac ) &
                 call enforce_min_accept_fraction(quality%scores, quality%hard_reject, quality%states, quality%threshold, &
                                                  model%min_accept_frac)
-            quality%threshold_margin = quality%raw_threshold - quality%threshold
+            quality%threshold_offset = quality%raw_threshold - quality%threshold
             quality%good_label     = good_fit_label
             quality%used_threshold = .true.
         end if
@@ -668,14 +621,23 @@ contains
     subroutine accept_fit_as_single_cluster( quality, inds )
         type(cavg_quality_result), intent(inout) :: quality
         integer,                   intent(in)    :: inds(:)
-        if( size(inds) == 0 ) return
+        if( size(inds) == 0 )then
+            if( allocated(quality%medoids) ) deallocate(quality%medoids)
+            quality%threshold        = 0.0
+            quality%raw_threshold    = 0.0
+            quality%threshold_offset = 0.0
+            quality%nclust           = 0
+            quality%good_label       = 0
+            quality%used_threshold   = .false.
+            return
+        endif
         quality%states(inds) = 1
         quality%labels(inds) = 1
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
         allocate(quality%medoids(1), source=inds(1))
         quality%threshold        = minval(quality%scores(inds)) - EPS
         quality%raw_threshold    = quality%threshold
-        quality%threshold_margin = 0.0
+        quality%threshold_offset = 0.0
         quality%nclust           = 1
         quality%good_label       = 1
         quality%used_threshold   = .false.
@@ -785,6 +747,9 @@ contains
         min_accept = min(nfit, max(1, ceiling(min_accept_frac * real(nfit))))
         naccepted  = count(states > 0 .and. .not. hard_reject)
         if( naccepted >= min_accept ) return
+        ! Pool models use this as a score floor, so labels remain diagnostic:
+        ! the floor can accept a high-scoring class from the lower-scoring
+        ! k-medoids cluster if needed to satisfy the minimum acceptance rate.
         vals = pack(scores, .not. hard_reject)
         floor_threshold = minval(vals)
         do i = 1, min_accept

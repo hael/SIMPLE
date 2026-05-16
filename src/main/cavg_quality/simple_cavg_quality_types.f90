@@ -22,22 +22,24 @@ type :: cavg_quality_feature_def
     character(len=32)  :: name        = ''
     character(len=32)  :: direction   = 'higher_is_better'
     character(len=160) :: description = ''
+    character(len=32)  :: family      = 'general'
 end type cavg_quality_feature_def
 
 type :: cavg_quality_model_spec
-    character(len=64) :: name                    = ''
-    character(len=32) :: context                 = 'chunk'
+    character(len=64) :: name                         = ''
+    character(len=32) :: context                      = 'chunk'
+    character(len=32) :: feature_policy               = 'microchunk_plus_score_signal'
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
-    real              :: boundary_margin         = 0.0
-    real              :: min_score_separation    = 0.0
-    real              :: otsu_min_offset         = 0.0
-    real              :: otsu_max_offset         = 0.0
-    real              :: cluster_rescue_margin   = 0.0
-    real              :: min_accept_frac         = 0.0
-    logical           :: use_lowsep_otsu         = .false.
-    logical           :: use_otsu_window         = .false.
-    logical           :: use_cluster_rescue      = .false.
-    logical           :: enforce_min_accept_frac = .false.
+    real              :: boundary_margin              = 0.0
+    real              :: min_score_separation         = 0.0
+    real              :: otsu_min_offset              = 0.0
+    real              :: otsu_max_offset              = 0.0
+    real              :: cluster_rescue_margin        = 0.0
+    real              :: min_accept_frac              = 0.0
+    logical           :: use_lowsep_otsu              = .false.
+    logical           :: use_otsu_window              = .false.
+    logical           :: use_cluster_rescue           = .false.
+    logical           :: enforce_min_accept_frac      = .false.
 end type cavg_quality_model_spec
 
 type :: cavg_quality_result
@@ -50,7 +52,7 @@ type :: cavg_quality_result
     logical, allocatable :: hard_reject(:)
     real                 :: threshold        = 0.0
     real                 :: raw_threshold    = 0.0
-    real                 :: threshold_margin = 0.0
+    real                 :: threshold_offset = 0.0
     real                 :: separation       = 0.0
     integer              :: nclust           = 0
     integer              :: good_label       = 0
@@ -104,7 +106,7 @@ contains
         if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
-        quality%threshold_margin = 0.0
+        quality%threshold_offset = 0.0
         quality%separation       = 0.0
         quality%nclust           = 0
         quality%good_label       = 0

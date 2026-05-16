@@ -126,12 +126,12 @@ contains
         allocate( format, source='char' )
     end subroutine str2format_2
 
-    logical function char_is_a_letter( c )
+    pure logical function char_is_a_letter( c )
         character(len=1), intent(in) :: c
         char_is_a_letter = (scan(LOWER_CASE_LETTERS,c)>0) .or. (scan(UPPER_CASE_LETTERS,c)>0)
     end function char_is_a_letter
 
-    logical function char_is_a_number( c )
+    pure logical function char_is_a_number( c )
         character(len=1), intent(in) :: c
         char_is_a_number = scan(INTEGERS,c) > 0
     end function char_is_a_number
@@ -556,6 +556,96 @@ contains
             if( n /= 0 ) uppercase(i:i) = UPPER_CASE_LETTERS(n:n)
         enddo
     end function uppercase
+
+    pure function fortran_symbol_from_string( str, fallback, prefix_if_invalid_start, max_symbol_len ) result( symbol )
+        character(len=*), intent(in)           :: str
+        character(len=*), intent(in), optional :: fallback, prefix_if_invalid_start
+        integer,          intent(in), optional :: max_symbol_len
+        character(len=64) :: symbol
+        character(len=LONGSTRLEN) :: lower_name, fallback_name, invalid_start_prefix
+        character(len=1) :: ch
+        integer :: i, n, symbol_max
+        lower_name           = lowercase(adjustl(trim(str)))
+        fallback_name        = 'symbol'
+        invalid_start_prefix = 'symbol_'
+        symbol_max           = len(symbol)
+        if( present(fallback) ) fallback_name = trim(fallback)
+        if( present(prefix_if_invalid_start) ) invalid_start_prefix = trim(prefix_if_invalid_start)
+        if( present(max_symbol_len) ) symbol_max = min(symbol_max, max(1, max_symbol_len))
+        symbol = ''
+        n = 0
+        do i = 1, len_trim(lower_name)
+            ch = lower_name(i:i)
+            if( is_fortran_symbol_char(ch) )then
+                call append_limited_char(symbol, n, ch, symbol_max)
+            else if( n > 0 .and. symbol(n:n) /= '_' )then
+                call append_limited_char(symbol, n, '_', symbol_max)
+            endif
+        end do
+        do while( n > 1 .and. symbol(n:n) == '_' )
+            symbol(n:n) = ' '
+            n = n - 1
+        end do
+        if( n == 0 )then
+            symbol = fallback_name
+        else if( .not. is_fortran_symbol_start(symbol(1:1)) )then
+            symbol = trim(invalid_start_prefix)//trim(symbol)
+        endif
+    end function fortran_symbol_from_string
+
+    pure subroutine append_limited_char( str, n, ch, max_len )
+        character(len=*), intent(inout) :: str
+        integer,          intent(inout) :: n
+        character(len=1), intent(in)    :: ch
+        integer,          intent(in)    :: max_len
+        if( n >= min(len(str), max_len) ) return
+        n = n + 1
+        str(n:n) = ch
+    end subroutine append_limited_char
+
+    pure logical function is_fortran_symbol_start( ch )
+        character(len=1), intent(in) :: ch
+        is_fortran_symbol_start = char_is_a_letter(ch)
+    end function is_fortran_symbol_start
+
+    pure logical function is_fortran_symbol_char( ch )
+        character(len=1), intent(in) :: ch
+        is_fortran_symbol_char = char_is_a_letter(ch) .or. char_is_a_number(ch) .or. ch == '_'
+    end function is_fortran_symbol_char
+
+    pure function fortran_quote( str ) result( quoted )
+        character(len=*), intent(in) :: str
+        character(len=XLONGSTRLEN) :: quoted
+        integer :: i, n
+        quoted = ''
+        n = 1
+        quoted(n:n) = ''''
+        do i = 1, len_trim(str)
+            if( n + 2 > len(quoted) ) exit
+            if( str(i:i) == '''' )then
+                quoted(n+1:n+2) = ''''''
+                n = n + 2
+            else
+                quoted(n+1:n+1) = str(i:i)
+                n = n + 1
+            endif
+        end do
+        if( n < len(quoted) )then
+            quoted(n+1:n+1) = ''''
+        else
+            quoted(n:n) = ''''
+        endif
+    end function fortran_quote
+
+    pure function fortran_logical( val ) result( literal )
+        logical, intent(in) :: val
+        character(len=8) :: literal
+        if( val )then
+            literal = '.true.'
+        else
+            literal = '.false.'
+        endif
+    end function fortran_logical
 
     !>  \brief works out whether a character string is a comment line
     logical function str_is_comment( line )

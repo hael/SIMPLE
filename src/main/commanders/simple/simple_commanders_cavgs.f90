@@ -325,7 +325,7 @@ contains
         integer, parameter        :: QUALITY_MODE_PROMOTE = 4
         integer                   :: quality_mode
         real                      :: smpd
-        character(len=LONGSTRLEN) :: model_fname, report_fname
+        character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -353,10 +353,10 @@ contains
             call model%read(params%infile%to_char())
         if( quality_mode == QUALITY_MODE_PROMOTE )then
             if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
-            model_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
-            if( cline%defined('fname') ) model_fname = params%fname%to_char()
-            call write_cavg_quality_model_builtin_code(model, trim(model_fname))
-            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(model_fname)
+            out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
+            if( cline%defined('fname') ) out_fname = params%fname%to_char()
+            call write_cavg_quality_model_builtin_code(model, trim(out_fname))
+            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(out_fname)
             call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
                 verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
             return
@@ -389,8 +389,8 @@ contains
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
-        write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / MARGIN / EFFECTIVE : ', &
-            quality%raw_threshold, ' / ', quality%threshold_margin, ' / ', quality%threshold
+        write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
+            quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
         write(logfhandle,'(A,F8.3,A,L1)') '>>> CAVG QUALITY SEPARATION / USED THRESHOLD : ', &
             quality%separation, ' USED=', quality%used_threshold
         if( quality_mode == QUALITY_MODE_ANALYZE )then
@@ -420,12 +420,16 @@ contains
     contains
 
         subroutine annotate_project()
-            integer :: icls
+            integer :: icls, ncls3d
+            ncls3d = spproj%os_cls3D%get_noris()
+            if( ncls3d > 0 .and. ncls3d /= ncls ) &
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> CAVG QUALITY NOTE: cls3D count (', ncls3d, &
+                    ') does not match cls2D count (', ncls, '); cls3D quality fields not updated'
             do icls = 1, ncls
                 call spproj%os_cls2D%set(icls, 'quality',         quality%scores(icls))
                 call spproj%os_cls2D%set(icls, 'quality_cluster', quality%labels(icls))
                 call spproj%os_cls2D%set(icls, 'accept',          quality%states(icls))
-                if( spproj%os_cls3D%get_noris() == ncls )then
+                if( ncls3d == ncls )then
                     call spproj%os_cls3D%set(icls, 'quality',         quality%scores(icls))
                     call spproj%os_cls3D%set(icls, 'quality_cluster', quality%labels(icls))
                     call spproj%os_cls3D%set(icls, 'accept',          quality%states(icls))

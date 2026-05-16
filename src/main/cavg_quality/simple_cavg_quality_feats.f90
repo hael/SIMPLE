@@ -1,13 +1,13 @@
 !@descr: feature inventory and feature extraction for 2D class-average quality
 module simple_cavg_quality_feats
 !$ use omp_lib
-use simple_defs,         only: nthr_glob
-use simple_error,        only: simple_exception
-use simple_image,        only: image
-use simple_image_bin,    only: image_bin
-use simple_oris,         only: oris
-use simple_segmentation, only: otsu_img
-use simple_stat,         only: median, mad_gau
+use simple_defs,               only: nthr_glob
+use simple_error,              only: simple_exception
+use simple_image,              only: image
+use simple_image_bin,          only: image_bin
+use simple_oris,               only: oris
+use simple_segmentation,       only: otsu_img
+use simple_stat,               only: median, mad_gau
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_feature_def
 implicit none
 private
@@ -27,17 +27,22 @@ public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
 public :: cavg_quality_feature_direction
+public :: cavg_quality_feature_family
 public :: write_cavg_quality_feature_inventory
 public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: CAVG_RES_HARD_REJECT_A
+public :: POP_FRACTION_HARD_REJECT
 
 #include "simple_local_flags.inc"
 
 real,    parameter :: LOG_EPS                   = 1.0e-12
+! Low-pass scales used by the foreground and signal metrics documented in
+! doc/microchunk_and_rejection/model_cavgs_rejection.md.
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
+real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 
@@ -53,23 +58,23 @@ integer, parameter :: I_PRESENCE                = 9
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
-        'log class population; larger classes have more particle support'), &
+        'log class population; larger classes have more particle support', 'microchunk'), &
     cavg_quality_feature_def('neg_log_res', 'higher_is_better', &
-        'negative log class resolution estimate; higher values indicate better nominal resolution'), &
+        'negative log class resolution estimate; higher values indicate better nominal resolution', 'microchunk'), &
     cavg_quality_feature_def('centered', 'higher_is_better', &
-        'negative normalized centroid displacement of segmented class-average signal'), &
+        'negative normalized centroid displacement of segmented class-average signal', 'microchunk'), &
     cavg_quality_feature_def('log_locvar_fg', 'higher_is_better', &
-        'log local variance measured in the foreground Otsu mask'), &
+        'log local variance measured in the foreground Otsu mask', 'microchunk'), &
     cavg_quality_feature_def('log_locvar_bg', 'higher_is_better', &
-        'log local variance measured in the complementary background mask'), &
+        'log local variance measured in the complementary background mask', 'microchunk'), &
     cavg_quality_feature_def('corr_frc_proxy', 'higher_is_better', &
-        'stored class correlation or FRC-like score when available in cls2D metadata'), &
+        'stored class correlation or FRC-like quality score when available in cls2D data', 'score'), &
     cavg_quality_feature_def('log_center_edge_snr', 'higher_is_better', &
-        'log central signal variance relative to edge variance in the class average'), &
+        'log central signal variance relative to edge variance in the class average', 'signal'), &
     cavg_quality_feature_def('cc_area_frac', 'higher_is_better', &
-        'main connected-component area divided by the expected circular mask area'), &
+        'main connected-component area divided by the expected circular mask area', 'microchunk'), &
     cavg_quality_feature_def('presence', 'higher_is_better', &
-        'central signal excess relative to border background noise') ]
+        'central signal excess relative to border background noise', 'signal') ]
 
 contains
 
@@ -94,13 +99,21 @@ contains
         direction = FEATURE_DEFS(i)%direction
     end function cavg_quality_feature_direction
 
+    function cavg_quality_feature_family( i ) result( family )
+        integer, intent(in) :: i
+        character(len=32)   :: family
+        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
+        family = FEATURE_DEFS(i)%family
+    end function cavg_quality_feature_family
+
     subroutine write_cavg_quality_feature_inventory( funit )
         integer, intent(in) :: funit
         integer :: i
-        write(funit,'(A)') '# feature_inventory_header=index,name,direction,description'
+        write(funit,'(A)') '# feature_inventory_header=index,name,direction,family,description'
         do i = 1, CAVG_QUALITY_NFEATS
-            write(funit,'(A,I0,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
-                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%description)
+            write(funit,'(A,I0,A,A,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
+                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%family), ',', &
+                trim(FEATURE_DEFS(i)%description)
         end do
     end subroutine write_cavg_quality_feature_inventory
 
@@ -112,7 +125,7 @@ contains
         logical, allocatable, intent(inout) :: hard_reject(:)
         integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
-        integer              :: ncls, i, ldim(3)
+        integer              :: ncls, i, ldim(3), pop_hard_threshold
         real                 :: smpd, rad_px
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
@@ -133,6 +146,7 @@ contains
         res  = cls_oris%get_all('res')
         if( size(pop) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid pop size')
         if( size(res) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid res size')
+        pop_hard_threshold = ceiling(real(sum(pop)) * POP_FRACTION_HARD_REJECT)
         allocate(corr(ncls), source=0.0)
         if( cls_oris%isthere('corr') )then
             corr_in = cls_oris%get_all('corr')
@@ -188,11 +202,13 @@ contains
             raw(i, I_CENTER_EDGE_SNR)         = log(max(center_edge_snr, LOG_EPS))
             raw(i, I_CC_AREA_FRAC)            = cc_area_frac
             raw(i, I_PRESENCE)                = presence_score
-            ! Catastrophic resolution and geometry failures are hard validity
-            ! rejects; ordinary resolution variation remains an active scalar
-            ! model feature through neg_log_res.
-            hard_reject(i) = pop(i) <= 0 .or. res(i) > CAVG_RES_HARD_REJECT_A .or. bad_pixels .or. &
-                                              no_component .or. mask_hard_reject .or. &
+            ! Catastrophic population, resolution, and foreground-geometry
+            ! failures are hard validity rejects. The population fraction and
+            ! connected-component pruning mirror the microchunk rejector, while
+            ! ordinary variation remains active scalar evidence for the model.
+            hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
+                                              res(i) > CAVG_RES_HARD_REJECT_A .or. &
+                                              bad_pixels .or. no_component .or. mask_hard_reject .or. &
                                               (locvar_fg <= EPS .and. locvar_bg <= EPS)
         end do
         !$omp end parallel do
@@ -247,7 +263,7 @@ contains
         logical,          intent(out)   :: no_component, mask_hard_reject
         real, allocatable :: ccsizes(:)
         integer           :: j, loc, nccs, nccs_valid, area, outside
-        real              :: xy(2)
+        real              :: cc_diam, xy(2)
         centroid_norm = 2.0
         cc_area_frac  = 0.0
         nccs_valid    = 0
@@ -261,6 +277,13 @@ contains
         call bin_img%find_ccs(cc_img)
         call cc_img%get_nccs(nccs)
         nccs_valid = nccs
+        do j = 1, nccs
+            call cc_img%diameter_cc(j, cc_diam)
+            if( cc_diam > real(size(rmat_cc, dim=1)) )then
+                call cc_img%elim_cc(j, update=.false.)
+                nccs_valid = nccs_valid - 1
+            endif
+        end do
         if( nccs_valid <= 0 ) then
             no_component = .true.
             mask_hard_reject = .true.

@@ -10,7 +10,7 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_result, reset_cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_result
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -27,7 +27,7 @@ contains
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
-        call reset_cavg_quality_result(quality)
+        call quality%kill()
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
@@ -68,7 +68,7 @@ contains
             suggested_weights = model%weights
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=3'
+        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=4'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
         write(funit,'(A,A)') '# model_context=', trim(model%context)
@@ -88,7 +88,7 @@ contains
         write(funit,'(A,F10.5)') '# accuracy=', accuracy
         write(funit,'(A,F10.5)') '# score_auc=', auc_for_values(quality%scores, reference_states)
         write(funit,'(A,F10.5)') '# raw_score_threshold=', quality%raw_threshold
-        write(funit,'(A,F10.5)') '# threshold_boundary_margin=', quality%threshold_margin
+        write(funit,'(A,F10.5)') '# threshold_offset=', quality%threshold_offset
         write(funit,'(A,F10.5)') '# current_score_threshold=', quality%threshold
         write(funit,'(A,F10.5)') '# best_balacc_threshold=', best_bal_thr
         write(funit,'(A,F10.5)') '# best_balacc=', best_balacc
@@ -154,6 +154,7 @@ contains
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
         integer :: i
+        write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') '# model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ','
