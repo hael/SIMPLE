@@ -6,6 +6,8 @@ use simple_refine3D_fnames,   only: refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
+integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
+
 type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
@@ -56,9 +58,9 @@ contains
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
-        real    :: smpd_target, smpd_crop, scale, trslim, init_smpd
-        integer :: box_crop, init_box
-        logical :: l_autoscale, l_have_init_vol
+        real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
+        integer :: box_crop, init_box, nptcls_eff, nsample_target
+        logical :: l_autoscale, l_have_init_vol, l_maxits_defined
         ! commanders
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
@@ -81,14 +83,14 @@ contains
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',     'global') ! 4 now, probably fine
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
-        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',        0.1) ! 4 now, needs testing/different logic (nsample?)
+        if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',              50) ! can we find a better logic here?
+        l_maxits_defined = cline%defined('maxits')
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',           'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
-        if( mod(params%maxits,2) /= 0) THROW_HARD('Maximum number of iterations (MAXITS) need to be divisible with 2')
+        call set_refine3D_auto_sampling()
         l_have_init_vol = .false.
         init_box        = 0
         init_smpd       = 0.
@@ -176,6 +178,51 @@ contains
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &
                 &abs(init_smpd - params%smpd) <= 1.e-6
         end function project_init_vol_compatible
+
+        subroutine set_refine3D_auto_sampling()
+            type(sp_project) :: sampling_proj
+            integer :: maxits_auto, nptcls_per_iter
+            nsample_target = params%nsample
+            if( nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for refine3D_auto')
+            call sampling_proj%read(params%projfile)
+            nptcls_eff = sampling_proj%count_state_gt_zero()
+            call sampling_proj%kill
+            if( nptcls_eff < 1 ) THROW_HARD('no active particles available for refine3D_auto')
+            nptcls_per_iter = min(nptcls_eff, nsample_target)
+            if( nptcls_eff <= nsample_target )then
+                params%update_frac   = 1.0
+                params%l_update_frac = .false.
+                params%l_trail_rec   = .false.
+                call cline%delete('update_frac')
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> REFINE3D_AUTO ACTIVE PARTICLES/SAMPLE TARGET: ', &
+                    nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
+            else
+                update_frac_auto = real(nsample_target) / real(nptcls_eff)
+                if( update_frac_auto <= 0.99 )then
+                    params%update_frac   = update_frac_auto
+                    params%l_update_frac = .true.
+                    params%l_trail_rec   = trim(params%trail_rec).eq.'yes'
+                    call cline%set('update_frac', update_frac_auto)
+                    write(logfhandle,'(A,I0,A,I0,A,F8.4)') '>>> REFINE3D_AUTO ACTIVE PARTICLES/SAMPLE TARGET/UPDATE_FRAC: ', &
+                        nptcls_eff, '/', nsample_target, '/', update_frac_auto
+                else
+                    params%update_frac   = 1.0
+                    params%l_update_frac = .false.
+                    params%l_trail_rec   = .false.
+                    call cline%delete('update_frac')
+                    write(logfhandle,'(A,I0,A,I0,A)') '>>> REFINE3D_AUTO ACTIVE PARTICLES/SAMPLE TARGET: ', &
+                        nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
+                endif
+            endif
+            if( .not. l_maxits_defined )then
+                maxits_auto = ceiling((2.0 * real(nptcls_eff)) / real(nptcls_per_iter))
+                maxits_auto = min(50, max(2, maxits_auto))
+                params%maxits = maxits_auto
+                call cline%set('maxits', params%maxits)
+                write(logfhandle,'(A,I0)') '>>> REFINE3D_AUTO MAXITS FOR ~2 UPDATES/PARTICLE: ', params%maxits
+            endif
+        end subroutine set_refine3D_auto_sampling
+
     end subroutine exec_refine3D_auto
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.

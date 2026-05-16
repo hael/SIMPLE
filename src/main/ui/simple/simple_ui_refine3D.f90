@@ -254,7 +254,6 @@ contains
         ! <empty>
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, update_frac, required_override=.false., gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
