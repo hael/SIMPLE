@@ -16,13 +16,55 @@ public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
+public :: cavg_quality_classify_cache
+public :: build_classify_cache
+public :: apply_cached_decision_to_quality
+public :: kill_classify_cache
 public :: write_cavg_quality_model_builtin_code
+
+! Classify-cache decision modes. The cache captures everything in the
+! classification pipeline that depends only on (features, hard_reject,
+! weights) and not on threshold/Otsu spec parameters, so the grid search
+! in learn mode can evaluate many candidate specs against the same cache
+! without redoing the k-medoids / Otsu work.
+integer, parameter :: CACHE_DECISION_EMPTY     = 1  ! no trainable rows
+integer, parameter :: CACHE_DECISION_FORCED    = 2  ! single-cluster accept-all path
+integer, parameter :: CACHE_DECISION_CLUSTERED = 3  ! two-cluster artifacts populated
+
+! Why the forced (single-cluster) path was taken. Mirrors the reason
+! strings used by accept_fit_as_single_cluster so the cached path can
+! reproduce the same soft_reason annotations.
+integer, parameter :: CACHE_FORCED_TOO_FEW             = 1
+integer, parameter :: CACHE_FORCED_FLAT_DMAT           = 2
+integer, parameter :: CACHE_FORCED_INVALID_TWO_CLUSTER = 3
+
+type :: cavg_quality_classify_cache
+    integer              :: ncls            = 0
+    integer              :: nfit            = 0
+    integer              :: decision_mode   = 0
+    integer              :: forced_reason   = 0
+    integer, allocatable :: inds(:)            ! nfit, indices of non-hard-rejected classes
+    real,    allocatable :: scores(:)          ! ncls, with hard-reject rows clipped to -CLIP_Z
+    real,    allocatable :: score_fit(:)       ! nfit
+    logical, allocatable :: hard_reject(:)     ! ncls
+    integer, allocatable :: labels_fit(:)      ! nfit (1/2 in CLUSTERED mode)
+    integer, allocatable :: medoids_fit(:)     ! medoid indices into score_fit
+    integer              :: good_fit_label  = 0
+    integer              :: bad_fit_label   = 0
+    real                 :: separation      = 0.0
+    real                 :: raw_threshold   = 0.0
+    real                 :: otsu_threshold  = 0.0
+    real                 :: otsu_separation = 0.0
+    logical              :: otsu_ok         = .false.
+end type cavg_quality_classify_cache
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
-character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//CAVG_QUALITY_MODEL_POOL_DEFAULT
+character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_EXP      = 'pool_exp'
+character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
+    CAVG_QUALITY_MODEL_POOL_DEFAULT//'|'//CAVG_QUALITY_MODEL_POOL_EXP
 
 real, parameter :: MIN_SCORE_SEPARATION    = 0.15
 real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
@@ -37,6 +79,18 @@ real, parameter :: CAVG_QUALITY_POOL_V1_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     3.953488E-01, 2.093023E-01, 0.000000E+00, 1.860465E-01, &
     2.093023E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00 ]
+
+! Experimental pool preset learned from the widened pool-only search grid.
+! This is intentionally not the pool default: it strongly protects recall and
+! should be validated on pool-style runs before promotion.
+character(len=*), parameter :: POOL_EXP_FEATURE_POLICY = 'microchunk_plus_signal'
+real, parameter :: CAVG_QUALITY_POOL_EXP_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+    2.029138E-01, 2.802879E-01, 4.939443E-02, 8.316658E-02, &
+    9.741970E-02, 0.000000E+00, 1.498684E-01, 4.935930E-02, &
+    8.758996E-02 ]
+real, parameter :: POOL_EXP_BOUNDARY_MARGIN      = 0.80
+real, parameter :: POOL_EXP_MIN_SCORE_SEPARATION = 0.20
+real, parameter :: POOL_EXP_MIN_ACCEPT_FRAC      = 0.90
 
 ! Chunk default for stream-style class-average rejection. Hard validity
 ! failures reject before fitting; the weights below describe the trainable
@@ -102,6 +156,8 @@ contains
                 spec = chunk_default_v2_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
+            case(CAVG_QUALITY_MODEL_POOL_EXP)
+                spec = pool_exp_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -189,6 +245,24 @@ contains
         spec%use_cluster_rescue      = .true.
         spec%enforce_min_accept_frac = .true.
     end function pool_default_model_spec
+
+    function pool_exp_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_POOL_EXP
+        spec%context                 = 'pool'
+        spec%feature_policy          = POOL_EXP_FEATURE_POLICY
+        spec%weights                 = CAVG_QUALITY_POOL_EXP_WEIGHTS
+        spec%boundary_margin         = POOL_EXP_BOUNDARY_MARGIN
+        spec%min_score_separation    = POOL_EXP_MIN_SCORE_SEPARATION
+        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
+        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
+        spec%min_accept_frac         = POOL_EXP_MIN_ACCEPT_FRAC
+        spec%use_lowsep_otsu         = .true.
+        spec%use_otsu_window         = .false.
+        spec%use_cluster_rescue      = .true.
+        spec%enforce_min_accept_frac = .true.
+    end function pool_exp_model_spec
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
@@ -477,25 +551,157 @@ contains
     subroutine apply_linear_boundary( quality, model )
         type(cavg_quality_result), intent(inout) :: quality
         class(cavg_quality_model), intent(in) :: model
-        real,    allocatable :: dmat(:,:), feats_fit(:,:), score_fit(:)
-        integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
-        integer              :: ncls, nfit, i, j, k, good_fit_label, bad_fit_label
-        real                 :: d, score1, score2, rescue_threshold, otsu_threshold, otsu_separation
-        real                 :: candidate_threshold
-        logical              :: dmat_ok, otsu_ok
+        type(cavg_quality_classify_cache) :: cache
         if( .not. allocated(quality%features)    ) THROW_HARD('apply_linear_boundary: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_linear_boundary: missing hard-reject mask')
-        ncls = size(quality%features, dim=1)
         if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_linear_boundary: invalid feature count')
-        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_linear_boundary: invalid mask size')
+        if( size(quality%hard_reject) /= size(quality%features, dim=1) ) THROW_HARD('apply_linear_boundary: invalid mask size')
+        call build_classify_cache(quality%features, quality%hard_reject, model%weights, cache)
+        call apply_cached_decision_to_quality(cache, model, quality)
+        call kill_classify_cache(cache)
+    end subroutine apply_linear_boundary
+
+    ! Heavy spec-independent portion of the classification pipeline:
+    ! scores, feature-weighted pairwise distances, k-medoids labels, raw
+    ! threshold, and Otsu threshold. Within a fixed feature policy (and
+    ! therefore fixed weights) the cache is reusable across an arbitrary
+    ! number of candidate model specs.
+    subroutine build_classify_cache( features, hard_reject, weights, cache )
+        real,                              intent(in)    :: features(:,:)
+        logical,                           intent(in)    :: hard_reject(:)
+        real,                              intent(in)    :: weights(:)
+        type(cavg_quality_classify_cache), intent(inout) :: cache
+        real,    allocatable :: dmat(:,:)
+        real,    allocatable :: feats_fit(:,:)
+        integer              :: ncls, nfit, i, j, nclust
+        real                 :: d, score1, score2
+        logical              :: dmat_ok
+        call kill_classify_cache(cache)
+        ncls = size(features, dim=1)
+        if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('build_classify_cache: invalid feature count')
+        if( size(hard_reject)     /= ncls                ) THROW_HARD('build_classify_cache: invalid mask size')
+        if( size(weights)         /= CAVG_QUALITY_NFEATS ) THROW_HARD('build_classify_cache: invalid weight size')
+        cache%ncls = ncls
+        allocate(cache%hard_reject(ncls), source=hard_reject)
+        allocate(cache%scores(ncls))
+        cache%scores = matmul(features, weights)
+        where( hard_reject ) cache%scores = -CLIP_Z
+        nfit = count(.not. hard_reject)
+        cache%nfit = nfit
+        if( nfit == 0 )then
+            cache%decision_mode = CACHE_DECISION_EMPTY
+            return
+        endif
+        allocate(cache%inds(nfit))
+        cache%inds = pack([(i, i=1,ncls)], .not. hard_reject)
+        allocate(cache%score_fit(nfit))
+        do i = 1, nfit
+            cache%score_fit(i) = cache%scores(cache%inds(i))
+        end do
+        if( nfit < 4 )then
+            cache%decision_mode = CACHE_DECISION_FORCED
+            cache%forced_reason = CACHE_FORCED_TOO_FEW
+            return
+        endif
+        allocate(feats_fit(nfit, CAVG_QUALITY_NFEATS))
+        do i = 1, nfit
+            feats_fit(i,:) = features(cache%inds(i),:)
+        end do
+        allocate(dmat(nfit, nfit), source=0.0)
+        !$omp parallel do default(shared) private(i,j,d) schedule(static) proc_bind(close)
+        do i = 1, nfit - 1
+            do j = i + 1, nfit
+                d = feature_vector_distance(feats_fit(i,:), feats_fit(j,:), weights)
+                dmat(i,j) = d
+                dmat(j,i) = d
+            end do
+        end do
+        !$omp end parallel do
+        call normalize_quality_dmat(dmat, dmat_ok)
+        if( .not. dmat_ok )then
+            cache%decision_mode = CACHE_DECISION_FORCED
+            cache%forced_reason = CACHE_FORCED_FLAT_DMAT
+            deallocate(dmat, feats_fit)
+            return
+        endif
+        nclust = 2
+        call cluster_dmat(dmat, 'kmed', nclust, cache%medoids_fit, cache%labels_fit)
+        if( .not. two_cluster_result_is_valid(nclust, cache%labels_fit, cache%medoids_fit, nfit) )then
+            cache%decision_mode = CACHE_DECISION_FORCED
+            cache%forced_reason = CACHE_FORCED_INVALID_TWO_CLUSTER
+            if( allocated(cache%labels_fit)  ) deallocate(cache%labels_fit)
+            if( allocated(cache%medoids_fit) ) deallocate(cache%medoids_fit)
+            deallocate(dmat, feats_fit)
+            return
+        endif
+        cache%decision_mode = CACHE_DECISION_CLUSTERED
+        score1 = mean_score_for_label(cache%score_fit, cache%labels_fit, 1)
+        score2 = mean_score_for_label(cache%score_fit, cache%labels_fit, 2)
+        if( score1 > score2 + EPS )then
+            cache%good_fit_label = 1
+            cache%bad_fit_label  = 2
+        else if( score2 > score1 + EPS )then
+            cache%good_fit_label = 2
+            cache%bad_fit_label  = 1
+        else
+            call choose_tied_good_label(cache%score_fit, cache%labels_fit, cache%medoids_fit, &
+                cache%good_fit_label, cache%bad_fit_label)
+        endif
+        cache%separation    = abs(score1 - score2)
+        cache%raw_threshold = 0.5 * (mean_score_for_label(cache%score_fit, cache%labels_fit, cache%good_fit_label) + &
+                                     mean_score_for_label(cache%score_fit, cache%labels_fit, cache%bad_fit_label))
+        call otsu_score_threshold(cache%score_fit, cache%otsu_threshold, cache%otsu_separation, cache%otsu_ok)
+        deallocate(dmat, feats_fit)
+    end subroutine build_classify_cache
+
+    subroutine kill_classify_cache( cache )
+        type(cavg_quality_classify_cache), intent(inout) :: cache
+        if( allocated(cache%inds)        ) deallocate(cache%inds)
+        if( allocated(cache%scores)      ) deallocate(cache%scores)
+        if( allocated(cache%score_fit)   ) deallocate(cache%score_fit)
+        if( allocated(cache%hard_reject) ) deallocate(cache%hard_reject)
+        if( allocated(cache%labels_fit)  ) deallocate(cache%labels_fit)
+        if( allocated(cache%medoids_fit) ) deallocate(cache%medoids_fit)
+        cache%ncls            = 0
+        cache%nfit            = 0
+        cache%decision_mode   = 0
+        cache%forced_reason   = 0
+        cache%good_fit_label  = 0
+        cache%bad_fit_label   = 0
+        cache%separation      = 0.0
+        cache%raw_threshold   = 0.0
+        cache%otsu_threshold  = 0.0
+        cache%otsu_separation = 0.0
+        cache%otsu_ok         = .false.
+    end subroutine kill_classify_cache
+
+    ! Spec-dependent portion of the classification pipeline. Operates on
+    ! a populated cache and a fully configured model and produces the
+    ! same quality result that apply_linear_boundary used to produce.
+    subroutine apply_cached_decision_to_quality( cache, model, quality )
+        type(cavg_quality_classify_cache), intent(in)    :: cache
+        class(cavg_quality_model),         intent(in)    :: model
+        type(cavg_quality_result),         intent(inout) :: quality
+        integer :: ncls, nfit, i, k
+        real    :: rescue_threshold, candidate_threshold
+        ncls = cache%ncls
+        nfit = cache%nfit
+        if( .not. allocated(cache%hard_reject) ) THROW_HARD('apply_cached_decision_to_quality: missing cache hard-reject mask')
+        if( allocated(quality%hard_reject) )then
+            if( size(quality%hard_reject) /= ncls ) &
+                THROW_HARD('apply_cached_decision_to_quality: quality/cache mask size mismatch')
+            if( any(quality%hard_reject .neqv. cache%hard_reject) ) &
+                THROW_HARD('apply_cached_decision_to_quality: quality/cache mask mismatch')
+        else
+            allocate(quality%hard_reject(ncls), source=cache%hard_reject)
+        endif
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
         if( allocated(quality%scores)  ) deallocate(quality%scores)
         allocate(quality%states(ncls), quality%labels(ncls), source=0)
         allocate(quality%scores(ncls), source=0.0)
-        quality%scores = matmul(quality%features, model%weights)
-        where( quality%hard_reject ) quality%scores = -CLIP_Z
+        quality%scores = cache%scores
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
         quality%threshold_offset = 0.0
@@ -505,106 +711,99 @@ contains
         quality%used_threshold   = .false.
         quality%model_name       = model%name
         quality%model_context    = model%context
-        nfit = count(.not. quality%hard_reject)
-        if( nfit == 0 ) return
-        inds = pack([(i, i=1,ncls)], .not. quality%hard_reject)
-        if( nfit < 4 ) then
-            call accept_fit_as_single_cluster(quality, inds)
-            deallocate(inds)
+        quality%soft_decision    = 'hard_only'
+        quality%soft_reason      = 'initial'
+        select case(cache%decision_mode)
+        case(CACHE_DECISION_EMPTY)
+            quality%soft_reason = 'no_trainable_after_hard'
             return
-        end if
-        allocate(feats_fit(nfit, CAVG_QUALITY_NFEATS), score_fit(nfit))
-        do i = 1, nfit
-            feats_fit(i,:) = quality%features(inds(i),:)
-            score_fit(i)   = quality%scores(inds(i))
-        end do
-        allocate(dmat(nfit, nfit), source=0.0)
-        !$omp parallel do default(shared) private(i,j,d) schedule(static) proc_bind(close)
-        do i = 1, nfit - 1
-            do j = i + 1, nfit
-                d = feature_vector_distance(feats_fit(i,:), feats_fit(j,:), model%weights)
-                dmat(i,j) = d
-                dmat(j,i) = d
-            end do
-        end do
-        !$omp end parallel do
-        call normalize_quality_dmat(dmat, dmat_ok)
-        if( .not. dmat_ok ) then
-            call accept_fit_as_single_cluster(quality, inds)
-            deallocate(dmat, feats_fit, score_fit, inds)
+        case(CACHE_DECISION_FORCED)
+            call accept_fit_as_single_cluster(quality, cache%inds, forced_reason_name(cache%forced_reason))
             return
-        end if
-        quality%nclust = 2
-        call cluster_dmat(dmat, 'kmed', quality%nclust, medoids_fit, labels_fit)
-        if( .not. two_cluster_result_is_valid(quality%nclust, labels_fit, medoids_fit, nfit) )then
-            call accept_fit_as_single_cluster(quality, inds)
-            if( allocated(labels_fit)  ) deallocate(labels_fit)
-            if( allocated(medoids_fit) ) deallocate(medoids_fit)
-            deallocate(dmat, feats_fit, score_fit, inds)
-            return
-        endif
-        score1 = mean_score_for_label(score_fit, labels_fit, 1)
-        score2 = mean_score_for_label(score_fit, labels_fit, 2)
-        if( score1 > score2 + EPS ) then
-            good_fit_label = 1
-            bad_fit_label  = 2
-        else if( score2 > score1 + EPS )then
-            good_fit_label = 2
-            bad_fit_label  = 1
-        else
-            call choose_tied_good_label(score_fit, labels_fit, medoids_fit, good_fit_label, bad_fit_label)
-        endif
-        quality%separation = abs(score1 - score2)
-        quality%raw_threshold = 0.5 * (mean_score_for_label(score_fit, labels_fit, good_fit_label) + &
-                                                mean_score_for_label(score_fit, labels_fit, bad_fit_label))
-        quality%labels(inds) = labels_fit
-        allocate(quality%medoids(size(medoids_fit)))
-        do k = 1, size(medoids_fit)
-            quality%medoids(k) = inds(medoids_fit(k))
+        case(CACHE_DECISION_CLUSTERED)
+            continue
+        case default
+            THROW_HARD('apply_cached_decision_to_quality: invalid cache decision mode')
+        end select
+        quality%nclust        = 2
+        quality%separation    = cache%separation
+        quality%raw_threshold = cache%raw_threshold
+        quality%labels(cache%inds) = cache%labels_fit
+        allocate(quality%medoids(size(cache%medoids_fit)))
+        do k = 1, size(cache%medoids_fit)
+            quality%medoids(k) = cache%inds(cache%medoids_fit(k))
         end do
-        call otsu_score_threshold(score_fit, otsu_threshold, otsu_separation, otsu_ok)
-        if( quality%separation < model%min_score_separation ) then
-            if( model%use_lowsep_otsu .and. otsu_ok .and. otsu_separation >= model%min_score_separation )then
-                quality%raw_threshold     = otsu_threshold
-                quality%threshold         = otsu_threshold
-                quality%threshold_offset  = 0.0
-                ! Low-separation Otsu bypasses the k-medoids boundary: labels
-                ! remain diagnostic, while states come only from the score cut.
+        if( cache%separation < model%min_score_separation )then
+            if( model%use_lowsep_otsu .and. cache%otsu_ok .and. cache%otsu_separation >= model%min_score_separation )then
+                quality%raw_threshold    = cache%otsu_threshold
+                quality%threshold        = cache%otsu_threshold
+                quality%threshold_offset = 0.0
                 do i = 1, nfit
-                    if( quality%scores(inds(i)) >= quality%threshold ) quality%states(inds(i)) = 1
+                    if( cache%score_fit(i) >= quality%threshold ) quality%states(cache%inds(i)) = 1
                 end do
-                quality%good_label     = good_fit_label
+                quality%good_label     = cache%good_fit_label
                 quality%used_threshold = .true.
+                quality%soft_decision  = 'soft_threshold'
+                quality%soft_reason    = 'lowsep_otsu'
+                if( count(quality%states <= 0 .and. .not. cache%hard_reject) == 0 )then
+                    quality%soft_decision = 'hard_only'
+                    quality%soft_reason   = 'soft_threshold_accepts_all'
+                endif
             else
-                call accept_fit_as_single_cluster(quality, inds)
+                call accept_fit_as_single_cluster(quality, cache%inds, 'low_score_separation')
             endif
         else
-            candidate_threshold = quality%raw_threshold - model%boundary_margin
-            quality%threshold = candidate_threshold
-            if( model%use_otsu_window .and. otsu_ok .and. otsu_separation >= model%min_score_separation .and. &
-                otsu_threshold >= quality%raw_threshold + model%otsu_min_offset .and. &
-                otsu_threshold <= quality%raw_threshold + model%otsu_max_offset ) quality%threshold = otsu_threshold
+            candidate_threshold = cache%raw_threshold - model%boundary_margin
+            quality%threshold   = candidate_threshold
+            if( model%use_otsu_window .and. cache%otsu_ok .and. cache%otsu_separation >= model%min_score_separation .and. &
+                cache%otsu_threshold >= cache%raw_threshold + model%otsu_min_offset .and. &
+                cache%otsu_threshold <= cache%raw_threshold + model%otsu_max_offset ) quality%threshold = cache%otsu_threshold
             if( model%use_cluster_rescue )then
                 rescue_threshold = quality%threshold - model%cluster_rescue_margin
                 do i = 1, nfit
-                    if( quality%scores(inds(i)) >= quality%threshold .or. &
-                       (labels_fit(i) == good_fit_label .and. quality%scores(inds(i)) >= rescue_threshold) ) &
-                       quality%states(inds(i)) = 1
+                    if( cache%score_fit(i) >= quality%threshold .or. &
+                       (cache%labels_fit(i) == cache%good_fit_label .and. cache%score_fit(i) >= rescue_threshold) ) &
+                       quality%states(cache%inds(i)) = 1
                 end do
             else
                 do i = 1, nfit
-                    if( quality%scores(inds(i)) >= quality%threshold ) quality%states(inds(i)) = 1
+                    if( cache%score_fit(i) >= quality%threshold ) quality%states(cache%inds(i)) = 1
                 end do
             endif
             if( model%enforce_min_accept_frac ) &
-                call enforce_min_accept_fraction(quality%scores, quality%hard_reject, quality%states, quality%threshold, &
+                call enforce_min_accept_fraction(quality%scores, cache%hard_reject, quality%states, quality%threshold, &
                                                  model%min_accept_frac)
             quality%threshold_offset = quality%raw_threshold - quality%threshold
-            quality%good_label     = good_fit_label
+            quality%good_label     = cache%good_fit_label
             quality%used_threshold = .true.
-        end if
-        deallocate(dmat, feats_fit, score_fit, inds, labels_fit, medoids_fit)
-    end subroutine apply_linear_boundary
+            quality%soft_decision  = 'soft_threshold'
+            if( abs(quality%threshold - cache%otsu_threshold) <= EPS .and. &
+                abs(quality%threshold - candidate_threshold) > EPS )then
+                quality%soft_reason = 'otsu_window'
+            else
+                quality%soft_reason = 'cluster_boundary'
+            endif
+            if( count(quality%states <= 0 .and. .not. cache%hard_reject) == 0 )then
+                quality%soft_decision = 'hard_only'
+                quality%soft_reason   = 'soft_threshold_accepts_all'
+            endif
+        endif
+    end subroutine apply_cached_decision_to_quality
+
+    function forced_reason_name( reason ) result( name )
+        integer, intent(in) :: reason
+        character(len=32)   :: name
+        select case(reason)
+        case(CACHE_FORCED_TOO_FEW)
+            name = 'too_few_trainable'
+        case(CACHE_FORCED_FLAT_DMAT)
+            name = 'flat_feature_distances'
+        case(CACHE_FORCED_INVALID_TWO_CLUSTER)
+            name = 'invalid_two_cluster_result'
+        case default
+            name = 'single_cluster'
+        end select
+    end function forced_reason_name
 
     real function feature_vector_distance( feat1, feat2, weights )
         real, intent(in) :: feat1(:), feat2(:), weights(:)
@@ -625,9 +824,10 @@ contains
         feature_vector_distance = sqrt(feature_vector_distance)
     end function feature_vector_distance
 
-    subroutine accept_fit_as_single_cluster( quality, inds )
+    subroutine accept_fit_as_single_cluster( quality, inds, reason )
         type(cavg_quality_result), intent(inout) :: quality
         integer,                   intent(in)    :: inds(:)
+        character(len=*), optional,intent(in)    :: reason
         if( size(inds) == 0 )then
             if( allocated(quality%medoids) ) deallocate(quality%medoids)
             quality%threshold        = 0.0
@@ -636,6 +836,8 @@ contains
             quality%nclust           = 0
             quality%good_label       = 0
             quality%used_threshold   = .false.
+            quality%soft_decision    = 'hard_only'
+            quality%soft_reason      = 'no_trainable_after_hard'
             return
         endif
         quality%states(inds) = 1
@@ -648,6 +850,12 @@ contains
         quality%nclust           = 1
         quality%good_label       = 1
         quality%used_threshold   = .false.
+        quality%soft_decision    = 'hard_only'
+        if( present(reason) )then
+            quality%soft_reason = reason
+        else
+            quality%soft_reason = 'single_cluster'
+        endif
     end subroutine accept_fit_as_single_cluster
 
     logical function two_cluster_result_is_valid( nclust, labels, medoids, nfit )

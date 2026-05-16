@@ -4,7 +4,7 @@ This folder collects the documentation for streaming microchunk class-average re
 
 ## Documents
 
-- `model_cavgs_rejection.md`: current command modes, feature bank, hard rejects, built-in models, classification, analysis output, learning, and promotion.
+- `model_cavgs_rejection.md`: side-by-side comparison with microchunk rejection, current command modes, feature bank, hard rejects, built-in models, classification, analysis output, learning, and promotion.
 - `microchunk_rejection_model_integration.md`: current relationship between stream rejection and the shared model backend.
 - `microchunk_rejection_policy.md`: current stream policy for class-average rejection, particle cleanup, lifecycle sentinels, and combined outputs.
 

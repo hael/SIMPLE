@@ -76,6 +76,9 @@ contains
         write(funit,'(A,I0)') '# manual_selected=', ngood
         write(funit,'(A,I0)') '# manual_rejected=', nbad
         write(funit,'(A,I0)') '# auto_selected=', count(auto)
+        write(funit,'(A,A)') '# soft_decision=', trim(quality%soft_decision)
+        write(funit,'(A,A)') '# soft_reason=', trim(quality%soft_reason)
+        write(funit,'(A,I0)') '# soft_trainable_rejected=', count(quality%states <= 0 .and. .not. quality%hard_reject)
         write(funit,'(A,I0)') '# true_positive=', tp
         write(funit,'(A,I0)') '# false_positive=', fp
         write(funit,'(A,I0)') '# true_negative=', tn

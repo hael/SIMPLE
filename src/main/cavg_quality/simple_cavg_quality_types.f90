@@ -59,6 +59,8 @@ type :: cavg_quality_result
     logical              :: used_threshold   = .false.
     character(len=64)    :: model_name       = ''
     character(len=32)    :: model_context    = ''
+    character(len=32)    :: soft_decision    = ''
+    character(len=64)    :: soft_reason      = ''
 contains
     procedure :: kill => reset_cavg_quality_result
 end type cavg_quality_result
@@ -74,6 +76,11 @@ end type cavg_quality_training_dataset
 
 type :: cavg_quality_learn_diagnostics
     integer :: n_datasets          = 0
+    integer :: n_scored_datasets   = 0
+    integer :: n_weight_datasets   = 0
+    integer :: n_recall_only       = 0
+    integer :: n_specificity_only  = 0
+    integer :: n_skipped           = 0
     integer :: total_fp            = 0
     integer :: total_fn            = 0
     integer :: n_lowsep            = 0
@@ -113,6 +120,8 @@ contains
         quality%used_threshold   = .false.
         quality%model_name       = ''
         quality%model_context    = ''
+        quality%soft_decision    = ''
+        quality%soft_reason      = ''
     end subroutine reset_cavg_quality_result
 
 end module simple_cavg_quality_types
