@@ -112,18 +112,18 @@ Hard-rejected classes receive rejected state directly. Their normalized features
 
 ## Built-In Presets
 
-`chunk_default_v2` has context `chunk`, feature policy `microchunk_plus_score_signal`, cluster rescue disabled, and minimum accepted fraction disabled.
+`chunk_default_v2` has context `chunk`, feature policy `microchunk_plus_score`, cluster rescue disabled, and minimum accepted fraction disabled.
 
 ```text
-log_pop             1.178989E-01
-neg_log_res         1.493300E-01
-centered            4.191915E-02
-log_locvar_fg       1.202525E-01
-log_locvar_bg       1.252421E-01
-corr_frc_proxy      1.621421E-01
-log_center_edge_snr 8.224624E-02
-cc_area_frac        6.406378E-02
-presence            1.369053E-01
+log_pop             1.355581E-01
+neg_log_res         1.808395E-01
+centered            4.942806E-02
+log_locvar_fg       1.635655E-01
+log_locvar_bg       1.726983E-01
+corr_frc_proxy      2.108072E-01
+log_center_edge_snr 0.000000E+00
+cc_area_frac        8.710331E-02
+presence            0.000000E+00
 ```
 
 ```text

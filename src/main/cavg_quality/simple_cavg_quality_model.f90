@@ -41,10 +41,17 @@ real, parameter :: CAVG_QUALITY_POOL_V1_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! Chunk default for stream-style class-average rejection. Hard validity
 ! failures reject before fitting; the weights below describe the trainable
 ! quality boundary for classes that pass those validity checks.
+! Previous chunk_default_v2 model retained as commented fallback:
+! character(len=*), parameter :: CHUNK_V2_FEATURE_POLICY = 'microchunk_plus_score_signal'
+! real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+!     1.178989E-01, 1.493300E-01, 4.191915E-02, 1.202525E-01, &
+!     1.252421E-01, 1.621421E-01, 8.224624E-02, 6.406378E-02, &
+!     1.369053E-01 ]
+character(len=*), parameter :: CHUNK_V2_FEATURE_POLICY = 'microchunk_plus_score'
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.178989E-01, 1.493300E-01, 4.191915E-02, 1.202525E-01, &
-    1.252421E-01, 1.621421E-01, 8.224624E-02, 6.406378E-02, &
-    1.369053E-01 ]
+    1.355581E-01, 1.808395E-01, 4.942806E-02, 1.635655E-01, &
+    1.726983E-01, 2.108072E-01, 0.000000E+00, 8.710331E-02, &
+    0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
@@ -53,7 +60,7 @@ real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = 'microchunk_plus_score_signal'
+    character(len=32) :: feature_policy          = CHUNK_V2_FEATURE_POLICY
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -151,7 +158,7 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'microchunk_plus_score_signal'
+        spec%feature_policy          = CHUNK_V2_FEATURE_POLICY
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
