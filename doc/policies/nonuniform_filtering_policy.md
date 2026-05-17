@@ -123,6 +123,10 @@ The optional high-resolution extension path can add finer low-pass candidates af
 
 When requested, the extension step applies the same ordered-label prior to this constrained two-label decision. The old finest label and proposed new high-resolution label are the only labels that can change inside the extension mask, but neighborhood costs are evaluated against the surrounding frozen label field. This lets the extension avoid creating large discontinuities at the boundary of the finest-resolution region while preserving the local nature of the refinement.
 
+Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
+
+When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative ratchet: an iteration can evaluate and accept at most one speculative high-resolution low-pass candidate beyond the bank available at the start of that iteration. The candidate is promoted into the next iteration's starting bank only when the ordered-label extension refinement moves at least 20% of the tested frontier voxels inside the NU refinement mask to the speculative limit. The denominator is the tested extension frontier, not the total map volume.
+
 ## Strengths of the current design
 
 - Shared-memory volume work is centralized in one execution step.

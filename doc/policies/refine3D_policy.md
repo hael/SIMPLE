@@ -218,6 +218,11 @@ should reconstruct an initializer only when neither source is available; it
 should not re-read all particle images merely to recreate the map already
 registered by the preceding ab initio workflow.
 
+`refine3D_auto` must run at least ten refinement iterations. Its automatic
+iteration planner may extend beyond that to reach the requested updates per
+particle, but the updates-per-particle estimate must not reduce the run below
+ten iterations, and normal convergence checks must respect that minimum.
+
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction
 workflow, but they are not registered as `os_out` project handoff artifacts for

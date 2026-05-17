@@ -58,6 +58,7 @@ contains
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
+        integer, parameter :: MINITS_REFINE3D_AUTO = 10
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
@@ -86,7 +87,13 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
+        if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         l_maxits_defined = cline%defined('maxits')
+        if( cline%defined('minits') )then
+            call cline%set('minits', max(MINITS_REFINE3D_AUTO, cline%get_iarg('minits')))
+        else
+            call cline%set('minits', MINITS_REFINE3D_AUTO)
+        endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',           'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
@@ -216,10 +223,15 @@ contains
             endif
             if( .not. l_maxits_defined )then
                 maxits_auto = ceiling((2.0 * real(nptcls_eff)) / real(nptcls_per_iter))
-                maxits_auto = min(50, max(2, maxits_auto))
+                maxits_auto = max(params%minits, min(50, max(2, maxits_auto)))
                 params%maxits = maxits_auto
                 call cline%set('maxits', params%maxits)
-                write(logfhandle,'(A,I0)') '>>> REFINE3D_AUTO MAXITS FOR ~2 UPDATES/PARTICLE: ', params%maxits
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> REFINE3D_AUTO MAXITS FOR ~2 UPDATES/PARTICLE: ', &
+                    &params%maxits, ' (MINIMUM: ', params%minits, ')'
+            else if( params%maxits < params%minits )then
+                params%maxits = params%minits
+                call cline%set('maxits', params%maxits)
+                write(logfhandle,'(A,I0)') '>>> REFINE3D_AUTO MAXITS RAISED TO MINIMUM ITERATIONS: ', params%maxits
             endif
         end subroutine set_refine3D_auto_sampling
 

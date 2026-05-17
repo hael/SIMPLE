@@ -394,13 +394,7 @@ contains
         if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
         if( params%nstates == 1 )then
-            if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
-                write(logfhandle,'(A)') '>>> CONVERGED: yes'
-                converged = .true.
-            else
-                write(logfhandle,'(A)') '>>> CONVERGED: no'
-                converged = .false.
-            endif
+            converged = self%frac_srch%avg > fracsrch_lim .and. self%mi_proj > overlap_lim
         else
             ! provides convergence stats for multiple states
             ! by calculating mi_joint for individual states
@@ -424,14 +418,20 @@ contains
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            if( min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim )then
-                write(logfhandle,'(A)') '>>> CONVERGED: yes'
-                converged = .true.
-            else
-                write(logfhandle,'(A)') '>>> CONVERGED: no'
+            converged = min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim
+            deallocate( state_mi_joint, statepops )
+        endif
+        if( converged .and. params%minits > 0 )then
+            if( params%which_iter < params%startit + params%minits - 1 )then
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &
+                    &params%which_iter - params%startit + 1, '/', params%minits, ')'
                 converged = .false.
             endif
-            deallocate( state_mi_joint, statepops )
+        endif
+        if( converged )then
+            write(logfhandle,'(A)') '>>> CONVERGED: yes'
+        else
+            write(logfhandle,'(A)') '>>> CONVERGED: no'
         endif
         ! stats
         call ostats%new(1, is_ptcl=.false.)

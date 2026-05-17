@@ -244,7 +244,8 @@ contains
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
+            &extend_nu_filter_highres_next, nu_highres_extension_stats
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -383,6 +384,7 @@ contains
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
             call optimize_nu_cutoff_finds(l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR)
+            call refine_nonuniform_filter_bank()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
@@ -416,17 +418,95 @@ contains
         end subroutine build_nonuniform_mask
 
         subroutine setup_nonuniform_filter()
+            integer :: n_highres_steps
+            n_highres_steps = nu_highres_steps_for_state()
             call cleanup_nu_aux_images()
             if( params%l_ml_reg )then
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [res0143s(state)], &
-                    &nu_aux_even, nu_aux_odd)
+                    &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
             else
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::])
+                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::], &
+                    &n_highres_steps=n_highres_steps)
             endif
         end subroutine setup_nonuniform_filter
+
+        subroutine refine_nonuniform_filter_bank()
+            type(nu_highres_extension_stats) :: ext_stats
+            integer :: n_highres_steps
+            if( .not. params%l_nu_refine ) return
+            n_highres_steps = nu_highres_steps_for_state()
+            write(logfhandle,'(A,I0)') '>>> NU resolution expansion refinement enabled, promoted high-resolution steps: ', &
+                &n_highres_steps
+            call extend_nu_filter_highres_next(vol_nu_base_even, vol_nu_base_odd, &
+                &l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR, stats=ext_stats)
+            call log_nu_highres_extension_stats(ext_stats)
+            if( ext_stats%promote_next )then
+                call write_nu_highres_steps_for_state(n_highres_steps + 1)
+                write(logfhandle,'(A,I0)') '>>> NU high-resolution expansion promoted for next iteration, depth: ', &
+                    &n_highres_steps + 1
+            endif
+        end subroutine refine_nonuniform_filter_bank
+
+        integer function nu_highres_steps_for_state() result(nsteps)
+            type(string) :: fname
+            integer :: funit, io_stat
+            nsteps = 0
+            if( .not. params%l_nu_refine ) return
+            if( params%startit <= 1 .and. params%which_iter <= params%startit )then
+                call write_nu_highres_steps_for_state(0)
+                return
+            endif
+            fname = nu_highres_steps_fname()
+            if( .not.file_exists(fname) )then
+                call fname%kill
+                return
+            endif
+            call fopen(funit, status='OLD', action='READ', file=fname, iostat=io_stat)
+            if( io_stat == 0 )then
+                read(funit, *, iostat=io_stat) nsteps
+                call fclose(funit)
+            endif
+            if( io_stat /= 0 ) nsteps = 0
+            nsteps = max(0, nsteps)
+            call fname%kill
+        end function nu_highres_steps_for_state
+
+        subroutine write_nu_highres_steps_for_state(nsteps)
+            integer, intent(in) :: nsteps
+            type(string) :: fname
+            integer :: funit, io_stat
+            if( .not. params%l_nu_refine ) return
+            fname = nu_highres_steps_fname()
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
+            if( io_stat == 0 )then
+                write(funit,'(I0)') max(0, nsteps)
+                call fclose(funit)
+            else
+                write(logfhandle,'(A,1X,A)') '>>> WARNING: failed to write NU high-resolution depth file:', &
+                    &fname%to_char()
+            endif
+            call fname%kill
+        end subroutine write_nu_highres_steps_for_state
+
+        function nu_highres_steps_fname() result(fname)
+            type(string) :: fname
+            fname = 'nu_highres_depth_state'//int2str_pad(state,2)//'.txt'
+        end function nu_highres_steps_fname
+
+        subroutine log_nu_highres_extension_stats(ext_stats)
+            type(nu_highres_extension_stats), intent(in) :: ext_stats
+            if( .not. ext_stats%attempted )then
+                write(logfhandle,'(A,I0,A,F6.2,A)') '>>> NU high-resolution extension not attempted; tested frontier: ', &
+                    &ext_stats%n_tested, ' voxels (', ext_stats%pct_tested_mask, '% of NU mask)'
+                return
+            endif
+            write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> NU high-resolution extension evidence: ', &
+                &ext_stats%n_extended, '/', ext_stats%n_tested, ' tested voxels changed (', &
+                &ext_stats%pct_extended_tested, '%)'
+        end subroutine log_nu_highres_extension_stats
 
         subroutine log_nonuniform_filter_stats()
             if( allocated(nu_aux_even) )then

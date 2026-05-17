@@ -12,7 +12,7 @@ integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
-    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk
+    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -149,6 +149,7 @@ contains
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
+        cfg%nu_refine  = 'no'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
         if( l_cavgs ) return
@@ -252,6 +253,7 @@ contains
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
+        call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         if( cfg%filt_mode.eq.'uniform' )then
             call cline_refine3D%set('lpstart',            cfg%lpstart)
             call cline_refine3D%set('lpstop',             cfg%lpstop)
