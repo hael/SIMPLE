@@ -19,6 +19,8 @@ real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 
 type :: cavg_quality_feature_def
+    ! Keep these fixed-width fields within the current inventory limits:
+    ! names/families are compact identifiers, descriptions are one-line labels.
     character(len=32)  :: name        = ''
     character(len=32)  :: direction   = 'higher_is_better'
     character(len=160) :: description = ''

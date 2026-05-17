@@ -145,7 +145,9 @@ contains
                 auto_match   = merge(1, 0, (manual_state > 0) .eqv. (quality%states(icls) > 0))
             else
                 manual_state = 0
-                auto_match   = 0
+                ! No reference is available; keep auto_matches_manual from
+                ! masquerading as a real mismatch.
+                auto_match   = -1
             endif
             call write_feature_table_class_row(funit, dataset_id, model, quality, icls, manual_state, auto_match)
         end do
