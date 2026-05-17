@@ -86,16 +86,16 @@ real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 
 ! Pool default for batch-style class-average rejection.
-character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk_plus_signal'
+character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_POOL_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    4.813012E-02, 2.695316E-01, 9.090118E-02, 1.619594E-01, &
-    1.688248E-01, 0.000000E+00, 2.092930E-02, 1.059645E-01, &
-    1.337592E-01 ]
-real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 1.10
+    1.826303E-01, 2.379928E-01, 0.000000E+00, 7.328372E-02, &
+    6.126274E-02, 1.257789E-01, 1.572098E-01, 2.139509E-02, &
+    1.404466E-01 ]
+real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 1.70
 real, parameter :: POOL_V2_MIN_SCORE_SEPARATION = 0.20
 real, parameter :: POOL_V2_OTSU_MIN_OFFSET      = 0.15
 real, parameter :: POOL_V2_OTSU_MAX_OFFSET      = 0.50
-real, parameter :: POOL_V2_MIN_ACCEPT_FRAC      = 0.90
+real, parameter :: POOL_V2_MIN_ACCEPT_FRAC      = 0.95
 
 ! Chunk default for stream-style class-average rejection. Hard validity
 ! failures reject before fitting; the weights below describe the trainable

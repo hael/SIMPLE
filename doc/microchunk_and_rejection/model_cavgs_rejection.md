@@ -234,27 +234,27 @@ use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
 
-`pool_default_v2` has context `pool`, feature policy `microchunk_plus_signal`, cluster rescue enabled, Otsu windowing disabled, and minimum accepted fraction enforcement enabled.
+`pool_default_v2` has context `pool`, feature policy `microchunk_plus_score_signal`, cluster rescue enabled, Otsu windowing disabled, and minimum accepted fraction enforcement enabled.
 
 ```text
-log_pop             4.813012E-02
-neg_log_res         2.695316E-01
-centered            9.090118E-02
-log_locvar_fg       1.619594E-01
-log_locvar_bg       1.688248E-01
-corr_frc_proxy      0.000000E+00
-log_center_edge_snr 2.092930E-02
-cc_area_frac        1.059645E-01
-presence            1.337592E-01
+log_pop             1.826303E-01
+neg_log_res         2.379928E-01
+centered            0.000000E+00
+log_locvar_fg       7.328372E-02
+log_locvar_bg       6.126274E-02
+corr_frc_proxy      1.257789E-01
+log_center_edge_snr 1.572098E-01
+cc_area_frac        2.139509E-02
+presence            1.404466E-01
 ```
 
 ```text
-boundary_margin         1.10
+boundary_margin         1.70
 min_score_separation    0.20
 otsu_min_offset         0.15
 otsu_max_offset         0.50
 cluster_rescue_margin   0.20
-min_accept_frac         0.90
+min_accept_frac         0.95
 use_lowsep_otsu         true
 use_otsu_window         false
 use_cluster_rescue      true
@@ -349,7 +349,7 @@ Learn mode searches:
 - `use_otsu_window`: `false, true`;
 - `otsu_min_offset`: `0.05, 0.10, 0.15, 0.25, 0.35` when the Otsu window is enabled;
 - `otsu_max_offset`: `0.40, 0.50, 0.65` when the Otsu window is enabled;
-- `min_accept_frac`: `0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90` for pool-context training.
+- `min_accept_frac`: `0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90, 0.925, 0.95, 0.975, 1.00` for pool-context training.
 
 Each candidate is evaluated by running the full classifier on every scoreable training dataset and averaging the role-specific learn score. If multiple candidates tie, the selected candidate is the one closest to the starting model in the searched threshold controls.
 
