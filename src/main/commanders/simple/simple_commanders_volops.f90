@@ -28,6 +28,11 @@ type, extends(commander_base) :: commander_postprocess
    procedure :: execute      => exec_postprocess
 end type commander_postprocess
 
+type, extends(commander_base) :: commander_postprocess_nu
+ contains
+   procedure :: execute      => exec_postprocess_nu
+end type commander_postprocess_nu
+
 type, extends(commander_base) :: commander_ppca_volvar
   contains
     procedure :: execute      => exec_ppca_volvar
@@ -377,6 +382,130 @@ contains
         call vol_no_bfac%kill
     end subroutine postprocess_volume_from_files
 
+    subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
+        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, extend_nu_filter_highres_shells, &
+            &nu_filter_vol, cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+        class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
+        integer,         intent(in)    :: box
+        real,            intent(in)    :: smpd
+        type(parameters),intent(inout) :: params
+        class(cmdline),  intent(inout) :: cline
+        real, allocatable :: fsc(:), res(:)
+        logical, allocatable :: l_mask(:,:,:)
+        integer, allocatable :: imat(:,:,:)
+        type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_even_raw, fname_odd_raw
+        type(image)      :: vol_even_raw, vol_odd_raw, vol_bfac, vol_no_bfac, vol_pproc, vol_lp, vol_msk
+        type(image_msk)  :: envmsk
+        real    :: fsc0143, fsc05, lplim, mskrad_px
+        integer :: ldim(3), nsteps
+        logical :: has_fsc
+        fname_even_raw = raw_halfmap_name(fname_even)
+        fname_odd_raw  = raw_halfmap_name(fname_odd)
+        if( .not.file_exists(fname_vol)      ) THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
+        if( .not.file_exists(fname_even_raw) ) THROW_HARD('even half-map: '//fname_even_raw%to_char()//' does not exist')
+        if( .not.file_exists(fname_odd_raw)  ) THROW_HARD('odd half-map: '//fname_odd_raw%to_char()//' does not exist')
+        fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_SUFFIX))
+        fname_mirr  = basename(add2fbody(fname_pproc, params%ext, MIRR_SUFFIX))
+        fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_SUFFIX))
+        ldim = [box,box,box]
+        call vol_bfac%new(ldim, smpd)
+        call vol_bfac%read(fname_vol)
+        call vol_even_raw%new(ldim, smpd)
+        call vol_odd_raw%new(ldim, smpd)
+        call vol_even_raw%read(fname_even_raw)
+        call vol_odd_raw%read(fname_odd_raw)
+        has_fsc = .false.
+        params%fsc = fname_fsc
+        if( trim(params%fsc%to_char()) /= '' .and. file_exists(params%fsc) )then
+            has_fsc = .true.
+        else
+            THROW_WARN('FSC file: '//params%fsc%to_char()//' not found')
+            if( .not. cline%defined('lp') )then
+                THROW_HARD('no method for B-factor estimation defined; give fsc|lp on command line; postprocess_nu_volume_from_files')
+            endif
+        endif
+        if( has_fsc )then
+            res = vol_bfac%get_res()
+            fsc = file2rarr(params%fsc)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            lplim = fsc0143
+        else
+            lplim = params%lp
+        endif
+        if( cline%defined('bfac') )then
+            ! already in params%bfac
+        else
+            if( lplim < 5. )then
+                params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
+                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+            else
+                params%bfac = 0.
+            endif
+        endif
+        call build_nu_postprocess_mask()
+        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
+        call optimize_nu_cutoff_finds()
+        write(logfhandle,'(A)') '>>> NU postprocess Fourier-shell resolution expansion refinement enabled'
+        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=nsteps)
+        write(logfhandle,'(A,I0)') '>>> NU postprocess Fourier-shell expansion steps accepted: ', nsteps
+        call vol_bfac%fft()
+        call vol_no_bfac%copy(vol_bfac)
+        call vol_bfac%apply_bfac(params%bfac)
+        call nu_filter_vol(vol_bfac,    vol_pproc)
+        call nu_filter_vol(vol_no_bfac, vol_lp)
+        call vol_lp%write(fname_lp)
+        call vol_pproc%mask3D_soft(params%msk_crop)
+        call vol_pproc%write(fname_pproc)
+        if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
+            call vol_pproc%mirror('x')
+            call vol_pproc%write(fname_mirr)
+        endif
+        call print_nu_filtmap_lowpass_stats(l_mask)
+        call analyze_filtmap_neighbor_continuity(l_mask)
+        call cleanup_nu_filter
+        call vol_bfac%kill
+        call vol_no_bfac%kill
+        call vol_even_raw%kill
+        call vol_odd_raw%kill
+        call vol_pproc%kill
+        call vol_lp%kill
+        call envmsk%kill
+        if( allocated(l_mask) ) deallocate(l_mask)
+        if( allocated(imat)   ) deallocate(imat)
+
+    contains
+
+        subroutine build_nu_postprocess_mask()
+            if( allocated(l_mask) ) deallocate(l_mask)
+            if( allocated(imat)   ) deallocate(imat)
+            if( params%automsk .ne. 'no' )then
+                call envmsk%automask3D(params, vol_even_raw, vol_odd_raw, l_tight=params%automsk.eq.'tight')
+                call envmsk%set_imat
+                call envmsk%get_imat(imat)
+                allocate(l_mask(ldim(1),ldim(2),ldim(3)))
+                l_mask = imat > 0
+                deallocate(imat)
+            else
+                mskrad_px = 0.5 * params%mskdiam / smpd
+                call vol_msk%disc(ldim, smpd, mskrad_px, l_mask)
+                call vol_msk%kill
+            endif
+        end subroutine build_nu_postprocess_mask
+
+        type(string) function raw_halfmap_name( fname ) result(raw_fname)
+            class(string), intent(in) :: fname
+            type(string) :: candidate
+            candidate = add2fbody(fname, MRC_EXT, '_unfil')
+            if( file_exists(candidate) )then
+                raw_fname = candidate
+            else
+                raw_fname = fname
+            endif
+            call candidate%kill
+        end function raw_halfmap_name
+
+    end subroutine postprocess_nu_volume_from_files
+
     subroutine exec_postprocess( self, cline )
         class(commander_postprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -420,6 +549,61 @@ contains
         call spproj%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
+
+    subroutine exec_postprocess_nu( self, cline )
+        use simple_refine3D_fnames, only: refine3D_state_halfvol_fname
+        class(commander_postprocess_nu), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(string)     :: fname_vol, fname_even, fname_odd, fname_fsc, fname_even_fallback, fname_odd_fallback
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        real    :: smpd
+        integer :: state, box, fsc_box
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call cline%set('oritype', 'out')
+        call params%new(cline)
+        call spproj%read_segment(params%oritype, params%projfile)
+        if( cline%defined('state') )then
+            state = params%state
+        else
+            state = 1
+        endif
+        if( cline%defined('imgkind') )then
+            call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
+        else
+            call spproj%get_vol('vol', state, fname_vol, smpd, box)
+        endif
+        if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
+        if( cline%defined('vol_even') .and. cline%defined('vol_odd') )then
+            fname_even = params%vol_even
+            fname_odd  = params%vol_odd
+        else if( cline%defined('vol'//int2str(state)) )then
+            fname_even = params%vols_even(state)
+            fname_odd  = params%vols_odd(state)
+        else
+            fname_even = refine3D_state_halfvol_fname(state, 'even')
+            fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
+            if( .not.file_exists(fname_even) .or. .not.file_exists(fname_odd) )then
+                fname_even_fallback = add2fbody(fname_vol, params%ext, '_even')
+                fname_odd_fallback  = add2fbody(fname_vol, params%ext, '_odd')
+                if( file_exists(fname_even_fallback) .and. file_exists(fname_odd_fallback) )then
+                    fname_even = fname_even_fallback
+                    fname_odd  = fname_odd_fallback
+                endif
+            endif
+        endif
+        if( cline%defined('fsc') )then
+            if( .not.file_exists(params%fsc) ) THROW_HARD('FSC file: '//params%fsc%to_char()//' not found')
+            fname_fsc = params%fsc
+        else
+            call spproj%get_fsc(state, fname_fsc, fsc_box)
+        endif
+        call postprocess_nu_volume_from_files(fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline)
+        call spproj%kill
+        call fname_even_fallback%kill
+        call fname_odd_fallback%kill
+        call simple_end('**** SIMPLE_POSTPROCESS_NU NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_postprocess_nu
 
     subroutine exec_volanalyze( self, cline )
         use simple_volanalyzer

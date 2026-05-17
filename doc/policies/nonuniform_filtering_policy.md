@@ -83,8 +83,8 @@ In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd referenc
 
 ## Ordered-label smoothing regularization
 
-The standalone nonuniform filter API still defaults to the unary voxelwise selector described above.
-The iterative `refine3D`/`volassemble` nonuniform workflow enables ordered-label smoothing by default before writing `_nu_filt` volumes.
+The nonuniform filter always applies ordered-label smoothing after the unary
+voxelwise selector described above and before writing filtered volumes.
 
 The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of ICM-style passes over the label map using the fully connected 26-neighbor 3D voxel neighborhood. Updates use an 8-color parity schedule so voxels updated within the same pass are not neighbors under the full 3x3x3 neighborhood. The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
 
@@ -99,23 +99,18 @@ Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volum
 
 Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, jump-penalty settings, candidate coordinates, changed voxels per iteration, and mean site energy.
 
-### Activating ordered-label smoothing
+### Ordered-label smoothing
 
-For standalone testing, `nu_filt3D` keeps the smoothing stage optional through a typed command-line parameter:
+Ordered-label smoothing is always active in the NU filter. Standalone
+`nu_filt3D`, iterative `volassemble`, coupled high-resolution refinement, and
+the `postprocess_nu` Fourier-shell workflow all use the same smoothing policy.
 
-```bash
-simple_exec prg=nu_filt3D vol1=odd.mrc vol2=even.mrc smpd=1.0 potts_prior=yes
-```
-
-The public `potts_prior` name is retained for familiarity and for compatibility with the current `optimize_nu_cutoff_finds(l_potts_prior=...)` keyword, but the implementation is the ordered-label smoothing prior described above.
-
-For iterative `refine3D`, the Cartesian `volassemble` path explicitly calls:
+The Cartesian `volassemble` path and standalone `nu_filt3D` therefore call the
+optimizer without any smoothing switch:
 
 ```fortran
-call optimize_nu_cutoff_finds(l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR)
+call optimize_nu_cutoff_finds()
 ```
-
-This makes ordered-label smoothing part of the default reconstruction-owned nonuniform filtering workflow while preserving the standalone `nu_filt3D` opt-in behavior.
 
 ### High-resolution bank extension
 
@@ -127,19 +122,35 @@ Iterative workflows gate this behavior through `nu_refine`. The default is `nu_r
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative ratchet: an iteration can evaluate and accept at most one speculative high-resolution low-pass candidate beyond the bank available at the start of that iteration. The candidate is promoted into the next iteration's starting bank only when the ordered-label extension refinement moves at least 20% of the tested frontier voxels inside the NU refinement mask to the speculative limit. The denominator is the tested extension frontier, not the total map volume.
 
+The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
+`volassemble` or the iterative refinement path. It estimates the NU filter map
+from raw even/odd half maps without ML-regularized auxiliary candidates, then
+walks the actual Fourier-transform sampling one shell at a time from the
+current finest low-pass bin toward Nyquist. Each shell uses the same constrained
+two-label extension refinement and ordered-label smoothing as the iterative
+path. The postprocess walk stops when the next shell is not attempted, no voxels
+move to it, or the move is not strong enough to promote another shell.
+
+`postprocess_nu` mirrors the standard postprocessing order: it determines or
+accepts the B factor in the same way as `postprocess`, applies the B-factor
+sharpening to the merged reconstruction map, and then uses the NU filter map
+where the standard commander would use the FSC-derived optimal filter. The
+matched non-B-factor map is filtered with the same NU filter map and written as
+the low-pass companion output.
+
 ## Strengths of the current design
 
 - Shared-memory volume work is centralized in one execution step.
 - The mask used for automasking can also guide nonuniform filtering.
 - The implementation is explicit and testable.
 - Cached filtered volumes reduce repeated FFT/filter work when the same cutoff bank is reused.
-- The optional ordered-label smoothing stage is orthogonal to candidate-bank construction and can be enabled without changing output synthesis.
+- The ordered-label smoothing stage is orthogonal to candidate-bank construction and preserves the output synthesis path.
 
 ## Current limitations
 
 - Disk-backed cache files add avoidable filesystem traffic inside an already expensive volume step.
 - The cutoff search still performs repeated full-volume passes.
-- Ordered-label smoothing regularization is exposed for standalone `nu_filt3D` testing, but not yet as a public iterative refinement workflow parameter.
+- Ordered-label smoothing regularization is controlled by the NU filter implementation rather than by workflow-level flags.
 - Policy and execution are mixed together in `volassemble`, which makes the commander harder to reason about.
 - The nonuniform filter depends on module-level cached state, which limits composability and future concurrency.
 

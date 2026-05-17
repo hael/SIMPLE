@@ -13,6 +13,11 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
+! Postprocess workflows can instead walk the available Fourier shells one at a
+! time and then apply the resulting local filter map to a merged/sharpened map:
+!    call extend_nu_filter_highres_shells(vol_even, vol_odd)
+!    call nu_filter_vol(vol, vol_filt)
+!
 ! supports auxiliary candidate pairs that can compete with the
 ! base low-pass bank during voxelwise optimization
 !
@@ -25,31 +30,31 @@ use simple_neighs,      only: neigh_8_3D
 implicit none
 #include "simple_local_flags.inc"
 
-public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
+public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_next,&
+          extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells, &
           extend_nu_filter_highres_iterative, analyze_filtmap_neighbor_continuity, nu_highres_extension_stats
 private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 10.
-real,             parameter   :: NU_HIGHRES_PROMOTION_TESTED_PCT    = 20.
+real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 5.  ! criterion for extending the search to higher resolution
+real,             parameter   :: NU_HIGHRES_PROMOTION_TESTED_PCT    = 10. ! criterion for promoting filter to higher resolution
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
-real,             parameter   :: WINSZ_TENT_ANGSTROM      = 8.
-integer,          parameter   :: DISCONT_STEP_THRESH      = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS   = 3
-integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH   = 26
-integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS  = 8
+real,             parameter   :: WINSZ_TENT_ANGSTROM       = 8.
+integer,          parameter   :: DISCONT_STEP_THRESH       = 1
+integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS    = 3
+integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL  = 1
+integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH    = 26
+integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS   = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
-real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS  = 1.e-6
-logical,          parameter   :: L_NU_LABEL_SMOOTH_DEFAULT = .false.
-character(len=*), parameter   :: NU_FILTER_CACHE_EVEN     = 'nu_filter_cache_even'
-character(len=*), parameter   :: NU_FILTER_CACHE_ODD      = 'nu_filter_cache_odd'
+real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS   = 1.e-6
+character(len=*), parameter   :: NU_FILTER_CACHE_EVEN      = 'nu_filter_cache_even'
+character(len=*), parameter   :: NU_FILTER_CACHE_ODD       = 'nu_filter_cache_odd'
 real,             allocatable :: dmats(:,:,:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
@@ -401,12 +406,8 @@ contains
         lowpass_limit_to_candidate_coord = real(n_base)
     end function lowpass_limit_to_candidate_coord
 
-    subroutine optimize_nu_cutoff_finds( l_potts_prior )
-        ! l_potts_prior is kept as the public keyword for source compatibility.
-        ! Internally this is an ordered-label smoothness prior, not a strict Potts prior.
-        logical, optional, intent(in) :: l_potts_prior
+    subroutine optimize_nu_cutoff_finds()
         integer, allocatable :: candmap(:,:,:)
-        logical :: l_use_label_smooth
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates
         real    :: best_dmat
         if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -446,9 +447,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        l_use_label_smooth = L_NU_LABEL_SMOOTH_DEFAULT
-        if( present(l_potts_prior) ) l_use_label_smooth = l_potts_prior
-        if( l_use_label_smooth ) call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
+        call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
         call candidate_map_to_filt_and_src(candmap, n_base)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
@@ -669,11 +668,10 @@ contains
         write(logfhandle,*)
     end subroutine log_nu_candidate_coords
 
-    subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, l_potts_prior, stats )
+    subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! e.g. 3.5 Angstroms
-        logical, optional, intent(in) :: l_potts_prior
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
@@ -682,7 +680,6 @@ contains
         integer           :: new_find, n_finest, n_total, n_extended, sz_old
         real              :: pct_finest, x
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
-        logical              :: l_use_label_smooth
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k
         local_stats%new_limit = new_limit
@@ -761,12 +758,10 @@ contains
             call tent_smooth_3d(dmat_finest, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
         end if
         ! --- update filtmap in place for the masked voxels ---
-        l_use_label_smooth = L_NU_LABEL_SMOOTH_DEFAULT
-        if( present(l_potts_prior) ) l_use_label_smooth = l_potts_prior
         allocate(extend_to_new(ldim(1),ldim(2),ldim(3)), source=.false.)
         n_extended = 0
         call init_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, extend_to_new, n_extended)
-        if( l_use_label_smooth ) call refine_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, &
+        call refine_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, &
             &extend_to_new, sz_old, n_extended)
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
@@ -798,9 +793,8 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
-    subroutine extend_nu_filter_highres_next( vol_even, vol_odd, l_potts_prior, stats )
+    subroutine extend_nu_filter_highres_next( vol_even, vol_odd, stats )
         class(image), intent(in) :: vol_even, vol_odd
-        logical, optional, intent(in) :: l_potts_prior
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         type(nu_highres_extension_stats) :: local_stats
         integer :: i, new_find, sz_old
@@ -810,30 +804,58 @@ contains
             new_find = calc_fourier_index(EXTRA_LIMITS(i), box, smpd)
             if( new_find <= cutoff_finds(sz_old) ) cycle
             if( any(cutoff_finds == new_find) ) cycle
-            if( present(l_potts_prior) )then
-                call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                    &EXTRA_LIMITS(i), l_potts_prior=l_potts_prior, stats=local_stats)
-            else
-                call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                    &EXTRA_LIMITS(i), stats=local_stats)
-            endif
+            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
+                &EXTRA_LIMITS(i), stats=local_stats)
             if( present(stats) ) stats = local_stats
             return
         end do
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres_next
 
-    subroutine extend_nu_filter_highres_iterative( vol_even, vol_odd, l_potts_prior )
+    subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats )
         class(image), intent(in) :: vol_even, vol_odd
-        logical, optional, intent(in) :: l_potts_prior
+        type(nu_highres_extension_stats), optional, intent(out) :: stats
+        type(nu_highres_extension_stats) :: local_stats
+        integer :: new_find, sz_old
+        real    :: new_limit
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; extend_nu_filter_highres_shell_next')
+        sz_old   = size(cutoff_finds)
+        new_find = cutoff_finds(sz_old) + 1
+        do while( new_find <= box/2 )
+            if( .not.any(cutoff_finds == new_find) ) exit
+            new_find = new_find + 1
+        end do
+        if( new_find > box/2 )then
+            if( present(stats) ) stats = local_stats
+            return
+        endif
+        new_limit = calc_lowpass_lim(new_find, box, smpd)
+        call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
+            &new_limit, stats=local_stats)
+        if( present(stats) ) stats = local_stats
+    end subroutine extend_nu_filter_highres_shell_next
+
+    subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps )
+        class(image), intent(in) :: vol_even, vol_odd
+        integer, optional, intent(out) :: nsteps
+        type(nu_highres_extension_stats) :: step_stats
+        integer :: nsteps_local
+        nsteps_local = 0
+        do
+            call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats)
+            if( .not. step_stats%attempted ) exit
+            if( .not. step_stats%applied   ) exit
+            nsteps_local = nsteps_local + 1
+            if( .not. step_stats%promote_next ) exit
+        end do
+        if( present(nsteps) ) nsteps = nsteps_local
+    end subroutine extend_nu_filter_highres_shells
+
+    subroutine extend_nu_filter_highres_iterative( vol_even, vol_odd )
+        class(image), intent(in) :: vol_even, vol_odd
         integer :: i
         do i = 1, size(EXTRA_LIMITS)
-            if( present(l_potts_prior) )then
-                call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                    &EXTRA_LIMITS(i), l_potts_prior=l_potts_prior)
-            else
-                call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, EXTRA_LIMITS(i))
-            endif
+            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, EXTRA_LIMITS(i))
         end do
     end subroutine extend_nu_filter_highres_iterative
 
@@ -1094,6 +1116,59 @@ contains
         call vol_even_filt%kill
         call vol_odd_filt%kill
     end subroutine nu_filter_vols
+
+    subroutine nu_filter_vol( vol_in, vol_out )
+        class(image), intent(in)  :: vol_in
+        class(image), intent(out) :: vol_out
+        type(image) :: vol_in_ft, vol_filt
+        real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_out(:,:,:)
+        real, allocatable :: bwfilter(:)
+        integer :: i, j, k, icut, winsz
+        real    :: edge_mean
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vol')
+        if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
+        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
+        if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_filter_vol')
+        if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_filter_vol')
+        if( any(nu_lmask .and. srcmap /= 1) )then
+            THROW_HARD('single-map NU filtering requires a base-bank-only filter map; nu_filter_vol')
+        endif
+        call vol_in_ft%copy(vol_in)
+        call vol_in_ft%set_wthreads(.true.)
+        if( .not. vol_in_ft%is_ft() )then
+            winsz = nint(COSMSKHALFWIDTH)
+            call vol_in_ft%taper_edges_vol(winsz, edge_mean)
+            call vol_in_ft%fft
+        endif
+        call vol_filt%new(ldim, smpd)
+        call vol_filt%set_ft(.true.)
+        call vol_filt%set_wthreads(.true.)
+        call vol_out%new(ldim, smpd, wthreads=.false.)
+        call vol_out%get_rmat_ptr(rmat_out)
+        rmat_out(:ldim(1),:ldim(2),:ldim(3)) = 0.
+        allocate(bwfilter(box), source=0.)
+        do icut = 1, size(cutoff_finds)
+            call butterworth_filter(cutoff_finds(icut), bwfilter)
+            call vol_filt%copy_fast(vol_in_ft)
+            call vol_filt%apply_filter(bwfilter)
+            call vol_filt%ifft
+            call vol_filt%get_rmat_ptr(rmat_filt)
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut )then
+                            rmat_out(i,j,k) = rmat_filt(i,j,k)
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        end do
+        deallocate(bwfilter)
+        call vol_in_ft%kill
+        call vol_filt%kill
+    end subroutine nu_filter_vol
 
     ! statistics about local resolution
 

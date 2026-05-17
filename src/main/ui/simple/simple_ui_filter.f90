@@ -155,7 +155,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call nu_filt3D%add_input(UI_FILT, potts_prior)
+        ! <empty>
         ! mask controls
         call nu_filt3D%add_input(UI_MASK, mskdiam)
         call nu_filt3D%add_input(UI_MASK, automsk)

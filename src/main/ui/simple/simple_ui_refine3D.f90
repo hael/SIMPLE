@@ -5,6 +5,7 @@ implicit none
 
 type(ui_program), target :: automask
 type(ui_program), target :: postprocess
+type(ui_program), target :: postprocess_nu
 type(ui_program), target :: reconstruct3D
 type(ui_program), target :: bootstrap_rec3D
 type(ui_program), target :: refine3D
@@ -16,6 +17,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_automask(prgtab)
         call new_postprocess(prgtab)
+        call new_postprocess_nu(prgtab)
         call new_reconstruct3D(prgtab)
         call new_bootstrap_rec3D(prgtab)
         call new_refine3D(prgtab)
@@ -27,6 +29,7 @@ contains
         write(logfhandle,'(A)') format_str('REFINE 3D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') automask%name%to_char()
         write(logfhandle,'(A)') postprocess%name%to_char()
+        write(logfhandle,'(A)') postprocess_nu%name%to_char()
         write(logfhandle,'(A)') reconstruct3D%name%to_char()
         write(logfhandle,'(A)') bootstrap_rec3D%name%to_char()
         write(logfhandle,'(A)') refine3D%name%to_char()
@@ -104,6 +107,48 @@ contains
         ! add to ui_hash
         call add_ui_program('postprocess', postprocess, prgtab)
     end subroutine new_postprocess
+
+    subroutine new_postprocess_nu( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call postprocess_nu%new(&
+        &'postprocess_nu',&                                                   ! name
+        &'NU post-processing of volume',&                                     ! descr_short
+        &'is a program for nonuniform-filter map post-processing using raw even/odd half maps to estimate the local filter bank',&
+        &'simple_exec',&                                                      ! executable
+        &.true.)                                                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call postprocess_nu%add_input(UI_IMG, 'vol1', 'file', 'Volume override', &
+            &'Volume override for selected state; even/odd half maps are resolved from the matching _even/_odd names', &
+            &'input volume e.g. vol_state01.mrc', .false., '')
+        call postprocess_nu%add_input(UI_IMG, 'vol_even', 'file', 'Even half-map override', &
+            &'Even half-map override for NU filter-bank estimation', 'even half-map e.g. vol_state01_even.mrc', .false., '')
+        call postprocess_nu%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half-map override', &
+            &'Odd half-map override for NU filter-bank estimation', 'odd half-map e.g. vol_state01_odd.mrc', .false., '')
+        ! parameter input/output
+        call postprocess_nu%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
+        call postprocess_nu%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind{vol}', &
+            &'project output kind: vol or vol_cavg', .false., 'vol')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call postprocess_nu%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit for B-factor estimation fallback', &
+            &'Low-pass limit used only when an FSC file is unavailable', 'low-pass limit in Angstroms', .false., 20.)
+        call postprocess_nu%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file for B-factor estimation', &
+            &'e.g. fsc_state01.bin file', .false., '')
+        call postprocess_nu%add_input(UI_FILT, bfac)
+        call postprocess_nu%add_input(UI_FILT, mirr)
+        ! mask controls
+        call postprocess_nu%add_input(UI_MASK, mskdiam)
+        call postprocess_nu%add_input(UI_MASK, automsk)
+        ! computer controls
+        call postprocess_nu%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('postprocess_nu', postprocess_nu, prgtab)
+    end subroutine new_postprocess_nu
 
     subroutine new_reconstruct3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab

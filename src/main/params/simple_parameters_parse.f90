@@ -148,7 +148,6 @@ contains
         call reg%add_char('picker', self%picker)
         call reg%add_char('platonic', self%platonic)
         call reg%add_char('plot_key', self%plot_key)
-        call reg%add_char('potts_prior', self%potts_prior)
         call reg%add_char('postprocess', self%postprocess)
         call reg%add_char('pre_norm', self%pre_norm)
         call reg%add_char('prg', self%prg)

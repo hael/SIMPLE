@@ -610,10 +610,9 @@ contains
                     THROW_HARD('unsupported correlation weighting method')
             end select
         endif
-        self%l_graphene    = self%graphene_filt .ne. 'no'
-        self%l_potts_prior = trim(self%potts_prior).eq.'yes'
-        self%l_nu_refine   = trim(self%nu_refine).eq.'yes'
-        self%l_autoscale   = self%autoscale .eq. 'yes'
+        self%l_graphene       = self%graphene_filt .ne. 'no'
+        self%l_nu_refine      = trim(self%nu_refine).eq.'yes'
+        self%l_autoscale      = self%autoscale .eq. 'yes'
         if( .not. cline%defined('newbox') )then
             if( cline%defined('scale') ) self%newbox = find_magic_box(nint(self%scale*real(self%box)))
         endif

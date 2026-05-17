@@ -122,7 +122,6 @@ type :: parameters
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
-    character(len=3)          :: potts_prior='no'     !< ordered-label/Potts prior for nonuniform filter(yes|no){no}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
@@ -580,7 +579,6 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_phaseplate      = .false.
-    logical :: l_potts_prior     = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.

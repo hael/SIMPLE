@@ -6,8 +6,6 @@ use simple_refine3D_fnames,   only: refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
-integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
-
 type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
@@ -48,13 +46,15 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
+        use simple_abinitio_utils, only: write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
-        type(parameters)            :: params
+        type(parameters)            :: params, params_final_rec
         type(sp_project)            :: spproj
         type(string)                :: init_vol
+        integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
@@ -94,7 +94,7 @@ contains
         else
             call cline%set('minits', MINITS_REFINE3D_AUTO)
         endif
-        if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',           'no') ! we do not keep volumes for each iteration by deafult
+        if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         call set_refine3D_auto_sampling()
@@ -163,6 +163,7 @@ contains
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
+        call cline_rec3D%set('postprocess', 'no')
         if( l_have_init_vol )then
             call cline%set('vol1', init_vol)
         else
@@ -175,8 +176,16 @@ contains
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
+        call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
         call cline_rec3D%set('postprocess', 'yes')
-        call xrec3D%execute(cline_rec3D)       
+        call cline_rec3D%set('nu_refine', 'no')
+        call xrec3D%execute(cline_rec3D)
+        call params_final_rec%new(cline_rec3D)
+        params_final_rec%box  = params_final_rec%box_crop
+        params_final_rec%smpd = params_final_rec%smpd_crop
+        call spproj%read_segment('out', params_final_rec%projfile)
+        call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%res_target)
+        call spproj%kill
         call init_vol%kill
 
     contains

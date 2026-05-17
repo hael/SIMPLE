@@ -7,8 +7,6 @@ private
 public :: commander_volassemble
 #include "simple_local_flags.inc"
 
-logical, parameter :: L_VOLASSEMBLE_NU_POTTS_PRIOR = .true.
-
 type, extends(commander_base) :: commander_volassemble
   contains
     procedure :: execute => exec_volassemble
@@ -383,7 +381,7 @@ contains
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
-            call optimize_nu_cutoff_finds(l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR)
+            call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
@@ -440,8 +438,7 @@ contains
             n_highres_steps = nu_highres_steps_for_state()
             write(logfhandle,'(A,I0)') '>>> NU resolution expansion refinement enabled, promoted high-resolution steps: ', &
                 &n_highres_steps
-            call extend_nu_filter_highres_next(vol_nu_base_even, vol_nu_base_odd, &
-                &l_potts_prior=L_VOLASSEMBLE_NU_POTTS_PRIOR, stats=ext_stats)
+            call extend_nu_filter_highres_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
             call log_nu_highres_extension_stats(ext_stats)
             if( ext_stats%promote_next )then
                 call write_nu_highres_steps_for_state(n_highres_steps + 1)

@@ -171,10 +171,7 @@ contains
             call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
         endif
         call setup_nu_dmats(even, odd, l_mask, [real ::])
-        if( params%l_potts_prior )then
-            write(logfhandle,'(A)') '>>> NU ordered-label/Potts prior enabled'
-        endif
-        call optimize_nu_cutoff_finds(l_potts_prior=params%l_potts_prior)
+        call optimize_nu_cutoff_finds()
         call nu_filter_vols(even_nu, odd_nu)
         call print_nu_filtmap_lowpass_stats(l_mask)
         call analyze_filtmap_neighbor_continuity(l_mask)
