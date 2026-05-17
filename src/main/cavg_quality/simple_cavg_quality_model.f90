@@ -83,14 +83,14 @@ real, parameter :: CAVG_QUALITY_POOL_V1_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
 ! Experimental pool preset learned from the widened pool-only search grid.
 ! This is intentionally not the pool default: it strongly protects recall and
 ! should be validated on pool-style runs before promotion.
-character(len=*), parameter :: POOL_EXP_FEATURE_POLICY = 'microchunk_plus_signal'
+character(len=*), parameter :: POOL_EXP_FEATURE_POLICY = 'microchunk'
 real, parameter :: CAVG_QUALITY_POOL_EXP_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    2.029138E-01, 2.802879E-01, 4.939443E-02, 8.316658E-02, &
-    9.741970E-02, 0.000000E+00, 1.498684E-01, 4.935930E-02, &
-    8.758996E-02 ]
+    5.693773E-02, 3.188547E-01, 1.075357E-01, 1.915973E-01, &
+    1.997190E-01, 0.000000E+00, 0.000000E+00, 1.253555E-01, &
+    0.000000E+00 ]
 real, parameter :: POOL_EXP_BOUNDARY_MARGIN      = 0.80
 real, parameter :: POOL_EXP_MIN_SCORE_SEPARATION = 0.20
-real, parameter :: POOL_EXP_MIN_ACCEPT_FRAC      = 0.90
+real, parameter :: POOL_EXP_MIN_ACCEPT_FRAC      = 0.80
 
 ! Chunk default for stream-style class-average rejection. Hard validity
 ! failures reject before fitting; the weights below describe the trainable
@@ -258,7 +258,7 @@ contains
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
         spec%min_accept_frac         = POOL_EXP_MIN_ACCEPT_FRAC
-        spec%use_lowsep_otsu         = .true.
+        spec%use_lowsep_otsu         = .false.
         spec%use_otsu_window         = .false.
         spec%use_cluster_rescue      = .true.
         spec%enforce_min_accept_frac = .true.

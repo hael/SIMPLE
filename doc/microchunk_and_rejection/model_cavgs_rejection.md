@@ -262,18 +262,18 @@ use_cluster_rescue      true
 enforce_min_accept_frac true
 ```
 
-`pool_exp` has context `pool`, feature policy `microchunk_plus_signal`, cluster rescue enabled, low-separation Otsu enabled, and minimum accepted fraction enforcement enabled. It is an experimental validation preset, not the pool default.
+`pool_exp` has context `pool`, feature policy `microchunk`, cluster rescue enabled, low-separation Otsu disabled, and minimum accepted fraction enforcement enabled. It is an experimental validation preset, not the pool default.
 
 ```text
-log_pop             2.029138E-01
-neg_log_res         2.802879E-01
-centered            4.939443E-02
-log_locvar_fg       8.316658E-02
-log_locvar_bg       9.741970E-02
+log_pop             5.693773E-02
+neg_log_res         3.188547E-01
+centered            1.075357E-01
+log_locvar_fg       1.915973E-01
+log_locvar_bg       1.997190E-01
 corr_frc_proxy      0.000000E+00
-log_center_edge_snr 1.498684E-01
-cc_area_frac        4.935930E-02
-presence            8.758996E-02
+log_center_edge_snr 0.000000E+00
+cc_area_frac        1.253555E-01
+presence            0.000000E+00
 ```
 
 ```text
@@ -282,8 +282,8 @@ min_score_separation    0.20
 otsu_min_offset         0.25
 otsu_max_offset         0.50
 cluster_rescue_margin   0.20
-min_accept_frac         0.90
-use_lowsep_otsu         true
+min_accept_frac         0.80
+use_lowsep_otsu         false
 use_otsu_window         false
 use_cluster_rescue      true
 enforce_min_accept_frac true
@@ -368,7 +368,8 @@ Learn mode searches:
 - feature policies: `microchunk`, `microchunk_plus_score`, `microchunk_plus_signal`, `microchunk_plus_score_signal`;
 - `min_score_separation`: `0.05, 0.10, 0.15, 0.20, 0.30`;
 - chunk `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50`;
-- pool `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`;
+- pool `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`,
+  `0.90, 1.00, 1.10, 1.20`;
 - `use_lowsep_otsu`: `false, true`;
 - `use_otsu_window`: `false, true`;
 - `otsu_min_offset`: `0.05, 0.10, 0.15, 0.25, 0.35` when the Otsu window is enabled;
