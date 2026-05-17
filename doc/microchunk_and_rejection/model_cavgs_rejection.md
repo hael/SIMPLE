@@ -89,15 +89,15 @@ The learned artifact has three parts:
 
 The apply-time classifier is partly dataset-adaptive. Features are robustly normalized inside the current dataset. K-medoids and Otsu operate on the current score/feature distribution. The learned parameters provide the inductive bias: which features are active, how the score is weighted, and how aggressively the cluster-derived boundary is shifted or replaced.
 
-The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature weights are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute balanced accuracy. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
+The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute balanced accuracy. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
 
-Feature weights are learned ab initio from the supplied training data:
+Feature-weight search is ab initio for the supplied training data. The learner first constructs an AUC-derived seed:
 
 ```text
 weight(feature) = max(0, pooled_auc(feature, manual_state) - 0.5)
 ```
 
-The weights are normalized after the active feature policy is applied. There is no base-weight blending in the current learner. This means each training run derives the scalar model from the current analysis files rather than nudging an inherited default.
+The weights are normalized after the active feature policy is applied. For each feature policy, the learner then adds a small deterministic non-negative simplex of alternative weight vectors, ranked by oracle one-dimensional threshold performance on the balanced contrast datasets. The AUC-derived seed is always retained. Candidate weights are evaluated by the full classifier during model search. There is no base-weight blending in the current learner. This means each training run derives the scalar model from the current analysis files rather than nudging an inherited default.
 
 Feature-family policies act as a small structural model-selection layer:
 
@@ -108,7 +108,7 @@ Feature-family policies act as a small structural model-selection layer:
 | `microchunk_plus_signal` | `microchunk`, `signal` | Adds center/edge and presence evidence without stored score evidence. |
 | `microchunk_plus_score_signal` | `microchunk`, `score`, `signal` | Uses the full current feature bank. |
 
-Learn mode reports feature signal, feature-drop diagnostics, and leave-one-dataset-out feature-policy diagnostics so that the selected model can be interpreted as a compact scientific statement about which evidence family generalized on the supplied training set.
+Learn mode reports feature signal, feature-drop diagnostics, leave-one-dataset-out feature-policy diagnostics, and a coarse deterministic weight-simplex audit so that the selected model can be interpreted as a compact scientific statement about which evidence family and weight structure generalized on the supplied training set.
 
 ## Command Modes
 
@@ -127,8 +127,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 `quality_model` selects a built-in preset. The default is `chunk_default_v2`. The available built-ins are:
 
 - `chunk_default_v2`: default chunk/stream-style model.
-- `pool_default_v1`: pool/batch-style model with minimum accepted fraction enforcement.
-- `pool_exp`: experimental pool/batch-style model learned from the widened pool search grid.
+- `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -235,14 +234,14 @@ use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
 
-`pool_default_v1` has context `pool`, feature policy `microchunk_plus_score_signal`, cluster rescue enabled, and minimum accepted fraction enforcement enabled.
+`pool_default_v2` has context `pool`, feature policy `microchunk`, cluster rescue enabled, Otsu windowing enabled, and minimum accepted fraction enforcement enabled.
 
 ```text
-log_pop             3.953488E-01
-neg_log_res         2.093023E-01
+log_pop             0.000000E+00
+neg_log_res         1.000000E+00
 centered            0.000000E+00
-log_locvar_fg       1.860465E-01
-log_locvar_bg       2.093023E-01
+log_locvar_fg       0.000000E+00
+log_locvar_bg       0.000000E+00
 corr_frc_proxy      0.000000E+00
 log_center_edge_snr 0.000000E+00
 cc_area_frac        0.000000E+00
@@ -250,41 +249,14 @@ presence            0.000000E+00
 ```
 
 ```text
-boundary_margin         0.05
-min_score_separation    0.15
-otsu_min_offset         0.25
-otsu_max_offset         0.50
-cluster_rescue_margin   0.20
-min_accept_frac         0.65
-use_lowsep_otsu         false
-use_otsu_window         false
-use_cluster_rescue      true
-enforce_min_accept_frac true
-```
-
-`pool_exp` has context `pool`, feature policy `microchunk`, cluster rescue enabled, low-separation Otsu disabled, and minimum accepted fraction enforcement enabled. It is an experimental validation preset, not the pool default.
-
-```text
-log_pop             5.693773E-02
-neg_log_res         3.188547E-01
-centered            1.075357E-01
-log_locvar_fg       1.915973E-01
-log_locvar_bg       1.997190E-01
-corr_frc_proxy      0.000000E+00
-log_center_edge_snr 0.000000E+00
-cc_area_frac        1.253555E-01
-presence            0.000000E+00
-```
-
-```text
-boundary_margin         0.80
+boundary_margin         2.00
 min_score_separation    0.20
-otsu_min_offset         0.25
+otsu_min_offset         0.15
 otsu_max_offset         0.50
 cluster_rescue_margin   0.20
-min_accept_frac         0.80
+min_accept_frac         0.70
 use_lowsep_otsu         false
-use_otsu_window         false
+use_otsu_window         true
 use_cluster_rescue      true
 enforce_min_accept_frac true
 ```
@@ -351,25 +323,30 @@ Hard-rejected rows are kept in reports but excluded from feature-weight estimati
 Learn mode assigns each dataset an automatic role:
 
 - `balanced`: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by balanced accuracy.
-- `trainable_good_only`: only manual good rows remain after hard rejects; not used for feature weights, scored by recall.
+- `trainable_good_only`: only manual good rows remain after hard rejects; not used for feature weights, scored by guarded recall.
 - `trainable_bad_only`: only manual bad rows remain after hard rejects and no manually good rows were hard rejected; not used for feature weights, scored by specificity.
 - `skip_hard_gate_blocked`: only manual bad rows remain because all manually good rows were hard rejected; reported but skipped for soft-model fitting and scoring.
 
-Learn mode derives feature weights from the training data:
+Learn mode derives candidate feature weights from the training data. The starting candidate is:
 
 ```text
 weight(feature) = max(0, pooled_auc(feature, manual_state) - 0.5)
 ```
 
-The weights are normalized to sum to one. If all active weights are zero for a policy, uniform weights are assigned over the active policy features.
+The weights are normalized to sum to one. If all active weights are zero for a policy, uniform weights are assigned over the active policy features. The learner then keeps this AUC candidate and appends the strongest coarse-simplex candidates for the same active feature policy. The full classifier search chooses among those retained weight vectors.
+
+The learn report also includes a `weight_simplex_audit` table. This table reports the oracle threshold screen used to rank the coarse-simplex candidates. The promoted model is still chosen only after those candidate weights are run through the full clustering and thresholding classifier.
+
+Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the learn score applies an additional shortfall penalty below the recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large number of classes from datasets that contain only trainable manual positives.
 
 Learn mode searches:
 
 - feature policies: `microchunk`, `microchunk_plus_score`, `microchunk_plus_signal`, `microchunk_plus_score_signal`;
+- feature weights: AUC-derived candidate plus the strongest coarse-simplex candidates for each feature policy;
 - `min_score_separation`: `0.05, 0.10, 0.15, 0.20, 0.30`;
 - chunk `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50`;
 - pool `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`,
-  `0.90, 1.00, 1.10, 1.20`;
+  `0.90, 1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.70, 1.80, 1.90, 2.00, 2.25, 2.50, 2.75, 3.00, 3.50, 4.00`;
 - `use_lowsep_otsu`: `false, true`;
 - `use_otsu_window`: `false, true`;
 - `otsu_min_offset`: `0.05, 0.10, 0.15, 0.25, 0.35` when the Otsu window is enabled;
@@ -378,7 +355,7 @@ Learn mode searches:
 
 Each candidate is evaluated by running the full classifier on every scoreable training dataset and averaging the role-specific learn score. If multiple candidates tie, the selected candidate is the one closest to the starting model in the searched threshold controls.
 
-The learn report includes the search grid, `macro_learn_score`, suggested weights, selected model, dataset-role diagnostics, Otsu ablation diagnostics, feature-signal diagnostics, feature-drop diagnostics, leave-one-dataset-out feature-policy diagnostics, top candidates, best ties, and per-dataset confusion metrics.
+The learn report includes the search grid, `macro_learn_score`, suggested weights, selected model, dataset-role diagnostics, Otsu ablation diagnostics, feature-signal diagnostics, feature-drop diagnostics, leave-one-dataset-out feature-policy diagnostics, weight-simplex diagnostics, top candidates, best ties, and per-dataset confusion metrics.
 
 ## Promotion
 

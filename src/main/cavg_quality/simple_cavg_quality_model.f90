@@ -19,6 +19,7 @@ public :: cavg_quality_model_spec
 public :: cavg_quality_classify_cache
 public :: build_classify_cache
 public :: apply_cached_decision_to_quality
+public :: cached_decision_confusion
 public :: kill_classify_cache
 public :: write_cavg_quality_model_builtin_code
 
@@ -49,6 +50,7 @@ type :: cavg_quality_classify_cache
     logical, allocatable :: hard_reject(:)     ! ncls
     integer, allocatable :: labels_fit(:)      ! nfit (1/2 in CLUSTERED mode)
     integer, allocatable :: medoids_fit(:)     ! medoid indices into score_fit
+    real,    allocatable :: score_fit_sorted(:) ! nfit, ascending score_fit values
     integer              :: good_fit_label  = 0
     integer              :: bad_fit_label   = 0
     real                 :: separation      = 0.0
@@ -61,36 +63,27 @@ end type cavg_quality_classify_cache
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v1'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_EXP      = 'pool_exp'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v2'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_POOL_DEFAULT//'|'//CAVG_QUALITY_MODEL_POOL_EXP
+    CAVG_QUALITY_MODEL_POOL_DEFAULT
 
-real, parameter :: MIN_SCORE_SEPARATION    = 0.15
-real, parameter :: BOUNDARY_MARGIN_DEFAULT = 0.05
 real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
 real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
-real, parameter :: POOL_MIN_ACCEPT_FRAC    = 0.65
 real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
 
-! Pool preset weights. The chunk default has its own learned weights below;
-! feature definitions and extraction live in simple_cavg_quality_feats.
-real, parameter :: CAVG_QUALITY_POOL_V1_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    3.953488E-01, 2.093023E-01, 0.000000E+00, 1.860465E-01, &
-    2.093023E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
+! Pool default for batch-style class-average rejection. The learned v2 model
+! is resolution-dominated; other microchunk features remain in the policy but
+! have zero learned weight for this training set.
+character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk'
+real, parameter :: CAVG_QUALITY_POOL_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+    0.000000E+00, 1.000000E+00, 0.000000E+00, 0.000000E+00, &
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
     0.000000E+00 ]
-
-! Experimental pool preset learned from the widened pool-only search grid.
-! This is intentionally not the pool default: it strongly protects recall and
-! should be validated on pool-style runs before promotion.
-character(len=*), parameter :: POOL_EXP_FEATURE_POLICY = 'microchunk'
-real, parameter :: CAVG_QUALITY_POOL_EXP_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    5.693773E-02, 3.188547E-01, 1.075357E-01, 1.915973E-01, &
-    1.997190E-01, 0.000000E+00, 0.000000E+00, 1.253555E-01, &
-    0.000000E+00 ]
-real, parameter :: POOL_EXP_BOUNDARY_MARGIN      = 0.80
-real, parameter :: POOL_EXP_MIN_SCORE_SEPARATION = 0.20
-real, parameter :: POOL_EXP_MIN_ACCEPT_FRAC      = 0.80
+real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 2.00
+real, parameter :: POOL_V2_MIN_SCORE_SEPARATION = 0.20
+real, parameter :: POOL_V2_OTSU_MIN_OFFSET      = 0.15
+real, parameter :: POOL_V2_OTSU_MAX_OFFSET      = 0.50
+real, parameter :: POOL_V2_MIN_ACCEPT_FRAC      = 0.70
 
 ! Chunk default for stream-style class-average rejection. Hard validity
 ! failures reject before fitting; the weights below describe the trainable
@@ -156,8 +149,6 @@ contains
                 spec = chunk_default_v2_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
-            case(CAVG_QUALITY_MODEL_POOL_EXP)
-                spec = pool_exp_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -232,37 +223,19 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_POOL_DEFAULT
         spec%context                 = 'pool'
-        spec%feature_policy          = 'microchunk_plus_score_signal'
-        spec%weights                 = CAVG_QUALITY_POOL_V1_WEIGHTS
-        spec%boundary_margin         = BOUNDARY_MARGIN_DEFAULT
-        spec%min_score_separation    = MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
+        spec%feature_policy          = POOL_V2_FEATURE_POLICY
+        spec%weights                 = CAVG_QUALITY_POOL_V2_WEIGHTS
+        spec%boundary_margin         = POOL_V2_BOUNDARY_MARGIN
+        spec%min_score_separation    = POOL_V2_MIN_SCORE_SEPARATION
+        spec%otsu_min_offset         = POOL_V2_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = POOL_V2_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = POOL_MIN_ACCEPT_FRAC
+        spec%min_accept_frac         = POOL_V2_MIN_ACCEPT_FRAC
         spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
+        spec%use_otsu_window         = .true.
         spec%use_cluster_rescue      = .true.
         spec%enforce_min_accept_frac = .true.
     end function pool_default_model_spec
-
-    function pool_exp_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_POOL_EXP
-        spec%context                 = 'pool'
-        spec%feature_policy          = POOL_EXP_FEATURE_POLICY
-        spec%weights                 = CAVG_QUALITY_POOL_EXP_WEIGHTS
-        spec%boundary_margin         = POOL_EXP_BOUNDARY_MARGIN
-        spec%min_score_separation    = POOL_EXP_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
-        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = POOL_EXP_MIN_ACCEPT_FRAC
-        spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .true.
-        spec%enforce_min_accept_frac = .true.
-    end function pool_exp_model_spec
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
@@ -598,6 +571,8 @@ contains
         do i = 1, nfit
             cache%score_fit(i) = cache%scores(cache%inds(i))
         end do
+        allocate(cache%score_fit_sorted(nfit), source=cache%score_fit)
+        call hpsort(cache%score_fit_sorted)
         if( nfit < 4 )then
             cache%decision_mode = CACHE_DECISION_FORCED
             cache%forced_reason = CACHE_FORCED_TOO_FEW
@@ -662,6 +637,7 @@ contains
         if( allocated(cache%hard_reject) ) deallocate(cache%hard_reject)
         if( allocated(cache%labels_fit)  ) deallocate(cache%labels_fit)
         if( allocated(cache%medoids_fit) ) deallocate(cache%medoids_fit)
+        if( allocated(cache%score_fit_sorted) ) deallocate(cache%score_fit_sorted)
         cache%ncls            = 0
         cache%nfit            = 0
         cache%decision_mode   = 0
@@ -771,8 +747,7 @@ contains
                 end do
             endif
             if( model%enforce_min_accept_frac ) &
-                call enforce_min_accept_fraction(quality%scores, cache%hard_reject, quality%states, quality%threshold, &
-                                                 model%min_accept_frac)
+                call enforce_cached_min_accept_fraction(cache, quality%states, quality%threshold, model%min_accept_frac)
             quality%threshold_offset = quality%raw_threshold - quality%threshold
             quality%good_label     = cache%good_fit_label
             quality%used_threshold = .true.
@@ -789,6 +764,113 @@ contains
             endif
         endif
     end subroutine apply_cached_decision_to_quality
+
+    subroutine cached_decision_confusion( cache, model, manual_states, tp, fp, tn, fn )
+        type(cavg_quality_classify_cache), intent(in) :: cache
+        class(cavg_quality_model),         intent(in) :: model
+        integer,                           intent(in) :: manual_states(:)
+        integer,                           intent(out):: tp, fp, tn, fn
+        integer :: i, idx, min_accept, naccepted
+        real    :: threshold, rescue_threshold, floor_threshold
+        logical :: accept_all, use_rescue, floor_active, pred
+        if( size(manual_states) /= cache%ncls ) &
+            THROW_HARD('cached_decision_confusion: manual-state/cache size mismatch')
+        tp = 0; fp = 0; tn = 0; fn = 0
+        select case(cache%decision_mode)
+        case(CACHE_DECISION_EMPTY)
+            return
+        case(CACHE_DECISION_FORCED)
+            call accumulate_accept_all_confusion(cache, manual_states, tp, fp, tn, fn)
+            return
+        case(CACHE_DECISION_CLUSTERED)
+            continue
+        case default
+            THROW_HARD('cached_decision_confusion: invalid cache decision mode')
+        end select
+        accept_all       = .false.
+        use_rescue       = .false.
+        floor_active     = .false.
+        threshold        = 0.0
+        rescue_threshold = 0.0
+        floor_threshold  = 0.0
+        if( cache%separation < model%min_score_separation )then
+            if( model%use_lowsep_otsu .and. cache%otsu_ok .and. &
+                cache%otsu_separation >= model%min_score_separation )then
+                threshold = cache%otsu_threshold
+            else
+                accept_all = .true.
+            endif
+        else
+            threshold = cache%raw_threshold - model%boundary_margin
+            if( model%use_otsu_window .and. cache%otsu_ok .and. &
+                cache%otsu_separation >= model%min_score_separation .and. &
+                cache%otsu_threshold >= cache%raw_threshold + model%otsu_min_offset .and. &
+                cache%otsu_threshold <= cache%raw_threshold + model%otsu_max_offset ) threshold = cache%otsu_threshold
+            use_rescue = model%use_cluster_rescue
+            rescue_threshold = threshold - model%cluster_rescue_margin
+            if( model%enforce_min_accept_frac )then
+                if( .not. allocated(cache%score_fit_sorted) ) &
+                    THROW_HARD('cached_decision_confusion: missing sorted scores')
+                min_accept = min(cache%nfit, max(1, ceiling(model%min_accept_frac * real(cache%nfit))))
+                naccepted = 0
+                do i = 1, cache%nfit
+                    if( cached_score_fit_is_good(cache, i, threshold, use_rescue, rescue_threshold) ) &
+                        naccepted = naccepted + 1
+                end do
+                if( naccepted < min_accept )then
+                    floor_active    = .true.
+                    floor_threshold = cache%score_fit_sorted(cache%nfit - min_accept + 1)
+                endif
+            endif
+        endif
+        if( accept_all )then
+            call accumulate_accept_all_confusion(cache, manual_states, tp, fp, tn, fn)
+            return
+        endif
+        do i = 1, cache%nfit
+            idx = cache%inds(i)
+            pred = cached_score_fit_is_good(cache, i, threshold, use_rescue, rescue_threshold)
+            if( floor_active .and. cache%score_fit(i) >= floor_threshold ) pred = .true.
+            if( pred )then
+                if( manual_states(idx) > 0 )then
+                    tp = tp + 1
+                else
+                    fp = fp + 1
+                endif
+            else
+                if( manual_states(idx) > 0 )then
+                    fn = fn + 1
+                else
+                    tn = tn + 1
+                endif
+            endif
+        end do
+    end subroutine cached_decision_confusion
+
+    logical function cached_score_fit_is_good( cache, ifit, threshold, use_rescue, rescue_threshold )
+        type(cavg_quality_classify_cache), intent(in) :: cache
+        integer,                           intent(in) :: ifit
+        real,                              intent(in) :: threshold, rescue_threshold
+        logical,                           intent(in) :: use_rescue
+        cached_score_fit_is_good = cache%score_fit(ifit) >= threshold
+        if( use_rescue .and. cache%labels_fit(ifit) == cache%good_fit_label .and. &
+            cache%score_fit(ifit) >= rescue_threshold ) cached_score_fit_is_good = .true.
+    end function cached_score_fit_is_good
+
+    subroutine accumulate_accept_all_confusion( cache, manual_states, tp, fp, tn, fn )
+        type(cavg_quality_classify_cache), intent(in)    :: cache
+        integer,                           intent(in)    :: manual_states(:)
+        integer,                           intent(inout) :: tp, fp, tn, fn
+        integer :: i, idx
+        do i = 1, cache%nfit
+            idx = cache%inds(i)
+            if( manual_states(idx) > 0 )then
+                tp = tp + 1
+            else
+                fp = fp + 1
+            endif
+        end do
+    end subroutine accumulate_accept_all_confusion
 
     function forced_reason_name( reason ) result( name )
         integer, intent(in) :: reason
@@ -946,38 +1028,30 @@ contains
         deallocate(sorted, prefix)
     end subroutine otsu_score_threshold
 
-    subroutine enforce_min_accept_fraction( scores, hard_reject, states, threshold, min_accept_frac )
-        real,    intent(in)    :: scores(:)
-        logical, intent(in)    :: hard_reject(:)
+    subroutine enforce_cached_min_accept_fraction( cache, states, threshold, min_accept_frac )
+        type(cavg_quality_classify_cache), intent(in)    :: cache
         integer, intent(inout) :: states(:)
         real,    intent(inout) :: threshold
         real,    intent(in)    :: min_accept_frac
-        real, allocatable :: vals(:)
-        integer :: nfit, min_accept, naccepted, i, loc
+        integer :: nfit, min_accept, naccepted, i
         real    :: floor_threshold
-        if( size(hard_reject) /= size(scores) ) THROW_HARD('enforce_min_accept_fraction: mask size mismatch')
-        if( size(states)      /= size(scores) ) THROW_HARD('enforce_min_accept_fraction: state size mismatch')
-        nfit = count(.not. hard_reject)
+        if( size(states) /= cache%ncls ) THROW_HARD('enforce_cached_min_accept_fraction: state size mismatch')
+        nfit = cache%nfit
         if( nfit <= 0 ) return
+        if( .not. allocated(cache%score_fit_sorted) ) &
+            THROW_HARD('enforce_cached_min_accept_fraction: missing sorted scores')
         min_accept = min(nfit, max(1, ceiling(min_accept_frac * real(nfit))))
-        naccepted  = count(states > 0 .and. .not. hard_reject)
+        naccepted  = count(states(cache%inds) > 0)
         if( naccepted >= min_accept ) return
         ! Pool models use this as a score floor, so labels remain diagnostic:
         ! the floor can accept a high-scoring class from the lower-scoring
         ! k-medoids cluster if needed to satisfy the minimum acceptance rate.
-        vals = pack(scores, .not. hard_reject)
-        floor_threshold = minval(vals)
-        do i = 1, min_accept
-            loc = maxloc(vals, dim=1)
-            floor_threshold = vals(loc)
-            vals(loc) = -huge(1.0)
-        end do
-        do i = 1, size(scores)
-            if( .not. hard_reject(i) .and. scores(i) >= floor_threshold ) states(i) = 1
+        floor_threshold = cache%score_fit_sorted(nfit - min_accept + 1)
+        do i = 1, nfit
+            if( cache%score_fit(i) >= floor_threshold ) states(cache%inds(i)) = 1
         end do
         threshold = min(threshold, floor_threshold)
-        deallocate(vals)
-    end subroutine enforce_min_accept_fraction
+    end subroutine enforce_cached_min_accept_fraction
 
     real function mean_score_for_label( scores, labels, label )
         real,    intent(in) :: scores(:)

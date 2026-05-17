@@ -6,10 +6,11 @@ use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family
 use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, &
-    build_classify_cache, kill_classify_cache, apply_cached_decision_to_quality
+    build_classify_cache, kill_classify_cache, cached_decision_confusion
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, &
     cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
+use simple_srch_sort_loc,      only: hpsort
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -23,6 +24,10 @@ integer, parameter :: LEARN_ROLE_SKIP               = 0
 integer, parameter :: LEARN_ROLE_BALANCED           = 1
 integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
 integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY   = 3
+integer, parameter :: LEARN_WEIGHT_SIMPLEX_QUANTA     = 4
+integer, parameter :: LEARN_MAX_WEIGHT_CANDIDATES   = 8
+real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
+real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
 real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
 ! Positive margins deliberately over-select relative to the learned boundary.
 ! Chunk and pool contexts use separate grids so pool learning can test stronger
@@ -30,10 +35,13 @@ real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0
 real,    parameter :: LEARN_CHUNK_MARGINS(16)        = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                                        -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, &
                                                         0.25, 0.30, 0.40, 0.50]
-real,    parameter :: LEARN_POOL_MARGINS(23)         = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
+real,    parameter :: LEARN_POOL_MARGINS(37)         = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                                        -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, &
                                                         0.25, 0.30, 0.40, 0.50, 0.60, 0.70, &
-                                                        0.80, 0.90, 1.00, 1.10, 1.20]
+                                                        0.80, 0.90, 1.00, 1.10, 1.20, 1.30, &
+                                                        1.40, 1.50, 1.60, 1.70, 1.80, 1.90, &
+                                                        2.00, 2.25, 2.50, 2.75, 3.00, 3.50, &
+                                                        4.00]
 real,    parameter :: LEARN_OTSU_MIN_OFFSETS(5)     = [0.05, 0.10, 0.15, 0.25, 0.35]
 real,    parameter :: LEARN_OTSU_MAX_OFFSETS(3)     = [0.40, 0.50, 0.65]
 real,    parameter :: LEARN_POOL_FRACS(7)           = [0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90]
@@ -50,9 +58,13 @@ contains
         type(cavg_quality_model_spec) :: top_specs(CAVG_QUALITY_LEARN_TOP_K)
         type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
+        real :: weight_candidates(CAVG_QUALITY_NFEATS, LEARN_MAX_WEIGHT_CANDIDATES)
+        real :: weight_candidate_scores(LEARN_MAX_WEIGHT_CANDIDATES)
+        real :: weight_candidate_dists(LEARN_MAX_WEIGHT_CANDIDATES)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
         real :: best_score
-        integer :: i, ipol, im, isep, ilow, iwin, iomin, iomax, max_grid, n_grid, n_top, n_best_ties
+        integer :: i, ipol, iw, im, isep, ilow, iwin, iomin, iomax, max_grid
+        integer :: n_grid, n_top, n_best_ties, n_weight_candidates
         logical :: is_pool_context
         if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
         allocate(dsets(size(analysis_files)))
@@ -68,49 +80,51 @@ contains
         n_top       = 0
         n_grid      = 0
         n_best_ties = 0
-        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * size(LEARN_MINSEPS) * n_learn_margins(is_pool_context) * &
-            n_otsu_grid_combinations()
+        max_grid = CAVG_QUALITY_LEARN_N_POLICIES * LEARN_MAX_WEIGHT_CANDIDATES * size(LEARN_MINSEPS) * &
+            n_learn_margins(is_pool_context) * n_otsu_grid_combinations()
         if( is_pool_context ) max_grid = max_grid * size(LEARN_POOL_FRACS)
         allocate(best_tie_specs(max_grid))
         allocate(caches(size(dsets)))
         do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
-            candidate_spec = base_spec
-            candidate_spec%feature_policy = feature_policy_name(ipol)
-            candidate_spec%weights = suggested_weights
-            call apply_feature_policy(ipol, candidate_spec%weights)
-            ! Within a feature policy the active weights are fixed, so the
-            ! per-dataset scores, k-medoids partition, raw threshold, and
-            ! Otsu threshold are reused across the entire (min_sep, margin,
-            ! Otsu window, pool fraction) sub-grid. Build the caches once
-            ! per policy and let the inner loops evaluate cheaply.
-            call build_policy_caches(dsets, candidate_spec%weights, caches)
-            do isep = 1, size(LEARN_MINSEPS)
-                candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
-                do im = 1, n_learn_margins(is_pool_context)
-                    candidate_spec%boundary_margin = learn_boundary_margin(im, is_pool_context)
-                    do ilow = 1, size(LEARN_OTSU_FLAGS)
-                        candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
-                        do iwin = 1, size(LEARN_OTSU_FLAGS)
-                            candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
-                            if( candidate_spec%use_otsu_window )then
-                                do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
-                                    candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
-                                    do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
-                                        candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
-                                        if( candidate_spec%otsu_max_offset <= candidate_spec%otsu_min_offset + EPS ) cycle
-                                        call evaluate_candidate_spec(dsets, caches, candidate_spec, &
-                                            is_pool_context, n_grid, best_spec, best_score, &
-                                            best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+            call build_weight_candidates_for_policy(dsets, suggested_weights, ipol, weight_candidates, &
+                weight_candidate_scores, weight_candidate_dists, n_weight_candidates)
+            do iw = 1, n_weight_candidates
+                candidate_spec = base_spec
+                candidate_spec%feature_policy = feature_policy_name(ipol)
+                candidate_spec%weights = weight_candidates(:,iw)
+                ! For a fixed weight vector, the per-dataset scores,
+                ! k-medoids partition, raw threshold, and Otsu threshold are
+                ! reused across the whole threshold-control sub-grid.
+                call build_policy_caches(dsets, candidate_spec%weights, caches)
+                do isep = 1, size(LEARN_MINSEPS)
+                    candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
+                    do im = 1, n_learn_margins(is_pool_context)
+                        candidate_spec%boundary_margin = learn_boundary_margin(im, is_pool_context)
+                        do ilow = 1, size(LEARN_OTSU_FLAGS)
+                            candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
+                            do iwin = 1, size(LEARN_OTSU_FLAGS)
+                                candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
+                                if( candidate_spec%use_otsu_window )then
+                                    do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
+                                        candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
+                                        do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
+                                            candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
+                                            if( candidate_spec%otsu_max_offset <= &
+                                                candidate_spec%otsu_min_offset + EPS ) cycle
+                                            call evaluate_candidate_spec(dsets, caches, candidate_spec, &
+                                                is_pool_context, n_grid, best_spec, best_score, &
+                                                best_tie_specs, n_best_ties, top_specs, top_scores, n_top)
+                                        end do
                                     end do
-                                end do
-                            else
-                                candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
-                                candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
-                                call evaluate_candidate_spec(dsets, caches, candidate_spec, &
-                                    is_pool_context, &
-                                    n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
-                                    top_specs, top_scores, n_top)
-                            endif
+                                else
+                                    candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
+                                    candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
+                                    call evaluate_candidate_spec(dsets, caches, candidate_spec, &
+                                        is_pool_context, &
+                                        n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
+                                        top_specs, top_scores, n_top)
+                                endif
+                            end do
                         end do
                     end do
                 end do
@@ -308,6 +322,112 @@ contains
             inds(ninds) = ifeat
         end do
     end subroutine feature_policy_indices
+
+    subroutine build_weight_candidates_for_policy( dsets, suggested_weights, ipolicy, candidates, scores, dists, &
+                                                   n_candidates )
+        type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
+        real,                                intent(in)  :: suggested_weights(:)
+        integer,                             intent(in)  :: ipolicy
+        real,                                intent(out) :: candidates(:,:)
+        real,                                intent(out) :: scores(:), dists(:)
+        integer,                             intent(out) :: n_candidates
+        real :: auc_weights(CAVG_QUALITY_NFEATS)
+        integer :: inds(CAVG_QUALITY_NFEATS), counts(CAVG_QUALITY_NFEATS)
+        integer :: ninds
+        if( size(candidates, dim=1) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('build_weight_candidates_for_policy: invalid feature dimension')
+        if( size(candidates, dim=2) /= size(scores) .or. size(scores) /= size(dists) ) &
+            THROW_HARD('build_weight_candidates_for_policy: inconsistent candidate arrays')
+        if( size(candidates, dim=2) < 1 ) &
+            THROW_HARD('build_weight_candidates_for_policy: empty candidate array')
+        call feature_policy_indices(ipolicy, inds, ninds)
+        auc_weights = 0.0
+        auc_weights(1:min(size(suggested_weights), CAVG_QUALITY_NFEATS)) = &
+            suggested_weights(1:min(size(suggested_weights), CAVG_QUALITY_NFEATS))
+        call apply_feature_policy(ipolicy, auc_weights)
+        candidates = 0.0
+        scores     = -huge(1.0)
+        dists      = huge(1.0)
+        candidates(:,1) = auc_weights
+        scores(1)       = macro_oracle_score_for_weights(dsets, auc_weights, .true.)
+        dists(1)        = 0.0
+        n_candidates    = 1
+        counts = 0
+        call scan_weight_candidate_simplex(dsets, inds(1:ninds), 1, LEARN_WEIGHT_SIMPLEX_QUANTA, counts, &
+            auc_weights, candidates, scores, dists, n_candidates)
+    end subroutine build_weight_candidates_for_policy
+
+    recursive subroutine scan_weight_candidate_simplex( dsets, inds, pos, remaining, counts, ref_weights, &
+                                                        candidates, scores, dists, n_candidates )
+        type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
+        integer,                             intent(in)    :: inds(:), pos, remaining
+        integer,                             intent(inout) :: counts(:), n_candidates
+        real,                                intent(in)    :: ref_weights(CAVG_QUALITY_NFEATS)
+        real,                                intent(inout) :: candidates(:,:)
+        real,                                intent(inout) :: scores(:), dists(:)
+        real :: weights(CAVG_QUALITY_NFEATS), score
+        integer :: i, val
+        if( pos == size(inds) )then
+            counts(pos) = remaining
+            weights = 0.0
+            do i = 1, size(inds)
+                weights(inds(i)) = real(counts(i)) / real(LEARN_WEIGHT_SIMPLEX_QUANTA)
+            end do
+            score = macro_oracle_score_for_weights(dsets, weights, .true.)
+            call record_weight_candidate(weights, score, ref_weights, candidates, scores, dists, n_candidates)
+            return
+        endif
+        do val = 0, remaining
+            counts(pos) = val
+            call scan_weight_candidate_simplex(dsets, inds, pos + 1, remaining - val, counts, ref_weights, &
+                candidates, scores, dists, n_candidates)
+        end do
+    end subroutine scan_weight_candidate_simplex
+
+    subroutine record_weight_candidate( weights, score, ref_weights, candidates, scores, dists, n_candidates )
+        real,    intent(in)    :: weights(CAVG_QUALITY_NFEATS), score, ref_weights(CAVG_QUALITY_NFEATS)
+        real,    intent(inout) :: candidates(:,:)
+        real,    intent(inout) :: scores(:), dists(:)
+        integer, intent(inout) :: n_candidates
+        real :: dist
+        integer :: i, pos, max_candidates
+        max_candidates = size(scores)
+        do i = 1, n_candidates
+            if( weight_vector_close(weights, candidates(:,i)) ) return
+        end do
+        dist = weight_l1_distance(weights, ref_weights)
+        if( n_candidates < max_candidates )then
+            n_candidates = n_candidates + 1
+            pos = n_candidates
+        else
+            if( .not. weight_candidate_better(score, dist, scores(max_candidates), dists(max_candidates)) ) return
+            pos = max_candidates
+        endif
+        do i = pos, 3, -1
+            if( weight_candidate_better(score, dist, scores(i-1), dists(i-1)) )then
+                scores(i)       = scores(i-1)
+                dists(i)        = dists(i-1)
+                candidates(:,i) = candidates(:,i-1)
+                pos = i - 1
+            else
+                exit
+            endif
+        end do
+        scores(pos)       = score
+        dists(pos)        = dist
+        candidates(:,pos) = weights
+    end subroutine record_weight_candidate
+
+    logical function weight_candidate_better( score1, dist1, score2, dist2 )
+        real, intent(in) :: score1, dist1, score2, dist2
+        weight_candidate_better = score1 > score2 + EPS .or. &
+            (abs(score1 - score2) <= EPS .and. dist1 < dist2 - EPS)
+    end function weight_candidate_better
+
+    logical function weight_vector_close( weights1, weights2 )
+        real, intent(in) :: weights1(:), weights2(:)
+        weight_vector_close = maxval(abs(weights1 - weights2)) <= 1.0e-6
+    end function weight_vector_close
 
     subroutine read_quality_training_dataset( fname, dset )
         character(len=*),                    intent(in)    :: fname
@@ -555,13 +675,19 @@ contains
             case(LEARN_ROLE_BALANCED)
                 learn_balacc_from_confusion = balacc
             case(LEARN_ROLE_RECALL_ONLY)
-                learn_balacc_from_confusion = recall
+                learn_balacc_from_confusion = guarded_recall_score(recall)
             case(LEARN_ROLE_SPECIFICITY_ONLY)
                 learn_balacc_from_confusion = specificity
             case default
                 learn_balacc_from_confusion = 0.5
         end select
     end function learn_balacc_from_confusion
+
+    real function guarded_recall_score( recall )
+        real, intent(in) :: recall
+        guarded_recall_score = recall - LEARN_RECALL_ONLY_PENALTY * &
+            max(0.0, LEARN_RECALL_ONLY_FLOOR - recall)
+    end function guarded_recall_score
 
     subroutine consider_model_candidate( spec, score, best_spec, best_score, best_tie_specs, n_best_ties, &
                                          top_specs, top_scores, n_top )
@@ -620,6 +746,8 @@ contains
             minval(LEARN_MINSEPS), maxval(LEARN_MINSEPS))
         threshold_tie_distance = threshold_tie_distance + scaled_absdiff(spec%boundary_margin, &
             base_spec%boundary_margin, margin_min, margin_max)
+        if( is_pool_context ) threshold_tie_distance = threshold_tie_distance + scaled_absdiff( &
+            spec%min_accept_frac, base_spec%min_accept_frac, minval(LEARN_POOL_FRACS), maxval(LEARN_POOL_FRACS))
         if( spec%use_lowsep_otsu .neqv. base_spec%use_lowsep_otsu ) threshold_tie_distance = threshold_tie_distance + 0.25
         if( spec%use_otsu_window .neqv. base_spec%use_otsu_window ) threshold_tie_distance = threshold_tie_distance + 0.25
         if( spec%use_otsu_window )then
@@ -680,24 +808,7 @@ contains
         type(cavg_quality_classify_cache),   intent(in) :: cache
         type(cavg_quality_model),            intent(in) :: model
         integer,                             intent(out):: tp, fp, tn, fn
-        type(cavg_quality_result) :: quality
-        logical, allocatable :: pred(:), ref(:)
-        integer :: nfit
-        call quality%kill()
-        allocate(quality%hard_reject(size(dset%hard_reject)), source=dset%hard_reject)
-        call apply_cached_decision_to_quality(cache, model, quality)
-        nfit = count_trainable_classes(dset)
-        if( nfit == 0 )then
-            tp = 0; fp = 0; tn = 0; fn = 0
-            call quality%kill()
-            return
-        endif
-        allocate(pred(nfit), ref(nfit))
-        pred = pack(quality%states > 0, .not. dset%hard_reject)
-        ref  = pack(dset%manual_states > 0, .not. dset%hard_reject)
-        call calc_confusion(pred, ref, tp, fp, tn, fn)
-        deallocate(pred, ref)
-        call quality%kill()
+        call cached_decision_confusion(cache, model, dset%manual_states, tp, fp, tn, fn)
     end subroutine classify_training_dataset_cached
 
     subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
@@ -755,10 +866,14 @@ contains
         write(funit,'(A)') 'note=feature_policy_scans_cumulative_family_sets_starting_with_microchunk'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
         write(funit,'(A)') 'note=feature_weights_use_only_datasets_with_both_manual_states_after_hard_rejects'
-        write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_recall'
+        write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
-        write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
+        write(funit,'(A)') 'note=feature_weights_searched_from_auc_seed_plus_simplex_no_base_weight_blending'
         call write_feature_policy_grid(funit)
+        write(funit,'(A,I0)') 'grid_max_weight_candidates_per_policy=', LEARN_MAX_WEIGHT_CANDIDATES
+        write(funit,'(A,I0)') 'grid_weight_simplex_quanta=', LEARN_WEIGHT_SIMPLEX_QUANTA
+        write(funit,'(A,ES14.6)') 'grid_recall_only_floor=', LEARN_RECALL_ONLY_FLOOR
+        write(funit,'(A,ES14.6)') 'grid_recall_only_shortfall_penalty=', LEARN_RECALL_ONLY_PENALTY
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
         call write_learn_margin_grid(funit, model_is_pool_context(learned_model))
         call write_logical_list(funit, 'grid_use_lowsep_otsu=', LEARN_OTSU_FLAGS)
@@ -850,6 +965,8 @@ contains
         call write_feature_drop_diagnostics(funit, dsets, learned_model, best_score)
         write(funit,'(A)') ''
         call write_feature_policy_screen(funit, dsets)
+        write(funit,'(A)') ''
+        call write_weight_simplex_audit(funit, dsets, suggested_weights)
     end subroutine write_feature_screen_diagnostics
 
     subroutine write_feature_signal_diagnostics( funit, dsets, base_spec, suggested_weights, learned_model )
@@ -1060,6 +1177,141 @@ contains
         if( allocated(refs)   ) deallocate(refs)
     end subroutine write_feature_policy_lodo_row
 
+    subroutine write_weight_simplex_audit( funit, dsets, suggested_weights )
+        integer,                             intent(in) :: funit
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        real,                                intent(in) :: suggested_weights(:)
+        real :: auc_weights(CAVG_QUALITY_NFEATS), best_weights(CAVG_QUALITY_NFEATS)
+        real :: auc_contrast, best_contrast, auc_learn, best_learn, best_dist, step
+        integer :: inds(CAVG_QUALITY_NFEATS), counts(CAVG_QUALITY_NFEATS)
+        integer :: ipol, ninds, n_candidates
+        step = 1.0 / real(LEARN_WEIGHT_SIMPLEX_QUANTA)
+        write(funit,'(A)') 'weight_simplex_audit_note=coarse_oracle_threshold_screen_ranks_weight_candidates'
+        write(funit,'(A)') 'weight_simplex_audit_header=feature_policy,n_features,step,n_candidates,'//&
+            'auc_weight_contrast_oracle_score,best_contrast_oracle_score,delta_contrast,'//&
+            'auc_weight_learn_oracle_score,best_contrast_weight_learn_oracle_score,delta_learn,'//&
+            'best_feature_weights_semicolon'
+        do ipol = 1, CAVG_QUALITY_LEARN_N_POLICIES
+            call feature_policy_indices(ipol, inds, ninds)
+            auc_weights = 0.0
+            auc_weights(1:min(size(suggested_weights), CAVG_QUALITY_NFEATS)) = &
+                suggested_weights(1:min(size(suggested_weights), CAVG_QUALITY_NFEATS))
+            call apply_feature_policy(ipol, auc_weights)
+            auc_contrast  = macro_oracle_score_for_weights(dsets, auc_weights, .true.)
+            auc_learn     = macro_oracle_score_for_weights(dsets, auc_weights, .false.)
+            best_weights  = auc_weights
+            best_contrast = -huge(1.0)
+            best_dist     = huge(1.0)
+            counts        = 0
+            n_candidates  = 0
+            call scan_weight_simplex(dsets, inds(1:ninds), 1, LEARN_WEIGHT_SIMPLEX_QUANTA, counts, &
+                auc_weights, best_weights, best_contrast, best_dist, n_candidates)
+            best_learn = macro_oracle_score_for_weights(dsets, best_weights, .false.)
+            write(funit,'(A,A,A,I0,A,F8.4,A,I0,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A)', &
+                advance='no') 'weight_simplex_audit,', trim(feature_policy_name(ipol)), ',', ninds, ',', &
+                step, ',', n_candidates, ',', auc_contrast, ',', best_contrast, ',', best_contrast - auc_contrast, &
+                ',', auc_learn, ',', best_learn, ',', best_learn - auc_learn, ','
+            call write_weight_list_semicolon(funit, best_weights)
+        end do
+    end subroutine write_weight_simplex_audit
+
+    recursive subroutine scan_weight_simplex( dsets, inds, pos, remaining, counts, ref_weights, best_weights, &
+                                              best_score, best_dist, n_candidates )
+        type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
+        integer,                             intent(in)    :: inds(:), pos, remaining
+        integer,                             intent(inout) :: counts(:), n_candidates
+        real,                                intent(in)    :: ref_weights(CAVG_QUALITY_NFEATS)
+        real,                                intent(inout) :: best_weights(CAVG_QUALITY_NFEATS)
+        real,                                intent(inout) :: best_score, best_dist
+        real :: weights(CAVG_QUALITY_NFEATS), score, dist
+        integer :: i, val
+        if( pos == size(inds) )then
+            counts(pos) = remaining
+            weights = 0.0
+            do i = 1, size(inds)
+                weights(inds(i)) = real(counts(i)) / real(LEARN_WEIGHT_SIMPLEX_QUANTA)
+            end do
+            score = macro_oracle_score_for_weights(dsets, weights, .true.)
+            dist  = weight_l1_distance(weights, ref_weights)
+            n_candidates = n_candidates + 1
+            if( score > best_score + EPS .or. &
+                (abs(score - best_score) <= EPS .and. dist < best_dist - EPS) )then
+                best_score   = score
+                best_dist    = dist
+                best_weights = weights
+            endif
+            return
+        endif
+        do val = 0, remaining
+            counts(pos) = val
+            call scan_weight_simplex(dsets, inds, pos + 1, remaining - val, counts, ref_weights, &
+                best_weights, best_score, best_dist, n_candidates)
+        end do
+    end subroutine scan_weight_simplex
+
+    real function macro_oracle_score_for_weights( dsets, weights, contrast_only )
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        real,                                intent(in) :: weights(CAVG_QUALITY_NFEATS)
+        logical,                             intent(in) :: contrast_only
+        real,    allocatable :: scores(:)
+        integer, allocatable :: refs(:)
+        integer :: ids, tp, fp, tn, fn, role, nused
+        real    :: score, sum_score
+        sum_score = 0.0
+        nused     = 0
+        do ids = 1, size(dsets)
+            role = dataset_learn_role(dsets(ids))
+            if( role == LEARN_ROLE_SKIP ) cycle
+            if( contrast_only .and. role /= LEARN_ROLE_BALANCED ) cycle
+            call score_dataset_full_weights(dsets(ids), weights, scores, refs)
+            call best_score_threshold_balacc(scores, refs, role, score, tp, fp, tn, fn)
+            sum_score = sum_score + score
+            nused     = nused + 1
+            if( allocated(scores) ) deallocate(scores)
+            if( allocated(refs)   ) deallocate(refs)
+        end do
+        if( nused > 0 )then
+            macro_oracle_score_for_weights = sum_score / real(nused)
+        else
+            macro_oracle_score_for_weights = 0.5
+        endif
+    end function macro_oracle_score_for_weights
+
+    subroutine score_dataset_full_weights( dset, weights, scores, refs )
+        type(cavg_quality_training_dataset), intent(in)  :: dset
+        real,                                intent(in)  :: weights(CAVG_QUALITY_NFEATS)
+        real, allocatable,                   intent(out) :: scores(:)
+        integer, allocatable,                intent(out) :: refs(:)
+        integer :: i, nfit, ifit
+        nfit = count_trainable_classes(dset)
+        allocate(scores(nfit), refs(nfit))
+        scores = 0.0
+        refs = 0
+        ifit = 0
+        do i = 1, dset%ncls
+            if( dset%hard_reject(i) ) cycle
+            ifit = ifit + 1
+            refs(ifit)   = dset%manual_states(i)
+            scores(ifit) = dot_product(dset%features(i,:), weights)
+        end do
+    end subroutine score_dataset_full_weights
+
+    real function weight_l1_distance( weights, ref_weights )
+        real, intent(in) :: weights(:), ref_weights(:)
+        weight_l1_distance = sum(abs(weights - ref_weights))
+    end function weight_l1_distance
+
+    subroutine write_weight_list_semicolon( funit, weights )
+        integer, intent(in) :: funit
+        real,    intent(in) :: weights(:)
+        integer :: i
+        do i = 1, size(weights)
+            if( i > 1 ) write(funit,'(A)', advance='no') ';'
+            write(funit,'(ES14.6)', advance='no') weights(i)
+        end do
+        write(funit,*)
+    end subroutine write_weight_list_semicolon
+
     subroutine lodo_feature_policy_weights( dsets, holdout, feat_inds, weights )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
         integer,                             intent(in)  :: holdout
@@ -1108,45 +1360,61 @@ contains
         integer, intent(in)  :: role
         real,    intent(out) :: best_balacc
         integer, intent(out) :: tp, fp, tn, fn
-        logical, allocatable :: pred(:), ref(:)
-        integer :: i, cand_tp, cand_fp, cand_tn, cand_fn
-        real :: precision, recall, specificity, f1, balacc, accuracy
+        real,    allocatable :: sorted_scores(:)
+        integer, allocatable :: order(:)
+        integer :: n, i, npos, nneg, cur_tp, cur_fp, cur_tn, cur_fn
+        real    :: metric
         if( size(scores) /= size(refs) ) THROW_HARD('best_score_threshold_balacc: size mismatch')
-        best_balacc = -huge(1.0)
-        tp = 0
-        fp = 0
-        tn = 0
-        fn = 0
-        if( size(scores) == 0 )then
+        n  = size(scores)
+        tp = 0; fp = 0; tn = 0; fn = 0
+        if( n == 0 )then
             best_balacc = 0.5
             return
         endif
-        allocate(pred(size(scores)), ref(size(scores)))
-        ref = refs > 0
-        pred = .false.
-        call calc_confusion(pred, ref, cand_tp, cand_fp, cand_tn, cand_fn)
-        call calc_binary_metrics(cand_tp, cand_fp, cand_tn, cand_fn, precision, recall, specificity, f1, &
-            balacc, accuracy)
-        best_balacc = learn_balacc_from_confusion(cand_tp, cand_fp, cand_tn, cand_fn, role)
-        tp = cand_tp
-        fp = cand_fp
-        tn = cand_tn
-        fn = cand_fn
-        do i = 1, size(scores)
-            pred = scores >= scores(i)
-            call calc_confusion(pred, ref, cand_tp, cand_fp, cand_tn, cand_fn)
-            call calc_binary_metrics(cand_tp, cand_fp, cand_tn, cand_fn, precision, recall, specificity, f1, &
-                balacc, accuracy)
-            balacc = learn_balacc_from_confusion(cand_tp, cand_fp, cand_tn, cand_fn, role)
-            if( balacc > best_balacc )then
-                best_balacc = balacc
-                tp = cand_tp
-                fp = cand_fp
-                tn = cand_tn
-                fn = cand_fn
+        npos = count(refs > 0)
+        nneg = n - npos
+        ! Baseline: predict none positive (threshold above max score)
+        cur_tp = 0
+        cur_fp = 0
+        cur_fn = npos
+        cur_tn = nneg
+        best_balacc = learn_balacc_from_confusion(cur_tp, cur_fp, cur_tn, cur_fn, role)
+        tp = cur_tp; fp = cur_fp; tn = cur_tn; fn = cur_fn
+        ! Sort scores ascending, carrying the original indices in 'order'
+        allocate(sorted_scores(n), source=scores)
+        allocate(order(n))
+        do i = 1, n
+            order(i) = i
+        end do
+        call hpsort(sorted_scores, order)
+        ! Sweep thresholds from high to low. Each step lowers the threshold to admit
+        ! one more (or a tied group of) sample(s) as positive. This visits the same
+        ! set of (tp,fp,tn,fn) states as the original O(n^2) loop, but in O(n log n).
+        do i = n, 1, -1
+            if( refs(order(i)) > 0 )then
+                cur_tp = cur_tp + 1
+                cur_fn = cur_fn - 1
+            else
+                cur_fp = cur_fp + 1
+                cur_tn = cur_tn - 1
+            endif
+            ! Evaluate only at a tie-group boundary (last item, or next-lower sample
+            ! has a strictly smaller score).
+            if( i == 1 )then
+                metric = learn_balacc_from_confusion(cur_tp, cur_fp, cur_tn, cur_fn, role)
+                if( metric > best_balacc )then
+                    best_balacc = metric
+                    tp = cur_tp; fp = cur_fp; tn = cur_tn; fn = cur_fn
+                endif
+            else if( sorted_scores(i-1) < sorted_scores(i) )then
+                metric = learn_balacc_from_confusion(cur_tp, cur_fp, cur_tn, cur_fn, role)
+                if( metric > best_balacc )then
+                    best_balacc = metric
+                    tp = cur_tp; fp = cur_fp; tn = cur_tn; fn = cur_fn
+                endif
             endif
         end do
-        deallocate(pred, ref)
+        deallocate(sorted_scores, order)
     end subroutine best_score_threshold_balacc
 
     function dataset_short_name( dset ) result( name )
@@ -1276,8 +1544,13 @@ contains
             ';weight_contrast=', diag%n_weight_datasets, ';recall_only=', diag%n_recall_only, &
             ';specificity_only=', diag%n_specificity_only, ';skipped=', diag%n_skipped
         call write_search_diagnostic(funit, 'note', 'dataset_roles', 'automatic', trim(detail))
-        call write_search_diagnostic(funit, 'note', 'feature_weights', 'data_auc_no_base_blending', &
-            'learned_weights_are_derived_abinitio_from_contrast_datasets_only')
+        write(detail,'(A,F6.3,A,F6.3)') 'floor=', LEARN_RECALL_ONLY_FLOOR, ';penalty=', &
+            LEARN_RECALL_ONLY_PENALTY
+        call write_search_diagnostic(funit, 'note', 'trainable_good_only_score', 'guarded_recall', trim(detail))
+        write(detail,'(A,I0,A,I0)') 'auc_candidate_plus_top_oracle_candidates_per_policy=', &
+            LEARN_MAX_WEIGHT_CANDIDATES, ';simplex_quanta=', LEARN_WEIGHT_SIMPLEX_QUANTA
+        call write_search_diagnostic(funit, 'note', 'feature_weights', 'auc_plus_simplex_no_base_blending', &
+            trim(detail))
         call write_search_diagnostic(funit, 'note', 'feature_policy', trim(learned_model%feature_policy), &
             'selected_family_set_encoded_by_zeroed_model_weights')
         call write_minsep_diagnostic(funit, learned_model%min_score_separation, best_tie_specs, n_best_ties)

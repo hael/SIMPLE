@@ -288,7 +288,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|promote){apply}
-    ! class-average quality model preset(chunk_default_v2|pool_default_v1|pool_exp){chunk_default_v2}
+    ! class-average quality model preset(chunk_default_v2|pool_default_v2){chunk_default_v2}
     character(len=STDLEN)     :: quality_model='chunk_default_v2'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}

@@ -86,7 +86,7 @@ endif
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('acb48744')
+call simple_print_git_version('069e3e54')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

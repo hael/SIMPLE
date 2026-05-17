@@ -635,8 +635,8 @@ subroutine set_ui_params
                                    'Class-average quality mode(apply|analyze|learn|promote){apply}', .false., 'apply')
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
-                                   'Built-in quality model preset(chunk_default_v2|pool_default_v1|pool_exp){chunk_default_v2}', &
-                                   'Quality model preset(chunk_default_v2|pool_default_v1|pool_exp){chunk_default_v2}', &
+                                   'Built-in quality model preset(chunk_default_v2|pool_default_v2){chunk_default_v2}', &
+                                   'Quality model preset(chunk_default_v2|pool_default_v2){chunk_default_v2}', &
                                    .false., 'chunk_default_v2')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
