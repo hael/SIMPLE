@@ -22,16 +22,16 @@ contains
     subroutine exec_stream_p01_preprocess( self, cline )
         class(stream_p01_preprocess), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)               :: params
-        logical,          parameter    :: DEBUG_HERE      = .false.
-        class(cmdline),  allocatable   :: completed_jobs_clines(:), failed_jobs_clines(:)
-        type(cmdline)                  :: cline_exec
-        type(qsys_env)                 :: qenv
-        type(stream_watcher)           :: movie_buff
-        type(sp_project)               :: spproj_glob    ! global project
-        type(starproject_stream)       :: starproj_stream
-        type(string), allocatable      :: movies(:), dir_movies(:)
-        type(string)                   :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, projfile
+        type(parameters)                     :: params
+        logical,                   parameter :: DEBUG_HERE      = .false.
+        class(cmdline),          allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
+        type(cmdline)                        :: cline_exec
+        type(qsys_env)                       :: qenv
+        type(stream_watcher)                 :: movie_buff
+        type(sp_project)                     :: spproj_glob    ! global project
+        type(starproject_stream)             :: starproj_stream
+        type(string),            allocatable :: movies(:), dir_movies(:)
+        type(string)                         :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct, projfile
         type(gui_metadata_stream_update)     :: meta_update
         type(gui_metadata_stream_preprocess) :: meta_preprocess
         type(gui_metadata_micrograph)        :: meta_preprocess_micrograph
@@ -42,17 +42,17 @@ contains
         real,                    allocatable :: histogram_rvec(:), histogram_rvec2(:), histogram_rvec3(:)
         integer,                 allocatable :: histogram_ivec(:)
         integer                              :: ikey, ibin, nbins, binsize, iori
-        real :: average_ctfres, average_astig, average_icefrac, ave, sdev, var
-        logical                      :: err
-        integer                      :: fromto(2)
-
-        character(len=STDLEN)          :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
-        real        :: stat_dfx_threshold, stat_dfy_threshold
-        real        :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
-        integer     :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
-        integer     :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
-        integer     :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
-        logical     :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found, l_terminate=.false.
+        real                                 :: average_ctfres, average_astig, average_icefrac, ave, sdev, var
+        logical                              :: err
+        integer                              :: fromto(2)
+        character(len=STDLEN)                :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
+        real                                 :: stat_dfx_threshold, stat_dfy_threshold
+        real                                 :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
+        integer                              :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
+        integer                              :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
+        integer                              :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
+        logical                              :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found, l_terminate
+        l_terminate=.false.
         call signal(SIGTERM, sigterm_handler)
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -253,6 +253,24 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
+                ! apply cutoffs
+                do ikey = 1, spproj_glob%os_mic%get_noris()
+                    if( spproj_glob%os_mic%isthere('ctfres') ) then
+                        if( spproj_glob%os_mic%get(ikey,'ctfres') > params%ctfresthreshold ) then
+                            call spproj_glob%os_mic%set_state( ikey, 0 )
+                        endif
+                    endif
+                    if( spproj_glob%os_mic%isthere('icefrac') ) then
+                        if( spproj_glob%os_mic%get(ikey,'icefrac') > params%icefracthreshold ) then
+                            call spproj_glob%os_mic%set_state( ikey, 0 )
+                        endif
+                    endif
+                    if( spproj_glob%os_mic%isthere('astig') ) then
+                        if( spproj_glob%os_mic%get(ikey,'astig') > params%astigthreshold ) then
+                            call spproj_glob%os_mic%set_state( ikey, 0 )
+                        endif
+                    endif
+                end do
                 write(logfhandle,'(A,I8)')                         '>>> # MOVIES PROCESSED & IMPORTED       : ',n_imported
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
@@ -450,17 +468,16 @@ contains
             if(spproj_glob%os_mic%isthere('ctfres'))  average_ctfres  = spproj_glob%os_mic%get_avg("ctfres")
             if(spproj_glob%os_mic%isthere('icefrac')) average_icefrac = spproj_glob%os_mic%get_avg("icefrac")
             if(spproj_glob%os_mic%isthere('astig'))   average_astig   = spproj_glob%os_mic%get_avg("astig")
-            call meta_preprocess%set(stage=string("finding and processing new movies"),          &
-                                     movies_imported     = movie_buff%n_history,                 &
-                                     movies_processed    = spproj_glob%os_mic%get_noris(),       & 
-                                     movies_rejected     = n_failed_jobs,                        &
-                                     movies_rate         = movie_buff%rate,                      &
-                                     average_ctf_res     = average_ctfres,                       &
-                                     average_ice_score   = average_icefrac,                      &
-                                     average_astigmatism = average_astig,                        &
-                                     cutoff_ctf_res      = params%ctfresthreshold,               &
-                                     cutoff_ice_score    = params%icefracthreshold,              & 
-                                 !   last_movie_imported = c_time(0_c_long),                     &
+            call meta_preprocess%set(stage=string("finding and processing new movies"),                                                               &
+                                     movies_imported     = movie_buff%n_history,                                                                      &
+                                     movies_processed    = spproj_glob%os_mic%get_noris() + n_failed_jobs,                                            & 
+                                     movies_rejected     = n_failed_jobs + spproj_glob%os_mic%get_noris() - spproj_glob%os_mic%count_state_gt_zero(), &
+                                     movies_rate         = movie_buff%rate,                                                                           &
+                                     average_ctf_res     = average_ctfres,                                                                            &
+                                     average_ice_score   = average_icefrac,                                                                           &
+                                     average_astigmatism = average_astig,                                                                             &
+                                     cutoff_ctf_res      = params%ctfresthreshold,                                                                    &
+                                     cutoff_ice_score    = params%icefracthreshold,                                                                   & 
                                      cutoff_astigmatism  = params%astigthreshold)
             if( meta_preprocess%assigned() ) then
                 if( mq_stream_master_in%is_active() ) then
@@ -608,6 +625,7 @@ contains
                 logical,          allocatable :: mics_mask(:)
                 type(string) :: fname, abs_fname
                 integer      :: i, n_spprojs, n_old, j, n2import, n_completed, iproj, nmics, imic, cnt
+                logical      :: l_updated_proj
                 n_completed = 0
                 nimported   = 0
                 n_spprojs = size(completed_jobs_clines) ! projects to import
@@ -650,6 +668,28 @@ contains
                                 call spproj_glob%os_mic%transfer_ori(j, streamspprojs(iproj)%os_mic, i)
                             endif
                         enddo
+                        l_updated_proj = .false.
+                        do i = 1, STREAM_NMOVS_SET
+                            if( streamspprojs(iproj)%os_mic%isthere('ctfres') ) then
+                                if( streamspprojs(iproj)%os_mic%get(i,'ctfres') > params%ctfresthreshold ) then
+                                    call streamspprojs(iproj)%os_mic%set_state(i, 0)
+                                    l_updated_proj = .true. 
+                                endif
+                            endif
+                            if( streamspprojs(iproj)%os_mic%isthere('icefrac') ) then
+                                if( streamspprojs(iproj)%os_mic%get(i,'icefrac') > params%icefracthreshold ) then
+                                    call streamspprojs(iproj)%os_mic%set_state(i, 0)
+                                    l_updated_proj = .true.
+                                endif
+                            endif
+                            if( streamspprojs(iproj)%os_mic%isthere('astig') ) then
+                                if( streamspprojs(iproj)%os_mic%get(i,'astig') > params%astigthreshold ) then
+                                    call streamspprojs(iproj)%os_mic%set_state(i, 0)
+                                    l_updated_proj = .true.
+                                endif
+                            endif
+                        end do
+                        if( l_updated_proj ) call streamspprojs(iproj)%write_segment_inside('mic', completed_fnames(iproj))
                         call streamspprojs(iproj)%kill
                     enddo
                 endif

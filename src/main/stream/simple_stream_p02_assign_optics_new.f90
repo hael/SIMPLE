@@ -173,10 +173,10 @@ contains
                 call sleep(WAITTIME) ! may want to increase as 3s default
             endif
             call update_user_params(params, cline)
-            call meta_optics_assignment%set(stage=string('finding and processing new micrographs'),&
-                                            micrographs_assigned=spproj%os_mic%get_noris(),        & 
-                                            optics_groups_assigned=spproj%os_optics%get_noris(),   &
-                                            micrographs_imported=nimported)
+            call meta_optics_assignment%set(stage=string('finding and processing new micrographs'),   &
+                                            micrographs_assigned=spproj%os_mic%count_state_gt_zero(), & 
+                                            optics_groups_assigned=spproj%os_optics%get_noris(),      &
+                                            micrographs_imported=spproj%os_mic%count_state_gt_zero())
             if(params%updated .eq. 'yes') then
                 call starproj_stream%stream_export_optics(params, spproj, params%outdir)
                 params%updated = 'no'

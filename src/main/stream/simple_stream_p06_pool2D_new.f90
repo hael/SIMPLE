@@ -225,7 +225,7 @@ contains
             ! Performs clustering iteration
             if( nptcls_glob_state_1 > 0 .and. nmics > 0) then
                 nptcls_max_threshold = ceiling(( float(nptcls_glob_state_1) / float(nmics) ) * 200 )! average number of selected particles from 200 micrographs
-                nptcls_threshold     = min(params%ncls * 200, nptcls_max_threshold)
+                nptcls_threshold     = max(params%ncls * 20, nptcls_max_threshold)
             end if
             if( l_pause )then
                 ! skip iteration

@@ -16,15 +16,17 @@
             {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
                 <div class="flex flex-col w-full">
                     <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">movies</p>
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">micrographs</p>
                     </div>
                     <div class="flex gap-2 p-[10px] pb-[6px]">
+                        {% with net=jobstats.movies_processed|subtract:jobstats.movies_rejected %}
                         {% if jobstats.movies_processed|add:jobstats.movies_rejected == jobstats.movies_imported %}
-                            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_processed label="movies processed" sublabel=jobstats.movies_imported sublabel_sep="/" %}
+                            {% include 'nice_stream/includes/_count_tile.html' with count=net label="micrographs processed" sublabel=jobstats.movies_imported sublabel_sep="/" %}
                         {% else %}
-                            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_processed label="movies processed" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
+                            {% include 'nice_stream/includes/_count_tile.html' with count=net label="micrographs processed" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
                         {% endif %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_rejected  label="movies rejected"  sublabel=jobstats.movies_imported sublabel_sep="/" variant="rejected" %}
+                        {% endwith %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_rejected  label="micrographs rejected"  sublabel=jobstats.movies_imported sublabel_sep="/" variant="neutral" %}
                     </div>
                 </div>
             {% endif %}

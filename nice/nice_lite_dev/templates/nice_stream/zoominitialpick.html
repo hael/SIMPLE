@@ -25,7 +25,7 @@
                     {% else %}
                         {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_accepted label="micrographs picked" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="action" %}
                     {% endif %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_rejected label="micrographs rejected" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="rejected" %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.micrographs_rejected label="micrographs rejected" sublabel=jobstats.micrographs_imported sublabel_sep="/" variant="neutral" %}
                 </div>
             </div>
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">

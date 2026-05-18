@@ -40,6 +40,13 @@
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% if "movies_rate" in jobstats and "movies_imported" in jobstats %}{% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_imported label="movies" sublabel=jobstats.movies_rate sublabel_unit="/hour" %}{% endif %}
+            {% if "movies_processed" in jobstats and "movies_imported" in jobstats %}
+                {% if jobstats.movies_processed|add:jobstats.movies_rejected == jobstats.movies_imported %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_processed label="movies processed" sublabel=jobstats.movies_imported sublabel_sep="/" %}
+                {% else %}
+                    {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.movies_processed label="movies processed" sublabel=jobstats.movies_imported sublabel_sep="/" variant="action" %}
+                {% endif %}
+            {% endif %}
         </div> 
 
         <!-- Collection parameters -->
