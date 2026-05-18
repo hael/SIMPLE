@@ -44,6 +44,8 @@ type :: eul_prob_tab
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_state_tab
     procedure :: read_tab_to_glob
+    procedure :: merge_state_tab_coarray
+    procedure :: merge_loc_tab_coarray
     procedure :: ref_assign
     procedure :: write_assignment
     procedure :: state_assign
@@ -638,6 +640,60 @@ contains
         deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
     end subroutine read_tab_to_glob
 
+    subroutine merge_loc_tab_coarray( self )
+        class(eul_prob_tab), intent(inout) :: self
+        type(ptcl_ref), allocatable :: loc_chunk(:,:)[:]
+        real,           allocatable :: seed_chunk(:,:)[:]
+        logical,        allocatable :: has_chunk(:)[:]
+        integer :: me, nimgs, chunksz, istart, iend, nloc, i, ri, img, best_img, iglob
+        real    :: best_dist
+        logical :: has_seed
+        me    = this_image()
+        nimgs = num_images()
+        if( nimgs == 1 ) return
+        chunksz = max(1, min(512, self%nptcls))
+        allocate(loc_chunk(self%nrefs,chunksz)[*], seed_chunk(2,chunksz)[*], has_chunk(chunksz)[*])
+        do istart = 1, self%nptcls, chunksz
+            iend                 = min(self%nptcls, istart + chunksz - 1)
+            nloc                 = iend - istart + 1
+            loc_chunk(:,1:nloc)  = self%loc_tab(:,istart:iend)
+            seed_chunk(:,1:nloc) = self%seed_shifts(:,istart:iend)
+            has_chunk(1:nloc)    = self%seed_has_sh(istart:iend)
+            sync all
+            if( me == 1 )then
+                do i = 1, nloc
+                    iglob = istart + i - 1
+                    do ri = 1, self%nrefs
+                        best_img  = 1
+                        best_dist = loc_chunk(ri,i)[1]%dist
+                        do img = 2, nimgs
+                            if( loc_chunk(ri,i)[img]%dist < best_dist )then
+                                best_img  = img
+                                best_dist = loc_chunk(ri,i)[img]%dist
+                            endif
+                        enddo
+                        self%loc_tab(ri,iglob) = loc_chunk(ri,i)[best_img]
+                    enddo
+                    has_seed = .false.
+                    do img = 1, nimgs
+                        if( has_chunk(i)[img] )then
+                            self%seed_has_sh(iglob)   = .true.
+                            self%seed_shifts(:,iglob) = seed_chunk(:,i)[img]
+                            has_seed = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. has_seed )then
+                        self%seed_has_sh(iglob)   = .false.
+                        self%seed_shifts(:,iglob) = 0.
+                    endif
+                enddo
+            endif
+            sync all
+        enddo
+        deallocate(loc_chunk, seed_chunk, has_chunk)
+    end subroutine merge_loc_tab_coarray
+
     subroutine write_state_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         class(string),       intent(in) :: binfname
@@ -681,6 +737,42 @@ contains
         !$omp end parallel do
         deallocate(state_tab_glob, pind2glob)
     end subroutine read_state_tab
+
+    subroutine merge_state_tab_coarray( self )
+        class(eul_prob_tab), intent(inout) :: self
+        type(ptcl_ref), allocatable :: state_chunk(:,:)[:]
+        integer :: me, nimgs, chunksz, istart, iend, nloc, i, si, img, best_img, iglob
+        real    :: best_dist
+        me    = this_image()
+        nimgs = num_images()
+        if( nimgs == 1 ) return
+        chunksz = max(1, min(512, self%nptcls))
+        allocate(state_chunk(self%nstates,chunksz)[*])
+        do istart = 1, self%nptcls, chunksz
+            iend                  = min(self%nptcls, istart + chunksz - 1)
+            nloc                  = iend - istart + 1
+            state_chunk(:,1:nloc) = self%state_tab(:,istart:iend)
+            sync all
+            if( me == 1 )then
+                do i = 1, nloc
+                    iglob = istart + i - 1
+                    do si = 1, self%nstates
+                        best_img  = 1
+                        best_dist = state_chunk(si,i)[1]%dist
+                        do img = 2, nimgs
+                            if( state_chunk(si,i)[img]%dist < best_dist )then
+                                best_img  = img
+                                best_dist = state_chunk(si,i)[img]%dist
+                            endif
+                        enddo
+                        self%state_tab(si,iglob) = state_chunk(si,i)[best_img]
+                    enddo
+                enddo
+            endif
+            sync all
+        enddo
+        deallocate(state_chunk)
+    end subroutine merge_state_tab_coarray
 
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )

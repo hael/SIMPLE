@@ -37,6 +37,7 @@ type :: eul_prob_tab2D
     procedure :: ref_assign => ref_assign_pow_smpl
     procedure :: write_tab
     procedure :: read_tab_to_glob
+    procedure :: merge_loc_tab_coarray
     procedure :: write_assignment
     procedure :: read_assignment
     ! DESTRUCTOR
@@ -504,6 +505,60 @@ contains
         !$omp end parallel do
         deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
     end subroutine read_tab_to_glob
+
+    subroutine merge_loc_tab_coarray( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        type(ptcl_ref), allocatable :: loc_chunk(:,:)[:]
+        real,           allocatable :: seed_chunk(:,:)[:]
+        logical,        allocatable :: has_chunk(:)[:]
+        integer :: me, nimgs, chunksz, istart, iend, nloc, i, icls, img, best_img, iglob
+        real    :: best_dist
+        logical :: has_seed
+        me    = this_image()
+        nimgs = num_images()
+        if( nimgs == 1 ) return
+        chunksz = max(1, min(512, self%nptcls))
+        allocate(loc_chunk(self%nclasses,chunksz)[*], seed_chunk(2,chunksz)[*], has_chunk(chunksz)[*])
+        do istart = 1, self%nptcls, chunksz
+            iend                 = min(self%nptcls, istart + chunksz - 1)
+            nloc                 = iend - istart + 1
+            loc_chunk(:,1:nloc)  = self%loc_tab(:,istart:iend)
+            seed_chunk(:,1:nloc) = self%seed_shifts(:,istart:iend)
+            has_chunk(1:nloc)    = self%seed_has_sh(istart:iend)
+            sync all
+            if( me == 1 )then
+                do i = 1, nloc
+                    iglob = istart + i - 1
+                    do icls = 1, self%nclasses
+                        best_img  = 1
+                        best_dist = loc_chunk(icls,i)[1]%dist
+                        do img = 2, nimgs
+                            if( loc_chunk(icls,i)[img]%dist < best_dist )then
+                                best_img  = img
+                                best_dist = loc_chunk(icls,i)[img]%dist
+                            endif
+                        enddo
+                        self%loc_tab(icls,iglob) = loc_chunk(icls,i)[best_img]
+                    enddo
+                    has_seed = .false.
+                    do img = 1, nimgs
+                        if( has_chunk(i)[img] )then
+                            self%seed_has_sh(iglob)   = .true.
+                            self%seed_shifts(:,iglob) = seed_chunk(:,i)[img]
+                            has_seed = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. has_seed )then
+                        self%seed_has_sh(iglob)   = .false.
+                        self%seed_shifts(:,iglob) = 0.
+                    endif
+                enddo
+            endif
+            sync all
+        enddo
+        deallocate(loc_chunk, seed_chunk, has_chunk)
+    end subroutine merge_loc_tab_coarray
 
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self

@@ -141,7 +141,9 @@ contains
         type(cmdline)            :: cline_prob_tab
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
-        integer :: nptcls, ipart
+        integer :: nptcls, ipart, me, nimgs
+        me    = this_image()
+        nimgs = num_images()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -161,31 +163,53 @@ contains
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
         if( .not.cline_prob_tab%defined('nparts') )then
-            call xprob_tab%execute(cline_prob_tab)
+            if( me == 1 ) call xprob_tab%execute(cline_prob_tab)
+            sync all
         else
             ! setup the environment for distributed execution
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab%gen_job_descr(job_descr)
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            if( me == 1 )then
+                call qenv%new(params, params%nparts, nptcls=params%nptcls)
+                call cline_prob_tab%gen_job_descr(job_descr)
+                ! schedule
+                call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            endif
+            sync all
         endif
         ! reading corrs from all parts
         if( str_has_substr(params%refine, 'prob_state') )then
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_state_tab(fname)
-            enddo
-            call eulprob_obj_glob%state_assign
+            if( nimgs > 1 .and. cline_prob_tab%defined('nparts') )then
+                do ipart = me, params%nparts, nimgs
+                    fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                    call eulprob_obj_glob%read_state_tab(fname)
+                enddo
+                call eulprob_obj_glob%merge_state_tab_coarray
+            else if( me == 1 )then
+                do ipart = 1, params%nparts
+                    fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                    call eulprob_obj_glob%read_state_tab(fname)
+                enddo
+            endif
+            if( me == 1 ) call eulprob_obj_glob%state_assign
         else
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_tab_to_glob(fname)
-            enddo
-            call eulprob_obj_glob%ref_assign
+            if( nimgs > 1 .and. cline_prob_tab%defined('nparts') )then
+                do ipart = me, params%nparts, nimgs
+                    fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                    call eulprob_obj_glob%read_tab_to_glob(fname)
+                enddo
+                call eulprob_obj_glob%merge_loc_tab_coarray
+            else if( me == 1 )then
+                do ipart = 1, params%nparts
+                    fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                    call eulprob_obj_glob%read_tab_to_glob(fname)
+                enddo
+            endif
+            if( me == 1 ) call eulprob_obj_glob%ref_assign
         endif
         ! write the iptcl->(iref,istate) assignment
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob%write_assignment(fname)
+        if( me == 1 )then
+            fname = string(ASSIGNMENT_FBODY)//'.dat'
+            call eulprob_obj_glob%write_assignment(fname)
+        endif
         call eulprob_obj_glob%kill
         ! cleanup
         call cline_prob_tab%kill
@@ -212,7 +236,9 @@ contains
         type(cmdline)                  :: cline_prob_tab
         type(qsys_env)                 :: qenv
         type(chash)                    :: job_descr
-        integer :: nptcls
+        integer :: nptcls, ipart, me, nimgs
+        me    = this_image()
+        nimgs = num_images()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
@@ -229,17 +255,32 @@ contains
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
-            call xprob_tab_neigh%execute(cline_prob_tab)
+            if( me == 1 ) call xprob_tab_neigh%execute(cline_prob_tab)
+            sync all
         else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab%gen_job_descr(job_descr)
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            if( me == 1 )then
+                call qenv%new(params, params%nparts, nptcls=params%nptcls)
+                call cline_prob_tab%gen_job_descr(job_descr)
+                call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            endif
+            sync all
         endif
-        call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
-        call eulprob_obj_glob_neigh%ref_assign
-        ! write the iptcl->(iref,istate) assignment
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob_neigh%write_assignment(fname)
+        if( nimgs > 1 .and. cline_prob_tab%defined('nparts') )then
+            do ipart = me, params%nparts, nimgs
+                fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(ipart,params%numlen)//'.dat'
+                call eulprob_obj_glob_neigh%read_sparse_tab_to_glob(fname)
+            enddo
+            call eulprob_obj_glob_neigh%merge_loc_tab_coarray
+            if( me == 1 ) call eulprob_obj_glob_neigh%rebuild_eval_touched_from_loc_tab
+        else if( me == 1 )then
+            call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
+        endif
+        if( me == 1 )then
+            call eulprob_obj_glob_neigh%ref_assign
+            ! write the iptcl->(iref,istate) assignment
+            fname = string(ASSIGNMENT_FBODY)//'.dat'
+            call eulprob_obj_glob_neigh%write_assignment(fname)
+        endif
         call eulprob_obj_glob_neigh%kill
         ! cleanup
         call cline_prob_tab%kill
@@ -325,7 +366,9 @@ contains
         type(cmdline)              :: cline_prob_tab
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
-        integer :: nptcls, ipart
+        integer :: nptcls, ipart, me, nimgs
+        me    = this_image()
+        nimgs = num_images()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -349,22 +392,36 @@ contains
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')
         if( .not. cline_prob_tab%defined('nparts') )then
-            call xprob_tab2D%execute(cline_prob_tab)
+            if( me == 1 ) call xprob_tab2D%execute(cline_prob_tab)
+            sync all
         else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab%gen_job_descr(job_descr)
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            if( me == 1 )then
+                call qenv%new(params, params%nparts, nptcls=params%nptcls)
+                call cline_prob_tab%gen_job_descr(job_descr)
+                call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+            endif
+            sync all
         endif
         ! merge all partition tables into global
-        do ipart = 1, params%nparts
-            fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call eulprob_obj_glob%read_tab_to_glob(fname)
-        end do
-        ! global probabilistic class assignment
-        call eulprob_obj_glob%ref_assign
-        ! write assignment to file
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob%write_assignment(fname)
+        if( nimgs > 1 .and. cline_prob_tab%defined('nparts') )then
+            do ipart = me, params%nparts, nimgs
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                call eulprob_obj_glob%read_tab_to_glob(fname)
+            end do
+            call eulprob_obj_glob%merge_loc_tab_coarray
+        else if( me == 1 )then
+            do ipart = 1, params%nparts
+                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+                call eulprob_obj_glob%read_tab_to_glob(fname)
+            end do
+        endif
+        if( me == 1 )then
+            ! global probabilistic class assignment
+            call eulprob_obj_glob%ref_assign
+            ! write assignment to file
+            fname = string(ASSIGNMENT_FBODY)//'.dat'
+            call eulprob_obj_glob%write_assignment(fname)
+        endif
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
