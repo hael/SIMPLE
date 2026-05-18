@@ -51,6 +51,7 @@ integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS    = 3
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL  = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH    = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS   = 8
+integer,          parameter   :: NU_FULL_SHELL_ZERO_GUARD   = 3
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS   = 1.e-6
@@ -68,6 +69,7 @@ type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: winsz_tent
 real    :: smpd
+logical :: l_full_shell_bank_active = .false.
 
 type :: nu_highres_extension_stats
     logical :: attempted    = .false.
@@ -110,6 +112,7 @@ contains
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         l_full_bank = .false.
         if( present(l_full_shell_bank) ) l_full_bank = l_full_shell_bank
+        l_full_shell_bank_active = l_full_bank
         n_extra = 0
         if( l_full_bank )then
             n_extra = max(0, box / 2)
@@ -192,6 +195,7 @@ contains
         box  = 0
         winsz_tent = 0
         smpd = 0.
+        l_full_shell_bank_active = .false.
     end subroutine cleanup_nu_filter
 
     subroutine cleanup_aux_bank
@@ -320,6 +324,158 @@ contains
         deallocate(bwfilter)
     end subroutine generate_single_filtered_pair
 
+    subroutine delete_cached_filtered_pair( cutoff_find )
+        integer, intent(in) :: cutoff_find
+        type(string) :: cache_fname
+        cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_find)
+        if( file_exists(cache_fname) ) call del_file(cache_fname)
+        cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_ODD), cutoff_find)
+        if( file_exists(cache_fname) ) call del_file(cache_fname)
+    end subroutine delete_cached_filtered_pair
+
+    subroutine trim_nu_base_bank( n_keep )
+        integer, intent(in) :: n_keep
+        integer, allocatable :: cutoff_finds_new(:)
+        real,    allocatable :: bwfilters_new(:,:), dmats_new(:,:,:,:)
+        integer :: i, n_old
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; trim_nu_base_bank')
+        n_old = size(cutoff_finds)
+        if( n_keep < 1 .or. n_keep > n_old ) THROW_HARD('invalid n_keep; trim_nu_base_bank')
+        if( n_keep == n_old ) return
+        do i = n_keep + 1, n_old
+            call delete_cached_filtered_pair(cutoff_finds(i))
+        end do
+        allocate(cutoff_finds_new(n_keep))
+        cutoff_finds_new = cutoff_finds(:n_keep)
+        call move_alloc(cutoff_finds_new, cutoff_finds)
+        if( allocated(bwfilters) )then
+            allocate(bwfilters_new(box,n_keep), source=0.)
+            bwfilters_new = bwfilters(:,:n_keep)
+            call move_alloc(bwfilters_new, bwfilters)
+        endif
+        if( allocated(dmats) )then
+            if( size(dmats,4) < n_keep ) THROW_HARD('dmats too short; trim_nu_base_bank')
+            allocate(dmats_new(ldim(1),ldim(2),ldim(3),n_keep), source=0.)
+            dmats_new = dmats(:,:,:,:n_keep)
+            call move_alloc(dmats_new, dmats)
+        endif
+    end subroutine trim_nu_base_bank
+
+    integer function update_full_shell_best_counts( dmat_cand, best_dmat, l_first ) result( nwins )
+        real,    intent(in)    :: dmat_cand(:,:,:)
+        real,    intent(inout) :: best_dmat(:,:,:)
+        logical, intent(in)    :: l_first
+        integer :: i, j, k
+        nwins = 0
+        if( l_first )then
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nwins) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        best_dmat(i,j,k) = dmat_cand(i,j,k)
+                        nwins = nwins + 1
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nwins) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        if( dmat_cand(i,j,k) < best_dmat(i,j,k) )then
+                            best_dmat(i,j,k) = dmat_cand(i,j,k)
+                            nwins = nwins + 1
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
+    end function update_full_shell_best_counts
+
+    subroutine setup_nu_dmats_full_shell_guarded( vol_even, vol_odd )
+        class(image), intent(in) :: vol_even, vol_odd
+        type(image) :: vol_even_filt, vol_odd_filt
+        type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
+        type(string) :: even_cache_fname, odd_cache_fname
+        real, allocatable :: dmat_tmp(:,:,:), best_dmat(:,:,:), no_aux_resolutions(:)
+        integer :: i, n_base_max, n_eval, zero_run, nwins, winsz
+        real    :: edge_mean, x
+        logical :: stopped
+        n_base_max = size(cutoff_finds)
+        n_eval     = n_base_max
+        zero_run   = 0
+        stopped    = .false.
+        if( n_base_max < 1 ) THROW_HARD('empty cutoff bank; setup_nu_dmats_full_shell_guarded')
+        call vol_even_copy_cmat%copy(vol_even)
+        call vol_odd_copy_cmat%copy(vol_odd)
+        call vol_even_copy_cmat%set_wthreads(.true.)
+        call vol_odd_copy_cmat%set_wthreads(.true.)
+        winsz = nint(COSMSKHALFWIDTH)
+        call vol_even_copy_cmat%taper_edges_vol(winsz, edge_mean)
+        call vol_odd_copy_cmat%taper_edges_vol(winsz, edge_mean)
+        call vol_even_copy_cmat%fft
+        call vol_odd_copy_cmat%fft
+        call vol_even_filt%new(ldim, smpd)
+        call vol_odd_filt%new(ldim, smpd)
+        call vol_even_filt%set_ft(.true.)
+        call vol_odd_filt%set_ft(.true.)
+        call vol_even_filt%set_wthreads(.true.)
+        call vol_odd_filt%set_wthreads(.true.)
+        if( allocated(dmats) ) deallocate(dmats)
+        allocate(dmats(ldim(1),ldim(2),ldim(3),n_base_max), source=huge(x))
+        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
+        allocate(best_dmat(ldim(1),ldim(2),ldim(3)), source=huge(x))
+        do i = 1, n_base_max
+            even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
+            odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
+            if( file_exists(even_cache_fname) .and. file_exists(odd_cache_fname) )then
+                call vol_even_filt%read(even_cache_fname)
+                call vol_odd_filt%read(odd_cache_fname)
+            else
+                call vol_even_filt%copy_fast(vol_even_copy_cmat)
+                call vol_odd_filt%copy_fast(vol_odd_copy_cmat)
+                call vol_even_filt%apply_filter(vol_odd_filt, bwfilters(:,i))
+                call vol_even_filt%ifft
+                call vol_odd_filt%ifft
+                call vol_even_filt%write(even_cache_fname, del_if_exists=.true.)
+                call vol_odd_filt%write(odd_cache_fname,  del_if_exists=.true.)
+            endif
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i), nu_lmask)
+            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+            nwins = update_full_shell_best_counts(dmats(:,:,:,i), best_dmat, i == 1)
+            if( i > size(lowpass_limits) )then
+                if( nwins == 0 )then
+                    zero_run = zero_run + 1
+                else
+                    zero_run = 0
+                endif
+                if( zero_run >= NU_FULL_SHELL_ZERO_GUARD )then
+                    n_eval  = i
+                    stopped = .true.
+                    exit
+                endif
+            endif
+        end do
+        if( stopped )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F6.2,A)') '>>> NU full-shell candidate bank stopped after ', &
+                &n_eval, '/', n_base_max, ' candidates (zero guard=', NU_FULL_SHELL_ZERO_GUARD, &
+                &', finest LP=', cutoff_find_to_lowpass_limit(n_eval), ' A)'
+        endif
+        if( n_eval < n_base_max ) call trim_nu_base_bank(n_eval)
+        allocate(no_aux_resolutions(0))
+        call setup_nu_candidate_coords(size(cutoff_finds), no_aux_resolutions)
+        deallocate(no_aux_resolutions)
+        call vol_even_copy_cmat%kill
+        call vol_odd_copy_cmat%kill
+        call vol_even_filt%kill
+        call vol_odd_filt%kill
+        deallocate(dmat_tmp, best_dmat)
+    end subroutine setup_nu_dmats_full_shell_guarded
+
     subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps, &
         &l_full_shell_bank )
         class(image),          intent(in) :: vol_even, vol_odd
@@ -346,6 +502,10 @@ contains
             if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
             call cleanup_aux_bank
         end if
+        if( l_full_shell_bank_active .and. .not.allocated(aux_even_bank) )then
+            call setup_nu_dmats_full_shell_guarded(vol_even, vol_odd)
+            return
+        endif
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
@@ -614,7 +774,7 @@ contains
         n_base = size(cutoff_finds)
         n_aux  = max(0, n_candidates - n_base)
         beta = estimate_nu_label_smooth_beta(n_candidates)
-        write(logfhandle,'(A,F10.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
+        write(logfhandle,'(A,ES12.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
             &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
             &', auxiliary=', n_aux, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
         write(logfhandle,'(A,I0,A,I0)') '>>> NU ordered-label smoothing neighborhood: ', &
