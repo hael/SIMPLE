@@ -232,8 +232,8 @@ respect that minimum.
 high-resolution Fourier shell per refinement iteration. The terminal all-particle
 `reconstruct3D` pass leaves refinement and uses reconstruction postprocessing:
 when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
-builds the uncoupled full Fourier-shell NU filter bank for the final filtered
-map and also writes ordinary `_pproc`/`_lp` comparison outputs.
+challenges the uncoupled Fourier-shell NU filter bank incrementally for the
+final filtered map and also writes ordinary `_pproc`/`_lp` comparison outputs.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction

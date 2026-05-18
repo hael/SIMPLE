@@ -146,11 +146,17 @@ total map volume.
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
 from raw even/odd half maps without ML-regularized auxiliary candidates. Unlike
-the iterative refinement ratchet, postprocessing builds the full available
-Fourier-shell low-pass bank up front, through Nyquist, and lets the unary
-objective plus ordered-label smoothing select broadly from that bank in one
-optimization. There is no postprocess-only threshold requiring enough frontier
-voxels to accept one shell before the next shell can contribute.
+the iterative refinement ratchet, postprocessing is allowed to challenge the
+available Fourier shells through Nyquist, but it must grow the objective bank
+incrementally: allocate the active bank plus at most one candidate challenger,
+evaluate the challenger, and append it only as the active bank advances. There
+is no postprocess-only threshold requiring enough frontier voxels to accept one
+shell before the next shell can contribute.
+
+The candidate objective bank should be stored only for voxels inside the NU
+mask. Full-volume objective arrays are temporary work buffers for objective
+generation and tent smoothing; persistent unary costs used for candidate
+selection and ordered-label smoothing are mask-packed.
 
 Terminal original-sampling `abinitio3D` reconstruction follows this
 postprocessing policy. If the top-level ab initio run used

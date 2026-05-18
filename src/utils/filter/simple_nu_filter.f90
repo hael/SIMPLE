@@ -13,8 +13,8 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows can instead build the full available Fourier-shell bank
-! up front and then apply the resulting local filter map to a merged/sharpened map:
+! Postprocess workflows can instead challenge Fourier-shell candidates
+! sequentially and then apply the resulting local filter map to a merged/sharpened map:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::], l_full_shell_bank=.true.)
 !    call optimize_nu_cutoff_finds()
 !    call nu_filter_vol(vol, vol_filt)
@@ -57,7 +57,7 @@ real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS   = 1.e-6
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN      = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD       = 'nu_filter_cache_odd'
-real,             allocatable :: dmats(:,:,:,:)
+real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer,          allocatable :: filtmap(:,:,:)
@@ -65,8 +65,10 @@ integer,          allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:,:,:)
 logical,          allocatable :: nu_lmask(:,:,:)
+integer,          allocatable :: nu_mask_index(:,:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
+integer :: n_nu_mask = 0
 integer :: winsz_tent
 real    :: smpd
 logical :: l_full_shell_bank_active = .false.
@@ -185,7 +187,7 @@ contains
     subroutine cleanup_nu_filter
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
-        if( allocated(dmats)              ) deallocate(dmats)
+        if( allocated(dmats_mask)         ) deallocate(dmats_mask)
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
@@ -193,9 +195,11 @@ contains
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
+        if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
         call cleanup_aux_bank
         ldim = 0
         box  = 0
+        n_nu_mask = 0
         winsz_tent = 0
         smpd = 0.
         l_full_shell_bank_active = .false.
@@ -241,6 +245,64 @@ contains
             call aux_odd_bank(i)%copy(aux_odd(i))
         end do
     end subroutine stash_aux_volumes
+
+    subroutine setup_nu_mask_index
+        integer :: i, j, k, imask
+        if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_index')
+        if( allocated(nu_mask_index) ) deallocate(nu_mask_index)
+        allocate(nu_mask_index(ldim(1),ldim(2),ldim(3)), source=0)
+        imask = 0
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    imask = imask + 1
+                    nu_mask_index(i,j,k) = imask
+                end do
+            end do
+        end do
+        n_nu_mask = imask
+        if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_index')
+    end subroutine setup_nu_mask_index
+
+    subroutine pack_nu_dmat_candidate( dmat_full, icand )
+        real,    intent(in) :: dmat_full(:,:,:)
+        integer, intent(in) :: icand
+        integer :: i, j, k, imask
+        if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; pack_nu_dmat_candidate')
+        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; pack_nu_dmat_candidate')
+        if( size(dmats_mask,1) /= n_nu_mask ) THROW_HARD('dmats_mask mask dimension mismatch; pack_nu_dmat_candidate')
+        if( icand < 1 .or. icand > size(dmats_mask,2) ) THROW_HARD('candidate index out of range; pack_nu_dmat_candidate')
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    imask = nu_mask_index(i,j,k)
+                    if( imask == 0 ) cycle
+                    dmats_mask(imask,icand) = dmat_full(i,j,k)
+                end do
+            end do
+        end do
+    end subroutine pack_nu_dmat_candidate
+
+    subroutine unpack_nu_dmat_candidate( icand, dmat_full )
+        integer, intent(in)  :: icand
+        real,    intent(out) :: dmat_full(:,:,:)
+        integer :: i, j, k, imask
+        real :: x
+        if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; unpack_nu_dmat_candidate')
+        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; unpack_nu_dmat_candidate')
+        if( icand < 1 .or. icand > size(dmats_mask,2) ) THROW_HARD('candidate index out of range; unpack_nu_dmat_candidate')
+        dmat_full = huge(x)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    imask = nu_mask_index(i,j,k)
+                    if( imask == 0 ) cycle
+                    dmat_full(i,j,k) = dmats_mask(imask,icand)
+                end do
+            end do
+        end do
+    end subroutine unpack_nu_dmat_candidate
 
     subroutine cache_filtered_vols( vol_even, vol_odd )
         class(image), intent(in) :: vol_even, vol_odd
@@ -339,7 +401,7 @@ contains
     subroutine trim_nu_base_bank( n_keep )
         integer, intent(in) :: n_keep
         integer, allocatable :: cutoff_finds_new(:)
-        real,    allocatable :: bwfilters_new(:,:), dmats_new(:,:,:,:)
+        real,    allocatable :: bwfilters_new(:,:), dmats_mask_new(:,:)
         integer :: i, n_old
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; trim_nu_base_bank')
         n_old = size(cutoff_finds)
@@ -356,11 +418,13 @@ contains
             bwfilters_new = bwfilters(:,:n_keep)
             call move_alloc(bwfilters_new, bwfilters)
         endif
-        if( allocated(dmats) )then
-            if( size(dmats,4) < n_keep ) THROW_HARD('dmats too short; trim_nu_base_bank')
-            allocate(dmats_new(ldim(1),ldim(2),ldim(3),n_keep), source=0.)
-            dmats_new = dmats(:,:,:,:n_keep)
-            call move_alloc(dmats_new, dmats)
+        if( allocated(dmats_mask) )then
+            if( size(dmats_mask,2) < n_keep ) THROW_HARD('dmats_mask too short; trim_nu_base_bank')
+            if( size(dmats_mask,2) > n_keep )then
+                allocate(dmats_mask_new(size(dmats_mask,1),n_keep), source=0.)
+                dmats_mask_new = dmats_mask(:,:n_keep)
+                call move_alloc(dmats_mask_new, dmats_mask)
+            endif
         endif
     end subroutine trim_nu_base_bank
 
@@ -404,7 +468,7 @@ contains
         type(image) :: vol_even_filt, vol_odd_filt
         type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
         type(string) :: even_cache_fname, odd_cache_fname
-        real, allocatable :: dmat_tmp(:,:,:), best_dmat(:,:,:), no_aux_resolutions(:)
+        real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:), best_dmat(:,:,:), no_aux_resolutions(:)
         integer :: i, n_base_max, n_eval, zero_run, nwins, winsz
         real    :: edge_mean, x
         logical :: stopped
@@ -428,9 +492,9 @@ contains
         call vol_odd_filt%set_ft(.true.)
         call vol_even_filt%set_wthreads(.true.)
         call vol_odd_filt%set_wthreads(.true.)
-        if( allocated(dmats) ) deallocate(dmats)
-        allocate(dmats(ldim(1),ldim(2),ldim(3),n_base_max), source=huge(x))
+        if( allocated(dmats_mask) ) deallocate(dmats_mask)
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
+        allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
         allocate(best_dmat(ldim(1),ldim(2),ldim(3)), source=huge(x))
         do i = 1, n_base_max
             even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
@@ -447,9 +511,10 @@ contains
                 call vol_even_filt%write(even_cache_fname, del_if_exists=.true.)
                 call vol_odd_filt%write(odd_cache_fname,  del_if_exists=.true.)
             endif
-            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i), nu_lmask)
-            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
-            nwins = update_full_shell_best_counts(dmats(:,:,:,i), best_dmat, i == 1)
+            dmat_cand = huge(x)
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, nu_lmask)
+            call tent_smooth_3d(dmat_cand, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+            nwins = update_full_shell_best_counts(dmat_cand, best_dmat, i == 1)
             if( i > size(lowpass_limits) )then
                 if( nwins == 0 )then
                     zero_run = zero_run + 1
@@ -469,6 +534,29 @@ contains
                 &', finest LP=', cutoff_find_to_lowpass_limit(n_eval), ' A)'
         endif
         if( n_eval < n_base_max ) call trim_nu_base_bank(n_eval)
+        deallocate(best_dmat)
+        allocate(dmats_mask(n_nu_mask,size(cutoff_finds)), source=huge(x))
+        do i = 1, size(cutoff_finds)
+            even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
+            odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
+            if( file_exists(even_cache_fname) .and. file_exists(odd_cache_fname) )then
+                call vol_even_filt%read(even_cache_fname)
+                call vol_odd_filt%read(odd_cache_fname)
+            else
+                call vol_even_filt%copy_fast(vol_even_copy_cmat)
+                call vol_odd_filt%copy_fast(vol_odd_copy_cmat)
+                call vol_even_filt%apply_filter(vol_odd_filt, bwfilters(:,i))
+                call vol_even_filt%ifft
+                call vol_odd_filt%ifft
+                call vol_even_filt%write(even_cache_fname, del_if_exists=.true.)
+                call vol_odd_filt%write(odd_cache_fname,  del_if_exists=.true.)
+            endif
+            dmat_tmp = 0.
+            dmat_cand = huge(x)
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, nu_lmask)
+            call tent_smooth_3d(dmat_cand, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+            call pack_nu_dmat_candidate(dmat_cand, i)
+        end do
         allocate(no_aux_resolutions(0))
         call setup_nu_candidate_coords(size(cutoff_finds), no_aux_resolutions)
         deallocate(no_aux_resolutions)
@@ -476,7 +564,7 @@ contains
         call vol_odd_copy_cmat%kill
         call vol_even_filt%kill
         call vol_odd_filt%kill
-        deallocate(dmat_tmp, best_dmat)
+        deallocate(dmat_tmp, dmat_cand)
     end subroutine setup_nu_dmats_full_shell_guarded
 
     subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps, &
@@ -489,7 +577,7 @@ contains
         logical,     optional, intent(in) :: l_full_shell_bank
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
-        real, allocatable :: dmat_tmp(:,:,:)
+        real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         integer :: i, n_candidates
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps, l_full_shell_bank)
@@ -497,6 +585,7 @@ contains
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
         if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
+        call setup_nu_mask_index
         if( present(aux_even) ) then
             if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
             if( size(aux_resolutions) /= size(aux_even) ) THROW_HARD('Auxiliary resolutions size mismatch; setup_nu_dmats')
@@ -512,12 +601,13 @@ contains
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
-        if( allocated(dmats) ) deallocate(dmats)
+        if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
         if( allocated(aux_even_bank) ) n_candidates = n_candidates + size(aux_even_bank)
         call setup_nu_candidate_coords(n_candidates, aux_resolutions)
-        allocate(dmats(ldim(1),ldim(2),ldim(3),n_candidates), source=huge(x))
-        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),           source=0.)
+        allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
+        allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
+        allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
         do i = 1, size(cutoff_finds)
             even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
             odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
@@ -525,19 +615,22 @@ contains
             if( .not.file_exists(odd_cache_fname)  ) THROW_HARD('Missing filtered volume cache: '//odd_cache_fname%to_char())
             call vol_even_filt%read(even_cache_fname)
             call vol_odd_filt%read(odd_cache_fname)
-            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmats(:,:,:,i), nu_lmask)
-            call tent_smooth_3d(dmats(:,:,:,i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
-            ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
+            dmat_cand = huge(x)
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, nu_lmask)
+            call tent_smooth_3d(dmat_cand, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+            call pack_nu_dmat_candidate(dmat_cand, i)
         end do
         if( allocated(aux_even_bank) ) then
             do i = 1, size(aux_even_bank)
-                call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), &
-                    &dmats(:,:,:,size(cutoff_finds)+i), nu_lmask)
-                call tent_smooth_3d(dmats(:,:,:,size(cutoff_finds)+i), dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+                dmat_cand = huge(x)
+                call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), dmat_cand, nu_lmask)
+                call tent_smooth_3d(dmat_cand, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+                call pack_nu_dmat_candidate(dmat_cand, size(cutoff_finds)+i)
             end do
         end if
         call vol_even_filt%kill
         call vol_odd_filt%kill
+        deallocate(dmat_tmp, dmat_cand)
     end subroutine setup_nu_dmats
 
     subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
@@ -590,24 +683,26 @@ contains
 
     subroutine optimize_nu_cutoff_finds()
         integer, allocatable :: candmap(:,:,:)
-        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates
+        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask
         real    :: best_dmat
-        if( .not.allocated(dmats) ) THROW_HARD('dmats not allocated; run setup_nu_dmats before nonuniform_filter_vol')
+        if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
+        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
         n_base       = size(cutoff_finds)
-        ! dmats is laid out as [base low-pass bank | auxiliary pre-filtered pairs].
+        ! dmats_mask is laid out as [base low-pass bank | auxiliary pre-filtered pairs].
         ! The first n_base entries correspond to cutoff_finds(:); any remaining
         ! entries are caller-supplied auxiliary sources.
-        n_candidates = size(dmats, 4)
+        n_candidates = size(dmats_mask, 2)
         if( allocated(filtmap) ) deallocate(filtmap)
         if( allocated(srcmap)  ) deallocate(srcmap)
         allocate(candmap(nx,ny,nz), source=1)
         allocate(filtmap(nx,ny,nz), source=1)
         allocate(srcmap(nx,ny,nz),  source=1)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icand,best_icand,best_dmat) proc_bind(close)
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,icand,best_icand,best_dmat,imask) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
@@ -616,11 +711,12 @@ contains
                         srcmap(i,j,k)  = 1
                         cycle
                     endif
+                    imask = nu_mask_index(i,j,k)
                     best_icand = 1
-                    best_dmat = dmats(i,j,k,1)
+                    best_dmat = dmats_mask(imask,1)
                     do icand = 2, n_candidates
-                        if( dmats(i,j,k,icand) < best_dmat ) then
-                            best_dmat = dmats(i,j,k,icand)
+                        if( dmats_mask(imask,icand) < best_dmat ) then
+                            best_dmat = dmats_mask(imask,icand)
                             best_icand = icand
                         end if
                     end do
@@ -635,9 +731,10 @@ contains
         call log_nu_candidate_selection_counts(candmap, n_base, 'after ordered-label smoothing')
         call candidate_map_to_filt_and_src(candmap, n_base)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
-        ! this is the big memory consumer, so deallocate it here
-        if( allocated(dmats) ) deallocate(dmats)
+        allocate(dmat_finest_cached(nx,ny,nz))
+        call unpack_nu_dmat_candidate(n_base, dmat_finest_cached)
+        ! Drop the candidate unary bank before output synthesis.
+        if( allocated(dmats_mask) ) deallocate(dmats_mask)
         deallocate(candmap)
     end subroutine optimize_nu_cutoff_finds
 
@@ -713,13 +810,14 @@ contains
     subroutine log_nu_aux_unary_margin_stats( n_base )
         integer, intent(in) :: n_base
         integer :: iaux, ibase, icand, n_candidates, nmask, nwins, eff_label
-        integer :: i, j, k
+        integer :: i, j, k, imask
         real    :: best_base, margin, margin_sum, win_margin_sum, avg_margin, avg_win_margin, pct
         character(len=16) :: auxtag
-        if( .not.allocated(dmats) ) return
+        if( .not.allocated(dmats_mask) ) return
         if( .not.allocated(nu_lmask) ) return
         if( .not.allocated(candidate_coords) ) return
-        n_candidates = size(dmats, 4)
+        if( .not.allocated(nu_mask_index) ) return
+        n_candidates = size(dmats_mask, 2)
         if( n_candidates <= n_base ) return
         nmask = count(nu_lmask)
         if( nmask == 0 ) return
@@ -733,16 +831,17 @@ contains
             margin_sum = 0.
             win_margin_sum = 0.
             !$omp parallel do collapse(3) schedule(static) default(shared) &
-            !$omp private(i,j,k,ibase,best_base,margin) reduction(+:nwins,margin_sum,win_margin_sum) proc_bind(close)
+            !$omp private(i,j,k,imask,ibase,best_base,margin) reduction(+:nwins,margin_sum,win_margin_sum) proc_bind(close)
             do k = 1, ldim(3)
                 do j = 1, ldim(2)
                     do i = 1, ldim(1)
                         if( .not.nu_lmask(i,j,k) ) cycle
-                        best_base = dmats(i,j,k,1)
+                        imask = nu_mask_index(i,j,k)
+                        best_base = dmats_mask(imask,1)
                         do ibase = 2, n_base
-                            best_base = min(best_base, dmats(i,j,k,ibase))
+                            best_base = min(best_base, dmats_mask(imask,ibase))
                         end do
-                        margin = best_base - dmats(i,j,k,icand)
+                        margin = best_base - dmats_mask(imask,icand)
                         margin_sum = margin_sum + margin
                         if( margin > 0. )then
                             nwins = nwins + 1
@@ -766,7 +865,7 @@ contains
     subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer, intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
-        integer :: iter, color, i, j, k, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged
         integer :: n_base, n_aux
         real    :: beta, e, best_e, site_energy
@@ -795,21 +894,22 @@ contains
             nchanged = 0
             do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
                 !$omp parallel do collapse(3) schedule(static) default(shared) &
-                !$omp private(i,j,k,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
+                !$omp private(i,j,k,imask,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
                 !$omp reduction(+:nchanged) proc_bind(close)
                 do k = 1, ldim(3)
                     do j = 1, ldim(2)
                         do i = 1, ldim(1)
                             if( .not.nu_lmask(i,j,k) ) cycle
                             if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                            imask = nu_mask_index(i,j,k)
                             call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
                             cur_icand  = candmap(i,j,k)
                             best_icand = cur_icand
-                            best_e     = dmats(i,j,k,cur_icand) + beta * &
+                            best_e     = dmats_mask(imask,cur_icand) + beta * &
                                 &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
                             do icand = 1, n_candidates
                                 if( icand == cur_icand ) cycle
-                                e = dmats(i,j,k,icand) + beta * &
+                                e = dmats_mask(imask,icand) + beta * &
                                     &nu_label_smooth_neighborhood_cost(icand, candmap, n_full, nsz)
                                 if( nu_label_smooth_is_better(e, best_e) )then
                                     best_e     = e
@@ -834,7 +934,7 @@ contains
 
     real function estimate_nu_label_smooth_beta( n_candidates )
         integer, intent(in) :: n_candidates
-        integer :: i, j, k, icand, nvox
+        integer :: i, j, k, imask, icand, nvox
         real    :: best_e, second_e, cur_e
         estimate_nu_label_smooth_beta = 0.
         nvox = 0
@@ -843,10 +943,11 @@ contains
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
                     if( .not.nu_lmask(i,j,k) ) cycle
+                    imask = nu_mask_index(i,j,k)
                     best_e   = huge(best_e)
                     second_e = huge(second_e)
                     do icand = 1, n_candidates
-                        cur_e = dmats(i,j,k,icand)
+                        cur_e = dmats_mask(imask,icand)
                         if( cur_e < best_e )then
                             second_e = best_e
                             best_e   = cur_e
@@ -913,19 +1014,20 @@ contains
     real function calc_nu_label_smooth_site_energy( candmap, beta )
         integer, intent(in) :: candmap(:,:,:)
         real,    intent(in) :: beta
-        integer :: i, j, k, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nvox
+        integer :: i, j, k, imask, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nvox
         real :: energy_sum
         calc_nu_label_smooth_site_energy = 0.
         energy_sum = 0.
         nvox = 0
         !$omp parallel do collapse(3) schedule(static) default(shared) &
-        !$omp private(i,j,k,n_full,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
+        !$omp private(i,j,k,imask,n_full,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
                     if( .not.nu_lmask(i,j,k) ) cycle
+                    imask = nu_mask_index(i,j,k)
                     call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
-                    energy_sum = energy_sum + dmats(i,j,k,candmap(i,j,k)) + beta * &
+                    energy_sum = energy_sum + dmats_mask(imask,candmap(i,j,k)) + beta * &
                         &nu_label_smooth_neighborhood_cost(candmap(i,j,k), candmap, n_full, nsz)
                     nvox = nvox + 1
                 end do
@@ -1021,7 +1123,7 @@ contains
         call vol_odd_filt_new%read(odd_cache_fname)
         call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, nu_lmask)
         call tent_smooth_3d(dmat_new, dmat_tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
-        ! dmat_tmp is never just a temporary buffer, the result is in dmats(:,:,:,i)
+        ! dmat_tmp is only a work buffer; tent_smooth_3d updates dmat_new in place.
         allocate(dmat_finest(ldim(1),ldim(2),ldim(3)), source=huge(x))
         if( allocated(dmat_finest_cached) ) then
             if( all(shape(dmat_finest_cached) == ldim) ) then
