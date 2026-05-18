@@ -243,7 +243,7 @@ contains
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &extend_nu_filter_highres_next, nu_highres_extension_stats
+            &extend_nu_filter_highres_shell_next, nu_highres_extension_stats
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -436,13 +436,13 @@ contains
             integer :: n_highres_steps
             if( .not. params%l_nu_refine ) return
             n_highres_steps = nu_highres_steps_for_state()
-            write(logfhandle,'(A,I0)') '>>> NU resolution expansion refinement enabled, promoted high-resolution steps: ', &
+            write(logfhandle,'(A,I0)') '>>> NU resolution expansion refinement enabled, promoted high-resolution shell steps: ', &
                 &n_highres_steps
-            call extend_nu_filter_highres_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
+            call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
             call log_nu_highres_extension_stats(ext_stats)
             if( ext_stats%promote_next )then
                 call write_nu_highres_steps_for_state(n_highres_steps + 1)
-                write(logfhandle,'(A,I0)') '>>> NU high-resolution expansion promoted for next iteration, depth: ', &
+                write(logfhandle,'(A,I0)') '>>> NU high-resolution shell expansion promoted for next iteration, depth: ', &
                     &n_highres_steps + 1
             endif
         end subroutine refine_nonuniform_filter_bank
@@ -508,9 +508,9 @@ contains
             write(logfhandle,'(A,I12,A,F8.2,A)') '    Promoted this iteration: ', ext_stats%n_extended, &
                 &' (', ext_stats%pct_extended_tested, '% of tested)'
             if( ext_stats%promote_next )then
-                write(logfhandle,'(A)') '    Next iteration: include one additional high-resolution step'
+                write(logfhandle,'(A)') '    Next iteration: include one additional high-resolution shell'
             else
-                write(logfhandle,'(A)') '    Next iteration: keep current high-resolution depth'
+                write(logfhandle,'(A)') '    Next iteration: keep current high-resolution shell depth'
             endif
         end subroutine log_nu_highres_extension_stats
 

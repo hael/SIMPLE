@@ -131,7 +131,17 @@ When requested, the extension step applies the same ordered-label prior to this 
 
 Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
 
-When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative ratchet: an iteration can evaluate and accept at most one speculative high-resolution low-pass candidate beyond the bank available at the start of that iteration. The candidate is promoted into the next iteration's starting bank only when the ordered-label extension refinement moves at least 20% of the tested frontier voxels inside the NU refinement mask to the speculative limit. The denominator is the tested extension frontier, not the total map volume.
+When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative
+ratchet: an iteration can evaluate and accept at most one speculative
+high-resolution Fourier-shell candidate beyond the bank available at the start
+of that iteration. The challenge candidate is the next unrepresented shell
+above the current finest base-bank label, not a coarse hard-coded Angstrom
+ladder. The challenge is attempted whenever at least one base-bank voxel sits
+on that current finest label. The candidate is promoted into the next
+iteration's starting bank only when the ordered-label extension refinement moves
+more than 5% of the tested frontier voxels inside the NU refinement mask to the
+speculative shell. The denominator is the tested extension frontier, not the
+total map volume.
 
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map

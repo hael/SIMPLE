@@ -9,7 +9,7 @@
 ! Updated call sequence with iterative high-resolution refinement
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call extend_nu_filter_highres_next(vol_even, vol_odd)       ! optional conservative step
+!    call extend_nu_filter_highres_shell_next(vol_even, vol_odd) ! optional shell step
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
@@ -33,15 +33,15 @@ implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
-          print_filtmap_lowpass_histogram, extend_nu_filter_highres, extend_nu_filter_highres_next,&
-          extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells, &
-          extend_nu_filter_highres_iterative, analyze_filtmap_neighbor_continuity, nu_highres_extension_stats
+          print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
+          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats
 private
 
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
-real,             parameter   :: EXTRA_LIMITS(3)   = [3.5, 3.0, 2.5]
-real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 5.  ! criterion for extending the search to higher resolution
-real,             parameter   :: NU_HIGHRES_PROMOTION_TESTED_PCT    = 10. ! criterion for promoting filter to higher resolution
+! Minimum finest-frontier fraction of the NU mask required before testing a
+! finer shell. Zero means challenge whenever at least one frontier voxel exists.
+real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
+real,             parameter   :: NU_HIGHRES_PROMOTION_TESTED_PCT    = 5.  ! promotion threshold among tested frontier voxels
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
@@ -97,7 +97,7 @@ contains
         integer, optional, intent(in) :: n_highres_steps
         logical, optional, intent(in) :: l_full_shell_bank
         integer, allocatable :: cutoff_finds_tmp(:)
-        integer :: i, n_extra, n_valid, new_find
+        integer :: i, n_extra, n_valid, new_find, n_added
         logical :: l_full_bank
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
@@ -117,7 +117,7 @@ contains
         if( l_full_bank )then
             n_extra = max(0, box / 2)
         else if( present(n_highres_steps) )then
-            n_extra = min(size(EXTRA_LIMITS), max(0, n_highres_steps))
+            n_extra = min(max(0, n_highres_steps), max(0, box / 2))
         endif
         allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
         do i = 1, size(lowpass_limits)
@@ -131,12 +131,15 @@ contains
                 cutoff_finds_tmp(n_valid) = new_find
             end do
         else
-            do i = 1, n_extra
-                new_find = calc_fourier_index(EXTRA_LIMITS(i), box, smpd)
-                if( new_find <= cutoff_finds_tmp(n_valid) ) cycle
-                if( any(cutoff_finds_tmp(:n_valid) == new_find) ) cycle
-                n_valid = n_valid + 1
-                cutoff_finds_tmp(n_valid) = new_find
+            n_added = 0
+            new_find = cutoff_finds_tmp(n_valid) + 1
+            do while( n_added < n_extra .and. new_find <= box / 2 )
+                if( .not.any(cutoff_finds_tmp(:n_valid) == new_find) )then
+                    n_valid = n_valid + 1
+                    cutoff_finds_tmp(n_valid) = new_find
+                    n_added = n_added + 1
+                endif
+                new_find = new_find + 1
             end do
         endif
         allocate(cutoff_finds(n_valid))
@@ -945,7 +948,7 @@ contains
     subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
-        real,         intent(in) :: new_limit        ! e.g. 3.5 Angstroms
+        real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
@@ -972,6 +975,10 @@ contains
         local_stats%n_tested = n_finest
         pct_finest = 100. * real(n_finest) / real(n_total)
         local_stats%pct_tested_mask = pct_finest
+        if( n_finest == 0 )then
+            if( present(stats) ) stats = local_stats
+            return
+        endif
         if( pct_finest < threshold_pct )then
             if( present(stats) ) stats = local_stats
             return   ! trigger not met, nothing to do
@@ -1041,7 +1048,7 @@ contains
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         local_stats%applied      = n_extended > 0
         local_stats%promote_next = local_stats%applied .and. &
-            &local_stats%pct_extended_tested >= NU_HIGHRES_PROMOTION_TESTED_PCT
+            &local_stats%pct_extended_tested > NU_HIGHRES_PROMOTION_TESTED_PCT
         write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> NU high-resolution extension changed ', &
             &n_extended, '/', n_finest, ' tested voxels (', local_stats%pct_extended_tested, '%)'
         if( n_extended == 0 ) then
@@ -1066,25 +1073,6 @@ contains
         deallocate(extend_mask, extend_to_new, dmat_new, dmat_finest, dmat_tmp)
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
-
-    subroutine extend_nu_filter_highres_next( vol_even, vol_odd, stats )
-        class(image), intent(in) :: vol_even, vol_odd
-        type(nu_highres_extension_stats), optional, intent(out) :: stats
-        type(nu_highres_extension_stats) :: local_stats
-        integer :: i, new_find, sz_old
-        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; extend_nu_filter_highres_next')
-        sz_old = size(cutoff_finds)
-        do i = 1, size(EXTRA_LIMITS)
-            new_find = calc_fourier_index(EXTRA_LIMITS(i), box, smpd)
-            if( new_find <= cutoff_finds(sz_old) ) cycle
-            if( any(cutoff_finds == new_find) ) cycle
-            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                &EXTRA_LIMITS(i), stats=local_stats)
-            if( present(stats) ) stats = local_stats
-            return
-        end do
-        if( present(stats) ) stats = local_stats
-    end subroutine extend_nu_filter_highres_next
 
     subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats )
         class(image), intent(in) :: vol_even, vol_odd
@@ -1124,14 +1112,6 @@ contains
         end do
         if( present(nsteps) ) nsteps = nsteps_local
     end subroutine extend_nu_filter_highres_shells
-
-    subroutine extend_nu_filter_highres_iterative( vol_even, vol_odd )
-        class(image), intent(in) :: vol_even, vol_odd
-        integer :: i
-        do i = 1, size(EXTRA_LIMITS)
-            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, EXTRA_LIMITS(i))
-        end do
-    end subroutine extend_nu_filter_highres_iterative
 
     subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)

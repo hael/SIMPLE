@@ -226,7 +226,7 @@ respect that minimum.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and can promote at most one
-high-resolution bin per refinement iteration. The terminal all-particle
+high-resolution Fourier shell per refinement iteration. The terminal all-particle
 `reconstruct3D` pass leaves refinement and uses reconstruction postprocessing:
 when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
 builds the uncoupled full Fourier-shell NU filter bank for the final filtered
