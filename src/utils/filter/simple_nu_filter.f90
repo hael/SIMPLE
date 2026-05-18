@@ -1250,20 +1250,31 @@ contains
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
-        write(logfhandle,'(A)') '>>> LOCAL RESOLUTION HISTOGRAM'
+        if( allocated(srcmap) )then
+            nselected = count(mask .and. srcmap == 1)
+        else
+            nselected = count(mask)
+        endif
+        write(logfhandle,'(A)') '>>> NU LOW-PASS ASSIGNMENTS (base filter bank)'
+        write(logfhandle,'(A,I12)') '    Base-bank voxels: ', nselected
+        write(logfhandle,'(A)')     '    LP limit (A)        Voxels    Pct base'
         do icut = 1, size(cutoff_finds)
-            write(logfhandle,'(A8,1X,F8.1,A,I12,A,F8.1,A)') '', cutoff_find_to_lowpass_limit(icut), ' A : ', counts(icut), ' voxels, ', percentages(icut), '%'
+            write(logfhandle,'(4X,F10.1,2X,I12,2X,F8.2,A)') cutoff_find_to_lowpass_limit(icut), counts(icut), percentages(icut), '%'
         end do
         ! Print auxiliary pair assignments if present
         if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
             if( size(aux_resolutions) /= size(aux_even_bank) ) THROW_HARD('aux_resolutions size mismatch in print_filtmap_lowpass_histogram')
-            ! Determine nselected for percentage calculation
             nselected = count(mask)
+            write(logfhandle,'(A)') ''
+            write(logfhandle,'(A)')     '>>> NU AUXILIARY SOURCE ASSIGNMENTS'
+            write(logfhandle,'(A,I12)') '    Mask voxels:      ', nselected
+            write(logfhandle,'(A)')     '    Source    Resolution (A)        Voxels    Pct mask'
             do iaux = 1, size(aux_even_bank)
                 nvox = count(srcmap == iaux + 1 .and. mask)
-                pct = 100. * real(nvox) / real(nselected)
+                pct = 0.
+                if( nselected > 0 ) pct = 100. * real(nvox) / real(nselected)
                 write(auxtag,'(A,I0,A)') 'Aux', iaux, '@'
-                write(logfhandle,'(A8,1X,F8.1,A,I12,A,F8.1,A)') auxtag, aux_resolutions(iaux), ' A : ', nvox, ' voxels, ', pct, '%'
+                write(logfhandle,'(4X,A8,2X,F14.1,2X,I12,2X,F8.2,A)') auxtag, aux_resolutions(iaux), nvox, pct, '%'
             end do
         end if
         deallocate(counts, percentages)
@@ -1282,12 +1293,17 @@ contains
             end if
         end if
         call calc_filtmap_lowpass_stats(statvars, mask)
-        write(logfhandle,'(A)') '>>> LOCAL RESOLUTION STATS'
-        write(logfhandle,'(A,F8.4)') 'Average: ', statvars%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', statvars%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', statvars%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', statvars%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', statvars%minv
+        if( allocated(srcmap) )then
+            nbase = count(srcmap == 1 .and. mask)
+        else
+            nbase = count(mask)
+        endif
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') '>>> NU FILTER LOCAL RESOLUTION SUMMARY'
+        write(logfhandle,'(A,I12)') '    Voxels analyzed: ', nbase
+        write(logfhandle,'(A)')     '              Mean    Median     Sigma       Min       Max'
+        write(logfhandle,'(A,5F10.3)') '    Angstrom ', statvars%avg, statvars%med, statvars%sdev, statvars%minv, statvars%maxv
+        write(logfhandle,'(A)') ''
         call print_filtmap_lowpass_histogram(mask, aux_resolutions)
     end subroutine print_nu_filtmap_lowpass_stats
 
@@ -1376,67 +1392,61 @@ contains
             end do
         end do
         !$omp end parallel do
-        ! Print diagnostics
-        write(logfhandle,'(A)') ''
-        write(logfhandle,'(A)') '>>> NONUNIFORM FILTER NEIGHBOR CONTINUITY ANALYSIS'
-        write(logfhandle,'(A,I0,A)') '>>> Tolerated LP-step difference: <= ', thresh, ' step(s)'
-        write(logfhandle,'(A,I0,A)') '>>> Discontinuous LP-step difference: > ', thresh, ' step(s)'
-        write(logfhandle,'(A)') ''
         ! Count total masked voxels
         if( allocated(srcmap) ) then
             n_analyzed = count(mask .and. srcmap == 1)
         else
             n_analyzed = count(mask)
         end if
-        write(logfhandle,'(A,I12)') 'Total voxels analyzed:                   ', n_analyzed
-        write(logfhandle,'(A,I12)') 'Voxels with discontinuous neighbors:     ', n_voxels_with_discontinuity
         pct_vox = 0.
-        if( n_analyzed > 0 ) then
-            pct_vox = 100. * real(n_voxels_with_discontinuity) / real(n_analyzed)
-            write(logfhandle,'(A,F8.2,A)') 'Percentage of voxels with discontinuity: ', pct_vox, '%'
-        end if
-        write(logfhandle,'(A)') ''
+        if( n_analyzed > 0 ) pct_vox = 100. * real(n_voxels_with_discontinuity) / real(n_analyzed)
         pct_pairs = 0.
-        if( n_total_neighbor_pairs > 0 ) then
-            pct_pairs = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
-            write(logfhandle,'(A,I14)') 'Total neighbor pairs examined:            ', n_total_neighbor_pairs
-            write(logfhandle,'(A,I14)') 'Neighbor pairs with identical LP step:     ', n_identical_pairs
-            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with tolerated LP diff (<=', thresh, ' step): ', n_tolerated_pairs
-            write(logfhandle,'(A,I0,A,I14)') 'Neighbor pairs with discontinuity (>', thresh, ' step):  ', n_discontinuous_pairs
-            write(logfhandle,'(A,F8.2,A)') 'Percentage of discontinuous pairs:        ', pct_pairs, '%'
-        end if
+        if( n_total_neighbor_pairs > 0 ) pct_pairs = 100. * real(n_discontinuous_pairs) / real(n_total_neighbor_pairs)
         write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') '>>> NU NEIGHBOR CONTINUITY'
+        write(logfhandle,'(A,I0,A,I0,A)') '    LP-step tolerance: <= ', thresh, '; discontinuity: > ', thresh, ' step(s)'
+        write(logfhandle,'(A,I12)') '    Voxels analyzed: ', n_analyzed
+        write(logfhandle,'(A,I12,A,F8.2,A)') '    Voxels with discontinuous neighbors: ', &
+            &n_voxels_with_discontinuity, ' (', pct_vox, '%)'
+        if( n_total_neighbor_pairs > 0 ) then
+            write(logfhandle,'(A,I14)') '    Neighbor pairs examined: ', n_total_neighbor_pairs
+            pct = 100. * real(n_identical_pairs) / real(n_total_neighbor_pairs)
+            write(logfhandle,'(A,I14,A,F8.2,A)') '      identical:      ', n_identical_pairs, ' (', pct, '%)'
+            pct = 100. * real(n_tolerated_pairs) / real(n_total_neighbor_pairs)
+            write(logfhandle,'(A,I14,A,F8.2,A)') '      tolerated:      ', n_tolerated_pairs, ' (', pct, '%)'
+            write(logfhandle,'(A,I14,A,F8.2,A)') '      discontinuous:  ', n_discontinuous_pairs, ' (', pct_pairs, '%)'
+        endif
         ! Print distribution of all pair step-differences without implying that
         ! tolerated one-step differences are discontinuities.
-        write(logfhandle,'(A)') '>>> LP STEP-DIFFERENCE DISTRIBUTION'
+        write(logfhandle,'(A)') '    LP-step difference distribution:'
+        write(logfhandle,'(A)') '      Step           Pairs       Pct    Class'
         if( n_total_neighbor_pairs > 0 )then
             pct = 100. * real(n_identical_pairs) / real(n_total_neighbor_pairs)
-            write(logfhandle,'(A,I14,A,F7.3,A)') 'LP step diff = 0: ', n_identical_pairs, ' pairs (', pct, '%), identical'
+            write(logfhandle,'(6X,I4,2X,I14,2X,F8.3,4X,A)') 0, n_identical_pairs, pct, 'identical'
         endif
         do ii = 1, max_step_diff
             if( stepdiff_counts(ii) > 0 ) then
                 pct = 100. * real(stepdiff_counts(ii)) / real(n_total_neighbor_pairs)
                 if( ii <= thresh )then
-                    write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
-                        'LP step diff = ', ii, ': ', stepdiff_counts(ii), ' pairs (', pct, '%), tolerated'
+                    write(logfhandle,'(6X,I4,2X,I14,2X,F8.3,4X,A)') ii, stepdiff_counts(ii), pct, 'tolerated'
                 else
-                    write(logfhandle,'(A,I1,A,I14,A,F7.3,A)') &
-                        'LP step diff = ', ii, ': ', stepdiff_counts(ii), ' pairs (', pct, '%), discontinuous'
+                    write(logfhandle,'(6X,I4,2X,I14,2X,F8.3,4X,A)') ii, stepdiff_counts(ii), pct, 'discontinuous'
                 endif
             end if
         end do
-        write(logfhandle,'(A)') ''
-        write(logfhandle,'(A)') '>>> INTERPRETATION'
         if( n_total_neighbor_pairs > 0 ) then
             if( pct_pairs <= 5. ) then
-                write(logfhandle,'(A)') '>>> Low discontinuity rate — local resolution map is spatially smooth'
+                write(logfhandle,'(A)') &
+                    &'    Continuity assessment: low discontinuity rate; local resolution map is spatially smooth'
             else if( pct_pairs <= 10. ) then
-                write(logfhandle,'(A)') '>>> Moderate discontinuity rate — label smoothing may benefit from additional convergence'
+                write(logfhandle,'(A)') &
+                    &'    Continuity assessment: moderate discontinuity rate; label smoothing may benefit from additional convergence'
             else
-                write(logfhandle,'(A)') '>>> High discontinuity rate — inspect mask support, objective maps, and label-prior convergence'
+                write(logfhandle,'(A)') &
+                    &'    Continuity assessment: high discontinuity rate; inspect mask support, objective maps, and label-prior convergence'
             end if
         else
-            write(logfhandle,'(A)') '>>> No neighbor pairs found in mask — continuity analysis is inconclusive'
+            write(logfhandle,'(A)') '    Continuity assessment: no neighbor pairs found in mask; analysis is inconclusive'
         end if
         write(logfhandle,'(A)') ''
         deallocate(stepdiff_counts)

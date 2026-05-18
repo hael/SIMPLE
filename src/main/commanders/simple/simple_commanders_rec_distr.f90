@@ -496,13 +496,22 @@ contains
         subroutine log_nu_highres_extension_stats(ext_stats)
             type(nu_highres_extension_stats), intent(in) :: ext_stats
             if( .not. ext_stats%attempted )then
-                write(logfhandle,'(A,I0,A,F6.2,A)') '>>> NU high-resolution extension not attempted; tested frontier: ', &
-                    &ext_stats%n_tested, ' voxels (', ext_stats%pct_tested_mask, '% of NU mask)'
+                write(logfhandle,'(A)') '>>> NU HIGH-RESOLUTION EXTENSION'
+                write(logfhandle,'(A)') '    Attempted: no'
+                write(logfhandle,'(A,I12,A,F8.2,A)') '    Frontier voxels: ', ext_stats%n_tested, &
+                    &' (', ext_stats%pct_tested_mask, '% of NU mask)'
                 return
             endif
-            write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> NU high-resolution extension evidence: ', &
-                &ext_stats%n_extended, '/', ext_stats%n_tested, ' tested voxels changed (', &
-                &ext_stats%pct_extended_tested, '%)'
+            write(logfhandle,'(A)') '>>> NU HIGH-RESOLUTION EXTENSION'
+            write(logfhandle,'(A)') '    Attempted: yes'
+            write(logfhandle,'(A,I12)') '    Tested frontier voxels: ', ext_stats%n_tested
+            write(logfhandle,'(A,I12,A,F8.2,A)') '    Promoted this iteration: ', ext_stats%n_extended, &
+                &' (', ext_stats%pct_extended_tested, '% of tested)'
+            if( ext_stats%promote_next )then
+                write(logfhandle,'(A)') '    Next iteration: include one additional high-resolution step'
+            else
+                write(logfhandle,'(A)') '    Next iteration: keep current high-resolution depth'
+            endif
         end subroutine log_nu_highres_extension_stats
 
         subroutine log_nonuniform_filter_stats()
