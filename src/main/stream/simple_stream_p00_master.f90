@@ -177,8 +177,8 @@ contains
         if( c_pthread_mutex_init(terminate_mutex, c_null_ptr) /= 0 ) THROW_HARD('failed to initialise terminate mutex')
         ! start persistent worker server if requested by params
         params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
-        params%ncunits   = 4  ! set to 4 for now to ensure enough threads for stream processes and metadata listener; can be overridden by env var or compenv
-        call qsys%new(params, 1, qsys_nthr=32)
+        params%ncunits   = 8  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
+        call qsys%new(params, 1, qsys_nthr=24)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         ! init metadata 
@@ -826,8 +826,8 @@ contains
             call cline_particle_sieving%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
             call cline_particle_sieving%set('nthr',                                    4)
             call cline_particle_sieving%set('mkdir',                               'yes')
-            call cline_particle_sieving%set('nparts',                                  4)
-            call cline_particle_sieving%set('nchunks',                                 8)
+            call cline_particle_sieving%set('nparts',                                  8)
+            call cline_particle_sieving%set('nchunks',                                 4)
             call cline_particle_sieving%set('worker_priority',                    'high')
             if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)
         end subroutine init_cline_particle_sieving
@@ -849,8 +849,8 @@ contains
             call cline_pool2D%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
             call cline_pool2D%set('nthr',                                        8)
             call cline_pool2D%set('mkdir',                                   'yes')
-            call cline_pool2D%set('nparts',                                      5)
-            call cline_pool2D%set('ncls',                                      200)
+            call cline_pool2D%set('nparts',                                      6)
+            call cline_pool2D%set('ncls',                                      150)
             call cline_pool2D%set('worker_priority',                        'high')
             if( server_address%strlen() > 0 ) call cline_pool2D%set('worker_server', server_address)
         end subroutine init_cline_pool2D
