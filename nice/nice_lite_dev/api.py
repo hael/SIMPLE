@@ -9,7 +9,6 @@ from django.views.decorators.csrf   import csrf_exempt
 from .helpers                    import *
 from .data_structures.workspace  import Workspace
 from .data_structures.project    import Project
-from .data_structures.job        import Job
 from .data_structures.jobclassic import JobClassic
 from .data_structures.streamjob  import StreamJob
 
