@@ -228,16 +228,19 @@ not reduce the run below ten iterations, and normal convergence checks must
 respect that minimum.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
-`nu_refine` ratchet is coupled to 3D refinement and can promote at most one
-high-resolution Fourier shell per refinement iteration. In this coupled
-refinement path, NU filtering does not add the ML-regularized half-map pair as
-an auxiliary candidate; the `_unfil` pair remains the base-bank input when
-`ml_reg=yes`, and the shell challenger is the only refinement experiment. The
-terminal all-particle
+`nu_refine` ratchet is coupled to 3D refinement and may promote multiple
+high-resolution Fourier shells per refinement iteration, but only by testing
+one shell at a time. Each shell is applied/promoted only when at least 5% of the
+tested frontier voxels select it, and the sequential walk stops at the first
+unattempted or rejected challenger. In this coupled refinement path, NU
+filtering does not add the ML-regularized half-map pair as an auxiliary
+candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
+the shell challenger sequence is the only refinement experiment. The terminal
+all-particle
 `reconstruct3D` pass leaves refinement and uses reconstruction postprocessing:
 when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
-challenges the uncoupled Fourier-shell NU filter bank incrementally for the
-final filtered map and also writes ordinary `_pproc`/`_lp` comparison outputs.
+challenges the uncoupled Fourier-shell NU filter bank one shell at a time for
+the final filtered map and also writes ordinary `_pproc`/`_lp` comparison outputs.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction

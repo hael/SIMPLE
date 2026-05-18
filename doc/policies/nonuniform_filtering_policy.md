@@ -132,31 +132,35 @@ When requested, the extension step applies the same ordered-label prior to this 
 Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative
-ratchet: an iteration can evaluate and accept at most one speculative
-high-resolution Fourier-shell candidate beyond the bank available at the start
-of that iteration. The challenge candidate is the next unrepresented shell
-above the current finest base-bank label, not a coarse hard-coded Angstrom
-ladder. The challenge is attempted whenever at least one base-bank voxel sits
-on that current finest label. The candidate is promoted into the next
-iteration's starting bank only when the ordered-label extension refinement moves
-more than 5% of the tested frontier voxels inside the NU refinement mask to the
-speculative shell. The denominator is the tested extension frontier, not the
-total map volume.
+ratchet: an iteration can evaluate and accept one or more speculative
+high-resolution Fourier-shell candidates, but only sequentially. Each challenge
+candidate is the next unrepresented shell above the current finest base-bank
+label, not a coarse hard-coded Angstrom ladder. A challenge is attempted
+whenever at least one base-bank voxel sits on the current finest label. The
+candidate is applied to the current map and promoted into the next iteration's
+starting bank only when the ordered-label extension refinement moves at least
+5% of the tested frontier voxels inside the NU refinement mask to that
+speculative shell. The denominator is the tested extension frontier for the
+current challenger, not the total map volume. If a candidate is accepted, the
+same iteration may challenge the next Fourier shell; the walk stops at the
+first unattempted or rejected challenger.
 
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
-from raw even/odd half maps without ML-regularized auxiliary candidates. Unlike
-the iterative refinement ratchet, postprocessing is allowed to challenge the
-available Fourier shells through Nyquist, but it must grow the objective bank
-incrementally: allocate the active bank plus at most one candidate challenger,
-evaluate the challenger, and append it only as the active bank advances. There
-is no postprocess-only threshold requiring enough frontier voxels to accept one
-shell before the next shell can contribute.
+from raw even/odd half maps without ML-regularized auxiliary candidates. It
+starts from the static base bank, then challenges one unrepresented Fourier
+shell at a time. A postprocess challenger is accepted only when the ordered-label
+extension refinement assigns at least one tested frontier voxel to that shell;
+only accepted shells become part of the active bank before the next shell is
+challenged. The postprocess path may continue this sequential challenger loop
+through Nyquist, but it must not pre-generate or pre-evaluate the full sampling
+ladder.
 
 The candidate objective bank should be stored only for voxels inside the NU
 mask. Full-volume objective arrays are temporary work buffers for objective
-generation and tent smoothing; persistent unary costs used for candidate
-selection and ordered-label smoothing are mask-packed.
+generation and mask-normalized tent smoothing; persistent unary costs used for
+candidate selection and ordered-label smoothing are mask-packed. Objective
+values outside the NU mask must not contribute to smoothed in-mask unary costs.
 
 Terminal original-sampling `abinitio3D` reconstruction follows this
 postprocessing policy. If the top-level ab initio run used
@@ -169,10 +173,11 @@ ab initio output copy stage must preserve the NU products under the
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
-accepts the B factor in the same way, applies B-factor sharpening to the merged
-reconstruction map, and uses the NU filter map where the standard commander
-would use the FSC-derived optimal filter. The NU products are written separately
-as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when mirroring is enabled.
+accepts the B factor in the same way, applies the NU filter map to the merged
+reconstruction, writes the unsharpened NU-filtered comparison as `_lp_nu`, and
+applies B-factor sharpening after NU filtering for `_pproc_nu`. The NU products
+are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
+mirroring is enabled.
 
 ## Strengths of the current design
 

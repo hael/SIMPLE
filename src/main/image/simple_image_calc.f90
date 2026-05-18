@@ -1682,8 +1682,14 @@ contains
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
-                    diff(i,j,k) = abs(even_raw%rmat(i,j,k) - odd_filt%rmat(i,j,k)) +&
-                                 &abs(even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))
+                    if( l_mask(i,j,k) )then
+                        diff(i,j,k) = abs(even_raw%rmat(i,j,k) - odd_filt%rmat(i,j,k)) +&
+                                     &abs(even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))
+                    else
+                        ! Neutral fill for mask-normalized tent smoothing only;
+                        ! outside-mask voxels are assigned the coarsest label later.
+                        diff(i,j,k) = 0.
+                    endif
                 end do
             end do
         end do

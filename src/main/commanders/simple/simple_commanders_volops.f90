@@ -384,7 +384,8 @@ contains
 
     subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
-            &nu_filter_vol, cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &extend_nu_filter_highres_shells, nu_filter_vol, cleanup_nu_filter, &
+            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
         class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -394,10 +395,10 @@ contains
         logical, allocatable :: l_mask(:,:,:)
         integer, allocatable :: imat(:,:,:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_even_raw, fname_odd_raw
-        type(image)      :: vol_even_raw, vol_odd_raw, vol_bfac, vol_no_bfac, vol_pproc, vol_lp, vol_msk
+        type(image)      :: vol_even_raw, vol_odd_raw, vol_bfac, vol_pproc, vol_lp, vol_msk
         type(image_msk)  :: envmsk
         real    :: fsc0143, fsc05, lplim, mskrad_px
-        integer :: ldim(3)
+        integer :: ldim(3), n_nu_postprocess_steps
         logical :: has_fsc
         fname_even_raw = raw_halfmap_name(fname_even)
         fname_odd_raw  = raw_halfmap_name(fname_odd)
@@ -445,15 +446,19 @@ contains
             endif
         endif
         call build_nu_postprocess_mask()
-        write(logfhandle,'(A)') '>>> NU postprocess full Fourier-shell candidate bank enabled'
-        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::], l_full_shell_bank=.true.)
+        write(logfhandle,'(A)') '>>> NU postprocess sequential Fourier-shell challenger enabled'
+        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
         call optimize_nu_cutoff_finds()
+        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_nu_postprocess_steps)
+        write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
+            &n_nu_postprocess_steps
         call vol_bfac%fft()
-        call vol_no_bfac%copy(vol_bfac)
-        call vol_bfac%apply_bfac(params%bfac)
-        call nu_filter_vol(vol_bfac,    vol_pproc)
-        call nu_filter_vol(vol_no_bfac, vol_lp)
+        call nu_filter_vol(vol_bfac, vol_lp)
         call vol_lp%write(fname_lp)
+        call vol_pproc%copy(vol_lp)
+        call vol_pproc%fft()
+        call vol_pproc%apply_bfac(params%bfac)
+        call vol_pproc%ifft()
         call vol_pproc%mask3D_soft(params%msk_crop)
         call vol_pproc%write(fname_pproc)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
@@ -464,7 +469,6 @@ contains
         call analyze_filtmap_neighbor_continuity(l_mask)
         call cleanup_nu_filter
         call vol_bfac%kill
-        call vol_no_bfac%kill
         call vol_even_raw%kill
         call vol_odd_raw%kill
         call vol_pproc%kill
