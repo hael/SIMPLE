@@ -426,7 +426,7 @@ contains
         ! read the project file
         call spproj%read(params%projfile)
         call spproj%write_segment_inside('projinfo')
-        call spproj%write_substk([params%fromp,params%top], params%outstk)
+        call spproj%write_substk(params%fromp, params%top, params%outstk)
         ! end gracefully
         call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')
     end subroutine exec_extract_substk
