@@ -25,8 +25,8 @@ contains
     !> Reduce one state's Cartesian partial reconstructions and restore dense
     !> even, odd, and merged volumes. On return build%vol/build%vol2 contain the
     !> restored half-volumes needed by automask, while vol_nu_base_even/odd and
-    !> optional vol_nu_aux_even/odd contain the nonuniform-filter inputs before
-    !> even/odd low-resolution insertion.
+    !> optional vol_nu_aux_even/odd contain the static-bank nonuniform-filter
+    !> auxiliary inputs before even/odd low-resolution insertion.
     subroutine restore_state_from_parts( params, build, cline, eorecvol_read, state, numlen_part, &
         &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
@@ -162,14 +162,16 @@ contains
             call vol_nu_base_even%new(ldim, params%smpd_crop)
             call vol_nu_base_odd%new( ldim, params%smpd_crop)
             if( params%l_ml_reg )then
-                call vol_nu_aux_even%new(ldim, params%smpd_crop)
-                call vol_nu_aux_odd%new( ldim, params%smpd_crop)
                 call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
                 call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
-                call vol_nu_aux_even%read(eonames(1))
-                call vol_nu_aux_odd%read( eonames(2))
-                call vol_nu_aux_even%mul(gridcorr_img)
-                call vol_nu_aux_odd%mul( gridcorr_img)
+                if( use_static_nu_aux_candidate() )then
+                    call vol_nu_aux_even%new(ldim, params%smpd_crop)
+                    call vol_nu_aux_odd%new( ldim, params%smpd_crop)
+                    call vol_nu_aux_even%read(eonames(1))
+                    call vol_nu_aux_odd%read( eonames(2))
+                    call vol_nu_aux_even%mul(gridcorr_img)
+                    call vol_nu_aux_odd%mul( gridcorr_img)
+                endif
             else
                 call vol_nu_base_even%read(eonames(1))
                 call vol_nu_base_odd%read( eonames(2))
@@ -207,7 +209,7 @@ contains
                 call vol_nu_base_odd%mul(update_frac_trail_rec)
                 call vol_nu_base_even%add(vol_prev_even)
                 call vol_nu_base_odd%add(vol_prev_odd)
-                if( params%l_ml_reg )then
+                if( use_static_nu_aux_candidate() )then
                     call vol_nu_aux_even%mul(update_frac_trail_rec)
                     call vol_nu_aux_odd%mul(update_frac_trail_rec)
                     call vol_nu_aux_even%add(vol_prev_even)
@@ -225,6 +227,10 @@ contains
             endif
             if( L_BENCH_GLOB ) timings%trail_restored_halves = timings%trail_restored_halves + toc(t_trail)
         end subroutine trail_restored_halves_if_needed
+
+        logical function use_static_nu_aux_candidate() result(l_use_aux)
+            l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
+        end function use_static_nu_aux_candidate
 
         subroutine cleanup_restore_state()
             call vol_prev_even%kill
@@ -419,7 +425,7 @@ contains
             integer :: n_highres_steps
             n_highres_steps = nu_highres_steps_for_state()
             call cleanup_nu_aux_images()
-            if( params%l_ml_reg )then
+            if( use_static_nu_aux_candidate() )then
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
@@ -430,6 +436,10 @@ contains
                     &n_highres_steps=n_highres_steps)
             endif
         end subroutine setup_nonuniform_filter
+
+        logical function use_static_nu_aux_candidate() result(l_use_aux)
+            l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
+        end function use_static_nu_aux_candidate
 
         subroutine refine_nonuniform_filter_bank()
             type(nu_highres_extension_stats) :: ext_stats

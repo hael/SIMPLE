@@ -66,6 +66,7 @@ integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:,:,:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_index(:,:,:)
+integer,          allocatable :: nu_mask_vox(:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -196,6 +197,7 @@ contains
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
         if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
+        if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
         call cleanup_aux_bank
         ldim = 0
         box  = 0
@@ -250,7 +252,11 @@ contains
         integer :: i, j, k, imask
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_index')
         if( allocated(nu_mask_index) ) deallocate(nu_mask_index)
+        if( allocated(nu_mask_vox)   ) deallocate(nu_mask_vox)
+        n_nu_mask = count(nu_lmask)
+        if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_index')
         allocate(nu_mask_index(ldim(1),ldim(2),ldim(3)), source=0)
+        allocate(nu_mask_vox(3,n_nu_mask), source=0)
         imask = 0
         do k = 1, ldim(3)
             do j = 1, ldim(2)
@@ -258,11 +264,13 @@ contains
                     if( .not.nu_lmask(i,j,k) ) cycle
                     imask = imask + 1
                     nu_mask_index(i,j,k) = imask
+                    nu_mask_vox(1,imask) = i
+                    nu_mask_vox(2,imask) = j
+                    nu_mask_vox(3,imask) = k
                 end do
             end do
         end do
-        n_nu_mask = imask
-        if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_index')
+        if( imask /= n_nu_mask ) THROW_HARD('mask voxel count mismatch; setup_nu_mask_index')
     end subroutine setup_nu_mask_index
 
     subroutine pack_nu_dmat_candidate( dmat_full, icand )
@@ -270,18 +278,17 @@ contains
         integer, intent(in) :: icand
         integer :: i, j, k, imask
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; pack_nu_dmat_candidate')
-        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; pack_nu_dmat_candidate')
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; pack_nu_dmat_candidate')
         if( size(dmats_mask,1) /= n_nu_mask ) THROW_HARD('dmats_mask mask dimension mismatch; pack_nu_dmat_candidate')
         if( icand < 1 .or. icand > size(dmats_mask,2) ) THROW_HARD('candidate index out of range; pack_nu_dmat_candidate')
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    imask = nu_mask_index(i,j,k)
-                    if( imask == 0 ) cycle
-                    dmats_mask(imask,icand) = dmat_full(i,j,k)
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            dmats_mask(imask,icand) = dmat_full(i,j,k)
         end do
+        !$omp end parallel do
     end subroutine pack_nu_dmat_candidate
 
     subroutine unpack_nu_dmat_candidate( icand, dmat_full )
@@ -290,18 +297,17 @@ contains
         integer :: i, j, k, imask
         real :: x
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; unpack_nu_dmat_candidate')
-        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; unpack_nu_dmat_candidate')
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; unpack_nu_dmat_candidate')
         if( icand < 1 .or. icand > size(dmats_mask,2) ) THROW_HARD('candidate index out of range; unpack_nu_dmat_candidate')
         dmat_full = huge(x)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    imask = nu_mask_index(i,j,k)
-                    if( imask == 0 ) cycle
-                    dmat_full(i,j,k) = dmats_mask(imask,icand)
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            dmat_full(i,j,k) = dmats_mask(imask,icand)
         end do
+        !$omp end parallel do
     end subroutine unpack_nu_dmat_candidate
 
     subroutine cache_filtered_vols( vol_even, vol_odd )

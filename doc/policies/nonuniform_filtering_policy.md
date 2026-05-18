@@ -50,7 +50,7 @@ Mask precedence is:
 2. existing compatible state-specific automask, when `automsk != 'no'`
 3. spherical support mask derived from `mskdiam`
 
-When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base nonuniform input and supplies the ML-regularized even/odd pair as an auxiliary candidate source. Both pairs are clean of low-resolution insertion and receive any trailing blend before filtering. The auxiliary coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
+When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base nonuniform input. In the static NU bank path (`nu_refine=no`), it may also supply the ML-regularized even/odd pair as an auxiliary candidate source. In the refinement-ratchet path (`nu_refine=yes`, as in `refine3D_auto`), ML-regularized auxiliary candidates are not supplied; the high-resolution shell challenger owns the refinement experiment. Any supplied pairs are clean of low-resolution insertion and receive any trailing blend before filtering. The auxiliary coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
 
 The auxiliary source remains a distinct candidate source. It does not replace a
 base low-pass bank member. When an auxiliary candidate wins, source provenance is
@@ -74,7 +74,7 @@ Actual filenames are built by appending `NUFILT_SUFFIX`, currently `_nu_filt`, t
 The filter currently:
 
 1. builds a bank of low-pass filtered even/odd volumes from the unfiltered pair
-2. optionally appends auxiliary pre-filtered even/odd pairs to that candidate bank
+2. optionally appends auxiliary pre-filtered even/odd pairs to that candidate bank only for static-bank NU filtering
 3. maps all candidates onto a shared filter-bank coordinate axis
 4. caches the low-pass-filtered base bank on disk
 5. computes voxelwise objective maps across all candidates
@@ -102,7 +102,7 @@ The smoothing stage is intended to reduce abrupt local jumps in the selected fil
 - neighbor penalties are normalized by the number of in-mask neighbors, so boundary and thin-mask voxels do not receive systematically weaker or stronger regularization
 - ties preserve the current label within a small tolerance instead of drifting to the lowest candidate index
 
-Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volumes are supplied. In the current `volassemble` ML-regularized path, the auxiliary candidate is the ML-regularized even/odd pair and its coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
+Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volumes are supplied. In the current `volassemble` ML-regularized static-bank path, the auxiliary candidate is the ML-regularized even/odd pair and its coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`. When `nu_refine=yes`, no ML-regularized auxiliary candidate is supplied to the initial NU competition.
 
 Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, jump-penalty settings, candidate coordinates, changed voxels per iteration, and mean site energy.
 Auxiliary-candidate diagnostics also log the unary aux-vs-best-base margin and
@@ -202,4 +202,4 @@ Architectural target:
 
 - `volassemble` should orchestrate nonuniform filtering.
 - A dedicated volume postprocessing service should own the filter-bank setup, objective evaluation, and output synthesis.
-- When `ml_reg=yes`, `volassemble` should feed the `_unfil` pair as the base nonuniform input and may add the ML-regularized pair as an auxiliary candidate source.
+- When `ml_reg=yes`, `volassemble` should feed the `_unfil` pair as the base nonuniform input. It may add the ML-regularized pair as an auxiliary candidate source only in static-bank NU filtering (`nu_refine=no`).
