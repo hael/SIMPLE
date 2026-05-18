@@ -135,6 +135,10 @@ contains
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
         call send_meta(string('waiting for picking references'))
         ! make directories structure
+        odir           = DIR_STREAM
+        odir_completed = DIR_STREAM_COMPLETED
+        odir_picker    = PATH_HERE//DIR_PICKER
+        odir_extract   = PATH_HERE//DIR_EXTRACT
         call simple_mkdir(odir)
         call simple_mkdir(odir//STDERROUT_DIR)
         call simple_mkdir(odir_completed)
@@ -170,11 +174,7 @@ contains
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('stream_pick_extract must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
-        ! directories structure & restart
-        odir                       = DIR_STREAM
-        odir_completed             = DIR_STREAM_COMPLETED
-        odir_picker                = PATH_HERE//DIR_PICKER
-        odir_extract               = PATH_HERE//DIR_EXTRACT
+        ! restart
         pick_extract_set_counter = 0    ! global counter of projects to be processed
         nptcls_glob              = 0    ! global number of particles
         nmics_rejected_glob      = 0    ! global number of micrographs rejected
