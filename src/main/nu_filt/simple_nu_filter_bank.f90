@@ -113,6 +113,12 @@ contains
         lowpass_limit_to_candidate_coord = real(n_base)
     end function lowpass_limit_to_candidate_coord
 
+    module real function get_nu_filter_bank_finest_lp()
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; get_nu_filter_bank_finest_lp')
+        if( size(cutoff_finds) < 1 ) THROW_HARD('empty filter bank; get_nu_filter_bank_finest_lp')
+        get_nu_filter_bank_finest_lp = cutoff_find_to_lowpass_limit(size(cutoff_finds))
+    end function get_nu_filter_bank_finest_lp
+
     module subroutine optimize_nu_cutoff_finds()
         integer, allocatable :: candmap(:,:,:)
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask

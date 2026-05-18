@@ -3,6 +3,7 @@ module simple_matcher_smpl_and_lplims
 use simple_pftc_srch_api
 use simple_builder, only: builder
 use simple_refine3D_fnames, only: refine3D_fsc_fname
+use simple_nu_filter_policy, only: read_nu_align_lp_for_state
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
@@ -17,11 +18,12 @@ contains
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
         real, allocatable :: resarr(:), fsc_arr(:)
-        real              :: fsc0143, fsc05
+        real              :: fsc0143, fsc05, nu_align_lp
         real              :: mapres(params%nstates)
         integer           :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
         type(string)      :: fsc_fname
-        logical           :: fsc_bin_exists(params%nstates), all_fsc_bin_exist
+        logical           :: fsc_bin_exists(params%nstates), all_fsc_bin_exist, l_nu_align_lp
+        l_nu_align_lp = .false.
         if( params%l_lpset )then
             ! set Fourier index range
             params%kfromto(2) = calc_fourier_index(params%lp, params%box, params%smpd)
@@ -61,6 +63,7 @@ contains
             enddo
             if(build%spproj%is_virgin_field(params%oritype)) &
                 all_fsc_bin_exist = (count(fsc_bin_exists)==params%nstates)
+            l_nu_align_lp = try_nu_refine_alignment_lp(params, build, nu_align_lp)
             ! set low-pass Fourier index limit
             if( all_fsc_bin_exist )then
                 resarr = build%img%get_res()
@@ -89,6 +92,10 @@ contains
                         build%fsc(s,:) = 0.
                     endif
                 end do
+            endif
+            if( l_nu_align_lp )then
+                params%kfromto(2) = calc_fourier_index(nu_align_lp, params%box, params%smpd)
+            else if( all_fsc_bin_exist )then
                 loc = minloc(mapres) ! best resolved
                 if( params%nstates == 1 )then
                     lp_ind = get_find_at_crit(build%fsc(1,:), params%lplim_crit, incrreslim=params%l_incrreslim)
@@ -115,9 +122,51 @@ contains
         nyqcrop_ind       = calc_fourier_index(2.*params%smpd_crop, params%box_crop, params%smpd_crop)
         params%kfromto(2) = min(params%kfromto(2), nyqcrop_ind)
         params%lp         = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
+        if( l_nu_align_lp )then
+            write(logfhandle,'(A,F8.3,A)') '>>> NU refinement matching low-pass limit: ', params%lp, ' A'
+        endif
         ! update low-pass limit in project
         call build%spproj_field%set_all2single('lp',params%lp)
     end subroutine set_bp_range3D
+
+    logical function try_nu_refine_alignment_lp( params, build, align_lp ) result( l_use )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        real,              intent(out)   :: align_lp
+        type(string) :: vol_even_nu, vol_odd_nu
+        real    :: state_lp
+        integer :: s
+        logical :: l_active, l_any_active, l_found, l_fresh_start
+        align_lp = 0.
+        l_use    = .false.
+        if( .not. params%l_nu_refine ) return
+        if( trim(params%filt_mode).ne.'nonuniform' ) return
+        l_fresh_start = params%which_iter <= params%startit .and. trim(params%continue).ne.'yes'
+        if( l_fresh_start ) return
+        l_any_active = .false.
+        l_use        = .true.
+        do s = 1, params%nstates
+            l_active = build%spproj%is_virgin_field(params%oritype) .or. &
+                &build%spproj_field%get_pop(s, 'state') > 0
+            if( .not. l_active ) cycle
+            l_any_active = .true.
+            call read_nu_align_lp_for_state(s, state_lp, l_found)
+            vol_even_nu = add2fbody(params%vols_even(s), MRC_EXT, NUFILT_SUFFIX)
+            vol_odd_nu  = add2fbody(params%vols_odd(s),  MRC_EXT, NUFILT_SUFFIX)
+            if( .not.(l_found .and. file_exists(vol_even_nu) .and. file_exists(vol_odd_nu)) )then
+                l_use = .false.
+            else if( align_lp <= TINY )then
+                align_lp = state_lp
+            else
+                align_lp = min(align_lp, state_lp)
+            endif
+            call vol_even_nu%kill
+            call vol_odd_nu%kill
+            if( .not. l_use ) return
+        enddo
+        if( .not. l_any_active ) l_use = .false.
+        if( align_lp <= TINY ) l_use = .false.
+    end function try_nu_refine_alignment_lp
 
     subroutine set_bp_range2D( params, build, cline, which_iter, frac_srch_space )
         class(parameters), intent(inout) :: params

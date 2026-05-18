@@ -88,6 +88,16 @@ This design is scientifically reasonable and easy to debug, but it pays a large 
 
 In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd references first, falls back to the regular even/odd references before filtered products exist, and avoids applying the ordinary low-pass filter on top of the nonuniform reference path.
 
+When `filt_mode=nonuniform`, `nu_refine=yes`, and the user has not set an
+explicit `lp`, the 3D matching/reprojection low-pass limit follows the finest
+active NU filter-bank limit from the previous `volassemble` pass instead of the
+global FSC resolution. `volassemble` records that limit only after writing the
+matching `_nu_filt` even/odd products. The matcher uses it only when the
+corresponding NU-filtered references are present for all active states; a fresh
+first iteration, missing NU metadata, or missing `_nu_filt` half maps falls back
+to the ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard user
+override, and `lpstop` still caps the selected matching bandwidth.
+
 ## Ordered-label smoothing regularization
 
 The nonuniform filter always applies ordered-label smoothing after the unary

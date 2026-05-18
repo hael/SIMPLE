@@ -242,6 +242,15 @@ when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
 challenges the uncoupled Fourier-shell NU filter bank one shell at a time for
 the final filtered map and also writes ordinary `_pproc`/`_lp` comparison outputs.
 
+In the coupled `nu_refine` path, gold-standard 3D matching must not continue to
+derive its alignment low-pass limit solely from the global FSC once NU-filtered
+references exist. If `lp` was not set by the user, the reprojection model uses
+the finest active NU filter-bank limit recorded by the previous `volassemble`
+pass, provided the corresponding `_nu_filt` even/odd references exist for all
+active states. A fresh first iteration and incomplete NU handoff artifacts fall
+back to the ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard
+override, and `lpstop` remains a cap on the final matcher bandwidth.
+
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction
 workflow, but they are not registered as `os_out` project handoff artifacts for

@@ -249,7 +249,8 @@ contains
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &extend_nu_filter_highres_shell_next, nu_highres_extension_stats
+            &extend_nu_filter_highres_shell_next, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
+        use simple_nu_filter_policy, only: write_nu_align_lp_for_state
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -392,6 +393,7 @@ contains
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
+            call record_nu_alignment_lowpass_limit()
             call cleanup_nonuniform_state()
             if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
         end subroutine run_state_nonuniform_filter
@@ -561,6 +563,15 @@ contains
             call eonames_nu(2)%kill
             call volname_nu%kill
         end subroutine write_nonuniform_outputs
+
+        subroutine record_nu_alignment_lowpass_limit()
+            real :: align_lp
+            if( .not. params%l_nu_refine ) return
+            align_lp = get_nu_filter_bank_finest_lp()
+            call write_nu_align_lp_for_state(state, align_lp)
+            write(logfhandle,'(A,F8.3,A)') &
+                &'>>> NU refinement matching low-pass limit for next iteration: ', align_lp, ' A'
+        end subroutine record_nu_alignment_lowpass_limit
 
         subroutine cleanup_nonuniform_state()
             call vol_even_nu%kill

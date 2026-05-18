@@ -44,7 +44,7 @@ implicit none
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
-          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats
+          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
 private
 #include "simple_local_flags.inc"
 
@@ -187,6 +187,9 @@ interface
     module real function lowpass_limit_to_candidate_coord( lp_angstrom )
         real, intent(in) :: lp_angstrom
     end function lowpass_limit_to_candidate_coord
+
+    module real function get_nu_filter_bank_finest_lp()
+    end function get_nu_filter_bank_finest_lp
 
     module subroutine optimize_nu_cutoff_finds()
     end subroutine optimize_nu_cutoff_finds
