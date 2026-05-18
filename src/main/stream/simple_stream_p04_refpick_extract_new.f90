@@ -134,11 +134,26 @@ contains
         call wait_for_folder2(params%dir_target)
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
         call send_meta(string('waiting for picking references'))
+        ! make directories structure
+        call simple_mkdir(odir)
+        call simple_mkdir(odir//STDERROUT_DIR)
+        call simple_mkdir(odir_completed)
+        call simple_mkdir(odir_picker)
+        call simple_mkdir(odir_extract)
+        ! wait for pickrefs
         if( .not. file_exists(params%pickrefs) )then
             write(logfhandle,'(A)') '>>> WAITING UP TO 24 HOURS FOR '//params%pickrefs%to_char()
             do i = 1, 8640
                 call sleep(10)
                 if( file_exists(params%pickrefs) ) exit
+                if( l_terminate                  ) then
+                    ! cleanup
+                    call spproj%kill
+                    call qsys_cleanup(params)
+                    ! end gracefully
+                    call simple_end('**** SIMPLE_STREAM_PICK_EXTRACT NORMAL STOP ****')
+                    call exit(0)
+                end if
             end do
             if( .not. file_exists(params%pickrefs) ) THROW_HARD('timed out waiting for pickrefs: '//params%pickrefs%to_char())
         endif
@@ -181,12 +196,6 @@ contains
                 endif
             endif
         endif
-        ! make directories structure
-        call simple_mkdir(odir)
-        call simple_mkdir(odir//STDERROUT_DIR)
-        call simple_mkdir(odir_completed)
-        call simple_mkdir(odir_picker)
-        call simple_mkdir(odir_extract)
         ! setup the environment for distributed execution
         call get_environment_variable(SIMPLE_STREAM_PICK_PARTITION, pick_part_env, envlen)
         if(envlen > 0) then
