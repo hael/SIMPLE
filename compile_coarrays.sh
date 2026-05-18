@@ -5,4 +5,3 @@ cd build
 cmake .. -D USE_COARRAYS=on
 make -j install
 #exit
-
