@@ -87,7 +87,11 @@ endif
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 rt_elapsed = toc(t_start)
-call print_nu_filtmap_lowpass_stats(l_mask)
+if( allocated(aux_even) )then
+    call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[aux_res])
+else
+    call print_nu_filtmap_lowpass_stats(l_mask)
+endif
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
 write(logfhandle,'(a,f10.3,a)') 'nonuniform filtering elapsed wall time: ', rt_elapsed, ' s'

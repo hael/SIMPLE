@@ -31,22 +31,6 @@ type :: eul_prob_tab
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
-    integer                     :: bench_fill_projs_ns            = 0
-    integer                     :: bench_fill_ref_evals           = 0
-    integer                     :: bench_fill_nsubs               = 0
-    integer                     :: bench_fill_neigh_evals         = 0
-    integer                     :: bench_fill_shift_seed_trials   = 0
-    integer                     :: bench_fill_shift_refine_trials = 0
-    real(timer_int_kind)        :: bench_fill_shift_seed          = 0.
-    real(timer_int_kind)        :: bench_fill_ref_sweep           = 0.
-    real(timer_int_kind)        :: bench_fill_select              = 0.
-    real(timer_int_kind)        :: bench_fill_neigh_eval          = 0.
-    real(timer_int_kind)        :: bench_fill_shift_refine        = 0.
-    real(timer_int_kind)        :: bench_assign_normalize         = 0.
-    real(timer_int_kind)        :: bench_assign_sort              = 0.
-    real(timer_int_kind)        :: bench_assign_graph             = 0.
-    real(timer_int_kind)        :: bench_assign_loop              = 0.
-    real(timer_int_kind)        :: bench_assign_fallback          = 0.
     contains
     ! CONSTRUCTOR
     procedure :: new
@@ -187,20 +171,7 @@ contains
                   &istate, iref_start
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
-        integer(timer_int_kind) :: t_local
-        real(timer_int_kind) :: rt_shift_seed, rt_ref_sweep, rt_select, rt_shift_refine
         logical :: l_prob_objfun
-        self%bench_fill_projs_ns            = 0
-        self%bench_fill_ref_evals           = 0
-        self%bench_fill_nsubs               = 0
-        self%bench_fill_neigh_evals         = 0
-        self%bench_fill_shift_seed_trials   = 0
-        self%bench_fill_shift_refine_trials = 0
-        self%bench_fill_shift_seed          = 0.
-        self%bench_fill_ref_sweep           = 0.
-        self%bench_fill_select              = 0.
-        self%bench_fill_neigh_eval          = 0.
-        self%bench_fill_shift_refine        = 0.
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         call seed_rnd
@@ -213,8 +184,6 @@ contains
         enddo
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
-        self%bench_fill_projs_ns  = projs_ns
-        self%bench_fill_ref_evals = self%nptcls * self%nrefs
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -225,20 +194,13 @@ contains
                 call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
-            self%bench_fill_shift_seed_trials   = self%nptcls
-            self%bench_fill_shift_refine_trials = self%nptcls * projs_ns
-            rt_shift_seed   = 0.
-            rt_ref_sweep    = 0.
-            rt_select       = 0.
-            rt_shift_refine = 0.
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob,t_local)&
-            !$omp proc_bind(close) schedule(static) reduction(+:rt_shift_seed,rt_ref_sweep,rt_select,rt_shift_refine)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob)&
+            !$omp proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best reference
-                t_local = tic()
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
                 istate     = o_prev%get_state()
                 irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
@@ -254,9 +216,7 @@ contains
                 endif
                 self%seed_shifts(:,i) = cxy(2:3)
                 self%seed_has_sh(i)   = .true.
-                rt_shift_seed = rt_shift_seed + toc(t_local)
                 ! (2) search projection directions using those shifts for all references
-                t_local = tic()
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
@@ -274,13 +234,9 @@ contains
                     dists_refs(ri,ithr)     = self%loc_tab(ri,i)%dist
                     self%loc_tab(ri,i)%inpl = irot
                 enddo
-                rt_ref_sweep = rt_ref_sweep + toc(t_local)
                 ! (3) see if we can refine the shifts by re-searching them for individual references in the 
                 !     identified probabilistic neighborhood
-                t_local = tic()
                 locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
-                rt_select = rt_select + toc(t_local)
-                t_local = tic()
                 do j = 1,projs_ns
                     ri     = locn(j,ithr)
                     istate = self%sinds(ri)
@@ -297,21 +253,14 @@ contains
                         self%loc_tab(ri,i)%has_sh = .true.
                     endif
                 end do
-                rt_shift_refine = rt_shift_refine + toc(t_local)
             enddo
             !$omp end parallel do
-            self%bench_fill_shift_seed   = rt_shift_seed
-            self%bench_fill_ref_sweep    = rt_ref_sweep
-            self%bench_fill_select       = rt_select
-            self%bench_fill_shift_refine = rt_shift_refine
         else
-            rt_ref_sweep = 0.
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot,t_local) proc_bind(close) schedule(static) reduction(+:rt_ref_sweep)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
-                t_local = tic()
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
                     iproj  = self%jinds(ri)
@@ -328,10 +277,8 @@ contains
                     endif
                     self%loc_tab(ri,i)%inpl = irot
                 enddo
-                rt_ref_sweep = rt_ref_sweep + toc(t_local)
             enddo
             !$omp end parallel do
-            self%bench_fill_ref_sweep = rt_ref_sweep
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
@@ -508,31 +455,20 @@ contains
                     &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
         real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres,iref_dist(self%nrefs), dists_sorted(self%nrefs)
         logical :: ptcl_avail(self%nptcls)
-        integer(timer_int_kind) :: t_local
-        self%bench_assign_normalize = 0.
-        self%bench_assign_sort      = 0.
-        self%bench_assign_graph     = 0.
-        self%bench_assign_loop      = 0.
-        self%bench_assign_fallback  = 0.
         ! normalization
-        if( L_BENCH_GLOB ) t_local = tic()
         call ref_score_tab(self, sorted_tab)
-        if( L_BENCH_GLOB ) self%bench_assign_normalize = toc(t_local)
         ! sorting each columns
-        if( L_BENCH_GLOB ) t_local = tic()
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
         do iref = 1, self%nrefs
             stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)
             call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
         enddo
         !$omp end parallel do
-        if( L_BENCH_GLOB ) self%bench_assign_sort = toc(t_local)
         projs_athres = 0.
         do istate = 1, self%nstates
             projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
         enddo
         ! first row is the current best reference distribution
-        if( L_BENCH_GLOB ) t_local = tic()
         iref_dist_inds = 1
         iref_dist      = sorted_tab(1,:)
         ptcl_avail     = .true.
@@ -552,7 +488,6 @@ contains
                 enddo
             enddo
         enddo
-        if( L_BENCH_GLOB ) self%bench_assign_loop = toc(t_local)
     end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab
@@ -809,11 +744,6 @@ contains
         if( allocated(self%state_exists) ) deallocate(self%state_exists)
         if( allocated(self%proj_exists)  ) deallocate(self%proj_exists)
         self%seed_nrots = 0
-        self%bench_assign_normalize = 0.
-        self%bench_assign_sort      = 0.
-        self%bench_assign_graph     = 0.
-        self%bench_assign_loop      = 0.
-        self%bench_assign_fallback  = 0.
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill

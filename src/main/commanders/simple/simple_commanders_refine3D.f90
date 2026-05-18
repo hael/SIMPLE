@@ -56,6 +56,7 @@ contains
         type(string)                :: init_vol
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
+        real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO = 4.0
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
         integer, parameter :: MINITS_REFINE3D_AUTO = 10
@@ -231,12 +232,13 @@ contains
                 endif
             endif
             if( .not. l_maxits_defined )then
-                maxits_auto = ceiling((2.0 * real(nptcls_eff)) / real(nptcls_per_iter))
+                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO * real(nptcls_eff)) / real(nptcls_per_iter))
                 maxits_auto = max(params%minits, min(50, max(2, maxits_auto)))
                 params%maxits = maxits_auto
                 call cline%set('maxits', params%maxits)
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> REFINE3D_AUTO MAXITS FOR ~2 UPDATES/PARTICLE: ', &
-                    &params%maxits, ' (MINIMUM: ', params%minits, ')'
+                write(logfhandle,'(A,I0,A,F5.1,A,I0,A)') '>>> REFINE3D_AUTO MAXITS: ', &
+                    &params%maxits, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO, &
+                    &' UPDATES/PARTICLE (MINIMUM: ', params%minits, ')'
             else if( params%maxits < params%minits )then
                 params%maxits = params%minits
                 call cline%set('maxits', params%maxits)

@@ -13,9 +13,10 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows can instead walk the available Fourier shells one at a
-! time and then apply the resulting local filter map to a merged/sharpened map:
-!    call extend_nu_filter_highres_shells(vol_even, vol_odd)
+! Postprocess workflows can instead build the full available Fourier-shell bank
+! up front and then apply the resulting local filter map to a merged/sharpened map:
+!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::], l_full_shell_bank=.true.)
+!    call optimize_nu_cutoff_finds()
 !    call nu_filter_vol(vol, vol_filt)
 !
 ! supports auxiliary candidate pairs that can compete with the
@@ -89,11 +90,13 @@ contains
         cutoff_find_to_lowpass_limit = calc_lowpass_lim(cutoff_finds(icut), box, smpd)
     end function cutoff_find_to_lowpass_limit
 
-    subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
+    subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, l_full_shell_bank )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
+        logical, optional, intent(in) :: l_full_shell_bank
         integer, allocatable :: cutoff_finds_tmp(:)
         integer :: i, n_extra, n_valid, new_find
+        logical :: l_full_bank
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
         box  = ldim(1)
@@ -105,20 +108,34 @@ contains
         winsz_tent = max(1, nint(WINSZ_TENT_ANGSTROM / smpd))
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
+        l_full_bank = .false.
+        if( present(l_full_shell_bank) ) l_full_bank = l_full_shell_bank
         n_extra = 0
-        if( present(n_highres_steps) ) n_extra = min(size(EXTRA_LIMITS), max(0, n_highres_steps))
+        if( l_full_bank )then
+            n_extra = max(0, box / 2)
+        else if( present(n_highres_steps) )then
+            n_extra = min(size(EXTRA_LIMITS), max(0, n_highres_steps))
+        endif
         allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
         do i = 1, size(lowpass_limits)
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
         n_valid = size(lowpass_limits)
-        do i = 1, n_extra
-            new_find = calc_fourier_index(EXTRA_LIMITS(i), box, smpd)
-            if( new_find <= cutoff_finds_tmp(n_valid) ) cycle
-            if( any(cutoff_finds_tmp(:n_valid) == new_find) ) cycle
-            n_valid = n_valid + 1
-            cutoff_finds_tmp(n_valid) = new_find
-        end do
+        if( l_full_bank )then
+            do new_find = cutoff_finds_tmp(n_valid) + 1, box / 2
+                if( any(cutoff_finds_tmp(:n_valid) == new_find) ) cycle
+                n_valid = n_valid + 1
+                cutoff_finds_tmp(n_valid) = new_find
+            end do
+        else
+            do i = 1, n_extra
+                new_find = calc_fourier_index(EXTRA_LIMITS(i), box, smpd)
+                if( new_find <= cutoff_finds_tmp(n_valid) ) cycle
+                if( any(cutoff_finds_tmp(:n_valid) == new_find) ) cycle
+                n_valid = n_valid + 1
+                cutoff_finds_tmp(n_valid) = new_find
+            end do
+        endif
         allocate(cutoff_finds(n_valid))
         cutoff_finds = cutoff_finds_tmp(:n_valid)
         deallocate(cutoff_finds_tmp)
@@ -303,18 +320,20 @@ contains
         deallocate(bwfilter)
     end subroutine generate_single_filtered_pair
 
-    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps )
+    subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps, &
+        &l_full_shell_bank )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
+        logical,     optional, intent(in) :: l_full_shell_bank
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:)
         integer :: i, n_candidates
         real    :: x
-        call init_nu_filter(vol_even, vol_odd, n_highres_steps)
+        call init_nu_filter(vol_even, vol_odd, n_highres_steps, l_full_shell_bank)
         if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
@@ -447,7 +466,10 @@ contains
             end do
         end do
         !$omp end parallel do
+        call log_nu_aux_unary_margin_stats(n_base)
+        call log_nu_candidate_selection_counts(candmap, n_base, 'before ordered-label smoothing')
         call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
+        call log_nu_candidate_selection_counts(candmap, n_base, 'after ordered-label smoothing')
         call candidate_map_to_filt_and_src(candmap, n_base)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(nx,ny,nz), source=dmats(:,:,:,n_base))
@@ -468,8 +490,9 @@ contains
                 do i = 1, nx
                     icand = candmap(i,j,k)
                     ! Base-bank winners preserve their low-pass index in filtmap.
-                    ! Auxiliary winners are tracked through srcmap only, because
-                    ! they do not correspond to one of cutoff_finds(:).
+                    ! Auxiliary winners preserve their provenance in srcmap while
+                    ! filtmap stores the nearest effective base-bank label for
+                    ! diagnostics and map visualization.
                     if( icand <= n_base ) then
                         srcmap(i,j,k)  = 1
                         filtmap(i,j,k) = icand
@@ -478,13 +501,104 @@ contains
                         !   1   -> base low-pass bank
                         !   2+  -> auxiliary pair 1, 2, ...
                         srcmap(i,j,k)  = icand - n_base + 1
-                        filtmap(i,j,k) = 1
+                        filtmap(i,j,k) = nu_effective_base_label_for_candidate(icand, n_base)
                     end if
                 end do
             end do
         end do
         !$omp end parallel do
     end subroutine candidate_map_to_filt_and_src
+
+    subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
+        integer,          intent(in) :: candmap(:,:,:), n_base
+        character(len=*), intent(in) :: stage
+        integer :: icand, iaux, n_candidates, nmask, nvox, nbasevox, nauxvox, eff_label
+        real    :: pct
+        character(len=16) :: auxtag
+        if( .not.allocated(nu_lmask) ) return
+        if( .not.allocated(candidate_coords) ) return
+        n_candidates = size(candidate_coords)
+        if( n_candidates <= n_base ) return
+        nmask = count(nu_lmask)
+        if( nmask == 0 ) return
+        nbasevox = 0
+        do icand = 1, n_base
+            nbasevox = nbasevox + count(nu_lmask .and. candmap == icand)
+        end do
+        nauxvox = 0
+        do icand = n_base + 1, n_candidates
+            nauxvox = nauxvox + count(nu_lmask .and. candmap == icand)
+        end do
+        write(logfhandle,'(A,A)') '>>> NU candidate source assignments ', trim(stage)
+        write(logfhandle,'(A,I12)') '    Mask voxels:      ', nmask
+        pct = 100. * real(nbasevox) / real(nmask)
+        write(logfhandle,'(A,I12,A,F8.2,A)') '    Base-bank voxels: ', nbasevox, ' (', pct, '%)'
+        pct = 100. * real(nauxvox) / real(nmask)
+        write(logfhandle,'(A,I12,A,F8.2,A)') '    Auxiliary voxels: ', nauxvox, ' (', pct, '%)'
+        write(logfhandle,'(A)') '    Source      Coord  Nearest LP(A)        Voxels    Pct mask'
+        do iaux = 1, n_candidates - n_base
+            icand = n_base + iaux
+            eff_label = nu_effective_base_label_for_candidate(icand, n_base)
+            nvox = count(nu_lmask .and. candmap == icand)
+            pct = 100. * real(nvox) / real(nmask)
+            write(auxtag,'(A,I0)') 'Aux', iaux
+            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.1,2X,I12,2X,F8.2,A)') &
+                &auxtag, candidate_coords(icand), cutoff_find_to_lowpass_limit(eff_label), nvox, pct, '%'
+        end do
+    end subroutine log_nu_candidate_selection_counts
+
+    subroutine log_nu_aux_unary_margin_stats( n_base )
+        integer, intent(in) :: n_base
+        integer :: iaux, ibase, icand, n_candidates, nmask, nwins, eff_label
+        integer :: i, j, k
+        real    :: best_base, margin, margin_sum, win_margin_sum, avg_margin, avg_win_margin, pct
+        character(len=16) :: auxtag
+        if( .not.allocated(dmats) ) return
+        if( .not.allocated(nu_lmask) ) return
+        if( .not.allocated(candidate_coords) ) return
+        n_candidates = size(dmats, 4)
+        if( n_candidates <= n_base ) return
+        nmask = count(nu_lmask)
+        if( nmask == 0 ) return
+        write(logfhandle,'(A)') '>>> NU auxiliary unary margins versus best base-bank candidate'
+        write(logfhandle,'(A)') '    Positive margin means the auxiliary candidate has the lower unary objective.'
+        write(logfhandle,'(A)') '    Source      Coord  Nearest LP(A)      Wins    Pct mask   Mean margin    Win margin'
+        do iaux = 1, n_candidates - n_base
+            icand = n_base + iaux
+            eff_label = nu_effective_base_label_for_candidate(icand, n_base)
+            nwins = 0
+            margin_sum = 0.
+            win_margin_sum = 0.
+            !$omp parallel do collapse(3) schedule(static) default(shared) &
+            !$omp private(i,j,k,ibase,best_base,margin) reduction(+:nwins,margin_sum,win_margin_sum) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        best_base = dmats(i,j,k,1)
+                        do ibase = 2, n_base
+                            best_base = min(best_base, dmats(i,j,k,ibase))
+                        end do
+                        margin = best_base - dmats(i,j,k,icand)
+                        margin_sum = margin_sum + margin
+                        if( margin > 0. )then
+                            nwins = nwins + 1
+                            win_margin_sum = win_margin_sum + margin
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            avg_margin = margin_sum / real(nmask)
+            avg_win_margin = 0.
+            if( nwins > 0 ) avg_win_margin = win_margin_sum / real(nwins)
+            pct = 100. * real(nwins) / real(nmask)
+            write(auxtag,'(A,I0)') 'Aux', iaux
+            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.1,2X,I8,2X,F8.2,A,2X,F12.5,2X,F12.5)') &
+                &auxtag, candidate_coords(icand), cutoff_find_to_lowpass_limit(eff_label), &
+                &nwins, pct, '%', avg_margin, avg_win_margin
+        end do
+    end subroutine log_nu_aux_unary_margin_stats
 
     subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer, intent(inout) :: candmap(:,:,:)
@@ -1019,6 +1133,13 @@ contains
         nu_candidate_coord_for_label = real(ilabel)
     end function nu_candidate_coord_for_label
 
+    integer function nu_effective_base_label_for_candidate( icand, n_base )
+        integer, intent(in) :: icand, n_base
+        if( n_base < 1 ) THROW_HARD('empty base bank; nu_effective_base_label_for_candidate')
+        nu_effective_base_label_for_candidate = nint(nu_candidate_coord_for_label(icand))
+        nu_effective_base_label_for_candidate = max(1, min(n_base, nu_effective_base_label_for_candidate))
+    end function nu_effective_base_label_for_candidate
+
     subroutine apply_nu_highres_extension_selection( extend_to_new, new_label )
         logical, intent(in) :: extend_to_new(:,:,:)
         integer, intent(in) :: new_label
@@ -1226,9 +1347,9 @@ contains
         else
             nselected = count(mask)
         end if
-        if( nselected == 0 ) THROW_HARD('No local resolution values selected in calc_filtmap_lowpass_histogram')
         counts       = 0
         percentages  = 0.
+        if( nselected == 0 ) return
         do icut = 1, size(cutoff_finds)
             if( allocated(srcmap) ) then
                 counts(icut) = count(filtmap == icut .and. srcmap == 1 .and. mask)
@@ -1289,6 +1410,7 @@ contains
             nbase = count(srcmap == 1 .and. mask)
             if( nbase == 0 ) then
                 write(logfhandle,'(A)') '>>> No base low-pass selections remain after auxiliary-source optimization'
+                call print_filtmap_lowpass_histogram(mask, aux_resolutions)
                 return
             end if
         end if

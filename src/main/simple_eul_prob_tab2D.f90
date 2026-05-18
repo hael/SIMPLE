@@ -29,11 +29,6 @@ type :: eul_prob_tab2D
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
     integer                     :: nhood_sz = 1      !< probabilistic neighborhood size used in fill_tab/ref_assign
-    real(timer_int_kind)        :: bench_assign_normalize = 0.
-    real(timer_int_kind)        :: bench_assign_sort      = 0.
-    real(timer_int_kind)        :: bench_assign_graph     = 0.
-    real(timer_int_kind)        :: bench_assign_loop      = 0.
-    real(timer_int_kind)        :: bench_assign_fallback  = 0.
     contains
     ! CONSTRUCTOR
     procedure :: new
@@ -337,12 +332,6 @@ contains
         logical :: class_active(self%nclasses)
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc
         real    :: best_dist, power
-        integer(timer_int_kind) :: t_local
-        self%bench_assign_normalize = 0.
-        self%bench_assign_sort      = 0.
-        self%bench_assign_graph     = 0.
-        self%bench_assign_loop      = 0.
-        self%bench_assign_fallback  = 0.
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -362,11 +351,8 @@ contains
         ! keep raw distances for output (objective values), normalize only for assignment ordering
         dists_raw = self%loc_tab(:,:)%dist
         ! normalization
-        if( L_BENCH_GLOB ) t_local = tic()
         call self%ref_normalize
-        if( L_BENCH_GLOB ) self%bench_assign_normalize = toc(t_local)
         ! sort each column
-        if( L_BENCH_GLOB ) t_local = tic()
         sorted_tab = transpose(self%loc_tab(:,:)%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
         do icls = 1, self%nclasses
@@ -378,10 +364,8 @@ contains
             endif
         end do
         !$omp end parallel do
-        if( L_BENCH_GLOB ) self%bench_assign_sort = toc(t_local)
         icls_dist_inds = 1
         ptcl_avail     = .true.
-        if( L_BENCH_GLOB ) t_local = tic()
         do while( any(ptcl_avail) )
             ! collect the current best distance for each class, skipping exhausted ones
             neligible = 0
@@ -412,9 +396,7 @@ contains
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
         end do
-        if( L_BENCH_GLOB ) self%bench_assign_loop = toc(t_local)
         if( any(ptcl_avail) )then
-            if( L_BENCH_GLOB ) t_local = tic()
             do i = 1, self%nptcls
                 if( .not. ptcl_avail(i) ) cycle
                 assigned_icls = 0
@@ -443,7 +425,6 @@ contains
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 ptcl_avail(i)     = .false.
             end do
-            if( L_BENCH_GLOB ) self%bench_assign_fallback = toc(t_local)
         endif
     end subroutine ref_assign_pow_smpl
 
@@ -458,11 +439,6 @@ contains
         if( allocated(self%pinds)          ) deallocate(self%pinds)
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
         self%seed_nrots = 0
-        self%bench_assign_normalize = 0.
-        self%bench_assign_sort      = 0.
-        self%bench_assign_graph     = 0.
-        self%bench_assign_loop      = 0.
-        self%bench_assign_fallback  = 0.
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill

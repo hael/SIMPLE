@@ -383,7 +383,7 @@ contains
     end subroutine postprocess_volume_from_files
 
     subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
-        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, extend_nu_filter_highres_shells, &
+        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
             &nu_filter_vol, cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
         class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
         integer,         intent(in)    :: box
@@ -397,16 +397,18 @@ contains
         type(image)      :: vol_even_raw, vol_odd_raw, vol_bfac, vol_no_bfac, vol_pproc, vol_lp, vol_msk
         type(image_msk)  :: envmsk
         real    :: fsc0143, fsc05, lplim, mskrad_px
-        integer :: ldim(3), nsteps
+        integer :: ldim(3)
         logical :: has_fsc
         fname_even_raw = raw_halfmap_name(fname_even)
         fname_odd_raw  = raw_halfmap_name(fname_odd)
         if( .not.file_exists(fname_vol)      ) THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         if( .not.file_exists(fname_even_raw) ) THROW_HARD('even half-map: '//fname_even_raw%to_char()//' does not exist')
         if( .not.file_exists(fname_odd_raw)  ) THROW_HARD('odd half-map: '//fname_odd_raw%to_char()//' does not exist')
-        fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_SUFFIX))
+        write(logfhandle,'(A)') '>>> Writing classical postprocess comparison map'
+        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline)
+        fname_pproc = basename(add2fbody(fname_vol,   params%ext, PPROC_NU_SUFFIX))
         fname_mirr  = basename(add2fbody(fname_pproc, params%ext, MIRR_SUFFIX))
-        fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_SUFFIX))
+        fname_lp    = basename(add2fbody(fname_vol,   params%ext, LP_NU_SUFFIX))
         ldim = [box,box,box]
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
@@ -443,11 +445,9 @@ contains
             endif
         endif
         call build_nu_postprocess_mask()
-        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
+        write(logfhandle,'(A)') '>>> NU postprocess full Fourier-shell candidate bank enabled'
+        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::], l_full_shell_bank=.true.)
         call optimize_nu_cutoff_finds()
-        write(logfhandle,'(A)') '>>> NU postprocess Fourier-shell resolution expansion refinement enabled'
-        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=nsteps)
-        write(logfhandle,'(A,I0)') '>>> NU postprocess Fourier-shell expansion steps accepted: ', nsteps
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)

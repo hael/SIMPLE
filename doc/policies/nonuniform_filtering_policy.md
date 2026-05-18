@@ -52,6 +52,13 @@ Mask precedence is:
 
 When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base nonuniform input and supplies the ML-regularized even/odd pair as an auxiliary candidate source. Both pairs are clean of low-resolution insertion and receive any trailing blend before filtering. The auxiliary coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
 
+The auxiliary source remains a distinct candidate source. It does not replace a
+base low-pass bank member. When an auxiliary candidate wins, source provenance is
+tracked separately from the effective local low-pass label: `srcmap` identifies
+the auxiliary source used for output synthesis, while `filtmap` stores the
+nearest base-bank label implied by the auxiliary effective-resolution coordinate
+for diagnostics and map visualization.
+
 ## Outputs
 
 For each state, the filter produces:
@@ -98,6 +105,10 @@ The smoothing stage is intended to reduce abrupt local jumps in the selected fil
 Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volumes are supplied. In the current `volassemble` ML-regularized path, the auxiliary candidate is the ML-regularized even/odd pair and its coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
 
 Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, jump-penalty settings, candidate coordinates, changed voxels per iteration, and mean site energy.
+Auxiliary-candidate diagnostics also log the unary aux-vs-best-base margin and
+the auxiliary source assignment counts before and after ordered-label smoothing,
+so workflow logs can distinguish an auxiliary candidate that loses the unary
+competition from one that is removed by the spatial prior.
 
 ### Ordered-label smoothing
 
@@ -124,19 +135,20 @@ When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative ratchet
 
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
-from raw even/odd half maps without ML-regularized auxiliary candidates, then
-walks the actual Fourier-transform sampling one shell at a time from the
-current finest low-pass bin toward Nyquist. Each shell uses the same constrained
-two-label extension refinement and ordered-label smoothing as the iterative
-path. The postprocess walk stops when the next shell is not attempted, no voxels
-move to it, or the move is not strong enough to promote another shell.
+from raw even/odd half maps without ML-regularized auxiliary candidates. Unlike
+the iterative refinement ratchet, postprocessing builds the full available
+Fourier-shell low-pass bank up front, through Nyquist, and lets the unary
+objective plus ordered-label smoothing select broadly from that bank in one
+optimization. There is no postprocess-only threshold requiring enough frontier
+voxels to accept one shell before the next shell can contribute.
 
-`postprocess_nu` mirrors the standard postprocessing order: it determines or
-accepts the B factor in the same way as `postprocess`, applies the B-factor
-sharpening to the merged reconstruction map, and then uses the NU filter map
-where the standard commander would use the FSC-derived optimal filter. The
-matched non-B-factor map is filtered with the same NU filter map and written as
-the low-pass companion output.
+`postprocess_nu` first writes the standard classically postprocessed comparison
+outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
+the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
+accepts the B factor in the same way, applies B-factor sharpening to the merged
+reconstruction map, and uses the NU filter map where the standard commander
+would use the FSC-derived optimal filter. The NU products are written separately
+as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when mirroring is enabled.
 
 ## Strengths of the current design
 

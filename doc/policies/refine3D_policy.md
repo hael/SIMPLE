@@ -219,17 +219,18 @@ should not re-read all particle images merely to recreate the map already
 registered by the preceding ab initio workflow.
 
 `refine3D_auto` must run at least ten refinement iterations. Its automatic
-iteration planner may extend beyond that to reach the requested updates per
-particle, but the updates-per-particle estimate must not reduce the run below
-ten iterations, and normal convergence checks must respect that minimum.
+iteration planner aims for roughly four particle updates when deriving the
+maximum iteration count from the sampled-update size, but that estimate must
+not reduce the run below ten iterations, and normal convergence checks must
+respect that minimum.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and can promote at most one
 high-resolution bin per refinement iteration. The terminal all-particle
 `reconstruct3D` pass leaves refinement and uses reconstruction postprocessing:
 when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
-performs the uncoupled Fourier-shell filter-bank expansion for the final
-filtered map.
+builds the uncoupled full Fourier-shell NU filter bank for the final filtered
+map and also writes ordinary `_pproc`/`_lp` comparison outputs.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction
