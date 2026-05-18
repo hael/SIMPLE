@@ -1,4 +1,4 @@
-!@descr: motion correction for movies of nanoparticles with aberation-corrected TEM
+!@descr: motion correction for movies of nanoparticles with aberration-corrected TEM
 module simple_motion_align_nano
 use simple_core_module_api
 use simple_image,      only: image
@@ -9,7 +9,7 @@ public :: motion_align_nano
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: MINITS_DCORR  = 3, MAXITS_DCORR  = 10
+integer, parameter :: MINITS_DCORR = 3, MAXITS_DCORR = 10
 
 type :: motion_align_nano
     private
@@ -39,8 +39,10 @@ contains
     ! Doers
     procedure, private :: calc_shifts
     procedure, private :: shift_frames_gen_ref
+    procedure, private :: shift_frames_partial_ref
     procedure          :: align
     procedure, private :: align_dcorr
+    procedure, private :: align_dcorr_co
     procedure, private :: gen_weights
     procedure, private :: calc_rmsd
     ! Getters & setters
@@ -141,15 +143,21 @@ contains
         class(motion_align_nano), intent(inout) :: self
         class(image),   optional, intent(inout) :: reference
         real,           optional, intent(in)    :: ini_shifts(self%nframes,2)
+        integer :: iframe, iter
         real    :: frameweights_saved(self%nframes), opt_shifts_prev(self%nframes,2), rmsd
-        integer :: iter, iframe
         logical :: l_refset
-        l_refset = present(reference)
+
         ! init shifts & generate groups
         self%opt_shifts = 0.
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
         ! init weights matrix
         call self%gen_weights
+
+        l_refset = present(reference)
+        if( num_images() > 1 )then
+            call self%align_dcorr_co( reference, l_refset )
+            return
+        endif
         ! shift frames, generate reference & calculates correlation
         call self%shift_frames_gen_ref
         if( l_refset ) call self%reference%copy(reference)
@@ -161,21 +169,103 @@ contains
                 ! setting weight to zero if reference provided on the first iteration only
                 ! to circumvent frame subtraction from reference
                 frameweights_saved = self%frameweights
-                self%frameweights = 0.
+                self%frameweights  = 0.
             endif
             !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
             do iframe = 1,self%nframes
                 call self%calc_shifts(iframe)
-            end do
+            enddo
             !$omp end parallel do
-            if( l_refset .and. iter==1) self%frameweights = frameweights_saved
+            if( l_refset .and. iter==1 ) self%frameweights = frameweights_saved
             ! shift frames, generate reference & calculates correlations
             call self%shift_frames_gen_ref
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
-            if( iter > MINITS_DCORR .and. rmsd < 0.1 ) exit
+            if( iter > MINITS_DCORR .and. rmsd < 0.1 )exit
         enddo
     end subroutine align_dcorr
+
+    subroutine align_dcorr_co( self, reference, l_refset )
+        class(motion_align_nano), intent(inout) :: self
+        class(image),   optional, intent(inout) :: reference
+        logical,                  intent(in)    :: l_refset
+        real,    allocatable :: opt_shifts_co(:,:)[:]
+        real,    allocatable :: partial_rmat(:,:,:)[:]
+        real,    pointer     :: rmat_ptr(:,:,:)
+        real                 :: frameweights_saved(self%nframes), opt_shifts_prev(self%nframes,2), rmsd
+        integer              :: iter, iframe, img, me, nimgs
+        integer              :: my_fstart, my_fend, fstart_img, fend_img
+        integer              :: rdim(3)
+
+        me       = this_image()
+        nimgs    = num_images()
+        ! shift frames, generate reference & calculates correlation
+        call ca_frame_partition(self%nframes, nimgs, me, my_fstart, my_fend)
+        call self%shift_frames_gen_ref
+        if( l_refset ) call self%reference%copy(reference)
+        call self%reference%ifft
+        call self%reference%get_rmat_ptr(rmat_ptr)
+        rdim = shape(rmat_ptr)
+        allocate(opt_shifts_co(self%nframes,2)[*], partial_rmat(rdim(1),rdim(2),rdim(3))[*])
+        if( l_refset )then
+            if( me == 1 ) partial_rmat = rmat_ptr
+            sync all
+            rmat_ptr = partial_rmat(:,:,:)[1]
+            call self%reference%set_rmat(rmat_ptr, .false.)
+            call self%reference%fft
+        else
+            call self%reference%fft
+        endif
+        ! main loop
+        do iter=1,self%maxits_dcorr
+            opt_shifts_prev = self%opt_shifts
+            ! individual optimizations
+            if( l_refset .and. iter==1 )then
+                ! setting weight to zero if reference provided on the first iteration only
+                ! to circumvent frame subtraction from reference
+                frameweights_saved = self%frameweights
+                self%frameweights  = 0.
+            endif
+            if( my_fstart <= my_fend )then
+                do iframe=my_fstart,my_fend
+                    call self%calc_shifts(iframe)
+                enddo
+            endif
+            opt_shifts_co = self%opt_shifts
+            sync all
+            if( me == 1 )then
+                do img=2,nimgs
+                    call ca_frame_partition(self%nframes, nimgs, img, fstart_img, fend_img)
+                    if( fstart_img <= fend_img ) self%opt_shifts(fstart_img:fend_img,:) = opt_shifts_co(fstart_img:fend_img,:)[img]
+                enddo
+            endif
+            sync all
+            self%opt_shifts = opt_shifts_co(:,:)[1]
+            if( l_refset .and. iter==1 ) self%frameweights = frameweights_saved
+            ! shift frames, generate reference & calculates correlations
+            call self%shift_frames_partial_ref(my_fstart, my_fend)
+            call self%reference%ifft
+            call self%reference%get_rmat_ptr(rmat_ptr)
+            partial_rmat = rmat_ptr
+            sync all
+            if( me == 1 )then
+                rmat_ptr = partial_rmat
+                do img=2,nimgs
+                    rmat_ptr = rmat_ptr + partial_rmat(:,:,:)[img]
+                enddo
+                partial_rmat = rmat_ptr
+            endif
+            sync all
+            rmat_ptr = partial_rmat(:,:,:)[1]
+            call self%reference%set_rmat(rmat_ptr, .false.)
+            call self%reference%fft
+            ! convergence
+            rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
+            if( iter > MINITS_DCORR .and. rmsd < 0.1 )exit
+        enddo
+        sync all
+        deallocate(opt_shifts_co, partial_rmat)
+    end subroutine align_dcorr_co
 
     ! shifts frames, generate reference
     subroutine shift_frames_gen_ref( self )
@@ -192,6 +282,34 @@ contains
             call self%reference%add_workshare(self%frames_sh(iframe), self%frameweights(iframe))
         enddo
     end subroutine shift_frames_gen_ref
+
+    subroutine shift_frames_partial_ref( self, fstart, fend )
+        class(motion_align_nano), intent(inout) :: self
+        integer,                  intent(in)    :: fstart, fend
+        integer :: iframe
+        call self%reference%zero_and_flag_ft
+        if( fstart > fend ) return
+        do iframe=fstart,fend
+            call self%frames_sh(iframe)%set_cmat(self%frames(iframe))
+            call self%frames_sh(iframe)%shift2Dserial(-self%opt_shifts(iframe,:))
+            call self%reference%add_workshare(self%frames_sh(iframe), self%frameweights(iframe))
+        enddo
+    end subroutine shift_frames_partial_ref
+
+    pure subroutine ca_frame_partition( nframes, nimages, img_id, fstart, fend )
+        integer, intent(in)  :: nframes, nimages, img_id
+        integer, intent(out) :: fstart, fend
+        integer :: chunk
+        if( nimages <= 1 )then
+            fstart = 1
+            fend   = nframes
+            return
+        endif
+        chunk  = nframes / nimages
+        fstart = (img_id-1) * chunk + 1
+        fend   = img_id      * chunk
+        if( img_id == nimages ) fend = nframes
+    end subroutine ca_frame_partition
 
     subroutine calc_shifts( self, iframe )
         class(motion_align_nano), intent(inout) :: self
@@ -210,7 +328,7 @@ contains
         pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
         dshift = real(pos)
         ! interpolate
-        beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
+        beta  = pcorrs(pos(1)+center(1),  pos(2)+center(2),1)
         alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
         gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
         if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
@@ -221,6 +339,7 @@ contains
         self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
         call self%frames_sh(iframe)%zero_and_flag_ft
+
         contains
 
             real function interp_peak()
@@ -230,6 +349,7 @@ contains
                 if( abs(denom) < TINY )return
                 interp_peak = 0.5 * (alpha-gamma) / denom
             end function interp_peak
+            
     end subroutine calc_shifts
 
     ! generates weights and mask matrix

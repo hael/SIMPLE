@@ -80,10 +80,11 @@ type(commander_split)                   :: xsplit
 ! OTHER DECLARATIONS
 character(len=STDLEN)   :: xarg, prg
 type(cmdline)           :: cline
-integer                 :: cmdstat, cmdlen, pos
+integer                 :: cmdstat, cmdlen, pos, me
 integer(timer_int_kind) :: t0
 real(timer_int_kind)    :: rt_exec
 logical                 :: l_silent
+me = this_image()
 
 ! start timer
 t0 = tic()
@@ -230,7 +231,7 @@ select case(prg)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
     case( 'tseries_motion_correct' )
-        call xtseries_mcorr%execute(cline)
+        if( me == 1 ) call xtseries_mcorr%execute(cline)
     case( 'track_particles' )
         call xtrack_particles%execute(cline)
 
@@ -242,7 +243,7 @@ select case(prg)
 end select
 ! end timer and print
 rt_exec = toc(t0)
-if( .not. l_silent ) call simple_print_timer(rt_exec)
+if( me == 1 .and. .not. l_silent ) call simple_print_timer(rt_exec)
 ! cleanup
 call cline%kill
 end program simple_private_exec
