@@ -152,6 +152,14 @@ objective plus ordered-label smoothing select broadly from that bank in one
 optimization. There is no postprocess-only threshold requiring enough frontier
 voxels to accept one shell before the next shell can contribute.
 
+Terminal original-sampling `abinitio3D` reconstruction follows this
+postprocessing policy. If the top-level ab initio run used
+`filt_mode=nonuniform` and final postprocessing is enabled, the final
+`reconstruct3D` command preserves `filt_mode=nonuniform`, which dispatches to
+`postprocess_nu` rather than the classical postprocessing-only path. The final
+ab initio output copy stage must preserve the NU products under the
+`rec_final_stateNN` names, including `_pproc_nu` and `_lp_nu`.
+
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or

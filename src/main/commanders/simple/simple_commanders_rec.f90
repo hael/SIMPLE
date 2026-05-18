@@ -130,6 +130,7 @@ contains
                 call cline_rec%set('objfun',       'cc')
                 call cline_rec%set('ml_reg',       'no')
                 call cline_rec%set('postprocess',  'no')
+                call cline_rec%set('filt_mode',    'none')
             endif
         end subroutine prepare_bootstrap_rec_cline
 

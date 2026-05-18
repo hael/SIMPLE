@@ -204,12 +204,15 @@ use compatible grouped sigma estimates when they are already local to the
 workflow, otherwise it should bootstrap sigmas locally before producing the
 regularized map. This terminal reconstruction is still a fresh reconstruction
 from selected particles: it must not apply fractional-update sampling or
-trailing-average blending, and it also must not inherit staged search,
-filtering, or mask-generation controls
-such as `refine`, `lp`, `filt_mode`, `automsk`, `envfsc`, or `gauref`; those
-belong to the staged refinement schedule, not to the terminal original-sampling
-reconstruction. Build the terminal reconstruction command line from a small
-whitelist instead of copying the staged `refine3D` command and deleting keys.
+trailing-average blending, and it also must not inherit staged search or
+mask-generation controls such as `refine`, `lp`, `automsk`, `envfsc`, or
+`gauref`; those belong to the staged refinement schedule, not to the terminal
+original-sampling reconstruction. The filtering exception is top-level
+`filt_mode=nonuniform`: when the ab initio run requested nonuniform filtering
+and terminal postprocessing is enabled, the terminal `reconstruct3D` command
+must preserve that filter mode so final postprocessing uses `postprocess_nu`.
+Build the terminal reconstruction command line from a small whitelist instead
+of copying the staged `refine3D` command and deleting keys.
 
 For single-state continuation into `refine3D_auto`, an existing project
 `os_out` state-1 `vol` entry is a valid initializer when the referenced file is

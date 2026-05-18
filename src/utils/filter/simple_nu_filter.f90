@@ -705,7 +705,7 @@ contains
             nvox = count(nu_lmask .and. candmap == icand)
             pct = 100. * real(nvox) / real(nmask)
             write(auxtag,'(A,I0)') 'Aux', iaux
-            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.1,2X,I12,2X,F8.2,A)') &
+            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.3,2X,I12,2X,F8.2,A)') &
                 &auxtag, candidate_coords(icand), cutoff_find_to_lowpass_limit(eff_label), nvox, pct, '%'
         end do
     end subroutine log_nu_candidate_selection_counts
@@ -757,7 +757,7 @@ contains
             if( nwins > 0 ) avg_win_margin = win_margin_sum / real(nwins)
             pct = 100. * real(nwins) / real(nmask)
             write(auxtag,'(A,I0)') 'Aux', iaux
-            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.1,2X,I8,2X,F8.2,A,2X,F12.5,2X,F12.5)') &
+            write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.3,2X,I8,2X,F8.2,A,2X,F12.5,2X,F12.5)') &
                 &auxtag, candidate_coords(icand), cutoff_find_to_lowpass_limit(eff_label), &
                 &nwins, pct, '%', avg_margin, avg_win_margin
         end do
@@ -1518,9 +1518,10 @@ contains
         endif
         write(logfhandle,'(A)') '>>> NU LOW-PASS ASSIGNMENTS (base filter bank)'
         write(logfhandle,'(A,I12)') '    Base-bank voxels: ', nselected
-        write(logfhandle,'(A)')     '    LP limit (A)        Voxels    Pct base'
+        write(logfhandle,'(A)')     '    Bank  Fourier k  LP limit (A)        Voxels    Pct base'
         do icut = 1, size(cutoff_finds)
-            write(logfhandle,'(4X,F10.1,2X,I12,2X,F8.2,A)') cutoff_find_to_lowpass_limit(icut), counts(icut), percentages(icut), '%'
+            write(logfhandle,'(4X,I4,2X,I9,2X,F12.3,2X,I12,2X,F8.2,A)') &
+                &icut, cutoff_finds(icut), cutoff_find_to_lowpass_limit(icut), counts(icut), percentages(icut), '%'
         end do
         ! Print auxiliary pair assignments if present
         if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
@@ -1535,7 +1536,7 @@ contains
                 pct = 0.
                 if( nselected > 0 ) pct = 100. * real(nvox) / real(nselected)
                 write(auxtag,'(A,I0,A)') 'Aux', iaux, '@'
-                write(logfhandle,'(4X,A8,2X,F14.1,2X,I12,2X,F8.2,A)') auxtag, aux_resolutions(iaux), nvox, pct, '%'
+                write(logfhandle,'(4X,A8,2X,F14.3,2X,I12,2X,F8.2,A)') auxtag, aux_resolutions(iaux), nvox, pct, '%'
             end do
         end if
         deallocate(counts, percentages)
