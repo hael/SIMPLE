@@ -42,6 +42,7 @@ type :: eul_prob_tab2D
     procedure :: ref_assign => ref_assign_pow_smpl
     procedure :: write_tab
     procedure :: read_tab_to_glob
+    procedure :: merge_loc_tab_coarray
     procedure :: write_assignment
     procedure :: read_assignment
     ! DESTRUCTOR
@@ -53,6 +54,7 @@ type :: eul_prob_tab2D
     procedure, private :: ref_normalize_sparse_snhc
     procedure, private :: write_sparse_tab
     procedure, private :: read_sparse_tab_to_glob
+    procedure, private :: rebuild_eval_touched_from_loc_tab
 end type eul_prob_tab2D
 
 contains
@@ -997,6 +999,87 @@ contains
         if( pos /= nnz ) THROW_HARD('sparse table count mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
         deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
     end subroutine read_sparse_tab_to_glob
+
+    subroutine merge_loc_tab_coarray( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        type(ptcl_ref), allocatable :: loc_chunk(:,:)[:]
+        real,           allocatable :: seed_chunk(:,:)[:]
+        logical,        allocatable :: has_chunk(:)[:]
+        integer :: me, nimgs, chunksz, istart, iend, nloc, i, icls, img, best_img, iglob
+        real    :: best_dist
+        logical :: has_seed
+        me    = this_image()
+        nimgs = num_images()
+        if( nimgs == 1 ) return
+        chunksz = max(1, min(512, self%nptcls))
+        allocate(loc_chunk(self%nclasses,chunksz)[*], seed_chunk(2,chunksz)[*], has_chunk(chunksz)[*])
+        do istart = 1, self%nptcls, chunksz
+            iend                 = min(self%nptcls, istart + chunksz - 1)
+            nloc                 = iend - istart + 1
+            loc_chunk(:,1:nloc)  = self%loc_tab(:,istart:iend)
+            seed_chunk(:,1:nloc) = self%seed_shifts(:,istart:iend)
+            has_chunk(1:nloc)    = self%seed_has_sh(istart:iend)
+            sync all
+            if( me == 1 )then
+                do i = 1, nloc
+                    iglob = istart + i - 1
+                    do icls = 1, self%nclasses
+                        best_img  = 1
+                        best_dist = loc_chunk(icls,i)[1]%dist
+                        do img = 2, nimgs
+                            if( loc_chunk(icls,i)[img]%dist < best_dist )then
+                                best_img  = img
+                                best_dist = loc_chunk(icls,i)[img]%dist
+                            endif
+                        enddo
+                        self%loc_tab(icls,iglob) = loc_chunk(icls,i)[best_img]
+                    enddo
+                    has_seed = .false.
+                    do img = 1, nimgs
+                        if( has_chunk(i)[img] )then
+                            self%seed_has_sh(iglob)   = .true.
+                            self%seed_shifts(:,iglob) = seed_chunk(:,i)[img]
+                            has_seed = .true.
+                            exit
+                        endif
+                    enddo
+                    if( .not. has_seed )then
+                        self%seed_has_sh(iglob)   = .false.
+                        self%seed_shifts(:,iglob) = 0.
+                    endif
+                enddo
+            endif
+            sync all
+        enddo
+        deallocate(loc_chunk, seed_chunk, has_chunk)
+        if( me == 1 .and. self%l_sparse_snhc ) call self%rebuild_eval_touched_from_loc_tab
+    end subroutine merge_loc_tab_coarray
+
+    subroutine rebuild_eval_touched_from_loc_tab( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer :: i, icls, cnt
+        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
+        if( .not. allocated(self%eval_touched_refs) )then
+            self%eval_max_touched = max(1, self%nclasses)
+            allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
+        endif
+        self%eval_touched_counts = 0
+        self%eval_touched_refs   = 0
+        do i = 1, self%nptcls
+            cnt = 0
+            do icls = 1, self%nclasses
+                if( self%loc_tab(icls,i)%inpl > 0 )then
+                    cnt = cnt + 1
+                    if( cnt > size(self%eval_touched_refs,1) )then
+                        THROW_HARD('eval_touched overflow in eul_prob_tab2D%rebuild_eval_touched_from_loc_tab')
+                    endif
+                    self%eval_touched_refs(cnt,i) = icls
+                endif
+            enddo
+            self%eval_touched_counts(i) = cnt
+        enddo
+        self%eval_max_touched = size(self%eval_touched_refs,1)
+    end subroutine rebuild_eval_touched_from_loc_tab
 
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self

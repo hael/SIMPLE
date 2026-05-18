@@ -29,7 +29,8 @@ contains
     procedure :: kill          => kill_neigh
     procedure :: write_tab     => write_tab_neigh
     procedure :: read_tabs_to_glob
-    procedure, private :: read_sparse_tab_to_glob
+    procedure :: rebuild_eval_touched_from_loc_tab
+    procedure :: read_sparse_tab_to_glob
 end type eul_prob_tab_neigh
 
 contains
@@ -899,6 +900,32 @@ contains
         self%eval_max_touched = size(self%eval_touched_refs,1)
     end subroutine read_tabs_to_glob
 
+    subroutine rebuild_eval_touched_from_loc_tab( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer :: i, ri, cnt
+        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
+        if( .not. allocated(self%eval_touched_refs) )then
+            self%eval_max_touched = max(1, self%nrefs)
+            allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
+        endif
+        self%eval_touched_counts = 0
+        self%eval_touched_refs   = 0
+        do i = 1, self%nptcls
+            cnt = 0
+            do ri = 1, self%nrefs
+                if( self%loc_tab(ri,i)%inpl > 0 )then
+                    cnt = cnt + 1
+                    if( cnt > size(self%eval_touched_refs,1) )then
+                        THROW_HARD('eval_touched overflow in eul_prob_tab_neigh%rebuild_eval_touched_from_loc_tab')
+                    endif
+                    self%eval_touched_refs(cnt,i) = ri
+                endif
+            enddo
+            self%eval_touched_counts(i) = cnt
+        enddo
+        self%eval_max_touched = size(self%eval_touched_refs,1)
+    end subroutine rebuild_eval_touched_from_loc_tab
+
     subroutine ref_normalize_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
@@ -1356,17 +1383,17 @@ contains
             call o_prev_loc%kill
         end subroutine seed_fallback_if_empty
 
-        subroutine advance_ref_head(iref)
-            integer, intent(in) :: iref
+        subroutine advance_ref_head(iref_loc)
+            integer, intent(in) :: iref_loc
             integer :: mloc, sloc, cand
-            mloc = graph%ref_counts(iref)
-            if( graph%ref_pos(iref) > mloc )then
-                frontier%iref_dist(iref) = huge_val
+            mloc = graph%ref_counts(iref_loc)
+            if( graph%ref_pos(iref_loc) > mloc )then
+                frontier%iref_dist(iref_loc) = huge_val
                 return
             endif
-            sloc = graph%ref_offsets(iref)
-            do while( graph%ref_pos(iref) <= mloc )
-                cand = graph%ref_list(sloc + graph%ref_pos(iref) - 1)
+            sloc = graph%ref_offsets(iref_loc)
+            do while( graph%ref_pos(iref_loc) <= mloc )
+                cand = graph%ref_list(sloc + graph%ref_pos(iref_loc) - 1)
                 if( frontier%ptcl_avail(cand) )then
                     if( .not. l_filter_greedy_state )then
                         frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
@@ -1377,33 +1404,33 @@ contains
                         return
                     endif
                 endif
-                graph%ref_pos(iref) = graph%ref_pos(iref) + 1
+                graph%ref_pos(iref_loc) = graph%ref_pos(iref_loc) + 1
             enddo
-            frontier%iref_dist(iref) = huge_val
+            frontier%iref_dist(iref_loc) = huge_val
         end subroutine advance_ref_head
 
-        subroutine sync_frontier_ref(iref)
-            integer, intent(in) :: iref
-            if( frontier%sel_pos(iref) > 0 )then
-                if( frontier%iref_dist(iref) >= huge_val )then
-                    pos = frontier%sel_pos(iref)
+        subroutine sync_frontier_ref(iref_loc)
+            integer, intent(in) :: iref_loc
+            if( frontier%sel_pos(iref_loc) > 0 )then
+                if( frontier%iref_dist(iref_loc) >= huge_val )then
+                    pos = frontier%sel_pos(iref_loc)
                     if( pos < nsel )then
                         last_ref                   = frontier%sel_refs(nsel)
                         frontier%sel_refs(pos)     = last_ref
                         frontier%sel_dists(pos)    = frontier%sel_dists(nsel)
                         frontier%sel_pos(last_ref) = pos
                     endif
-                    frontier%sel_pos(iref) = 0
+                    frontier%sel_pos(iref_loc) = 0
                     nsel = nsel - 1
                 else
-                    frontier%sel_dists(frontier%sel_pos(iref)) = frontier%iref_dist(iref)
+                    frontier%sel_dists(frontier%sel_pos(iref_loc)) = frontier%iref_dist(iref_loc)
                 endif
             else
-                if( frontier%iref_dist(iref) < huge_val )then
+                if( frontier%iref_dist(iref_loc) < huge_val )then
                     nsel                     = nsel + 1
-                    frontier%sel_refs(nsel)  = iref
-                    frontier%sel_dists(nsel) = frontier%iref_dist(iref)
-                    frontier%sel_pos(iref)   = nsel
+                    frontier%sel_refs(nsel)  = iref_loc
+                    frontier%sel_dists(nsel) = frontier%iref_dist(iref_loc)
+                    frontier%sel_pos(iref_loc)   = nsel
                 endif
             endif
         end subroutine sync_frontier_ref
