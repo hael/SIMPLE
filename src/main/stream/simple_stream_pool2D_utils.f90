@@ -597,7 +597,11 @@ contains
         if( changed )then
             match_selection          = selection    ! intrinsic reallocation on assignment
             l_match_selection_update = .true.
-            write(logfhandle,'(A)') '>>> QUEUED UPDATE TO MATCH CLASS STATES'
+            if( pool_iter > 0 .and. pool_iter < 20 ) then
+                write(logfhandle,'(A,I6,A)') '>>> QUEUED MATCH CLASS SELECTION UPDATE FOR ITERATION 20'
+            else
+                write(logfhandle,'(A)') '>>> QUEUED UPDATE TO MATCH CLASS STATES'
+            end if
         end if
     end subroutine update_match_class_states
 
@@ -610,7 +614,8 @@ contains
         integer, allocatable :: class_match(:), state(:)
         integer              :: i, nptcls
         ! Nothing to do if no selection has been received yet
-        if( .not. allocated(match_selection) ) return
+        if( .not. allocated(match_selection)   ) return
+        if( pool_iter > 0 .and. pool_iter < 20 ) return
         nptcls      = pool_proj%os_ptcl2D%get_noris()
         state       = pool_proj%os_ptcl2D%get_all_asint('state')
         class_match = pool_proj%os_ptcl2D%get_all_asint('class_match')
@@ -627,6 +632,7 @@ contains
             end if
         end do
         call pool_proj%os_ptcl2D%set_all('state', state)
+        l_match_selection_update = .false.
         write(logfhandle,'(A)') '>>> APPLIED MATCH CLASS SELECTION TO POOL'
     end subroutine update_match_class_states_in_pool
 
@@ -671,6 +677,10 @@ contains
         call spproj%read_segment('cls2D', string(POOL_DIR)//POOL_PROJFILE)
         if( spproj%os_cls2D%get_noris() == 0 )then
             ! not executed yet, do nothing
+            ! except update match_class states if needed
+            if( l_match_selection_update )then
+                call update_match_class_states_in_pool()
+            end if
         else
             if( .not.allocated(pool_stacks_mask) )then
                 THROW_HARD('Critical ERROR 0') ! first time
@@ -732,7 +742,6 @@ contains
             ! update match_class states if needed
             if( l_match_selection_update )then
                 call update_match_class_states_in_pool()
-                l_match_selection_update = .false.
             end if
             ! deal with dimensions/resolution update
             call update_pool_dims(params)

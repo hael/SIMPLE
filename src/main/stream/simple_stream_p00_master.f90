@@ -225,7 +225,7 @@ contains
         if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()            /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D'           )
         if( .not. l_existing_pickrefs ) then
-            if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
+           if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
         endif
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)

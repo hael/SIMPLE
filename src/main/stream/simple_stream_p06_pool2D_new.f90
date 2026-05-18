@@ -76,12 +76,20 @@ contains
         logical,                    allocatable   :: l_imported(:)
         type(string)                              :: snapshot_filename, snapshot_dir
         integer(kind=dp)                          :: time_last_import
-        integer                                   :: i, nprojects, nimported, nptcls_glob=0, pool_iter, iter_last_import
+        integer                                   :: i, nprojects, nimported, nptcls_glob, pool_iter, iter_last_import
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
-        integer                                   :: snapshot_id, last_snapshot_id
+        integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
+        integer                                   :: nptcls_threshold, nptcls_max_threshold
         logical                                   :: l_pause, l_terminate, l_once
-        l_once      = .true.
-        l_terminate = .false.
+        real                                      :: final_mskdiam
+        l_once               = .true.
+        l_terminate          = .false.
+        nptcls_glob          = 0
+        nptcls_glob_state_1  = 0
+        nmics                = 0
+        nptcls_threshold     = 0
+        nptcls_max_threshold = 0
+        final_mskdiam        = 0.0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -157,9 +165,8 @@ contains
                     it_mskdiam = setslist%begin()
                     call it_mskdiam%get(crec_mskdiam)
                     call spproj_tmp%read_segment('out', crec_mskdiam%projfile)
-                    call spproj_tmp%get_mskdiam('cavg', params%mskdiam)
-                    call cline%set('mskdiam', params%mskdiam)
-                    write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
+                    call spproj_tmp%get_mskdiam('cavg', final_mskdiam)
+                    write(logfhandle,'(A,F8.2)') '>>> FINAL MASK DIAMETER SET TO : ', final_mskdiam
                     call spproj_tmp%kill()
                     l_once = .false.
                 end if
@@ -204,6 +211,7 @@ contains
                     endif
                 endif
             endif
+            
             ! pause?
             ! if( (pool_iter >= iter_last_import+PAUSE_NITERS+extra_pause_iters) .or.&
             !     & (time8()-time_last_import>PAUSE_TIMELIMIT) )then
@@ -213,16 +221,21 @@ contains
             !         if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
             !     endif
             ! endif
+            
             ! Performs clustering iteration
+            if( nptcls_glob_state_1 > 0 .and. nmics > 0) then
+                nptcls_max_threshold = ceiling(( float(nptcls_glob_state_1) / float(nmics) ) * 200 )! average number of selected particles from 200 micrographs
+                nptcls_threshold     = min(params%ncls * 200, nptcls_max_threshold)
+            end if
             if( l_pause )then
                 ! skip iteration
                 call send_meta(string('paused whilst awaiting new particles'))
-            else if( nptcls_glob == 0 ) then
+            else if( nptcls_glob == 0 .or. nptcls_threshold == 0) then
                 ! skip iteration but update metadata
                 call send_meta(string('waiting for sieved particles'))
-            else if( nptcls_glob < params%ncls * 100 ) then
+            else if( nptcls_glob_state_1 < nptcls_threshold ) then
                 ! skip iteration but update metadata
-                call send_meta(string('waiting for minimum number sieved particles ... '// int2str(ceiling(float(nptcls_glob) / float((params%ncls * 100)) * 100)) // '%'))
+                call send_meta(string('waiting for minimum number sieved particles ... '// int2str(ceiling(100.0 * float(nptcls_glob_state_1) / float(nptcls_threshold) )) // '%'))
             else
                 ! optionally updates alignment parameters
                 call update_pool_aln_params
@@ -231,6 +244,12 @@ contains
                 call iterate_pool(params)
                 call send_meta(string('finding and classifying particles'))
             endif
+            ! Adaptive mask policy
+            pool_iter = get_pool_iter()
+            if( pool_iter >= 10 .and. final_mskdiam > 0.0 ) then
+               call update_mskdiam(params, nint(final_mskdiam))
+               final_mskdiam = 0.0
+            end if
             ! http stats
             if(get_pool_iter() > 1) then
                 call meta_pool2D%set_user_input(.true.)
@@ -309,7 +328,7 @@ contains
                 type(rec_iterator)             :: it
                 type(chunk_rec)                :: crec
                 logical, allocatable :: l_processed(:), l_imported(:)
-                integer :: nsets2import, iset, nptcls2import, nmics2import, nmics, nptcls
+                integer :: nsets2import, iset, nptcls2import, nmics2import, pool_nmics, nptcls
                 integer :: i, fromp, imic, ind, iptcl, jptcl, jmic, nptcls_sel, nptcls_sel_tot, ptcl_match_class
                 nimported = 0
                 if( setslist%size()== 0 ) return
@@ -341,21 +360,21 @@ contains
                 enddo
                 ! reallocations
                 call get_pool_ptr(pool)
-                nmics  = pool%os_mic%get_noris()
+                pool_nmics  = pool%os_mic%get_noris()
                 nptcls = pool%os_ptcl2D%get_noris()
-                if( nmics == 0 )then
+                if( pool_nmics == 0 )then
                     call pool%os_mic%new(nmics2import, is_ptcl=.false.)
                     call pool%os_stk%new(nmics2import, is_ptcl=.false.)
                     call pool%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
                     fromp = 1
                 else
-                    call pool%os_mic%reallocate(nmics+nmics2import)
-                    call pool%os_stk%reallocate(nmics+nmics2import)
+                    call pool%os_mic%reallocate(pool_nmics+nmics2import)
+                    call pool%os_stk%reallocate(pool_nmics+nmics2import)
                     call pool%os_ptcl2D%reallocate(nptcls+nptcls2import)
-                    fromp = pool%os_stk%get_top(nmics)+1
+                    fromp = pool%os_stk%get_top(pool_nmics)+1
                 endif
                 ! parameters transfer
-                imic           = nmics
+                imic           = pool_nmics
                 nptcls_sel_tot = 0
                 it             = setslist%begin()
                 do iset = 1,setslist%size()
@@ -436,14 +455,17 @@ contains
                     params%smpd = pool%get_smpd()
                     params%box  = pool%get_box()
                     if(params%mskdiam <= 0.0) then
-                        params%mskdiam = 0.9 * ceiling(params%box * params%smpd)
+                        !params%mskdiam = 0.9 * ceiling(params%box * params%smpd)
+                        params%mskdiam = 2 * nint(real(params%box/2)-COSMSKHALFWIDTH-1.)
                         call cline%set('mskdiam', params%mskdiam)
-                        write(logfhandle,'(A,F8.2)')'>>> MASK DIAMETER SET TO', params%mskdiam
+                        write(logfhandle,'(A,F8.2)')'>>> INITIAL MASK DIAMETER SET TO', params%mskdiam
                     endif
                     call init_pool_clustering(params, cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
                 endif
                 ! global count
-                nptcls_glob = nptcls_glob + nptcls_sel_tot
+                nptcls_glob         = nptcls_glob + nptcls_sel_tot
+                nptcls_glob_state_1 = pool%os_ptcl2D%count_state_gt_zero()
+                nmics               = pool%os_mic%get_noris()
                 ! cleanup
                 do iset = 1,setslist%size()
                     call spprojs(iset)%kill
