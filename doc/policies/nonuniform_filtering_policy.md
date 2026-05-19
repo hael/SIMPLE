@@ -186,11 +186,13 @@ outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
 accepts the B factor in the same way and uses the NU filter map as a local
 postprocessing transfer-function selector for the merged reconstruction. Each
-candidate transfer function applies the same global B-factor weighting followed
-by a Hann anti-aliasing window at that candidate's local low-pass limit. The
-candidate-specific Hann window provides the local anti-aliasing and NU
-low-pass behavior. `_lp_nu` is written as the corresponding unsharpened
-Hann-windowed NU comparison map. The NU products
+candidate at or better than the `nu_sharp_cutoff` resolution, which defaults
+to 8 A, uses the classical global B-factor/FSC-filtered transfer. Candidates
+below that cutoff use the same global B-factor followed by a Hann
+anti-aliasing window at the candidate's local low-pass limit. `_lp_nu` is
+written with the analogous unsharpened transfers: classical FSC-filtered
+output for labels at or better than the cutoff and Hann-windowed NU low-pass
+output for lower-resolution labels. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 
