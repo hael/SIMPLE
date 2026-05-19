@@ -190,8 +190,9 @@ contains
         write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F9.2,A,F9.2)') &
             &'Global FSC LP(A): ', global_lp, '  Global B: ', global_bfac, &
             &'  B floor: ', bfac_floor, '  B ceiling: ', bfac_ceil
-        write(logfhandle,'(4X,A,F5.2,A,F5.2,A,F5.2,A,F5.2)') &
+        write(logfhandle,'(4X,A,F5.2,A,F5.2,A,F5.2,A,F5.2,A,F5.2)') &
             &'B-factor model alpha/beta: ', NU_POSTPROCESS_BFAC_ALPHA, '/', NU_POSTPROCESS_BFAC_BETA, &
+            &'  High-res ramp: ', NU_POSTPROCESS_BFAC_HIRES_RAMP, &
             &'  Ratio clamp: ', NU_POSTPROCESS_BFAC_RATIO_MIN, '/', NU_POSTPROCESS_BFAC_RATIO_MAX
         write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Ratio^2      B_eff'
         do icut = 1, size(cutoff_finds)
@@ -212,9 +213,13 @@ contains
             local_bfac = global_bfac
             return
         endif
-        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
         ratio2     = nu_postprocess_bfac_ratio2(local_lp, global_lp)
-        local_bfac = bfac_floor + ratio2 * (global_bfac - bfac_floor)
+        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
+        if( ratio2 <= 1. )then
+            local_bfac = bfac_floor + ratio2 * (global_bfac - bfac_floor)
+        else
+            local_bfac = global_bfac + nu_postprocess_hires_frac(ratio2) * (bfac_ceil - global_bfac)
+        endif
         local_bfac = min(bfac_floor, max(bfac_ceil, local_bfac))
     end function nu_postprocess_resolution_bfac
 
@@ -229,6 +234,14 @@ contains
             bfac_ceil  = global_bfac
         endif
     end subroutine nu_postprocess_bfac_bounds
+
+    real function nu_postprocess_hires_frac( ratio2 ) result( frac )
+        real, intent(in) :: ratio2
+        real :: ramp
+        ramp = max(TINY, NU_POSTPROCESS_BFAC_HIRES_RAMP)
+        frac = 1. - exp(-(ratio2 - 1.) / ramp)
+        frac = min(1., max(0., frac))
+    end function nu_postprocess_hires_frac
 
     real function nu_postprocess_bfac_ratio2( local_lp, global_lp ) result( ratio2 )
         real, intent(in) :: local_lp, global_lp

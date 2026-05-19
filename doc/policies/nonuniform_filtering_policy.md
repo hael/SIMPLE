@@ -188,15 +188,15 @@ accepts the B factor in the same way and uses the NU filter map as a local
 postprocessing transfer-function selector for the merged reconstruction. Each
 local-resolution bin is sharpened with a bin-specific B factor derived from the
 global B factor and the squared ratio between the global FSC resolution and the
-bin resolution:
-`B_i = B_floor + clamp((R_global / R_i)^2, 0, ratio_max) * (B_global - B_floor)`,
-then clamped between `B_ceil` and `B_floor`. For negative sharpening B factors,
-`B_floor = alpha * (-B_global)` and `B_ceil = beta * B_global`. The B-factor
-floor is therefore positive, so low-resolution bins can be down-weighted,
-while the negative ceiling limits extra sharpening in higher-resolution bins.
-All bins are then filtered with the same global FSC-derived antialiasing
-transfer used by classical postprocessing. `_lp_nu` is written as the
-corresponding unsharpened global-antialiased map. The NU products
+bin resolution. For negative sharpening B factors,
+`B_floor = alpha * (-B_global)` and `B_ceil = beta * B_global`.
+Bins worse than the global FSC resolution interpolate from `B_floor` to
+`B_global`. Bins better than the global FSC resolution use a separate
+saturating ramp from `B_global` toward `B_ceil`; this avoids tying
+high-resolution sharpening variation to the low-resolution damping floor. All
+bins are then filtered with the same global FSC-derived antialiasing transfer
+used by classical postprocessing. `_lp_nu` is written as the corresponding
+unsharpened global-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 

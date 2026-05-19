@@ -63,11 +63,17 @@ real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! - BETA controls the hard negative-B sharpening ceiling for bins better than
 !   the global FSC resolution. Increase it if high-resolution regions remain
 !   too soft; decrease it if they look noisy or over-sharpened.
+! - HIRES_RAMP controls how quickly better-than-global bins approach the BETA
+!   ceiling. Decrease it if high-resolution bins near the global FSC limit are
+!   not upweighted enough, or if high-resolution bins vary too dramatically;
+!   increase it if the finest bins need to remain more distinct.
 ! - RATIO_MAX controls how much the squared resolution ratio can drive the
-!   interpolation before the hard B-factor clamp. Increase it for stronger
-!   separation between bins; decrease it for more conservative variation.
+!   low-resolution interpolation and high-resolution ramp. Increase it for
+!   stronger separation between bins; decrease it for more conservative
+!   variation.
 real,             parameter   :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
-real,             parameter   :: NU_POSTPROCESS_BFAC_BETA            = 2.
+real,             parameter   :: NU_POSTPROCESS_BFAC_BETA            = 1.5
+real,             parameter   :: NU_POSTPROCESS_BFAC_HIRES_RAMP      = 0.10
 real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MIN       = 0.
 real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MAX       = 2.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
