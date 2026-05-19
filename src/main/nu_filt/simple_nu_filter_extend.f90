@@ -125,7 +125,7 @@ contains
         call append_nu_highres_candidate_coord(sz_old, real(sz_old + 1))
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(ldim(1),ldim(2),ldim(3)), source=dmat_new)
-        write(logfhandle,'(A,I0,A,F6.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
+        write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         call vol_even_filt_new%kill
         call vol_odd_filt_new%kill
         deallocate(extend_mask, extend_to_new, dmat_new, dmat_finest, dmat_tmp)

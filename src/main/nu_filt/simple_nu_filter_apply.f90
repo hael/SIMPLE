@@ -127,10 +127,10 @@ contains
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
-        type(image) :: vol_in_ft, vol_filt
+        type(image) :: vol_in_ft, vol_sharp_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_lp(:,:,:), rmat_pproc(:,:,:)
         integer :: icut, winsz
-        real    :: edge_mean, local_lp, local_bfac
+        real    :: edge_mean, local_lp
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
@@ -147,6 +147,9 @@ contains
             call vol_in_ft%taper_edges_vol(winsz, edge_mean)
             call vol_in_ft%fft
         endif
+        call vol_sharp_ft%copy(vol_in_ft)
+        call vol_sharp_ft%set_wthreads(.true.)
+        call vol_sharp_ft%apply_bfac(global_bfac)
         call vol_filt%new(ldim, smpd)
         call vol_filt%set_ft(.true.)
         call vol_filt%set_wthreads(.true.)
@@ -159,52 +162,34 @@ contains
         call log_nu_postprocess_transfer_bank(global_lp, global_bfac)
         do icut = 1, size(cutoff_finds)
             local_lp = cutoff_find_to_lowpass_limit(icut)
-            local_bfac = nu_postprocess_effective_bfac(local_lp, global_lp, global_bfac)
             call vol_filt%copy_fast(vol_in_ft)
             call vol_filt%bp(0., local_lp, NU_POSTPROCESS_HANN_WIDTH)
             call vol_filt%ifft
             call vol_filt%get_rmat_ptr(rmat_filt)
             call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_lp)
-            call vol_filt%copy_fast(vol_in_ft)
-            call vol_filt%apply_bfac(local_bfac)
+            call vol_filt%copy_fast(vol_sharp_ft)
             call vol_filt%bp(0., local_lp, NU_POSTPROCESS_HANN_WIDTH)
             call vol_filt%ifft
             call vol_filt%get_rmat_ptr(rmat_filt)
             call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
         end do
         call vol_in_ft%kill
+        call vol_sharp_ft%kill
         call vol_filt%kill
     end subroutine nu_postprocess_vol
-
-    real function nu_postprocess_effective_bfac( local_lp, global_lp, global_bfac ) result(bfac_eff)
-        real, intent(in) :: local_lp, global_lp, global_bfac
-        real :: rho, rho_eff
-        bfac_eff = global_bfac
-        if( local_lp < global_lp - TINY .and. global_bfac < 0. )then
-            rho = max(1., (global_lp / local_lp)**2)
-            rho_eff = min(NU_POSTPROCESS_SHARPEN_RHO_MAX, &
-                &1. + NU_POSTPROCESS_SHARPEN_ALPHA * (rho - 1.))
-            bfac_eff = rho_eff * global_bfac
-        endif
-    end function nu_postprocess_effective_bfac
 
     subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac )
         real, intent(in) :: global_lp, global_bfac
         integer :: icut
-        real :: local_lp, local_bfac
+        real :: local_lp
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
         write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F6.1)') &
             &'Global FSC LP(A): ', global_lp, '  Global B: ', global_bfac, &
             &'  Hann width(k): ', NU_POSTPROCESS_HANN_WIDTH
-        write(logfhandle,'(4X,A,F6.2,A,F6.2)') &
-            &'High-resolution B extrapolation alpha: ', NU_POSTPROCESS_SHARPEN_ALPHA, &
-            &'  rho max: ', NU_POSTPROCESS_SHARPEN_RHO_MAX
-        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k       B_eff      Delta B'
+        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k'
         do icut = 1, size(cutoff_finds)
             local_lp   = cutoff_find_to_lowpass_limit(icut)
-            local_bfac = nu_postprocess_effective_bfac(local_lp, global_lp, global_bfac)
-            write(logfhandle,'(4X,F10.3,4X,I9,4X,F9.2,4X,F9.2)') &
-                &local_lp, cutoff_finds(icut), local_bfac, local_bfac - global_bfac
+            write(logfhandle,'(4X,F10.3,4X,I9)') local_lp, cutoff_finds(icut)
         end do
     end subroutine log_nu_postprocess_transfer_bank
 
