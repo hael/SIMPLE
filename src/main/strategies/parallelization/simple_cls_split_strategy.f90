@@ -667,10 +667,10 @@ contains
             call flush(logfhandle)
         endif
         l_diffmap_vec_den = .false.
-        if( trim(params%pca_mode) == 'diffusion_maps' ) then
-            call diffusion_map_generate_subavg_vectors(params, cls_id, coords, preimg_pcavecs, preimg_avg, labels, nsplit, &
-                                                        diffmap_den_subavg_vecs, l_diffmap_vec_den)
-        endif
+        ! if( trim(params%pca_mode) == 'diffusion_maps' ) then
+        !     call diffusion_map_generate_subavg_vectors(params, cls_id, coords, preimg_pcavecs, preimg_avg, labels, nsplit, &
+        !                                                 diffmap_den_subavg_vecs, l_diffmap_vec_den)
+        ! endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         if( allocated(coeff_ptcls) ) call cavg_coeff%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
