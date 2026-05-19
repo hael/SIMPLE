@@ -200,7 +200,7 @@ offset is derived by interpolating from the fitted global B factor at the
 global FSC boundary toward a fixed positive-B endpoint. That endpoint is
 computed from a fixed damping reference B factor, not from the fitted global B
 factor used for sharpening. With the current defaults, maximally damped bins
-approach the positive-B endpoint implied by a `-75 A^2` sharpening experiment,
+approach the positive-B endpoint implied by a `-150 A^2` damping reference,
 so low-resolution downweighting does not become weak just because the fitted
 global B-factor magnitude is smaller. The sigmoid fraction is normalized to be
 zero at the global FSC resolution, so the B-factor field is continuous at the

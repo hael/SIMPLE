@@ -56,27 +56,6 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
-! NU postprocess B-factor model tuning:
-! - Bins at or better than the global FSC resolution use the global B factor.
-!   This preserves classical sharpening wherever the global FSC supports it.
-! - DAMPING_BFAC_REF fixes the strength of the resolution-dependent damping
-!   schedule independently of the fitted global B factor. The default reproduces
-!   the behavior obtained when the fitted global sharpening B was about -75 A^2.
-!   Increase the magnitude if low-resolution regions remain too sharp/noisy;
-!   decrease it if those regions become too blurred.
-! - ALPHA controls the positive-B endpoint of the low-resolution branch. With
-!   the defaults, maximally damped bins approach the same effective B factor
-!   regardless of the fitted global sharpening B.
-! - SIGMOID_MID is the resolution where damping turns on most rapidly.
-!   Increase it if mid-resolution density is damped too early; decrease it if
-!   damping should begin closer to the global FSC limit.
-! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
-!   change across local-resolution bins; decrease it for a sharper transition.
-real,             parameter   :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
-real,             parameter   :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -75.
-real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 8.
-real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
-real,             parameter   :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.

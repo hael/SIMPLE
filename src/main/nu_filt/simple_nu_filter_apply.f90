@@ -3,6 +3,29 @@ submodule (simple_nu_filter) simple_nu_filter_apply
 implicit none
 #include "simple_local_flags.inc"
 
+! NU postprocess B-factor model tuning. These constants live in the applying
+! submodule so local tuning edits force recompilation of the code that computes
+! the transfer-function bank.
+! - Bins at or better than the global FSC resolution use the global B factor.
+!   This preserves classical sharpening wherever the global FSC supports it.
+! - DAMPING_BFAC_REF fixes the positive-B endpoint of the low-resolution branch
+!   independently of the fitted global B factor. Increase the magnitude if
+!   low-resolution regions remain too sharp/noisy; decrease it if those regions
+!   become too blurred.
+! - ALPHA scales that positive-B endpoint. With the defaults, maximally damped
+!   bins approach the same effective B factor regardless of the fitted global
+!   sharpening B.
+! - SIGMOID_MID is the resolution where damping turns on most rapidly.
+!   Increase it if mid-resolution density is damped too early; decrease it if
+!   damping should begin closer to the global FSC limit.
+! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
+!   change across local-resolution bins; decrease it for a sharper transition.
+real, parameter :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
+real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -150.
+real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 8.
+real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
+real, parameter :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
+
 contains
 
     module subroutine nu_filter_vols( vol_even, vol_odd )
