@@ -27,7 +27,10 @@
 ! challenge further Fourier-shell candidates sequentially with the loop helper.
 ! The resulting local filter/source map is applied to a merged map using
 ! resolution-dependent B factors for base-bank voxels and caller-supplied
-! classical transfer maps for auxiliary voxels:
+! classical transfer maps for auxiliary voxels. Postprocess can opt into
+! source-aware auxiliary Potts behavior so the classical candidate remains a
+! persistent source alternative rather than a rung on the ordered resolution
+! ladder:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
@@ -70,9 +73,15 @@ integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS   = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS   = 1.e-6
+! In postprocess_nu the classical FSC-filtered auxiliary candidate is a source
+! alternative, not an ordered resolution-bin label. Keep this at zero to let
+! the unary objective decide aux-vs-base assignments without frequency-ladder
+! Potts bias; raise slightly if a future dataset needs source-boundary cleanup.
+real,             parameter   :: NU_AUX_SOURCE_BOUNDARY_COST = 0.0
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN      = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD       = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
+real,             allocatable :: dmats_aux_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer,          allocatable :: filtmap(:,:,:)
@@ -88,6 +97,7 @@ integer :: ldim(3), box
 integer :: n_nu_mask = 0
 integer :: winsz_tent
 real    :: smpd
+logical :: l_aux_source_unordered_potts = .false.
 
 type :: nu_highres_extension_stats
     logical :: attempted    = .false.
@@ -175,12 +185,14 @@ interface
     end subroutine delete_cached_filtered_pair
 
     ! In submodule: simple_nu_filter_bank.f90
-    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps )
+    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
+            &n_highres_steps, l_aux_source_unordered )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
+        logical,     optional, intent(in) :: l_aux_source_unordered
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
@@ -244,6 +256,11 @@ interface
         real, intent(in) :: icoord, jcoord
     end function nu_label_smooth_coord_pair_cost
 
+    module real function nu_label_smooth_source_pair_cost( icoord, jcoord, l_aux_i, l_aux_j )
+        real,    intent(in) :: icoord, jcoord
+        logical, intent(in) :: l_aux_i, l_aux_j
+    end function nu_label_smooth_source_pair_cost
+
     module integer function nu_label_smooth_color( i, j, k )
         integer, intent(in) :: i, j, k
     end function nu_label_smooth_color
@@ -298,12 +315,42 @@ interface
         real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
     end function estimate_nu_highres_extension_beta
 
+    module real function estimate_nu_highres_extension_beta_aux( extend_mask, dmat_old, dmat_new )
+        logical, intent(in) :: extend_mask(:,:,:)
+        real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
+    end function estimate_nu_highres_extension_beta_aux
+
     module real function nu_highres_extension_neighborhood_cost( icoord, extend_mask, extend_to_new, old_label, &
         &new_coord, neigh, nsz )
         real,    intent(in) :: icoord, new_coord
         logical, intent(in) :: extend_mask(:,:,:), extend_to_new(:,:,:)
         integer, intent(in) :: old_label, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
     end function nu_highres_extension_neighborhood_cost
+
+    module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+            &extend_choice, n_extended )
+        logical, intent(in)    :: extend_mask(:,:,:)
+        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
+        integer, intent(inout) :: extend_choice(:,:,:)
+        integer, intent(out)   :: n_extended
+    end subroutine init_nu_highres_extension_selection_aux
+
+    module subroutine refine_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+            &extend_choice, old_label, n_extended )
+        logical, intent(in)    :: extend_mask(:,:,:)
+        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
+        integer, intent(inout) :: extend_choice(:,:,:)
+        integer, intent(in)    :: old_label
+        integer, intent(out)   :: n_extended
+    end subroutine refine_nu_highres_extension_selection_aux
+
+    module real function nu_highres_extension_choice_neighborhood_cost( choice, i, j, k, extend_mask, &
+            &extend_choice, old_label, new_coord, neigh, nsz )
+        integer, intent(in) :: choice, i, j, k, old_label, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        logical, intent(in) :: extend_mask(:,:,:)
+        integer, intent(in) :: extend_choice(:,:,:)
+        real,    intent(in) :: new_coord
+    end function nu_highres_extension_choice_neighborhood_cost
 
     module real function nu_highres_extension_current_coord( i, j, k, extend_mask, extend_to_new, old_label, new_coord )
         integer, intent(in) :: i, j, k, old_label
@@ -315,6 +362,11 @@ interface
         logical, intent(in) :: extend_to_new(:,:,:)
         integer, intent(in) :: new_label
     end subroutine apply_nu_highres_extension_selection
+
+    module subroutine apply_nu_highres_extension_selection_aux( extend_choice, old_label, new_label )
+        integer, intent(in) :: extend_choice(:,:,:)
+        integer, intent(in) :: old_label, new_label
+    end subroutine apply_nu_highres_extension_selection_aux
 
     module subroutine append_nu_highres_candidate_coord( old_n_base, new_coord )
         integer, intent(in) :: old_n_base

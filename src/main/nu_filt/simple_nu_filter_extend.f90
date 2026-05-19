@@ -18,8 +18,10 @@ contains
         integer           :: new_find, n_finest, n_total, n_extended, sz_old
         real              :: pct_finest, x
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
+        integer, allocatable :: extend_choice(:,:,:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k
+        logical           :: l_use_aux_extension
         local_stats%new_limit = new_limit
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds first')
@@ -99,11 +101,20 @@ contains
             call smooth_nu_objective(dmat_finest, dmat_tmp)
         end if
         ! --- update filtmap in place for the masked voxels ---
-        allocate(extend_to_new(ldim(1),ldim(2),ldim(3)), source=.false.)
+        l_use_aux_extension = l_aux_source_unordered_potts .and. allocated(dmats_aux_mask)
         n_extended = 0
-        call init_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, extend_to_new, n_extended)
-        call refine_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, &
-            &extend_to_new, sz_old, n_extended)
+        if( l_use_aux_extension )then
+            allocate(extend_choice(ldim(1),ldim(2),ldim(3)), source=0)
+            call init_nu_highres_extension_selection_aux(extend_mask, dmat_finest, dmat_new, &
+                &extend_choice, n_extended)
+            call refine_nu_highres_extension_selection_aux(extend_mask, dmat_finest, dmat_new, &
+                &extend_choice, sz_old, n_extended)
+        else
+            allocate(extend_to_new(ldim(1),ldim(2),ldim(3)), source=.false.)
+            call init_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, extend_to_new, n_extended)
+            call refine_nu_highres_extension_selection(extend_mask, dmat_finest, dmat_new, &
+                &extend_to_new, sz_old, n_extended)
+        endif
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         local_stats%applied = n_extended > 0 .and. local_stats%pct_extended_tested >= accept_pct
@@ -112,11 +123,17 @@ contains
             call delete_cached_filtered_pair(new_find)
             call vol_even_filt_new%kill
             call vol_odd_filt_new%kill
-            deallocate(extend_mask, extend_to_new, dmat_new, dmat_finest, dmat_tmp)
+            if( allocated(extend_to_new) ) deallocate(extend_to_new)
+            if( allocated(extend_choice) ) deallocate(extend_choice)
+            deallocate(extend_mask, dmat_new, dmat_finest, dmat_tmp)
             if( present(stats) ) stats = local_stats
             return
         end if
-        call apply_nu_highres_extension_selection(extend_to_new, sz_old + 1)
+        if( l_use_aux_extension )then
+            call apply_nu_highres_extension_selection_aux(extend_choice, sz_old, sz_old + 1)
+        else
+            call apply_nu_highres_extension_selection(extend_to_new, sz_old + 1)
+        endif
         ! --- grow cutoff_finds to include the new level ---
         allocate(cutoff_finds_new(sz_old + 1))
         cutoff_finds_new(:sz_old)  = cutoff_finds
@@ -124,11 +141,17 @@ contains
         call move_alloc(cutoff_finds_new, cutoff_finds)
         call append_nu_highres_candidate_coord(sz_old, real(sz_old + 1))
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(ldim(1),ldim(2),ldim(3)), source=dmat_new)
+        if( l_use_aux_extension )then
+            call cache_nu_highres_extension_frontier_after_aux_selection(dmat_new, sz_old + 1)
+        else
+            allocate(dmat_finest_cached(ldim(1),ldim(2),ldim(3)), source=dmat_new)
+        endif
         write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         call vol_even_filt_new%kill
         call vol_odd_filt_new%kill
-        deallocate(extend_mask, extend_to_new, dmat_new, dmat_finest, dmat_tmp)
+        if( allocated(extend_to_new) ) deallocate(extend_to_new)
+        if( allocated(extend_choice) ) deallocate(extend_choice)
+        deallocate(extend_mask, dmat_new, dmat_finest, dmat_tmp)
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
@@ -275,6 +298,216 @@ contains
             &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_highres_extension_beta / real(nvox)
     end function estimate_nu_highres_extension_beta
 
+    module real function estimate_nu_highres_extension_beta_aux( extend_mask, dmat_old, dmat_new )
+        logical, intent(in) :: extend_mask(:,:,:)
+        real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
+        integer :: i, j, k, iaux, imask, nvox
+        real    :: cur_e, best_e, second_e
+        estimate_nu_highres_extension_beta_aux = 0.
+        nvox = 0
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.extend_mask(i,j,k) ) cycle
+                    imask = nu_mask_index(i,j,k)
+                    best_e   = dmat_old(i,j,k)
+                    second_e = dmat_new(i,j,k)
+                    if( second_e < best_e )then
+                        cur_e   = best_e
+                        best_e   = second_e
+                        second_e = cur_e
+                    endif
+                    do iaux = 1, size(dmats_aux_mask,2)
+                        cur_e = dmats_aux_mask(imask,iaux)
+                        if( cur_e < best_e )then
+                            second_e = best_e
+                            best_e   = cur_e
+                        else if( cur_e < second_e )then
+                            second_e = cur_e
+                        endif
+                    end do
+                    if( second_e < huge(second_e) )then
+                        estimate_nu_highres_extension_beta_aux = estimate_nu_highres_extension_beta_aux + &
+                            &max(0., second_e - best_e)
+                        nvox = nvox + 1
+                    endif
+                end do
+            end do
+        end do
+        if( nvox > 0 ) estimate_nu_highres_extension_beta_aux = &
+            &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_highres_extension_beta_aux / real(nvox)
+    end function estimate_nu_highres_extension_beta_aux
+
+    module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+            &extend_choice, n_extended )
+        logical, intent(in)    :: extend_mask(:,:,:)
+        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
+        integer, intent(inout) :: extend_choice(:,:,:)
+        integer, intent(out)   :: n_extended
+        integer :: i, j, k, iaux, imask, best_choice
+        real    :: best_dmat, cur_dmat
+        extend_choice = 0
+        n_extended = 0
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,iaux,imask,best_choice,best_dmat,cur_dmat) reduction(+:n_extended)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.extend_mask(i,j,k) ) cycle
+                    imask = nu_mask_index(i,j,k)
+                    best_choice = 0
+                    best_dmat   = dmat_old(i,j,k)
+                    if( dmat_new(i,j,k) < best_dmat )then
+                        best_choice = 1
+                        best_dmat   = dmat_new(i,j,k)
+                    endif
+                    do iaux = 1, size(dmats_aux_mask,2)
+                        cur_dmat = dmats_aux_mask(imask,iaux)
+                        if( cur_dmat < best_dmat )then
+                            best_choice = iaux + 1
+                            best_dmat   = cur_dmat
+                        endif
+                    end do
+                    extend_choice(i,j,k) = best_choice
+                    if( best_choice == 1 ) n_extended = n_extended + 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine init_nu_highres_extension_selection_aux
+
+    module subroutine refine_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+            &extend_choice, old_label, n_extended )
+        logical, intent(in)    :: extend_mask(:,:,:)
+        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
+        integer, intent(inout) :: extend_choice(:,:,:)
+        integer, intent(in)    :: old_label
+        integer, intent(out)   :: n_extended
+        integer :: iter, color, i, j, k, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nchanged
+        integer :: choice, cur_choice, best_choice, iaux, imask
+        real    :: beta, new_coord, e, best_e
+        beta = estimate_nu_highres_extension_beta_aux(extend_mask, dmat_old, dmat_new)
+        new_coord = real(old_label + 1)
+        if( beta <= TINY )then
+            n_extended = count(extend_mask .and. (extend_choice == 1))
+            return
+        endif
+        do iter = 1, NU_LABEL_SMOOTH_MAXITS
+            nchanged = 0
+            do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
+                !$omp parallel do collapse(3) schedule(static) default(shared) &
+                !$omp private(i,j,k,n_full,nsz,choice,cur_choice,best_choice,iaux,imask,e,best_e) &
+                !$omp reduction(+:nchanged) proc_bind(close)
+                do k = 1, ldim(3)
+                    do j = 1, ldim(2)
+                        do i = 1, ldim(1)
+                            if( .not.extend_mask(i,j,k) ) cycle
+                            if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                            imask = nu_mask_index(i,j,k)
+                            call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
+                            cur_choice  = extend_choice(i,j,k)
+                            best_choice = cur_choice
+                            best_e = nu_highres_extension_choice_unary(i, j, k, imask, cur_choice, &
+                                &dmat_old, dmat_new) + beta * &
+                                &nu_highres_extension_choice_neighborhood_cost(cur_choice, i, j, k, extend_mask, &
+                                &extend_choice, old_label, new_coord, n_full, nsz)
+                            do choice = 0, 1
+                                if( choice == cur_choice ) cycle
+                                e = nu_highres_extension_choice_unary(i, j, k, imask, choice, dmat_old, dmat_new) + &
+                                    &beta * nu_highres_extension_choice_neighborhood_cost(choice, i, j, k, &
+                                    &extend_mask, extend_choice, old_label, new_coord, n_full, nsz)
+                                if( nu_label_smooth_is_better(e, best_e) )then
+                                    best_e = e
+                                    best_choice = choice
+                                endif
+                            end do
+                            do iaux = 1, size(dmats_aux_mask,2)
+                                choice = iaux + 1
+                                if( choice == cur_choice ) cycle
+                                e = nu_highres_extension_choice_unary(i, j, k, imask, choice, dmat_old, dmat_new) + &
+                                    &beta * nu_highres_extension_choice_neighborhood_cost(choice, i, j, k, &
+                                    &extend_mask, extend_choice, old_label, new_coord, n_full, nsz)
+                                if( nu_label_smooth_is_better(e, best_e) )then
+                                    best_e = e
+                                    best_choice = choice
+                                endif
+                            end do
+                            if( best_choice /= cur_choice )then
+                                extend_choice(i,j,k) = best_choice
+                                nchanged = nchanged + 1
+                            endif
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+            end do
+            if( nchanged == 0 ) exit
+        end do
+        n_extended = count(extend_mask .and. (extend_choice == 1))
+    end subroutine refine_nu_highres_extension_selection_aux
+
+    real function nu_highres_extension_choice_unary( i, j, k, imask, choice, dmat_old, dmat_new ) result(e)
+        integer, intent(in) :: i, j, k, imask, choice
+        real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
+        if( choice == 0 )then
+            e = dmat_old(i,j,k)
+        else if( choice == 1 )then
+            e = dmat_new(i,j,k)
+        else
+            e = dmats_aux_mask(imask,choice-1)
+        endif
+    end function nu_highres_extension_choice_unary
+
+    module real function nu_highres_extension_choice_neighborhood_cost( choice, i, j, k, extend_mask, &
+            &extend_choice, old_label, new_coord, neigh, nsz )
+        integer, intent(in) :: choice, i, j, k, old_label, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        logical, intent(in) :: extend_mask(:,:,:)
+        integer, intent(in) :: extend_choice(:,:,:)
+        real,    intent(in) :: new_coord
+        integer :: ineigh, ni, nj, nk, degree, neigh_choice
+        real    :: icoord, jcoord
+        logical :: l_aux_i, l_aux_j
+        call nu_highres_extension_choice_state(i, j, k, choice, old_label, new_coord, icoord, l_aux_i)
+        nu_highres_extension_choice_neighborhood_cost = 0.
+        degree = 0
+        do ineigh = 1, nsz
+            ni = neigh(1,ineigh)
+            nj = neigh(2,ineigh)
+            nk = neigh(3,ineigh)
+            if( .not.nu_lmask(ni,nj,nk) ) cycle
+            degree = degree + 1
+            neigh_choice = 0
+            if( extend_mask(ni,nj,nk) ) neigh_choice = extend_choice(ni,nj,nk)
+            call nu_highres_extension_choice_state(ni, nj, nk, neigh_choice, old_label, new_coord, jcoord, l_aux_j)
+            nu_highres_extension_choice_neighborhood_cost = nu_highres_extension_choice_neighborhood_cost + &
+                &nu_label_smooth_source_pair_cost(icoord, jcoord, l_aux_i, l_aux_j)
+        end do
+        if( degree > 0 ) nu_highres_extension_choice_neighborhood_cost = &
+            &nu_highres_extension_choice_neighborhood_cost / real(degree)
+    end function nu_highres_extension_choice_neighborhood_cost
+
+    subroutine nu_highres_extension_choice_state( i, j, k, choice, old_label, new_coord, coord, l_aux )
+        integer, intent(in)  :: i, j, k, choice, old_label
+        real,    intent(in)  :: new_coord
+        real,    intent(out) :: coord
+        logical, intent(out) :: l_aux
+        integer :: iaux
+        l_aux = .false.
+        if( choice == 1 )then
+            coord = new_coord
+        else if( choice > 1 )then
+            iaux = choice - 1
+            coord = nu_candidate_coord_for_label(old_label + iaux)
+            l_aux = .true.
+        else if( allocated(srcmap) .and. srcmap(i,j,k) > 1 )then
+            iaux = srcmap(i,j,k) - 1
+            coord = nu_candidate_coord_for_label(old_label + iaux)
+            l_aux = .true.
+        else
+            coord = nu_candidate_coord_for_label(filtmap(i,j,k))
+        endif
+    end subroutine nu_highres_extension_choice_state
+
     module real function nu_highres_extension_neighborhood_cost( icoord, extend_mask, extend_to_new, old_label, &
         &new_coord, neigh, nsz )
         real,    intent(in) :: icoord, new_coord
@@ -337,6 +570,55 @@ contains
         end do
         !$omp end parallel do
     end subroutine apply_nu_highres_extension_selection
+
+    module subroutine apply_nu_highres_extension_selection_aux( extend_choice, old_label, new_label )
+        integer, intent(in) :: extend_choice(:,:,:)
+        integer, intent(in) :: old_label, new_label
+        integer :: i, j, k, choice, aux_icand
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,choice,aux_icand)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    choice = extend_choice(i,j,k)
+                    if( choice == 0 ) cycle
+                    if( choice == 1 )then
+                        srcmap(i,j,k)  = 1
+                        filtmap(i,j,k) = new_label
+                    else
+                        srcmap(i,j,k) = choice
+                        aux_icand = old_label + choice - 1
+                        filtmap(i,j,k) = nu_effective_base_label_for_candidate(aux_icand, old_label)
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine apply_nu_highres_extension_selection_aux
+
+    subroutine cache_nu_highres_extension_frontier_after_aux_selection( dmat_new, new_label )
+        real,    intent(in) :: dmat_new(:,:,:)
+        integer, intent(in) :: new_label
+        integer :: i, j, k, imask, iaux
+        allocate(dmat_finest_cached(ldim(1),ldim(2),ldim(3)), source=huge(0.))
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask,iaux)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    if( filtmap(i,j,k) /= new_label ) cycle
+                    if( srcmap(i,j,k) == 1 )then
+                        dmat_finest_cached(i,j,k) = dmat_new(i,j,k)
+                    else
+                        iaux = srcmap(i,j,k) - 1
+                        if( iaux < 1 .or. iaux > size(dmats_aux_mask,2) ) cycle
+                        imask = nu_mask_index(i,j,k)
+                        dmat_finest_cached(i,j,k) = dmats_aux_mask(imask,iaux)
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine cache_nu_highres_extension_frontier_after_aux_selection
 
     module subroutine append_nu_highres_candidate_coord( old_n_base, new_coord )
         integer, intent(in) :: old_n_base

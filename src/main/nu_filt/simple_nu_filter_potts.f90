@@ -128,7 +128,10 @@ contains
 
     module real function nu_label_smooth_pair_cost( icand, jcand )
         integer, intent(in) :: icand, jcand
-        nu_label_smooth_pair_cost = nu_label_smooth_coord_pair_cost(candidate_coords(icand), candidate_coords(jcand))
+        integer :: n_base
+        n_base = size(cutoff_finds)
+        nu_label_smooth_pair_cost = nu_label_smooth_source_pair_cost(candidate_coords(icand), &
+            &candidate_coords(jcand), icand > n_base, jcand > n_base)
     end function nu_label_smooth_pair_cost
 
     module real function nu_label_smooth_coord_pair_cost( icoord, jcoord )
@@ -141,6 +144,21 @@ contains
             nu_label_smooth_coord_pair_cost = step_jump + NU_LABEL_SMOOTH_QUAD_FRAC * step_jump * step_jump
         endif
     end function nu_label_smooth_coord_pair_cost
+
+    module real function nu_label_smooth_source_pair_cost( icoord, jcoord, l_aux_i, l_aux_j )
+        real,    intent(in) :: icoord, jcoord
+        logical, intent(in) :: l_aux_i, l_aux_j
+        if( l_aux_source_unordered_potts .and. (l_aux_i .or. l_aux_j) )then
+            ! In postprocess_nu the classical auxiliary map is a separate
+            ! source alternative, not an ordered resolution-bin label. A zero
+            ! boundary cost keeps Potts smoothing from suppressing classical
+            ! assignments solely because nearby base-bank voxels marched to a
+            ! finer Fourier shell.
+            nu_label_smooth_source_pair_cost = NU_AUX_SOURCE_BOUNDARY_COST
+        else
+            nu_label_smooth_source_pair_cost = nu_label_smooth_coord_pair_cost(icoord, jcoord)
+        endif
+    end function nu_label_smooth_source_pair_cost
 
     module integer function nu_label_smooth_color( i, j, k )
         integer, intent(in) :: i, j, k

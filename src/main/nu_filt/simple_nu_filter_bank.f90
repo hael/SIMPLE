@@ -5,18 +5,22 @@ implicit none
 
 contains
 
-    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, n_highres_steps )
+    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
+            &n_highres_steps, l_aux_source_unordered )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
+        logical,     optional, intent(in) :: l_aux_source_unordered
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         integer :: i, n_candidates
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps)
+        l_aux_source_unordered_potts = .false.
+        if( present(l_aux_source_unordered) ) l_aux_source_unordered_potts = l_aux_source_unordered
         if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
@@ -134,6 +138,11 @@ contains
         ! The first n_base entries correspond to cutoff_finds(:); any remaining
         ! entries are caller-supplied auxiliary sources.
         n_candidates = size(dmats_mask, 2)
+        if( allocated(dmats_aux_mask) ) deallocate(dmats_aux_mask)
+        if( l_aux_source_unordered_potts .and. n_candidates > n_base )then
+            allocate(dmats_aux_mask(n_nu_mask,n_candidates-n_base))
+            dmats_aux_mask = dmats_mask(:,n_base+1:n_candidates)
+        endif
         if( allocated(filtmap) ) deallocate(filtmap)
         if( allocated(srcmap)  ) deallocate(srcmap)
         allocate(candmap(nx,ny,nz), source=1)

@@ -91,6 +91,7 @@ contains
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         if( allocated(dmats_mask)         ) deallocate(dmats_mask)
+        if( allocated(dmats_aux_mask)     ) deallocate(dmats_aux_mask)
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
@@ -107,6 +108,7 @@ contains
         n_nu_mask = 0
         winsz_tent = 0
         smpd = 0.
+        l_aux_source_unordered_potts = .false.
     end subroutine cleanup_nu_filter
 
     module subroutine cleanup_aux_bank

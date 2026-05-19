@@ -199,6 +199,15 @@ NU postprocess map copies that voxel from a classical transfer map where the
 global B factor is applied first and the FSC-derived filter is applied second,
 matching the ordinary postprocess ordering.
 
+In this postprocess workflow, the classical auxiliary candidate is treated as a
+source alternative rather than an ordered low-pass rung. Its Potts boundary cost
+is source-aware, so neighboring base-bank voxels that march to finer Fourier
+shells do not suppress assignment to the classical map by resolution-distance
+penalty alone. During high-resolution extension, the local challenger search
+therefore compares the current winner, the next Fourier shell, and the
+classical auxiliary candidate; promotion of the next shell is still gated only
+by the fraction of tested frontier voxels assigned to that next shell.
+
 Base-bank voxels still use the NU filter map as a local postprocessing
 transfer-function selector for the merged reconstruction. Bins at or better
 than the global FSC resolution use the global B factor exactly. Worse
