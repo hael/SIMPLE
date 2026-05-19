@@ -91,12 +91,13 @@ In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd referenc
 When `filt_mode=nonuniform`, `nu_refine=yes`, and the user has not set an
 explicit `lp`, the 3D matching/reprojection low-pass limit follows the finest
 active NU filter-bank limit from the previous `volassemble` pass instead of the
-global FSC resolution. `volassemble` records that limit only after writing the
-matching `_nu_filt` even/odd products. The matcher uses it only when the
-corresponding NU-filtered references are present for all active states; a fresh
-first iteration, missing NU metadata, or missing `_nu_filt` half maps falls back
-to the ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard user
-override, and `lpstop` still caps the selected matching bandwidth.
+global FSC resolution. After writing the matching `_nu_filt` even/odd products,
+`volassemble` updates the ordinary project `lp` field to the finest active NU
+bank limit, using the same project metadata convention as `set_bp_range3D`.
+The matcher reads that project `lp` value on the next iteration; a fresh first
+iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
+policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
+selected matching bandwidth.
 
 ## Ordered-label smoothing regularization
 
@@ -183,9 +184,15 @@ ab initio output copy stage must preserve the NU products under the
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
-accepts the B factor in the same way, applies the NU filter map to the merged
-reconstruction, writes the unsharpened NU-filtered comparison as `_lp_nu`, and
-applies B-factor sharpening after NU filtering for `_pproc_nu`. The NU products
+accepts the B factor in the same way and uses the NU filter map as a local
+postprocessing transfer-function selector for the merged reconstruction. Each
+candidate transfer function applies B-factor weighting followed by a Hann
+anti-aliasing window at that candidate's local low-pass limit. Voxels assigned
+to a local resolution equal to or better than the global FSC limit use the
+ordinary global B factor. Lower-resolution voxels use a Wilson-statistics
+shrinkage of the global B factor toward the neutral postprocessing prior by
+`(s_local/s_global)^2`, where `s` is spatial frequency. `_lp_nu` is written as
+the corresponding unsharpened Hann-windowed NU comparison map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 

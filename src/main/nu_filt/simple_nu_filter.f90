@@ -24,11 +24,11 @@
 !
 ! Postprocess workflows can instead challenge Fourier-shell candidates
 ! sequentially with the loop helper, then apply the resulting local filter map
-! to a merged map:
+! to a merged map using Hann-windowed, Wilson-shrunk transfer functions:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
-!    call nu_filter_vol(vol, vol_filt)
+!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
@@ -41,7 +41,8 @@ use simple_tent_smooth, only: tent_smooth_3d
 use simple_neighs,      only: neigh_8_3D
 implicit none
 
-public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, cleanup_nu_filter, pack_filtmap_lowpass_limits,&
+public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, nu_postprocess_vol, &
+          cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           analyze_filtmap_neighbor_continuity, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
@@ -54,6 +55,8 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
+real,             parameter   :: NU_POSTPROCESS_HANN_WIDTH           = 10.
+real,             parameter   :: NU_POSTPROCESS_BFAC_PRIOR           = 0.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
@@ -326,6 +329,12 @@ interface
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
+
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac )
+        class(image), intent(in)  :: vol_in
+        class(image), intent(out) :: vol_lp, vol_pproc
+        real,         intent(in)  :: global_lp, global_bfac
+    end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )

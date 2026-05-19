@@ -250,7 +250,6 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &extend_nu_filter_highres_shell_next, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
-        use simple_nu_filter_policy, only: write_nu_align_lp_for_state
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -271,6 +270,7 @@ contains
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: imat(:,:,:)
         real, allocatable             :: res0143s(:)
+        real, allocatable             :: nu_align_lps(:)
         real                          :: update_frac_trail_rec, res05
         integer                       :: state, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_automask3D, t_nonuniform_filter, t_tot
@@ -329,6 +329,8 @@ contains
             l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
             allocate(res0143s(params%nstates))
             res0143s = 0.
+            allocate(nu_align_lps(params%nstates))
+            nu_align_lps = 0.
             call eorecvol_read%new(params, build%spproj, expand=.false.)
         end subroutine initialize_context
 
@@ -568,7 +570,7 @@ contains
             real :: align_lp
             if( .not. params%l_nu_refine ) return
             align_lp = get_nu_filter_bank_finest_lp()
-            call write_nu_align_lp_for_state(state, align_lp)
+            nu_align_lps(state) = align_lp
             write(logfhandle,'(A,F8.3,A)') &
                 &'>>> NU refinement matching low-pass limit for next iteration: ', align_lp, ' A'
         end subroutine record_nu_alignment_lowpass_limit
@@ -622,8 +624,20 @@ contains
                     endif
                 enddo
             endif
+            call update_project_nu_alignment_lowpass()
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         end subroutine update_project_resolution_metadata
+
+        subroutine update_project_nu_alignment_lowpass()
+            real :: align_lp
+            if( .not. l_nonuniform_mode ) return
+            if( .not. params%l_nu_refine ) return
+            if( .not. allocated(nu_align_lps) ) return
+            if( .not. any(nu_align_lps > TINY) ) return
+            align_lp = minval(nu_align_lps, mask=nu_align_lps > TINY)
+            call build%spproj_field%set_all2single('lp', align_lp)
+            write(logfhandle,'(A,F8.3,A)') '>>> NU refinement project matching low-pass limit: ', align_lp, ' A'
+        end subroutine update_project_nu_alignment_lowpass
 
         subroutine cleanup_context()
             call gridcorr_img%kill
@@ -645,6 +659,7 @@ contains
             if( allocated(l_mask) ) deallocate(l_mask)
             if( allocated(imat) ) deallocate(imat)
             if( allocated(res0143s) ) deallocate(res0143s)
+            if( allocated(nu_align_lps) ) deallocate(nu_align_lps)
             call cleanup_nu_filter()
             call state_mask_bin%kill_bimg
             call mskvol%kill_bimg

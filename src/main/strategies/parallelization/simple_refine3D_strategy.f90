@@ -5,6 +5,7 @@ use simple_matcher_refvol_utils
 use simple_builder,       only: builder
 use simple_parameters,    only: parameters
 use simple_cmdline,       only: cmdline
+use simple_sp_project,    only: sp_project
 use simple_qsys_env,      only: qsys_env
 use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
@@ -216,6 +217,34 @@ contains
         if( allocated(res0143s) ) deallocate(res0143s)
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
+
+    subroutine refresh_matching_lp_from_project( params, build )
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(sp_project) :: lp_project
+        real    :: project_lp
+        logical :: l_has_lp
+        if( .not. params%l_nu_refine ) return
+        if( trim(params%filt_mode).ne.'nonuniform' ) return
+        if( .not. file_exists(params%projfile) ) return
+        project_lp = 0.
+        l_has_lp   = .false.
+        call lp_project%read_segment(params%oritype, params%projfile)
+        select case(trim(params%oritype))
+            case('cls3D')
+                if( lp_project%os_cls3D%get_noris() >= params%fromp )then
+                    l_has_lp = lp_project%os_cls3D%isthere(params%fromp, 'lp')
+                    if( l_has_lp ) project_lp = lp_project%os_cls3D%get(params%fromp, 'lp')
+                endif
+            case DEFAULT
+                if( lp_project%os_ptcl3D%get_noris() >= params%fromp )then
+                    l_has_lp = lp_project%os_ptcl3D%isthere(params%fromp, 'lp')
+                    if( l_has_lp ) project_lp = lp_project%os_ptcl3D%get(params%fromp, 'lp')
+                endif
+        end select
+        if( l_has_lp .and. project_lp > TINY ) call build%spproj_field%set_all2single('lp', project_lp)
+        call lp_project%kill
+    end subroutine refresh_matching_lp_from_project
 
     subroutine remove_partial_rec_files( params )
         type(parameters), intent(in) :: params
@@ -569,6 +598,7 @@ contains
             endif
             call cline%delete('force_volassemble')
         endif
+        if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build)
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
         converged = .false.
         select case(trim(params%refine))
@@ -1008,6 +1038,7 @@ contains
                     endif
             end select
         endif
+        if( trim(params%volrec).eq.'yes' ) call refresh_matching_lp_from_project(params, build)
         ! convergence
         ! For strict same-iteration metrics, evaluate convergence after assembly
         ! and refresh the FSC-derived resolution fields in the active table.

@@ -384,7 +384,7 @@ contains
 
     subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
-            &extend_nu_filter_highres_shells, nu_filter_vol, cleanup_nu_filter, &
+            &extend_nu_filter_highres_shells, nu_postprocess_vol, cleanup_nu_filter, &
             &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
         class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
         integer,         intent(in)    :: box
@@ -453,12 +453,8 @@ contains
         write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
             &n_nu_postprocess_steps
         call vol_bfac%fft()
-        call nu_filter_vol(vol_bfac, vol_lp)
+        call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac)
         call vol_lp%write(fname_lp)
-        call vol_pproc%copy(vol_lp)
-        call vol_pproc%fft()
-        call vol_pproc%apply_bfac(params%bfac)
-        call vol_pproc%ifft()
         call vol_pproc%mask3D_soft(params%msk_crop)
         call vol_pproc%write(fname_pproc)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
