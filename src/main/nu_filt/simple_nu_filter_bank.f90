@@ -168,13 +168,34 @@ contains
         call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
         call log_nu_candidate_selection_counts(candmap, n_base, 'after ordered-label smoothing')
         call candidate_map_to_filt_and_src(candmap, n_base)
-        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(nx,ny,nz))
-        call unpack_nu_dmat_candidate(n_base, dmat_finest_cached)
+        call cache_nu_extension_frontier_dmats(candmap, n_base)
         ! Drop the candidate unary bank before output synthesis.
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         deallocate(candmap)
     end subroutine optimize_nu_cutoff_finds
+
+    subroutine cache_nu_extension_frontier_dmats( candmap, n_base )
+        integer, intent(in) :: candmap(:,:,:), n_base
+        integer :: i, j, k, imask, icand, nx, ny, nz
+        nx = size(candmap, 1)
+        ny = size(candmap, 2)
+        nz = size(candmap, 3)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        allocate(dmat_finest_cached(nx,ny,nz), source=huge(0.))
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask,icand) proc_bind(close)
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    icand = candmap(i,j,k)
+                    if( nu_effective_base_label_for_candidate(icand, n_base) /= n_base ) cycle
+                    imask = nu_mask_index(i,j,k)
+                    dmat_finest_cached(i,j,k) = dmats_mask(imask,icand)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine cache_nu_extension_frontier_dmats
 
     module subroutine candidate_map_to_filt_and_src( candmap, n_base )
         integer, intent(in) :: candmap(:,:,:), n_base

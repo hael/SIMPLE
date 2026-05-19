@@ -146,10 +146,11 @@ contains
         call vol_filt%kill
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
+        type(image), optional, intent(in) :: aux_vols(:)
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
         integer :: icut, winsz
@@ -160,9 +161,7 @@ contains
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_postprocess_vol')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
-        if( any(nu_lmask .and. srcmap /= 1) )then
-            THROW_HARD('NU postprocess transfer functions require a base-bank-only filter map; nu_postprocess_vol')
-        endif
+        call validate_nu_postprocess_aux_vols(aux_vols)
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
         if( .not. vol_in_ft%is_ft() )then
@@ -192,9 +191,34 @@ contains
             call vol_filt%get_rmat_ptr(rmat_filt)
             call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
         end do
+        if( present(aux_vols) ) call copy_nu_postprocess_aux_voxels(aux_vols, rmat_pproc)
         call vol_in_ft%kill
         call vol_filt%kill
     end subroutine nu_postprocess_vol
+
+    subroutine validate_nu_postprocess_aux_vols( aux_vols )
+        type(image), optional, intent(in) :: aux_vols(:)
+        integer :: iaux, n_aux_needed
+        n_aux_needed = max(0, maxval(srcmap) - 1)
+        if( n_aux_needed == 0 ) return
+        if( .not. present(aux_vols) )then
+            THROW_HARD('NU postprocess selected auxiliary sources but no auxiliary output volumes were supplied; nu_postprocess_vol')
+        endif
+        if( size(aux_vols) < n_aux_needed )then
+            THROW_HARD('NU postprocess auxiliary output volume count is smaller than selected auxiliary sources; nu_postprocess_vol')
+        endif
+        do iaux = 1, n_aux_needed
+            if( any(aux_vols(iaux)%get_ldim() /= ldim) )then
+                THROW_HARD('NU postprocess auxiliary output volume dimensions differ; nu_postprocess_vol')
+            endif
+            if( abs(aux_vols(iaux)%get_smpd() - smpd) > TINY )then
+                THROW_HARD('NU postprocess auxiliary output volume smpd differs; nu_postprocess_vol')
+            endif
+            if( aux_vols(iaux)%is_ft() )then
+                THROW_HARD('NU postprocess auxiliary output volumes must be real-space maps; nu_postprocess_vol')
+            endif
+        end do
+    end subroutine validate_nu_postprocess_aux_vols
 
     subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp )
         real, intent(in) :: global_lp, global_bfac, antialias_lp
@@ -279,5 +303,26 @@ contains
         end do
         !$omp end parallel do
     end subroutine copy_nu_postprocess_voxels
+
+    subroutine copy_nu_postprocess_aux_voxels( aux_vols, rmat_dst )
+        type(image),        intent(in)    :: aux_vols(:)
+        real(kind=c_float), intent(inout) :: rmat_dst(:,:,:)
+        real(kind=c_float), pointer :: rmat_aux(:,:,:)
+        integer :: iaux, i, j, k
+        do iaux = 1, size(aux_vols)
+            call aux_vols(iaux)%get_rmat_ptr(rmat_aux)
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( srcmap(i,j,k) == iaux + 1 )then
+                            rmat_dst(i,j,k) = rmat_aux(i,j,k)
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        end do
+    end subroutine copy_nu_postprocess_aux_voxels
 
 end submodule simple_nu_filter_apply

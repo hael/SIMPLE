@@ -190,23 +190,31 @@ The final ab initio output copy stage must not propagate stale `_pproc_nu` or
 
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
-the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
-accepts the B factor in the same way and uses the NU filter map as a local
-postprocessing transfer-function selector for the merged reconstruction. Bins
-at or better than the global FSC resolution use the global B factor exactly.
-Worse local-resolution bins receive an added positive-B damping offset through
-an asymmetric sigmoid, with the default inflection near 8 A. The size of this
+the mirrored `_pproc_mirr` map when mirroring is enabled. It then inserts the
+classical FSC-filtered half-map pair as an auxiliary candidate in the NU
+half-map competition. This candidate is assigned the global FSC resolution and
+the base bank is seeded to that Fourier shell before sequential high-resolution
+extension begins. If the classical auxiliary candidate wins a voxel, the final
+NU postprocess map copies that voxel from a classical transfer map where the
+global B factor is applied first and the FSC-derived filter is applied second,
+matching the ordinary postprocess ordering.
+
+Base-bank voxels still use the NU filter map as a local postprocessing
+transfer-function selector for the merged reconstruction. Bins at or better
+than the global FSC resolution use the global B factor exactly. Worse
+local-resolution bins receive an added positive-B damping offset through an
+asymmetric sigmoid, with the default inflection near 8 A. The size of this
 offset is derived by interpolating from the fitted global B factor at the
 global FSC boundary toward a fixed positive-B endpoint. That endpoint is
 computed from a fixed damping reference B factor, not from the fitted global B
 factor used for sharpening. With the current defaults, maximally damped bins
-approach the positive-B endpoint implied by a `-150 A^2` damping reference,
-so low-resolution downweighting does not become weak just because the fitted
+approach the positive-B endpoint implied by a `-150 A^2` damping reference, so
+low-resolution downweighting does not become weak just because the fitted
 global B-factor magnitude is smaller. The sigmoid fraction is normalized to be
 zero at the global FSC resolution, so the B-factor field is continuous at the
-boundary between classically sharpened and damped regions. All bins are then
-filtered with the same 4-pixel Hann antialiasing window at the finest active NU
-bin, rather than with the global FSC transfer, so locally promoted
+boundary between classically sharpened and damped regions. Base-bank bins are
+then filtered with the same 4-pixel Hann antialiasing window at the finest
+active NU bin, rather than with the global FSC transfer, so locally promoted
 high-resolution bins are not cut back to the global FSC limit. `_lp_nu` is
 written as the corresponding unsharpened Hann-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when

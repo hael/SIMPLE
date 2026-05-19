@@ -334,7 +334,7 @@
       </clipPath>
       <rect x="58" y="57" width="150" height="96" fill="url(#heat)" opacity="0.65" clip-path="url(#postClip)" />
       <text class="small" x="260" y="66">same local competition</text>
-      <text class="small" x="260" y="88">and Potts smoothing</text>
+      <text class="small" x="260" y="88">plus classical FSC aux candidate</text>
       <text class="small" x="260" y="110">but no E-step coupling</text>
     </g>
 
@@ -350,7 +350,7 @@
       <text class="tiny" x="178" y="160">global FSC</text>
       <text class="tiny" x="74" y="56">global B</text>
       <text class="tiny" x="300" y="60">fixed-B sigmoid damping</text>
-      <text class="small" x="38" y="184">high-resolution bins keep the global sharpening; lower-resolution bins are damped</text>
+      <text class="small" x="38" y="184">base bins use NU B/Hann transfer; aux voxels use classical B then FSC filter</text>
     </g>
 
     <line class="arrow" x1="265" y1="486" x2="265" y2="520" />

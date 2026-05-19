@@ -32,7 +32,7 @@ contains
             if( present(stats) ) stats = local_stats
             return
         endif
-        n_finest  = count(nu_lmask .and. srcmap == 1 .and. filtmap == sz_old)
+        n_finest  = count(nu_lmask .and. filtmap == sz_old)
         local_stats%n_tested = n_finest
         pct_finest = 100. * real(n_finest) / real(n_total)
         local_stats%pct_tested_mask = pct_finest
@@ -67,7 +67,7 @@ contains
         do k = 1, ldim(3)
         do j = 1, ldim(2)
             do i = 1, ldim(1)
-                extend_mask(i,j,k) = (nu_lmask(i,j,k) .and. srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == sz_old)
+                extend_mask(i,j,k) = (nu_lmask(i,j,k) .and. filtmap(i,j,k) == sz_old)
             end do
         end do
         end do

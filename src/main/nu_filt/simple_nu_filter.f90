@@ -22,14 +22,16 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows can instead challenge Fourier-shell candidates
-! sequentially with the loop helper, then apply the resulting local filter map
-! to a merged map using resolution-dependent B factors followed by a shared
-! Hann antialiasing filter at the finest active NU bin:
+! Postprocess workflows can seed the base bank to the global FSC resolution,
+! add the classical FSC-filtered half-map pair as an auxiliary candidate, then
+! challenge further Fourier-shell candidates sequentially with the loop helper.
+! The resulting local filter/source map is applied to a merged map using
+! resolution-dependent B factors for base-bank voxels and caller-supplied
+! classical transfer maps for auxiliary voxels:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
-!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac)
+!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
@@ -329,10 +331,11 @@ interface
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
+        type(image), optional, intent(in) :: aux_vols(:)
     end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90
