@@ -690,8 +690,6 @@ contains
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')
-                else if( trim(params%filt_mode).eq.'nonuniform' )then
-                    call child_cline%set('filt_mode', 'nonuniform')
                 endif
                 if( prg.eq.'reconstruct3D' .and. .not. final_stage_uses_ml_reg() )then
                     call child_cline%set('objfun', 'cc')
@@ -712,17 +710,19 @@ contains
 
     end subroutine calc_final_rec
 
-    subroutine write_final_rec_outputs( params, spproj, lp )
+    subroutine write_final_rec_outputs( params, spproj, lp, l_copy_nu_products )
         class(parameters), intent(in) :: params
         class(sp_project), intent(in) :: spproj
         real,              intent(in) :: lp
+        logical, optional, intent(in) :: l_copy_nu_products
         type(string) :: str_state, vol_name, vol_final, vol_final_lp
         type(string) :: vol_pproc, vol_final_pproc, vol_mirr, vol_final_mirr
         type(string) :: vol_pproc_nu, vol_final_pproc_nu, vol_lp_nu, vol_final_lp_nu
         integer :: state
         real    :: lp_snapshot
         logical :: l_copy_nu
-        l_copy_nu = trim(params%filt_mode).eq.'nonuniform'
+        l_copy_nu = .false.
+        if( present(l_copy_nu_products) ) l_copy_nu = l_copy_nu_products
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)

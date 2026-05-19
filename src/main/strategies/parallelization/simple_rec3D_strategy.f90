@@ -6,7 +6,7 @@ use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec
 use simple_commanders_rec_distr, only: commander_volassemble
-use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_halfvol_fname, refine3D_state_vol_fname
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -335,15 +335,19 @@ contains
     end subroutine sync_resolved_rec_params
 
     subroutine maybe_postprocess_reconstruct3D(params, cline)
-        use simple_commanders_volops, only: postprocess_volume_from_files, postprocess_nu_volume_from_files
+        use simple_commanders_volops, only: postprocess_volume_from_files
         type(parameters), intent(in)    :: params
         class(cmdline),   intent(inout) :: cline
         type(parameters) :: params_pp
-        type(string)     :: fname_vol, fname_even, fname_odd, fname_fsc
+        type(string)     :: fname_vol, fname_fsc
         real             :: smpd
         integer          :: state, nptcls, ldim(3)
         if( trim(params%postprocess) /= 'yes' )return
         if( cline%defined('part') )return
+        if( trim(params%filt_mode).eq.'nonuniform' )then
+            write(logfhandle,'(A)') &
+                &'>>> reconstruct3D postprocess: using classical postprocessing; automated postprocess_nu is refine3D_auto-only'
+        endif
         do state = 1, params%nstates
             params_pp = params
             fname_vol = refine3D_state_vol_fname(state)
@@ -355,16 +359,7 @@ contains
             endif
             call find_ldim_nptcls(fname_vol, ldim, nptcls)
             smpd = params%smpd_crop
-            if( trim(params%filt_mode).eq.'nonuniform' )then
-                fname_even = refine3D_state_halfvol_fname(state, 'even')
-                fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
-                call postprocess_nu_volume_from_files(fname_vol, fname_even, fname_odd, fname_fsc, &
-                    &ldim(1), smpd, params_pp, cline)
-                call fname_even%kill
-                call fname_odd%kill
-            else
-                call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
-            endif
+            call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
             call fname_vol%kill
             call fname_fsc%kill
         enddo

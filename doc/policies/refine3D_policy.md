@@ -205,14 +205,12 @@ workflow, otherwise it should bootstrap sigmas locally before producing the
 regularized map. This terminal reconstruction is still a fresh reconstruction
 from selected particles: it must not apply fractional-update sampling or
 trailing-average blending, and it also must not inherit staged search or
-mask-generation controls such as `refine`, `lp`, `automsk`, `envfsc`, or
-`gauref`; those belong to the staged refinement schedule, not to the terminal
-original-sampling reconstruction. The filtering exception is top-level
-`filt_mode=nonuniform`: when the ab initio run requested nonuniform filtering
-and terminal postprocessing is enabled, the terminal `reconstruct3D` command
-must preserve that filter mode so final postprocessing uses `postprocess_nu`.
-Build the terminal reconstruction command line from a small whitelist instead
-of copying the staged `refine3D` command and deleting keys.
+mask-generation controls such as `refine`, `lp`, `automsk`, `envfsc`, `gauref`,
+or `filt_mode=nonuniform`; those belong to the staged refinement schedule, not
+to the terminal original-sampling reconstruction. Terminal ab initio
+postprocessing is classical even when the staged workflow used NU-filtered
+references. Build the terminal reconstruction command line from a small
+whitelist instead of copying the staged `refine3D` command and deleting keys.
 
 For single-state continuation into `refine3D_auto`, an existing project
 `os_out` state-1 `vol` entry is a valid initializer when the referenced file is
@@ -236,11 +234,12 @@ unattempted or rejected challenger. In this coupled refinement path, NU
 filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
-all-particle
-`reconstruct3D` pass leaves refinement and uses reconstruction postprocessing:
-when `filt_mode=nonuniform`, `reconstruct3D` selects `postprocess_nu`, which
-challenges the uncoupled Fourier-shell NU filter bank one shell at a time for
-the final filtered map and also writes ordinary `_pproc`/`_lp` comparison outputs.
+all-particle `reconstruct3D` pass leaves refinement and writes the final half
+maps and merged map. When `filt_mode=nonuniform`, `refine3D_auto` then
+explicitly runs automated `postprocess_nu` for that final map. This is the only
+automated NU postprocessing path, because it is the path where particle
+refinement has already been coupled to iteratively refined NU references.
+Generic `reconstruct3D` postprocessing remains classical.
 
 In the coupled `nu_refine` path, gold-standard 3D matching must not continue to
 derive its alignment low-pass limit solely from the global FSC once NU-filtered

@@ -176,12 +176,14 @@ contains
     subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp )
         real, intent(in) :: global_lp, global_bfac, antialias_lp
         integer :: icut
-        real :: local_lp, damp_frac, local_bfac, bfac_floor
-        bfac_floor = nu_postprocess_bfac_floor(global_bfac)
+        real :: local_lp, damp_frac, local_bfac, damping_plateau
+        damping_plateau = nu_postprocess_bfac_damping_plateau()
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
-        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F9.2)') &
-            &'Damping reference LP(A): ', global_lp, '  Global B: ', global_bfac, &
-            &'  B floor: ', bfac_floor
+        write(logfhandle,'(4X,A,F8.3,A,F9.2)') &
+            &'Damping reference LP(A): ', global_lp, '  Global B: ', global_bfac
+        write(logfhandle,'(4X,A,F9.2,A,F9.2)') &
+            &'Fixed damping B ref: ', NU_POSTPROCESS_DAMPING_BFAC_REF, &
+            &'  B floor: ', damping_plateau
         write(logfhandle,'(4X,A,F5.2,A,F6.2,A,F5.2)') &
             &'B-factor model alpha/mid/width: ', NU_POSTPROCESS_BFAC_ALPHA, '/', &
             &NU_POSTPROCESS_BFAC_SIGMOID_MID, '/', NU_POSTPROCESS_BFAC_SIGMOID_WIDTH
@@ -200,27 +202,19 @@ contains
 
     real function nu_postprocess_resolution_bfac( local_lp, global_lp, global_bfac ) result( local_bfac )
         real, intent(in) :: local_lp, global_lp, global_bfac
-        real :: bfac_floor, damp_frac
-        ! The damping model is defined for sharpening B factors (negative in
-        ! SIMPLE's exp(-(B/4)*s^2) convention). If the caller supplies a
-        ! nonnegative B factor, preserve that damping uniformly.
-        if( global_bfac >= 0. )then
-            local_bfac = global_bfac
-            return
-        endif
-        bfac_floor = nu_postprocess_bfac_floor(global_bfac)
+        real :: damp_frac
+        ! The global B factor still defines classical sharpening at and better
+        ! than the global FSC resolution. Worse local-resolution bins
+        ! interpolate toward a fixed positive-B endpoint derived from the
+        ! reference damping B factor, so weakly sharpened maps do not also get a
+        ! weak low-resolution penalty.
         damp_frac  = nu_postprocess_damping_frac(local_lp, global_lp)
-        local_bfac = global_bfac + damp_frac * (bfac_floor - global_bfac)
+        local_bfac = global_bfac + damp_frac * (nu_postprocess_bfac_damping_plateau() - global_bfac)
     end function nu_postprocess_resolution_bfac
 
-    real function nu_postprocess_bfac_floor( global_bfac ) result( bfac_floor )
-        real, intent(in) :: global_bfac
-        if( global_bfac < 0. )then
-            bfac_floor = NU_POSTPROCESS_BFAC_ALPHA * (-global_bfac)
-        else
-            bfac_floor = global_bfac
-        endif
-    end function nu_postprocess_bfac_floor
+    real function nu_postprocess_bfac_damping_plateau() result( damping_plateau )
+        damping_plateau = NU_POSTPROCESS_BFAC_ALPHA * abs(NU_POSTPROCESS_DAMPING_BFAC_REF)
+    end function nu_postprocess_bfac_damping_plateau
 
     real function nu_postprocess_damping_frac( local_lp, global_lp ) result( frac )
         real, intent(in) :: local_lp, global_lp

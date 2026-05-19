@@ -167,19 +167,26 @@ challenged. The postprocess path may continue this sequential challenger loop
 through Nyquist, but it must not pre-generate or pre-evaluate the full sampling
 ladder.
 
+Automated `postprocess_nu` is restricted to the terminal all-particle map
+produced by `refine3D_auto`, where the particle refinement has already been
+driven by iteratively refined NU references. Generic `reconstruct3D`
+postprocessing, including terminal ab initio reconstruction, must use the
+classical postprocessing path even when earlier reconstruction stages used
+`filt_mode=nonuniform`. The standalone `postprocess_nu` command remains
+available for explicit manual experiments.
+
 The candidate objective bank should be stored only for voxels inside the NU
 mask. Full-volume objective arrays are temporary work buffers for objective
 generation and mask-normalized tent smoothing; persistent unary costs used for
 candidate selection and ordered-label smoothing are mask-packed. Objective
 values outside the NU mask must not contribute to smoothed in-mask unary costs.
 
-Terminal original-sampling `abinitio3D` reconstruction follows this
-postprocessing policy. If the top-level ab initio run used
-`filt_mode=nonuniform` and final postprocessing is enabled, the final
-`reconstruct3D` command preserves `filt_mode=nonuniform`, which dispatches to
-`postprocess_nu` rather than the classical postprocessing-only path. The final
-ab initio output copy stage must preserve the NU products under the
-`rec_final_stateNN` names, including `_pproc_nu` and `_lp_nu`.
+Terminal original-sampling `abinitio3D` reconstruction does not automatically
+run `postprocess_nu`. If staged ab initio refinement used
+`filt_mode=nonuniform`, that policy controls the staged `_nu_filt` reference
+generation, but the terminal `reconstruct3D` postprocessing remains classical.
+The final ab initio output copy stage must not propagate stale `_pproc_nu` or
+`_lp_nu` products unless an explicit workflow has produced and requested them.
 
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
@@ -187,15 +194,21 @@ the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
 accepts the B factor in the same way and uses the NU filter map as a local
 postprocessing transfer-function selector for the merged reconstruction. Bins
 at or better than the global FSC resolution use the global B factor exactly.
-Worse local-resolution bins transition through an asymmetric sigmoid toward a
-positive damping plateau, with the default inflection near 8 A. For negative
-sharpening B factors, `B_floor = alpha * (-B_global)`. The sigmoid fraction is
-normalized to be zero at the global FSC resolution, so the B-factor field is
-continuous at the boundary between classically sharpened and damped regions.
-All bins are then filtered with the same 4-pixel Hann antialiasing window at
-the finest active NU bin, rather than with the global FSC transfer, so locally
-promoted high-resolution bins are not cut back to the global FSC limit.
-`_lp_nu` is written as the corresponding unsharpened Hann-antialiased map. The NU products
+Worse local-resolution bins receive an added positive-B damping offset through
+an asymmetric sigmoid, with the default inflection near 8 A. The size of this
+offset is derived by interpolating from the fitted global B factor at the
+global FSC boundary toward a fixed positive-B endpoint. That endpoint is
+computed from a fixed damping reference B factor, not from the fitted global B
+factor used for sharpening. With the current defaults, maximally damped bins
+approach the positive-B endpoint implied by a `-75 A^2` sharpening experiment,
+so low-resolution downweighting does not become weak just because the fitted
+global B-factor magnitude is smaller. The sigmoid fraction is normalized to be
+zero at the global FSC resolution, so the B-factor field is continuous at the
+boundary between classically sharpened and damped regions. All bins are then
+filtered with the same 4-pixel Hann antialiasing window at the finest active NU
+bin, rather than with the global FSC transfer, so locally promoted
+high-resolution bins are not cut back to the global FSC limit. `_lp_nu` is
+written as the corresponding unsharpened Hann-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 

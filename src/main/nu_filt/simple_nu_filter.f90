@@ -59,15 +59,21 @@ real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! NU postprocess B-factor model tuning:
 ! - Bins at or better than the global FSC resolution use the global B factor.
 !   This preserves classical sharpening wherever the global FSC supports it.
-! - ALPHA controls the positive-B damping plateau for worse local-resolution
-!   bins. Increase it if low-resolution regions remain too sharp/noisy;
+! - DAMPING_BFAC_REF fixes the strength of the resolution-dependent damping
+!   schedule independently of the fitted global B factor. The default reproduces
+!   the behavior obtained when the fitted global sharpening B was about -75 A^2.
+!   Increase the magnitude if low-resolution regions remain too sharp/noisy;
 !   decrease it if those regions become too blurred.
+! - ALPHA controls the positive-B endpoint of the low-resolution branch. With
+!   the defaults, maximally damped bins approach the same effective B factor
+!   regardless of the fitted global sharpening B.
 ! - SIGMOID_MID is the resolution where damping turns on most rapidly.
 !   Increase it if mid-resolution density is damped too early; decrease it if
 !   damping should begin closer to the global FSC limit.
 ! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
 !   change across local-resolution bins; decrease it for a sharper transition.
 real,             parameter   :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
+real,             parameter   :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -75.
 real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 8.
 real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
 real,             parameter   :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
