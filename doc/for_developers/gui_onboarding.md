@@ -272,7 +272,7 @@ scientific behavior of SIMPLE.
    database status/update response.
 5. Harden `nice_local` startup: avoid fragile rename behavior, detect occupied
    ports, write logs, and make repeated launches idempotent.
-6. Choose one batch command, such as `cluster2D`, and trace its
+6. Choose one batch command, such as `import_movies`, and trace its
    `simple_nice_comm` updates from commander to Django.
 7. Prototype a generic batch heartbeat using the same status vocabulary as the
    stream master.
@@ -298,14 +298,15 @@ scientific behavior of SIMPLE.
 ## Open Questions For The Project Lead
 
 - Should active development happen in `nice_lite`, `nice_lite_dev`, or should
-  `nice_lite_dev` be merged back first?
+  `nice_lite_dev` be merged back first? - Yes. We should move nice_lite_dev to 
+  nice_lite once we're ready to start active development. 
 - Should the future batch communicator use HTTP like stream, or adapt the older
-  `simple_nice_comm` socket/thread model?
-- Which batch commands are the first-class desktop workflows?
-- What minimum offline/local behavior is required for a desktop release?
+  `simple_nice_comm` socket/thread model? use HTTP like stream
+- Which batch commands are the first-class desktop workflows? import procedures
+- What minimum offline/local behavior is required for a desktop release? None - already implemented
 - Should the desktop app support local-only execution first, or also configure
-  SLURM/LSF submission from day one?
-- What is the expected support matrix for macOS and Linux desktop installs?
+  SLURM/LSF submission from day one? Local only to start.
+- What is the expected support matrix for macOS and Linux desktop installs? All possible
 
 ## Practical Definition Of Done For The First Milestone
 
