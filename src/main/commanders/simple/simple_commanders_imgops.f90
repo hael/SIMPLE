@@ -364,7 +364,8 @@ contains
         use simple_ppca,        only: ppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
-        use simple_diffusion_maps, only: steerable_diffusion_map_embedder, steerable_transport_denoise, steerable_coeffproj_denoise
+        use simple_diffusion_maps, only: diffusion_map_embedder, steerable_diffusion_map_embedder, &
+            steerable_transport_denoise, steerable_coeffproj_denoise
         use simple_imgarr_utils,   only: copy_imgarr, dealloc_imgarr
         class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -372,6 +373,7 @@ contains
         class(pca),        pointer     :: pca_ptr         => null()
         type(ppca),        pointer     :: ppca_ptr_typed  => null()
         type(kpca_svd),    pointer     :: kpca_ptr        => null()
+        type(diffusion_map_embedder)    :: diffmap
         type(steerable_diffusion_map_embedder) :: steerable_diffmap
         type(image),       allocatable :: imgs(:), imgs_steer(:), den_ptcls(:)
         real,              allocatable :: avg(:), pcavecs(:, :), tmpvec(:), zavg(:), corrvec(:)
@@ -383,7 +385,7 @@ contains
         real(real64)                   :: trate
         integer                        :: npix, iptcl, j, neigs, directed_edges
         real                           :: sdev_noise, mskrad
-        logical                        :: l_transp_pca, l_profile_pca, l_hybrid_resid, l_steerable
+        logical                        :: l_transp_pca, l_profile_pca, l_hybrid_resid, l_steerable, l_diffmap
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//STK_EXT)
         ! doesn't work if projfile given - may need to mod in future
@@ -392,7 +394,9 @@ contains
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
         l_hybrid_resid = trim(params%pca_mode) .eq. 'ppca_kpca_resid'
         l_steerable    = trim(params%pca_mode) .eq. 'steerable_diff_map'
-        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. l_hybrid_resid .or. l_steerable
+        l_diffmap      = trim(params%pca_mode) .eq. 'diffusion_maps'
+        l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. &
+            l_hybrid_resid .or. l_steerable .or. l_diffmap
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
@@ -410,11 +414,14 @@ contains
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA+kPCA residual denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             else if( l_steerable )then
                 write(logfhandle,'(A,F8.3,A,I8)') 'Steerable diffusion denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
+            else if( l_diffmap )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'Diffusion map denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             else
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA denoise read stack: ', real(t1-t0)/real(trate), ' s; nptcls=', params%nptcls
             endif
         endif
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        if( l_diffmap .and. l_transp_pca ) THROW_HARD('diffusion_maps denoise supports transp_pca=no only')
         if( l_steerable )then
             if( l_transp_pca ) THROW_HARD('steerable_diff_map denoise supports transp_pca=no only')
             imgs_steer = copy_imgarr(imgs)
@@ -502,11 +509,59 @@ contains
                 write(logfhandle,'(A,F8.3,A,I8)') 'kPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
             else if( l_hybrid_resid )then
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA+kPCA residual denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
+            else if( l_diffmap )then
+                write(logfhandle,'(A,F8.3,A,I8)') 'Diffusion map denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
             else
                 write(logfhandle,'(A,F8.3,A,I8)') 'PPCA denoise make_pcavecs: ', real(t1-t0)/real(trate), ' s; npix=', npix
             endif
         endif
         neigs = params%neigs
+        if( l_diffmap )then
+            select case(trim(params%diffmap_preimage))
+                case('decoder','joint')
+                case DEFAULT
+                    THROW_HARD('diffmap_preimage must be decoder or joint for pca_mode=diffusion_maps')
+            end select
+            if( neigs > 0 ) neigs = min(max(neigs, 1), max(params%nptcls-2, 1))
+            call diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, params%nptcls-1)))
+            call diffmap%set_preimage_params(.true., decoder_ridge=1.e-2, &
+                joint_decoder=(trim(params%diffmap_preimage) == 'joint'), &
+                joint_decoder_iters=80, joint_decoder_weight=0.5, joint_decoder_tol=1.e-4)
+            call system_clock(t0)
+            call diffmap%embed(pcavecs, coords, eigvals, pcavecs)
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A,I8,A,A)') 'Diffusion map denoise graph/embed/model: ', &
+                real(t1-t0)/real(trate), ' s; dims=', size(coords,1), ' method=', trim(params%diffmap_preimage)
+            call flush(logfhandle)
+            allocate(tmpvec(npix), source=0.)
+            call system_clock(t0)
+            do iptcl = 1, params%nptcls
+                select case(trim(params%diffmap_preimage))
+                    case('decoder')
+                        call diffmap%decode(coords(:,iptcl), tmpvec)
+                    case('joint')
+                        call diffmap%joint_decode(coords(:,iptcl), tmpvec)
+                end select
+                tmpvec = avg + tmpvec
+                call imgs(iptcl)%unserialize(tmpvec)
+                call imgs(iptcl)%write(params%outstk, iptcl)
+                call imgs(iptcl)%kill
+            end do
+            call system_clock(t1)
+            write(logfhandle,'(A,F8.3,A)') 'Diffusion map denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+            call flush(logfhandle)
+            call diffmap%kill_preimage_model()
+            if( allocated(coords)  ) deallocate(coords)
+            if( allocated(eigvals) ) deallocate(eigvals)
+            if( allocated(avg)     ) deallocate(avg)
+            if( allocated(pcavecs) ) deallocate(pcavecs)
+            if( allocated(tmpvec)  ) deallocate(tmpvec)
+            deallocate(imgs)
+            call build%kill_general_tbox
+            call nice_comm%terminate()
+            call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
+            return
+        endif
         if( (trim(params%pca_mode) .eq. 'kpca' .or. l_hybrid_resid) .and. trim(params%kpca_backend) .eq. 'nystrom' .and. neigs <= 0 )then
             neigs = max(8, min(64, max(1, params%kpca_nystrom_npts / 2)))
             if( l_hybrid_resid )then
@@ -656,7 +711,7 @@ contains
             case('kpca')
                 allocate(kpca_svd    :: pca_ptr)
             case DEFAULT
-                THROW_HARD('pca_mode must be ppca, ppca_kpca_resid, pca_svd, or kpca')
+                THROW_HARD('pca_mode must be ppca, ppca_kpca_resid, pca_svd, kpca, diffusion_maps, or steerable_diff_map')
         end select
         if( l_transp_pca )then
             call pca_ptr%new(npix, params%nptcls, neigs)

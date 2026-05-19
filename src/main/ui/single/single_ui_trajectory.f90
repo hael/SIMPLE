@@ -148,7 +148,10 @@ contains
         ! <empty>
         ! filter controls
         call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|steerable_diff_map){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, diffusion maps, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map){ppca}', .false., 'ppca')
+        call trajectory_denoise%add_input(UI_FILT, 'diffmap_preimage', 'multi', 'Diffusion-map preimage model', &
+            'Diffusion-map preimage model for pca_mode=diffusion_maps(decoder|joint){decoder}', &
+            '(decoder|joint){decoder}', .false., 'decoder')
         call trajectory_denoise%add_input(UI_FILT, 'steerable_denoise_mode', 'multi', 'Steerable denoise mode', 'Steerable denoise mode(coeffproj|transport){coeffproj}', '(coeffproj|transport){coeffproj}', .false., 'coeffproj')
         call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Steerable graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=steerable_diff_map', '# neighbors', .false., 10.0)
         call trajectory_denoise%add_input(UI_FILT, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used for pca_mode=steerable_diff_map', '# modes', .false., 4.0)

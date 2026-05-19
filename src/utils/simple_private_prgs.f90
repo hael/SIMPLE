@@ -271,6 +271,7 @@ contains
         call cmd_dict%push('dfmax',         'maximum expected defocus(in microns){5.0}')
         call cmd_dict%push('dfmin',         'minimum expected defocus(in microns){0.2}')
         call cmd_dict%push('dfunit',        'defocus unit (A|microns){microns}')
+        call cmd_dict%push('diffmap_preimage', 'Diffusion-map preimage model for pca_mode=diffusion_maps(decoder|joint){decoder}')
         call cmd_dict%push('dir',           'directory')
         call cmd_dict%push('dir_movies',    'grab .mrc/.mrcs files from here')
         call cmd_dict%push('dir_prev',      'grab previous project info & files')

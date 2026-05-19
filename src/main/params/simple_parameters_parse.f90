@@ -131,6 +131,7 @@ contains
         call reg%add_char('pad', self%pad)
         call reg%add_char('partition', self%partition)
         call reg%add_char('pca_mode', self%pca_mode)
+        call reg%add_char('diffmap_preimage', self%diffmap_preimage)
         call reg%add_char('steerable_denoise_mode', self%steerable_denoise_mode)
         call reg%add_char('kpca_backend', self%kpca_backend)
         call reg%add_char('kpca_ker', self%kpca_ker)

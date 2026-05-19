@@ -272,6 +272,7 @@ type :: parameters
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map){ppca}
+    character(len=STDLEN)     :: diffmap_preimage='decoder' !< Diffusion-map preimage model(decoder|joint){decoder}
     character(len=STDLEN)     :: steerable_denoise_mode='coeffproj' !< Steerable denoise mode(coeffproj|transport){coeffproj}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}

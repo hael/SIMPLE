@@ -5,7 +5,7 @@ use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_image,                  only: image
 use simple_imgarr_utils,           only: copy_imgarr, dealloc_imgarr
-use simple_linalg,                 only: eigh
+use simple_linalg,                 only: eigh, matinv
 use simple_parameters,             only: parameters
 use simple_polarft_calc,           only: polarft_calc
 use simple_srch_sort_loc,          only: hpsort
@@ -23,9 +23,21 @@ public :: steerable_coeffproj_denoise
 type :: diffusion_map_embedder
     integer :: ndiff = 4  !< 0 requests automatic dimensionality selection from the diffusion spectrum
     integer :: k_nn  = 10
+    logical :: keep_preimage_model = .false.
+    real    :: decoder_ridge       = 1.e-3
+    logical :: fit_joint_decoder   = .false.
+    integer :: joint_decoder_iters = 80
+    real    :: joint_decoder_weight = 1.
+    real    :: joint_decoder_tol   = 1.e-4
+    real, allocatable :: train_coords(:,:), preimage_targets(:,:), decoder_mat(:,:), joint_decoder_mat(:,:)
 contains
     procedure :: set_params
+    procedure :: set_preimage_params
     procedure :: embed
+    procedure :: decode
+    procedure :: joint_decode
+    procedure :: trim_preimage_model
+    procedure :: kill_preimage_model
 end type diffusion_map_embedder
 
 type :: steerable_diffusion_map_embedder
@@ -46,11 +58,28 @@ contains
         self%k_nn  = max(2, k_nn)
     end subroutine set_params
 
-    subroutine embed(self, pcavecs, coords, eigvals)
+    subroutine set_preimage_params(self, keep_model, decoder_ridge, joint_decoder, &
+                                   joint_decoder_iters, joint_decoder_weight, joint_decoder_tol)
+        class(diffusion_map_embedder), intent(inout) :: self
+        logical, optional,             intent(in)    :: keep_model
+        logical, optional,             intent(in)    :: joint_decoder
+        real,    optional,             intent(in)    :: decoder_ridge
+        real,    optional,             intent(in)    :: joint_decoder_weight, joint_decoder_tol
+        integer, optional,             intent(in)    :: joint_decoder_iters
+        if( present(keep_model)     ) self%keep_preimage_model = keep_model
+        if( present(decoder_ridge)  ) self%decoder_ridge       = max(decoder_ridge, 0.)
+        if( present(joint_decoder)  ) self%fit_joint_decoder   = joint_decoder
+        if( present(joint_decoder_iters) ) self%joint_decoder_iters = max(0, joint_decoder_iters)
+        if( present(joint_decoder_weight) ) self%joint_decoder_weight = max(joint_decoder_weight, 0.)
+        if( present(joint_decoder_tol) ) self%joint_decoder_tol = max(joint_decoder_tol, 1.e-8)
+    end subroutine set_preimage_params
+
+    subroutine embed(self, pcavecs, coords, eigvals, preimage_targets)
         class(diffusion_map_embedder), intent(inout) :: self
         real,                          intent(in)    :: pcavecs(:,:)
         real, allocatable,             intent(out)   :: coords(:,:)
         real, allocatable, optional,   intent(out)   :: eigvals(:)
+        real, optional,                 intent(in)    :: preimage_targets(:,:)
         real, allocatable :: d2(:,:), aff(:,:), evals(:), evecs(:,:), kth_d2(:), deg(:), norm_aff(:,:)
         real, allocatable :: diff_evals(:)
         real :: eps, scale
@@ -58,6 +87,7 @@ contains
         integer(int64) :: t0, t1, trate, t_total0
         npix   = size(pcavecs, 1)
         nptcls = size(pcavecs, 2)
+        if( self%keep_preimage_model ) call self%kill_preimage_model()
         if( nptcls < 3 )then
             allocate(coords(1, nptcls), source=0.)
             return
@@ -157,7 +187,16 @@ contains
             end do
         end do
         !$omp end parallel do
-        call normalize_coords(coords)
+        if( self%keep_preimage_model )then
+            call normalize_coords(coords)
+            if( present(preimage_targets) )then
+                call store_preimage_model(self, preimage_targets, coords)
+            else
+                call store_preimage_model(self, pcavecs, coords)
+            endif
+        else
+            call normalize_coords(coords)
+        endif
         call system_clock(t1)
         write(logfhandle,'(A,F8.3,A,I8)') 'Diffusion maps embedding build: ', real(t1-t0)/real(trate), ' s; dims=', ndiff_used
         call flush(logfhandle)
@@ -166,6 +205,171 @@ contains
         call flush(logfhandle)
         deallocate(d2, aff, kth_d2, deg, norm_aff, evals, evecs, diff_evals)
     end subroutine embed
+
+    subroutine store_preimage_model(self, targets, coords)
+        class(diffusion_map_embedder), intent(inout) :: self
+        real,                          intent(in)    :: targets(:,:), coords(:,:)
+        if( size(targets,2) /= size(coords,2) ) THROW_HARD('preimage target particle-count mismatch; diffusion map embed')
+        allocate(self%train_coords(size(coords,1),size(coords,2)), source=coords)
+        allocate(self%preimage_targets(size(targets,1),size(targets,2)), source=targets)
+        call fit_latent_decoder(self, coords, targets)
+        if( self%fit_joint_decoder ) call fit_joint_latent_decoder(self, coords, targets)
+    end subroutine store_preimage_model
+
+    subroutine trim_preimage_model(self, nkeep)
+        class(diffusion_map_embedder), intent(inout) :: self
+        integer,                       intent(in)    :: nkeep
+        real, allocatable :: coords_tmp(:,:)
+        integer :: n
+        if( .not. allocated(self%train_coords) ) return
+        if( .not. allocated(self%preimage_targets) ) return
+        n = min(max(1, nkeep), size(self%train_coords,1))
+        if( n == size(self%train_coords,1) ) return
+        allocate(coords_tmp(n,size(self%train_coords,2)), source=self%train_coords(1:n,:))
+        call move_alloc(coords_tmp, self%train_coords)
+        if( allocated(self%decoder_mat) ) deallocate(self%decoder_mat)
+        if( allocated(self%joint_decoder_mat) ) deallocate(self%joint_decoder_mat)
+        call fit_latent_decoder(self, self%train_coords, self%preimage_targets)
+        if( self%fit_joint_decoder ) call fit_joint_latent_decoder(self, self%train_coords, self%preimage_targets)
+    end subroutine trim_preimage_model
+
+    subroutine fit_latent_decoder(self, coords, targets)
+        class(diffusion_map_embedder), intent(inout) :: self
+        real,                          intent(in)    :: coords(:,:), targets(:,:)
+        real, allocatable :: design(:,:), gram(:,:), invgram(:,:), rhs(:,:)
+        integer :: ndim, nptcls, nfeat, i, err
+        ndim   = size(coords,1)
+        nptcls = size(coords,2)
+        nfeat  = ndim + 1
+        allocate(design(nfeat,nptcls), gram(nfeat,nfeat), invgram(nfeat,nfeat), source=0.)
+        design(1,:) = 1.
+        design(2:nfeat,:) = coords
+        gram = matmul(design, transpose(design))
+        gram(1,1) = gram(1,1) + self%decoder_ridge * 1.e-3
+        do i = 2, nfeat
+            gram(i,i) = gram(i,i) + self%decoder_ridge
+        end do
+        call matinv(gram, invgram, nfeat, err)
+        if( err == -1 )then
+            invgram = 0.
+            do i = 1, nfeat
+                invgram(i,i) = 1. / max(gram(i,i), 1.e-6)
+            end do
+        endif
+        rhs = matmul(targets, transpose(design))
+        self%decoder_mat = matmul(rhs, invgram)
+        deallocate(design, gram, invgram, rhs)
+    end subroutine fit_latent_decoder
+
+    subroutine fit_image_encoder(self, targets, coords, encoder_mat)
+        class(diffusion_map_embedder), intent(in)  :: self
+        real,                          intent(in)  :: targets(:,:), coords(:,:)
+        real, allocatable,             intent(out) :: encoder_mat(:,:)
+        real, allocatable :: loadings(:,:), gram(:,:), invgram(:,:)
+        integer :: npix, ndim, i, err
+        if( .not. allocated(self%decoder_mat) ) THROW_HARD('diffusion decoder not fitted; fit_image_encoder')
+        npix   = size(targets,1)
+        ndim   = size(coords,1)
+        if( size(self%decoder_mat,1) /= npix .or. size(self%decoder_mat,2) /= ndim + 1 )then
+            THROW_HARD('diffusion decoder/encoder shape mismatch; fit_image_encoder')
+        endif
+        allocate(loadings(npix,ndim), source=self%decoder_mat(:,2:ndim+1))
+        allocate(gram(ndim,ndim), invgram(ndim,ndim), source=0.)
+        gram = matmul(transpose(loadings), loadings)
+        do i = 1, ndim
+            gram(i,i) = gram(i,i) + self%decoder_ridge
+        end do
+        call matinv(gram, invgram, ndim, err)
+        if( err == -1 )then
+            invgram = 0.
+            do i = 1, ndim
+                invgram(i,i) = 1. / max(gram(i,i), 1.e-6)
+            end do
+        endif
+        allocate(encoder_mat(ndim,npix+1), source=0.)
+        encoder_mat(:,2:npix+1) = matmul(invgram, transpose(loadings))
+        encoder_mat(:,1) = -matmul(encoder_mat(:,2:npix+1), self%decoder_mat(:,1))
+        deallocate(loadings, gram, invgram)
+    end subroutine fit_image_encoder
+
+    subroutine fit_joint_latent_decoder(self, coords, targets)
+        class(diffusion_map_embedder), intent(inout) :: self
+        real,                          intent(in)    :: coords(:,:), targets(:,:)
+        real, allocatable :: design(:,:), encoder_mat(:,:), xhat(:,:), zhat(:,:), img_resid(:,:), lat_resid(:,:)
+        real, allocatable :: grad_x(:,:), grad(:,:)
+        real :: loss, prev_loss, step, grad_norm, weight
+        integer :: ndim, nptcls, nfeat, iter
+        if( .not. allocated(self%decoder_mat) ) return
+        ndim   = size(coords,1)
+        nptcls = size(coords,2)
+        nfeat  = ndim + 1
+        weight = self%joint_decoder_weight
+        call fit_image_encoder(self, targets, coords, encoder_mat)
+        allocate(design(nfeat,nptcls), source=0.)
+        design(1,:)       = 1.
+        design(2:nfeat,:) = coords
+        if( allocated(self%joint_decoder_mat) ) deallocate(self%joint_decoder_mat)
+        allocate(self%joint_decoder_mat(size(self%decoder_mat,1),size(self%decoder_mat,2)), source=self%decoder_mat)
+        allocate(xhat(size(targets,1),nptcls), zhat(ndim,nptcls), img_resid(size(targets,1),nptcls), &
+                 lat_resid(ndim,nptcls), grad_x(size(targets,1),nptcls), grad(size(self%joint_decoder_mat,1),nfeat), source=0.)
+        prev_loss = huge(prev_loss)
+        do iter = 1, self%joint_decoder_iters
+            xhat = matmul(self%joint_decoder_mat, design)
+            zhat = spread(encoder_mat(:,1), 2, nptcls) + matmul(encoder_mat(:,2:size(encoder_mat,2)), xhat)
+            if( .not. all(ieee_is_finite(xhat)) .or. .not. all(ieee_is_finite(zhat)) ) exit
+            img_resid = xhat - targets
+            lat_resid = zhat - coords
+            loss = 0.5 * sum(img_resid**2) / real(max(1, nptcls)) + &
+                   0.5 * weight * sum(lat_resid**2) / real(max(1, nptcls))
+            if( .not. ieee_is_finite(loss) ) exit
+            if( iter > 1 .and. abs(prev_loss - loss) <= self%joint_decoder_tol * max(1., abs(prev_loss)) ) exit
+            prev_loss = loss
+            grad_x = img_resid + weight * matmul(transpose(encoder_mat(:,2:size(encoder_mat,2))), lat_resid)
+            grad = matmul(grad_x, transpose(design)) / real(max(1, nptcls))
+            grad(:,1) = grad(:,1) + self%decoder_ridge * 1.e-3 * self%joint_decoder_mat(:,1)
+            grad(:,2:nfeat) = grad(:,2:nfeat) + self%decoder_ridge * self%joint_decoder_mat(:,2:nfeat)
+            grad_norm = sqrt(sum(grad**2) / real(max(1, size(grad))))
+            if( .not. ieee_is_finite(grad_norm) .or. grad_norm <= self%joint_decoder_tol ) exit
+            step = 0.005 / sqrt(real(iter))
+            self%joint_decoder_mat = self%joint_decoder_mat - step * grad
+        end do
+        deallocate(design, encoder_mat, xhat, zhat, img_resid, lat_resid, grad_x, grad)
+    end subroutine fit_joint_latent_decoder
+
+    subroutine decode(self, z, x)
+        class(diffusion_map_embedder), intent(in)  :: self
+        real,                          intent(in)  :: z(:)
+        real, allocatable,             intent(out) :: x(:)
+        integer :: ndim
+        if( .not. allocated(self%decoder_mat) ) THROW_HARD('diffusion preimage decoder is not fitted')
+        ndim = size(self%decoder_mat,2) - 1
+        if( size(z) /= ndim ) THROW_HARD('latent coordinate size mismatch; diffusion decode')
+        allocate(x(size(self%decoder_mat,1)), source=self%decoder_mat(:,1))
+        x = x + matmul(self%decoder_mat(:,2:ndim+1), z)
+    end subroutine decode
+
+    subroutine joint_decode(self, z, x)
+        class(diffusion_map_embedder), intent(in)  :: self
+        real,                          intent(in)  :: z(:)
+        real, allocatable,             intent(out) :: x(:)
+        integer :: ndim
+        if( .not. allocated(self%joint_decoder_mat) )then
+            call self%decode(z, x)
+            return
+        endif
+        ndim = size(self%joint_decoder_mat,2) - 1
+        if( size(z) /= ndim ) THROW_HARD('latent coordinate size mismatch; diffusion joint_decode')
+        allocate(x(size(self%joint_decoder_mat,1)), source=self%joint_decoder_mat(:,1))
+        x = x + matmul(self%joint_decoder_mat(:,2:ndim+1), z)
+    end subroutine joint_decode
+
+    subroutine kill_preimage_model(self)
+        class(diffusion_map_embedder), intent(inout) :: self
+        if( allocated(self%train_coords)  ) deallocate(self%train_coords)
+        if( allocated(self%preimage_targets) ) deallocate(self%preimage_targets)
+        if( allocated(self%decoder_mat)   ) deallocate(self%decoder_mat)
+        if( allocated(self%joint_decoder_mat) ) deallocate(self%joint_decoder_mat)
+    end subroutine kill_preimage_model
 
     integer function auto_ndiff_from_eigengap(eigvals) result(ndiff)
         real, intent(in) :: eigvals(:)
@@ -189,14 +393,25 @@ contains
         ndiff = max(min(2, maxcand), min(maxcand, ndiff))
     end function auto_ndiff_from_eigengap
 
-    subroutine normalize_coords(coords)
+    subroutine normalize_coords(coords, coord_mu, coord_sigma)
         real, intent(inout) :: coords(:,:)
+        real, allocatable, optional, intent(out) :: coord_mu(:), coord_sigma(:)
         real :: mu, sigma
         integer :: i
+        if( present(coord_mu) )then
+            if( allocated(coord_mu) ) deallocate(coord_mu)
+            allocate(coord_mu(size(coords,1)), source=0.)
+        endif
+        if( present(coord_sigma) )then
+            if( allocated(coord_sigma) ) deallocate(coord_sigma)
+            allocate(coord_sigma(size(coords,1)), source=1.)
+        endif
         do i = 1, size(coords,1)
             mu = sum(coords(i,:)) / real(size(coords,2))
             sigma = sqrt(sum((coords(i,:) - mu)**2) / real(max(size(coords,2)-1, 1)))
             if( sigma < 1.e-6 ) sigma = 1.0
+            if( present(coord_mu)    ) coord_mu(i)    = mu
+            if( present(coord_sigma) ) coord_sigma(i) = sigma
             coords(i,:) = (coords(i,:) - mu) / sigma
         end do
     end subroutine normalize_coords
@@ -409,7 +624,6 @@ contains
         allocate(inpl_corrs(nrots,nthr_use))
         ithr = 1
         !$omp parallel private(i,j,loc,corr,ithr) default(shared) num_threads(nthr_use) proc_bind(close)
-        !$ ithr = omp_get_thread_num() + 1
         !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
