@@ -178,16 +178,14 @@ contains
 
     real function nu_postprocess_effective_bfac( local_lp, global_lp, global_bfac ) result(bfac_eff)
         real, intent(in) :: local_lp, global_lp, global_bfac
-        real :: rho
-        if( local_lp <= global_lp + TINY )then
-            bfac_eff = global_bfac
-            return
+        real :: rho, rho_eff
+        bfac_eff = global_bfac
+        if( local_lp < global_lp - TINY .and. global_bfac < 0. )then
+            rho = max(1., (global_lp / local_lp)**2)
+            rho_eff = min(NU_POSTPROCESS_SHARPEN_RHO_MAX, &
+                &1. + NU_POSTPROCESS_SHARPEN_ALPHA * (rho - 1.))
+            bfac_eff = rho_eff * global_bfac
         endif
-        ! Wilson falloff is linear in squared spatial frequency.  A local
-        ! resolution below the global FSC limit therefore shrinks the global
-        ! sharpening B-factor by (s_local/s_global)^2 toward a neutral prior.
-        rho = max(0., min(1., (global_lp / local_lp)**2))
-        bfac_eff = rho * global_bfac + (1. - rho) * NU_POSTPROCESS_BFAC_PRIOR
     end function nu_postprocess_effective_bfac
 
     subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac )
@@ -195,9 +193,12 @@ contains
         integer :: icut
         real :: local_lp, local_bfac
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
-        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F7.2,A,F6.1)') &
+        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F6.1)') &
             &'Global FSC LP(A): ', global_lp, '  Global B: ', global_bfac, &
-            &'  B prior: ', NU_POSTPROCESS_BFAC_PRIOR, '  Hann width(k): ', NU_POSTPROCESS_HANN_WIDTH
+            &'  Hann width(k): ', NU_POSTPROCESS_HANN_WIDTH
+        write(logfhandle,'(4X,A,F6.2,A,F6.2)') &
+            &'High-resolution B extrapolation alpha: ', NU_POSTPROCESS_SHARPEN_ALPHA, &
+            &'  rho max: ', NU_POSTPROCESS_SHARPEN_RHO_MAX
         write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k       B_eff      Delta B'
         do icut = 1, size(cutoff_finds)
             local_lp   = cutoff_find_to_lowpass_limit(icut)

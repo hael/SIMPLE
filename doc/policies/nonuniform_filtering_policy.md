@@ -188,11 +188,13 @@ accepts the B factor in the same way and uses the NU filter map as a local
 postprocessing transfer-function selector for the merged reconstruction. Each
 candidate transfer function applies B-factor weighting followed by a Hann
 anti-aliasing window at that candidate's local low-pass limit. Voxels assigned
-to a local resolution equal to or better than the global FSC limit use the
-ordinary global B factor. Lower-resolution voxels use a Wilson-statistics
-shrinkage of the global B factor toward the neutral postprocessing prior by
-`(s_local/s_global)^2`, where `s` is spatial frequency. `_lp_nu` is written as
-the corresponding unsharpened Hann-windowed NU comparison map. The NU products
+to a local resolution better than the global FSC limit may receive controlled
+extra sharpening by extrapolating the global B factor in squared spatial
+frequency, capped by the NU postprocess sharpening limit. Voxels assigned to
+the same or worse local resolution use the ordinary global B factor; the
+candidate-specific Hann window provides the local anti-aliasing. `_lp_nu` is
+written as the corresponding unsharpened Hann-windowed NU comparison map. The
+NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 

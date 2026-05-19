@@ -450,12 +450,9 @@ contains
             integer :: n_highres_steps, n_accepted_this_iteration
             if( .not. params%l_nu_refine ) return
             n_highres_steps = nu_highres_steps_for_state()
-            write(logfhandle,'(A,I0)') '>>> NU resolution expansion refinement enabled, promoted high-resolution shell steps: ', &
-                &n_highres_steps
             n_accepted_this_iteration = 0
             do
                 call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
-                call log_nu_highres_extension_stats(ext_stats)
                 if( .not. ext_stats%attempted    ) exit
                 if( .not. ext_stats%applied      ) exit
                 if( .not. ext_stats%promote_next ) exit
@@ -463,9 +460,6 @@ contains
             end do
             if( n_accepted_this_iteration > 0 )then
                 call write_nu_highres_steps_for_state(n_highres_steps + n_accepted_this_iteration)
-                write(logfhandle,'(A,I0,A,I0)') &
-                    &'>>> NU high-resolution shell expansion promoted for next iteration, accepted steps: ', &
-                    &n_accepted_this_iteration, ', depth: ', n_highres_steps + n_accepted_this_iteration
             endif
         end subroutine refine_nonuniform_filter_bank
 
@@ -514,32 +508,6 @@ contains
             type(string) :: fname
             fname = 'nu_highres_depth_state'//int2str_pad(state,2)//'.txt'
         end function nu_highres_steps_fname
-
-        subroutine log_nu_highres_extension_stats(ext_stats)
-            type(nu_highres_extension_stats), intent(in) :: ext_stats
-            if( .not. ext_stats%attempted )then
-                write(logfhandle,'(A)') '>>> NU HIGH-RESOLUTION EXTENSION'
-                write(logfhandle,'(A)') '    Attempted: no'
-                write(logfhandle,'(A,I12,A,F8.2,A)') '    Frontier voxels: ', ext_stats%n_tested, &
-                    &' (', ext_stats%pct_tested_mask, '% of NU mask)'
-                return
-            endif
-            write(logfhandle,'(A)') '>>> NU HIGH-RESOLUTION EXTENSION'
-            write(logfhandle,'(A)') '    Attempted: yes'
-            write(logfhandle,'(A,I12)') '    Tested frontier voxels: ', ext_stats%n_tested
-            write(logfhandle,'(A,I12,A,F8.2,A)') '    Selected by challenger: ', ext_stats%n_extended, &
-                &' (', ext_stats%pct_extended_tested, '% of tested)'
-            if( ext_stats%applied )then
-                write(logfhandle,'(A)') '    Accepted this iteration: yes'
-            else
-                write(logfhandle,'(A)') '    Accepted this iteration: no'
-            endif
-            if( ext_stats%promote_next )then
-                write(logfhandle,'(A)') '    Next iteration: include this accepted high-resolution shell'
-            else
-                write(logfhandle,'(A)') '    Next iteration: keep current high-resolution shell depth'
-            endif
-        end subroutine log_nu_highres_extension_stats
 
         subroutine log_nonuniform_filter_stats()
             if( allocated(nu_aux_even) )then

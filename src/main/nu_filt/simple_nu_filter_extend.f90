@@ -54,7 +54,6 @@ contains
             return
         endif
         local_stats%attempted = .true.
-        write(logfhandle,'(A,F6.2,A)') '>>> Extending NU filter to ', new_limit, ' A'
         ! --- build the new Butterworth filter and cache filtered vols ---
         even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), new_find)
         odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  new_find)
@@ -109,11 +108,7 @@ contains
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         local_stats%applied = n_extended > 0 .and. local_stats%pct_extended_tested >= accept_pct
         local_stats%promote_next = local_stats%applied
-        write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> NU high-resolution extension challenger selected ', &
-            &n_extended, '/', n_finest, ' tested voxels (', local_stats%pct_extended_tested, '%)'
         if( .not. local_stats%applied ) then
-            write(logfhandle,'(A,F6.2,A)') '>>> NU high-resolution extension rejected: acceptance threshold ', &
-                &accept_pct, '% of tested voxels'
             call delete_cached_filtered_pair(new_find)
             call vol_even_filt_new%kill
             call vol_odd_filt_new%kill
@@ -218,12 +213,7 @@ contains
         beta = estimate_nu_highres_extension_beta(extend_mask, dmat_old, dmat_new)
         old_coord = nu_candidate_coord_for_label(old_label)
         new_coord = real(old_label + 1)
-        write(logfhandle,'(A,F10.4,A,I0,A,I0,A,F6.2,A,F6.2)') &
-            &'>>> NU high-resolution extension smoothing: beta=', beta, &
-            &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL, &
-            &', old/new coords=', old_coord, '/', new_coord
         if( beta <= TINY )then
-            write(logfhandle,'(A)') '>>> NU high-resolution extension smoothing skipped: beta <= TINY'
             n_extended = count(extend_to_new)
             return
         endif
@@ -260,8 +250,6 @@ contains
                 end do
                 !$omp end parallel do
             end do
-            write(logfhandle,'(A,I0,A,I0)') '>>> NU high-resolution extension smoothing iteration ', iter, &
-                &' changed voxels: ', nchanged
             if( nchanged == 0 ) exit
         end do
         n_extended = count(extend_to_new)

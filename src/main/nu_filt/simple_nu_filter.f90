@@ -55,8 +55,9 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
-real,             parameter   :: NU_POSTPROCESS_HANN_WIDTH           = 10.
-real,             parameter   :: NU_POSTPROCESS_BFAC_PRIOR           = 0.
+real,             parameter   :: NU_POSTPROCESS_HANN_WIDTH           = 5.
+real,             parameter   :: NU_POSTPROCESS_SHARPEN_ALPHA        = 0.5
+real,             parameter   :: NU_POSTPROCESS_SHARPEN_RHO_MAX      = 1.5
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
