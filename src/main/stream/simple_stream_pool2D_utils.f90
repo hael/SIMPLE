@@ -582,9 +582,9 @@ contains
     !! If the incoming mask differs from the cached @p match_selection — or if no
     !! selection has been recorded yet — the cache is overwritten and
     !! @p l_match_selection_update is raised so the next pool iteration applies it.
-    subroutine update_match_class_states( selection )
-        integer, intent(in) :: selection(:)
-        logical :: changed
+    subroutine update_match_class_states( selection, changed )
+        integer, intent(in)  :: selection(:)
+        logical, intent(out) :: changed
         ! A missing or differently-sized cache counts as changed; avoids an
         ! illegal conformance check in the elemental `==` below.
         if( .not. allocated(match_selection) )then

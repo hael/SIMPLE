@@ -76,12 +76,13 @@ contains
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob, pick_extract_set_counter, i_max, i_thumb, i, i_ori
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj, envlen
         integer                                :: cnt, n_imported, n_imported_iter, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        integer                                :: n_pickrefs, xtiles, ytiles
+        integer                                :: n_pickrefs, xtiles, ytiles, n_mics_imported
         logical                                :: l_projects_left, l_haschanged, l_once
         logical                                :: l_restart, l_terminate
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
-        l_terminate = .false.
+        l_terminate     = .false.
+        n_mics_imported = 0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
@@ -89,7 +90,7 @@ contains
         if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
         if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29*60) ! 29 minutes
         ! micrograph selection
-        if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
+        if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'no')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  STREAM_CTFRES_THRESHOLD)
         if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', STREAM_ICEFRAC_THRESHOLD)
         if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   STREAM_ASTIG_THRESHOLD)
@@ -597,6 +598,7 @@ contains
                 spproj_here%jobproc = spproj%jobproc
                 ! import micrographs & updates path to files
                 call spproj_here%os_mic%new(nmics,is_ptcl=.false.)
+                n_mics_imported = n_mics_imported + count(states==1)
                 cnt = 0
                 do imic = 1,tmp_proj%os_mic%get_noris()
                     if( states(imic) == 0 ) cycle
@@ -721,11 +723,11 @@ contains
             ! Broadcast initial-picking progress to the GUI.
             subroutine send_meta( my_stage )
                 type(string), intent(in) :: my_stage
-                call meta_reference_picking%set(                                                        &
-                    stage                = my_stage,                                                    &
-                    micrographs_imported = spproj%os_mic%get_noris() + qenv%qscripts%get_stack_range(), &
-                    micrographs_accepted = n_imported,                                                  &
-                    particles_extracted  = nptcls_glob,                                                 &
+                call meta_reference_picking%set(            &
+                    stage                = my_stage,        &
+                    micrographs_imported = n_mics_imported, &
+                    micrographs_accepted = n_imported,      &
+                    particles_extracted  = nptcls_glob,     &
                     box_size             = params%box)
                 if( meta_reference_picking%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_reference_picking%serialise(meta_buffer)

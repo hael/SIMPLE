@@ -79,8 +79,8 @@ contains
         integer                                   :: i, nprojects, nimported, nptcls_glob, pool_iter, iter_last_import
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
-        integer                                   :: nptcls_threshold, nptcls_max_threshold
-        logical                                   :: l_pause, l_terminate, l_once
+        integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
+        logical                                   :: l_pause, l_terminate, l_once, l_changed
         real                                      :: final_mskdiam
         l_once               = .true.
         l_terminate          = .false.
@@ -89,6 +89,7 @@ contains
         nmics                = 0
         nptcls_threshold     = 0
         nptcls_max_threshold = 0
+        nptcls_dynamic_threshold = 0
         final_mskdiam        = 0.0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
@@ -187,19 +188,20 @@ contains
             if( nimported > 0 )then
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
-                call unpause_pool
+                if( nptcls_glob_state_1 > nptcls_dynamic_threshold ) call unpause_pool()
             endif
             l_imported = setslist%get_included_flags()
             
             ! Adaptive pause policy:
             ! - iterations 11..20: pause only if no imports for >5 iterations
             ! - iterations 21+:    pause after 1 iteration without imports
-            if( pool_iter > 10 .and. pool_iter <= 20 ) then
+            if( pool_iter > 2 .and. pool_iter <= 20 ) then
                 if( pool_iter > iter_last_import + 5 ) then
                     if( .not.l_pause ) then
                         l_pause = is_pool_available()
-                        extra_pause_iters = 0
-                        if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                        extra_pause_iters        = 0
+                        nptcls_dynamic_threshold = nptcls_glob_state_1 + nptcls_threshold
+                        if( l_pause ) write(logfhandle,'(A,I8)')'>>> PAUSING 2D ANALYSIS UNTIL #PTCLS IS ', nptcls_dynamic_threshold
                     endif
                 end if
             else if( pool_iter > 20 ) then
@@ -207,7 +209,8 @@ contains
                     if( .not.l_pause )then
                         l_pause = is_pool_available()
                         extra_pause_iters = 0
-                        if( l_pause ) write(logfhandle,'(A)')'>>> PAUSING 2D ANALYSIS'
+                        nptcls_dynamic_threshold = nptcls_glob_state_1 + nptcls_threshold
+                        if( l_pause ) write(logfhandle,'(A,I8)')'>>> PAUSING 2D ANALYSIS UNTIL #PTCLS IS ', nptcls_dynamic_threshold
                     endif
                 endif
             endif
@@ -226,6 +229,7 @@ contains
             if( nptcls_glob_state_1 > 0 .and. nmics > 0) then
                 nptcls_max_threshold = ceiling(( float(nptcls_glob_state_1) / float(nmics) ) * 200 )! average number of selected particles from 200 micrographs
                 nptcls_threshold     = max(params%ncls * 20, nptcls_max_threshold)
+                write(logfhandle,'(A,I8)') '>>> CURRENT PARTICLE THRESHOLD: ', nptcls_threshold
             end if
             if( l_pause )then
                 ! skip iteration
@@ -274,10 +278,12 @@ contains
                             call unpause_pool()
                         endif
                         if( meta_update%get_sieverefs_selection_length() > 0 ) then
-                            call update_match_class_states(meta_update%get_sieverefs_selection())
-                            if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
-                            time_last_import = time8()
-                            call unpause_pool()
+                            call update_match_class_states(meta_update%get_sieverefs_selection(), l_changed)
+                            if( l_changed ) then
+                                if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                                time_last_import = time8()
+                                call unpause_pool()
+                            end if
                         end if
                         if( meta_update%has_snapshot2D_update() ) then
                             call meta_update%get_snapshot2D_update(snapshot_id, snapshot_iteration, &
