@@ -181,30 +181,12 @@ contains
             allocate(hac_labels(size(diams_arr)))
             call hac_1d(diams_arr, hac_thresh, hac_labels, hac_centroids, hac_pops)
             nclust_hac = size(hac_centroids)
-            allocate(diam_means(nclust_hac),              source=hac_centroids)
-            allocate(diam_labels(size(diams_arr)), source=hac_labels)
-            deallocate(hac_labels, hac_centroids, hac_pops)
-            allocate(abs_z_scores(nclust_hac), source=abs((diam_means - diam_stats%med) / mad))
             do i = 1, nclust_hac
-                print *, 'hac cluster '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
-                &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
-                &', abs(zscore): ', abs_z_scores(i)
+                print *, 'hac cluster '//int2str_pad(i,2)//', avg diam: ', hac_centroids(i),&
+                &', % pop: ', 100 * real(hac_pops(i)) / real(size(diams_arr))
             end do
-            ! thresholding — all clusters; extremes rejected by Z-score naturally
-            pop = 0
-            do i = 1, nclust_hac
-                if( abs_z_scores(i) < SIGMA_CRIT )then
-                    pop = pop + count(diam_labels == i)
-                    tmp = pack(diams_arr, mask=diam_labels == i)
-                    if( allocated(diams_arr_ts) )then
-                        diams_arr_ts = [diams_arr_ts(:), tmp(:)]
-                        deallocate(tmp)
-                    else
-                        allocate(diams_arr_ts(size(tmp)), source=tmp)
-                        deallocate(tmp)
-                    endif
-                endif
-            end do
+            diams_arr_ts = pack(diams_arr, mask=diams_arr < maxval(hac_centroids) .and. diams_arr > minval(hac_centroids)) ! keep clusters that are not outliers in both directions
+            print *, 'thresholding, % of boxes: ', 100. * real(size(diams_arr_ts))/real(size(diams_arr))
         else
             ! --- k-means quantization path ---
             allocate(diam_means(NQ_DIAMS))
@@ -230,8 +212,8 @@ contains
                     endif
                 endif
             end do
+            print *, 'thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
         endif
-        print *, 'thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
         ! calculate diams stats after hybrid thresholding
         call calc_stats(diams_arr_ts, diam_stats)
         print *, 'CC diameter (in Angs) statistics after thresholding'
