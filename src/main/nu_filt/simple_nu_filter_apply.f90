@@ -123,15 +123,14 @@ contains
         call vol_filt%kill
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, fsc_filter )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
-        real, optional, intent(in) :: fsc_filter(:)
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
         integer :: icut, winsz
-        real    :: edge_mean, local_lp, local_bfac
+        real    :: edge_mean, local_lp, local_bfac, antialias_lp
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
@@ -148,13 +147,10 @@ contains
             call vol_in_ft%taper_edges_vol(winsz, edge_mean)
             call vol_in_ft%fft
         endif
+        antialias_lp = get_nu_filter_bank_finest_lp()
         call vol_lp%copy(vol_in_ft)
         call vol_lp%set_wthreads(.true.)
-        if( present(fsc_filter) )then
-            call vol_lp%apply_filter(fsc_filter)
-        else
-            call vol_lp%bp(0., global_lp)
-        endif
+        call vol_lp%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
         call vol_lp%ifft
         call vol_filt%new(ldim, smpd)
         call vol_filt%set_ft(.true.)
@@ -162,17 +158,13 @@ contains
         call vol_pproc%new(ldim, smpd, wthreads=.false.)
         call vol_pproc%get_rmat_ptr(rmat_pproc)
         rmat_pproc(:ldim(1),:ldim(2),:ldim(3)) = 0.
-        call log_nu_postprocess_transfer_bank(global_lp, global_bfac)
+        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, antialias_lp)
         do icut = 1, size(cutoff_finds)
             local_lp = cutoff_find_to_lowpass_limit(icut)
             local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
             call vol_filt%copy_fast(vol_in_ft)
             call vol_filt%apply_bfac(local_bfac)
-            if( present(fsc_filter) )then
-                call vol_filt%apply_filter(fsc_filter)
-            else
-                call vol_filt%bp(0., global_lp)
-            endif
+            call vol_filt%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
             call vol_filt%ifft
             call vol_filt%get_rmat_ptr(rmat_filt)
             call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
@@ -181,77 +173,77 @@ contains
         call vol_filt%kill
     end subroutine nu_postprocess_vol
 
-    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac )
-        real, intent(in) :: global_lp, global_bfac
+    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp )
+        real, intent(in) :: global_lp, global_bfac, antialias_lp
         integer :: icut
-        real :: local_lp, ratio2, local_bfac, bfac_floor, bfac_ceil
-        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
+        real :: local_lp, damp_frac, local_bfac, bfac_floor
+        bfac_floor = nu_postprocess_bfac_floor(global_bfac)
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
-        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F9.2,A,F9.2)') &
-            &'Global FSC LP(A): ', global_lp, '  Global B: ', global_bfac, &
-            &'  B floor: ', bfac_floor, '  B ceiling: ', bfac_ceil
-        write(logfhandle,'(4X,A,F5.2,A,F5.2,A,F5.2,A,F5.2,A,F5.2)') &
-            &'B-factor model alpha/beta: ', NU_POSTPROCESS_BFAC_ALPHA, '/', NU_POSTPROCESS_BFAC_BETA, &
-            &'  High-res ramp: ', NU_POSTPROCESS_BFAC_HIRES_RAMP, &
-            &'  Ratio clamp: ', NU_POSTPROCESS_BFAC_RATIO_MIN, '/', NU_POSTPROCESS_BFAC_RATIO_MAX
-        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Ratio^2      B_eff'
+        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F9.2)') &
+            &'Damping reference LP(A): ', global_lp, '  Global B: ', global_bfac, &
+            &'  B floor: ', bfac_floor
+        write(logfhandle,'(4X,A,F5.2,A,F6.2,A,F5.2)') &
+            &'B-factor model alpha/mid/width: ', NU_POSTPROCESS_BFAC_ALPHA, '/', &
+            &NU_POSTPROCESS_BFAC_SIGMOID_MID, '/', NU_POSTPROCESS_BFAC_SIGMOID_WIDTH
+        write(logfhandle,'(4X,A,F8.3,A,F5.1,A)') &
+            &'Antialias Hann LP(A): ', antialias_lp, '  Width: ', &
+            &NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH, ' Fourier pixels'
+        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Damp frac      B_eff'
         do icut = 1, size(cutoff_finds)
             local_lp   = cutoff_find_to_lowpass_limit(icut)
-            ratio2     = nu_postprocess_bfac_ratio2(local_lp, global_lp)
+            damp_frac  = nu_postprocess_damping_frac(local_lp, global_lp)
             local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
-            write(logfhandle,'(4X,F10.3,4X,I9,4X,F7.3,4X,F9.2)') local_lp, cutoff_finds(icut), ratio2, local_bfac
+            write(logfhandle,'(4X,F10.3,4X,I9,4X,F9.3,4X,F9.2)') &
+                &local_lp, cutoff_finds(icut), damp_frac, local_bfac
         end do
     end subroutine log_nu_postprocess_transfer_bank
 
     real function nu_postprocess_resolution_bfac( local_lp, global_lp, global_bfac ) result( local_bfac )
         real, intent(in) :: local_lp, global_lp, global_bfac
-        real :: bfac_floor, bfac_ceil, ratio2
-        ! The signed interpolation model is defined for sharpening B factors
-        ! (negative in SIMPLE's exp(-(B/4)*s^2) convention). If the caller
-        ! supplies a nonnegative B factor, preserve that damping uniformly.
+        real :: bfac_floor, damp_frac
+        ! The damping model is defined for sharpening B factors (negative in
+        ! SIMPLE's exp(-(B/4)*s^2) convention). If the caller supplies a
+        ! nonnegative B factor, preserve that damping uniformly.
         if( global_bfac >= 0. )then
             local_bfac = global_bfac
             return
         endif
-        ratio2     = nu_postprocess_bfac_ratio2(local_lp, global_lp)
-        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
-        if( ratio2 <= 1. )then
-            local_bfac = bfac_floor + ratio2 * (global_bfac - bfac_floor)
-        else
-            local_bfac = global_bfac + nu_postprocess_hires_frac(ratio2) * (bfac_ceil - global_bfac)
-        endif
-        local_bfac = min(bfac_floor, max(bfac_ceil, local_bfac))
+        bfac_floor = nu_postprocess_bfac_floor(global_bfac)
+        damp_frac  = nu_postprocess_damping_frac(local_lp, global_lp)
+        local_bfac = global_bfac + damp_frac * (bfac_floor - global_bfac)
     end function nu_postprocess_resolution_bfac
 
-    subroutine nu_postprocess_bfac_bounds( global_bfac, bfac_floor, bfac_ceil )
-        real, intent(in)  :: global_bfac
-        real, intent(out) :: bfac_floor, bfac_ceil
+    real function nu_postprocess_bfac_floor( global_bfac ) result( bfac_floor )
+        real, intent(in) :: global_bfac
         if( global_bfac < 0. )then
             bfac_floor = NU_POSTPROCESS_BFAC_ALPHA * (-global_bfac)
-            bfac_ceil  = NU_POSTPROCESS_BFAC_BETA  * global_bfac
         else
             bfac_floor = global_bfac
-            bfac_ceil  = global_bfac
         endif
-    end subroutine nu_postprocess_bfac_bounds
+    end function nu_postprocess_bfac_floor
 
-    real function nu_postprocess_hires_frac( ratio2 ) result( frac )
-        real, intent(in) :: ratio2
-        real :: ramp
-        ramp = max(TINY, NU_POSTPROCESS_BFAC_HIRES_RAMP)
-        frac = 1. - exp(-(ratio2 - 1.) / ramp)
-        frac = min(1., max(0., frac))
-    end function nu_postprocess_hires_frac
-
-    real function nu_postprocess_bfac_ratio2( local_lp, global_lp ) result( ratio2 )
+    real function nu_postprocess_damping_frac( local_lp, global_lp ) result( frac )
         real, intent(in) :: local_lp, global_lp
-        if( local_lp <= TINY .or. global_lp <= TINY )then
-            ratio2 = 1.
-        else
-            ratio2 = (global_lp / local_lp)**2
+        real :: sig, sig_global, width
+        if( local_lp <= global_lp )then
+            frac = 0.
+            return
         endif
-        ratio2 = min(NU_POSTPROCESS_BFAC_RATIO_MAX, max(NU_POSTPROCESS_BFAC_RATIO_MIN, ratio2))
-    end function nu_postprocess_bfac_ratio2
+        width      = max(TINY, NU_POSTPROCESS_BFAC_SIGMOID_WIDTH)
+        sig        = nu_postprocess_sigmoid(local_lp,  width)
+        sig_global = nu_postprocess_sigmoid(global_lp, width)
+        if( sig_global >= 1. - TINY )then
+            frac = 0.
+        else
+            frac = (sig - sig_global) / (1. - sig_global)
+        endif
+        frac = min(1., max(0., frac))
+    end function nu_postprocess_damping_frac
+
+    real function nu_postprocess_sigmoid( lp_angstrom, width ) result( sig )
+        real, intent(in) :: lp_angstrom, width
+        sig = 1. / (1. + exp(-(lp_angstrom - NU_POSTPROCESS_BFAC_SIGMOID_MID) / width))
+    end function nu_postprocess_sigmoid
 
     subroutine copy_nu_postprocess_voxels( icut, rmat_src, rmat_dst )
         integer,            intent(in)    :: icut

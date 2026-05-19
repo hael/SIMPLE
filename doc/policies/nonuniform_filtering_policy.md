@@ -185,18 +185,17 @@ ab initio output copy stage must preserve the NU products under the
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
 accepts the B factor in the same way and uses the NU filter map as a local
-postprocessing transfer-function selector for the merged reconstruction. Each
-local-resolution bin is sharpened with a bin-specific B factor derived from the
-global B factor and the squared ratio between the global FSC resolution and the
-bin resolution. For negative sharpening B factors,
-`B_floor = alpha * (-B_global)` and `B_ceil = beta * B_global`.
-Bins worse than the global FSC resolution interpolate from `B_floor` to
-`B_global`. Bins better than the global FSC resolution use a separate
-saturating ramp from `B_global` toward `B_ceil`; this avoids tying
-high-resolution sharpening variation to the low-resolution damping floor. All
-bins are then filtered with the same global FSC-derived antialiasing transfer
-used by classical postprocessing. `_lp_nu` is written as the corresponding
-unsharpened global-antialiased map. The NU products
+postprocessing transfer-function selector for the merged reconstruction. Bins
+at or better than the global FSC resolution use the global B factor exactly.
+Worse local-resolution bins transition through an asymmetric sigmoid toward a
+positive damping plateau, with the default inflection near 8 A. For negative
+sharpening B factors, `B_floor = alpha * (-B_global)`. The sigmoid fraction is
+normalized to be zero at the global FSC resolution, so the B-factor field is
+continuous at the boundary between classically sharpened and damped regions.
+All bins are then filtered with the same 4-pixel Hann antialiasing window at
+the finest active NU bin, rather than with the global FSC transfer, so locally
+promoted high-resolution bins are not cut back to the global FSC limit.
+`_lp_nu` is written as the corresponding unsharpened Hann-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 

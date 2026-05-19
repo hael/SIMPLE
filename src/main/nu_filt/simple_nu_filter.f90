@@ -25,11 +25,11 @@
 ! Postprocess workflows can instead challenge Fourier-shell candidates
 ! sequentially with the loop helper, then apply the resulting local filter map
 ! to a merged map using resolution-dependent B factors followed by a shared
-! global antialiasing filter:
+! Hann antialiasing filter at the finest active NU bin:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
-!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, optlp)
+!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
@@ -57,25 +57,20 @@ real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! NU postprocess B-factor model tuning:
-! - ALPHA controls positive-B damping for bins worse than the global FSC
-!   resolution. Increase it if low-resolution regions remain too sharp/noisy;
+! - Bins at or better than the global FSC resolution use the global B factor.
+!   This preserves classical sharpening wherever the global FSC supports it.
+! - ALPHA controls the positive-B damping plateau for worse local-resolution
+!   bins. Increase it if low-resolution regions remain too sharp/noisy;
 !   decrease it if those regions become too blurred.
-! - BETA controls the hard negative-B sharpening ceiling for bins better than
-!   the global FSC resolution. Increase it if high-resolution regions remain
-!   too soft; decrease it if they look noisy or over-sharpened.
-! - HIRES_RAMP controls how quickly better-than-global bins approach the BETA
-!   ceiling. Decrease it if high-resolution bins near the global FSC limit are
-!   not upweighted enough, or if high-resolution bins vary too dramatically;
-!   increase it if the finest bins need to remain more distinct.
-! - RATIO_MAX controls how much the squared resolution ratio can drive the
-!   low-resolution interpolation and high-resolution ramp. Increase it for
-!   stronger separation between bins; decrease it for more conservative
-!   variation.
+! - SIGMOID_MID is the resolution where damping turns on most rapidly.
+!   Increase it if mid-resolution density is damped too early; decrease it if
+!   damping should begin closer to the global FSC limit.
+! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
+!   change across local-resolution bins; decrease it for a sharper transition.
 real,             parameter   :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
-real,             parameter   :: NU_POSTPROCESS_BFAC_BETA            = 1.5
-real,             parameter   :: NU_POSTPROCESS_BFAC_HIRES_RAMP      = 0.10
-real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MIN       = 0.
-real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MAX       = 2.
+real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 8.
+real,             parameter   :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
+real,             parameter   :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
@@ -349,11 +344,10 @@ interface
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, fsc_filter )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
-        real, optional, intent(in) :: fsc_filter(:)
     end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90

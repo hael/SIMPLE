@@ -391,7 +391,7 @@ contains
         real,            intent(in)    :: smpd
         type(parameters),intent(inout) :: params
         class(cmdline),  intent(inout) :: cline
-        real, allocatable :: fsc(:), optlp(:), res(:)
+        real, allocatable :: fsc(:), res(:)
         logical, allocatable :: l_mask(:,:,:)
         integer, allocatable :: imat(:,:,:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_even_raw, fname_odd_raw
@@ -430,10 +430,7 @@ contains
         if( has_fsc )then
             res = vol_bfac%get_res()
             fsc = file2rarr(params%fsc)
-            optlp = fsc2optlp(fsc)
             call get_resolution(fsc, res, fsc05, fsc0143)
-            where( fsc < 0.05 ) optlp = 0.
-            where( res < TINY ) optlp = 0.
             lplim = fsc0143
         else
             lplim = params%lp
@@ -456,11 +453,7 @@ contains
         write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
             &n_nu_postprocess_steps
         call vol_bfac%fft()
-        if( has_fsc )then
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, optlp)
-        else
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac)
-        endif
+        call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac)
         call vol_lp%write(fname_lp)
         call vol_pproc%mask3D_soft(params%msk_crop)
         call vol_pproc%write(fname_pproc)
