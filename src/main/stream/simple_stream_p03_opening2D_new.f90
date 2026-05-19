@@ -148,7 +148,7 @@ contains
             call send_meta(string('picking particles'))
             ! segmentation-based picking
             nmics = params%nmics ! local copy: segdiampick_mics must not modify params%nmics
-            call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate)
+            call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate, l_hac=.true.)
             call send_meta(string('extracting particles'))
             ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
             if( spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &

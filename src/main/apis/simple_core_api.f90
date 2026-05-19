@@ -32,7 +32,7 @@ use simple_magic_boxes,     only: magic_pftsz, find_larger_magic_box, find_magic
 use simple_map_reduce,      only: split_nobjs_even
 use simple_math,            only: otsu, pixels_dist, equispaced_vals, put_last, bounds_from_mask3D, elim_dup, mode, sortmeans,&
                                  &quantize_vec_serial, quantize_vec, quadri, create_hist_vector, round2even, round2odd, rotmat2d, gauwfun,&
-                                 &gaussian1D, gaussian2D, gaussian3D, shft, cross, get_pixel_pos
+                                 &gaussian1D, gaussian2D, gaussian3D, shft, cross, get_pixel_pos, hac_1d
 use simple_math_ft,         only: csq_fast, csq, calc_fourier_index, calc_graphene_mask, calc_lowpass_lim, cyci_1d, cyci_1d_static,&
                                  &fdim, get_find_at_res, get_find_at_crit, get_resarr, mycabs, phase_angle, resang
 use simple_nrtxtfile,       only: nrtxtfile

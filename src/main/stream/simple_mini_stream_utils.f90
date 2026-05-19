@@ -72,13 +72,14 @@ contains
         call mic_diam_name%kill
     end subroutine segdiampick_preprocess
 
-    subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam )
+    subroutine segdiampick_mics( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam, l_hac )
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: pcontrast
         integer,           intent(inout) :: mic_to     ! last micrograph to process
         real,              intent(in)    :: moldiam_max
         integer,           intent(out)   :: box_in_pix
         real,              intent(out)   :: mskdiam    ! estimated mask diameter
+        logical, optional, intent(in)    :: l_hac      ! use hierarchical agglomerative clustering instead of k-means
         logical,           parameter     :: DEBUG = .true.
         real,              parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 2., SIGMA_CRIT_MSK = 2.5
         integer,           parameter     :: BOXFAC = 3, NQ_DIAMS = 10
@@ -91,9 +92,11 @@ contains
         type(image)        :: mic_raw, mic_shrink, mic_den
         type(stats_struct) :: diam_stats
         type(nrtxtfile)    :: diams_file
-        integer :: nmics, ldim_raw(3), ldim(3), imic, pop, nptcls, i
-        real    :: scale, mad, smpd
-        logical :: l_empty
+        integer              :: nmics, ldim_raw(3), ldim(3), imic, pop, nptcls, i, nclust_hac
+        real                 :: scale, mad, smpd, hac_thresh
+        integer, allocatable :: hac_labels(:), hac_pops(:)
+        real,    allocatable :: hac_centroids(:)
+        logical              :: l_empty, l_use_hac
         ! parse project
         smpd = spproj%get_smpd()
         call spproj%get_mics_table(micnames, orimap)
@@ -168,32 +171,66 @@ contains
         print *, 'sde diam: ', diam_stats%sdev
         print *, 'min diam: ', diam_stats%minv
         print *, 'max diam: ', diam_stats%maxv
-        allocate( diam_means(NQ_DIAMS), diam_labels(NQ_DIAMS) )
-        ! quantization of diameters
-        call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
-        ! Z-score of quantas
-        mad = mad_gau(diams_arr, diam_stats%med)
-        allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
-        do i = 1, NQ_DIAMS
-            print *, 'diam quanta '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
-            &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
-            &', abs(zscore): ', abs_z_scores(i)
-        end do
-        ! tresholding
-        pop = 0
-        do i = 2, NQ_DIAMS - 1
-            if( abs_z_scores(i) < SIGMA_CRIT )then
-                pop = pop + count(diam_labels == i)
-                tmp = pack(diams_arr, mask=diam_labels == i)
-                if( allocated(diams_arr_ts) )then
-                    diams_arr_ts = [diams_arr_ts(:), tmp(:)]
-                    deallocate(tmp)
-                else
-                    allocate(diams_arr_ts(size(tmp)), source=tmp)
-                    deallocate(tmp)
+        ! cluster & threshold diameters
+        mad       = mad_gau(diams_arr, diam_stats%med)
+        l_use_hac = .false.
+        if( present(l_hac) ) l_use_hac = l_hac
+        if( l_use_hac )then
+            ! --- hierarchical agglomerative clustering path ---
+            hac_thresh = diam_stats%sdev
+            allocate(hac_labels(size(diams_arr)))
+            call hac_1d(diams_arr, hac_thresh, hac_labels, hac_centroids, hac_pops)
+            nclust_hac = size(hac_centroids)
+            allocate(diam_means(nclust_hac),              source=hac_centroids)
+            allocate(diam_labels(size(diams_arr)), source=hac_labels)
+            deallocate(hac_labels, hac_centroids, hac_pops)
+            allocate(abs_z_scores(nclust_hac), source=abs((diam_means - diam_stats%med) / mad))
+            do i = 1, nclust_hac
+                print *, 'hac cluster '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
+                &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
+                &', abs(zscore): ', abs_z_scores(i)
+            end do
+            ! thresholding — all clusters; extremes rejected by Z-score naturally
+            pop = 0
+            do i = 1, nclust_hac
+                if( abs_z_scores(i) < SIGMA_CRIT )then
+                    pop = pop + count(diam_labels == i)
+                    tmp = pack(diams_arr, mask=diam_labels == i)
+                    if( allocated(diams_arr_ts) )then
+                        diams_arr_ts = [diams_arr_ts(:), tmp(:)]
+                        deallocate(tmp)
+                    else
+                        allocate(diams_arr_ts(size(tmp)), source=tmp)
+                        deallocate(tmp)
+                    endif
                 endif
-            endif
-        end do
+            end do
+        else
+            ! --- k-means quantization path ---
+            allocate(diam_means(NQ_DIAMS))
+            call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
+            allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
+            do i = 1, NQ_DIAMS
+                print *, 'diam quanta '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
+                &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
+                &', abs(zscore): ', abs_z_scores(i)
+            end do
+            ! thresholding — skip smallest and largest quantile, reject by Z-score
+            pop = 0
+            do i = 2, NQ_DIAMS - 1
+                if( abs_z_scores(i) < SIGMA_CRIT )then
+                    pop = pop + count(diam_labels == i)
+                    tmp = pack(diams_arr, mask=diam_labels == i)
+                    if( allocated(diams_arr_ts) )then
+                        diams_arr_ts = [diams_arr_ts(:), tmp(:)]
+                        deallocate(tmp)
+                    else
+                        allocate(diams_arr_ts(size(tmp)), source=tmp)
+                        deallocate(tmp)
+                    endif
+                endif
+            end do
+        endif
         print *, 'thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
         ! calculate diams stats after hybrid thresholding
         call calc_stats(diams_arr_ts, diam_stats)
