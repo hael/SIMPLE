@@ -21,8 +21,8 @@ implicit none
 ! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
 !   change across local-resolution bins; decrease it for a sharper transition.
 real, parameter :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
-real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -150.
-real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 8.
+real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -300.
+real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 6.
 real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
 real, parameter :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
 
