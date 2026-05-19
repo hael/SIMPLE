@@ -163,16 +163,11 @@ Current implementation details differ slightly by workflow:
 - `cluster2D` consolidates after the iteration and writes `which_iter + 1` for
   the next iteration. See
   [src/main/strategies/parallelization/simple_cluster2D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_cluster2D_strategy.f90:285).
-- shared-memory `refine3D` consolidates `which_iter` at iteration entry, before
-  any probabilistic pre-step, then writes `which_iter + 1` again at finalization
-  so a subsequent run can restart from grouped sigma state. See
-  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:442) and
-  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:570).
+- shared-memory `refine3D` consolidates and writes `which_iter` at iteration entry.
+  See [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:442) ..
 - distributed `refine3D` follows the same policy: current-iteration
-  consolidation before `prob_align*`/worker scheduling and `which_iter + 1`
-  consolidation at finalization. See
-  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:834) and
-  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:1020).
+  consolidation before `prob_align*`/worker scheduling. See
+  [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:834).
 
 The authoritative consolidation implementation is `exec_calc_group_sigmas` in [src/main/commanders/simple/simple_commanders_euclid.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_euclid.f90:41).
 

@@ -482,17 +482,29 @@ contains
     end subroutine calc_rec
 
     subroutine randomize_states( params, spproj, projfile, xrec3D, istage )
+        use simple_commanders_euclid,  only: commander_calc_group_sigmas
         class(parameters),     intent(inout) :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
         integer,               intent(in)    :: istage
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(cmdline)                     :: cline_calc_group_sigmas
         call spproj%read_segment('ptcl3D', projfile)
         call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
         call spproj%write_segment_inside(params%oritype, projfile)
         call cline_refine3D%set(     'nstates', params%nstates)
         call cline_reconstruct3D%set('nstates', params%nstates)
         call cline_reproject%set(    'nstates', params%nstates)
+        ! Sigma2 need be to consolidated because we bypass the general
+        ! path to reconstruct new volumes
+        if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
+            cline_calc_group_sigmas = cline_refine3D
+            call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
+            call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
+            call cline_calc_group_sigmas%kill
+        endif
+        ! Multi-state reconstruction
         call calc_rec(params, projfile, xrec3D, istage)
     end subroutine randomize_states
 

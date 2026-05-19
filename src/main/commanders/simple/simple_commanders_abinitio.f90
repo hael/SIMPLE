@@ -677,7 +677,7 @@ contains
             call set_cline_refine3D(params, istage, l_cavgs=.false.)
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call randomize_states(params, spproj, params%projfile, xrec3D, istage=split_stage)
+                call randomize_states(params, spproj, params%projfile, xrec3D, split_stage)
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
