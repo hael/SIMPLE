@@ -42,6 +42,10 @@ use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_mini_stream_utils,     only: segdiampick_mics
 use simple_qsys_env,              only: qsys_env
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality
+use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+use simple_cavg_quality_types,    only: cavg_quality_result
+use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr
 use simple_gui_metadata_api
 
 implicit none
@@ -61,10 +65,11 @@ contains
         implicit none
         class(stream_p03_opening2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 4, NTHUMB_MAX = 10
+        integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 8, NTHUMB_MAX = 10
         real,                      parameter       :: LPSTOP = 8.            ! low-pass stop resolution (A) for abinitio2D
         character(len=:),          allocatable     :: meta_buffer            ! serialised GUI metadata message
         type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
+        type(image),               allocatable     :: cavg_imgs(:)           ! class-average images for quality evaluation
         integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
         type(string)                               :: cavgsstk, mapfileprefix, projfile
@@ -74,6 +79,8 @@ contains
         type(sp_project)                           :: spproj, spproj_part
         type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
         type(commander_extract)                    :: xextract
+        type(cavg_quality_model)                   :: model
+        type(cavg_quality_result)                  :: quality
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(commander_abinitio2D)                 :: xabinitio2D
         type(gui_metadata_micrograph)              :: meta_micrograph
@@ -88,6 +95,7 @@ contains
         integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
         integer                                    :: ncls_stk, iori, i_max, optics_map_id
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
+        integer                                    :: ncls                   ! number of classes for abinitio2D
         integer                                    :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
         integer                                    :: increase_nmics_gui     ! cached value of meta_update%get_increase_nmics()
         integer                                    :: ncavgs                 ! number of reference classes selected by user
@@ -168,12 +176,26 @@ contains
             call send_meta(string('complete'))
             call send_meta2D(string('classifying particles'), box_in_pix)
             call run_abinitio2D()
-            call send_meta2D(string('shape ranking particles'), box_in_pix)
-            call run_shape_rank()
+            call send_meta2D(string('evaluating class average quality'), box_in_pix)
             call spproj%read(projfile)
-            call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
-            &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
-            call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
+            ncls      = spproj%os_cls2D%get_noris()
+            cavg_imgs = read_cavgs_into_imgarr(spproj)
+            call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, mskdiam_estimate, quality, model)
+            call model%kill()
+            call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
+            call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
+            call dealloc_imgarr(cavg_imgs)
+            call spproj%map_cavgs_selection(quality%states)
+            call spproj%write()
+           ! call send_meta2D(string('shape ranking particles'), box_in_pix)
+           ! call run_shape_rank()
+           ! call spproj%read(projfile)
+           ! call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
+           ! &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
+         !   call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
+            call spproj%cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
+            &xtiles, ytiles)
             ! signal the GUI that user input is required, then send the cavgs
             call meta_opening2D%set_user_input(.true.)
             call send_meta2D(string('waiting for user selection'), box_in_pix)
@@ -369,6 +391,21 @@ contains
                     endif
                 end do
             end subroutine micimporter
+
+            subroutine write_quality_stack( fname, selected )
+                type(string), intent(in) :: fname
+                logical,      intent(in) :: selected
+                integer :: icls, istk
+                if( file_exists(fname) ) call del_file(fname)
+                istk = 0
+                do icls = 1, ncls
+                    if( selected .eqv. (quality%states(icls) > 0) )then
+                        istk = istk + 1
+                        call cavg_imgs(icls)%write(fname, istk)
+                    endif
+                enddo
+                write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+            end subroutine write_quality_stack
 
             ! Broadcast initial-picking progress to the GUI.
             subroutine send_meta( my_stage )

@@ -95,7 +95,8 @@ contains
         integer              :: nmics, ldim_raw(3), ldim(3), imic, pop, nptcls, i, nclust_hac
         real                 :: scale, mad, smpd, hac_thresh
         integer, allocatable :: hac_labels(:), hac_pops(:)
-        real,    allocatable :: hac_centroids(:)
+        real,    allocatable :: hac_centroids(:), pop_arr(:), pop_z(:)
+        real                 :: pop_med, pop_mad
         logical              :: l_empty, l_use_hac
         ! parse project
         smpd = spproj%get_smpd()
@@ -179,28 +180,67 @@ contains
             ! --- hierarchical agglomerative clustering path ---
             hac_thresh = diam_stats%sdev
             allocate(hac_labels(size(diams_arr)))
-            call hac_1d(diams_arr, hac_thresh, hac_labels, hac_centroids, hac_pops)
+            call hac_1d_fast(diams_arr, hac_thresh, hac_labels, hac_centroids, hac_pops)
             nclust_hac = size(hac_centroids)
+            ! Z-score on cluster means
+            allocate(abs_z_scores(nclust_hac), source=abs((hac_centroids - diam_stats%med) / mad))
+            ! MAD-based Z-score on cluster populations (positive = below-median = sparse)
+            allocate(pop_arr(nclust_hac), source=real(hac_pops))
+            pop_med = median_nocopy(pop_arr)
+            pop_mad = mad_gau(pop_arr, pop_med)
+            if( pop_mad > 0.0 )then
+                allocate(pop_z(nclust_hac), source=(pop_med - pop_arr) / pop_mad)
+            else
+                allocate(pop_z(nclust_hac), source=0.)
+            endif
             do i = 1, nclust_hac
                 print *, 'hac cluster '//int2str_pad(i,2)//', avg diam: ', hac_centroids(i),&
-                &', % pop: ', 100 * real(hac_pops(i)) / real(size(diams_arr))
+                &', % pop: ', 100 * real(hac_pops(i)) / real(size(diams_arr)),&
+                &', abs(mean_z): ', abs_z_scores(i), ', pop_z: ', pop_z(i)
             end do
-            diams_arr_ts = pack(diams_arr, mask=diams_arr < maxval(hac_centroids) .and. diams_arr > minval(hac_centroids)) ! keep clusters that are not outliers in both directions
-            print *, 'thresholding, % of boxes: ', 100. * real(size(diams_arr_ts))/real(size(diams_arr))
+            ! thresholding — reject by outlier mean OR anomalously low population
+            pop = 0
+            do i = 1, nclust_hac
+                if( abs_z_scores(i) < SIGMA_CRIT .and. pop_z(i) < SIGMA_CRIT )then
+                    pop = pop + hac_pops(i)
+                    tmp = pack(diams_arr, mask=hac_labels == i)
+                    if( allocated(diams_arr_ts) )then
+                        diams_arr_ts = [diams_arr_ts(:), tmp(:)]
+                        deallocate(tmp)
+                    else
+                        allocate(diams_arr_ts(size(tmp)), source=tmp)
+                        deallocate(tmp)
+                    endif
+                endif
+            end do
+            print *, 'thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
+            deallocate(hac_labels, hac_centroids, hac_pops, abs_z_scores, pop_arr, pop_z)
         else
             ! --- k-means quantization path ---
             allocate(diam_means(NQ_DIAMS))
             call sortmeans(diams_arr, NQ_DIAMS, diam_means, diam_labels)
             allocate(abs_z_scores(NQ_DIAMS), source=abs((diam_means - diam_stats%med) / mad))
+            ! MAD-based Z-score on cluster populations (positive = below-median = sparse)
+            allocate(pop_arr(NQ_DIAMS))
+            do i = 1, NQ_DIAMS
+                pop_arr(i) = real(count(diam_labels == i))
+            end do
+            pop_med = median_nocopy(pop_arr)
+            pop_mad = mad_gau(pop_arr, pop_med)
+            if( pop_mad > 0.0 )then
+                allocate(pop_z(NQ_DIAMS), source=(pop_med - pop_arr) / pop_mad)
+            else
+                allocate(pop_z(NQ_DIAMS), source=0.)
+            endif
             do i = 1, NQ_DIAMS
                 print *, 'diam quanta '//int2str_pad(i,2)//', avg diam: ', diam_means(i),&
                 &', % pop: ', 100 * real(count(diam_labels == i)) / real(size(diams_arr)),&
-                &', abs(zscore): ', abs_z_scores(i)
+                &', abs(mean_z): ', abs_z_scores(i), ', pop_z: ', pop_z(i)
             end do
-            ! thresholding — skip smallest and largest quantile, reject by Z-score
+            ! thresholding — skip smallest and largest quantile; reject by mean or population Z-score
             pop = 0
             do i = 2, NQ_DIAMS - 1
-                if( abs_z_scores(i) < SIGMA_CRIT )then
+                if( abs_z_scores(i) < SIGMA_CRIT .and. pop_z(i) < SIGMA_CRIT )then
                     pop = pop + count(diam_labels == i)
                     tmp = pack(diams_arr, mask=diam_labels == i)
                     if( allocated(diams_arr_ts) )then
@@ -213,6 +253,7 @@ contains
                 endif
             end do
             print *, 'thresholding, % of boxes: ', 100. * real(pop)/real(size(diams_arr))
+            deallocate(pop_arr, pop_z)
         endif
         ! calculate diams stats after hybrid thresholding
         call calc_stats(diams_arr_ts, diam_stats)
@@ -223,11 +264,12 @@ contains
         print *, 'min diam: ', diam_stats%minv
         print *, 'max diam: ', diam_stats%maxv
         ! box size estimate in pixels
-        box_in_pix = find_magic_box(BOXFAC * nint(diam_stats%med/smpd))
+       ! box_in_pix = find_magic_box(BOXFAC * nint(diam_stats%med/smpd))
+        box_in_pix = find_magic_box(nint(1.5 * diam_stats%maxv/smpd))
         print *, 'box diam: ', box_in_pix * smpd
         ! mskdiam estimate in A
-        mskdiam = min((real(box_in_pix) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv)
-        mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
+        mskdiam = min((real(box_in_pix) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv * 1.2)
+       ! mskdiam = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, mskdiam)
         print *, 'msk diam: ', mskdiam
         ! re-pick with diameter constraints applied
         do imic = 1, mic_to

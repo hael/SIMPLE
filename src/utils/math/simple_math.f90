@@ -531,6 +531,94 @@ contains
         enddo
     end subroutine hac_1d
 
+    ! Faster rewrite of hac_1d with the following improvements over the original:
+    !   - no N×N distance matrix (eliminated O(N²) allocation; distances computed on-the-fly)
+    !   - centroid initialisation via a single O(N) accumulation pass instead of repeated minloc
+    !   - label compaction via an O(N) lookup table instead of O(N×ncls) where/any sweeps
+    !   - final centroid/population update via a single O(N) pass instead of O(N²) minloc loop
+    subroutine hac_1d_fast( vec, thresh, labels, centroids, populations )
+        real,    intent(in)  :: vec(:)
+        real,    intent(in)  :: thresh
+        integer, intent(out) :: labels(:)
+        real,    allocatable, intent(out) :: centroids(:)
+        integer, allocatable, intent(out) :: populations(:)
+        logical, allocatable :: mask(:)
+        integer, allocatable :: relabel(:)
+        real    :: d, best_d
+        integer :: N, i, j, best_j, ncls, cnt
+        N = size(vec)
+        labels = 0
+        allocate(mask(N), source=.true.)
+        ! 1) binary clustering — distances computed on-the-fly, no N×N matrix
+        ncls = 0
+        do i = 1, N
+            if( mask(i) )then
+                mask(i) = .false.
+                best_j  = 0
+                best_d  = huge(1.)
+                do j = 1, N
+                    if( mask(j) )then
+                        d = abs(vec(i) - vec(j))
+                        if( d < best_d )then
+                            best_d = d
+                            best_j = j
+                        endif
+                    endif
+                enddo
+                ncls      = ncls + 1
+                labels(i) = ncls
+                if( best_j > 0 .and. best_d <= thresh )then
+                    labels(best_j) = ncls
+                    mask(best_j)   = .false.
+                endif
+            endif
+        enddo
+        ! 2) initial centroids — single O(N) accumulation pass
+        allocate(centroids(ncls),   source=0.)
+        allocate(populations(ncls), source=0)
+        do i = 1, N
+            j              = labels(i)
+            centroids(j)   = centroids(j)   + vec(i)
+            populations(j) = populations(j) + 1
+        enddo
+        do i = 1, ncls
+            centroids(i) = centroids(i) / real(populations(i))
+        enddo
+        ! 3) merge clusters whose centroids are within threshold
+        do i = 1, ncls - 1
+            do j = i + 1, ncls
+                if( abs(centroids(i) - centroids(j)) <= thresh )then
+                    where( labels == j ) labels = i
+                endif
+            enddo
+        enddo
+        ! 4) compact labels in O(N) using a lookup table
+        allocate(relabel(ncls), source=0)
+        cnt = 0
+        do i = 1, N
+            j = labels(i)
+            if( relabel(j) == 0 )then
+                cnt        = cnt + 1
+                relabel(j) = cnt
+            endif
+            labels(i) = relabel(j)
+        enddo
+        ! 5) recompute final centroids and populations in a single O(N) pass
+        ncls = cnt
+        deallocate(centroids, populations)
+        allocate(centroids(ncls),   source=0.)
+        allocate(populations(ncls), source=0)
+        do i = 1, N
+            j              = labels(i)
+            centroids(j)   = centroids(j)   + vec(i)
+            populations(j) = populations(j) + 1
+        enddo
+        do i = 1, ncls
+            centroids(i) = centroids(i) / real(populations(i))
+        enddo
+        deallocate(mask, relabel)
+    end subroutine hac_1d_fast
+
     ! image processing
 
     !>    quadratic interpolation in 2D, from spider
