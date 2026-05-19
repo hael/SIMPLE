@@ -80,6 +80,7 @@ contains
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
+        integer                                   :: state_1_particle_rate
         logical                                   :: l_pause, l_terminate, l_once, l_changed
         real                                      :: final_mskdiam
         l_once               = .true.
@@ -91,6 +92,7 @@ contains
         nptcls_max_threshold = 0
         nptcls_dynamic_threshold = 0
         final_mskdiam        = 0.0
+        state_1_particle_rate = 0
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -190,17 +192,16 @@ contains
                 iter_last_import = get_pool_iter()
                 if( nptcls_glob_state_1 > nptcls_dynamic_threshold ) call unpause_pool()
             endif
-            l_imported = setslist%get_included_flags()
-            
+            l_imported            = setslist%get_included_flags()
             ! Adaptive pause policy:
             ! - iterations 11..20: pause only if no imports for >5 iterations
             ! - iterations 21+:    pause after 1 iteration without imports
-            if( pool_iter > 2 .and. pool_iter <= 20 ) then
-                if( pool_iter > iter_last_import + 5 ) then
+            if( pool_iter > 1 .and. pool_iter <= 20 ) then
+                if( pool_iter > iter_last_import + 1 ) then
                     if( .not.l_pause ) then
                         l_pause = is_pool_available()
                         extra_pause_iters        = 0
-                        nptcls_dynamic_threshold = nptcls_glob_state_1 + nptcls_threshold
+                        nptcls_dynamic_threshold = nptcls_glob_state_1 + max(params%ncls * 20, state_1_particle_rate * 200)
                         if( l_pause ) write(logfhandle,'(A,I8)')'>>> PAUSING 2D ANALYSIS UNTIL #PTCLS IS ', nptcls_dynamic_threshold
                     endif
                 end if
@@ -209,7 +210,7 @@ contains
                     if( .not.l_pause )then
                         l_pause = is_pool_available()
                         extra_pause_iters = 0
-                        nptcls_dynamic_threshold = nptcls_glob_state_1 + nptcls_threshold
+                        nptcls_dynamic_threshold = nptcls_glob_state_1 + max(params%ncls * 20, state_1_particle_rate * 500)
                         if( l_pause ) write(logfhandle,'(A,I8)')'>>> PAUSING 2D ANALYSIS UNTIL #PTCLS IS ', nptcls_dynamic_threshold
                     endif
                 endif
@@ -226,10 +227,9 @@ contains
             ! endif
             
             ! Performs clustering iteration
-            if( nptcls_glob_state_1 > 0 .and. nmics > 0) then
-                nptcls_max_threshold = ceiling(( float(nptcls_glob_state_1) / float(nmics) ) * 200 )! average number of selected particles from 200 micrographs
-                nptcls_threshold     = max(params%ncls * 20, nptcls_max_threshold)
-                write(logfhandle,'(A,I8)') '>>> CURRENT PARTICLE THRESHOLD: ', nptcls_threshold
+            if( get_pool_iter() == 0 ) then
+                nptcls_threshold = max(params%ncls * 20, state_1_particle_rate * 500) ! minimum threshold to trigger clustering; scales with particle rate but has a floor to avoid stalling when rates are very low
+                write(logfhandle,'(A,I8)') '>>> INITIAL PARTICLE THRESHOLD: ', nptcls_threshold
             end if
             if( l_pause )then
                 ! skip iteration
@@ -469,9 +469,10 @@ contains
                     call init_pool_clustering(params, cline, spproj_glob, string(MICSPPROJ_FNAME), reference_generation=.false.)
                 endif
                 ! global count
-                nptcls_glob         = nptcls_glob + nptcls_sel_tot
-                nptcls_glob_state_1 = pool%os_ptcl2D%count_state_gt_zero()
-                nmics               = pool%os_mic%get_noris()
+                nptcls_glob           = nptcls_glob + nptcls_sel_tot
+                nptcls_glob_state_1   = pool%os_ptcl2D%count_state_gt_zero()
+                nmics                 = pool%os_mic%get_noris()
+                state_1_particle_rate = ceiling(real(nptcls_glob_state_1) / max(1, nmics))
                 ! cleanup
                 do iset = 1,setslist%size()
                     call spprojs(iset)%kill
