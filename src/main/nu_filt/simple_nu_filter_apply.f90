@@ -123,23 +123,21 @@ contains
         call vol_filt%kill
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, sharp_cutoff, fsc_filter )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, fsc_filter )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
-        real,         intent(in)  :: global_lp, global_bfac, sharp_cutoff
+        real,         intent(in)  :: global_lp, global_bfac
         real, optional, intent(in) :: fsc_filter(:)
-        type(image) :: vol_in_ft, vol_sharp_ft, vol_classic_lp, vol_classic_pproc, vol_filt
-        real(kind=c_float), pointer :: rmat_classic_lp(:,:,:), rmat_classic_pproc(:,:,:), rmat_filt(:,:,:)
-        real(kind=c_float), pointer :: rmat_lp(:,:,:), rmat_pproc(:,:,:)
+        type(image) :: vol_in_ft, vol_filt
+        real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
         integer :: icut, winsz
-        real    :: edge_mean, local_lp
+        real    :: edge_mean, local_lp, local_bfac
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_postprocess_vol')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
-        if( sharp_cutoff <= TINY ) THROW_HARD('NU sharpening cutoff must be positive; nu_postprocess_vol')
         if( any(nu_lmask .and. srcmap /= 1) )then
             THROW_HARD('NU postprocess transfer functions require a base-bank-only filter map; nu_postprocess_vol')
         endif
@@ -150,77 +148,97 @@ contains
             call vol_in_ft%taper_edges_vol(winsz, edge_mean)
             call vol_in_ft%fft
         endif
-        call vol_sharp_ft%copy(vol_in_ft)
-        call vol_sharp_ft%set_wthreads(.true.)
-        call vol_sharp_ft%apply_bfac(global_bfac)
-        call vol_classic_lp%copy(vol_in_ft)
-        call vol_classic_pproc%copy(vol_sharp_ft)
-        call vol_classic_lp%set_wthreads(.true.)
-        call vol_classic_pproc%set_wthreads(.true.)
+        call vol_lp%copy(vol_in_ft)
+        call vol_lp%set_wthreads(.true.)
         if( present(fsc_filter) )then
-            call vol_classic_lp%apply_filter(fsc_filter)
-            call vol_classic_pproc%apply_filter(fsc_filter)
+            call vol_lp%apply_filter(fsc_filter)
         else
-            call vol_classic_lp%bp(0., global_lp)
-            call vol_classic_pproc%bp(0., global_lp)
+            call vol_lp%bp(0., global_lp)
         endif
-        call vol_classic_lp%ifft
-        call vol_classic_pproc%ifft
-        call vol_classic_lp%get_rmat_ptr(rmat_classic_lp)
-        call vol_classic_pproc%get_rmat_ptr(rmat_classic_pproc)
+        call vol_lp%ifft
         call vol_filt%new(ldim, smpd)
         call vol_filt%set_ft(.true.)
         call vol_filt%set_wthreads(.true.)
-        call vol_lp%new(ldim, smpd, wthreads=.false.)
         call vol_pproc%new(ldim, smpd, wthreads=.false.)
-        call vol_lp%get_rmat_ptr(rmat_lp)
         call vol_pproc%get_rmat_ptr(rmat_pproc)
-        rmat_lp(:ldim(1),:ldim(2),:ldim(3))    = 0.
         rmat_pproc(:ldim(1),:ldim(2),:ldim(3)) = 0.
-        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, sharp_cutoff)
+        call log_nu_postprocess_transfer_bank(global_lp, global_bfac)
         do icut = 1, size(cutoff_finds)
             local_lp = cutoff_find_to_lowpass_limit(icut)
-            if( local_lp <= sharp_cutoff )then
-                call copy_nu_postprocess_voxels(icut, rmat_classic_lp, rmat_lp)
-                call copy_nu_postprocess_voxels(icut, rmat_classic_pproc, rmat_pproc)
+            local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
+            call vol_filt%copy_fast(vol_in_ft)
+            call vol_filt%apply_bfac(local_bfac)
+            if( present(fsc_filter) )then
+                call vol_filt%apply_filter(fsc_filter)
             else
-                call vol_filt%copy_fast(vol_in_ft)
-                call vol_filt%bp(0., local_lp, NU_POSTPROCESS_HANN_WIDTH)
-                call vol_filt%ifft
-                call vol_filt%get_rmat_ptr(rmat_filt)
-                call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_lp)
-                call vol_filt%copy_fast(vol_sharp_ft)
-                call vol_filt%bp(0., local_lp, NU_POSTPROCESS_HANN_WIDTH)
-                call vol_filt%ifft
-                call vol_filt%get_rmat_ptr(rmat_filt)
-                call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
+                call vol_filt%bp(0., global_lp)
             endif
+            call vol_filt%ifft
+            call vol_filt%get_rmat_ptr(rmat_filt)
+            call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
         end do
         call vol_in_ft%kill
-        call vol_sharp_ft%kill
-        call vol_classic_lp%kill
-        call vol_classic_pproc%kill
         call vol_filt%kill
     end subroutine nu_postprocess_vol
 
-    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, sharp_cutoff )
-        real, intent(in) :: global_lp, global_bfac, sharp_cutoff
+    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac )
+        real, intent(in) :: global_lp, global_bfac
         integer :: icut
-        real :: local_lp
+        real :: local_lp, ratio2, local_bfac, bfac_floor, bfac_ceil
+        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
-        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F6.1,A,F8.3)') &
+        write(logfhandle,'(4X,A,F8.3,A,F9.2,A,F9.2,A,F9.2)') &
             &'Global FSC LP(A): ', global_lp, '  Global B: ', global_bfac, &
-            &'  Hann width(k): ', NU_POSTPROCESS_HANN_WIDTH, '  Classic cutoff(A): ', sharp_cutoff
-        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Postprocess transfer'
+            &'  B floor: ', bfac_floor, '  B ceiling: ', bfac_ceil
+        write(logfhandle,'(4X,A,F5.2,A,F5.2,A,F5.2,A,F5.2)') &
+            &'B-factor model alpha/beta: ', NU_POSTPROCESS_BFAC_ALPHA, '/', NU_POSTPROCESS_BFAC_BETA, &
+            &'  Ratio clamp: ', NU_POSTPROCESS_BFAC_RATIO_MIN, '/', NU_POSTPROCESS_BFAC_RATIO_MAX
+        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Ratio^2      B_eff'
         do icut = 1, size(cutoff_finds)
             local_lp   = cutoff_find_to_lowpass_limit(icut)
-            if( local_lp <= sharp_cutoff )then
-                write(logfhandle,'(4X,F10.3,4X,I9,4X,A)') local_lp, cutoff_finds(icut), 'classic'
-            else
-                write(logfhandle,'(4X,F10.3,4X,I9,4X,A)') local_lp, cutoff_finds(icut), 'Hann NU'
-            endif
+            ratio2     = nu_postprocess_bfac_ratio2(local_lp, global_lp)
+            local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
+            write(logfhandle,'(4X,F10.3,4X,I9,4X,F7.3,4X,F9.2)') local_lp, cutoff_finds(icut), ratio2, local_bfac
         end do
     end subroutine log_nu_postprocess_transfer_bank
+
+    real function nu_postprocess_resolution_bfac( local_lp, global_lp, global_bfac ) result( local_bfac )
+        real, intent(in) :: local_lp, global_lp, global_bfac
+        real :: bfac_floor, bfac_ceil, ratio2
+        ! The signed interpolation model is defined for sharpening B factors
+        ! (negative in SIMPLE's exp(-(B/4)*s^2) convention). If the caller
+        ! supplies a nonnegative B factor, preserve that damping uniformly.
+        if( global_bfac >= 0. )then
+            local_bfac = global_bfac
+            return
+        endif
+        call nu_postprocess_bfac_bounds(global_bfac, bfac_floor, bfac_ceil)
+        ratio2     = nu_postprocess_bfac_ratio2(local_lp, global_lp)
+        local_bfac = bfac_floor + ratio2 * (global_bfac - bfac_floor)
+        local_bfac = min(bfac_floor, max(bfac_ceil, local_bfac))
+    end function nu_postprocess_resolution_bfac
+
+    subroutine nu_postprocess_bfac_bounds( global_bfac, bfac_floor, bfac_ceil )
+        real, intent(in)  :: global_bfac
+        real, intent(out) :: bfac_floor, bfac_ceil
+        if( global_bfac < 0. )then
+            bfac_floor = NU_POSTPROCESS_BFAC_ALPHA * (-global_bfac)
+            bfac_ceil  = NU_POSTPROCESS_BFAC_BETA  * global_bfac
+        else
+            bfac_floor = global_bfac
+            bfac_ceil  = global_bfac
+        endif
+    end subroutine nu_postprocess_bfac_bounds
+
+    real function nu_postprocess_bfac_ratio2( local_lp, global_lp ) result( ratio2 )
+        real, intent(in) :: local_lp, global_lp
+        if( local_lp <= TINY .or. global_lp <= TINY )then
+            ratio2 = 1.
+        else
+            ratio2 = (global_lp / local_lp)**2
+        endif
+        ratio2 = min(NU_POSTPROCESS_BFAC_RATIO_MAX, max(NU_POSTPROCESS_BFAC_RATIO_MIN, ratio2))
+    end function nu_postprocess_bfac_ratio2
 
     subroutine copy_nu_postprocess_voxels( icut, rmat_src, rmat_dst )
         integer,            intent(in)    :: icut

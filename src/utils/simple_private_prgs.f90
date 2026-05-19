@@ -343,7 +343,6 @@ contains
         call cmd_dict%push('lpstop',        'stop low-pass limit(in A){8}')
         call cmd_dict%push('lpstop2D',      'stop low-pass limit(in A){8}')
         call cmd_dict%push('lpthres',      'resolution rejection limit(in A){30}')
-        call cmd_dict%push('nu_sharp_cutoff', 'NU postprocess classic-sharpening cutoff(in A){8}')
         call cmd_dict%push('makemovie',     'produces files to generate a movie with ffmpeg(yes|no){no}')
         call cmd_dict%push('maxits',        'maximum # iterations')
         call cmd_dict%push('max_dose',      'maximum dose threshold (in e-/A2)')

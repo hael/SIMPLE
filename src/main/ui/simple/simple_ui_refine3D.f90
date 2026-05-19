@@ -139,10 +139,6 @@ contains
             &'Low-pass limit used only when an FSC file is unavailable', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess_nu%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'Binary FSC file for B-factor estimation', &
             &'e.g. fsc_state01.bin file', .false., '')
-        call postprocess_nu%add_input(UI_FILT, 'nu_sharp_cutoff', 'num', 'NU classic sharpening cutoff', &
-            &'Local NU labels at or better than this resolution use the classical B-factor/FSC-filtered map; '//&
-            &'lower-resolution labels use NU Hann dampening', &
-            &'resolution in Angstroms{8}', .false., 8.)
         call postprocess_nu%add_input(UI_FILT, bfac)
         call postprocess_nu%add_input(UI_FILT, mirr)
         ! mask controls

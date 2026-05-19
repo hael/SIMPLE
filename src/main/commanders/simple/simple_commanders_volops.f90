@@ -457,11 +457,9 @@ contains
             &n_nu_postprocess_steps
         call vol_bfac%fft()
         if( has_fsc )then
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, &
-                &params%nu_sharp_cutoff, optlp)
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, optlp)
         else
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, &
-                &params%nu_sharp_cutoff)
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac)
         endif
         call vol_lp%write(fname_lp)
         call vol_pproc%mask3D_soft(params%msk_crop)

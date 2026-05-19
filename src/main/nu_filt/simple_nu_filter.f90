@@ -24,11 +24,12 @@
 !
 ! Postprocess workflows can instead challenge Fourier-shell candidates
 ! sequentially with the loop helper, then apply the resulting local filter map
-! to a merged map using Hann-windowed, Wilson-shrunk transfer functions:
+! to a merged map using resolution-dependent B factors followed by a shared
+! global antialiasing filter:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
-!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, nu_sharp_cutoff, optlp)
+!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, optlp)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
@@ -55,7 +56,20 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
-real,             parameter   :: NU_POSTPROCESS_HANN_WIDTH           = 5.
+! NU postprocess B-factor model tuning:
+! - ALPHA controls positive-B damping for bins worse than the global FSC
+!   resolution. Increase it if low-resolution regions remain too sharp/noisy;
+!   decrease it if those regions become too blurred.
+! - BETA controls the hard negative-B sharpening ceiling for bins better than
+!   the global FSC resolution. Increase it if high-resolution regions remain
+!   too soft; decrease it if they look noisy or over-sharpened.
+! - RATIO_MAX controls how much the squared resolution ratio can drive the
+!   interpolation before the hard B-factor clamp. Increase it for stronger
+!   separation between bins; decrease it for more conservative variation.
+real,             parameter   :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
+real,             parameter   :: NU_POSTPROCESS_BFAC_BETA            = 2.
+real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MIN       = 0.
+real,             parameter   :: NU_POSTPROCESS_BFAC_RATIO_MAX       = 2.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
@@ -329,10 +343,10 @@ interface
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, sharp_cutoff, fsc_filter )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, fsc_filter )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
-        real,         intent(in)  :: global_lp, global_bfac, sharp_cutoff
+        real,         intent(in)  :: global_lp, global_bfac
         real, optional, intent(in) :: fsc_filter(:)
     end subroutine nu_postprocess_vol
 

@@ -186,13 +186,17 @@ outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then determines or
 accepts the B factor in the same way and uses the NU filter map as a local
 postprocessing transfer-function selector for the merged reconstruction. Each
-candidate at or better than the `nu_sharp_cutoff` resolution, which defaults
-to 8 A, uses the classical global B-factor/FSC-filtered transfer. Candidates
-below that cutoff use the same global B-factor followed by a Hann
-anti-aliasing window at the candidate's local low-pass limit. `_lp_nu` is
-written with the analogous unsharpened transfers: classical FSC-filtered
-output for labels at or better than the cutoff and Hann-windowed NU low-pass
-output for lower-resolution labels. The NU products
+local-resolution bin is sharpened with a bin-specific B factor derived from the
+global B factor and the squared ratio between the global FSC resolution and the
+bin resolution:
+`B_i = B_floor + clamp((R_global / R_i)^2, 0, ratio_max) * (B_global - B_floor)`,
+then clamped between `B_ceil` and `B_floor`. For negative sharpening B factors,
+`B_floor = alpha * (-B_global)` and `B_ceil = beta * B_global`. The B-factor
+floor is therefore positive, so low-resolution bins can be down-weighted,
+while the negative ceiling limits extra sharpening in higher-resolution bins.
+All bins are then filtered with the same global FSC-derived antialiasing
+transfer used by classical postprocessing. `_lp_nu` is written as the
+corresponding unsharpened global-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.
 
