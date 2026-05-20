@@ -87,8 +87,8 @@ module simple_ipc_tcp_socket_server
   !> Reinitialise server object and start a fresh listener thread.
   subroutine new( self, thread_funloc, thread_args_ptr )
     class(ipc_tcp_socket_server), intent(inout) :: self
-    type(c_ptr), value,    intent(in)    :: thread_funloc
-    type(c_ptr), value,    intent(in)    :: thread_args_ptr
+    type(c_funptr), value, intent(in) :: thread_funloc
+    type(c_ptr),     value, intent(in) :: thread_args_ptr
     call self%kill()
     call self%find_server_ips()
     call self%start_listener(thread_funloc, thread_args_ptr)
@@ -124,8 +124,8 @@ module simple_ipc_tcp_socket_server
   !> Bind an available port, call listen(), and launch the listener pthread.
   subroutine start_listener( self, thread_funloc, thread_args_ptr )
     class(ipc_tcp_socket_server), intent(inout) :: self
-    type(c_ptr), value,         intent(in) :: thread_funloc
-    type(c_ptr), value,         intent(in) :: thread_args_ptr
+    type(c_funptr), value,      intent(in) :: thread_funloc
+    type(c_ptr),     value,     intent(in) :: thread_args_ptr
     type(listener_args),  pointer :: args
     type(tcp_sockaddr_in), target :: addr
     integer(kind=c_socklen_t)     :: addrlen
