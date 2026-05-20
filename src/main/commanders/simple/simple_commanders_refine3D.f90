@@ -73,7 +73,6 @@ contains
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
         call cline%set('refine',  'prob_neigh') ! probabilistioc neighborhood 3D refinement 
         call cline%set('ml_reg',         'yes') ! ML regularization is on
-        call cline%set('automsk',        'yes') ! envelope masking for background flattening
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
         call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
@@ -90,6 +89,7 @@ contains
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
+        if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
             if( cline%get_iarg('maxits') < 1 ) THROW_HARD('maxits must be >= 1 for refine3D_auto')
