@@ -452,7 +452,7 @@ contains
         if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
-        if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',                    'none')
+        if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
