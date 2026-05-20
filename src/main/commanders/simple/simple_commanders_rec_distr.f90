@@ -269,6 +269,7 @@ contains
         logical, allocatable          :: l_mask(:,:,:)
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: imat(:,:,:)
+        integer, allocatable          :: state_pops(:)
         real, allocatable             :: res0143s(:)
         real, allocatable             :: nu_align_lps(:)
         real                          :: update_frac_trail_rec, res05
@@ -331,8 +332,18 @@ contains
             res0143s = 0.
             allocate(nu_align_lps(params%nstates))
             nu_align_lps = 0.
+            allocate(state_pops(params%nstates))
+            state_pops = 0
             call eorecvol_read%new(params, build%spproj, expand=.false.)
         end subroutine initialize_context
+
+        subroutine refresh_state_populations()
+            integer :: istate
+            if( .not. allocated(state_pops) ) return
+            do istate = 1,params%nstates
+                state_pops(istate) = build%spproj_field%get_pop(istate, 'state')
+            enddo
+        end subroutine refresh_state_populations
 
         subroutine determine_trailing_update_fraction()
             update_frac_trail_rec = 1.0
@@ -539,8 +550,8 @@ contains
             if( .not. params%l_nu_refine ) return
             align_lp = get_nu_filter_bank_finest_lp()
             nu_align_lps(state) = align_lp
-            write(logfhandle,'(A,F8.3,A)') &
-                &'>>> NU refinement matching low-pass limit for next iteration: ', align_lp, ' A'
+            write(logfhandle,'(A,I0,A,F8.3,A)') &
+                &'>>> NU refinement state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'
         end subroutine record_nu_alignment_lowpass_limit
 
         subroutine cleanup_nonuniform_state()
@@ -582,6 +593,7 @@ contains
 
         subroutine update_project_resolution_metadata()
             integer :: iptcl, istate
+            call refresh_state_populations()
             if( params%nstates == 1 )then
                 call build%spproj_field%set_all2single('res', res0143s(1))
             else
@@ -597,15 +609,48 @@ contains
         end subroutine update_project_resolution_metadata
 
         subroutine update_project_nu_alignment_lowpass()
-            real :: align_lp
+            logical :: l_included(params%nstates)
+            real    :: align_lp
+            integer :: istate, selected_state
             if( .not. l_nonuniform_mode ) return
             if( .not. params%l_nu_refine ) return
             if( .not. allocated(nu_align_lps) ) return
-            if( .not. any(nu_align_lps > TINY) ) return
-            align_lp = minval(nu_align_lps, mask=nu_align_lps > TINY)
+            if( .not. allocated(state_pops) ) return
+            ! Match the classical multi-state policy: the best resolved
+            ! populated state determines the single global matching bandwidth.
+            l_included = (nu_align_lps > TINY) .and. (state_pops > 0)
+            if( params%nstates > 1 ) call log_nu_alignment_lowpass_summary(l_included)
+            if( .not. any(l_included) )then
+                if( any(nu_align_lps > TINY) )then
+                    write(logfhandle,'(A)') &
+                        &'>>> WARNING: no populated state has a valid NU refinement matching low-pass limit'
+                endif
+                return
+            endif
+            align_lp       = minval(nu_align_lps, mask=l_included)
+            selected_state = 0
+            do istate = 1,params%nstates
+                if( l_included(istate) .and. abs(nu_align_lps(istate) - align_lp) <= TINY )then
+                    selected_state = istate
+                    exit
+                endif
+            enddo
             call build%spproj_field%set_all2single('lp', align_lp)
-            write(logfhandle,'(A,F8.3,A)') '>>> NU refinement project matching low-pass limit: ', align_lp, ' A'
+            write(logfhandle,'(A,I0,A,F8.3,A)') &
+                &'>>> NU refinement project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
         end subroutine update_project_nu_alignment_lowpass
+
+        subroutine log_nu_alignment_lowpass_summary(l_included)
+            logical, intent(in) :: l_included(:)
+            integer :: istate
+            write(logfhandle,'(A)') '>>> NU refinement multi-state matching low-pass candidates'
+            write(logfhandle,'(A)') '    State       Pop   FSC(A)   NU LP(A)   Used'
+            do istate = 1,params%nstates
+                write(logfhandle,'(I9,I10,F9.3,F10.3,5X,A)') &
+                    &istate, state_pops(istate), res0143s(istate), nu_align_lps(istate), &
+                    &merge('yes', 'no ', l_included(istate))
+            enddo
+        end subroutine log_nu_alignment_lowpass_summary
 
         subroutine cleanup_context()
             call gridcorr_img%kill
@@ -626,6 +671,7 @@ contains
             call cleanup_nu_aux_images()
             if( allocated(l_mask) ) deallocate(l_mask)
             if( allocated(imat) ) deallocate(imat)
+            if( allocated(state_pops) ) deallocate(state_pops)
             if( allocated(res0143s) ) deallocate(res0143s)
             if( allocated(nu_align_lps) ) deallocate(nu_align_lps)
             call cleanup_nu_filter()

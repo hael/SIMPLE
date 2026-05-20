@@ -58,28 +58,28 @@ private
 real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4.]
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
-real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT = 0.
-real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT     = 5.
+real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
+real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT      = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
-real,             parameter   :: WINSZ_TENT_ANGSTROM       = 8.
-integer,          parameter   :: DISCONT_STEP_THRESH       = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS    = 3
-integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL  = 1
-integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH    = 26
-integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS   = 8
-real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC = 2.0
-real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC = 1.0
-real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS   = 1.e-6
+real,             parameter   :: WINSZ_TENT_ANGSTROM         = 8.
+integer,          parameter   :: DISCONT_STEP_THRESH         = 1
+integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 3
+integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
+integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
+integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
+real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
+real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
+real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 ! In postprocess_nu the classical FSC-filtered auxiliary candidate is a source
 ! alternative, not an ordered resolution-bin label. Keep this at zero to let
 ! the unary objective decide aux-vs-base assignments without frequency-ladder
 ! Potts bias; raise slightly if a future dataset needs source-boundary cleanup.
 real,             parameter   :: NU_AUX_SOURCE_BOUNDARY_COST = 0.0
-character(len=*), parameter   :: NU_FILTER_CACHE_EVEN      = 'nu_filter_cache_even'
-character(len=*), parameter   :: NU_FILTER_CACHE_ODD       = 'nu_filter_cache_odd'
+character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
+character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: dmats_aux_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
@@ -110,7 +110,6 @@ type :: nu_highres_extension_stats
     real    :: pct_tested_mask     = 0.
     real    :: pct_extended_tested = 0.
 end type nu_highres_extension_stats
-
 
 interface
 
@@ -284,9 +283,9 @@ interface
     end subroutine extend_nu_filter_highres
 
     module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
-        class(image), intent(in) :: vol_even, vol_odd
+        class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
-        real, optional, intent(in) :: accept_pct
+        real, optional,                             intent(in)  :: accept_pct
     end subroutine extend_nu_filter_highres_shell_next
 
     module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
@@ -384,21 +383,21 @@ interface
     end subroutine nu_filter_vol
 
     module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols )
-        class(image), intent(in)  :: vol_in
-        class(image), intent(out) :: vol_lp, vol_pproc
-        real,         intent(in)  :: global_lp, global_bfac
-        type(image), optional, intent(in) :: aux_vols(:)
+        class(image),          intent(in)  :: vol_in
+        class(image),          intent(out) :: vol_lp, vol_pproc
+        real,                  intent(in)  :: global_lp, global_bfac
+        type(image), optional, intent(in)  :: aux_vols(:)
     end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
         real, allocatable, intent(inout) :: lowpass_vals(:)
-        logical, intent(in)              :: mask(:,:,:)
+        logical,           intent(in)    :: mask(:,:,:)
     end subroutine pack_filtmap_lowpass_limits
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
         type(stats_struct), intent(out) :: statvars
-        logical, intent(in)             :: mask(:,:,:)
+        logical,            intent(in)  :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_stats
 
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )

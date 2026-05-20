@@ -440,6 +440,7 @@ contains
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
+        logical :: l_cavg_ini_ext
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -515,11 +516,13 @@ contains
         nice_comm%stat_root%stage = "preparing workflow"
         call nice_comm%cycle()
         ! initialization on class averages done outside this workflow (externally)?
-        if( trim(params%cavg_ini_ext).eq.'yes' )then
+        l_cavg_ini_ext = trim(params%cavg_ini_ext).eq.'yes'
+        if( l_cavg_ini_ext )then
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
             endif
+            call validate_cavg_ini_ext_states
             ! symmetry axis search is skipped: input orientations are assumed already symmetrized
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
@@ -621,7 +624,7 @@ contains
                     THROW_HARD('Unsupported ORITYPE; exec_abinitio3D')
             end select
             ! randomize states
-            if( trim(params%multivol_mode).eq.'independent' )then
+            if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
@@ -633,7 +636,7 @@ contains
                 THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
             endif
             ! randomize states
-            if( trim(params%multivol_mode).eq.'independent' )then
+            if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
             endif
             ! create an initial balanced greedy sampling
@@ -760,6 +763,23 @@ contains
             ! make the move
             call move_files_in_cwd(string(INI3D_DIR), files_that_stay)
         end subroutine ini3D_from_cavgs
+
+        subroutine validate_cavg_ini_ext_states
+            integer :: state, pop
+            if( params%nstates <= 1 ) return
+            nstates_in_project = spproj%os_ptcl3D%get_n('state')
+            if( nstates_in_project /= params%nstates )then
+                write(logfhandle,*) 'requested nstates, project ptcl3D state bins: ', params%nstates, nstates_in_project
+                THROW_HARD('cavg_ini_ext=yes with nstates>1 requires matching existing ptcl3D state assignments')
+            endif
+            do state = 1,params%nstates
+                pop = spproj%os_ptcl3D%get_pop(state, 'state')
+                if( pop < 1 )then
+                    write(logfhandle,*) 'empty ptcl3D state for cavg_ini_ext: ', state
+                    THROW_HARD('cavg_ini_ext=yes requires every requested state to be populated')
+                endif
+            enddo
+        end subroutine validate_cavg_ini_ext_states
 
     end subroutine exec_abinitio3D
 

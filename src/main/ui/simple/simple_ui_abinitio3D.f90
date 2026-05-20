@@ -54,6 +54,9 @@ contains
         call abinitio3D%add_input(UI_SRCH, pgrp, gui_submenu="model", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, pgrp_start, gui_submenu="model")
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        call abinitio3D%add_input(UI_SRCH, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
+            &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}', &
+            &'(yes|no){no}', .false., 'no', gui_submenu="model", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')

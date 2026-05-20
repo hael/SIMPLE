@@ -91,7 +91,10 @@ contains
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         l_maxits_defined = cline%defined('maxits')
-        if( cline%defined('minits') )then
+        if( l_maxits_defined )then
+            if( cline%get_iarg('maxits') < 1 ) THROW_HARD('maxits must be >= 1 for refine3D_auto')
+            call cline%set('minits', cline%get_iarg('maxits'))
+        else if( cline%defined('minits') )then
             call cline%set('minits', max(MINITS_REFINE3D_AUTO, cline%get_iarg('minits')))
         else
             call cline%set('minits', MINITS_REFINE3D_AUTO)
@@ -271,10 +274,8 @@ contains
                 write(logfhandle,'(A,I0,A,F5.1,A,I0,A)') '>>> REFINE3D_AUTO MAXITS: ', &
                     &params%maxits, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO, &
                     &' UPDATES/PARTICLE (MINIMUM: ', params%minits, ')'
-            else if( params%maxits < params%minits )then
-                params%maxits = params%minits
-                call cline%set('maxits', params%maxits)
-                write(logfhandle,'(A,I0)') '>>> REFINE3D_AUTO MAXITS RAISED TO MINIMUM ITERATIONS: ', params%maxits
+            else
+                write(logfhandle,'(A,I0)') '>>> REFINE3D_AUTO MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
             endif
         end subroutine set_refine3D_auto_sampling
 
