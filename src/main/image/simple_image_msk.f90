@@ -27,7 +27,9 @@ type, extends(image_bin) :: image_msk
     generic            :: automask3D => automask3D_1, automask3D_2
     procedure          :: estimate_spher_mask_diam
     procedure          :: automask3D_filter
+    procedure, private :: automask3D_snr_icm
     procedure, private :: automask3D_binarize
+    procedure, private :: automask3D_keep_largest_cc
     procedure, private :: env_rproject
 end type image_msk
 
@@ -63,16 +65,19 @@ contains
         self%amsklp   = params%amsklp
         self%binwidth = params%binwidth
         self%edge     = params%edge
-        ! filter 
-        call self%automask3D_filter(params, vol_even, vol_odd, vol_filt)
-        ! binarization
-        call self%automask3D_binarize(params, l_tight, pix_thres)
+        if( trim(params%automsk).eq.'snr' )then
+            call self%automask3D_snr_icm(params, vol_even, vol_odd)
+        else
+            ! filter
+            call self%automask3D_filter(params, vol_even, vol_odd, vol_filt)
+            ! binarization
+            call self%automask3D_binarize(params, l_tight, pix_thres)
+            call vol_filt%kill
+        endif
         ! add layers
         call self%grow_bins(self%binwidth)
         ! add volume soft edge
         call self%cos_edge(self%edge)
-        ! destruct
-        call vol_filt%kill
     end subroutine automask3D_2
 
     subroutine estimate_spher_mask_diam( self, params, vol, amsklp, msk_in_pix )
@@ -128,22 +133,42 @@ contains
         call vol_odd_icm%kill
     end subroutine automask3D_filter
 
+    subroutine automask3D_snr_icm( self, params, vol_even, vol_odd )
+        class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        class(image),      intent(in)    :: vol_even, vol_odd
+        type(image) :: score_img
+        call binary_icm_snr3D(vol_even, vol_odd, self, self%amsklp, score_img)
+        if( L_WRITE .and. params%part == 1 )then
+            call score_img%write(string('snr_mask_score.mrc'))
+            call self%write(string('snr_icm_mask.mrc'))
+        endif
+        call self%automask3D_keep_largest_cc(params)
+        call score_img%kill
+    end subroutine automask3D_snr_icm
+
     subroutine automask3D_binarize( self, params, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres
-        real,    allocatable :: ccsizes(:)
-        type(image_bin)       :: ccimage
-        integer              :: loc(1), sz
         ! binarize volume
         if( present(pix_thres) )then
             call self%binarize(pix_thres)
         else
             call otsu_img(self, tight=l_tight)
         endif
-        call self%set_imat
         if( L_WRITE .and. params%part == 1 ) call self%write(string('binarized.mrc'))
+        call self%automask3D_keep_largest_cc(params)
+    end subroutine automask3D_binarize
+
+    subroutine automask3D_keep_largest_cc( self, params )
+        class(image_msk),  intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        real,    allocatable :: ccsizes(:)
+        type(image_bin)       :: ccimage
+        integer              :: loc(1), sz
+        call self%set_imat
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -161,7 +186,7 @@ contains
         ! destruct
         call ccimage%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
-    end subroutine automask3D_binarize
+    end subroutine automask3D_keep_largest_cc
 
     ! CALCULATORS
 

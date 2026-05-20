@@ -755,7 +755,7 @@ contains
                     call build%vol%lp_background(mskvol, params%lp_backgr)
                     call mskvol%kill
                 else
-                    THROW_HARD('lp_backgr requires automsk=yes|tight under current masking policy')
+                    THROW_HARD('lp_backgr requires automsk=yes|tight|snr under current masking policy')
                 endif
             endif
             call build%vol%write(params%outvol, del_if_exists=.true.)

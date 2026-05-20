@@ -185,8 +185,8 @@ subroutine set_ui_params
                                    'in microns{0.05}', .false., 0.05)
 
     call automsk%set_param(        'automsk',         'multi',  'Perform envelope masking', &
-                                   'Whether to generate/apply an envelope mask(yes|tight|no){no}', &
-                                   '(yes|tight|no){no}', .false., 'no')
+                                   'Whether to generate/apply an envelope mask(yes|tight|snr|no){no}', &
+                                   '(yes|tight|snr|no){no}', .false., 'no')
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
                                    'Perform micrograph background subtraction before picking/extraction(yes|no){no}', &

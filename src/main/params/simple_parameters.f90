@@ -249,7 +249,7 @@ type :: parameters
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
-    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
+    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|snr|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices

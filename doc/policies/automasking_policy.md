@@ -18,6 +18,8 @@ The user-facing control is:
 - `automsk=no`: no automask generation; FSC falls back to the spherical mask
 - `automsk=yes`: generate a per-state envelope mask from the even/odd volumes
 - `automsk=tight`: same as `yes`, but request tighter Otsu-style thresholding
+- `automsk=snr`: experimental local half-map SNR mask with binary 26-neighbor
+  ICM regularization
 
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
@@ -71,6 +73,11 @@ This avoids the old single-file collision problem in multi-state workflows and k
 - Multi-state automasking is supported.
 - Masks are internal workflow artifacts; they are not recorded as explicit CLI outputs.
 - `tight` should be preserved end-to-end as a policy value, not collapsed to a boolean.
+- `snr` is an experimental alternative to the density/Otsu automask. It uses
+  band-passed even/odd halfmaps to estimate local signal and noise variance,
+  initializes a binary mask from the resulting local SNR score, and regularizes
+  the labels with a 26-neighbor binary ICM/Potts prior before the usual connected
+  component, growth, and soft-edge steps.
 - The implementation currently behaves as "generate if missing or incompatible". If periodic refresh every `AMSK_FREQ` iterations is desired, that must be enforced explicitly in `volassemble`.
 
 ## Compatibility rules
