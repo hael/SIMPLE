@@ -40,7 +40,7 @@ use simple_stream_mq_defs,        only: mq_stream_master_in, mq_stream_master_ou
 use simple_commanders_pick,       only: commander_extract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
-use simple_mini_stream_utils,     only: segdiampick_mics
+use simple_mini_stream_utils,     only: segdiampick_mics_multi
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
 use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -69,10 +69,13 @@ contains
         real,                      parameter       :: LPSTOP = 8.            ! low-pass stop resolution (A) for abinitio2D
         character(len=:),          allocatable     :: meta_buffer            ! serialised GUI metadata message
         type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
+        type(string),              allocatable     :: projs_clusters(:)      ! paths to cluster output for each project
         type(image),               allocatable     :: cavg_imgs(:)           ! class-average images for quality evaluation
         integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
+        integer,                   allocatable     :: boxes_in_pix(:)        ! box sizes (px) used for picking each micrograph
+        real,                      allocatable     :: mskdiams(:)            ! mask diameters (A) used for picking each micrograph
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
-        type(string)                               :: cavgsstk, mapfileprefix, projfile
+        type(string)                               :: cavgsstk, mapfileprefix, projfile, cwd_master
         type(qsys_env)                             :: qsys
         type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank
         type(parameters)                           :: params
@@ -93,7 +96,7 @@ contains
         integer                                    :: box_for_pick           ! box size used for reference picking
         integer                                    :: box_for_extract        ! box size used for particle extraction
         integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                    :: ncls_stk, iori, i_max, optics_map_id
+        integer                                    :: ncls_stk, iori, i_max, optics_map_id, i_cluster
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
         integer                                    :: ncls                   ! number of classes for abinitio2D
         integer                                    :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
@@ -156,7 +159,7 @@ contains
             call send_meta(string('picking particles'))
             ! segmentation-based picking
             nmics = params%nmics ! local copy: segdiampick_mics must not modify params%nmics
-            call segdiampick_mics(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam_estimate, l_hac=.true.)
+            call segdiampick_mics_multi(spproj, projs_clusters, params%pcontrast, nmics, params%moldiam_max, boxes_in_pix, mskdiams)
             call send_meta(string('extracting particles'))
             ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
             if( spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
@@ -171,36 +174,47 @@ contains
             !
             call qsys%new(params, NPARTS2D)
             call qsys%kill()
-            call run_extract()
-            call spproj%read(projfile)
-            call send_meta(string('complete'))
-            call send_meta2D(string('classifying particles'), box_in_pix)
-            call run_abinitio2D()
-            call send_meta2D(string('evaluating class average quality'), box_in_pix)
-            call spproj%read(projfile)
-            ncls      = spproj%os_cls2D%get_noris()
-            cavg_imgs = read_cavgs_into_imgarr(spproj)
-            call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, mskdiam_estimate, quality, model)
-            call model%kill()
-            call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
-            call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
-            call dealloc_imgarr(cavg_imgs)
-            call spproj%map_cavgs_selection(quality%states)
-            call spproj%write()
-           ! call send_meta2D(string('shape ranking particles'), box_in_pix)
-           ! call run_shape_rank()
+            do i_cluster = 1, size(projs_clusters)
+                call run_extract(projs_clusters(i_cluster), string('extract_cluster_'//int2str(i_cluster)))
+            end do
            ! call spproj%read(projfile)
-           ! call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
-           ! &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
-         !   call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
-            call spproj%cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
-            &xtiles, ytiles)
-            ! signal the GUI that user input is required, then send the cavgs
-            call meta_opening2D%set_user_input(.true.)
-            call send_meta2D(string('waiting for user selection'), box_in_pix)
-            if( allocated(cavg_inds) ) call send_available_cavgs2D(&
-                &string(trim(CWD_GLOB)//'/shape_ranked_'//int2str(params%nmics)//JPG_EXT), size(cavg_inds))
+            call send_meta(string('complete'))
+            call send_meta2D(string('classifying particles'), maxval(boxes_in_pix))
+            do i_cluster = 1, size(projs_clusters)
+                call run_abinitio2D(projs_clusters(i_cluster), string('abinitio2D_cluster_'//int2str(i_cluster)), nint(mskdiams(i_cluster)))
+            end do
+            call send_meta2D(string('evaluating class average quality'), maxval(boxes_in_pix))
+      !      call spproj%read(projfile)
+            call simple_getcwd(cwd_master) ! cache master CWD for constructing absolute paths to send to the GUI
+            do i_cluster = 1, size(projs_clusters)
+                call spproj%kill()
+                call spproj%read(projs_clusters(i_cluster))
+                ncls      = spproj%os_cls2D%get_noris()
+                cavg_imgs = read_cavgs_into_imgarr(spproj)
+                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+                call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, mskdiams(i_cluster), quality, model)
+                call model%kill()
+                call write_quality_stack(string('quality_selected_cavgs_cluster_'//int2str(i_cluster)//MRC_EXT),  selected=.true.)
+                call write_quality_stack(string('quality_rejected_cavgs_cluster_'//int2str(i_cluster)//MRC_EXT), selected=.false.)
+                call dealloc_imgarr(cavg_imgs)
+                call spproj%map_cavgs_selection(quality%states)
+                call spproj%write()
+            ! call send_meta2D(string('shape ranking particles'), box_in_pix)
+            ! call run_shape_rank()
+            ! call spproj%read(projfile)
+            ! call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
+            ! &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
+            !   call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
+                call spproj%cavgs2jpg(cavg_inds, string("shape_ranked_cluster_")//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT,&
+                &xtiles, ytiles)
+                ! signal the GUI that user input is required, then send the cavgs
+                if( i_cluster == 1 ) then
+                    call meta_opening2D%set_user_input(.true.)
+                    call send_meta2D(string('waiting for user selection'), box_in_pix)
+                    if( allocated(cavg_inds) ) call send_available_cavgs2D(&
+                        &cwd_master//'/shape_ranked_cluster_'//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT, size(cavg_inds))
+                end if
+            end do
             ! wait for user interaction
             write(logfhandle, '(A)') ">>> WAITING FOR USER TO SELECT REFERENCES"
             do
@@ -233,7 +247,7 @@ contains
                                 call meta_cavg2D%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
                                 call send_meta2D(string('applying user selection'), box_for_extract)
                                 call send_available_cavgs2D(&
-                                    &string(trim(CWD_GLOB)//'/'//STREAM_SELECTED_REFS//JPG_EXT), ncavgs)
+                                    &cwd_master//'/'//STREAM_SELECTED_REFS//JPG_EXT, ncavgs)
                                 exit  ! exit inner wait-loop; restart_requested already .false.
                             end if
                         end if
@@ -285,34 +299,54 @@ contains
             end subroutine cleanup_previous
 
             ! Extract particles using one thread per partition (nthr partitions).
-            subroutine run_extract()
-                call cline_extract%set('prg',        'extract')
-                call cline_extract%set('mkdir',           'no')
-                call cline_extract%set('nparts',   params%nthr)
-                call cline_extract%set('nthr',               1)
-                call cline_extract%set('projfile',    projfile)
+            subroutine run_extract( cluster_projfile, outdir )
+                type(string), intent(in) :: cluster_projfile
+                type(string), intent(in) :: outdir
+                type(string)             :: cwd
+                call simple_getcwd(cwd)
+                call cline_extract%kill()
+                call cline_extract%set('prg',              'extract')
+                call cline_extract%set('outdir',              outdir)
+                call cline_extract%set('nparts',         params%nthr)
+                call cline_extract%set('nthr',                     1)
+                call cline_extract%set('projfile',  cluster_projfile)
+                call cline_extract%printline()
                 call xextract%execute(cline_extract)
+                call simple_chdir(cwd)
+                call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy extracted particles back to main projfile for downstream steps
             end subroutine run_extract
 
             ! Run ab-initio 2D classification on the extracted particles.
             ! ncls is clamped to [NCLS_MIN, NCLS_MAX] based on particle count.
-            subroutine run_abinitio2D()
+            subroutine run_abinitio2D( cluster_projfile, outdir, mskdiam )
+                type(string), intent(in) :: cluster_projfile
+                type(string), intent(in) :: outdir
+                integer,      intent(in) :: mskdiam
+                type(sp_project)         :: spproj_cluster
+                type(string)             :: cwd
                 integer :: nptcls, ncls, nthr2D
-                nptcls = spproj%os_ptcl2D%get_noris()
+                call spproj_cluster%read(cluster_projfile)
+                nptcls = spproj_cluster%os_ptcl2D%get_noris()
                 ncls   = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
                 nthr2D = max(1,floor(real(params%nthr)/4.))
+                call simple_getcwd(cwd)
+                call spproj_cluster%kill()
+                call cline_abinitio2D%kill()
                 call cline_abinitio2D%set('prg',               'abinitio2D')
-                call cline_abinitio2D%set('mkdir',                     'no')
+                call cline_abinitio2D%set('outdir',                  outdir)
                 call cline_abinitio2D%set('ncls',                      ncls)
                 call cline_abinitio2D%set('sigma_est',             'global')
                 call cline_abinitio2D%set('center',                   'yes')
                 call cline_abinitio2D%set('autoscale',                'yes')
                 call cline_abinitio2D%set('lpstop',                  LPSTOP)
-                call cline_abinitio2D%set('mskdiam',       mskdiam_estimate)
+                call cline_abinitio2D%set('mskdiam',                mskdiam)
                 call cline_abinitio2D%set('nthr',                    nthr2D)
                 call cline_abinitio2D%set('nparts',                NPARTS2D)
-                call cline_abinitio2D%set('projfile',              projfile)
+                call cline_abinitio2D%set('projfile',      cluster_projfile)
+                call cline_abinitio2D%printline()
                 call xabinitio2D%execute(cline_abinitio2D)
+                call simple_chdir(cwd)
+                call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy abinitio2D output back to main projfile for downstream steps
             end subroutine run_abinitio2D
 
             ! Shape-rank the 2D class averages by particle quality.

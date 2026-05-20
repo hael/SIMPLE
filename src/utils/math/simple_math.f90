@@ -543,13 +543,22 @@ contains
         real,    allocatable, intent(out) :: centroids(:)
         integer, allocatable, intent(out) :: populations(:)
         logical, allocatable :: mask(:)
-        integer, allocatable :: relabel(:)
+        integer, allocatable :: relabel(:), head(:), tail(:), next_lbl(:), label_map(:)
         real    :: d, best_d
-        integer :: N, i, j, best_j, ncls, cnt
+        integer :: N, i, j, k, best_j, ncls, cnt
+        real    :: t_all0, t_all1, t_stage0, t_stage1
+        real    :: t_pair, t_init, t_merge, t_compact, t_final
         N = size(vec)
+        t_pair    = 0.
+        t_init    = 0.
+        t_merge   = 0.
+        t_compact = 0.
+        t_final   = 0.
+        call cpu_time(t_all0)
         labels = 0
         allocate(mask(N), source=.true.)
         ! 1) binary clustering — distances computed on-the-fly, no N×N matrix
+        call cpu_time(t_stage0)
         ncls = 0
         do i = 1, N
             if( mask(i) )then
@@ -573,7 +582,10 @@ contains
                 endif
             endif
         enddo
+        call cpu_time(t_stage1)
+        t_pair = t_pair + (t_stage1 - t_stage0)
         ! 2) initial centroids — single O(N) accumulation pass
+        call cpu_time(t_stage0)
         allocate(centroids(ncls),   source=0.)
         allocate(populations(ncls), source=0)
         do i = 1, N
@@ -584,15 +596,48 @@ contains
         do i = 1, ncls
             centroids(i) = centroids(i) / real(populations(i))
         enddo
+        call cpu_time(t_stage1)
+        t_init = t_init + (t_stage1 - t_stage0)
         ! 3) merge clusters whose centroids are within threshold
+        !    Fast path: operate on label ids, then apply one global remap to labels(:).
+        call cpu_time(t_stage0)
+        allocate(head(ncls), tail(ncls), next_lbl(ncls), label_map(ncls), source=0)
+        do i = 1, ncls
+            head(i) = i
+            tail(i) = i
+        enddo
         do i = 1, ncls - 1
             do j = i + 1, ncls
                 if( abs(centroids(i) - centroids(j)) <= thresh )then
-                    where( labels == j ) labels = i
+                    if( head(j) > 0 )then
+                        if( head(i) == 0 )then
+                            head(i) = head(j)
+                            tail(i) = tail(j)
+                        else
+                            next_lbl(tail(i)) = head(j)
+                            tail(i) = tail(j)
+                        endif
+                        head(j) = 0
+                        tail(j) = 0
+                    endif
                 endif
             enddo
         enddo
+        do i = 1, ncls
+            k = head(i)
+            do while( k > 0 )
+                label_map(k) = i
+                k = next_lbl(k)
+            enddo
+        enddo
+        do i = 1, N
+            labels(i) = label_map(labels(i))
+        enddo
+        deallocate(head, tail, next_lbl, label_map)
+        call cpu_time(t_stage1)
+        t_merge = t_merge + (t_stage1 - t_stage0)
         ! 4) compact labels in O(N) using a lookup table
+        call cpu_time(t_stage0)
         allocate(relabel(ncls), source=0)
         cnt = 0
         do i = 1, N
@@ -603,7 +648,10 @@ contains
             endif
             labels(i) = relabel(j)
         enddo
+        call cpu_time(t_stage1)
+        t_compact = t_compact + (t_stage1 - t_stage0)
         ! 5) recompute final centroids and populations in a single O(N) pass
+        call cpu_time(t_stage0)
         ncls = cnt
         deallocate(centroids, populations)
         allocate(centroids(ncls),   source=0.)
@@ -616,7 +664,13 @@ contains
         do i = 1, ncls
             centroids(i) = centroids(i) / real(populations(i))
         enddo
+        call cpu_time(t_stage1)
+        t_final = t_final + (t_stage1 - t_stage0)
         deallocate(mask, relabel)
+        call cpu_time(t_all1)
+        write(logfhandle, '(A,I0,A,F10.4)') 'hac_1d_fast timing N=', N, ' total(s)=', (t_all1 - t_all0)
+        write(logfhandle, '(A,F10.4,A,F10.4,A,F10.4,A,F10.4,A,F10.4)') '  pair(s)=', t_pair, ', init(s)=', t_init, &
+            ', merge(s)=', t_merge, ', compact(s)=', t_compact, ', final(s)=', t_final
     end subroutine hac_1d_fast
 
     ! image processing
