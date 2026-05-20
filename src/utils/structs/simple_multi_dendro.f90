@@ -158,16 +158,18 @@ contains
       integer,             intent(in)  :: itree
       integer,             intent(out) :: refs(:)
       integer,             intent(out) :: n_refs_out
-      integer :: iref, n
+      integer :: iref, n, n_refs_map
       n_refs_out = 0
-      if( itree < 1 .or. itree > self%n_trees ) return
       if( .not. allocated(self%tree_map) ) return
-      n = 0
-      do iref = 1, self%n_refs
-          if( self%tree_map(itree, iref) )then
-              n = n + 1
-              refs(n) = iref
-          endif
+      if( itree < 1 .or. itree > size(self%tree_map,1) ) return
+      n_refs_map = size(self%tree_map,2)
+      n          = 0
+      do iref = 1, n_refs_map
+         if( self%tree_map(itree, iref) )then
+             n = n + 1
+             if( n > size(refs) ) return
+            refs(n) = iref
+         endif
       end do
       n_refs_out = n
    end subroutine get_tree_refs_static
@@ -177,14 +179,28 @@ contains
       class(multi_dendro), intent(in) :: self
       integer,             intent(in) :: itree
       integer, allocatable :: refs(:)
-      integer :: n
-      if (itree < 1 .or. itree > self%n_trees) then
+      integer :: n, iref, n_refs_map
+      if (.not. allocated(self%tree_map)) then
          allocate(refs(0))
          return
       end if
-      n = count(self%tree_map(itree,:))
+      if (itree < 1 .or. itree > size(self%tree_map,1)) then
+         allocate(refs(0))
+         return
+      end if
+      n_refs_map = size(self%tree_map,2)
+      n = 0
+      do iref = 1, n_refs_map
+         if (self%tree_map(itree, iref)) n = n + 1
+      end do
       allocate(refs(n))
-      refs = mask2inds(self%tree_map(itree,:))
+      n = 0
+      do iref = 1, n_refs_map
+         if (self%tree_map(itree, iref)) then
+            n = n + 1
+            refs(n) = iref
+         end if
+      end do
    end function get_tree_refs
 
    pure integer function get_tree_height(self, itree) result(h)
