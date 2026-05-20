@@ -27,7 +27,6 @@ type, extends(image_bin) :: image_msk
     generic            :: automask3D => automask3D_1, automask3D_2
     procedure          :: estimate_spher_mask_diam
     procedure          :: automask3D_filter
-    procedure, private :: automask3D_snr_icm
     procedure, private :: automask3D_binarize
     procedure, private :: automask3D_keep_largest_cc
     procedure, private :: env_rproject
@@ -65,15 +64,11 @@ contains
         self%amsklp   = params%amsklp
         self%binwidth = params%binwidth
         self%edge     = params%edge
-        if( trim(params%automsk).eq.'snr' )then
-            call self%automask3D_snr_icm(params, vol_even, vol_odd)
-        else
-            ! filter
-            call self%automask3D_filter(params, vol_even, vol_odd, vol_filt)
-            ! binarization
-            call self%automask3D_binarize(params, l_tight, pix_thres)
-            call vol_filt%kill
-        endif
+        ! filter
+        call self%automask3D_filter(params, vol_even, vol_odd, vol_filt)
+        ! binarization
+        call self%automask3D_binarize(params, l_tight, pix_thres)
+        call vol_filt%kill
         ! add layers
         call self%grow_bins(self%binwidth)
         ! add volume soft edge
@@ -132,20 +127,6 @@ contains
         call vol_even_icm%kill
         call vol_odd_icm%kill
     end subroutine automask3D_filter
-
-    subroutine automask3D_snr_icm( self, params, vol_even, vol_odd )
-        class(image_msk),  intent(inout) :: self
-        class(parameters), intent(in)    :: params
-        class(image),      intent(in)    :: vol_even, vol_odd
-        type(image) :: score_img
-        call binary_icm_snr3D(vol_even, vol_odd, self, self%amsklp, score_img)
-        if( L_WRITE .and. params%part == 1 )then
-            call score_img%write(string('snr_mask_score.mrc'))
-            call self%write(string('snr_icm_mask.mrc'))
-        endif
-        call self%automask3D_keep_largest_cc(params)
-        call score_img%kill
-    end subroutine automask3D_snr_icm
 
     subroutine automask3D_binarize( self, params, l_tight, pix_thres )
         class(image_msk),  intent(inout) :: self

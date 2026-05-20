@@ -665,6 +665,11 @@ contains
         if( cline%defined('mskfile') )then
             THROW_HARD('mskfile is no longer supported on command line; masks are internal and per-state')
         endif
+        select case(trim(self%automsk))
+            case('yes','tight','no')
+            case DEFAULT
+                THROW_HARD('Unsupported automsk mode: '//trim(self%automsk))
+        end select
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
