@@ -45,7 +45,7 @@ https://zenodo.org/records/18789533
 
 ------------------------------------------------------------------------
 
-# 🧬 Features
+## 🧬 Features
 
 -   End-to-end cryo‑EM workflow
 -   Streaming data processing
@@ -56,9 +56,9 @@ https://zenodo.org/records/18789533
 
 ------------------------------------------------------------------------
 
-# 📦 Installation
+## 📦 Installation
 
-## System Requirements
+### System Requirements
 
 -   Linux (Ubuntu 16.04+ recommended)
 -   macOS 10.10+
@@ -72,9 +72,9 @@ https://zenodo.org/records/18789533
 
 ------------------------------------------------------------------------
 
-## Standard Build
+### Standard Build
 
-### 1️⃣ Obtain source
+#### 1️⃣ Obtain source
 
 Stable release:
 
@@ -93,7 +93,7 @@ cd SIMPLE
 
 ------------------------------------------------------------------------
 
-### 2️⃣ Build
+#### 2️⃣ Build
 
 ``` bash
 mkdir build
@@ -104,7 +104,7 @@ make -j install
 
 ------------------------------------------------------------------------
 
-### 3️⃣ Environment Setup
+#### 3️⃣ Environment Setup
 
 For bash:
 
@@ -131,7 +131,7 @@ Define:
 
 ------------------------------------------------------------------------
 
-# ⚙ Advanced Configuration
+### ⚙ Advanced Configuration
 
 Custom install directory:
 
@@ -149,7 +149,7 @@ make -j install
 
 ------------------------------------------------------------------------
 
-# 🔁 Updating
+### 🔁 Updating
 
 ``` bash
 cd ~/SIMPLE
@@ -161,7 +161,7 @@ make -j install
 ```
 ------------------------------------------------------------------------
 
-## 🖥️ GUI Build (NICE)
+### 🖥️ GUI Build (NICE)
 
 ``` bash
 mkdir build
@@ -173,7 +173,7 @@ nice_local
 
 ------------------------------------------------------------------------
 
-# 📜 License
+## 📜 License
 
 SIMPLE is distributed under the **GNU General Public License v3
 (GPLv3)** or later.
@@ -185,7 +185,7 @@ See the GNU General Public License for details.
 
 ------------------------------------------------------------------------
 
-# 🧠 Philosophy
+## 🧠 Philosophy
 
 SIMPLE combines:
 
