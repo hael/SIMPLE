@@ -249,7 +249,7 @@ contains
         character(len=*),          intent(in)    :: pcontrast
         real,                      intent(in)    :: moldiam_max
         real,                      parameter     :: SMPD_SHRINK1  = 4.0,  SIGMA_CRIT = 3., SIGMA_CRIT_MSK = 2.5
-        integer,                   parameter     :: BOXFAC = 3
+        real,                      parameter     :: BOXFAC = 1.5, MSKFAC=1.1
         type(string),              allocatable   :: micnames(:), mic_den_names(:), mic_topo_names(:), mic_bin_names(:)
         integer,                   allocatable   :: orimap(:)
         integer,                   allocatable   :: hac_labels(:), hac_pops(:)
@@ -257,12 +257,14 @@ contains
         real,                      allocatable   :: abs_z_scores(:)
         real,                      allocatable   :: hac_centroids(:), hac_area_pops(:), hac_dmin(:), hac_dmax(:), pop_arr(:), pop_z(:)
         type(string)       :: boxfile, fbody_here, ext, fname_thumb_den, str_intg
+        type(string),      allocatable :: boxfiles(:)
         type(picksegdiam)  :: picker
         type(image)        :: mic_raw, mic_shrink, mic_den
         type(stats_struct) :: diam_stats
         type(nrtxtfile)    :: diams_file
         type(sp_project)   :: spproj_tmp
         integer            :: nmics, ldim_raw(3), ldim(3), imic, nptcls, i, nclust_hac, n_accepted, i_acc, box_loc
+        integer,           allocatable :: nptcls_by_mic(:)
         real               :: scale, mad, smpd, hac_thresh, n_diams_r, area_sum, pop_scale, area_scale
         real               :: pop_med, pop_mad, msk_loc
         logical            :: l_empty
@@ -426,22 +428,34 @@ contains
                 print *, 'min diam: ', diam_stats%minv
                 print *, 'max diam: ', diam_stats%maxv
                 ! box/msk estimate for this accepted cluster; values are stored per cluster in output arrays
-                box_loc = find_magic_box(BOXFAC * nint(diam_stats%med/smpd))
-                msk_loc = min((real(box_loc) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv)
-                msk_loc = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, msk_loc)
+                box_loc = find_magic_box(nint(BOXFAC * diam_stats%maxv / smpd))
+                msk_loc = (real(box_loc) - COSMSKHALFWIDTH) * smpd
+            ! msk_loc = min((real(box_loc) - COSMSKHALFWIDTH) * smpd, diam_stats%maxv * MSKFAC)
+            !    msk_loc = min(diam_stats%avg + SIGMA_CRIT_MSK * diam_stats%sdev, msk_loc)
                 print *, 'box diam: ', box_loc * smpd
                 print *, 'msk diam: ', msk_loc
                 ! re-pick with diameter constraints applied
+                allocate(boxfiles(mic_to))
+                allocate(nptcls_by_mic(mic_to), source=0)
                 do imic = 1, mic_to
-                    boxfile = basename(fname_new_ext(micnames(imic),'box'//int2str(i)))
+                    boxfiles(imic) = basename(fname_new_ext(micnames(imic),'box'//int2str(i)))
+                enddo
+                do imic = 1, mic_to
                     call picker%pick(ldim_raw, smpd, mic_bin_names(imic), [diam_stats%minv,diam_stats%maxv])
                     nptcls = picker%get_nboxes()
                     if( nptcls > 0 )then
-                        call picker%write_pos_and_diams(boxfile, nptcls, box_loc)
-                        call spproj_tmp%set_boxfile(orimap(imic), simple_abspath(boxfile), nptcls=nptcls)
+                        call picker%write_pos_and_diams(boxfiles(imic), nptcls, box_loc)
+                        nptcls_by_mic(imic) = nptcls
                     endif
                 end do
-                call picker%kill  ! intentional: picker is stateless and reinitialised by each pick() call
+                call picker%kill
+                do imic = 1, mic_to
+                    if( nptcls_by_mic(imic) > 0 )then
+                        call spproj_tmp%set_boxfile(orimap(imic), simple_abspath(boxfiles(imic)), nptcls=nptcls_by_mic(imic))
+                    endif
+                    call boxfiles(imic)%kill
+                enddo
+                deallocate(boxfiles, nptcls_by_mic)
                 ! write output to disk
                 projs_clusters(i_acc) = 'cluster_project_'//int2str(i)//METADATA_EXT
                 boxes_in_pix(i_acc)   = box_loc

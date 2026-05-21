@@ -46,7 +46,7 @@ end type sprite_sheet_pos
 type, extends( gui_metadata_base ) :: gui_metadata_cavg2D
   private
   character(len=LONGSTRLEN) :: path    = ''                  ! absolute path to the cavgs JPEG
-  character(len=LONGSTRLEN) :: mrcpath = ''               ! absolute path to the cavgs MRC
+  character(len=LONGSTRLEN) :: mrcpath = ''                  ! absolute path to the cavgs MRC
   integer                   :: idx     = 0                   ! class index within the MRC
   type(sprite_sheet_pos)    :: sprite  = sprite_sheet_pos()  ! tile position and sheet dimensions
   real                      :: res     = 0.0   ! resolution estimate (Angstroms); valid only when l_res
