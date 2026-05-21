@@ -344,7 +344,7 @@ contains
         integer          :: state, nptcls, ldim(3)
         if( trim(params%postprocess) /= 'yes' )return
         if( cline%defined('part') )return
-        if( trim(params%filt_mode).eq.'nonuniform' )then
+        if( params%l_nonuniform )then
             write(logfhandle,'(A)') &
                 &'>>> reconstruct3D postprocess: using classical postprocessing; automated postprocess_nu is refine3D_auto-only'
         endif

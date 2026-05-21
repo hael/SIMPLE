@@ -15,7 +15,7 @@ contains
     subroutine set_bp_range3D( params, build, cline )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
-        class(cmdline),    intent(in)    :: cline
+        class(cmdline),    intent(inout) :: cline
         real, allocatable :: resarr(:), fsc_arr(:)
         real              :: fsc0143, fsc05, nu_align_lp
         real              :: mapres(params%nstates)
@@ -123,6 +123,12 @@ contains
         params%lp         = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
         if( l_nu_align_lp )then
             write(logfhandle,'(A,F8.3,A)') '>>> NU refinement matching low-pass limit: ', params%lp, ' A'
+            if( params%l_nonuniform_lpset )then
+                params%l_lpset = .true.
+                call cline%set('lp', params%lp)
+                write(logfhandle,'(A,F8.3,A)') &
+                    &'>>> NU refinement promoted matching low-pass to command line: ', params%lp, ' A'
+            endif
         endif
         ! update low-pass limit in project
         call build%spproj_field%set_all2single('lp',params%lp)
@@ -136,7 +142,7 @@ contains
         align_lp = 0.
         l_use    = .false.
         if( .not. params%l_nu_refine ) return
-        if( trim(params%filt_mode).ne.'nonuniform' ) return
+        if( .not. params%l_nonuniform ) return
         l_fresh_start = params%which_iter <= params%startit .and. trim(params%continue).ne.'yes'
         if( l_fresh_start ) return
         if( .not. build%spproj_field%isthere(params%fromp, 'lp') ) return

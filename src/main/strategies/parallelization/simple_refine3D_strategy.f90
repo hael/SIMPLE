@@ -218,14 +218,16 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
-    subroutine refresh_matching_lp_from_project( params, build )
-        type(parameters), intent(in)    :: params
+    subroutine refresh_matching_lp_from_project( params, build, cline )
+        type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
+        type(cmdline),    intent(inout) :: cline
         type(sp_project) :: lp_project
-        real    :: project_lp
-        logical :: l_has_lp
+        real    :: project_lp, promoted_lp
+        integer :: project_find, lpstop_find
+        logical :: l_has_lp, l_log_promotion
         if( .not. params%l_nu_refine ) return
-        if( trim(params%filt_mode).ne.'nonuniform' ) return
+        if( .not. params%l_nonuniform ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
         l_has_lp   = .false.
@@ -242,7 +244,26 @@ contains
                     if( l_has_lp ) project_lp = lp_project%os_ptcl3D%get(params%fromp, 'lp')
                 endif
         end select
-        if( l_has_lp .and. project_lp > TINY ) call build%spproj_field%set_all2single('lp', project_lp)
+        if( l_has_lp .and. project_lp > TINY )then
+            call build%spproj_field%set_all2single('lp', project_lp)
+            if( params%l_nonuniform_lpset )then
+                project_find = calc_fourier_index(project_lp, params%box, params%smpd)
+                if( cline%defined('lpstop') )then
+                    lpstop_find  = calc_fourier_index(params%lpstop, params%box, params%smpd)
+                    project_find = min(project_find, lpstop_find)
+                endif
+                promoted_lp     = calc_lowpass_lim(project_find, params%box, params%smpd)
+                l_log_promotion = (.not. cline%defined('lp')) .or. abs(params%lp - promoted_lp) > 1.e-3
+                params%kfromto(2) = project_find
+                params%lp         = promoted_lp
+                params%l_lpset    = .true.
+                call cline%set('lp', params%lp)
+                if( l_log_promotion )then
+                    write(logfhandle,'(A,F8.3,A)') &
+                        &'>>> NU refinement promoted matching low-pass to command line: ', params%lp, ' A'
+                endif
+            endif
+        endif
         call lp_project%kill
     end subroutine refresh_matching_lp_from_project
 
@@ -354,6 +375,9 @@ contains
         call refbuild%build_general_tbox(params, cline_ref, do3d=.true.)
         call refbuild%build_strategy3D_tbox(params)
         call set_bp_range3D(params, refbuild, cline_ref)
+        if( params%l_nonuniform_lpset .and. params%l_lpset .and. cline_ref%defined('lp') )then
+            call cline%set('lp', params%lp)
+        endif
         call materialize_reprojection_model_from_volumes(params, refbuild, cline_ref, cleanup_pftc=.true.)
         call refbuild%spproj%write_segment_inside(params%oritype)
         call refbuild%kill_strategy3D_tbox
@@ -598,7 +622,7 @@ contains
             endif
             call cline%delete('force_volassemble')
         endif
-        if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build)
+        if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build, cline)
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
         converged = .false.
         select case(trim(params%refine))
@@ -963,6 +987,7 @@ contains
         call cline%set(          'extr_iter',  params%extr_iter)
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
+        if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)
         endif
@@ -1038,7 +1063,10 @@ contains
                     endif
             end select
         endif
-        if( trim(params%volrec).eq.'yes' ) call refresh_matching_lp_from_project(params, build)
+        if( trim(params%volrec).eq.'yes' )then
+            call refresh_matching_lp_from_project(params, build, cline)
+            if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
+        endif
         ! convergence
         ! For strict same-iteration metrics, evaluate convergence after assembly
         ! and refresh the FSC-derived resolution fields in the active table.

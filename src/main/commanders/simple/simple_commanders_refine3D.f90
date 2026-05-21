@@ -101,7 +101,7 @@ contains
         endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
-        l_final_nu_postprocess = trim(params%filt_mode).eq.'nonuniform'
+        l_final_nu_postprocess = params%l_nonuniform
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         call set_refine3D_auto_sampling()
         l_have_init_vol = .false.

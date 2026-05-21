@@ -702,7 +702,9 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
-        self%l_lpauto = .false.
+        self%l_lpauto           = .false.
+        self%l_nonuniform       = .false.
+        self%l_nonuniform_lpset = .false.
         select case(trim(self%filt_mode))
             case('none')
             case('uniform')
@@ -712,6 +714,10 @@ contains
                 self%l_lpauto = .true.
                 self%l_lpset = .true.
             case('nonuniform')
+                self%l_nonuniform = .true.
+            case('nonuniform_lpset')
+                self%l_nonuniform       = .true.
+                self%l_nonuniform_lpset = .true.
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select

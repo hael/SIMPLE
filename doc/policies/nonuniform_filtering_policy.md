@@ -14,8 +14,10 @@ Supported values:
 - `uniform`
 - `fsc`
 - `nonuniform`
+- `nonuniform_lpset`
 
-Only `filt_mode=nonuniform` activates the nonuniform volume filter path.
+`filt_mode=nonuniform` and `filt_mode=nonuniform_lpset` activate the
+nonuniform volume filter path.
 
 ## Execution point
 
@@ -99,6 +101,17 @@ iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
 policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
 selected matching bandwidth.
 
+`filt_mode=nonuniform_lpset` is an experimental variant for testing the same
+NU-refined bandwidth without continuing gold-standard matching. It runs the same
+NU filter-bank generation as `filt_mode=nonuniform`, but after `volassemble`
+writes the NU-refined project `lp`, the refinement strategy promotes that value
+onto the active command line. On the next iteration the ordinary explicit-`lp`
+policy is active. The matcher then uses the merged `_nu_filt` reference in both
+channels when it is available, so the registration model is built from the
+nonuniformly filtered map rather than independent even/odd NU references. A
+fresh run still behaves like ordinary `nonuniform` until a NU-refined project
+`lp` exists; `lpstop` remains a cap.
+
 ## Ordered-label smoothing regularization
 
 The nonuniform filter always applies ordered-label smoothing after the unary
@@ -168,12 +181,12 @@ through Nyquist, but it must not pre-generate or pre-evaluate the full sampling
 ladder.
 
 Automated `postprocess_nu` is restricted to the terminal all-particle map
-produced by `refine3D_auto`, where the particle refinement has already been
-driven by iteratively refined NU references. Generic `reconstruct3D`
-postprocessing, including terminal ab initio reconstruction, must use the
-classical postprocessing path even when earlier reconstruction stages used
-`filt_mode=nonuniform`. The standalone `postprocess_nu` command remains
-available for explicit manual experiments.
+produced by `refine3D_auto` in either NU filter mode, where the particle
+refinement has already been driven by iteratively refined NU references.
+Generic `reconstruct3D` postprocessing, including terminal ab initio
+reconstruction, must use the classical postprocessing path even when earlier
+reconstruction stages used a NU `filt_mode`. The standalone `postprocess_nu`
+command remains available for explicit manual experiments.
 
 The candidate objective bank should be stored only for voxels inside the NU
 mask. Full-volume objective arrays are temporary work buffers for objective
@@ -182,9 +195,9 @@ candidate selection and ordered-label smoothing are mask-packed. Objective
 values outside the NU mask must not contribute to smoothed in-mask unary costs.
 
 Terminal original-sampling `abinitio3D` reconstruction does not automatically
-run `postprocess_nu`. If staged ab initio refinement used
-`filt_mode=nonuniform`, that policy controls the staged `_nu_filt` reference
-generation, but the terminal `reconstruct3D` postprocessing remains classical.
+run `postprocess_nu`. If staged ab initio refinement used a NU `filt_mode`, that
+policy controls the staged `_nu_filt` reference generation, but the terminal
+`reconstruct3D` postprocessing remains classical.
 The final ab initio output copy stage must not propagate stale `_pproc_nu` or
 `_lp_nu` products unless an explicit workflow has produced and requested them.
 

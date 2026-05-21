@@ -206,7 +206,7 @@ regularized map. This terminal reconstruction is still a fresh reconstruction
 from selected particles: it must not apply fractional-update sampling or
 trailing-average blending, and it also must not inherit staged search or
 mask-generation controls such as `refine`, `lp`, `automsk`, `envfsc`, `gauref`,
-or `filt_mode=nonuniform`; those belong to the staged refinement schedule, not
+or a NU `filt_mode`; those belong to the staged refinement schedule, not
 to the terminal original-sampling reconstruction. Terminal ab initio
 postprocessing is classical even when the staged workflow used NU-filtered
 references. Build the terminal reconstruction command line from a small
@@ -235,7 +235,7 @@ filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
 all-particle `reconstruct3D` pass leaves refinement and writes the final half
-maps and merged map. When `filt_mode=nonuniform`, `refine3D_auto` then
+maps and merged map. When a NU `filt_mode` is active, `refine3D_auto` then
 explicitly runs automated `postprocess_nu` for that final map. This is the only
 automated NU postprocessing path, because it is the path where particle
 refinement has already been coupled to iteratively refined NU references.
@@ -249,6 +249,11 @@ the project `lp` value written by the previous `volassemble` pass, where
 `_nu_filt` even/odd references. A fresh first iteration or missing project `lp`
 falls back to the ordinary FSC/project-`lp` policy. Explicit `lp` remains a
 hard override, and `lpstop` remains a cap on the final matcher bandwidth.
+
+The experimental `filt_mode=nonuniform_lpset` variant uses that same NU-refined
+project `lp`, but promotes it onto the active command line after each
+`volassemble` pass. Subsequent matcher setup therefore follows the ordinary
+explicit-`lp` policy while still consuming NU-filtered references.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction

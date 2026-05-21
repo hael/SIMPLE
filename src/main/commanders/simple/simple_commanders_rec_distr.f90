@@ -157,7 +157,7 @@ contains
         end subroutine sum_eos_after_density_correction_if_needed
 
         subroutine capture_nonuniform_source_halves()
-            if( trim(params%filt_mode).ne.'nonuniform' ) return
+            if( .not. params%l_nonuniform ) return
             ldim = [params%box_crop, params%box_crop, params%box_crop]
             call vol_nu_base_even%new(ldim, params%smpd_crop)
             call vol_nu_base_odd%new( ldim, params%smpd_crop)
@@ -204,7 +204,7 @@ contains
             call build%vol2%mul(update_frac_trail_rec)
             call build%vol%add(vol_prev_even)
             call build%vol2%add(vol_prev_odd)
-            if( trim(params%filt_mode).eq.'nonuniform' )then
+            if( params%l_nonuniform )then
                 call vol_nu_base_even%mul(update_frac_trail_rec)
                 call vol_nu_base_odd%mul(update_frac_trail_rec)
                 call vol_nu_base_even%add(vol_prev_even)
@@ -327,7 +327,7 @@ contains
             call build%build_rec_eo_tbox(params)
             call build%eorecvol%kill_exp
             numlen_part       = max(1, params%numlen)
-            l_nonuniform_mode = trim(params%filt_mode).eq.'nonuniform'
+            l_nonuniform_mode = params%l_nonuniform
             allocate(res0143s(params%nstates))
             res0143s = 0.
             allocate(nu_align_lps(params%nstates))

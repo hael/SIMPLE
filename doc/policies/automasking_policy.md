@@ -62,7 +62,7 @@ This avoids the old single-file collision problem in multi-state workflows and k
 1. `refine3D` or `abinitio3D` produces partial reconstructions.
 2. `volassemble` builds even, odd, and merged state volumes.
 3. If `automsk != 'no'`, `volassemble` may generate `automask3D_stateNN.mrc`.
-4. If `filt_mode=nonuniform`, `volassemble` prefers that state mask as the nonuniform-filter support mask.
+4. If a NU `filt_mode` is active, `volassemble` prefers that state mask as the nonuniform-filter support mask.
 5. During FSC calculation, the reconstructor attempts to load the same state-specific mask.
 6. If no compatible mask exists, FSC uses the spherical fallback mask.
 

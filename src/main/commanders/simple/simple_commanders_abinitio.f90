@@ -531,7 +531,7 @@ contains
         endif
         ! set class global filt_mode flag for low-pass limit estimation
         l_lpauto     = params%l_lpauto
-        l_nonuniform = trim(params%filt_mode).eq.'nonuniform'
+        l_nonuniform = params%l_nonuniform
         nstages_refine3D = NSTAGES
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
