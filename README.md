@@ -158,7 +158,16 @@ git stash clear
 git pull
 cd build
 make -j install
-source add2.bashrc
+```
+------------------------------------------------------------------------
+
+## 🖥️ GUI Build (NICE)
+
+``` bash
+mkdir build
+cd build
+cmake .. -D NICE=on
+make -j install
 nice_local
 ```
 
