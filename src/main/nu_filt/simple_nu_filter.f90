@@ -9,7 +9,9 @@
 ! Iterative high-resolution refinement can challenge one Fourier shell at a
 ! time after the static bank has been optimized. Each challenger allocates and
 ! evaluates only one extra candidate; callers may loop while the shell is
-! accepted. Any nonzero challenger selection is enough to accept the next shell.
+! accepted. The challenger starts from the finest populated base-bank label, so
+! empty finer discrete labels do not block shell refinement. Any nonzero
+! challenger selection is enough to accept the next shell.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do

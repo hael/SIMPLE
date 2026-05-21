@@ -218,7 +218,10 @@ present. Explicit `vol1` on the command line takes precedence. `refine3D_auto`
 should reconstruct an initializer only when neither source is available. In NU
 filter mode, an existing initializer is accepted only if a same-stem raw native
 even/odd pair exists. `refine3D_auto` then generates fresh same-stem `_nu_filt`
-bootstrap references from that raw pair before the first matcher pass. If the
+bootstrap references from that raw pair before the first matcher pass. When
+`nu_refine=yes`, this bootstrap pass runs the sequential shell challenger from
+the finest populated base-bank label, so an empty 4 A discrete-bank member does
+not block higher-resolution probing. If the
 raw native even/odd pair is missing or incompatible, `refine3D_auto` uses its
 existing startup reconstruction path to create the missing reference material
 instead of trusting stale derived NU products.
@@ -235,8 +238,9 @@ high-resolution Fourier shells per refinement iteration, but only by testing
 one shell at a time. Each shell is applied/promoted whenever at least one
 tested frontier voxel selects it by unary objective comparison; no Potts prior
 is applied during this constrained extension challenge. The sequential walk
-stops at the first unattempted challenger or the first challenger with zero
-selected voxels. In this coupled refinement path, NU
+starts from the finest populated base-bank label and stops at the first
+unattempted challenger or the first challenger with zero selected voxels. In
+this coupled refinement path, NU
 filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal

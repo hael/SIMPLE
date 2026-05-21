@@ -151,15 +151,23 @@ call optimize_nu_cutoff_finds()
 
 ### High-resolution bank extension
 
-The optional high-resolution extension path can add finer low-pass candidates after the initial candidate map has been selected. It first identifies voxels currently assigned to the finest base-bank label, evaluates the next high-resolution candidate only within that local extension mask, and then updates only those eligible voxels. This challenge is unary-only: the full-bank Potts prior is not applied during extension because the extension experiment is already constrained to a one-shell step on the current finest frontier.
+The optional high-resolution extension path can add finer low-pass candidates
+after the initial candidate map has been selected. It first identifies voxels
+currently assigned to the finest populated base-bank label, prunes any empty
+finer base-bank labels, evaluates the next high-resolution candidate only
+within that local extension mask, and then updates only those eligible voxels.
+This challenge is unary-only: the full-bank Potts prior is not applied during
+extension because the extension experiment is already constrained to a
+one-shell step on the current finest populated frontier.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven permissive
 ratchet: an iteration can evaluate and accept one or more speculative
 high-resolution Fourier-shell candidates, but only sequentially. Each challenge
-candidate is the next unrepresented shell above the current finest base-bank
-label, not a coarse hard-coded Angstrom ladder. A challenge is attempted
+candidate is the next unrepresented shell above the current finest populated
+base-bank label, not a coarse hard-coded Angstrom ladder. A challenge is
+attempted
 whenever at least one base-bank voxel sits on the current finest label. The
 candidate is applied to the current map and promoted into the next iteration's
 starting bank whenever the unary objective moves at least one tested frontier

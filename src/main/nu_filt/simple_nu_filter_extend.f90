@@ -14,7 +14,7 @@ contains
         type(string)      :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest(:,:,:)
         integer, allocatable :: cutoff_finds_new(:)
-        integer           :: new_find, n_finest, n_total, n_extended, sz_old
+        integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         real              :: pct_finest, x
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
         integer, allocatable :: extend_choice(:,:,:)
@@ -35,7 +35,29 @@ contains
             if( present(stats) ) stats = local_stats
             return
         endif
-        n_finest  = count(nu_lmask .and. filtmap == sz_old)
+        old_label = 0
+        n_finest  = 0
+        do i = sz_old, 1, -1
+            n_finest = count(nu_lmask .and. srcmap == 1 .and. filtmap == i)
+            if( n_finest > 0 )then
+                old_label = i
+                exit
+            endif
+        end do
+        if( old_label == 0 )then
+            local_stats%n_tested = 0
+            if( present(stats) ) stats = local_stats
+            return
+        endif
+        if( old_label < sz_old )then
+            write(logfhandle,'(A,I0,A,I0,A,F8.3,A)') &
+                &'>>> NU high-resolution extension frontier reset from empty bank label ', &
+                &sz_old, ' to populated label ', old_label, ' (', cutoff_find_to_lowpass_limit(old_label), ' A)'
+            call prune_nu_highres_extension_bank(old_label)
+            sz_old = old_label
+        endif
+        local_stats%old_find  = cutoff_finds(sz_old)
+        local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
         local_stats%n_tested = n_finest
         pct_finest = 100. * real(n_finest) / real(n_total)
         local_stats%pct_tested_mask = pct_finest
@@ -71,7 +93,7 @@ contains
         do k = 1, ldim(3)
         do j = 1, ldim(2)
             do i = 1, ldim(1)
-                extend_mask(i,j,k) = (nu_lmask(i,j,k) .and. filtmap(i,j,k) == sz_old)
+                extend_mask(i,j,k) = (nu_lmask(i,j,k) .and. srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == sz_old)
             end do
         end do
         end do
@@ -172,19 +194,35 @@ contains
         class(image), intent(in) :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         type(nu_highres_extension_stats) :: local_stats
-        integer :: new_find, sz_old
+        integer :: new_find, sz_old, frontier_label, n_frontier, ilabel
         real    :: new_limit
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; extend_nu_filter_highres_shell_next')
+        if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; extend_nu_filter_highres_shell_next')
+        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; extend_nu_filter_highres_shell_next')
+        if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; extend_nu_filter_highres_shell_next')
         sz_old   = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
-        if( allocated(nu_lmask) )then
-            local_stats%n_mask = count(nu_lmask)
-            if( allocated(filtmap) ) local_stats%n_tested = count(nu_lmask .and. filtmap == sz_old)
+        local_stats%n_mask = count(nu_lmask)
+        frontier_label = 0
+        n_frontier = 0
+        do ilabel = sz_old, 1, -1
+            n_frontier = count(nu_lmask .and. srcmap == 1 .and. filtmap == ilabel)
+            if( n_frontier > 0 )then
+                frontier_label = ilabel
+                exit
+            endif
+        end do
+        if( frontier_label == 0 )then
+            if( present(stats) ) stats = local_stats
+            return
         endif
-        new_find = cutoff_finds(sz_old) + 1
+        local_stats%old_find  = cutoff_finds(frontier_label)
+        local_stats%old_limit = cutoff_find_to_lowpass_limit(frontier_label)
+        local_stats%n_tested  = n_frontier
+        new_find = cutoff_finds(frontier_label) + 1
         do while( new_find <= box/2 )
-            if( .not.any(cutoff_finds == new_find) ) exit
+            if( .not.any(cutoff_finds(:frontier_label) == new_find) ) exit
             new_find = new_find + 1
         end do
         if( new_find > box/2 )then
@@ -355,5 +393,36 @@ contains
         if( n_aux > 0 ) new_coords(old_n_base + 2:) = candidate_coords(old_n_base + 1:)
         call move_alloc(new_coords, candidate_coords)
     end subroutine append_nu_highres_candidate_coord
+
+    subroutine prune_nu_highres_extension_bank( active_label )
+        integer, intent(in) :: active_label
+        integer, allocatable :: new_cutoff_finds(:)
+        real,    allocatable :: new_coords(:), new_bwfilters(:,:)
+        integer :: old_n_base, n_aux, i
+        if( .not. allocated(cutoff_finds) ) return
+        old_n_base = size(cutoff_finds)
+        if( active_label < 1 .or. active_label >= old_n_base ) return
+        do i = active_label + 1, old_n_base
+            call delete_cached_filtered_pair(cutoff_finds(i))
+        end do
+        allocate(new_cutoff_finds(active_label))
+        new_cutoff_finds = cutoff_finds(:active_label)
+        call move_alloc(new_cutoff_finds, cutoff_finds)
+        if( allocated(bwfilters) )then
+            if( size(bwfilters,2) >= old_n_base )then
+                allocate(new_bwfilters(size(bwfilters,1), active_label))
+                new_bwfilters = bwfilters(:,1:active_label)
+                call move_alloc(new_bwfilters, bwfilters)
+            endif
+        endif
+        if( allocated(candidate_coords) )then
+            n_aux = max(0, size(candidate_coords) - old_n_base)
+            allocate(new_coords(active_label + n_aux))
+            new_coords(:active_label) = candidate_coords(:active_label)
+            if( n_aux > 0 ) new_coords(active_label + 1:) = candidate_coords(old_n_base + 1:)
+            call move_alloc(new_coords, candidate_coords)
+        endif
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+    end subroutine prune_nu_highres_extension_bank
 
 end submodule simple_nu_filter_extend

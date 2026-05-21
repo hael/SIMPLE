@@ -50,7 +50,8 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         use simple_commanders_volops, only: postprocess_nu_volume_from_files
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
+            &extend_nu_filter_highres_shells
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -242,7 +243,7 @@ contains
             type(image_msk)      :: envmsk
             logical, allocatable :: l_mask(:,:,:)
             integer, allocatable :: imat(:,:,:)
-            integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy
+            integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy, n_bootstrap_steps
             real                 :: mskrad_px
             logical              :: l_reconstruct_bootstrap
             if( .not. params%l_nonuniform ) return
@@ -317,6 +318,10 @@ contains
             endif
             call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
             call optimize_nu_cutoff_finds()
+            if( params%l_nu_refine )then
+                call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
+                write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
+            endif
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call print_nu_filtmap_lowpass_stats(l_mask)
             call analyze_filtmap_neighbor_continuity(l_mask)
