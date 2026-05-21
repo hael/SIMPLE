@@ -304,8 +304,8 @@
       <text class="small" x="326" y="58">test voxels already</text>
       <text class="small" x="326" y="80">assigned to the finest</text>
       <text class="small" x="326" y="102">active NU label</text>
-      <text class="callout" x="326" y="142">accept if selected</text>
-      <text class="callout" x="326" y="162">by at least 5%</text>
+      <text class="callout" x="326" y="142">unary frontier test</text>
+      <text class="callout" x="326" y="162">accept any win</text>
     </g>
 
     <path class="loop" d="M405,468 C462,430 465,322 405,252" />

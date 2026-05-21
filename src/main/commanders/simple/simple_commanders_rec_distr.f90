@@ -464,13 +464,31 @@ contains
             n_accepted_this_iteration = 0
             do
                 call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
-                if( .not. ext_stats%attempted    ) exit
+                if( .not. ext_stats%attempted )then
+                    if( ext_stats%n_mask == 0 )then
+                        write(logfhandle,'(A)') &
+                            &'>>> NU high-resolution extension stopped: empty NU refinement mask'
+                    else if( ext_stats%n_tested == 0 )then
+                        write(logfhandle,'(A,F8.3,A,I0,A)') &
+                            &'>>> NU high-resolution extension stopped: no frontier voxels at current finest label ', &
+                            &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
+                    else
+                        write(logfhandle,'(A,F8.3,A,I0,A)') &
+                            &'>>> NU high-resolution extension stopped: no valid next shell after ', &
+                            &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
+                    endif
+                    exit
+                endif
                 if( .not. ext_stats%applied      ) exit
                 if( .not. ext_stats%promote_next ) exit
                 n_accepted_this_iteration = n_accepted_this_iteration + 1
             end do
             if( n_accepted_this_iteration > 0 )then
                 call write_nu_highres_steps_for_state(n_highres_steps + n_accepted_this_iteration)
+                write(logfhandle,'(A,I0,A,I0)') &
+                    &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
+                    &n_accepted_this_iteration, '; promoted depth for next iteration: ', &
+                    &n_highres_steps + n_accepted_this_iteration
             endif
         end subroutine refine_nonuniform_filter_bank
 

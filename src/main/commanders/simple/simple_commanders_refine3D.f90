@@ -49,6 +49,8 @@ contains
         use simple_abinitio_utils, only: write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_commanders_volops, only: postprocess_nu_volume_from_files
+        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
+            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -170,6 +172,8 @@ contains
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call cline_rec3D%set('postprocess', 'no')
+        call cline_rec3D%set('nu_refine', 'no')
+        if( l_have_init_vol ) call prepare_nu_bootstrap_refs_from_raw_halves()
         if( l_have_init_vol )then
             call cline%set('vol1', init_vol)
         else
@@ -230,6 +234,121 @@ contains
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &
                 &abs(init_smpd - params%smpd) <= 1.e-6
         end function project_init_vol_compatible
+
+        subroutine prepare_nu_bootstrap_refs_from_raw_halves()
+            type(string)         :: init_even, init_odd, raw_even, raw_odd, candidate
+            type(string)         :: out_even, out_odd, out_avg
+            type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu, vol_msk
+            type(image_msk)      :: envmsk
+            logical, allocatable :: l_mask(:,:,:)
+            integer, allocatable :: imat(:,:,:)
+            integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy
+            real                 :: mskrad_px
+            logical              :: l_reconstruct_bootstrap
+            if( .not. params%l_nonuniform ) return
+            l_reconstruct_bootstrap = .false.
+            init_even      = add2fbody(init_vol, MRC_EXT, '_even')
+            init_odd       = add2fbody(init_vol, MRC_EXT, '_odd')
+            candidate      = add2fbody(init_even, MRC_EXT, '_unfil')
+            if( file_exists(candidate) )then
+                raw_even = candidate
+            else
+                raw_even = init_even
+            endif
+            call candidate%kill
+            candidate      = add2fbody(init_odd, MRC_EXT, '_unfil')
+            if( file_exists(candidate) )then
+                raw_odd = candidate
+            else
+                raw_odd = init_odd
+            endif
+            call candidate%kill
+            if( .not. file_exists(raw_even) .or. .not. file_exists(raw_odd) )then
+                write(logfhandle,'(A)') &
+                    &'>>> REFINE3D_AUTO BOOTSTRAP: raw native E/O pair missing; reconstructing startup references'
+                l_reconstruct_bootstrap = .true.
+            else
+                call find_ldim_nptcls(raw_even, ldim_even, nptcls_dummy)
+                call find_ldim_nptcls(raw_odd,  ldim_odd,  nptcls_dummy)
+                if( any(ldim_even /= [params%box,params%box,params%box]) .or. any(ldim_odd /= ldim_even) )then
+                    write(logfhandle,'(A)') &
+                        &'>>> REFINE3D_AUTO BOOTSTRAP: raw E/O dimensions incompatible; reconstructing startup references'
+                    l_reconstruct_bootstrap = .true.
+                else
+                    ldim = ldim_even
+                    call vol_even_raw%new(ldim, params%smpd)
+                    call vol_odd_raw%new(ldim, params%smpd)
+                    call vol_even_raw%read(raw_even)
+                    call vol_odd_raw%read(raw_odd)
+                    if( abs(vol_even_raw%get_smpd() - params%smpd) > 1.e-6 .or. &
+                        &abs(vol_odd_raw%get_smpd()  - params%smpd) > 1.e-6 )then
+                        write(logfhandle,'(A)') &
+                            &'>>> REFINE3D_AUTO BOOTSTRAP: raw E/O sampling incompatible; reconstructing startup references'
+                        l_reconstruct_bootstrap = .true.
+                    endif
+                endif
+            endif
+            if( l_reconstruct_bootstrap )then
+                l_have_init_vol = .false.
+                call cline_rec3D%delete('vol1')
+                call init_even%kill
+                call init_odd%kill
+                call raw_even%kill
+                call raw_odd%kill
+                call candidate%kill
+                call vol_even_raw%kill
+                call vol_odd_raw%kill
+                call vol_msk%kill
+                call envmsk%kill
+                if( allocated(l_mask) ) deallocate(l_mask)
+                if( allocated(imat)   ) deallocate(imat)
+                return
+            endif
+            if( params%automsk .ne. 'no' )then
+                call envmsk%automask3D(params, vol_even_raw, vol_odd_raw, l_tight=params%automsk.eq.'tight')
+                call envmsk%set_imat
+                call envmsk%get_imat(imat)
+                allocate(l_mask(ldim(1),ldim(2),ldim(3)))
+                l_mask = imat > 0
+                deallocate(imat)
+            else
+                mskrad_px = 0.5 * params%mskdiam / params%smpd
+                call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
+            endif
+            call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
+            call optimize_nu_cutoff_finds()
+            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call print_nu_filtmap_lowpass_stats(l_mask)
+            call analyze_filtmap_neighbor_continuity(l_mask)
+            out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
+            out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
+            out_avg  = add2fbody(init_vol,  MRC_EXT, NUFILT_SUFFIX)
+            call vol_even_nu%write(out_even, del_if_exists=.true.)
+            call vol_odd_nu%write(out_odd, del_if_exists=.true.)
+            call vol_even_nu%add(vol_odd_nu)
+            call vol_even_nu%mul(0.5)
+            call vol_even_nu%write(out_avg, del_if_exists=.true.)
+            call wait_for_closure(out_avg)
+            write(logfhandle,'(A)') &
+                &'>>> REFINE3D_AUTO BOOTSTRAP: generated NU-filtered startup references from raw native E/O maps'
+            call cleanup_nu_filter()
+            call init_even%kill
+            call init_odd%kill
+            call raw_even%kill
+            call raw_odd%kill
+            call out_even%kill
+            call out_odd%kill
+            call out_avg%kill
+            call candidate%kill
+            call vol_even_raw%kill
+            call vol_odd_raw%kill
+            call vol_even_nu%kill
+            call vol_odd_nu%kill
+            call vol_msk%kill
+            call envmsk%kill
+            if( allocated(l_mask) ) deallocate(l_mask)
+            if( allocated(imat)   ) deallocate(imat)
+        end subroutine prepare_nu_bootstrap_refs_from_raw_halves
 
         subroutine set_refine3D_auto_sampling()
             type(sp_project) :: sampling_proj

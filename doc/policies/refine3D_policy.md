@@ -215,9 +215,13 @@ whitelist instead of copying the staged `refine3D` command and deleting keys.
 For single-state continuation into `refine3D_auto`, an existing project
 `os_out` state-1 `vol` entry is a valid initializer when the referenced file is
 present. Explicit `vol1` on the command line takes precedence. `refine3D_auto`
-should reconstruct an initializer only when neither source is available; it
-should not re-read all particle images merely to recreate the map already
-registered by the preceding ab initio workflow.
+should reconstruct an initializer only when neither source is available. In NU
+filter mode, an existing initializer is accepted only if a same-stem raw native
+even/odd pair exists. `refine3D_auto` then generates fresh same-stem `_nu_filt`
+bootstrap references from that raw pair before the first matcher pass. If the
+raw native even/odd pair is missing or incompatible, `refine3D_auto` uses its
+existing startup reconstruction path to create the missing reference material
+instead of trusting stale derived NU products.
 
 `refine3D_auto` must run at least ten refinement iterations. Its automatic
 iteration planner aims for roughly four particle updates when deriving the
@@ -228,9 +232,11 @@ respect that minimum.
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and may promote multiple
 high-resolution Fourier shells per refinement iteration, but only by testing
-one shell at a time. Each shell is applied/promoted only when at least 5% of the
-tested frontier voxels select it, and the sequential walk stops at the first
-unattempted or rejected challenger. In this coupled refinement path, NU
+one shell at a time. Each shell is applied/promoted whenever at least one
+tested frontier voxel selects it by unary objective comparison; no Potts prior
+is applied during this constrained extension challenge. The sequential walk
+stops at the first unattempted challenger or the first challenger with zero
+selected voxels. In this coupled refinement path, NU
 filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
@@ -247,12 +253,11 @@ references exist. If `lp` was not set by the user, the reprojection model uses
 the project `lp` value written by the previous `volassemble` pass, where
 `volassemble` records the finest actually selected NU filter-bank limit after
 writing `_nu_filt` even/odd references. Candidate bins with zero voxel
-assignments do not advance the global matching bandwidth, and finer selected
-bins must pass the same 5% lower-resolution-bin threshold used for
-high-resolution shell extension before they define the next matching LP. A
-fresh first iteration or missing project `lp` falls back to the ordinary
-FSC/project-`lp` policy. Explicit `lp` remains a hard override, and `lpstop`
-remains a cap on the final matcher bandwidth.
+assignments do not advance the global matching bandwidth, but any finer
+base-bank bin with at least one voxel assignment is allowed to define the next
+matching LP. A fresh first iteration or missing project `lp` falls back to the
+ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard override, and
+`lpstop` remains a cap on the final matcher bandwidth.
 
 The experimental `filt_mode=nonuniform_lpset` variant uses that same NU-refined
 project `lp`, but promotes it onto the active command line after each

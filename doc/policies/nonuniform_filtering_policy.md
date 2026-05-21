@@ -96,12 +96,11 @@ actually selected NU filter-bank limit from the previous `volassemble` pass
 instead of the global FSC resolution. Candidate bins with zero voxel
 assignments do not advance the global matching bandwidth. After writing the
 matching `_nu_filt` even/odd products, `volassemble` updates the ordinary
-project `lp` field to that selected NU limit only when the finer selected bin
-passes the same acceptance threshold used for high-resolution shell extension:
-at least 5% of the nearest lower-resolution selected bin. The matcher reads
-that project `lp` value on the next iteration; a fresh first iteration or
-missing project `lp` falls back to the ordinary FSC/project-`lp` policy.
-Explicit `lp` remains a hard user override, and `lpstop` still caps the
+project `lp` field to that selected NU limit. Any finer bin with at least one
+base-bank voxel assignment is allowed to define the next matching bandwidth.
+The matcher reads that project `lp` value on the next iteration; a fresh first
+iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
+policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
 selected matching bandwidth.
 
 `filt_mode=nonuniform_lpset` is an experimental variant for testing the same
@@ -152,32 +151,30 @@ call optimize_nu_cutoff_finds()
 
 ### High-resolution bank extension
 
-The optional high-resolution extension path can add finer low-pass candidates after the initial candidate map has been selected. It first identifies voxels currently assigned to the finest base-bank label, evaluates the next high-resolution candidate only within that local extension mask, and then updates only those eligible voxels.
-
-When requested, the extension step applies the same ordered-label prior to this constrained two-label decision. The old finest label and proposed new high-resolution label are the only labels that can change inside the extension mask, but neighborhood costs are evaluated against the surrounding frozen label field. This lets the extension avoid creating large discontinuities at the boundary of the finest-resolution region while preserving the local nature of the refinement.
+The optional high-resolution extension path can add finer low-pass candidates after the initial candidate map has been selected. It first identifies voxels currently assigned to the finest base-bank label, evaluates the next high-resolution candidate only within that local extension mask, and then updates only those eligible voxels. This challenge is unary-only: the full-bank Potts prior is not applied during extension because the extension experiment is already constrained to a one-shell step on the current finest frontier.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
 
-When `nu_refine=yes`, `volassemble` uses an evidence-driven conservative
+When `nu_refine=yes`, `volassemble` uses an evidence-driven permissive
 ratchet: an iteration can evaluate and accept one or more speculative
 high-resolution Fourier-shell candidates, but only sequentially. Each challenge
 candidate is the next unrepresented shell above the current finest base-bank
 label, not a coarse hard-coded Angstrom ladder. A challenge is attempted
 whenever at least one base-bank voxel sits on the current finest label. The
 candidate is applied to the current map and promoted into the next iteration's
-starting bank only when the ordered-label extension refinement moves at least
-5% of the tested frontier voxels inside the NU refinement mask to that
-speculative shell. The denominator is the tested extension frontier for the
-current challenger, not the total map volume. If a candidate is accepted, the
-same iteration may challenge the next Fourier shell; the walk stops at the
-first unattempted or rejected challenger.
+starting bank whenever the unary objective moves at least one tested frontier
+voxel inside the NU refinement mask to that speculative shell. If a candidate
+is accepted, the same iteration may challenge the next Fourier shell; the walk
+stops at the first unattempted challenger or the first challenger with zero
+selected voxels. Each challenge logs the old/new Fourier shell, tested frontier
+size, unary wins, and accepted-shell depth for the next iteration.
 
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
 from raw even/odd half maps without ML-regularized auxiliary candidates. It
 starts from the static base bank, then challenges one unrepresented Fourier
-shell at a time. A postprocess challenger is accepted only when the ordered-label
-extension refinement assigns at least one tested frontier voxel to that shell;
+shell at a time. A postprocess challenger is accepted only when the unary
+extension challenge assigns at least one tested frontier voxel to that shell;
 only accepted shells become part of the active bank before the next shell is
 challenged. The postprocess path may continue this sequential challenger loop
 through Nyquist, but it must not pre-generate or pre-evaluate the full sampling

@@ -9,8 +9,7 @@
 ! Iterative high-resolution refinement can challenge one Fourier shell at a
 ! time after the static bank has been optimized. Each challenger allocates and
 ! evaluates only one extra candidate; callers may loop while the shell is
-! accepted. The default acceptance gate for extend_nu_filter_highres_shell_next
-! is the refinement threshold.
+! accepted. Any nonzero challenger selection is enough to accept the next shell.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -33,7 +32,7 @@
 ! ladder:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
+!    call extend_nu_filter_highres_shells(vol_even, vol_odd)
 !    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
@@ -60,10 +59,6 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
-! Shared acceptance threshold for adding a finer shell during NU refinement
-! and for allowing a finer selected bin to define the next matching LP.
-real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT      = 5.
-real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
 ! this as an integer pixel radius, so the full tent base spans 2*radius + 1
 ! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
@@ -106,11 +101,16 @@ type :: nu_highres_extension_stats
     logical :: attempted    = .false.
     logical :: applied      = .false.
     logical :: promote_next = .false.
+    real    :: old_limit = 0.
     real    :: new_limit = 0.
+    integer :: old_find  = 0
+    integer :: new_find  = 0
     integer :: n_mask     = 0
     integer :: n_tested   = 0
+    integer :: n_unary_wins = 0
     integer :: n_extended = 0
     real    :: pct_tested_mask     = 0.
+    real    :: pct_unary_wins_tested = 0.
     real    :: pct_extended_tested = 0.
 end type nu_highres_extension_stats
 
@@ -277,24 +277,21 @@ interface
     end function calc_nu_label_smooth_site_energy
 
     ! In submodule: simple_nu_filter_extend.f90
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, accept_pct, new_limit, stats )
+    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
-        real,         intent(in) :: accept_pct      ! minimum selected frontier percentage
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats )
         class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
-        real, optional,                             intent(in)  :: accept_pct
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
-        real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
@@ -304,31 +301,6 @@ interface
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection
 
-    module subroutine refine_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, old_label, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
-        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
-        logical, intent(inout) :: extend_to_new(:,:,:)
-        integer, intent(in)    :: old_label
-        integer, intent(out)   :: n_extended
-    end subroutine refine_nu_highres_extension_selection
-
-    module real function estimate_nu_highres_extension_beta( extend_mask, dmat_old, dmat_new )
-        logical, intent(in) :: extend_mask(:,:,:)
-        real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
-    end function estimate_nu_highres_extension_beta
-
-    module real function estimate_nu_highres_extension_beta_aux( extend_mask, dmat_old, dmat_new )
-        logical, intent(in) :: extend_mask(:,:,:)
-        real,    intent(in) :: dmat_old(:,:,:), dmat_new(:,:,:)
-    end function estimate_nu_highres_extension_beta_aux
-
-    module real function nu_highres_extension_neighborhood_cost( icoord, extend_mask, extend_to_new, old_label, &
-        &new_coord, neigh, nsz )
-        real,    intent(in) :: icoord, new_coord
-        logical, intent(in) :: extend_mask(:,:,:), extend_to_new(:,:,:)
-        integer, intent(in) :: old_label, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
-    end function nu_highres_extension_neighborhood_cost
-
     module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
             &extend_choice, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)
@@ -336,29 +308,6 @@ interface
         integer, intent(inout) :: extend_choice(:,:,:)
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection_aux
-
-    module subroutine refine_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
-            &extend_choice, old_label, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
-        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
-        integer, intent(inout) :: extend_choice(:,:,:)
-        integer, intent(in)    :: old_label
-        integer, intent(out)   :: n_extended
-    end subroutine refine_nu_highres_extension_selection_aux
-
-    module real function nu_highres_extension_choice_neighborhood_cost( choice, i, j, k, extend_mask, &
-            &extend_choice, old_label, new_coord, neigh, nsz )
-        integer, intent(in) :: choice, i, j, k, old_label, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
-        logical, intent(in) :: extend_mask(:,:,:)
-        integer, intent(in) :: extend_choice(:,:,:)
-        real,    intent(in) :: new_coord
-    end function nu_highres_extension_choice_neighborhood_cost
-
-    module real function nu_highres_extension_current_coord( i, j, k, extend_mask, extend_to_new, old_label, new_coord )
-        integer, intent(in) :: i, j, k, old_label
-        logical, intent(in) :: extend_mask(:,:,:), extend_to_new(:,:,:)
-        real,    intent(in) :: new_coord
-    end function nu_highres_extension_current_coord
 
     module subroutine apply_nu_highres_extension_selection( extend_to_new, new_label )
         logical, intent(in) :: extend_to_new(:,:,:)

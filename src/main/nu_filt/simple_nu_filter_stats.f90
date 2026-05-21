@@ -74,8 +74,7 @@ contains
 
     module real function get_nu_filtmap_finest_selected_lp( mask )
         logical, intent(in) :: mask(:,:,:)
-        integer :: icut, jcut, ncur, nlower
-        real    :: pct_cur_vs_lower
+        integer :: icut, ncur
         if( .not.allocated(filtmap) )then
             THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
         endif
@@ -91,19 +90,6 @@ contains
                 ncur = count(filtmap == icut .and. mask)
             endif
             if( ncur == 0 ) cycle
-            nlower = 0
-            do jcut = icut - 1, 1, -1
-                if( allocated(srcmap) )then
-                    nlower = count(filtmap == jcut .and. srcmap == 1 .and. mask)
-                else
-                    nlower = count(filtmap == jcut .and. mask)
-                endif
-                if( nlower > 0 ) exit
-            end do
-            if( nlower > 0 )then
-                pct_cur_vs_lower = 100. * real(ncur) / real(nlower)
-                if( pct_cur_vs_lower < NU_REFINE_EXTENSION_ACCEPT_PCT ) cycle
-            endif
             get_nu_filtmap_finest_selected_lp = cutoff_find_to_lowpass_limit(icut)
             return
         end do
