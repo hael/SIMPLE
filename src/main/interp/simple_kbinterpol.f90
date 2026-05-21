@@ -21,7 +21,7 @@ use simple_edges_sqwins, only: sqwin_1d
 implicit none
 
 public :: kbinterpol, kb_windim
-public :: apod_device, apod_fast_device
+public :: apod_device, apod_fast_device, apod_kb15_a2
 private
 
 type :: kbinterpol
@@ -50,7 +50,7 @@ interface kbinterpol
 end interface kbinterpol
 
 #ifdef USE_OPENMP_OFFLOAD
-!$omp declare target(apod_device, apod_fast_device, bessi0)
+!$omp declare target(apod_device, apod_fast_device, apod_kb15_a2, bessi0)
 #endif
 
 contains
@@ -456,6 +456,41 @@ contains
         enddo
         r = self%oneoW * p
     end function apod_fast_device
+
+    !>  \brief  fast KB apodization for the common KBWINSZ=1.5, KBALPHA=2 kernel
+    pure elemental function apod_kb15_a2( x ) result( r )
+        real, intent(in) :: x
+        real :: r
+        real(sp), parameter :: twooW = 2.0_sp / 3.0_sp
+        real(sp), parameter :: oneoW = 1.0_sp / 3.0_sp
+        real(sp), parameter :: coeffs(0:14) = [&
+            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
+            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
+            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+        real(sp) :: p, q, u
+        if( x*x > 2.25_sp )then
+            r = 0.
+            return
+        endif
+        q = twooW * x
+        u = max(0._sp, 1._sp - q*q)
+        p = coeffs(14)
+        p = p * u + coeffs(13)
+        p = p * u + coeffs(12)
+        p = p * u + coeffs(11)
+        p = p * u + coeffs(10)
+        p = p * u + coeffs(9)
+        p = p * u + coeffs(8)
+        p = p * u + coeffs(7)
+        p = p * u + coeffs(6)
+        p = p * u + coeffs(5)
+        p = p * u + coeffs(4)
+        p = p * u + coeffs(3)
+        p = p * u + coeffs(2)
+        p = p * u + coeffs(1)
+        p = p * u + coeffs(0)
+        r = oneoW * p
+    end function apod_kb15_a2
 
     ! Public utility to get the windows pixel size without instantiating the object
     pure integer function kb_windim( winsz )

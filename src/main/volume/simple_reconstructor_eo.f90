@@ -1,11 +1,11 @@
 !@descr: 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 use simple_core_module_api
-use simple_reconstructor, only: reconstructor
-use simple_image_msk,     only: image_msk
-use simple_parameters,    only: parameters
-use simple_image,         only: image
-use simple_sp_project,    only: sp_project
+use simple_reconstructor,   only: reconstructor
+use simple_image_msk,       only: image_msk
+use simple_parameters,      only: parameters
+use simple_image,           only: image
+use simple_sp_project,      only: sp_project
 use simple_refine3D_fnames, only: refine3D_fsc_fname
 use simple_fsc
 implicit none
@@ -16,9 +16,9 @@ private
 
 type :: reconstructor_eo
     private
-    class(parameters), pointer :: p_ptr=>null()
-    type(reconstructor) :: even
-    type(reconstructor) :: odd
+    class(parameters),  pointer :: p_ptr=>null()
+    type(reconstructor), public :: even       !< Only made public for the sake of GPU implementation
+    type(reconstructor), public :: odd        !< Only made public for the sake of GPU implementation
     type(reconstructor) :: eosum
     type(image_msk)     :: envmask
     type(string)        :: ext

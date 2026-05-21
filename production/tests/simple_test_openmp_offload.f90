@@ -24,7 +24,6 @@ call cline%checkvar('nthr',    1)
 call cline%checkvar('device',  2)
 call cline%check
 call p%new(cline)
-call set_offload_device(p%device)
 
 #ifdef USE_OPENMP_OFFLOAD
 ! pragma functionality test
@@ -54,6 +53,7 @@ call test_fftw_vs_cufft_2d_many
 call test_fftw_vs_cufft_1d_many_c2r
 call test_fftw_vs_cufft_movie
 call test_kb
+call test_pointers
 call banner('All tests passed successfully')
 contains
 
@@ -402,8 +402,6 @@ contains
           p_c = omp_get_mapped_ptr(c_loc(buf1_cufft(1)), 0)
           ierr = cufftExecR2C(plan_cufft, p_r, p_c)
           if (ierr /= CUFFT_SUCCESS) stop 60
-          ierr = cudaDeviceSynchronize()
-          if (ierr /= CUDA_SUCCESS) stop 61
         !$omp end target data
 
         call print_cpair('1D in-place R2C output coefficients, all bins:', &
@@ -452,8 +450,6 @@ contains
           p_c = omp_get_mapped_ptr(c_loc(buf2_cufft(1,1)), 0)
           ierr = cufftExecR2C(plan_cufft, p_r, p_c)
           if (ierr /= CUFFT_SUCCESS) stop 65
-          ierr = cudaDeviceSynchronize()
-          if (ierr /= CUDA_SUCCESS) stop 66
         !$omp end target data
         ! report
         call print_cpair('2D in-place R2C output coefficients, row 1, first four bins:', &
@@ -533,8 +529,6 @@ contains
             end do
             !$omp end target teams distribute parallel do
           end do
-          ierr = cudaDeviceSynchronize()
-          if (ierr /= CUDA_SUCCESS) stop 92
           cufft_time = toc(t)
         !$omp end target data
         ! report
@@ -627,8 +621,6 @@ contains
             end do
             !$omp end target teams distribute parallel do
           end do
-          ierr = cudaDeviceSynchronize()
-          if (ierr /= CUDA_SUCCESS) stop 103
           cufft_time = toc(t)
         !$omp end target data
         maxerr  = maxval(abs(buf3_cufft(1:nx,1:ny,1:nz) - xref))
@@ -697,11 +689,7 @@ contains
           p_r = omp_get_mapped_ptr(c_loc(buf1_cufft(1,1)), 0)
           p_c = omp_get_mapped_ptr(c_loc(buf1_cufft(1,1)), 0)
           ierr = cufftExecR2C(plan_cufft, p_r, p_c)
-          ! print *, 'CUFFT 1D many comparison forward ierr = ', ierr
           if (ierr /= CUFFT_SUCCESS) stop 70
-          ierr = cudaDeviceSynchronize()
-          ! print *, 'CUFFT 1D many comparison synchronize ierr = ', ierr
-          if (ierr /= CUDA_SUCCESS) stop 71
         !$omp end target data
         ! report
         do batch_idx = 1, nbatch
@@ -764,8 +752,6 @@ contains
             p_c = omp_get_mapped_ptr(c_loc(buf2_cufft(1,1,1)), 0)
             ierr = cufftExecR2C(plan_cufft, p_r, p_c)
             if (ierr /= CUFFT_SUCCESS) stop 75
-            ierr = cudaDeviceSynchronize()
-            if (ierr /= CUDA_SUCCESS) stop 76
         !$omp end target data
         do batch_idx = 1, nbatch
             call print_cpair('2D many R2C output coefficients, batch '//trim(int2str(batch_idx))//' row 1, first four bins:', &
@@ -831,7 +817,6 @@ contains
         if (.not. c_associated(plan_fftw_inv)) stop 79
 
         ierr = cufftPlanMany(plan_cufft_inv, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_C2R, howmany)
-        ! print *, 'cufftPlanMany 1D comparison C2R ierr = ', ierr, ' handle = ', plan_cufft_inv
         if (ierr /= CUFFT_SUCCESS) stop 80
 
         call fftwf_execute_dft_c2r(plan_fftw_inv, buf1_fftw_c, buf1_fftw)
@@ -839,17 +824,12 @@ contains
           p_r = omp_get_mapped_ptr(c_loc(buf1_cufft(1,1)), 0)
           p_c = omp_get_mapped_ptr(c_loc(buf1_cufft(1,1)), 0)
           ierr = cufftExecC2R(plan_cufft_inv, p_c, p_r)
-          ! print *, 'CUFFT 1D many comparison inverse ierr = ', ierr
           if (ierr /= CUFFT_SUCCESS) stop 81
-          ierr = cudaDeviceSynchronize()
-          ! print *, 'CUFFT 1D many comparison synchronize ierr = ', ierr
-          if (ierr /= CUDA_SUCCESS) stop 82
         !$omp end target data
 
         maxerr = maxval(abs(buf1_cufft(1:n1,:) - buf1_fftw(1:n1,:))) / max(1.0_sp, maxval(abs(buf1_fftw(1:n1,:))))
         print *, 'FFTW/CUFFT 1D many relative C2R output error = ', maxerr
         call report_fftw('FFTW VS CUFFT 1D MANY C2R', maxerr, tol_cmp, passed)
-
         ierr = cufftDestroy(plan_cufft_inv)
         if (ierr /= CUFFT_SUCCESS) stop 83
         call fftwf_destroy_plan(plan_fftw_inv)
@@ -857,7 +837,6 @@ contains
     end subroutine test_fftw_vs_cufft_1d_many_c2r
 
     subroutine test_fftw_vs_cufft_movie
-        use simple_image, only:image
         integer,  parameter :: nx      = 4096
         integer,  parameter :: ny      = 4096
         integer,  parameter :: nxsc    = 2048
@@ -872,17 +851,12 @@ contains
         integer :: i,kpi,kpo,hp,h,k,kp
         real(sp), allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
         complex(sp), pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
-        ! real(sp), allocatable, target :: buf3_cufft(:,:,:), buf3_fftw(:,:,:)
-        ! complex(sp), pointer :: buf3_cufft_c(:,:,:), buf3_fftw_c(:,:,:)
         real(sp) :: maxerr
         logical  :: passed
         call banner('BENCH: FFTW VS CUFFT 2D R2C 50 FRAMES')
         allocate(buf2_cufft(n2padx,ny,nframes), buf2_fftw(n2padx,ny,nframes))
-        ! allocate(buf3_cufft(nxsc+2,nysc,nframes), buf3_fftw(nxsc+2,nysc,nframes))
         call c_f_pointer(c_loc(buf2_cufft(1,1,1)), buf2_cufft_c, [n2cx,ny,nframes])
         call c_f_pointer(c_loc(buf2_fftw(1,1,1)),  buf2_fftw_c,  [n2cx,ny,nframes])
-        ! call c_f_pointer(c_loc(buf3_cufft(1,1,1)), buf3_cufft_c, [nxsc+2,nysc,nframes])
-        ! call c_f_pointer(c_loc(buf3_fftw(1,1,1)),  buf3_fftw_c,  [nxsc+2,nysc,nframes])
         buf2_cufft = 0.0_sp
         buf2_fftw  = 0.0_sp
         do i = 1, nframes
@@ -893,8 +867,6 @@ contains
         ! Plans
         ierr = cufftPlan2d(plan_cu_r2c, ny, nx, CUFFT_R2C)
         if (ierr /= CUFFT_SUCCESS) stop 73
-        ! ierr = cufftPlan2d(plan_cu_c2r, nysc, nxsc, CUFFT_C2R)
-        ! if (ierr /= CUFFT_SUCCESS) stop 73
         ierr = fftwf_init_threads()
         call fftwf_plan_with_nthreads(1)
         plan_fftw_r2c = fftwf_plan_dft_r2c_2d(int(ny,c_int), int(nx,c_int), buf2_fftw(:,:,1), buf2_fftw_c(:,:,1), FFTW_ESTIMATE)
@@ -956,6 +928,112 @@ contains
       endif
       print *, 'PASS: KB interpolation test successful, average difference = ', diff
     end subroutine test_kb
+
+    subroutine test_pointers
+        integer,  parameter :: nx      = 64
+        integer,  parameter :: ny      = nx
+        integer,  parameter :: nz      = nx
+        real,    allocatable :: reven(:,:,:), rodd(:,:,:)
+        complex, allocatable :: ceven(:,:,:), codd(:,:,:)
+        complex :: cavg_even, cavg_odd
+        real    :: avg_even, avg_odd
+        logical :: flag(nx), passed
+        integer :: i
+        call banner('TEST: POINTER')
+        allocate(reven(nx,ny,nz), rodd(nx,ny,nz), source=0.)
+        allocate(ceven(nx,ny,nz), codd(nx,ny,nz), source=CMPLX_ZERO)
+        flag(1:nx:2) = .true.
+        flag(2:nx:2) = .false.
+        call pointer_kernel(nx,ny,nz, reven,rodd, ceven,codd, flag)
+        passed = .true.
+        do i = 1, nx
+            avg_even  = sum(reven(i,:,:)) / real(ny*nz)
+            avg_odd   = sum(rodd(i,:,:))  / real(ny*nz)
+            cavg_even = sum(ceven(i,:,:)) / real(ny*nz)
+            cavg_odd  = sum(codd(i,:,:))  / real(ny*nz)
+            if( flag(i) ) then
+                if( .not.is_equal(avg_even, real(i)) ) then
+                    print *, 'FAIL: pointer test failed for avg_even at i = ', i, ' value = ', avg_even
+                    passed = .false.
+                endif
+                if( .not.is_equal(avg_odd, 0.) ) then
+                    print *, 'FAIL: pointer test failed for avg_odd at i = ', i, ' value = ', avg_odd
+                    passed = .false.
+                endif
+                if( .not.is_equal(imag(cavg_even), real(i)) ) then
+                    print *, 'FAIL: pointer test failed for cavg_even at i = ', i, ' value = ', cavg_even
+                    passed = .false.
+                endif
+                if( .not.is_equal(imag(cavg_odd), 0.) ) then
+                    print *, 'FAIL: pointer test failed for cavg_odd at i = ', i, ' value = ', cavg_odd
+                    passed = .false.
+                endif
+            else
+                if( .not.is_equal(avg_even, 0.) ) then
+                    print *, 'FAIL: pointer test failed for avg_even at i = ', i, ' value = ', avg_even
+                    passed = .false.
+                endif
+                if( .not.is_equal(avg_odd, real(i)) ) then
+                    print *, 'FAIL: pointer test failed for avg_odd at i = ', i, ' value = ', avg_odd
+                    passed = .false.
+                endif
+                if( .not.is_equal(imag(cavg_even), 0.) ) then
+                    print *, 'FAIL: pointer test failed for cavg_even at i = ', i, ' value = ', cavg_even
+                    passed = .false.
+                endif
+                if( .not.is_equal(imag(cavg_odd), real(i)) ) then
+                    print *, 'FAIL: pointer test failed for cavg_odd at i = ', i, ' value = ', cavg_odd
+                    passed = .false.
+                endif
+            endif
+            if( .not.is_equal(real(cavg_even), 0.) ) then
+                print *, 'FAIL: pointer test failed for cavg_even at i = ', i, ' value = ', cavg_even
+                passed = .false.
+            endif
+            if( .not.is_equal(real(cavg_odd), 0.) ) then
+                print *, 'FAIL: pointer test failed for cavg_odd at i = ', i, ' value = ', cavg_odd
+                passed = .false.
+            endif
+        enddo
+        if( passed ) then
+            print *, 'PASS: pointer test successful'
+        else
+            stop 'FAIL: pointer test failed'
+        endif
+    end subroutine test_pointers
+
+    ! such tar the arrays loose allocatable status, can change indexing and gain target status
+    subroutine pointer_kernel(nx,ny,nz, re, ro, ce, co, flag)
+        integer,         intent(in)    :: nx, ny, nz
+        real,    target, intent(inout) :: re(nx,ny,nz), ro(nx,ny,nz)
+        complex, target, intent(inout) :: ce(nx,ny,nz), co(nx,ny,nz)
+        logical,         intent(in)    :: flag(nx)
+        real,    pointer :: p_r(:,:,:)
+        complex, pointer :: p_c(:,:,:)
+        integer :: i,j,k
+        !$omp target enter data map(to: re, ro, ce, co)
+        !$omp target teams distribute parallel do&
+        !$omp& map(to: flag) default(shared) private(i,j,k,p_r,p_c)
+        do i = 1,nx
+            ! pointer to e/o
+            if( flag(i) ) then
+                p_r => re
+                p_c => ce
+            else
+                p_r => ro
+                p_c => co
+            endif
+            ! dummy
+            do j = 1, ny
+                do k = 1, nz
+                    p_r(i,j,k) = real(i)
+                    p_c(i,j,k) = cmplx(0., real(i))
+                end do
+            end do
+        enddo
+        !$omp end target teams distribute parallel do
+        !$omp target exit data map(from: re, ro, ce, co)
+    end subroutine pointer_kernel
 
 #endif
 end program simple_test_openmp_offload

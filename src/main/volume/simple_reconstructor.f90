@@ -16,8 +16,8 @@ type, extends(image) :: reconstructor
     type(kbinterpol)            :: kbwin                        !< window function object
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
-    complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
-    real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
+    complex, allocatable, public :: cmat_exp(:,:,:)             !< Fourier components of expanded reconstructor, only made public for the sake of GPU implementation
+    real,    allocatable, public :: rho_exp(:,:,:)              !< sampling+CTF**2 density of expanded reconstructor, only made public for the sake of GPU implementation
     real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
@@ -46,6 +46,7 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
+    procedure          :: insert_plane_oversamp_opt
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -356,6 +357,147 @@ contains
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp
+
+    subroutine insert_plane_oversamp_opt( self, se, o, fpl, pwght )
+        use simple_math,       only: ceil_div, floor_div
+        use simple_kbinterpol, only: apod_kb15_a2
+        class(reconstructor), intent(inout) :: self
+        class(sym),           intent(inout) :: se
+        class(ori),           intent(inout) :: o
+        class(fplane_type),   intent(in)    :: fpl
+        real,                 intent(in)    :: pwght
+        integer, parameter :: WDIM   = 3
+        integer, parameter :: STRIDE = WDIM
+        type(ori) :: o_sym
+        real      :: rotmats(3,3,se%get_nsym()), pf2
+        integer   :: fpllims(3, 2), fpllims_pd(3, 2)
+        integer   :: clb3D(3), cdim3D(3), clb2D(2), cdim2D(2)
+        integer   :: nyq_disk, jsym, nsym, iwinsz
+        if( self%wdim /= WDIM ) then
+            THROW_HARD('insert_plane_oversamp_opt only implemented for wdim=3!')
+        endif
+        ! window size
+        iwinsz = ceiling(KBWINSZ - 0.5)
+        ! Setup rotation matrices
+        nsym = se%get_nsym()
+        rotmats(:,:,1) = o%get_mat()
+        if( nsym > 1 ) then
+            do jsym = 2, nsym
+                call se%apply(o, jsym, o_sym)
+                rotmats(:,:,jsym) = o_sym%get_mat()
+            end do
+        endif
+        call o_sym%kill
+        ! Native iteration limits so that hp=h*pf and kp=k*pf are in-bounds
+        fpllims_pd   = fpl%frlims
+        pf2          = real(OSMPL_PAD_FAC**2)
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), OSMPL_PAD_FAC)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), OSMPL_PAD_FAC)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), OSMPL_PAD_FAC)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), OSMPL_PAD_FAC)
+        ! bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
+        nyq_disk = self%nyq * (self%nyq + 1)
+        ! 3D arrays boundaries
+        clb3D  = lbound(self%cmat_exp)
+        cdim3D = ubound(self%cmat_exp) - clb3D + 1
+        ! 2D planes boundaries
+        clb2D  = lbound(fpl%cmplx_plane)
+        cdim2D = ubound(fpl%cmplx_plane) - clb2D + 1
+        ! KB interpolation / insertion with KB interpolation
+        call kernel(self%cmat_exp, self%rho_exp, fpl%cmplx_plane, fpl%ctfsq_plane)
+        contains
+
+            subroutine kernel( cmatexp, rhoexp, fcomp_plane, ctfsq_plane )
+                complex(sp),      intent(inout) :: cmatexp(cdim3D(1),cdim3D(2),cdim3D(3))
+                real(sp),         intent(inout) :: rhoexp(cdim3D(1),cdim3D(2),cdim3D(3))
+                complex(sp),      intent(in)    :: fcomp_plane(cdim2D(1), cdim2D(2))
+                real(sp),         intent(in)    :: ctfsq_plane(cdim2D(1), cdim2D(2))
+                complex(sp) :: comp
+                real    :: wx(WDIM), wy(WDIM), wz(WDIM), base(3), loc(3)
+                real    :: r21, r22, r23, sx, sy, sz, comp_scale, ctfsq, wyz
+                integer :: h,k,l, h_sq, k_max_h, k_lo,k_hi, hp,kp,hpb,kpb, iy,iz, ky,mz, i
+                integer :: win(3, 2), isym
+                comp_scale = pwght * pf2
+                !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,&
+                !$omp& ctfsq,wx,wy,wz,sx,sy,sz,i,win,loc,r21,r22,r23,isym,iy,iz,ky,mz,wyz,&
+                !$omp& base,hp,kp,hpb,kpb) proc_bind(close)
+                do isym = 1, nsym
+                    r21 = rotmats(2,1,isym); r22 = rotmats(2,2,isym); r23 = rotmats(2,3,isym)
+                    do l = 0, STRIDE-1
+                        !$omp do schedule(static,1)
+                        do h = fpllims(1,1)+l, fpllims(1,2), STRIDE
+                            h_sq = h*h
+                            if( h_sq > nyq_disk ) cycle
+                            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                            k_lo    = max(fpllims(2,1), -k_max_h)
+                            k_hi    = min(fpllims(2,2),  k_max_h)
+                            loc     = real(h) * rotmats(1,1:3,isym)
+                            loc     = loc + real(k_lo-1) * [r21, r22, r23]
+                            ! padded h coordinate
+                            hp = h * OSMPL_PAD_FAC
+                            do k = k_lo, k_hi
+                                ! rotation
+                                loc(1) = loc(1) + r21
+                                loc(2) = loc(2) + r22
+                                loc(3) = loc(3) + r23
+                                win(:,1) = nint(loc)
+                                win(:,2) = win(:,1) + iwinsz
+                                win(:,1) = win(:,1) - iwinsz
+                                ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
+                                if( win(1,2) < self%lims(1,1) ) cycle
+                                ! padded coordinate
+                                kp = k * OSMPL_PAD_FAC
+                                ! gen_fplane4rec stores only k<=0; use Friedel symmetry for kp>0.
+                                if( kp <= 0 )then
+                                    hpb   = hp - clb2D(1) + 1
+                                    kpb   = kp - clb2D(2) + 1
+                                    comp  = fcomp_plane(hpb,kpb)
+                                    ctfsq = ctfsq_plane(hpb,kpb)
+                                else
+                                    hpb   = -hp - clb2D(1) + 1
+                                    kpb   = -kp - clb2D(2) + 1
+                                    comp  = conjg(fcomp_plane(hpb,kpb))
+                                    ctfsq =       ctfsq_plane(hpb,kpb)
+                                endif
+                                if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
+                                ! particle weighing and FFTW padding scaling
+                                comp  = comp_scale * comp
+                                ctfsq = pwght      * ctfsq
+                                ! precompute and normalize weights
+                                base = real(win(:,1)) - loc
+                                sx = 0.0; sy = 0.0; sz = 0.0
+                                do i = 1, WDIM
+                                    wx(i) = apod_kb15_a2(base(1) + real(i-1))
+                                    wy(i) = apod_kb15_a2(base(2) + real(i-1))
+                                    wz(i) = apod_kb15_a2(base(3) + real(i-1))
+                                    sx = sx + wx(i)
+                                    sy = sy + wy(i)
+                                    sz = sz + wz(i)
+                                end do
+                                wx = wx / sx; wy = wy / sy; wz = wz / sz
+                                ! Arrays updates
+                                win(:,1) = win(:,1) - clb3D ! adjust for 1-based indexing
+                                do iz = 1, WDIM
+                                    mz = win(3,1) + iz
+                                    do iy = 1, WDIM
+                                        ky  = win(2,1) + iy
+                                        wyz = wy(iy) * wz(iz)
+                                        cmatexp(win(1,1)+1:win(1,1)+WDIM, ky, mz) = &
+                                            &cmatexp(win(1,1)+1:win(1,1)+WDIM, ky, mz) + (wyz*comp) * wx(:WDIM)
+                                        rhoexp(win(1,1)+1:win(1,1)+WDIM, ky, mz)  = &
+                                            &rhoexp(win(1,1)+1:win(1,1)+WDIM, ky, mz)  + (wyz*ctfsq) * wx(:WDIM)
+                                    end do
+                                end do
+                            end do
+                        end do
+                        !$omp end do
+                    end do
+                end do
+                !$omp end parallel
+            end subroutine kernel
+
+    end subroutine insert_plane_oversamp_opt
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self
