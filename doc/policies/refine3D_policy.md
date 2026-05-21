@@ -245,10 +245,14 @@ In the coupled `nu_refine` path, gold-standard 3D matching must not continue to
 derive its alignment low-pass limit solely from the global FSC once NU-filtered
 references exist. If `lp` was not set by the user, the reprojection model uses
 the project `lp` value written by the previous `volassemble` pass, where
-`volassemble` records the finest active NU filter-bank limit after writing
-`_nu_filt` even/odd references. A fresh first iteration or missing project `lp`
-falls back to the ordinary FSC/project-`lp` policy. Explicit `lp` remains a
-hard override, and `lpstop` remains a cap on the final matcher bandwidth.
+`volassemble` records the finest actually selected NU filter-bank limit after
+writing `_nu_filt` even/odd references. Candidate bins with zero voxel
+assignments do not advance the global matching bandwidth, and finer selected
+bins must pass the same 5% lower-resolution-bin threshold used for
+high-resolution shell extension before they define the next matching LP. A
+fresh first iteration or missing project `lp` falls back to the ordinary
+FSC/project-`lp` policy. Explicit `lp` remains a hard override, and `lpstop`
+remains a cap on the final matcher bandwidth.
 
 The experimental `filt_mode=nonuniform_lpset` variant uses that same NU-refined
 project `lp`, but promotes it onto the active command line after each

@@ -51,7 +51,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
-          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
+          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats, get_nu_filter_bank_finest_lp,&
+          get_nu_filtmap_finest_selected_lp
 private
 #include "simple_local_flags.inc"
 
@@ -59,6 +60,8 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
+! Shared acceptance threshold for adding a finer shell during NU refinement
+! and for allowing a finer selected bin to define the next matching LP.
 real,             parameter   :: NU_REFINE_EXTENSION_ACCEPT_PCT      = 5.
 real,             parameter   :: NU_POSTPROCESS_EXTENSION_ACCEPT_PCT = 0.
 ! Physical half-width of the tent regularization kernel. The smoother consumes
@@ -405,6 +408,10 @@ interface
         real,    intent(out) :: percentages(:)
         logical, intent(in)  :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
+
+    module real function get_nu_filtmap_finest_selected_lp( mask )
+        logical, intent(in) :: mask(:,:,:)
+    end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )
         logical,        intent(in) :: mask(:,:,:)

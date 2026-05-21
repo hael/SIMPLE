@@ -249,7 +249,7 @@ contains
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &extend_nu_filter_highres_shell_next, nu_highres_extension_stats, get_nu_filter_bank_finest_lp
+            &extend_nu_filter_highres_shell_next, nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -548,7 +548,8 @@ contains
         subroutine record_nu_alignment_lowpass_limit()
             real :: align_lp
             if( .not. params%l_nu_refine ) return
-            align_lp = get_nu_filter_bank_finest_lp()
+            align_lp = get_nu_filtmap_finest_selected_lp(l_mask)
+            if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp
             write(logfhandle,'(A,I0,A,F8.3,A)') &
                 &'>>> NU refinement state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'

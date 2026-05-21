@@ -92,13 +92,16 @@ In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd referenc
 
 When `filt_mode=nonuniform`, `nu_refine=yes`, and the user has not set an
 explicit `lp`, the 3D matching/reprojection low-pass limit follows the finest
-active NU filter-bank limit from the previous `volassemble` pass instead of the
-global FSC resolution. After writing the matching `_nu_filt` even/odd products,
-`volassemble` updates the ordinary project `lp` field to the finest active NU
-bank limit, using the same project metadata convention as `set_bp_range3D`.
-The matcher reads that project `lp` value on the next iteration; a fresh first
-iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
-policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
+actually selected NU filter-bank limit from the previous `volassemble` pass
+instead of the global FSC resolution. Candidate bins with zero voxel
+assignments do not advance the global matching bandwidth. After writing the
+matching `_nu_filt` even/odd products, `volassemble` updates the ordinary
+project `lp` field to that selected NU limit only when the finer selected bin
+passes the same acceptance threshold used for high-resolution shell extension:
+at least 5% of the nearest lower-resolution selected bin. The matcher reads
+that project `lp` value on the next iteration; a fresh first iteration or
+missing project `lp` falls back to the ordinary FSC/project-`lp` policy.
+Explicit `lp` remains a hard user override, and `lpstop` still caps the
 selected matching bandwidth.
 
 `filt_mode=nonuniform_lpset` is an experimental variant for testing the same

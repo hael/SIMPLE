@@ -72,6 +72,43 @@ contains
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
+    module real function get_nu_filtmap_finest_selected_lp( mask )
+        logical, intent(in) :: mask(:,:,:)
+        integer :: icut, jcut, ncur, nlower
+        real    :: pct_cur_vs_lower
+        if( .not.allocated(filtmap) )then
+            THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
+        endif
+        if( .not.allocated(cutoff_finds) )then
+            THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before get_nu_filtmap_finest_selected_lp')
+        endif
+        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in get_nu_filtmap_finest_selected_lp')
+        get_nu_filtmap_finest_selected_lp = 0.
+        do icut = size(cutoff_finds), 1, -1
+            if( allocated(srcmap) )then
+                ncur = count(filtmap == icut .and. srcmap == 1 .and. mask)
+            else
+                ncur = count(filtmap == icut .and. mask)
+            endif
+            if( ncur == 0 ) cycle
+            nlower = 0
+            do jcut = icut - 1, 1, -1
+                if( allocated(srcmap) )then
+                    nlower = count(filtmap == jcut .and. srcmap == 1 .and. mask)
+                else
+                    nlower = count(filtmap == jcut .and. mask)
+                endif
+                if( nlower > 0 ) exit
+            end do
+            if( nlower > 0 )then
+                pct_cur_vs_lower = 100. * real(ncur) / real(nlower)
+                if( pct_cur_vs_lower < NU_REFINE_EXTENSION_ACCEPT_PCT ) cycle
+            endif
+            get_nu_filtmap_finest_selected_lp = cutoff_find_to_lowpass_limit(icut)
+            return
+        end do
+    end function get_nu_filtmap_finest_selected_lp
+
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )
         logical,        intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
