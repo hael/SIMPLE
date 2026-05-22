@@ -11,19 +11,19 @@ use simple_math,             only: ceil_div, floor_div
 use simple_kbinterpol,       only: apod_kb15_a2
 implicit none
 
-public :: insert_slices
+public :: calc_3Drec_gpu
 private
 #include "simple_local_flags.inc"
 
 logical              :: DEBUG = .true.
-real(timer_int_kind) :: t_init, t_read, t_prep, t_grid, t_tot
+real(timer_int_kind) :: t_init, t_read, t_prep, t_grid, t_finalize, t_tot
 
 contains
 
-    !> volumetric 3d reconstruction
-    subroutine insert_slices( build, params, cline, nptcls, pinds )
-        class(builder),          intent(inout) :: build
+    !> volumetric 3D reconstruction
+    subroutine calc_3Drec_gpu( params, build, cline, nptcls, pinds )
         class(parameters),       intent(inout) :: params
+        type(builder),           intent(inout) :: build
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: nptcls
         integer,                 intent(in)    :: pinds(nptcls)
@@ -41,13 +41,6 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        if( DEBUG ) t_init = toc(t)
-        ! Batch gridding
-        if( DEBUG ) then
-            t_read = 0.d0
-            t_prep = 0.d0
-            t_grid = 0.d0
-        endif
         ! 3D limits
         vollims = build%eorecvols(1)%even%loop_lims(2)
         h_edge  = vollims(1,1)
@@ -57,16 +50,24 @@ contains
         do jsym = 1, nsym
             call build%pgrpsyms%get_sym_rmat(jsym, symmats(:,:,jsym))
         end do
-        allocate(rotmats(3,3,MAXIMGBATCHSZ))
+        allocate(rotmats(2,3,MAXIMGBATCHSZ))
         ! Arrays
         clb  = lbound(build%eorecvols(1)%even%cmat_exp)
         cdim = ubound(build%eorecvols(1)%even%cmat_exp) - clb + 1
         nyq  = build%eorecvols(1)%even%get_lfny(1)
+        if( DEBUG ) then
+            t_init     = toc(t)
+            t_read     = 0.d0
+            t_prep     = 0.d0
+            t_grid     = 0.d0
+            t_finalize = 0.d0
+        endif
         ! Gridding interpolation of all particles
         call insert_all_slices(params, build, nptcls, pinds, fpls,&
             & build%eorecvols(1)%even%cmat_exp, build%eorecvols(1)%odd%cmat_exp,&
             & build%eorecvols(1)%even%rho_exp, build%eorecvols(1)%odd%rho_exp,&
             & cdim, clb, h_edge, nyq, symmats, rotmats, nsym)
+        if( DEBUG ) t = tic()
         deallocate(symmats, rotmats)
         ! Write partial reconstructions
         call write_partial_recs(params, build, cline, fpls)
@@ -74,15 +75,17 @@ contains
         call finalize_rec_objs(params, build)
         ! Timings
         if( DEBUG .and. (params%part==1) )then
-            t_tot = toc(t0)
+            t_finalize = toc(t)
+            t_tot      = toc(t0)
             print *,'Init          : ', t_init
             print *,'Read          : ', t_read
             print *,'Prep          : ', t_prep
             print *,'Grid          : ', t_grid
+            print *,'Finalize      : ', t_finalize
             print *,'Total rec time: ', t_tot
         endif
 #endif
-    end subroutine insert_slices
+    end subroutine calc_3Drec_gpu
 
 #ifdef USE_OPENMP_OFFLOAD
 
@@ -99,13 +102,14 @@ contains
         real,      target, intent(inout) :: rhoexp_e(cdim(1),cdim(2),cdim(3))
         real,      target, intent(inout) :: rhoexp_o(cdim(1),cdim(2),cdim(3))
         real,      target, intent(in)    :: symmats(3,3,nsym)
-        real,      target, intent(inout) :: rotmats(3,3,MAXIMGBATCHSZ)
-        complex, allocatable :: fplanes(:,:,:)
-        real,    allocatable :: ctfsqplanes(:,:,:), pws(:)
-        logical, allocatable :: even(:)
+        real,      target, intent(inout) :: rotmats(2,3,MAXIMGBATCHSZ)
+        complex,    allocatable :: fplanes(:,:,:)
+        real,       allocatable :: ctfsqplanes(:,:,:), pws(:)
+        logical,    allocatable :: even(:)
+        integer(timer_int_kind) :: t
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
         integer :: ibatch, batchsz, sz, nbatch
-        integer(timer_int_kind) :: t
+        if( DEBUG ) t = tic()
         ! prep first batch
         nbatch = ceiling(real(nptcls)/real(MAXIMGBATCHSZ))
         call prep_batch(1, batchsz, batchlims)
@@ -122,23 +126,26 @@ contains
             &pws(MAXIMGBATCHSZ),even(MAXIMGBATCHSZ))
         ! Device storage
         !$omp target enter data map(alloc: ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
-        !$omp& fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),rotmats(1:3,1:3,1:MAXIMGBATCHSZ))
+        !$omp& fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ), pws(1:MAXIMGBATCHSZ),&
+        !$omp& rotmats(1:2,1:3,1:MAXIMGBATCHSZ), even(1:MAXIMGBATCHSZ))
         !$omp target enter data map(to: symmats(1:3,1:3,1:nsym),&
         !$omp& rhoexp_e(1:cdim(1),1:cdim(2),1:cdim(3)), rhoexp_o(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& cmatexp_e(1:cdim(1),1:cdim(2),1:cdim(3)), cmatexp_o(1:cdim(1),1:cdim(2),1:cdim(3)))
+        if( DEBUG ) t_prep = t_prep + toc(t)
         do ibatch = 1,nbatch
             ! prep batch meta-data & matrices
             call update_ptcls_arrays(batchsz, batchlims(1), build%spproj_field, fpls,&
             & nptcls, pinds, even, pws, rotmats, fplanes, ctfsqplanes)
+            if( DEBUG ) t = tic()
             sz = batchsz    ! For use on device
-            !$omp target update to(fplanes(1:cdim2D(1),1:cdim2D(2),1:sz),&
-            !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:sz), rotmats(1:3,1:3,1:sz))
-            !$omp target data map(to: even(1:sz), pws(1:sz))&
-            !$omp& use_device_addr(even, pws, rotmats, symmats, fplanes,&
+            !$omp target update to(fplanes(1:cdim2D(1),1:cdim2D(2),1:sz),even(1:sz), pws(1:sz),&
+            !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:sz), rotmats(1:2,1:3,1:sz))
+            !$omp target data use_device_addr(even, pws, rotmats, symmats, fplanes,&
             !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
             call insert_slices_batch(sz, cdim, cdim2D, clb2D, clb, fpllims, nsym,&
                 &h_edge, nyq, even, pws, rotmats, symmats, fplanes, ctfsqplanes,&
                 &cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
+            if( DEBUG ) t_grid = t_grid + toc(t)
             if( ibatch < nbatch )then
                 ! process images for next batch while device is busy
                 call prep_batch(ibatch+1, batchsz, batchlims)
@@ -146,12 +153,15 @@ contains
             !$omp taskwait
             !$omp end target data
         enddo
+        if( DEBUG ) t = tic()
         !$omp target exit data map(delete:fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
-        !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ), rotmats(1:3,1:3,1:MAXIMGBATCHSZ))
+        !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ), pws(1:MAXIMGBATCHSZ),&
+        !$omp& rotmats(1:2,1:3,1:MAXIMGBATCHSZ), even(1:MAXIMGBATCHSZ))
         !$omp target exit data map(from: rhoexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& rhoexp_o(1:cdim(1),1:cdim(2),1:cdim(3)), cmatexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& cmatexp_o(1:cdim(1),1:cdim(2),1:cdim(3))) map(release: symmats(1:3,1:3,1:nsym))
         deallocate(fplanes, ctfsqplanes, pws, even)
+        if( DEBUG ) t_finalize = t_finalize + toc(t)
         contains
 
             subroutine prep_batch( batchid, sz, lims )
@@ -178,7 +188,7 @@ contains
         integer,         intent(in)    :: sz, cdim(3), cdim2D(2), clb2D(2), clb(3), fpllims(3,2)
         integer,         intent(in)    :: nsym, h_edge, nyq
         logical,         intent(in)    :: even(MAXIMGBATCHSZ)
-        real,            intent(in)    :: pws(MAXIMGBATCHSZ), rotmats(3,3,MAXIMGBATCHSZ)
+        real,            intent(in)    :: pws(MAXIMGBATCHSZ), rotmats(2,3,MAXIMGBATCHSZ)
         real,            intent(in)    :: symmats(3,3,nsym)
         complex,         intent(in)    :: fplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
         real,            intent(in)    :: ctfsqplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
@@ -190,10 +200,10 @@ contains
         real,      pointer :: rho(:,:,:)
         complex,   pointer :: cmat(:,:,:)
         complex :: comp
-        real    :: R(3,3), loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM)
-        real    :: pf2, pscale, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
+        real    :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM)
+        real    :: pf2, pscale, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
         real    :: w_ctfsq, pw, c_re, c_im
-        integer :: h, i, j, k, l, m, isym, iy, iz, ky, mz
+        integer :: h, i, k, l, m, isym, iy, iz, ky, mz
         integer :: h_sq, k_max_h, k_lo, k_hi, hp, kp, hpb, kpb
         integer :: win(3,2), nyqsq, iwinsz
         iwinsz = ceiling(KBWINSZ - 0.5)
@@ -204,12 +214,13 @@ contains
         !$omp& fpllims(1:3,1:2), nsym, h_edge, nyqsq, pf2, iwinsz)&
         !$omp& has_device_addr(even, pws, rotmats, symmats, fplanes,&
         !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)&
-        !$omp& default(shared) private(h,i,j,k,l,m,R,pscale,isym,r21,r22,r23,ctfsq,&
+        !$omp& default(shared) private(h,i,k,l,m,pscale,isym,r11,r12,r13,r21,r22,r23,ctfsq,&
         !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hp,kp,hpb,kpb,comp,pw,&
         !$omp& loc,w_ctfsq,c_re,c_im,h_sq,k_max_h,k_lo,k_hi,cmat,rho)
         do i = 1, sz
             do isym = 1, nsym
-                pw     = pws(i)
+                pw = pws(i)
+                if( pw <= TINY ) cycle
                 pscale = pw * pf2
                 if( even(i) )then
                     cmat => cmatexp_e
@@ -218,13 +229,12 @@ contains
                     cmat => cmatexp_o
                     rho  => rhoexp_o
                 endif
-                do j = 1, 3
-                    R(1,j) = rotmats(1,1,i)*symmats(1,j,isym) + rotmats(1,2,i)*symmats(2,j,isym) + &
-                        &rotmats(1,3,i)*symmats(3,j,isym)
-                    R(2,j) = rotmats(2,1,i)*symmats(1,j,isym) + rotmats(2,2,i)*symmats(2,j,isym) + &
-                        &rotmats(2,3,i)*symmats(3,j,isym)
-                end do
-                r21 = R(2,1); r22 = R(2,2); r23 = R(2,3)
+                r11 = rotmats(1,1,i)*symmats(1,1,isym) + rotmats(1,2,i)*symmats(2,1,isym) + rotmats(1,3,i)*symmats(3,1,isym)
+                r12 = rotmats(1,1,i)*symmats(1,2,isym) + rotmats(1,2,i)*symmats(2,2,isym) + rotmats(1,3,i)*symmats(3,2,isym)
+                r13 = rotmats(1,1,i)*symmats(1,3,isym) + rotmats(1,2,i)*symmats(2,3,isym) + rotmats(1,3,i)*symmats(3,3,isym)
+                r21 = rotmats(2,1,i)*symmats(1,1,isym) + rotmats(2,2,i)*symmats(2,1,isym) + rotmats(2,3,i)*symmats(3,1,isym)
+                r22 = rotmats(2,1,i)*symmats(1,2,isym) + rotmats(2,2,i)*symmats(2,2,isym) + rotmats(2,3,i)*symmats(3,2,isym)
+                r23 = rotmats(2,1,i)*symmats(1,3,isym) + rotmats(2,2,i)*symmats(2,3,isym) + rotmats(2,3,i)*symmats(3,3,isym)
                 do m = 0, WDIM-1
                     do h = fpllims(1,1)+m, fpllims(1,2), WDIM
                         h_sq = h*h
@@ -232,8 +242,9 @@ contains
                         k_max_h = int(sqrt(real(nyqsq - h_sq)))
                         k_lo    = max(fpllims(2,1), -k_max_h)
                         k_hi    = min(fpllims(2,2),  k_max_h)
-                        loc     = real(h) * R(1,1:3)
-                        loc     = loc + real(k_lo-1) * [r21, r22, r23]
+                        loc(1)  = real(h) * r11 + real(k_lo-1) * r21
+                        loc(2)  = real(h) * r12 + real(k_lo-1) * r22
+                        loc(3)  = real(h) * r13 + real(k_lo-1) * r23
                         hp      = h * OSMPL_PAD_FAC
                         do k = k_lo, k_hi
                             loc(1) = loc(1) + r21
@@ -305,21 +316,26 @@ contains
         integer,            intent(in)  :: pinds(nptcls)
         logical,            intent(out) :: even(MAXIMGBATCHSZ)
         real,               intent(out) :: pws(MAXIMGBATCHSZ)
-        real,               intent(out) :: rotmats(3,3,MAXIMGBATCHSZ)
+        real,               intent(out) :: rotmats(2,3,MAXIMGBATCHSZ)
         complex,            intent(out) :: fplanes(:,:,:)
         real,               intent(out) :: ctfsqplanes(:,:,:)
+        integer(timer_int_kind) :: t
+        real    :: rmat(3,3)
         integer :: i,j,iptcl
-        !$omp parallel do proc_bind(close) private(i,j,iptcl) default(shared)
+        if( DEBUG ) t = tic()
+        !$omp parallel do proc_bind(close) private(i,j,iptcl,rmat) default(shared) schedule(static)
         do i = 1, bsz
             j       = bstart + i - 1
             iptcl   = pinds(j)
             even(i) = os%get_eo(iptcl) == 0
             pws(i)  = os%get(iptcl, 'w')
-            rotmats(:,:,i)     = os%get_mat(iptcl)
+            rmat               = os%get_mat(iptcl)
+            rotmats(:,:,i)     = rmat(1:2,:)
             fplanes(:,:,i)     = fpls(i)%cmplx_plane(:,:)
             ctfsqplanes(:,:,i) = fpls(i)%ctfsq_plane(:,:)
         end do
         !$omp end parallel do
+        if( DEBUG ) t_prep = t_prep + toc(t)
     end subroutine update_ptcls_arrays
 
 #endif

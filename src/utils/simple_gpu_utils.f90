@@ -2,17 +2,19 @@
 ! bindings to CUDAToolkit
 module simple_gpu_utils
 use simple_core_module_api
-use, intrinsic :: iso_c_binding, only: c_int, c_ptr
+use, intrinsic :: iso_c_binding, only: c_float, c_int, c_ptr
 implicit none
 #include "simple_local_flags.inc"
 
-integer(c_int), parameter :: CUFFT_R2C      = int(z'2a', c_int)
-integer(c_int), parameter :: CUFFT_R2C_MANY = int(z'2a', c_int)
-integer(c_int), parameter :: CUFFT_C2R      = int(z'2c', c_int)
-integer(c_int), parameter :: CUFFT_D2Z      = int(z'6a', c_int)
-integer(c_int), parameter :: CUFFT_Z2D      = int(z'6c', c_int)
-integer(c_int), parameter :: CUDA_SUCCESS   = 0_c_int
-integer(c_int), parameter :: CUFFT_SUCCESS  = 0_c_int
+integer(c_int), parameter :: CUFFT_R2C             = int(z'2a', c_int)
+integer(c_int), parameter :: CUFFT_R2C_MANY        = int(z'2a', c_int)
+integer(c_int), parameter :: CUFFT_C2R             = int(z'2c', c_int)
+integer(c_int), parameter :: CUDA_SUCCESS          = 0_c_int
+integer(c_int), parameter :: CUFFT_SUCCESS         = 0_c_int
+integer(c_int), parameter :: CUBLAS_STATUS_SUCCESS = 0_c_int
+integer(c_int), parameter :: CUBLAS_OP_N           = 0_c_int
+integer(c_int), parameter :: CUBLAS_OP_T           = 1_c_int
+integer(c_int), parameter :: CUBLAS_OP_C           = 2_c_int
 
 #ifdef USE_OPENMP_OFFLOAD
 interface
@@ -58,20 +60,6 @@ interface
        type(c_ptr), value :: odata
     end function cufftExecC2R
 
-    integer(c_int) function cufftExecD2Z(plan, idata, odata) bind(C, name='cufftExecD2Z')
-       import :: c_int, c_ptr
-       integer(c_int), value :: plan
-       type(c_ptr), value :: idata
-       type(c_ptr), value :: odata
-    end function cufftExecD2Z
-
-    integer(c_int) function cufftExecZ2D(plan, idata, odata) bind(C, name='cufftExecZ2D')
-       import :: c_int, c_ptr
-       integer(c_int), value :: plan
-       type(c_ptr), value :: idata
-       type(c_ptr), value :: odata
-    end function cufftExecZ2D
-
     integer(c_int) function cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed,&
                             &ostride, odist, ffttype, batch) bind(C, name='cufftPlanMany')
        import :: c_int
@@ -89,6 +77,25 @@ interface
        import :: c_int
        integer(c_int), value :: plan
     end function cufftDestroy
+
+    integer(c_int) function cublasCreate(handle) bind(C, name='cublasCreate_v2')
+       import :: c_int, c_ptr
+       type(c_ptr) :: handle
+    end function cublasCreate
+
+    integer(c_int) function cublasDestroy(handle) bind(C, name='cublasDestroy_v2')
+       import :: c_int, c_ptr
+       type(c_ptr), value :: handle
+    end function cublasDestroy
+
+    integer(c_int) function cublasSgemm(handle, transa, transb, m, n, k, alpha, a, lda,&
+                            &b, ldb, beta, c, ldc) bind(C, name='cublasSgemm_v2')
+       import :: c_float, c_int, c_ptr
+       type(c_ptr),    value :: handle
+       integer(c_int), value :: transa, transb, m, n, k, lda, ldb, ldc
+       real(c_float),  intent(in) :: alpha, beta
+       type(c_ptr),    value :: a, b, c
+    end function cublasSgemm
 end interface
 #endif
 

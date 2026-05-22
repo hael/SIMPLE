@@ -760,7 +760,6 @@ contains
         integer,              optional, intent(in)    :: imat(:,:,:)
         real,    allocatable, optional, intent(out)   :: coords(:,:)
         integer, allocatable :: imat_cc_in(:,:,:)
-        real,        pointer :: rmat_raw(:,:,:)
         integer  :: i, ii, jj, kk
         real(dp) :: m(3,self%n_cc), sum_mass(self%n_cc)
         ! global variables allocation
@@ -773,7 +772,6 @@ contains
         else
             call self%img_cc%get_imat(imat_cc_in)
         endif
-        call self%img_raw%get_rmat_ptr(rmat_raw)
         m        = 0._dp
         sum_mass = 0._dp
         !$omp parallel do collapse(3) default(shared) private(i,ii,jj,kk) schedule(static) proc_bind(close)
@@ -782,8 +780,8 @@ contains
                 do ii = 1, self%ldim(1)
                     i = imat_cc_in(ii,jj,kk)
                     if( i >= 1 .and. i <= self%n_cc )then
-                        m(:,i)      = m(:,i)      + real(rmat_raw(ii,jj,kk),dp) * real([ii,jj,kk],dp)
-                        sum_mass(i) = sum_mass(i) + real(rmat_raw(ii,jj,kk),dp)
+                        m(:,i)      = m(:,i)      + real(self%img_raw%get([ii,jj,kk]),dp) * real([ii,jj,kk],dp)
+                        sum_mass(i) = sum_mass(i) + real(self%img_raw%get([ii,jj,kk]),dp)
                     endif
                 enddo
             enddo

@@ -1,6 +1,6 @@
 ! OMP_TARGET_OFFLOAD=MANDATORY simple_test_openmp_offload nthr= device=
 program simple_test_openmp_offload
-use, intrinsic :: iso_c_binding, only: c_int, c_ptr, c_loc, c_f_pointer, c_associated
+use, intrinsic :: iso_c_binding, only: c_float, c_int, c_ptr, c_loc, c_f_pointer, c_associated, c_null_ptr
 use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
@@ -52,6 +52,7 @@ call test_fftw_vs_cufft_1d_many
 call test_fftw_vs_cufft_2d_many
 call test_fftw_vs_cufft_1d_many_c2r
 call test_fftw_vs_cufft_movie
+call test_cublas_sgemm
 call test_kb
 call test_pointers
 call banner('All tests passed successfully')
@@ -837,22 +838,22 @@ contains
     end subroutine test_fftw_vs_cufft_1d_many_c2r
 
     subroutine test_fftw_vs_cufft_movie
-        integer,  parameter :: nx      = 4096
-        integer,  parameter :: ny      = 4096
-        integer,  parameter :: nxsc    = 2048
-        integer,  parameter :: nysc    = 2048
-        integer,  parameter :: nframes = 50
-        integer,  parameter :: n2cx = nx/2 + 1
-        integer,  parameter :: n2padx = 2*n2cx
-        real(sp), parameter :: tol_cmp = 1.0e-4_sp
-        integer(c_int) :: plan_cu_r2c, plan_cu_c2r
-        type(c_ptr)    :: plan_fftw_r2c, plan_fftw_c2r, p_r, p_c
-        integer(c_int) :: ierr
-        integer :: i,kpi,kpo,hp,h,k,kp
+        integer,            parameter :: nx      = 4096
+        integer,            parameter :: ny      = 4096
+        integer,            parameter :: nxsc    = 2048
+        integer,            parameter :: nysc    = 2048
+        integer,            parameter :: nframes = 50
+        integer,            parameter :: n2cx    = nx/2 + 1
+        integer,            parameter :: n2padx  = 2*n2cx
+        real(sp),           parameter :: tol_cmp = 1.0e-4_sp
         real(sp), allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
-        complex(sp), pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
-        real(sp) :: maxerr
-        logical  :: passed
+        complex(sp),          pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
+        type(c_ptr)    :: plan_fftw_r2c, plan_fftw_c2r, p_r, p_c
+        integer(c_int) :: plan_cu_r2c, plan_cu_c2r
+        integer(c_int) :: ierr
+        integer        :: i,kpi,kpo,hp,h,k,kp
+        real(sp)       :: maxerr
+        logical        :: passed
         call banner('BENCH: FFTW VS CUFFT 2D R2C 50 FRAMES')
         allocate(buf2_cufft(n2padx,ny,nframes), buf2_fftw(n2padx,ny,nframes))
         call c_f_pointer(c_loc(buf2_cufft(1,1,1)), buf2_cufft_c, [n2cx,ny,nframes])
@@ -896,6 +897,60 @@ contains
         call fftwf_destroy_plan(plan_fftw_r2c)
         deallocate(buf2_cufft, buf2_fftw)
     end subroutine test_fftw_vs_cufft_movie
+
+    subroutine test_cublas_sgemm
+        integer, parameter :: m = 4
+        integer, parameter :: n = 5
+        integer, parameter :: k = 3
+        real(c_float), allocatable, target :: a(:,:), b(:,:), c(:,:), cref(:,:)
+        real(c_float) :: alpha, beta, maxerr
+        type(c_ptr) :: handle, d_a, d_b, d_c
+        integer(c_int) :: ierr
+        integer :: i, j
+        call banner('TEST: CUBLAS SGEMM')
+        allocate(a(m,k), b(k,n), c(m,n), cref(m,n))
+        do j = 1, k
+            do i = 1, m
+                a(i,j) = real(10*i + j, c_float) / 7.0_c_float
+            end do
+        end do
+        do j = 1, n
+            do i = 1, k
+                b(i,j) = real(i - 2*j, c_float) / 5.0_c_float
+            end do
+        end do
+        c     = 0.0_c_float
+        cref  = matmul(a, b)
+        alpha = 1.0_c_float
+        beta  = 0.0_c_float
+
+        handle = c_null_ptr
+        ierr = cublasCreate(handle)
+        if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasCreate failed'
+        if( .not. c_associated(handle) ) stop 'Fatal error: cublasCreate returned null handle'
+
+        !$omp target data map(to:a,b) map(from:c)
+            d_a = omp_get_mapped_ptr(c_loc(a(1,1)), 0)
+            d_b = omp_get_mapped_ptr(c_loc(b(1,1)), 0)
+            d_c = omp_get_mapped_ptr(c_loc(c(1,1)), 0)
+            if( .not. c_associated(d_a) ) stop 'Fatal error: CUBLAS SGEMM A is not mapped'
+            if( .not. c_associated(d_b) ) stop 'Fatal error: CUBLAS SGEMM B is not mapped'
+            if( .not. c_associated(d_c) ) stop 'Fatal error: CUBLAS SGEMM C is not mapped'
+            ierr = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, int(m,c_int), int(n,c_int), int(k,c_int),&
+                &alpha, d_a, int(m,c_int), d_b, int(k,c_int), beta, d_c, int(m,c_int))
+            if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasSgemm failed'
+            ierr = cudaDeviceSynchronize()
+            if( ierr /= CUDA_SUCCESS ) stop 'Fatal error: cudaDeviceSynchronize failed after cublasSgemm'
+        !$omp end target data
+
+        maxerr = maxval(abs(c - cref))
+        print *, 'CUBLAS SGEMM max error = ', maxerr
+        if( maxerr > 1.0e-5_c_float ) stop 'Fatal error: CUBLAS SGEMM accuracy test failed'
+        ierr = cublasDestroy(handle)
+        if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasDestroy failed'
+        deallocate(a, b, c, cref)
+        print *, 'PASS: CUBLAS SGEMM test successful'
+    end subroutine test_cublas_sgemm
 
     subroutine test_kb
       use simple_kbinterpol, only: apod_device

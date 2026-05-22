@@ -110,26 +110,24 @@ subroutine gauss2Dfit( ref, center, cov, corr, fit )
     type(image), intent(inout) :: ref
     type(image), intent(out)   :: fit  
     real,        intent(out)   :: center(2), cov(2,2), corr
-    real, pointer       :: rmat(:,:,:)
     real, allocatable   :: rmat_fit(:,:,:)
     real    :: cov_inv(2,2), displ(2,1), displ_T(1,2), lambda(1,1)
-    real    :: smpd, prob, minint, totint, totprob
+    real    :: smpd, prob, minint, maxint,totint, totprob, sdev
     integer :: ldim(3), i, j, errflg
 
     ldim = ref%get_ldim()
     smpd = ref%get_smpd()
-    call ref%get_rmat_ptr(rmat)
     allocate(rmat_fit(ldim(1), ldim(2), 1), source = 0.)
 
-    minint = minval(rmat(:ldim(1),:ldim(2),1)) ! So all probs > 0
-    totint = sum(rmat(:ldim(1),:ldim(2),1)) ! For normalization
+    call ref%stats(totint, sdev, maxint, minint)
+    totint = real(ldim(1) * ldim(2)) * totint  ! For normalization
     totint = totint + ldim(1) * ldim(2) * abs(minint)
 
     ! Find center
     center = 0.
     do j=1, ldim(2)
         do i=1, ldim(1)
-            prob = (rmat(i,j,1) + abs(minint)) / totint
+            prob = (ref%get([i,j,1]) + abs(minint)) / totint
             center(1) = center(1) + i * prob
             center(2) = center(2) + j * prob
         end do
@@ -138,7 +136,7 @@ subroutine gauss2Dfit( ref, center, cov, corr, fit )
     ! Find covariance matrix
     do j=1, ldim(2)
         do i=1, ldim(1)
-            prob = (rmat(i,j,1) + abs(minint)) / totint
+            prob = (ref%get([i,j,1]) + abs(minint)) / totint
             cov(1,1) = cov(1,1) + prob * (i - center(1)) ** 2
             cov(2,2) = cov(2,2) + prob * (j - center(2)) ** 2
             cov(1,2) = cov(1,2) + prob * (i - center(1))*(j - center(2))

@@ -51,7 +51,8 @@ if(USE_OPENMP)
             if(NOT CUDAToolkit_Fortran_FOUND)
                 list(APPEND SIMPLE_LIBRARIES
                     CUDA::cudart
-                    CUDA::cufft)
+                    CUDA::cufft
+                    CUDA::cublas)
             else()
                 message(FATAL_ERROR
                     "The CUDAToolkit library was not found.\n"
