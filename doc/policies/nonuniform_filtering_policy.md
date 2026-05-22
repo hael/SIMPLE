@@ -178,7 +178,12 @@ finer base-bank labels, evaluates the next high-resolution candidate only
 within that local extension mask, and then updates only those eligible voxels.
 This challenge is unary-only: the full-bank Potts prior is not applied during
 extension because the extension experiment is already constrained to a
-one-shell step on the current finest populated frontier.
+one-shell step on the current finest populated frontier. After the sequential
+extension walk stops, the accepted label field is cleaned with the ordinary
+ordered-label Potts prior over the final accepted bank. This cleanup uses the
+mask-packed unary costs for all active labels, including accepted shell
+challengers, and therefore can suppress spatially isolated high-resolution
+islands without changing the shell-by-shell acceptance test itself.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is
 `nu_refine=no`. Staged `abinitio3D` keeps the NU bank discrete by mapping

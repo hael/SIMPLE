@@ -184,8 +184,9 @@ contains
         call log_nu_candidate_selection_counts(candmap, n_base, 'after ordered-label smoothing')
         call candidate_map_to_filt_and_src(candmap, n_base)
         call cache_nu_extension_frontier_dmats(candmap, n_base)
-        ! Drop the candidate unary bank before output synthesis.
-        if( allocated(dmats_mask) ) deallocate(dmats_mask)
+        ! Keep the mask-packed unary bank. High-resolution extension appends
+        ! accepted challenger unaries and can then run a final ordered-label
+        ! cleanup over the expanded label field.
         deallocate(candmap)
     end subroutine optimize_nu_cutoff_finds
 

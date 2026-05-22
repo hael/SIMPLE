@@ -12,7 +12,8 @@
 ! accepted. The challenger starts from the finest populated base-bank label, so
 ! empty finer discrete labels do not block shell refinement. Refinement-style
 ! callers accept the next shell only when at least 5% of the tested frontier
-! selects the challenger.
+! selects the challenger. After the shell walk stops, the final accepted label
+! map is cleaned with the ordered-label Potts prior over the expanded bank.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -54,8 +55,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
-          analyze_filtmap_neighbor_continuity, nu_highres_extension_stats, get_nu_filter_bank_finest_lp,&
-          get_nu_filtmap_finest_selected_lp
+          refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
+          nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp
 private
 #include "simple_local_flags.inc"
 
@@ -318,6 +319,9 @@ interface
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shells
+
+    module subroutine refine_nu_extension_filtmap_ordered_labels
+    end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)

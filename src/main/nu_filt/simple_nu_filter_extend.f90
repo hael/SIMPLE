@@ -197,6 +197,7 @@ contains
         cutoff_finds_new(:sz_old)  = cutoff_finds
         cutoff_finds_new(sz_old+1) = new_find
         call move_alloc(cutoff_finds_new, cutoff_finds)
+        call append_nu_highres_dmat_candidate(dmat_new, sz_old)
         call append_nu_highres_candidate_coord(sz_old, real(sz_old + 1))
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( l_use_aux_extension )then
@@ -282,8 +283,47 @@ contains
             nsteps_local = nsteps_local + 1
             if( .not. step_stats%promote_next ) exit
         end do
+        if( nsteps_local > 0 ) call refine_nu_extension_filtmap_ordered_labels()
         if( present(nsteps) ) nsteps = nsteps_local
     end subroutine extend_nu_filter_highres_shells
+
+    module subroutine refine_nu_extension_filtmap_ordered_labels
+        integer, allocatable :: candmap(:,:,:)
+        integer :: i, j, k, n_base, n_candidates, aux_icand
+        if( .not.allocated(filtmap)          ) THROW_HARD('filtmap not allocated; refine_nu_extension_filtmap_ordered_labels')
+        if( .not.allocated(srcmap)           ) THROW_HARD('srcmap not allocated; refine_nu_extension_filtmap_ordered_labels')
+        if( .not.allocated(dmats_mask)       ) THROW_HARD('dmats_mask not allocated; refine_nu_extension_filtmap_ordered_labels')
+        if( .not.allocated(candidate_coords) ) &
+            &THROW_HARD('candidate_coords not allocated; refine_nu_extension_filtmap_ordered_labels')
+        n_base = size(cutoff_finds)
+        n_candidates = size(dmats_mask, 2)
+        if( n_candidates /= size(candidate_coords) ) &
+            &THROW_HARD('candidate/unary size mismatch; refine_nu_extension_filtmap_ordered_labels')
+        if( n_candidates < 2 ) return
+        write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
+        allocate(candmap(ldim(1),ldim(2),ldim(3)), source=1)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,aux_icand) proc_bind(close)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) cycle
+                    if( srcmap(i,j,k) == 1 )then
+                        candmap(i,j,k) = max(1, min(n_base, filtmap(i,j,k)))
+                    else
+                        aux_icand = n_base + srcmap(i,j,k) - 1
+                        candmap(i,j,k) = max(1, min(n_candidates, aux_icand))
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call log_nu_candidate_selection_counts(candmap, n_base, 'before post-extension ordered-label cleanup')
+        call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
+        call log_nu_candidate_selection_counts(candmap, n_base, 'after post-extension ordered-label cleanup')
+        call candidate_map_to_filt_and_src(candmap, n_base)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        deallocate(candmap)
+    end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)
@@ -428,10 +468,36 @@ contains
         call move_alloc(new_coords, candidate_coords)
     end subroutine append_nu_highres_candidate_coord
 
+    subroutine append_nu_highres_dmat_candidate( dmat_new, old_n_base )
+        real,    intent(in) :: dmat_new(:,:,:)
+        integer, intent(in) :: old_n_base
+        real, allocatable :: new_dmats(:,:)
+        integer :: i, j, k, imask, n_aux, n_candidates_old
+        if( .not.allocated(dmats_mask)  ) THROW_HARD('dmats_mask not allocated; append_nu_highres_dmat_candidate')
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; append_nu_highres_dmat_candidate')
+        if( any(shape(dmat_new) /= ldim) ) THROW_HARD('dmat_new shape mismatch; append_nu_highres_dmat_candidate')
+        n_candidates_old = size(dmats_mask, 2)
+        if( old_n_base < 1 .or. old_n_base > n_candidates_old ) &
+            &THROW_HARD('base-bank size mismatch; append_nu_highres_dmat_candidate')
+        n_aux = n_candidates_old - old_n_base
+        allocate(new_dmats(n_nu_mask, old_n_base + 1 + n_aux), source=huge(0.))
+        new_dmats(:,:old_n_base) = dmats_mask(:,:old_n_base)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            new_dmats(imask,old_n_base + 1) = dmat_new(i,j,k)
+        end do
+        !$omp end parallel do
+        if( n_aux > 0 ) new_dmats(:,old_n_base + 2:) = dmats_mask(:,old_n_base + 1:)
+        call move_alloc(new_dmats, dmats_mask)
+    end subroutine append_nu_highres_dmat_candidate
+
     subroutine prune_nu_highres_extension_bank( active_label )
         integer, intent(in) :: active_label
         integer, allocatable :: new_cutoff_finds(:)
-        real,    allocatable :: new_coords(:), new_bwfilters(:,:)
+        real,    allocatable :: new_coords(:), new_bwfilters(:,:), new_dmats(:,:)
         integer :: old_n_base, n_aux, i
         if( .not. allocated(cutoff_finds) ) return
         old_n_base = size(cutoff_finds)
@@ -455,6 +521,13 @@ contains
             new_coords(:active_label) = candidate_coords(:active_label)
             if( n_aux > 0 ) new_coords(active_label + 1:) = candidate_coords(old_n_base + 1:)
             call move_alloc(new_coords, candidate_coords)
+        endif
+        if( allocated(dmats_mask) )then
+            n_aux = max(0, size(dmats_mask, 2) - old_n_base)
+            allocate(new_dmats(size(dmats_mask,1), active_label + n_aux))
+            new_dmats(:,:active_label) = dmats_mask(:,:active_label)
+            if( n_aux > 0 ) new_dmats(:,active_label + 1:) = dmats_mask(:,old_n_base + 1:)
+            call move_alloc(new_dmats, dmats_mask)
         endif
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
     end subroutine prune_nu_highres_extension_bank
