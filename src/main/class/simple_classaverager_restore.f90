@@ -1,7 +1,8 @@
 !@descr: Routines to perform the classes restoration and processing
 submodule (simple_classaverager) simple_classaverager_restore
-use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+use simple_imgarr_utils,     only: alloc_imgarr, dealloc_imgarr
 use simple_strategy2D_utils, only: calc_cavg_offset
+use simple_gridding,         only: prep2D_inv_instrfun4mul
 implicit none
 #include "simple_local_flags.inc"
 
@@ -589,7 +590,6 @@ contains
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
     !    frequencies, calculates & writes FRCs and optionally applies regularization
     module subroutine cavger_restore_cavgs( frcs_fname )
-        use simple_gridding, only: prep2D_inv_instrfun4mul
         class(string), intent(in) :: frcs_fname
         real, allocatable :: frcs(:,:)
         type(cavgs_set)   :: cavgs_bak
@@ -970,7 +970,7 @@ contains
 
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
         use simple_sp_project,          only: sp_project
-        use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch
+        use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch, killimgbatch
         use simple_memoize_ft_maps
         class(parameters), target,          intent(in)    :: params
         class(builder),                     target, intent(inout) :: build
@@ -982,36 +982,29 @@ contains
         logical,     optional,              intent(in)    :: phflip
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
-        class(oris),  pointer :: pos
-        type(kbinterpol)      :: kbwin
-        type(image)           :: img(nthr_glob), timg(nthr_glob)
-        type(ctfparams)       :: ctfparms
-        type(ctf)             :: tfun
-        type(string)          :: str
+        class(oris), pointer :: pos
+        type(kbinterpol)     :: kbwin
+        type(image)          :: img(nthr_glob), gridcorr_img
+        type(ctfparams)      :: ctfparms
+        type(ctf)            :: tfun
+        type(string)         :: str
         real,     allocatable :: kbw(:,:)
+        integer,  allocatable :: phys_addrh_ori(:,:), phys_addrk_ori(:,:)
         complex :: fcomp, fcompl
-        real    :: mat(2,2), shift(2), loc(2), e3
-        integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
-        integer :: i,iptcl, l,m, pop, h,k, hh,kk, ithr, iwinsz, wdim, physh,physk
-        logical :: l_phflip, l_imgs, l_conjg
+        real    :: mat(2,2), shift(2), loc(2), e3, pf2
+        integer :: ldim_pd(3), ldim(3),logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
+        integer :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk
+        logical :: l_phflip, l_ori_imgs, l_conjg
         p_ptr => params
         b_ptr => build
-        l_imgs = .false.
-        if( allocated(timgs) )then
-            do i = 1,size(timgs)
-                call timgs(i)%kill
-            enddo
-            deallocate(timgs)
-        endif
-        if( l_imgs )then
-            if( allocated(imgs_ori) )then
-                do i = 1,size(imgs_ori)
-                    call imgs_ori(i)%kill
-                enddo
-                deallocate(imgs_ori)
-            endif
-        endif
+        ! parse inputs
+        l_phflip = .false.
+        if( present(phflip) ) l_phflip = phflip
+        l_ori_imgs = present(imgs_ori)
         if(present(cavg)) call cavg%kill
+        call dealloc_imgarr(timgs)
+        if( l_ori_imgs ) call dealloc_imgarr(imgs_ori)
+        ! particles indices
         select case(trim(oritype))
             case('ptcl2D')
                 str = 'class'
@@ -1026,10 +1019,7 @@ contains
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)
         if( pop == 0 ) return
-        write(logfhandle,'(A,I8,A,I8)') 'transform_ptcls: class=', icls, ' pop=', pop
-        call flush(logfhandle)
-        l_phflip = .false.
-        if( present(phflip) ) l_phflip = phflip
+        ! Phase flipping sanity check
         if( l_phflip )then
             select case( spproj%get_ctfflag_type(oritype, pinds(1)) )
             case(CTFFLAG_NO)
@@ -1043,46 +1033,43 @@ contains
                 THROW_HARD('UNSUPPORTED CTF FLAG')
             end select
         endif
-        allocate(timgs(pop))
-        write(logfhandle,'(A,I8)') 'transform_ptcls: allocated timgs, pop=', pop
-        call flush(logfhandle)
-        write(logfhandle,'(A,I8,A,F10.4,A,I8)') 'transform_ptcls: image new params box=', p_ptr%box, ' smpd=', p_ptr%smpd, ' boxpd=', p_ptr%boxpd
-        call flush(logfhandle)
-        do i = 1,size(timgs)
-            call timgs(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
-        enddo
-        if( l_imgs )then
-            allocate(imgs_ori(pop))
-            do i = 1,size(imgs_ori)
-                call imgs_ori(i)%new([p_ptr%box,p_ptr%box,1],p_ptr%smpd, wthreads=.false.)
-            enddo
-        endif
         ! interpolation variables
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(kbw(wdim,wdim),source=0.)
-        write(logfhandle,'(A,I8,A,I8)') 'transform_ptcls: interp setup done, wdim=', wdim, ' nthr_glob=', nthr_glob
-        call flush(logfhandle)
-        ! temporary objects
-        call prepimgbatch(p_ptr, b_ptr, pop)
-        write(logfhandle,'(A)') 'transform_ptcls: prepimgbatch done'
-        call flush(logfhandle)
-        do ithr = 1, nthr_glob
-            call  img(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
-            call timg(ithr)%new([p_ptr%boxpd,p_ptr%boxpd,1],p_ptr%smpd, wthreads=.false.)
-        end do
-        write(logfhandle,'(A)') 'transform_ptcls: thread-local image buffers ready'
-        call flush(logfhandle)
-        call memoize_ft_maps(img(1)%get_ldim(), img(1)%get_smpd())
-        logi_lims      = img(1)%loop_lims(2)
-        cyc_lims       = img(1)%loop_lims(3)
+        ! Dimensions and limits
+        ldim    = [p_ptr%box,   p_ptr%box,   1]
+        ldim_pd = [p_ptr%boxpd, p_ptr%boxpd, 1]
+        ! memoization for original size
+        call memoize_ft_maps(ldim, p_ptr%smpd)
+        phys_addrh_ori = ft_map_phys_addrh
+        phys_addrk_ori = ft_map_phys_addrk
+        logi_lims      = ft_map_lims
+        ! memoization for padded size
+        call memoize_ft_maps(ldim_pd, p_ptr%smpd)
+        cyc_lims       = ft_map_lims_nr
         cyc_limsR(:,1) = cyc_lims(1,:)
         cyc_limsR(:,2) = cyc_lims(2,:)
+        ! Oversampling correction factor
+        pf2 = real(OSMPL_PAD_FAC**2)
+        ! Gridding correction object
+        gridcorr_img = prep2D_inv_instrfun4mul(ldim, ldim_pd, p_ptr%smpd)
+        ! transformed output images
+        call alloc_imgarr(pop, ldim, p_ptr%smpd, timgs)
+        ! temporary objects
+        call prepimgbatch(p_ptr, b_ptr, pop)
+        !$omp parallel do private(ithr) default(shared) schedule(static) proc_bind(close)
+        do ithr = 1, nthr_glob
+            call img(ithr)%new(ldim_pd, p_ptr%smpd, wthreads=.false.)
+        end do
+        !$omp end parallel do
+        if( l_ori_imgs ) call alloc_imgarr(pop, ldim, p_ptr%smpd, imgs_ori)
+        ! Read all images
         call discrete_read_imgbatch(p_ptr, b_ptr, pop, pinds(:), [1,pop])
-        write(logfhandle,'(A)') 'transform_ptcls: discrete_read_imgbatch done'
-        call flush(logfhandle)
-        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,h,k,hh,kk,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
+        ! Transformation and rotation loop
+        !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,&
+        !$omp& h,k,hh,kk,hp,kp,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &
         !$omp default(shared) schedule(static) proc_bind(close)
         do i = 1,pop
             ithr  = omp_get_thread_num() + 1
@@ -1090,10 +1077,10 @@ contains
             shift = pos%get_2Dshift(iptcl)
             e3    = pos%e3get(iptcl)
             call img(ithr)%zero_and_flag_ft
-            call timg(ithr)%zero_and_flag_ft
-            ! normalisation
-            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk,img(ithr))
-            if( l_imgs )then
+            call timgs(i)%zero_and_flag_ft
+            ! normalisation, padding & forward FT
+            call b_ptr%imgbatch(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk, img(ithr))
+            if( l_ori_imgs )then
                 call img(ithr)%ifft
                 call img(ithr)%clip(imgs_ori(i))
                 call img(ithr)%fft
@@ -1109,16 +1096,20 @@ contains
             ! rotation matrix
             call rotmat2d(-e3, mat)
             do h = logi_lims(1,1),logi_lims(1,2)
+                ! padded h-coordinate
+                hp = h * OSMPL_PAD_FAC
                 do k = logi_lims(2,1),logi_lims(2,2)
-                    ! rotation
-                    loc = matmul(real([h,k]),mat)
+                    ! padded k-coordinate
+                    kp = k * OSMPL_PAD_FAC
+                    ! rotation on the padded lattice
+                    loc = matmul(real([hp,kp]),mat)
                     ! interpolation window
                     win(1,:) = nint(loc)
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
                     ! interpolation kernel
                     call kbwin%apod_mat_2d_fast(loc, iwinsz, wdim, kbw)
-                    ! intepolation
+                    ! interpolation from padded images
                     fcomp = CMPLX_ZERO
                     do l = 1,wdim
                         hh      = win(1,1)+l-1
@@ -1134,13 +1125,17 @@ contains
                         enddo
                         fcomp = fcomp + merge(conjg(fcompl), fcompl, l_conjg)
                     end do
-                    physh = ft_map_phys_addrh(h,k)
-                    physk = ft_map_phys_addrk(h,k)
-                    call timg(ithr)%set_cmat_at(physh, physk, 1, fcomp)
+                    ! oversampling scaling correction
+                    fcomp = pf2 * fcomp
+                    ! sets Fourier component
+                    physh = phys_addrh_ori(h,k)
+                    physk = phys_addrk_ori(h,k)
+                    call timgs(i)%set_cmat_at(physh, physk, 1, fcomp)
                 enddo
             enddo
-            call timg(ithr)%ifft
-            call timg(ithr)%clip(timgs(i))
+            ! backwards FT & gridding correction
+            call timgs(i)%ifft
+            call timgs(i)%mul(gridcorr_img)
         enddo
         !$omp end parallel do
         if( present(cavg) )then
@@ -1150,11 +1145,14 @@ contains
             enddo
             call cavg%div(real(pop))
         endif
+        ! cleanup
+        call killimgbatch(build)
         call forget_ft_maps
         do ithr = 1, nthr_glob
             call img(ithr)%kill
-            call timg(ithr)%kill
         end do
+        call gridcorr_img%kill
+        call str%kill
         nullify(pos)
     end subroutine transform_ptcls
 
