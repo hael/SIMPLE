@@ -148,14 +148,23 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
+        logical :: l_automsk_active
         cfg%filt_mode  = 'none'
         cfg%nu_refine  = 'no'
         cfg%lpstart    = 0.
         cfg%lpstop     = 0.
         if( l_cavgs ) return
+        l_automsk_active = istage >= AUTOMSK_STAGE .and. l_automsk .and. trim(params%automsk).ne.'no'
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
-            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
+            if( cfg%filt_mode.eq.'nonuniform' )then
+                if( l_automsk_active )then
+                    cfg%nu_refine = 'yes'
+                else
+                    cfg%filt_mode = 'nonuniform_lpset'
+                    cfg%nu_refine = 'no'
+                endif
+            endif
             if( cfg%filt_mode.eq.'nonuniform_lpset' ) cfg%nu_refine = 'no'
             if( cfg%filt_mode.eq.'uniform' )then
                 cfg%lpstart = lpinfo(istage - 1)%lp

@@ -43,6 +43,9 @@ contains
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
         if( allocated(aux_even_bank) ) n_candidates = n_candidates + size(aux_even_bank)
+        if( n_candidates > NU_DMAT_CANDIDATE_CAP )then
+            THROW_HARD('NU distance-matrix candidate cap exceeded in setup_nu_dmats')
+        endif
         call setup_nu_candidate_coords(n_candidates, aux_resolutions)
         call log_nu_objective_smoothing_bank(aux_resolutions)
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
@@ -78,12 +81,17 @@ contains
     module subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
         integer, intent(in) :: n_candidates
         real,    intent(in) :: aux_resolutions(:)
-        integer :: i, n_base, iaux
+        integer :: i, n_base, iaux, n_discrete_base
         n_base = size(cutoff_finds)
+        n_discrete_base = min(size(lowpass_limits), n_base)
         if( allocated(candidate_coords) ) deallocate(candidate_coords)
         allocate(candidate_coords(n_candidates), source=0.)
         do i = 1, n_base
-            candidate_coords(i) = real(i)
+            if( i <= n_discrete_base )then
+                candidate_coords(i) = real(i)
+            else
+                candidate_coords(i) = real(n_discrete_base + cutoff_finds(i) - cutoff_finds(n_discrete_base))
+            endif
         end do
         if( n_candidates == n_base ) return
         if( size(aux_resolutions) /= n_candidates - n_base )then
@@ -128,6 +136,22 @@ contains
         if( size(cutoff_finds) < 1 ) THROW_HARD('empty filter bank; get_nu_filter_bank_finest_lp')
         get_nu_filter_bank_finest_lp = cutoff_find_to_lowpass_limit(size(cutoff_finds))
     end function get_nu_filter_bank_finest_lp
+
+    module integer function get_nu_filtmap_highres_shell_depth()
+        integer :: base_n, finest_label
+        get_nu_filtmap_highres_shell_depth = 0
+        if( .not.allocated(cutoff_finds) ) return
+        if( .not.allocated(filtmap)      ) return
+        if( .not.allocated(srcmap)       ) return
+        if( .not.allocated(nu_lmask)     ) return
+        base_n = min(size(lowpass_limits), size(cutoff_finds))
+        if( base_n < 1 ) return
+        if( .not.any(nu_lmask .and. srcmap == 1) ) return
+        finest_label = maxval(filtmap, mask=nu_lmask .and. srcmap == 1)
+        if( finest_label <= base_n ) return
+        finest_label = min(finest_label, size(cutoff_finds))
+        get_nu_filtmap_highres_shell_depth = max(0, cutoff_finds(finest_label) - cutoff_finds(base_n))
+    end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
         integer, allocatable :: candmap(:,:,:)

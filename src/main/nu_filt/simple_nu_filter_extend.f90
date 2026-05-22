@@ -16,17 +16,18 @@ contains
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest(:,:,:)
         integer, allocatable :: cutoff_finds_new(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
-        integer           :: old_radius_px, new_radius_px
+        integer           :: old_radius_px, new_radius_px, n_seed_min
         real              :: accept_pct_eff, pct_finest, x, noise_sigma
         real              :: old_radius_angstrom, new_radius_angstrom
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
         integer, allocatable :: extend_choice(:,:,:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k
-        logical           :: l_use_aux_extension
+        logical           :: l_use_aux_extension, l_permissive_accept
         local_stats%new_limit = new_limit
         accept_pct_eff = NU_HIGHRES_EXTENSION_ACCEPT_PCT
         if( present(accept_pct) ) accept_pct_eff = max(0., accept_pct)
+        l_permissive_accept = present(accept_pct) .and. accept_pct_eff <= TINY
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
@@ -152,6 +153,11 @@ contains
         if( n_finest > 0 )then
             local_stats%pct_unary_wins_tested = 100. * real(local_stats%n_unary_wins) / real(n_finest)
         endif
+        if( n_total > 0 )then
+            local_stats%pct_unary_wins_mask = 100. * real(local_stats%n_unary_wins) / real(n_total)
+        endif
+        n_seed_min = calc_nu_highres_extension_seed_min(n_total)
+        local_stats%n_seed_min = n_seed_min
         write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A,I12,A,I12,A,F8.3,A,I12,A,F8.3,A)') &
             &'>>> NU high-resolution extension challenge ', local_stats%old_limit, ' A (k=', &
             &local_stats%old_find, ') -> ', local_stats%new_limit, ' A (k=', local_stats%new_find, &
@@ -165,13 +171,25 @@ contains
             &'>>> NU high-resolution extension AWF radii old/new: ', &
             &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
             &new_radius_angstrom, ' A (px=', new_radius_px, ')'
-        local_stats%applied = n_extended > 0 .and. local_stats%pct_unary_wins_tested >= accept_pct_eff
+        if( l_permissive_accept )then
+            local_stats%applied = n_extended > 0
+        else
+            local_stats%accepted_by_frontier = n_extended >= n_seed_min .and. &
+                &local_stats%pct_unary_wins_tested >= accept_pct_eff
+            local_stats%accepted_by_seed = n_extended >= n_seed_min .and. &
+                &local_stats%pct_unary_wins_mask >= NU_HIGHRES_EXTENSION_SEED_MASK_PCT
+            local_stats%applied = n_extended > 0 .and. &
+                &(local_stats%accepted_by_frontier .or. local_stats%accepted_by_seed)
+        endif
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then
             if( n_extended > 0 )then
-                write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A,F8.3,A,F8.3,A)') &
                     &'>>> NU high-resolution extension rejected: challenger wins ', &
-                    &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, '% of tested frontier'
+                    &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, &
+                    &'% of tested frontier or lacks seed support ', n_extended, '/', n_seed_min, &
+                    &' voxels; mask wins ', local_stats%pct_unary_wins_mask, '% below ', &
+                    &NU_HIGHRES_EXTENSION_SEED_MASK_PCT, '%'
             else
                 write(logfhandle,'(A,F8.3,A)') &
                     &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
@@ -185,6 +203,36 @@ contains
             if( present(stats) ) stats = local_stats
             return
         end if
+        call compact_nu_highres_dmat_bank_for_capacity()
+        if( allocated(dmats_mask) )then
+            if( size(dmats_mask,2) >= NU_DMAT_CANDIDATE_CAP )then
+                local_stats%applied = .false.
+                local_stats%promote_next = .false.
+                local_stats%memory_limited = .true.
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> NU high-resolution extension stopped: distance-matrix cap full at ', &
+                    &NU_DMAT_CANDIDATE_CAP, ' candidates'
+                call delete_cached_filtered_pair(new_find)
+                call vol_even_filt_new%kill
+                call vol_odd_filt_new%kill
+                if( allocated(extend_to_new) ) deallocate(extend_to_new)
+                if( allocated(extend_choice) ) deallocate(extend_choice)
+                deallocate(extend_mask, dmat_new, dmat_finest, dmat_tmp)
+                if( present(stats) ) stats = local_stats
+                return
+            endif
+        endif
+        sz_old = size(cutoff_finds)
+        local_stats%old_find  = cutoff_finds(sz_old)
+        local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
+        if( .not.l_permissive_accept )then
+            if( local_stats%accepted_by_seed .and. .not.local_stats%accepted_by_frontier )then
+                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A)') &
+                    &'>>> NU high-resolution extension accepted by mask-level seed: ', &
+                    &local_stats%pct_unary_wins_mask, '% mask wins; frontier wins ', &
+                    &local_stats%pct_unary_wins_tested, '%, seed voxels ', n_seed_min, '+'
+            endif
+        endif
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         if( l_use_aux_extension )then
@@ -198,7 +246,12 @@ contains
         cutoff_finds_new(sz_old+1) = new_find
         call move_alloc(cutoff_finds_new, cutoff_finds)
         call append_nu_highres_dmat_candidate(dmat_new, sz_old)
-        call append_nu_highres_candidate_coord(sz_old, real(sz_old + 1))
+        if( allocated(candidate_coords) .and. size(candidate_coords) >= sz_old )then
+            call append_nu_highres_candidate_coord(sz_old, candidate_coords(sz_old) + &
+                &real(new_find - cutoff_finds(sz_old)))
+        else
+            call append_nu_highres_candidate_coord(sz_old, real(sz_old + 1))
+        endif
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( l_use_aux_extension )then
             call cache_nu_highres_extension_frontier_after_aux_selection(dmat_new, sz_old + 1)
@@ -321,9 +374,118 @@ contains
         call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
         call log_nu_candidate_selection_counts(candmap, n_base, 'after post-extension ordered-label cleanup')
         call candidate_map_to_filt_and_src(candmap, n_base)
+        call compact_nu_highres_dmat_bank_for_capacity()
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         deallocate(candmap)
     end subroutine refine_nu_extension_filtmap_ordered_labels
+
+    integer function calc_nu_highres_extension_seed_min( n_total ) result( n_seed_min )
+        integer, intent(in) :: n_total
+        if( n_total <= 0 )then
+            n_seed_min = 1
+        else
+            n_seed_min = max(NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS, &
+                &ceiling(NU_HIGHRES_EXTENSION_SEED_MASK_PCT * real(n_total) / 100.))
+            n_seed_min = min(n_total, n_seed_min)
+        endif
+    end function calc_nu_highres_extension_seed_min
+
+    subroutine compact_nu_highres_dmat_bank_for_capacity()
+        logical, allocatable :: keep(:)
+        integer, allocatable :: old_to_new(:), new_cutoff_finds(:)
+        real,    allocatable :: new_coords(:), new_bwfilters(:,:), new_dmats(:,:)
+        integer :: old_n_base, n_aux, base_keep_n, n_keep, i, j, k, ikeep, old_label
+        if( .not.allocated(dmats_mask)   ) return
+        if( .not.allocated(cutoff_finds) ) return
+        if( .not.allocated(filtmap)      ) return
+        if( .not.allocated(srcmap)       ) return
+        if( .not.allocated(nu_lmask)     ) return
+        if( size(dmats_mask,2) < NU_DMAT_CANDIDATE_CAP ) return
+        old_n_base = size(cutoff_finds)
+        if( old_n_base <= size(lowpass_limits) ) return
+        allocate(keep(old_n_base), source=.false.)
+        base_keep_n = min(size(lowpass_limits), old_n_base)
+        keep(:base_keep_n) = .true.
+        do i = base_keep_n + 1, old_n_base
+            keep(i) = any(nu_lmask .and. srcmap == 1 .and. filtmap == i)
+        end do
+        n_keep = count(keep)
+        if( n_keep >= old_n_base )then
+            deallocate(keep)
+            return
+        endif
+        allocate(old_to_new(old_n_base), source=0)
+        allocate(new_cutoff_finds(n_keep))
+        ikeep = 0
+        do i = 1, old_n_base
+            if( keep(i) )then
+                ikeep = ikeep + 1
+                old_to_new(i) = ikeep
+                new_cutoff_finds(ikeep) = cutoff_finds(i)
+            else
+                call delete_cached_filtered_pair(cutoff_finds(i))
+            endif
+        end do
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,old_label)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( srcmap(i,j,k) /= 1 ) cycle
+                    old_label = filtmap(i,j,k)
+                    if( old_label >= 1 .and. old_label <= old_n_base )then
+                        if( old_to_new(old_label) > 0 )then
+                            filtmap(i,j,k) = old_to_new(old_label)
+                        else
+                            filtmap(i,j,k) = 1
+                        endif
+                    else
+                        filtmap(i,j,k) = 1
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call move_alloc(new_cutoff_finds, cutoff_finds)
+        if( allocated(bwfilters) )then
+            if( size(bwfilters,2) >= old_n_base )then
+                allocate(new_bwfilters(size(bwfilters,1), n_keep))
+                ikeep = 0
+                do i = 1, old_n_base
+                    if( .not.keep(i) ) cycle
+                    ikeep = ikeep + 1
+                    new_bwfilters(:,ikeep) = bwfilters(:,i)
+                end do
+                call move_alloc(new_bwfilters, bwfilters)
+            endif
+        endif
+        if( allocated(candidate_coords) )then
+            n_aux = max(0, size(candidate_coords) - old_n_base)
+            allocate(new_coords(n_keep + n_aux), source=0.)
+            ikeep = 0
+            do i = 1, old_n_base
+                if( .not.keep(i) ) cycle
+                ikeep = ikeep + 1
+                new_coords(ikeep) = candidate_coords(i)
+            end do
+            if( n_aux > 0 ) new_coords(n_keep + 1:) = candidate_coords(old_n_base + 1:)
+            call move_alloc(new_coords, candidate_coords)
+        endif
+        n_aux = max(0, size(dmats_mask,2) - old_n_base)
+        allocate(new_dmats(size(dmats_mask,1), n_keep + n_aux), source=huge(0.))
+        ikeep = 0
+        do i = 1, old_n_base
+            if( .not.keep(i) ) cycle
+            ikeep = ikeep + 1
+            new_dmats(:,ikeep) = dmats_mask(:,i)
+        end do
+        if( n_aux > 0 ) new_dmats(:,n_keep + 1:) = dmats_mask(:,old_n_base + 1:)
+        write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
+            &'>>> NU distance-matrix bank compacted for memory: ', size(dmats_mask,2), &
+            &' -> ', n_keep + n_aux, ' candidates (cap ', NU_DMAT_CANDIDATE_CAP, ')'
+        call move_alloc(new_dmats, dmats_mask)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        deallocate(keep, old_to_new)
+    end subroutine compact_nu_highres_dmat_bank_for_capacity
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)

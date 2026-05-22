@@ -250,7 +250,8 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
-            &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp
+            &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
+            &get_nu_filtmap_highres_shell_depth
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -486,11 +487,11 @@ contains
             end do
             if( n_accepted_this_iteration > 0 )then
                 call refine_nu_extension_filtmap_ordered_labels()
-                call write_nu_highres_steps_for_state(n_highres_steps + n_accepted_this_iteration)
+                n_highres_steps = get_nu_filtmap_highres_shell_depth()
+                call write_nu_highres_steps_for_state(n_highres_steps)
                 write(logfhandle,'(A,I0,A,I0)') &
                     &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
-                    &n_accepted_this_iteration, '; promoted depth for next iteration: ', &
-                    &n_highres_steps + n_accepted_this_iteration
+                    &n_accepted_this_iteration, '; promoted depth for next iteration: ', n_highres_steps
             endif
         end subroutine refine_nonuniform_filter_bank
 

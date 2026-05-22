@@ -39,6 +39,7 @@ contains
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
+        call release_nu_filter_unary_storage
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call vol_even_filt%set_wthreads(.false.)
@@ -109,6 +110,7 @@ contains
         if( any(nu_lmask .and. srcmap /= 1) )then
             THROW_HARD('single-map NU filtering requires a base-bank-only filter map; nu_filter_vol')
         endif
+        call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
         if( .not. vol_in_ft%is_ft() )then
@@ -162,6 +164,7 @@ contains
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
         call validate_nu_postprocess_aux_vols(aux_vols)
+        call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
         if( .not. vol_in_ft%is_ft() )then

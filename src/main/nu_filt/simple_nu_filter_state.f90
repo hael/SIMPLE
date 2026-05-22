@@ -16,7 +16,7 @@ contains
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
         integer, allocatable :: cutoff_finds_tmp(:)
-        integer :: i, n_extra, n_valid, new_find, n_added
+        integer :: i, n_extra, n_extra_requested, n_valid, new_find, n_added, max_extra, base_find
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
         box  = ldim(1)
@@ -26,17 +26,26 @@ contains
         nu_smooth_norm_radius = -1
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
-        n_extra = 0
+        base_find = calc_fourier_index(lowpass_limits(size(lowpass_limits)), box, smpd)
+        n_extra_requested = 0
         if( present(n_highres_steps) )then
-            n_extra = min(max(0, n_highres_steps), max(0, box / 2))
+            n_extra_requested = min(max(0, n_highres_steps), max(0, box / 2 - base_find))
         endif
+        max_extra = max(0, NU_DMAT_CANDIDATE_CAP - size(lowpass_limits) - NU_DMAT_CANDIDATE_HEADROOM)
+        n_extra = min(n_extra_requested, max_extra)
         allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
         do i = 1, size(lowpass_limits)
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
         n_valid = size(lowpass_limits)
         n_added = 0
-        new_find = cutoff_finds_tmp(n_valid) + 1
+        if( n_extra_requested > n_extra )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
+                &'>>> NU high-resolution depth ', n_extra_requested, &
+                &' exceeds distance-matrix memory window; using finest ', n_extra, &
+                &' shell step(s) within cap ', NU_DMAT_CANDIDATE_CAP, ' candidates'
+        endif
+        new_find = cutoff_finds_tmp(n_valid) + max(0, n_extra_requested - n_extra) + 1
         do while( n_added < n_extra .and. new_find <= box / 2 )
             if( .not.any(cutoff_finds_tmp(:n_valid) == new_find) )then
                 n_valid = n_valid + 1
@@ -85,26 +94,30 @@ contains
         end if
     end subroutine delete_cached_filtered_vols
 
+    module subroutine release_nu_filter_unary_storage
+        if( allocated(dmats_mask)         ) deallocate(dmats_mask)
+        if( allocated(dmats_aux_mask)     ) deallocate(dmats_aux_mask)
+        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
+        if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
+        if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
+        if( allocated(nu_smooth_norm)     ) deallocate(nu_smooth_norm)
+        nu_smooth_norm_radius = -1
+    end subroutine release_nu_filter_unary_storage
+
     module subroutine cleanup_nu_filter
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
-        if( allocated(dmats_mask)         ) deallocate(dmats_mask)
-        if( allocated(dmats_aux_mask)     ) deallocate(dmats_aux_mask)
+        call release_nu_filter_unary_storage
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
-        if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
-        if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
-        if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
-        if( allocated(nu_smooth_norm)     ) deallocate(nu_smooth_norm)
         call cleanup_aux_bank
         ldim = 0
         box  = 0
         n_nu_mask = 0
-        nu_smooth_norm_radius = -1
         smpd = 0.
         l_aux_source_unordered_potts = .false.
     end subroutine cleanup_nu_filter
