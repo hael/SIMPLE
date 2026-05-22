@@ -1670,21 +1670,74 @@ contains
         endif
     end function sqeuclid
 
-    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask )
+    module real function nu_objective_noise_scale( even_raw, odd_raw, l_mask )
+        class(image),  intent(in) :: even_raw, odd_raw
+        logical,       intent(in) :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        real, allocatable :: vals(:)
+        real :: med
+        integer :: nx, ny, nz, i, j, k, imask, nmask
+        nx = even_raw%ldim(1)
+        ny = even_raw%ldim(2)
+        nz = even_raw%ldim(3)
+        nmask = count(l_mask)
+        if( nmask < 1 ) THROW_HARD('empty mask in nu_objective_noise_scale')
+        allocate(vals(nmask))
+        imask = 0
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.l_mask(i,j,k) ) cycle
+                    imask = imask + 1
+                    vals(imask) = even_raw%rmat(i,j,k) - odd_raw%rmat(i,j,k)
+                end do
+            end do
+        end do
+        ! Use the raw even/odd difference as a candidate-independent estimate of
+        ! half-map noise in the current support. The same normalization is then
+        ! used for every low-pass and auxiliary candidate, so the NU competition
+        ! is driven by cross-half consistency rather than by candidate-specific
+        ! amplitude or scale changes.
+        med = median_nocopy(vals)
+        nu_objective_noise_scale = mad_gau(vals, med)
+        if( nu_objective_noise_scale <= TINY )then
+            nu_objective_noise_scale = sqrt(sum(vals * vals) / real(nmask))
+        endif
+        if( nu_objective_noise_scale <= TINY ) nu_objective_noise_scale = 1.
+        deallocate(vals)
+    end function nu_objective_noise_scale
+
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_sigma )
         class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
         real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        real, optional, intent(in) :: noise_sigma
+        ! The NU unary is a cross-half prediction error: raw even versus
+        ! filtered odd, plus filtered even versus raw odd. Normalizing by the
+        ! raw E/O noise scale puts this error in approximately comparable noise
+        ! units across maps, iterations, and candidate banks.
+        !
+        ! Huber keeps the desired L2 behavior for residuals at the expected
+        ! noise scale, matching the least-squares intuition of the original NU
+        ! formulation, but becomes L1-like for large residuals. That prevents
+        ! local outliers, imperfect masks, disorder, or interpolation/filter
+        ! artifacts from dominating the voxelwise filter choice and pushing the
+        ! selection toward overly conservative low-pass candidates.
+        real, parameter :: HUBER_DELTA = 1.345
+        real :: sigma, r1, r2
         integer :: nx, ny, nz, i, j, k
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        sigma = 1.
+        if( present(noise_sigma) ) sigma = max(noise_sigma, TINY)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,r1,r2) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( l_mask(i,j,k) )then
-                        diff(i,j,k) = abs(even_raw%rmat(i,j,k) - odd_filt%rmat(i,j,k)) +&
-                                     &abs(even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))
+                        r1 = (even_raw%rmat(i,j,k)  - odd_filt%rmat(i,j,k)) / sigma
+                        r2 = (even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))  / sigma
+                        diff(i,j,k) = huber_loss(r1) + huber_loss(r2)
                     else
                         ! Neutral fill for mask-normalized tent smoothing only;
                         ! outside-mask voxels are assigned the coarsest label later.
@@ -1694,6 +1747,17 @@ contains
             end do
         end do
         !$omp end parallel do
+    contains
+        elemental real function huber_loss( r ) result( loss )
+            real, intent(in) :: r
+            real :: ar
+            ar = abs(r)
+            if( ar <= HUBER_DELTA )then
+                loss = 0.5 * r * r
+            else
+                loss = HUBER_DELTA * (ar - 0.5 * HUBER_DELTA)
+            endif
+        end function huber_loss
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )

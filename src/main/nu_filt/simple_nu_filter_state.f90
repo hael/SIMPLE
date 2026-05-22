@@ -23,9 +23,7 @@ contains
         if( any(vol_odd%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; init_nu_filter')
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
         if( smpd <= TINY ) THROW_HARD('Input volume smpd must be positive; init_nu_filter')
-        ! Convert the physical half-width to pixel radius for tent_smooth_3d.
-        ! The resulting support is 2*winsz_tent + 1 voxels.
-        winsz_tent = max(1, nint(WINSZ_TENT_ANGSTROM / smpd))
+        nu_smooth_norm_radius = -1
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         n_extra = 0
@@ -106,7 +104,7 @@ contains
         ldim = 0
         box  = 0
         n_nu_mask = 0
-        winsz_tent = 0
+        nu_smooth_norm_radius = -1
         smpd = 0.
         l_aux_source_unordered_potts = .false.
     end subroutine cleanup_nu_filter
@@ -154,7 +152,6 @@ contains
 
     module subroutine setup_nu_mask_index
         integer :: i, j, k, imask
-        real, allocatable :: tmp(:,:,:)
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_index')
         if( allocated(nu_mask_index)  ) deallocate(nu_mask_index)
         if( allocated(nu_mask_vox)    ) deallocate(nu_mask_vox)
@@ -179,20 +176,37 @@ contains
             end do
         end do
         if( imask /= n_nu_mask ) THROW_HARD('mask voxel count mismatch; setup_nu_mask_index')
-        allocate(tmp(ldim(1),ldim(2),ldim(3)), source=0.)
-        call tent_smooth_3d(nu_smooth_norm, tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
-        deallocate(tmp)
+        nu_smooth_norm_radius = -1
     end subroutine setup_nu_mask_index
 
-    module subroutine smooth_nu_objective( dmat, tmp )
+    module real function nu_objective_smooth_radius_angstrom( lp_angstrom )
+        real, intent(in) :: lp_angstrom
+        real :: radius_angstrom
+        if( smpd <= TINY ) THROW_HARD('invalid smpd; nu_objective_smooth_radius_angstrom')
+        radius_angstrom = NU_OBJECTIVE_SMOOTH_RADIUS_FRAC * NU_OBJECTIVE_SMOOTH_AWF * max(lp_angstrom, smpd)
+        if( NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A > TINY )then
+            radius_angstrom = min(radius_angstrom, NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A)
+        endif
+        nu_objective_smooth_radius_angstrom = max(smpd, radius_angstrom)
+    end function nu_objective_smooth_radius_angstrom
+
+    module integer function nu_objective_smooth_radius_pixels( lp_angstrom )
+        real, intent(in) :: lp_angstrom
+        nu_objective_smooth_radius_pixels = max(1, nint(nu_objective_smooth_radius_angstrom(lp_angstrom) / smpd))
+    end function nu_objective_smooth_radius_pixels
+
+    module subroutine smooth_nu_objective( dmat, tmp, lp_angstrom )
         real, intent(inout) :: dmat(:,:,:)
         real, intent(inout) :: tmp(:,:,:)
-        integer :: i, j, k
+        real, intent(in)    :: lp_angstrom
+        integer :: i, j, k, radius_px
         real :: x
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; smooth_nu_objective')
         if( .not.allocated(nu_smooth_norm) ) THROW_HARD('nu_smooth_norm not allocated; smooth_nu_objective')
         if( any(shape(dmat) /= ldim) ) THROW_HARD('dmat shape mismatch; smooth_nu_objective')
         if( any(shape(tmp)  /= ldim) ) THROW_HARD('tmp shape mismatch; smooth_nu_objective')
+        radius_px = nu_objective_smooth_radius_pixels(lp_angstrom)
+        call prepare_nu_smooth_norm(radius_px, tmp)
         ! Outside support is a neutral fill for normalized convolution, not a
         ! candidate preference. optimize_nu_cutoff_finds assigns those voxels
         ! to the coarsest filter-bank label after the in-mask competition.
@@ -205,7 +219,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call tent_smooth_3d(dmat, tmp, ldim(1), ldim(2), ldim(3), winsz_tent)
+        call tent_smooth_3d(dmat, tmp, ldim(1), ldim(2), ldim(3), radius_px)
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
@@ -220,6 +234,25 @@ contains
         end do
         !$omp end parallel do
     end subroutine smooth_nu_objective
+
+    subroutine prepare_nu_smooth_norm( radius_px, tmp )
+        integer, intent(in)    :: radius_px
+        real,    intent(inout) :: tmp(:,:,:)
+        integer :: i, j, k
+        if( radius_px < 1 ) THROW_HARD('invalid radius; prepare_nu_smooth_norm')
+        if( nu_smooth_norm_radius == radius_px ) return
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    nu_smooth_norm(i,j,k) = merge(1., 0., nu_lmask(i,j,k))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call tent_smooth_3d(nu_smooth_norm, tmp, ldim(1), ldim(2), ldim(3), radius_px)
+        nu_smooth_norm_radius = radius_px
+    end subroutine prepare_nu_smooth_norm
 
     module subroutine pack_nu_dmat_candidate( dmat_full, icand )
         real,    intent(in) :: dmat_full(:,:,:)

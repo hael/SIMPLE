@@ -9,6 +9,7 @@ type(ui_program), target :: postprocess_nu
 type(ui_program), target :: reconstruct3D
 type(ui_program), target :: bootstrap_rec3D
 type(ui_program), target :: refine3D
+type(ui_program), target :: pre_refine3D
 type(ui_program), target :: refine3D_auto
 
 contains
@@ -21,6 +22,7 @@ contains
         call new_reconstruct3D(prgtab)
         call new_bootstrap_rec3D(prgtab)
         call new_refine3D(prgtab)
+        call new_pre_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
     end subroutine construct_refine3D_programs
 
@@ -33,6 +35,7 @@ contains
         write(logfhandle,'(A)') reconstruct3D%name%to_char()
         write(logfhandle,'(A)') bootstrap_rec3D%name%to_char()
         write(logfhandle,'(A)') refine3D%name%to_char()
+        write(logfhandle,'(A)') pre_refine3D%name%to_char()
         write(logfhandle,'(A)') refine3D_auto%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_refine3D_programs
@@ -280,6 +283,43 @@ contains
         ! add to ui_hash
         call add_ui_program('refine3D', refine3D, prgtab)
     end subroutine new_refine3D
+
+    subroutine new_pre_refine3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call pre_refine3D%new(&
+        &'pre_refine3D',&                                                                           ! name
+        &'probabilistic NU pre-refinement',&                                                        ! descr_short
+        &'is a conservative single-state pre-refinement workflow using refine=prob and a static nonuniform filter bank',&
+        &'simple_exec',&                                                                            ! executable
+        &.true.,&                                                                                   ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call pre_refine3D%add_input(UI_SRCH, maxits, required_override=.false., gui_submenu="search")
+        call pre_refine3D%add_input(UI_SRCH, nspace, required_override=.false., gui_submenu="search")
+        call pre_refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
+        call pre_refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', &
+        &'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="search")
+        ! filter controls
+        call pre_refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., &
+        &gui_submenu="filter")
+        call pre_refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
+        ! mask controls
+        call pre_refine3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! computer controls
+        call pre_refine3D%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
+        call pre_refine3D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('pre_refine3D', pre_refine3D, prgtab)
+    end subroutine new_pre_refine3D
 
     subroutine new_refine3D_auto( prgtab )
         class(ui_hash), intent(inout) :: prgtab

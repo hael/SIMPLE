@@ -155,6 +155,8 @@ contains
         if( l_cavgs ) return
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
+            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
+            if( cfg%filt_mode.eq.'nonuniform_lpset' ) cfg%nu_refine = 'no'
             if( cfg%filt_mode.eq.'uniform' )then
                 cfg%lpstart = lpinfo(istage - 1)%lp
                 if( istage == active_refine3D_nstages() )then
@@ -265,10 +267,19 @@ contains
         if( cfg%automsk.eq.'no' )then
             ! frequency-limited refinement
             call cline_refine3D%set('lp',                 lpinfo(istage)%lp)
+        else if( cfg%filt_mode.eq.'nonuniform_lpset' .and. cline_refine3D%defined('lp') )then
+            ! In abinitio3D, static NU promotes the finest selected candidate
+            ! to lp after volassemble. Preserve the current command-line limit
+            ! across automasked stages so lpset matching remains active.
+            write(logfhandle,'(A,I0,A,F8.3,A)') &
+                &'emit_refine3D_stage_cfg: stage=', istage, &
+                &' preserving matching lp=', cline_refine3D%get_rarg('lp'), ' A'
         else
             ! gold-standard refinement
             call cline_refine3D%delete('lp')
-            write(logfhandle,'(A,I0,A)') 'emit_refine3D_stage_cfg: stage=', istage, ' automsk active, deleting lp for gold-standard refinement'
+            write(logfhandle,'(A,I0,A)') &
+                &'emit_refine3D_stage_cfg: stage=', istage, &
+                &' automsk active, deleting lp for gold-standard refinement'
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then

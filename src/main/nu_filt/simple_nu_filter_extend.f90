@@ -15,7 +15,8 @@ contains
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest(:,:,:)
         integer, allocatable :: cutoff_finds_new(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
-        real              :: pct_finest, x
+        integer           :: old_radius_px, new_radius_px
+        real              :: pct_finest, x, noise_sigma, old_radius_angstrom, new_radius_angstrom
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
         integer, allocatable :: extend_choice(:,:,:)
         type(nu_highres_extension_stats) :: local_stats
@@ -105,8 +106,10 @@ contains
         call vol_odd_filt_new%new(ldim, smpd)
         call vol_even_filt_new%read(even_cache_fname)
         call vol_odd_filt_new%read(odd_cache_fname)
-        call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, nu_lmask)
-        call smooth_nu_objective(dmat_new, dmat_tmp)
+        noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+        call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, &
+            &nu_lmask, noise_sigma)
+        call smooth_nu_objective(dmat_new, dmat_tmp, new_limit)
         ! dmat_tmp is only a work buffer; smooth_nu_objective updates dmat_new in place.
         allocate(dmat_finest(ldim(1),ldim(2),ldim(3)), source=huge(x))
         if( allocated(dmat_finest_cached) ) then
@@ -115,14 +118,16 @@ contains
             else
                 call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
                 call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
-                call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
-                call smooth_nu_objective(dmat_finest, dmat_tmp)
+                call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, &
+                    &dmat_finest, nu_lmask, noise_sigma)
+                call smooth_nu_objective(dmat_finest, dmat_tmp, local_stats%old_limit)
             end if
         else
             call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
             call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
-            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_finest, nu_lmask)
-            call smooth_nu_objective(dmat_finest, dmat_tmp)
+            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, &
+                &dmat_finest, nu_lmask, noise_sigma)
+            call smooth_nu_objective(dmat_finest, dmat_tmp, local_stats%old_limit)
         end if
         ! --- update filtmap in place for the masked voxels ---
         l_use_aux_extension = l_aux_source_unordered_potts .and. allocated(dmats_aux_mask)
@@ -150,6 +155,14 @@ contains
             &local_stats%old_find, ') -> ', local_stats%new_limit, ' A (k=', local_stats%new_find, &
             &'); frontier ', n_finest, '/', n_total, ' (', local_stats%pct_tested_mask, &
             &'% mask), unary wins ', local_stats%n_unary_wins, ' (', local_stats%pct_unary_wins_tested, '%)'
+        old_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%old_limit)
+        new_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%new_limit)
+        old_radius_px = nu_objective_smooth_radius_pixels(local_stats%old_limit)
+        new_radius_px = nu_objective_smooth_radius_pixels(local_stats%new_limit)
+        write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A)') &
+            &'>>> NU high-resolution extension AWF radii old/new: ', &
+            &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
+            &new_radius_angstrom, ' A (px=', new_radius_px, ')'
         local_stats%applied = n_extended > 0
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then

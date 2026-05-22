@@ -61,10 +61,15 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
-! Physical half-width of the tent regularization kernel. The smoother consumes
-! this as an integer pixel radius, so the full tent base spans 2*radius + 1
-! voxels along each axis; 8 A at 1 A/px gives radius=8 and a 17-voxel base.
-real,             parameter   :: WINSZ_TENT_ANGSTROM         = 8.
+! Candidate-scale objective smoothing. The normalized unary objective for a
+! candidate with low-pass L is averaged over an AWF-like local support:
+! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
+! makes local evidence more collective; lowering it makes assignments more
+! voxel-local. The cap prevents very coarse candidates from washing out the
+! objective over an unrealistically large support.
+real,             parameter   :: NU_OBJECTIVE_SMOOTH_AWF          = 3.0
+real,             parameter   :: NU_OBJECTIVE_SMOOTH_RADIUS_FRAC  = 0.5
+real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
 integer,          parameter   :: DISCONT_STEP_THRESH         = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 3
 integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
@@ -95,7 +100,7 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
-integer :: winsz_tent
+integer :: nu_smooth_norm_radius = -1
 real    :: smpd
 logical :: l_aux_source_unordered_potts = .false.
 
@@ -159,9 +164,18 @@ interface
     module subroutine setup_nu_mask_index
     end subroutine setup_nu_mask_index
 
-    module subroutine smooth_nu_objective( dmat, tmp )
+    module real function nu_objective_smooth_radius_angstrom( lp_angstrom )
+        real, intent(in) :: lp_angstrom
+    end function nu_objective_smooth_radius_angstrom
+
+    module integer function nu_objective_smooth_radius_pixels( lp_angstrom )
+        real, intent(in) :: lp_angstrom
+    end function nu_objective_smooth_radius_pixels
+
+    module subroutine smooth_nu_objective( dmat, tmp, lp_angstrom )
         real, intent(inout) :: dmat(:,:,:)
         real, intent(inout) :: tmp(:,:,:)
+        real, intent(in)    :: lp_angstrom
     end subroutine smooth_nu_objective
 
     module subroutine pack_nu_dmat_candidate( dmat_full, icand )
@@ -360,8 +374,9 @@ interface
         logical, intent(in)  :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
-    module real function get_nu_filtmap_finest_selected_lp( mask )
+    module real function get_nu_filtmap_finest_selected_lp( mask, aux_resolutions )
         logical, intent(in) :: mask(:,:,:)
+        real, optional, intent(in) :: aux_resolutions(:)
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )

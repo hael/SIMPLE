@@ -72,9 +72,11 @@ contains
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
-    module real function get_nu_filtmap_finest_selected_lp( mask )
+    module real function get_nu_filtmap_finest_selected_lp( mask, aux_resolutions )
         logical, intent(in) :: mask(:,:,:)
-        integer :: icut, ncur
+        real, optional, intent(in) :: aux_resolutions(:)
+        integer :: icut, iaux, ncur
+        real    :: selected_lp
         if( .not.allocated(filtmap) )then
             THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
         endif
@@ -91,8 +93,25 @@ contains
             endif
             if( ncur == 0 ) cycle
             get_nu_filtmap_finest_selected_lp = cutoff_find_to_lowpass_limit(icut)
-            return
+            exit
         end do
+        if( present(aux_resolutions) )then
+            if( .not. allocated(srcmap) ) return
+            if( allocated(aux_even_bank) )then
+                if( size(aux_resolutions) /= size(aux_even_bank) ) &
+                    &THROW_HARD('aux_resolutions size mismatch in get_nu_filtmap_finest_selected_lp')
+            endif
+            do iaux = 1, size(aux_resolutions)
+                ncur = count(srcmap == iaux + 1 .and. mask)
+                if( ncur == 0 ) cycle
+                selected_lp = aux_resolutions(iaux)
+                if( selected_lp <= TINY ) cycle
+                if( get_nu_filtmap_finest_selected_lp <= TINY .or. &
+                    &selected_lp < get_nu_filtmap_finest_selected_lp )then
+                    get_nu_filtmap_finest_selected_lp = selected_lp
+                endif
+            enddo
+        endif
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )

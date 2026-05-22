@@ -226,8 +226,8 @@ contains
         real    :: project_lp, promoted_lp
         integer :: project_find, lpstop_find
         logical :: l_has_lp, l_log_promotion
-        if( .not. params%l_nu_refine ) return
         if( .not. params%l_nonuniform ) return
+        if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
         l_has_lp   = .false.
@@ -260,7 +260,7 @@ contains
                 call cline%set('lp', params%lp)
                 if( l_log_promotion )then
                     write(logfhandle,'(A,F8.3,A)') &
-                        &'>>> NU refinement promoted matching low-pass to command line: ', params%lp, ' A'
+                        &'>>> NU filter promoted matching low-pass to command line: ', params%lp, ' A'
                 endif
             endif
         endif

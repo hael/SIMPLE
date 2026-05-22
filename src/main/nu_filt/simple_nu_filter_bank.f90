@@ -16,6 +16,7 @@ contains
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
+        real :: noise_sigma
         integer :: i, n_candidates
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps)
@@ -37,10 +38,13 @@ contains
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
+        noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+        write(logfhandle,'(A,ES12.4)') '>>> NU normalized Huber objective raw E/O scale: ', noise_sigma
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
         if( allocated(aux_even_bank) ) n_candidates = n_candidates + size(aux_even_bank)
         call setup_nu_candidate_coords(n_candidates, aux_resolutions)
+        call log_nu_objective_smoothing_bank(aux_resolutions)
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
         allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
@@ -52,15 +56,17 @@ contains
             call vol_even_filt%read(even_cache_fname)
             call vol_odd_filt%read(odd_cache_fname)
             dmat_cand = huge(x)
-            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, nu_lmask)
-            call smooth_nu_objective(dmat_cand, dmat_tmp)
+            call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, &
+                &nu_lmask, noise_sigma)
+            call smooth_nu_objective(dmat_cand, dmat_tmp, cutoff_find_to_lowpass_limit(i))
             call pack_nu_dmat_candidate(dmat_cand, i)
         end do
         if( allocated(aux_even_bank) ) then
             do i = 1, size(aux_even_bank)
                 dmat_cand = huge(x)
-                call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), dmat_cand, nu_lmask)
-                call smooth_nu_objective(dmat_cand, dmat_tmp)
+                call vol_even%nu_objective(aux_even_bank(i), vol_odd, aux_odd_bank(i), &
+                    &dmat_cand, nu_lmask, noise_sigma)
+                call smooth_nu_objective(dmat_cand, dmat_tmp, aux_resolutions(i))
                 call pack_nu_dmat_candidate(dmat_cand, size(cutoff_finds)+i)
             end do
         end if
@@ -339,6 +345,31 @@ contains
         end do
         write(logfhandle,*)
     end subroutine log_nu_candidate_coords
+
+    subroutine log_nu_objective_smoothing_bank( aux_resolutions )
+        real, intent(in) :: aux_resolutions(:)
+        integer :: i
+        real    :: lp_angstrom, radius_angstrom
+        write(logfhandle,'(A,F6.2,A,F6.2,A,F7.2,A)') &
+            &'>>> NU objective AWF smoothing: radius_A=', NU_OBJECTIVE_SMOOTH_RADIUS_FRAC, &
+            &' * AWF * LP(A), AWF=', NU_OBJECTIVE_SMOOTH_AWF, &
+            &', cap=', NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A, ' A'
+        write(logfhandle,'(A)') '    Source  Bank  Fourier k    LP(A)  Radius(A)  Radius(px)'
+        do i = 1, size(cutoff_finds)
+            lp_angstrom = cutoff_find_to_lowpass_limit(i)
+            radius_angstrom = nu_objective_smooth_radius_angstrom(lp_angstrom)
+            write(logfhandle,'(4X,A6,2X,I4,2X,I9,2X,F7.3,2X,F9.3,2X,I10)') &
+                &'Base', i, cutoff_finds(i), lp_angstrom, radius_angstrom, &
+                &nu_objective_smooth_radius_pixels(lp_angstrom)
+        end do
+        do i = 1, size(aux_resolutions)
+            lp_angstrom = aux_resolutions(i)
+            radius_angstrom = nu_objective_smooth_radius_angstrom(lp_angstrom)
+            write(logfhandle,'(4X,A6,2X,I4,2X,I9,2X,F7.3,2X,F9.3,2X,I10)') &
+                &'Aux', size(cutoff_finds) + i, 0, lp_angstrom, radius_angstrom, &
+                &nu_objective_smooth_radius_pixels(lp_angstrom)
+        end do
+    end subroutine log_nu_objective_smoothing_bank
 
     module real function nu_candidate_coord_for_label( ilabel )
         integer, intent(in) :: ilabel

@@ -19,6 +19,12 @@ Supported values:
 `filt_mode=nonuniform` and `filt_mode=nonuniform_lpset` activate the
 nonuniform volume filter path.
 
+In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
+the static lpset policy: `filt_mode=nonuniform_lpset` with `nu_refine=no`.
+This keeps ab initio NU filtering discrete, allows the ML-regularized
+auxiliary candidate to compete, and promotes the finest actually selected NU
+candidate as the matching low-pass limit for subsequent refinement.
+
 ## Execution point
 
 Nonuniform filtering is executed in Cartesian `volassemble`, after:
@@ -80,11 +86,12 @@ The filter currently:
 3. maps all candidates onto a shared filter-bank coordinate axis
 4. caches the low-pass-filtered base bank on disk
 5. computes voxelwise objective maps across all candidates
-6. chooses the best candidate per voxel
-7. optionally refines the candidate map with an ordered-label spatial smoothing prior
-8. logs selected-low-pass statistics and neighbor-continuity diagnostics
-9. synthesizes filtered even/odd outputs from the selected candidate map
-10. writes the merged `_nu_filt` volume as the average of the filtered even/odd outputs
+6. applies candidate-scale, mask-normalized AWF-like objective smoothing
+7. chooses the best candidate per voxel
+8. optionally refines the candidate map with an ordered-label spatial smoothing prior
+9. logs selected-low-pass statistics and neighbor-continuity diagnostics
+10. synthesizes filtered even/odd outputs from the selected candidate map
+11. writes the merged `_nu_filt` volume as the average of the filtered even/odd outputs
 
 This design is scientifically reasonable and easy to debug, but it pays a large I/O and memory-traffic cost.
 
@@ -113,6 +120,20 @@ channels when it is available, so the registration model is built from the
 nonuniformly filtered map rather than independent even/odd NU references. A
 fresh run still behaves like ordinary `nonuniform` until a NU-refined project
 `lp` exists; `lpstop` remains a cap.
+
+## Candidate-scale objective smoothing
+
+Before voxelwise selection, each candidate objective map is locally averaged
+with a normalized tent kernel over the NU mask. The tent radius is tied to the
+candidate's effective low-pass limit rather than a fixed physical width:
+`radius_A = 0.5 * AWF * LP(A)`, currently with `AWF = 3.0` and an upper cap of
+30 A. Auxiliary candidates use their supplied effective resolution.
+
+This is an AWF-like evidence aggregation step: lower-resolution candidates are
+judged from broader local evidence, while high-resolution challengers remain
+more spatially local. The masked normalization is radius-specific and cached,
+so each objective map only needs the current temporary full-volume work array
+plus the persistent mask-packed objective bank.
 
 ## Ordered-label smoothing regularization
 
@@ -160,7 +181,10 @@ This challenge is unary-only: the full-bank Potts prior is not applied during
 extension because the extension experiment is already constrained to a
 one-shell step on the current finest populated frontier.
 
-Iterative workflows gate this behavior through `nu_refine`. The default is `nu_refine=no`, so staged `abinitio3D` nonuniform filtering does not expand the high-resolution bank unless a caller deliberately opts in. `refine3D_auto` defaults `nu_refine=yes` while still allowing an explicit override.
+Iterative workflows gate this behavior through `nu_refine`. The default is
+`nu_refine=no`. Staged `abinitio3D` keeps the NU bank discrete by mapping
+nonuniform filtering to the static lpset policy with `nu_refine=no`, while
+`refine3D_auto` defaults `nu_refine=yes` and still allows an explicit override.
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven permissive
 ratchet: an iteration can evaluate and accept one or more speculative
@@ -176,6 +200,17 @@ is accepted, the same iteration may challenge the next Fourier shell; the walk
 stops at the first unattempted challenger or the first challenger with zero
 selected voxels. Each challenge logs the old/new Fourier shell, tested frontier
 size, unary wins, and accepted-shell depth for the next iteration.
+
+In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
+single matching low-pass limit back to the project. This limit is the finest
+assigned NU candidate in the state mask; when an auxiliary ML-regularized
+candidate is present and selected, its actual auxiliary resolution participates
+in that minimum rather than being ignored as a non-base source.
+
+For `abinitio3D`, that promoted limit is preserved on the staged `refine3D`
+command line across automasked stages. This makes the next stage follow the
+ordinary explicit-`lp` matching path while the static NU filter continues to
+refresh the project and command-line LP after each `volassemble` pass.
 
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
@@ -198,9 +233,10 @@ command remains available for explicit manual experiments.
 
 The candidate objective bank should be stored only for voxels inside the NU
 mask. Full-volume objective arrays are temporary work buffers for objective
-generation and mask-normalized tent smoothing; persistent unary costs used for
-candidate selection and ordered-label smoothing are mask-packed. Objective
-values outside the NU mask must not contribute to smoothed in-mask unary costs.
+generation and candidate-scale, mask-normalized tent smoothing; persistent
+unary costs used for candidate selection and ordered-label smoothing are
+mask-packed. Objective values outside the NU mask must not contribute to
+smoothed in-mask unary costs.
 
 Terminal original-sampling `abinitio3D` reconstruction does not automatically
 run `postprocess_nu`. If staged ab initio refinement used a NU `filt_mode`, that

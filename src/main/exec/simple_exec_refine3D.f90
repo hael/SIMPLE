@@ -53,6 +53,13 @@ contains
                 else
                     call xrefine3D_auto%execute(cline)
                 endif
+            case( 'pre_refine3D' )
+                if( cline%defined('nrestarts') )then
+                    call restarted_exec(cline, string('pre_refine3D'), string('simple_exec'))
+                else
+                    call cline%set('prg', 'pre_refine3D')
+                    call xrefine3D_auto%execute(cline)
+                endif
             case default
                 l_did_execute = .false.
         end select

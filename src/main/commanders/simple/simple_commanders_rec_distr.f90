@@ -565,12 +565,16 @@ contains
 
         subroutine record_nu_alignment_lowpass_limit()
             real :: align_lp
-            if( .not. params%l_nu_refine ) return
-            align_lp = get_nu_filtmap_finest_selected_lp(l_mask)
+            if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
+            if( allocated(nu_aux_even) )then
+                align_lp = get_nu_filtmap_finest_selected_lp(l_mask, aux_resolutions=[res0143s(state)])
+            else
+                align_lp = get_nu_filtmap_finest_selected_lp(l_mask)
+            endif
             if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp
             write(logfhandle,'(A,I0,A,F8.3,A)') &
-                &'>>> NU refinement state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'
+                &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'
         end subroutine record_nu_alignment_lowpass_limit
 
         subroutine cleanup_nonuniform_state()
@@ -632,7 +636,7 @@ contains
             real    :: align_lp
             integer :: istate, selected_state
             if( .not. l_nonuniform_mode ) return
-            if( .not. params%l_nu_refine ) return
+            if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
             if( .not. allocated(nu_align_lps) ) return
             if( .not. allocated(state_pops) ) return
             ! Match the classical multi-state policy: the best resolved
@@ -642,7 +646,7 @@ contains
             if( .not. any(l_included) )then
                 if( any(nu_align_lps > TINY) )then
                     write(logfhandle,'(A)') &
-                        &'>>> WARNING: no populated state has a valid NU refinement matching low-pass limit'
+                        &'>>> WARNING: no populated state has a valid NU filter matching low-pass limit'
                 endif
                 return
             endif
@@ -656,13 +660,13 @@ contains
             enddo
             call build%spproj_field%set_all2single('lp', align_lp)
             write(logfhandle,'(A,I0,A,F8.3,A)') &
-                &'>>> NU refinement project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
+                &'>>> NU filter project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
         end subroutine update_project_nu_alignment_lowpass
 
         subroutine log_nu_alignment_lowpass_summary(l_included)
             logical, intent(in) :: l_included(:)
             integer :: istate
-            write(logfhandle,'(A)') '>>> NU refinement multi-state matching low-pass candidates'
+            write(logfhandle,'(A)') '>>> NU filter multi-state matching low-pass candidates'
             write(logfhandle,'(A)') '    State       Pop   FSC(A)   NU LP(A)   Used'
             do istate = 1,params%nstates
                 write(logfhandle,'(I9,I10,F9.3,F10.3,5X,A)') &
