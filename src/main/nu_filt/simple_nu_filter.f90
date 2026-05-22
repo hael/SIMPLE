@@ -10,8 +10,9 @@
 ! time after the static bank has been optimized. Each challenger allocates and
 ! evaluates only one extra candidate; callers may loop while the shell is
 ! accepted. The challenger starts from the finest populated base-bank label, so
-! empty finer discrete labels do not block shell refinement. Any nonzero
-! challenger selection is enough to accept the next shell.
+! empty finer discrete labels do not block shell refinement. Refinement-style
+! callers accept the next shell only when at least 5% of the tested frontier
+! selects the challenger.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -25,7 +26,8 @@
 !
 ! Postprocess workflows can seed the base bank to the global FSC resolution,
 ! add the classical FSC-filtered half-map pair as an auxiliary candidate, then
-! challenge further Fourier-shell candidates sequentially with the loop helper.
+! challenge further Fourier-shell candidates sequentially with the loop helper
+! and accept_pct=0. to keep postprocess shell walking permissive.
 ! The resulting local filter/source map is applied to a merged map using
 ! resolution-dependent B factors for base-bank voxels and caller-supplied
 ! classical transfer maps for auxiliary voxels. Postprocess can opt into
@@ -34,7 +36,7 @@
 ! ladder:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call extend_nu_filter_highres_shells(vol_even, vol_odd)
+!    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
 !    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
@@ -61,6 +63,10 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! Minimum finest-frontier fraction of the NU mask required before testing a
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
+! Percentage of the tested frontier that must select a challenger before it is
+! accepted into refinement-style NU banks. Postprocess workflows pass
+! accept_pct=0. to preserve the permissive one-voxel shell walk.
+real,             parameter   :: NU_HIGHRES_EXTENSION_ACCEPT_PCT     = 5.0
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
@@ -293,21 +299,24 @@ interface
     end function calc_nu_label_smooth_site_energy
 
     ! In submodule: simple_nu_filter_extend.f90
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats )
+    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
+        real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
         class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
+        real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
+        real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )

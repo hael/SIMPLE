@@ -5,24 +5,28 @@ implicit none
 
 contains
 
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats )
+    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
+        real, optional, intent(in) :: accept_pct
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest(:,:,:)
         integer, allocatable :: cutoff_finds_new(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         integer           :: old_radius_px, new_radius_px
-        real              :: pct_finest, x, noise_sigma, old_radius_angstrom, new_radius_angstrom
+        real              :: accept_pct_eff, pct_finest, x, noise_sigma
+        real              :: old_radius_angstrom, new_radius_angstrom
         logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
         integer, allocatable :: extend_choice(:,:,:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k
         logical           :: l_use_aux_extension
         local_stats%new_limit = new_limit
+        accept_pct_eff = NU_HIGHRES_EXTENSION_ACCEPT_PCT
+        if( present(accept_pct) ) accept_pct_eff = max(0., accept_pct)
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
@@ -145,10 +149,8 @@ contains
         ! apply the full-bank Potts prior here. This lets any local unary
         ! evidence seed the next refinement shell.
         local_stats%n_unary_wins = n_extended
-        local_stats%n_extended = n_extended
         if( n_finest > 0 )then
             local_stats%pct_unary_wins_tested = 100. * real(local_stats%n_unary_wins) / real(n_finest)
-            local_stats%pct_extended_tested   = 100. * real(n_extended) / real(n_finest)
         endif
         write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A,I12,A,I12,A,F8.3,A,I12,A,F8.3,A)') &
             &'>>> NU high-resolution extension challenge ', local_stats%old_limit, ' A (k=', &
@@ -163,11 +165,17 @@ contains
             &'>>> NU high-resolution extension AWF radii old/new: ', &
             &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
             &new_radius_angstrom, ' A (px=', new_radius_px, ')'
-        local_stats%applied = n_extended > 0
+        local_stats%applied = n_extended > 0 .and. local_stats%pct_unary_wins_tested >= accept_pct_eff
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then
-            write(logfhandle,'(A,F8.3,A)') &
-                &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
+            if( n_extended > 0 )then
+                write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                    &'>>> NU high-resolution extension rejected: challenger wins ', &
+                    &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, '% of tested frontier'
+            else
+                write(logfhandle,'(A,F8.3,A)') &
+                    &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
+            endif
             call delete_cached_filtered_pair(new_find)
             call vol_even_filt_new%kill
             call vol_odd_filt_new%kill
@@ -177,6 +185,8 @@ contains
             if( present(stats) ) stats = local_stats
             return
         end if
+        local_stats%n_extended = n_extended
+        if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         if( l_use_aux_extension )then
             call apply_nu_highres_extension_selection_aux(extend_choice, sz_old, sz_old + 1)
         else
@@ -203,9 +213,10 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
+        real, optional, intent(in) :: accept_pct
         type(nu_highres_extension_stats) :: local_stats
         integer :: new_find, sz_old, frontier_label, n_frontier, ilabel
         real    :: new_limit
@@ -243,19 +254,29 @@ contains
             return
         endif
         new_limit = calc_lowpass_lim(new_find, box, smpd)
-        call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-            &new_limit, stats=local_stats)
+        if( present(accept_pct) )then
+            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
+                &new_limit, stats=local_stats, accept_pct=accept_pct)
+        else
+            call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
+                &new_limit, stats=local_stats)
+        endif
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
+        real, optional, intent(in) :: accept_pct
         type(nu_highres_extension_stats) :: step_stats
         integer :: nsteps_local
         nsteps_local = 0
         do
-            call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats)
+            if( present(accept_pct) )then
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, accept_pct=accept_pct)
+            else
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats)
+            endif
             if( .not. step_stats%attempted ) exit
             if( .not. step_stats%applied   ) exit
             nsteps_local = nsteps_local + 1

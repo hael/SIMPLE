@@ -459,7 +459,8 @@ contains
         call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [lplim], aux_even, aux_odd, &
             &n_highres_steps=n_nu_seed_steps, l_aux_source_unordered=.true.)
         call optimize_nu_cutoff_finds()
-        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_nu_postprocess_steps)
+        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, &
+            &nsteps=n_nu_postprocess_steps, accept_pct=0.)
         write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
             &n_nu_postprocess_steps
         call vol_bfac%fft()

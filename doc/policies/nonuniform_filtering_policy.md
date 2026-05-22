@@ -99,12 +99,11 @@ In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd referenc
 
 When `filt_mode=nonuniform`, `nu_refine=yes`, and the user has not set an
 explicit `lp`, the 3D matching/reprojection low-pass limit follows the finest
-actually selected NU filter-bank limit from the previous `volassemble` pass
-instead of the global FSC resolution. Candidate bins with zero voxel
-assignments do not advance the global matching bandwidth. After writing the
-matching `_nu_filt` even/odd products, `volassemble` updates the ordinary
-project `lp` field to that selected NU limit. Any finer bin with at least one
-base-bank voxel assignment is allowed to define the next matching bandwidth.
+accepted NU filter-bank limit from the previous `volassemble` pass instead of
+the global FSC resolution. Candidate bins that fail the 5% tested-frontier
+acceptance threshold do not advance the global matching bandwidth. After
+writing the matching `_nu_filt` even/odd products, `volassemble` updates the
+ordinary project `lp` field to that selected NU limit.
 The matcher reads that project `lp` value on the next iteration; a fresh first
 iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
 policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
@@ -194,12 +193,13 @@ base-bank label, not a coarse hard-coded Angstrom ladder. A challenge is
 attempted
 whenever at least one base-bank voxel sits on the current finest label. The
 candidate is applied to the current map and promoted into the next iteration's
-starting bank whenever the unary objective moves at least one tested frontier
-voxel inside the NU refinement mask to that speculative shell. If a candidate
-is accepted, the same iteration may challenge the next Fourier shell; the walk
-stops at the first unattempted challenger or the first challenger with zero
-selected voxels. Each challenge logs the old/new Fourier shell, tested frontier
-size, unary wins, and accepted-shell depth for the next iteration.
+starting bank only when the unary objective moves at least 5% of the tested
+frontier voxels inside the NU refinement mask to that speculative shell. If a
+candidate is accepted, the same iteration may challenge the next Fourier shell;
+the walk stops at the first unattempted challenger or the first challenger below
+the 5% tested-frontier acceptance threshold. Each challenge logs the old/new
+Fourier shell, tested frontier size, unary wins, and accepted-shell depth for
+the next iteration.
 
 In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
 single matching low-pass limit back to the project. This limit is the finest
@@ -262,8 +262,9 @@ is source-aware, so neighboring base-bank voxels that march to finer Fourier
 shells do not suppress assignment to the classical map by resolution-distance
 penalty alone. During high-resolution extension, the local challenger search
 therefore compares the current winner, the next Fourier shell, and the
-classical auxiliary candidate; promotion of the next shell is still gated only
-by the fraction of tested frontier voxels assigned to that next shell.
+classical auxiliary candidate; unlike iterative refinement, postprocess keeps a
+permissive acceptance rule and promotes the next shell when at least one tested
+frontier voxel is assigned to that next shell.
 
 Base-bank voxels still use the NU filter map as a local postprocessing
 transfer-function selector for the merged reconstruction. Bins at or better
