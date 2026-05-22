@@ -12,7 +12,7 @@
 ! accepted. The challenger starts from the finest populated base-bank label, so
 ! empty finer discrete labels do not block shell refinement. Refinement-style
 ! callers accept the next shell only when the challenger wins enough absolute
-! support and at least 5% of the tested frontier. Postprocess callers can pass
+! support and at least 5% of the tested frontier. Diagnostic callers can pass
 ! accept_pct=0. for an explicitly permissive shell walk. After the shell walk
 ! stops, the final accepted label map is cleaned with the ordered-label Potts
 ! prior over the expanded bank.
@@ -27,19 +27,15 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows can seed the base bank to the global FSC resolution,
-! add the classical FSC-filtered half-map pair as an auxiliary candidate, then
-! challenge further Fourier-shell candidates sequentially with the loop helper
-! and accept_pct=0. to keep postprocess shell walking permissive.
-! The resulting local filter/source map is applied to a merged map using
-! resolution-dependent B factors for base-bank voxels and caller-supplied
-! classical transfer maps for auxiliary voxels. Postprocess can opt into
-! source-aware auxiliary Potts behavior so the classical candidate remains a
-! persistent source alternative rather than a rung on the ordered resolution
-! ladder:
+! Postprocess workflows use the static base bank and add the classical
+! FSC-filtered half-map pair as an auxiliary candidate at the global FSC
+! resolution. They do not add or walk high-resolution shell extensions. The
+! resulting local filter/source map is applied to a merged map using
+! resolution-dependent B factors for base-bank voxels, while caller-supplied
+! classical transfer maps are used for auxiliary voxels and for base-bank bins
+! within the classical FSC-resolution window:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
 !    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
@@ -68,11 +64,11 @@ real,             parameter   :: lowpass_limits(8) = [20.,15.,12.,10.,8.,6.,5.,4
 ! finer shell. Zero means challenge whenever at least one frontier voxel exists.
 real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
 ! Percentage of the tested frontier that must select a challenger before it is
-! accepted into refinement-style NU banks. Postprocess workflows pass
-! accept_pct=0. to preserve the permissive one-voxel shell walk.
+! accepted into refinement-style NU banks. Diagnostic callers can pass
+! accept_pct=0. to request a permissive one-voxel shell walk.
 real,             parameter   :: NU_HIGHRES_EXTENSION_ACCEPT_PCT     = 5.0
 ! Refinement-style shell acceptance also requires enough absolute support so a
-! tiny frontier cannot march indefinitely. Postprocess workflows pass
+! tiny frontier cannot march indefinitely. Diagnostic callers can pass
 ! accept_pct=0. to bypass both the frontier fraction and this seed floor.
 integer,          parameter   :: NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS = 32
 ! Hard cap on mask-packed distance-matrix columns retained for NU optimization.

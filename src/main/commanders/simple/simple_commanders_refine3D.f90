@@ -252,7 +252,10 @@ contains
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params_final_rec%box_crop
         params_final_rec%smpd = params_final_rec%smpd_crop
-        if( l_final_nu_postprocess ) call postprocess_refine3D_auto_nu_final()
+        if( l_final_nu_postprocess )then
+            call propagate_final_nu_postprocess_automsk()
+            call postprocess_refine3D_auto_nu_final()
+        endif
         call spproj%read_segment('out', params_final_rec%projfile)
         call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%res_target, &
             &l_copy_nu_products=l_final_nu_postprocess)
@@ -265,6 +268,8 @@ contains
             type(string) :: fname_vol, fname_even, fname_odd, fname_fsc
             integer      :: state, nptcls_dummy, ldim_final(3)
             write(logfhandle,'(A)') '>>> REFINE3D_AUTO FINAL MAP: running automated NU postprocessing'
+            write(logfhandle,'(A,A)') '>>> REFINE3D_AUTO FINAL MAP: postprocess_nu automsk=', &
+                &trim(params_final_rec%automsk)
             do state = 1, params_final_rec%nstates
                 fname_vol = refine3D_state_vol_fname(state)
                 if( .not. file_exists(fname_vol) )then
@@ -283,6 +288,16 @@ contains
                 call fname_fsc%kill
             enddo
         end subroutine postprocess_refine3D_auto_nu_final
+
+        subroutine propagate_final_nu_postprocess_automsk()
+            if( trim(params%automsk) .ne. 'no' )then
+                params_final_rec%automsk = params%automsk
+                call cline_rec3D%set('automsk', params%automsk)
+            else
+                params_final_rec%automsk = 'no'
+                call cline_rec3D%set('automsk', 'no')
+            endif
+        end subroutine propagate_final_nu_postprocess_automsk
 
         logical function project_init_vol_compatible() result( l_compatible )
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &

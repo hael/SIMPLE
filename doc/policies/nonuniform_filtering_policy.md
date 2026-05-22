@@ -165,7 +165,7 @@ competition from one that is removed by the spatial prior.
 
 Ordered-label smoothing is always active in the NU filter. Standalone
 `nu_filt3D`, iterative `volassemble`, coupled high-resolution refinement, and
-the `postprocess_nu` Fourier-shell workflow all use the same smoothing policy.
+the `postprocess_nu` transfer workflow all use the same smoothing policy.
 
 The Cartesian `volassemble` path and standalone `nu_filt3D` therefore call the
 optimizer without any smoothing switch:
@@ -210,9 +210,9 @@ absolute support to avoid one-voxel shell walking. If a candidate is accepted,
 the same iteration may challenge the next Fourier shell; the walk stops at the
 first unattempted challenger or the first challenger below this conservative
 frontier rule. Each challenge logs the old/new Fourier shell, tested frontier
-size, unary wins, and accepted-shell depth for the next iteration. Postprocess
-workflows can pass `accept_pct=0` to request the intentionally permissive shell
-walk used outside iterative particle refinement.
+size, unary wins, and accepted-shell depth for the next iteration. The shell
+extension helper still supports `accept_pct=0` for manual diagnostics, but the
+current `postprocess_nu` policy does not use post-FSC shell walking.
 
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected
@@ -240,13 +240,11 @@ the project matching bandwidth.
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
 from raw even/odd half maps without ML-regularized auxiliary candidates. It
-starts from the static base bank, then challenges one unrepresented Fourier
-shell at a time. A postprocess challenger is accepted only when the unary
-extension challenge assigns at least one tested frontier voxel to that shell;
-only accepted shells become part of the active bank before the next shell is
-challenged. The postprocess path may continue this sequential challenger loop
-through Nyquist, but it must not pre-generate or pre-evaluate the full sampling
-ladder.
+uses the static base bank plus a classical auxiliary candidate at the global
+FSC resolution and does not add high-resolution shell extensions. This
+deliberately keeps standalone postprocessing close to the classical
+FSC-supported bandwidth instead of letting a terminal map create new
+high-resolution support that was not refined during the particle-update loop.
 
 Automated `postprocess_nu` is restricted to the terminal all-particle map
 produced by `refine3D_auto` in either NU filter mode, where the particle
@@ -275,21 +273,26 @@ outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then inserts the
 classical FSC-filtered half-map pair as an auxiliary candidate in the NU
 half-map competition. This candidate is assigned the global FSC resolution and
-the base bank is seeded to that Fourier shell before sequential high-resolution
-extension begins. If the classical auxiliary candidate wins a voxel, the final
-NU postprocess map copies that voxel from a classical transfer map where the
-global B factor is applied first and the FSC-derived filter is applied second,
-matching the ordinary postprocess ordering.
+the base bank remains the static discrete bank. If the classical auxiliary
+candidate wins a voxel, the final NU postprocess map copies that voxel from a
+classical transfer map where the global B factor is applied first and the
+FSC-derived filter is applied second, matching the ordinary postprocess
+ordering. Base-bank voxels within `0.5 A` of the global FSC resolution are also
+copied from this classical transfer map so the immediate FSC-resolution
+neighborhood mirrors the ordinary postprocess path exactly.
 
 In this postprocess workflow, the classical auxiliary candidate is treated as a
 source alternative rather than an ordered low-pass rung. Its Potts boundary cost
-is source-aware, so neighboring base-bank voxels that march to finer Fourier
-shells do not suppress assignment to the classical map by resolution-distance
-penalty alone. During high-resolution extension, the local challenger search
-therefore compares the current winner, the next Fourier shell, and the
-classical auxiliary candidate; unlike iterative refinement, postprocess keeps a
-permissive acceptance rule and promotes the next shell when at least one tested
-frontier voxel is assigned to that next shell.
+is source-aware, so neighboring base-bank voxels do not suppress assignment to
+the classical map by resolution-distance penalty alone.
+
+When `automsk=yes` or `automsk=tight`, `postprocess_nu` builds the NU support
+mask from the same automasking machinery used elsewhere. Voxels outside this
+support are forced to the coarsest base-bank label during objective
+optimization, so exterior density adopts the lowest-resolution candidate rather
+than participating in the local filter competition. The automated final
+`postprocess_nu` call from `refine3D_auto` forwards the parent `automsk` value
+(`yes` or `tight`) to preserve this mask policy.
 
 Base-bank voxels still use the NU filter map as a local postprocessing
 transfer-function selector for the merged reconstruction. Bins at or better
@@ -300,14 +303,14 @@ offset is derived by interpolating from the fitted global B factor at the
 global FSC boundary toward a fixed positive-B endpoint. That endpoint is
 computed from a fixed damping reference B factor, not from the fitted global B
 factor used for sharpening. With the current defaults, maximally damped bins
-approach the positive-B endpoint implied by a `-150 A^2` damping reference, so
-low-resolution downweighting does not become weak just because the fitted
+approach the positive-B endpoint implied by `NU_POSTPROCESS_DAMPING_BFAC_REF`,
+so low-resolution downweighting does not become weak just because the fitted
 global B-factor magnitude is smaller. The sigmoid fraction is normalized to be
 zero at the global FSC resolution, so the B-factor field is continuous at the
 boundary between classically sharpened and damped regions. Base-bank bins are
 then filtered with the same 4-pixel Hann antialiasing window at the finest
-active NU bin, rather than with the global FSC transfer, so locally promoted
-high-resolution bins are not cut back to the global FSC limit. `_lp_nu` is
+active NU bin, rather than with the global FSC transfer, so selected base-bank
+bins are not shaped by a second FSC transfer. `_lp_nu` is
 written as the corresponding unsharpened Hann-antialiased map. The NU products
 are written separately as `_pproc_nu` and `_lp_nu`, plus `_pproc_nu_mirr` when
 mirroring is enabled.

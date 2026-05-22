@@ -20,11 +20,15 @@ implicit none
 !   damping should begin closer to the global FSC limit.
 ! - SIGMOID_WIDTH controls transition sharpness. Increase it for a gentler
 !   change across local-resolution bins; decrease it for a sharper transition.
+! - CLASSICAL_LP_WINDOW_A protects the immediate FSC-resolution neighborhood:
+!   bins within this distance of the global FSC low-pass reuse the exact
+!   classical postprocess transfer map supplied by the caller.
 real, parameter :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
 real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -300.
 real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 6.
 real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
 real, parameter :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
+real, parameter :: NU_POSTPROCESS_CLASSICAL_LP_WINDOW_A = 0.5
 
 contains
 
@@ -155,8 +159,10 @@ contains
         type(image), optional, intent(in) :: aux_vols(:)
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
+        real(kind=c_float), pointer :: rmat_aux_classical(:,:,:) => null()
         integer :: icut, winsz
         real    :: edge_mean, local_lp, local_bfac, antialias_lp
+        logical :: l_have_classical_aux, l_classical_window
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
@@ -164,6 +170,9 @@ contains
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
         call validate_nu_postprocess_aux_vols(aux_vols)
+        l_have_classical_aux = present(aux_vols)
+        if( l_have_classical_aux ) l_have_classical_aux = size(aux_vols) >= 1
+        if( l_have_classical_aux ) call aux_vols(1)%get_rmat_ptr(rmat_aux_classical)
         call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
@@ -183,16 +192,22 @@ contains
         call vol_pproc%new(ldim, smpd, wthreads=.false.)
         call vol_pproc%get_rmat_ptr(rmat_pproc)
         rmat_pproc(:ldim(1),:ldim(2),:ldim(3)) = 0.
-        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, antialias_lp)
+        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, antialias_lp, l_have_classical_aux)
         do icut = 1, size(cutoff_finds)
             local_lp = cutoff_find_to_lowpass_limit(icut)
-            local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
-            call vol_filt%copy_fast(vol_in_ft)
-            call vol_filt%apply_bfac(local_bfac)
-            call vol_filt%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
-            call vol_filt%ifft
-            call vol_filt%get_rmat_ptr(rmat_filt)
-            call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
+            l_classical_window = l_have_classical_aux .and. &
+                &abs(local_lp - global_lp) <= NU_POSTPROCESS_CLASSICAL_LP_WINDOW_A
+            if( l_classical_window )then
+                call copy_nu_postprocess_voxels(icut, rmat_aux_classical, rmat_pproc)
+            else
+                local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
+                call vol_filt%copy_fast(vol_in_ft)
+                call vol_filt%apply_bfac(local_bfac)
+                call vol_filt%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
+                call vol_filt%ifft
+                call vol_filt%get_rmat_ptr(rmat_filt)
+                call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
+            endif
         end do
         if( present(aux_vols) ) call copy_nu_postprocess_aux_voxels(aux_vols, rmat_pproc)
         call vol_in_ft%kill
@@ -201,16 +216,17 @@ contains
 
     subroutine validate_nu_postprocess_aux_vols( aux_vols )
         type(image), optional, intent(in) :: aux_vols(:)
-        integer :: iaux, n_aux_needed
+        integer :: iaux, n_aux_needed, n_aux_to_check
         n_aux_needed = max(0, maxval(srcmap) - 1)
-        if( n_aux_needed == 0 ) return
+        if( n_aux_needed == 0 .and. .not. present(aux_vols) ) return
         if( .not. present(aux_vols) )then
-            THROW_HARD('NU postprocess selected auxiliary sources but no auxiliary output volumes were supplied; nu_postprocess_vol')
+            THROW_HARD('NU postprocess selected aux source but no aux output volume; nu_postprocess_vol')
         endif
         if( size(aux_vols) < n_aux_needed )then
-            THROW_HARD('NU postprocess auxiliary output volume count is smaller than selected auxiliary sources; nu_postprocess_vol')
+            THROW_HARD('NU postprocess aux output volume count too small; nu_postprocess_vol')
         endif
-        do iaux = 1, n_aux_needed
+        n_aux_to_check = size(aux_vols)
+        do iaux = 1, n_aux_to_check
             if( any(aux_vols(iaux)%get_ldim() /= ldim) )then
                 THROW_HARD('NU postprocess auxiliary output volume dimensions differ; nu_postprocess_vol')
             endif
@@ -223,10 +239,12 @@ contains
         end do
     end subroutine validate_nu_postprocess_aux_vols
 
-    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp )
+    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp, l_have_classical_aux )
         real, intent(in) :: global_lp, global_bfac, antialias_lp
+        logical, intent(in) :: l_have_classical_aux
         integer :: icut
         real :: local_lp, damp_frac, local_bfac, damping_plateau
+        character(len=9) :: mode
         damping_plateau = nu_postprocess_bfac_damping_plateau()
         write(logfhandle,'(A)') '>>> NU postprocess transfer-function bank'
         write(logfhandle,'(4X,A,F8.3,A,F9.2)') &
@@ -240,13 +258,24 @@ contains
         write(logfhandle,'(4X,A,F8.3,A,F5.1,A)') &
             &'Antialias Hann LP(A): ', antialias_lp, '  Width: ', &
             &NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH, ' Fourier pixels'
-        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Damp frac      B_eff'
+        if( l_have_classical_aux )then
+            write(logfhandle,'(4X,A,F5.2,A)') &
+                &'Classical transfer window: +/- ', NU_POSTPROCESS_CLASSICAL_LP_WINDOW_A, &
+                &' A around global FSC LP'
+        endif
+        write(logfhandle,'(4X,A)') 'LP limit (A)    Fourier k    Damp frac      B_eff       Mode'
         do icut = 1, size(cutoff_finds)
             local_lp   = cutoff_find_to_lowpass_limit(icut)
             damp_frac  = nu_postprocess_damping_frac(local_lp, global_lp)
             local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
-            write(logfhandle,'(4X,F10.3,4X,I9,4X,F9.3,4X,F9.2)') &
-                &local_lp, cutoff_finds(icut), damp_frac, local_bfac
+            if( l_have_classical_aux .and. &
+                &abs(local_lp - global_lp) <= NU_POSTPROCESS_CLASSICAL_LP_WINDOW_A )then
+                mode = 'classical'
+            else
+                mode = 'NU'
+            endif
+            write(logfhandle,'(4X,F10.3,4X,I9,4X,F9.3,4X,F9.2,4X,A)') &
+                &local_lp, cutoff_finds(icut), damp_frac, local_bfac, trim(mode)
         end do
     end subroutine log_nu_postprocess_transfer_bank
 

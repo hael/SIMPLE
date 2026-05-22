@@ -384,8 +384,8 @@ contains
 
     subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
-            &extend_nu_filter_highres_shells, nu_postprocess_vol, cleanup_nu_filter, &
-            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &nu_postprocess_vol, cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
+            &analyze_filtmap_neighbor_continuity
         class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -399,7 +399,7 @@ contains
         type(image), allocatable :: aux_even(:), aux_odd(:), aux_pproc(:)
         type(image_msk)  :: envmsk
         real    :: fsc0143, fsc05, lplim, mskrad_px
-        integer :: ldim(3), n_nu_postprocess_steps, n_nu_seed_steps
+        integer :: ldim(3)
         logical :: has_fsc
         fname_even_raw = raw_halfmap_name(fname_even)
         fname_odd_raw  = raw_halfmap_name(fname_odd)
@@ -451,18 +451,13 @@ contains
         endif
         call build_nu_postprocess_mask()
         call build_classical_postprocess_aux_candidate()
-        n_nu_seed_steps = postprocess_nu_seed_highres_steps()
-        write(logfhandle,'(A,F8.3,A,I0,A)') &
-            &'>>> NU postprocess classical FSC candidate inserted at ', lplim, &
-            &' A; seeded high-resolution shell steps: ', n_nu_seed_steps
-        write(logfhandle,'(A)') '>>> NU postprocess sequential Fourier-shell challenger enabled'
+        write(logfhandle,'(A,F8.3,A)') &
+            &'>>> NU postprocess classical FSC candidate inserted at ', lplim, ' A'
+        write(logfhandle,'(A)') &
+            &'>>> NU postprocess resolution extension disabled; using static base bank plus classical candidate'
         call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [lplim], aux_even, aux_odd, &
-            &n_highres_steps=n_nu_seed_steps, l_aux_source_unordered=.true.)
+            &l_aux_source_unordered=.true.)
         call optimize_nu_cutoff_finds()
-        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, &
-            &nsteps=n_nu_postprocess_steps, accept_pct=0.)
-        write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
-            &n_nu_postprocess_steps
         call vol_bfac%fft()
         call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc)
         call vol_lp%write(fname_lp)
@@ -502,7 +497,20 @@ contains
                 call vol_msk%disc(ldim, smpd, mskrad_px, l_mask)
                 call vol_msk%kill
             endif
+            call log_nu_postprocess_mask()
         end subroutine build_nu_postprocess_mask
+
+        subroutine log_nu_postprocess_mask()
+            integer :: n_mask, n_total
+            n_total = size(l_mask)
+            n_mask  = count(l_mask)
+            if( n_total <= 0 ) return
+            write(logfhandle,'(A,I12,A,F7.2,A)') &
+                &'>>> NU postprocess mask voxels: ', n_mask, ' (', &
+                &100. * real(n_mask) / real(n_total), '%)'
+            write(logfhandle,'(A)') &
+                &'>>> NU postprocess outside-mask voxels use the coarsest base-bank low-pass candidate'
+        end subroutine log_nu_postprocess_mask
 
         subroutine build_classical_postprocess_aux_candidate()
             allocate(aux_even(1), aux_odd(1), aux_pproc(1))
@@ -529,13 +537,6 @@ contains
             endif
             call vol_out%ifft
         end subroutine apply_classical_transfer
-
-        integer function postprocess_nu_seed_highres_steps() result(nsteps)
-            integer :: base_find, target_find
-            base_find   = calc_fourier_index(4.,     box, smpd)
-            target_find = calc_fourier_index(lplim,  box, smpd)
-            nsteps = max(0, target_find - base_find)
-        end function postprocess_nu_seed_highres_steps
 
         subroutine cleanup_classical_postprocess_aux_candidate()
             integer :: i
