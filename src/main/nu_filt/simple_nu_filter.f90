@@ -11,11 +11,11 @@
 ! evaluates only one extra candidate; callers may loop while the shell is
 ! accepted. The challenger starts from the finest populated base-bank label, so
 ! empty finer discrete labels do not block shell refinement. Refinement-style
-! callers accept the next shell when there is enough seed support and either
-! at least 5% of the tested frontier, or a small but meaningful fraction of
-! the whole NU mask, selects the challenger. After the shell walk stops, the
-! final accepted label map is cleaned with the ordered-label Potts prior over
-! the expanded bank.
+! callers accept the next shell only when the challenger wins enough absolute
+! support and at least 5% of the tested frontier. Postprocess callers can pass
+! accept_pct=0. for an explicitly permissive shell walk. After the shell walk
+! stops, the final accepted label map is cleaned with the ordered-label Potts
+! prior over the expanded bank.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -71,10 +71,9 @@ real,             parameter   :: NU_HIGHRES_EXTENSION_THRESHOLD_PCT  = 0.
 ! accepted into refinement-style NU banks. Postprocess workflows pass
 ! accept_pct=0. to preserve the permissive one-voxel shell walk.
 real,             parameter   :: NU_HIGHRES_EXTENSION_ACCEPT_PCT     = 5.0
-! Refinement-style shell acceptance also requires enough absolute/mask support
-! so a one-voxel frontier cannot march indefinitely. A challenger can still be
-! accepted when it misses the 5% frontier rule if it wins this mask-level seed.
-real,             parameter   :: NU_HIGHRES_EXTENSION_SEED_MASK_PCT   = 0.05
+! Refinement-style shell acceptance also requires enough absolute support so a
+! tiny frontier cannot march indefinitely. Postprocess workflows pass
+! accept_pct=0. to bypass both the frontier fraction and this seed floor.
 integer,          parameter   :: NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS = 32
 ! Hard cap on mask-packed distance-matrix columns retained for NU optimization.
 ! When this fills, unselected high-resolution labels are compacted away before
@@ -142,7 +141,6 @@ type :: nu_highres_extension_stats
     real    :: pct_unary_wins_mask = 0.
     real    :: pct_extended_tested = 0.
     logical :: accepted_by_frontier = .false.
-    logical :: accepted_by_seed     = .false.
     logical :: memory_limited       = .false.
 end type nu_highres_extension_stats
 

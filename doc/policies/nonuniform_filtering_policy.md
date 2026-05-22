@@ -197,23 +197,22 @@ the static lpset policy with `nu_refine=no` before automasking, then switches to
 explicit `filt_mode=nonuniform_lpset` variant remains static. `refine3D_auto`
 defaults `nu_refine=yes` and still allows an explicit override.
 
-When `nu_refine=yes`, `volassemble` uses an evidence-driven permissive
-ratchet: an iteration can evaluate and accept one or more speculative
-high-resolution Fourier-shell candidates, but only sequentially. Each challenge
-candidate is the next unrepresented shell above the current finest populated
-base-bank label, not a coarse hard-coded Angstrom ladder. A challenge is
-attempted whenever at least one base-bank voxel sits on the current finest
-label. The candidate is applied to the current map and promoted into the next
-iteration's starting bank only when it has enough seed support and either the unary
-objective moves at least 5% of the tested frontier voxels, or the challenger
-wins a small but meaningful fraction of the full NU mask. This mask-level seed
-escape prevents a large, weak but real high-resolution patch from deadlocking
-at the discrete bank edge, while the seed floor prevents one-voxel frontiers
-from marching indefinitely. If a candidate is accepted, the same iteration may
-challenge the next Fourier shell; the walk stops at the first unattempted
-challenger or the first challenger below both acceptance routes. Each challenge
-logs the old/new Fourier shell, tested frontier size, unary wins, and
-accepted-shell depth for the next iteration.
+When `nu_refine=yes`, `volassemble` uses an evidence-driven shell ratchet: an
+iteration can evaluate and accept one or more speculative high-resolution
+Fourier-shell candidates, but only sequentially. Each challenge candidate is the
+next unrepresented shell above the current finest populated base-bank label, not
+a coarse hard-coded Angstrom ladder. A challenge is attempted whenever at least
+one base-bank voxel sits on the current finest label. In iterative refinement,
+the candidate is applied to the current map and promoted into the next
+iteration's starting bank only when the unary objective moves at least 5% of the
+tested frontier voxels to that speculative shell and the challenger has enough
+absolute support to avoid one-voxel shell walking. If a candidate is accepted,
+the same iteration may challenge the next Fourier shell; the walk stops at the
+first unattempted challenger or the first challenger below this conservative
+frontier rule. Each challenge logs the old/new Fourier shell, tested frontier
+size, unary wins, and accepted-shell depth for the next iteration. Postprocess
+workflows can pass `accept_pct=0` to request the intentionally permissive shell
+walk used outside iterative particle refinement.
 
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected

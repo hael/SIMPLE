@@ -156,7 +156,7 @@ contains
         if( n_total > 0 )then
             local_stats%pct_unary_wins_mask = 100. * real(local_stats%n_unary_wins) / real(n_total)
         endif
-        n_seed_min = calc_nu_highres_extension_seed_min(n_total)
+        n_seed_min = min(n_total, NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS)
         local_stats%n_seed_min = n_seed_min
         write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A,I12,A,I12,A,F8.3,A,I12,A,F8.3,A)') &
             &'>>> NU high-resolution extension challenge ', local_stats%old_limit, ' A (k=', &
@@ -176,20 +176,15 @@ contains
         else
             local_stats%accepted_by_frontier = n_extended >= n_seed_min .and. &
                 &local_stats%pct_unary_wins_tested >= accept_pct_eff
-            local_stats%accepted_by_seed = n_extended >= n_seed_min .and. &
-                &local_stats%pct_unary_wins_mask >= NU_HIGHRES_EXTENSION_SEED_MASK_PCT
-            local_stats%applied = n_extended > 0 .and. &
-                &(local_stats%accepted_by_frontier .or. local_stats%accepted_by_seed)
+            local_stats%applied = n_extended > 0 .and. local_stats%accepted_by_frontier
         endif
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then
             if( n_extended > 0 )then
-                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A,F8.3,A,F8.3,A)') &
+                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') &
                     &'>>> NU high-resolution extension rejected: challenger wins ', &
                     &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, &
-                    &'% of tested frontier or lacks seed support ', n_extended, '/', n_seed_min, &
-                    &' voxels; mask wins ', local_stats%pct_unary_wins_mask, '% below ', &
-                    &NU_HIGHRES_EXTENSION_SEED_MASK_PCT, '%'
+                    &'% of tested frontier or lacks absolute support ', n_extended, '/', n_seed_min, ' voxels'
             else
                 write(logfhandle,'(A,F8.3,A)') &
                     &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
@@ -225,14 +220,6 @@ contains
         sz_old = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
-        if( .not.l_permissive_accept )then
-            if( local_stats%accepted_by_seed .and. .not.local_stats%accepted_by_frontier )then
-                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A)') &
-                    &'>>> NU high-resolution extension accepted by mask-level seed: ', &
-                    &local_stats%pct_unary_wins_mask, '% mask wins; frontier wins ', &
-                    &local_stats%pct_unary_wins_tested, '%, seed voxels ', n_seed_min, '+'
-            endif
-        endif
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         if( l_use_aux_extension )then
@@ -378,17 +365,6 @@ contains
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         deallocate(candmap)
     end subroutine refine_nu_extension_filtmap_ordered_labels
-
-    integer function calc_nu_highres_extension_seed_min( n_total ) result( n_seed_min )
-        integer, intent(in) :: n_total
-        if( n_total <= 0 )then
-            n_seed_min = 1
-        else
-            n_seed_min = max(NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS, &
-                &ceiling(NU_HIGHRES_EXTENSION_SEED_MASK_PCT * real(n_total) / 100.))
-            n_seed_min = min(n_total, n_seed_min)
-        endif
-    end function calc_nu_highres_extension_seed_min
 
     subroutine compact_nu_highres_dmat_bank_for_capacity()
         logical, allocatable :: keep(:)
