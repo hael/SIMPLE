@@ -543,9 +543,11 @@ contains
         real,    allocatable, intent(out) :: centroids(:)
         integer, allocatable, intent(out) :: populations(:)
         logical, allocatable :: mask(:)
-        integer, allocatable :: relabel(:), head(:), tail(:), next_lbl(:), label_map(:)
+        integer, allocatable :: relabel(:), head(:), tail(:), next_lbl(:), label_map(:), order(:)
+        real,    allocatable :: centroids_sorted(:)
         real    :: d, best_d
         integer :: N, i, j, k, best_j, ncls, cnt
+        integer, allocatable :: populations_sorted(:)
         real    :: t_all0, t_all1, t_stage0, t_stage1
         real    :: t_pair, t_init, t_merge, t_compact, t_final
         N = size(vec)
@@ -666,7 +668,41 @@ contains
         enddo
         call cpu_time(t_stage1)
         t_final = t_final + (t_stage1 - t_stage0)
-        deallocate(mask, relabel)
+        ! 6) enforce monotonic label order by centroid value (smallest centroid -> label 1)
+        call cpu_time(t_stage0)
+        allocate(order(ncls))
+        do i = 1, ncls
+            order(i) = i
+        enddo
+        do i = 1, ncls - 1
+            k = i
+            do j = i + 1, ncls
+                if( centroids(order(j)) < centroids(order(k)) ) k = j
+            enddo
+            if( k /= i )then
+                cnt      = order(i)
+                order(i) = order(k)
+                order(k) = cnt
+            endif
+        enddo
+        relabel = 0
+        do i = 1, ncls
+            relabel(order(i)) = i
+        enddo
+        allocate(centroids_sorted(ncls), populations_sorted(ncls))
+        do i = 1, ncls
+            centroids_sorted(i)   = centroids(order(i))
+            populations_sorted(i) = populations(order(i))
+        enddo
+        centroids   = centroids_sorted
+        populations = populations_sorted
+        deallocate(centroids_sorted, populations_sorted)
+        do i = 1, N
+            labels(i) = relabel(labels(i))
+        enddo
+        call cpu_time(t_stage1)
+        t_final = t_final + (t_stage1 - t_stage0)
+        deallocate(mask, relabel, order)
         call cpu_time(t_all1)
         write(logfhandle, '(A,I0,A,F10.4)') 'hac_1d_fast timing N=', N, ' total(s)=', (t_all1 - t_all0)
         write(logfhandle, '(A,F10.4,A,F10.4,A,F10.4,A,F10.4,A,F10.4)') '  pair(s)=', t_pair, ', init(s)=', t_init, &

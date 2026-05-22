@@ -33,6 +33,7 @@ def index(request):
         streamjob = StreamJob(id=jobid)
         if streamjob.update_stats(request_json):
            response = streamjob.get_master_update()
+           print("API RESPONSE", response)
         else:
             return JsonResponse(response, status=400)
     elif dict_present(request_json, "heartbeat"):

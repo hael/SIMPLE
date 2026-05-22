@@ -240,11 +240,12 @@ contains
         call mic_den%kill
     end subroutine segdiampick_mics
 
-    subroutine segdiampick_mics_multi( spproj, projs_clusters, pcontrast, mic_to, moldiam_max, boxes_in_pix, mskdiams )
+    subroutine segdiampick_mics_multi( spproj, projs_clusters, pcontrast, mic_to, moldiam_max, boxes_in_pix, mskdiams, maxmins )
         class(sp_project),         intent(inout) :: spproj
         type(string), allocatable, intent(inout) :: projs_clusters(:)
         integer,      allocatable, intent(inout) :: boxes_in_pix(:)
         real,         allocatable, intent(inout) :: mskdiams(:)
+        integer,      allocatable, intent(inout) :: maxmins(:,:)
         integer,                   intent(inout) :: mic_to     ! last micrograph to process
         character(len=*),          intent(in)    :: pcontrast
         real,                      intent(in)    :: moldiam_max
@@ -396,9 +397,11 @@ contains
         if( allocated(projs_clusters) ) deallocate(projs_clusters)
         if( allocated(boxes_in_pix)   ) deallocate(boxes_in_pix)
         if( allocated(mskdiams)       ) deallocate(mskdiams)
+        if( allocated(maxmins)        ) deallocate(maxmins)
         allocate(projs_clusters(n_accepted))
         allocate(boxes_in_pix(n_accepted))
         allocate(mskdiams(n_accepted))
+        allocate(maxmins(n_accepted, 2))
         ! Add denoised thumbs to project metadata.
         do imic = 1, mic_to
             if( file_exists(mic_den_names(imic)) )then
@@ -460,6 +463,8 @@ contains
                 projs_clusters(i_acc) = 'cluster_project_'//int2str(i)//METADATA_EXT
                 boxes_in_pix(i_acc)   = box_loc
                 mskdiams(i_acc)       = msk_loc
+                maxmins(i_acc, 1)     = nint(diam_stats%maxv)
+                maxmins(i_acc, 2)     = nint(diam_stats%minv)
                 call spproj_tmp%write(projs_clusters(i_acc))
                 ! tidy
                 call spproj_tmp%kill()

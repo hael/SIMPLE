@@ -154,7 +154,7 @@ contains
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
         character(kind=CK, len=:),     allocatable :: str_val
-        integer,                       allocatable :: i_arr(:)
+        integer,                       allocatable :: i_arr(:), pickrefs_sel(:,:)
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
@@ -344,6 +344,8 @@ contains
                         if(l_found) call meta_update%set_increase_nmics(i_val)
                         call json%get(json_response_ptr, 'pickrefs_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_pickrefs_selection(i_arr)
+                        call json%get(json_response_ptr, 'pickrefs_clusters', i_arr, l_found)
+                        if(l_found) call meta_update%set_pickrefs_clusters(i_arr)
                         call json%get(json_response_ptr, 'ref_selection', i_arr, l_found)
                         if(l_found) call meta_update%set_sieverefs_selection(i_arr)
                         call json%get(json_response_ptr, 'mskdiam2D', r_val, l_found)

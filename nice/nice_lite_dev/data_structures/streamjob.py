@@ -2,6 +2,7 @@
 import os
 import copy
 import time
+import json
 from time import gmtime, strftime
 from django.utils import timezone
 
@@ -237,8 +238,21 @@ class StreamJob:
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return False
+        
+        if isinstance(final_selection, str):
+            try:
+                final_selection = json.loads(final_selection)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                print_error("select_pickrefs: invalid final_selection JSON payload")
+                return False
+
+        if not isinstance(final_selection, list):
+            print_error("select_pickrefs: final_selection must be a list")
+            return False
+
         master_update = self.jobmodel.master_update
-        master_update["pickrefs_selection"] = final_selection
+        master_update["pickrefs_selection"] = [int(sublist[0]) for sublist in final_selection if isinstance(sublist, (list, tuple)) and len(sublist) > 0]
+        master_update["pickrefs_clusters"]  = [int(sublist[1]) for sublist in final_selection if isinstance(sublist, (list, tuple)) and len(sublist) > 1]
         self.jobmodel.master_update = master_update
         stats = self.jobmodel.generate_pickrefs_stats
         stats["user_input"] = False
@@ -316,6 +330,7 @@ class StreamJob:
                     # clear pending user inputs once the stage is no longer running
                     master_update.pop("increase_nmics",     None)
                     master_update.pop("pickrefs_selection", None)
+                    master_update.pop("pickrefs_clusters",  None)
             if "reference_picking" in heartbeat:
                 status, _ = analyse_heartbeat(heartbeat["reference_picking"])
                 self.jobmodel.reference_picking_status = status

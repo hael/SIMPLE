@@ -66,11 +66,11 @@ const selectRefs = (element) => {
     for (const pick_template of document.getElementsByClassName("picktemplate")) {
         if (!pick_template.classList.contains("disabledbutton")) {
             path = pick_template.dataset.path;
-            selected.push(Number(pick_template.dataset.idx));
+            selected.push([Number(pick_template.dataset.idx), Number(pick_template.dataset.idcluster)]);
         }
     }
-    document.getElementById("final_selection_source").value = path;
-    document.getElementById("final_selection").value = selected;
+   // document.getElementById("final_selection_source").value = path;
+    document.getElementById("final_selection").value = JSON.stringify(selected);
     if (selected.length === 0) {
         alert("You must select at least 1 reference");
     } else {

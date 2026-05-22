@@ -50,7 +50,8 @@ private
 
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
-  integer(kind=2)       :: pickrefs_selection(1000)     = 0    ! per-class selection; 1 = selected, 0 = not selected
+  integer(kind=2)       :: pickrefs_selection(500)      = 0    ! per-class selection; 1 = selected, 0 = not selected
+  integer(kind=2)       :: pickrefs_clusters(500)       = 0    ! per-class selection; 1 = selected, 0 = not selected
   integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
   integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! per-class selection for sieve refchunk; 1 = selected, 0 = not selected
   integer               :: sieverefs_selection_length   = 0    ! number of sieve-ref classes in the selection
@@ -75,6 +76,8 @@ contains
   procedure :: get_increase_nmics
   procedure :: set_pickrefs_selection
   procedure :: get_pickrefs_selection
+  procedure :: set_pickrefs_clusters
+  procedure :: get_pickrefs_clusters
   procedure :: set_pickrefs_selection_length
   procedure :: get_pickrefs_selection_length
   procedure :: set_sieverefs_selection
@@ -154,7 +157,7 @@ contains
     increase_nmics = self%increase_nmics
   end function get_increase_nmics
 
-  ! Store the user's class selection as an integer array (1 = selected, 0 = not selected).
+  ! Store the user's class selection as an integer array
   subroutine set_pickrefs_selection( self, selection )
     class(gui_metadata_stream_update), intent(inout) :: self
     integer,                           intent(in)    :: selection(:)
@@ -167,7 +170,7 @@ contains
     self%pickrefs_selection(1:n)   = selection  ! only 1:n is ever read back
   end subroutine set_pickrefs_selection
 
-  ! Retrieve the class selection as an integer array (1 = selected, 0 = not selected).
+  ! Retrieve the user's class selection as an integer array
   function get_pickrefs_selection( self ) result( selection )
     class(gui_metadata_stream_update), intent(in)  :: self
     integer, allocatable                           :: selection(:)
@@ -178,6 +181,30 @@ contains
     allocate(selection(n))
     selection = self%pickrefs_selection(1:n)
   end function get_pickrefs_selection
+
+  ! Store the pickref cluster membership as an integer array
+  subroutine set_pickrefs_clusters( self, clusters )
+    class(gui_metadata_stream_update), intent(inout) :: self
+    integer,                           intent(in)    :: clusters(:)
+    integer :: n
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    n = size(clusters)
+    if( n > size(self%pickrefs_clusters) ) THROW_HARD('pickrefs_clusters exceeds maximum size')
+    self%l_assigned               = .true.
+    self%pickrefs_clusters(1:n)   = clusters  ! only 1:n is ever read back
+  end subroutine set_pickrefs_clusters
+
+  ! Retrieve the pickref cluster membership as an integer array
+  function get_pickrefs_clusters( self ) result( clusters )
+    class(gui_metadata_stream_update), intent(in)  :: self
+    integer, allocatable                           :: clusters(:)
+    integer :: n
+    n = self%pickrefs_selection_length
+    if( n < 0 ) THROW_HARD('pickrefs_selection_length is negative')
+    if( n > size(self%pickrefs_clusters) ) THROW_HARD('pickrefs_clusters_length exceeds maximum size')
+    allocate(clusters(n))
+    clusters = self%pickrefs_clusters(1:n)
+  end function get_pickrefs_clusters
 
   ! Set the number of classes in the selection.
   subroutine set_pickrefs_selection_length( self, n )

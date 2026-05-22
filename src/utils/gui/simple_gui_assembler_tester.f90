@@ -331,6 +331,10 @@ contains
     call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
     call meta_opening2D%set(stage=string('test stage'), particles_imported=50000, &
                             particles_accepted=42000, mask_diam=160, box_size=256, mask_scale=0.75)
+    call meta_opening2D%add_diameter_cluster(120, 140, 130, 0.732)
+    call meta_opening2D%add_diameter_cluster(150, 180, 165, 0.654)
+    call meta_opening2D%clear_diameter_clusters()
+    call meta_opening2D%add_diameter_cluster(155, 185, 170, 0.812)
     allocate(meta_cavgs2D(3))
     do i=1, size(meta_cavgs2D)
       call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)

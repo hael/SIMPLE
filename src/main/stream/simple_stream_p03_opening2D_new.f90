@@ -70,10 +70,12 @@ contains
         character(len=:),          allocatable     :: meta_buffer            ! serialised GUI metadata message
         type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
         type(string),              allocatable     :: projs_clusters(:)      ! paths to cluster output for each project
+        type(string),              allocatable     :: imgfiles(:)            ! cache of cavgs stack paths for each cluster, for use in process_selected_refs
         type(image),               allocatable     :: cavg_imgs(:)           ! class-average images for quality evaluation
         integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
         integer,                   allocatable     :: boxes_in_pix(:)        ! box sizes (px) used for picking each micrograph
         real,                      allocatable     :: mskdiams(:)            ! mask diameters (A) used for picking each micrograph
+        integer,                   allocatable     :: maxmins(:,:)           ! max/min diameters (px) of picked particles for each micrograph
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
         type(string)                               :: cavgsstk, mapfileprefix, projfile, cwd_master
         type(qsys_env)                             :: qsys
@@ -96,7 +98,7 @@ contains
         integer                                    :: box_for_pick           ! box size used for reference picking
         integer                                    :: box_for_extract        ! box size used for particle extraction
         integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                    :: ncls_stk, iori, i_max, optics_map_id, i_cluster
+        integer                                    :: ncls_stk, iori, i_max, i_start, optics_map_id, i_cluster
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
         integer                                    :: ncls                   ! number of classes for abinitio2D
         integer                                    :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
@@ -109,10 +111,10 @@ contains
         ! validate required args and apply defaults
         if( .not. cline%defined('dir_target')     ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',            'yes')
-        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',     200)
+        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',     100)
         if( .not. cline%defined('pick_roi')       ) call cline%set('pick_roi',         'yes')
         if( .not. cline%defined('outdir')         ) call cline%set('outdir',              '')
-        if( .not. cline%defined('nmics')          ) call cline%set('nmics',              100)
+        if( .not. cline%defined('nmics')          ) call cline%set('nmics',              200)
         ! sanity check for restart
         if( cline%defined('outdir') .and. dir_exists(cline%get_carg('outdir')) ) then
             write(logfhandle,'(A)') ">>> RESTARTING EXISTING JOB"
@@ -159,7 +161,7 @@ contains
             call send_meta(string('picking particles'))
             ! segmentation-based picking
             nmics = params%nmics ! local copy: segdiampick_mics must not modify params%nmics
-            call segdiampick_mics_multi(spproj, projs_clusters, params%pcontrast, nmics, params%moldiam_max, boxes_in_pix, mskdiams)
+            call segdiampick_mics_multi(spproj, projs_clusters, params%pcontrast, nmics, params%moldiam_max, boxes_in_pix, mskdiams, maxmins)
             call send_meta(string('extracting particles'))
             ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
             if( spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
@@ -185,34 +187,44 @@ contains
             end do
             call send_meta2D(string('evaluating class average quality'), maxval(boxes_in_pix))
       !      call spproj%read(projfile)
+            i_max = 0
             call simple_getcwd(cwd_master) ! cache master CWD for constructing absolute paths to send to the GUI
+            call meta_opening2D%clear_diameter_clusters()
+            allocate(imgfiles(size(projs_clusters)))
             do i_cluster = 1, size(projs_clusters)
                 call spproj%kill()
                 call spproj%read(projs_clusters(i_cluster))
+                call spproj%get_cavgs_stk(cavgsstk, ncls, smpd_stk)
                 ncls      = spproj%os_cls2D%get_noris()
                 cavg_imgs = read_cavgs_into_imgarr(spproj)
+                smpd_stk  = spproj%get_smpd()
+                imgfiles(i_cluster) = cavgsstk ! cache for later use in process_selected_refs
                 call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, mskdiams(i_cluster), quality, model)
                 call model%kill()
-                call write_quality_stack(string('quality_selected_cavgs_cluster_'//int2str(i_cluster)//MRC_EXT),  selected=.true.)
+                call write_quality_stack(string('quality_selected_cavgs_cluster_'//int2str(i_cluster)//MRC_EXT), selected=.true. )
                 call write_quality_stack(string('quality_rejected_cavgs_cluster_'//int2str(i_cluster)//MRC_EXT), selected=.false.)
                 call dealloc_imgarr(cavg_imgs)
                 call spproj%map_cavgs_selection(quality%states)
                 call spproj%write()
-            ! call send_meta2D(string('shape ranking particles'), box_in_pix)
-            ! call run_shape_rank()
-            ! call spproj%read(projfile)
-            ! call spproj%shape_ranked_cavgs2jpg(cavg_inds, string("shape_ranked_")//int2str(params%nmics)//JPG_EXT,&
-            ! &xtiles, ytiles, mskdiam_px=ceiling(mskdiam_estimate * spproj%get_smpd()))
-            !   call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_stk)
-                call spproj%cavgs2jpg(cavg_inds, string("shape_ranked_cluster_")//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT,&
-                &xtiles, ytiles)
-                ! signal the GUI that user input is required, then send the cavgs
-                if( i_cluster == 1 ) then
-                    call meta_opening2D%set_user_input(.true.)
-                    call send_meta2D(string('waiting for user selection'), box_in_pix)
-                    if( allocated(cavg_inds) ) call send_available_cavgs2D(&
-                        &cwd_master//'/shape_ranked_cluster_'//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT, size(cavg_inds))
+                i_max = i_max + count(quality%states > 0)   ! accumulate count of selected classes for IPC routing
+                call meta_opening2D%add_diameter_cluster(maxmins(i_cluster, 2), maxmins(i_cluster, 1), nint(mskdiams(i_cluster)), boxes_in_pix(i_cluster) * smpd_stk) ! add diam cluster info to metadata for GUI display
+            end do
+            call meta_opening2D%set_user_input(.true.)
+            call send_meta2D(string('waiting for user selection'), box_in_pix)
+            i_start = 1
+            do i_cluster = 1, size(projs_clusters)
+                call spproj%kill()
+                call spproj%read(projs_clusters(i_cluster))
+                call spproj%cavgs2jpg(cavg_inds, string("diameter_cluster_")//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT,&
+                &xtiles, ytiles, ignore_states=.false.)
+                if( allocated(cavg_inds) ) then
+                    cavg_inds = pack(cavg_inds, cavg_inds > 0) ! filter out zero indices (unselected classes)
+                    if( size(cavg_inds) > 0 ) then
+                        call send_available_cavgs2D(&
+                            &cwd_master//'/diameter_cluster_'//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT, size(cavg_inds), i_cluster, my_i_max=i_max, my_i_start=i_start)
+                        i_start = i_start + size(cavg_inds)
+                    end if
                 end if
             end do
             ! wait for user interaction
@@ -240,14 +252,15 @@ contains
                             ncavgs = meta_update%get_pickrefs_selection_length()
                             if( ncavgs > 0 ) then
                                 call meta_opening2D%set_user_input(.false.)
-                                call process_selected_refs(params, cavgsstk, spproj%get_smpd(),  &
+                                call process_selected_refs(params, imgfiles, smpd_stk,            &
                                     &meta_update%get_pickrefs_selection(),                        &
+                                    &meta_update%get_pickrefs_clusters(),                         &
                                     &mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                                 call meta_cavg2D%kill()
                                 call meta_cavg2D%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
                                 call send_meta2D(string('applying user selection'), box_for_extract)
-                                call send_available_cavgs2D(&
-                                    &cwd_master//'/'//STREAM_SELECTED_REFS//JPG_EXT, ncavgs)
+                                !call send_available_cavgs2D(&
+                                !    &cwd_master//'/'//STREAM_SELECTED_REFS//JPG_EXT, ncavgs, cluster_id=0)
                                 exit  ! exit inner wait-loop; restart_requested already .false.
                             end if
                         end if
@@ -261,18 +274,19 @@ contains
         call send_meta2D(string('terminating'), box_for_extract)
         if( allocated(projects)  ) deallocate(projects)
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
+        if( allocated(imgfiles)  ) deallocate(imgfiles)
         ! add optics
-        if( cline%defined('optics_dir') ) then
-            optics_map_id = get_latest_optics_map_id(params%optics_dir)
-            if( optics_map_id > 0 ) then
-                mapfileprefix = params%optics_dir//'/'//OPTICS_MAP_PREFIX//int2str(optics_map_id)
-                call spproj%import_optics_map(mapfileprefix)
-            endif
-        endif
-        ! write project and star files (just in case you want to import these particles/micrographs elsewhere)
-        call spproj%write
-        call spproj%write_mics_star(string("micrographs.star"))
-        call spproj%write_ptcl2D_star(string("particles.star"))
+        ! if( cline%defined('optics_dir') ) then
+        !     optics_map_id = get_latest_optics_map_id(params%optics_dir)
+        !     if( optics_map_id > 0 ) then
+        !         mapfileprefix = params%optics_dir//'/'//OPTICS_MAP_PREFIX//int2str(optics_map_id)
+        !         call spproj%import_optics_map(mapfileprefix)
+        !     endif
+        ! endif
+        ! ! write project and star files (just in case you want to import these particles/micrographs elsewhere)
+        ! call spproj%write
+        ! call spproj%write_mics_star(string("micrographs.star"))
+        ! call spproj%write_ptcl2D_star(string("particles.star"))
         call spproj%kill
         call simple_end('**** SIMPLE_GEN_PICKREFS NORMAL STOP ****')
 
@@ -525,23 +539,24 @@ contains
 
             ! Send metadata for one 2D class average to the GUI.
             ! my_xtile/my_ytile are the 0-based grid position within the sprite sheet.
-            subroutine send_cavg2D_meta( my_path, my_i, my_i_max, my_xtile, my_ytile )
+            subroutine send_cavg2D_meta( my_path, my_i, my_i_delta, my_i_max, my_xtile, my_ytile, cluster_id )
                 type(string), intent(in) :: my_path
-                integer,      intent(in) :: my_i, my_i_max, my_xtile, my_ytile
+                integer,      intent(in) :: my_i, my_i_delta, my_i_max, my_xtile, my_ytile, cluster_id
                 integer                  :: my_idx
                 my_idx = cavg_inds(my_i)
-                call meta_cavg2D%set(                                    &
-                    path    = my_path,                                   &
-                    mrcpath = cavgsstk,                                  &
-                    i       = my_i,                                      &
-                    i_max   = my_i_max,                                  &
-                    res     = spproj%os_cls2D%get(my_idx,     'res'),    &
-                    pop     = spproj%os_cls2D%get_int(my_idx, 'pop'),    &
-                    idx     = my_idx,                                    &
-                    sprite  = sprite_sheet_pos(                                        &
+                call meta_cavg2D%set(                                       &
+                    path       = my_path,                                   &
+                    mrcpath    = cavgsstk,                                  &
+                    i          = my_i + my_i_delta,                         &
+                    i_max      = my_i_max,                                  &
+                    res        = spproj%os_cls2D%get(my_idx,     'res'),    &
+                    pop        = spproj%os_cls2D%get_int(my_idx, 'pop'),    &
+                    idx        = my_idx,                                    &
+                    cluster_id = cluster_id,                                &
+                    sprite     = sprite_sheet_pos(                          &
                                   x = merge(0.0, my_xtile * (100.0 / (xtiles - 1)), xtiles == 1), &
                                   y = merge(0.0, my_ytile * (100.0 / (ytiles - 1)), ytiles == 1), &
-                                  h = 100 * ytiles,                      &
+                                  h = 100 * ytiles,                                               &
                                   w = 100 * xtiles))
                 if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_cavg2D%serialise(meta_buffer)
@@ -550,14 +565,22 @@ contains
             end subroutine send_cavg2D_meta
 
             ! Send a batch of cavg2D metadata to the GUI, resetting tile counters.
-            subroutine send_available_cavgs2D( my_path, n )
-                type(string), intent(in) :: my_path
-                integer,      intent(in) :: n
-                integer                  :: my_xtile, my_ytile
-                my_xtile = 0
-                my_ytile = 0
-                do i = 1, n
-                    call send_cavg2D_meta(my_path, i, n, my_xtile, my_ytile)
+            subroutine send_available_cavgs2D( my_path, n, cluster_id, my_i_max, my_i_start )
+                type(string),      intent(in) :: my_path
+                integer,           intent(in) :: n, cluster_id
+                integer, optional, intent(in) :: my_i_max, my_i_start
+                integer                       :: my_xtile, my_ytile, my_i, my_i_delta
+                my_xtile   = 0
+                my_ytile   = 0
+                my_i_delta = 0
+                if( present(my_i_start) ) my_i_delta = my_i_start - 1
+                write(logfhandle,*) '>>> SENDING', n, ' CLASS AVERAGES TO GUI', my_i_max
+                do my_i = 1, n
+                    if (present(my_i_max)) then
+                        call send_cavg2D_meta(my_path, my_i, my_i_delta, my_i_max, my_xtile, my_ytile, cluster_id)
+                    else
+                        call send_cavg2D_meta(my_path, my_i, my_i_delta, n, my_xtile, my_ytile, cluster_id)
+                    endif
                     my_xtile = my_xtile + 1
                     if( my_xtile == xtiles ) then
                         my_xtile = 0

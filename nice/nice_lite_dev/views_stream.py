@@ -321,7 +321,7 @@ def select_pickrefs(request):
     if not raw_selection:
         print_error("select_pickrefs: final_selection missing")
         return redirect('nice_lite:view_stream', jobid=jobid)
-    final_selection = [int(s) for s in raw_selection.split(',')]
+    final_selection = raw_selection
     if not streamjob.select_pickrefs(final_selection):
         print_error(f"select_pickrefs: failed for job {jobid}")
     return redirect('nice_lite:view_stream', jobid=jobid)

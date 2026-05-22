@@ -39,18 +39,25 @@ module simple_gui_metadata_stream_opening2D
 
   type, extends(gui_metadata_base) :: gui_metadata_stream_opening2D
     private
-    character(len=STDLEN) :: stage                   = 'unknown'
-    integer               :: particles_imported      = 0       ! total particles received from upstream
-    integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
-    integer               :: particles_rejected      = 0       ! particles_imported - particles_accepted
-    integer               :: mask_diam               = 0       ! circular mask diameter (pixels)
-    integer               :: box_size                = 0       ! particle box size (pixels)
-    integer               :: last_particles_imported = 0       ! Unix timestamp of most recent import event
-    real                  :: mask_scale              = 0.0     ! fractional mask scale factor
-    logical               :: user_input              = .false. ! .true. once the user has supplied input
+    character(len=STDLEN) :: stage                        = 'unknown'
+    integer(kind=2)       :: diam_clusters_low(20)        = 0       ! diameter clusters lower bound (A)
+    integer(kind=2)       :: diam_clusters_high(20)       = 0       ! diameter clusters upper bound (A)
+    integer(kind=2)       :: diam_clusters_mask(20)       = 0       ! diameter clusters mask (A)
+    integer               :: n_clusters                   = 0       ! number of diameter clusters
+    integer               :: particles_imported           = 0       ! total particles received from upstream
+    integer               :: particles_accepted           = 0       ! particles passing 2-D selection criteria
+    integer               :: particles_rejected           = 0       ! particles_imported - particles_accepted
+    integer               :: mask_diam                    = 0       ! circular mask diameter (pixels)
+    integer               :: box_size                     = 0       ! particle box size (pixels)
+    integer               :: last_particles_imported      = 0       ! Unix timestamp of most recent import event
+    real                  :: diam_clusters_mask_scale(20) = 0.0     ! diameter clusters mask scale factor
+    real                  :: mask_scale                   = 0.0     ! fractional mask scale factor
+    logical               :: user_input                   = .false. ! .true. once the user has supplied input
   contains
     procedure :: set
     procedure :: set_user_input
+    procedure :: add_diameter_cluster
+    procedure :: clear_diameter_clusters
     procedure :: get
     procedure :: jsonise => jsonise_override
   end type gui_metadata_stream_opening2D
@@ -88,6 +95,40 @@ contains
     self%user_input = user_input
   end subroutine set_user_input
 
+  ! Append one diameter cluster interval [low, high] in Angstrom.
+  subroutine add_diameter_cluster( self, low, high, maskdiam, maskscale )
+    class(gui_metadata_stream_opening2D), intent(inout) :: self
+    integer,                              intent(in)    :: low, high
+    integer,                              intent(in)    :: maskdiam
+    real,                                 intent(in)    :: maskscale
+    integer                                             :: idx
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( low > high ) THROW_HARD('invalid diameter cluster bounds: low > high')
+    if( low < -32768 .or. high > 32767 ) THROW_HARD('diameter cluster bounds exceed int16 range')
+    if( self%n_clusters >= size(self%diam_clusters_low) ) then
+      THROW_HARD('too many diameter clusters for GUI metadata (max=100)')
+    endif
+    idx = self%n_clusters + 1
+    self%diam_clusters_low(idx)        = int(low,  kind=2)
+    self%diam_clusters_high(idx)       = int(high, kind=2)
+    self%n_clusters                    = idx
+    self%diam_clusters_mask(idx)  = int(maskdiam, kind=2)
+    self%diam_clusters_mask_scale(idx) = maskscale
+    self%l_assigned                    = .true.
+  end subroutine add_diameter_cluster
+
+  ! Clear all stored diameter cluster intervals.
+  subroutine clear_diameter_clusters( self )
+    class(gui_metadata_stream_opening2D), intent(inout) :: self
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%diam_clusters_low        = 0
+    self%diam_clusters_high       = 0
+    self%diam_clusters_mask       = 0
+    self%diam_clusters_mask_scale = 0.0
+    self%n_clusters               = 0
+    self%l_assigned               = .true.
+  end subroutine clear_diameter_clusters
+
   ! Retrieve particle counts and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
   function get( self, stage, particles_imported, particles_accepted, last_particles_imported ) result( l_assigned )
@@ -109,7 +150,8 @@ contains
   function jsonise_override( self ) result( json_ptr )
     class(gui_metadata_stream_opening2D), intent(inout) :: self
     type(json_core)                                     :: json
-    type(json_value),                     pointer       :: json_ptr
+    type(json_value),                     pointer       :: json_ptr, json_clust_ptr, json_diam_ptr
+    integer                                             :: idx
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then
       call json%create_object(json_ptr, '')
@@ -122,6 +164,19 @@ contains
       call json%add(json_ptr, 'box_size',                 self%box_size                  )
       call json%add(json_ptr, 'mskscale',                 dble(self%mask_scale)          )
       call json%add(json_ptr, 'user_input',               self%user_input                )
+      call json%add(json_ptr, 'n_clusters',               self%n_clusters                )
+      if( self%n_clusters > 0 ) then
+        call json%create_array(json_clust_ptr, 'diam_clusters')
+        do idx = 1, self%n_clusters
+          call json%create_object(json_diam_ptr, '')
+          call json%add(json_diam_ptr, 'low',        int(self%diam_clusters_low(idx))         )
+          call json%add(json_diam_ptr, 'high',       int(self%diam_clusters_high(idx))        )
+          call json%add(json_diam_ptr, 'mask_diam',  int(self%diam_clusters_mask(idx))        )
+          call json%add(json_diam_ptr, 'mask_scale', dble(self%diam_clusters_mask_scale(idx)) )
+          call json%add(json_clust_ptr, json_diam_ptr)
+        end do
+        call json%add(json_ptr, json_clust_ptr)
+      end if
     else
       nullify(json_ptr)
     end if

@@ -239,7 +239,7 @@ contains
                     call http_gen_pickrefs_communicator%get_json_arg('final_selection_source', buffer, found)
                     if(found) then
                         final_selection_source = buffer
-                        call process_selected_refs(params, final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
+    !                    call process_selected_refs(params, final_selection_source, spproj%get_smpd(), final_selection, mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
                         call http_gen_pickrefs_communicator%add_to_json("mask_diam", nint(mskdiam_estimate))
                         call http_gen_pickrefs_communicator%add_to_json("mskscale",  dble(box_for_extract * spproj%get_smpd()))
                         call http_gen_pickrefs_communicator%add_to_json("box_size",  box_for_extract)

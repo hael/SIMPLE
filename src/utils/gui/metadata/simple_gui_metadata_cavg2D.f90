@@ -45,16 +45,17 @@ end type sprite_sheet_pos
 
 type, extends( gui_metadata_base ) :: gui_metadata_cavg2D
   private
-  character(len=LONGSTRLEN) :: path    = ''                  ! absolute path to the cavgs JPEG
-  character(len=LONGSTRLEN) :: mrcpath = ''                  ! absolute path to the cavgs MRC
-  integer                   :: idx     = 0                   ! class index within the MRC
-  type(sprite_sheet_pos)    :: sprite  = sprite_sheet_pos()  ! tile position and sheet dimensions
-  real                      :: res     = 0.0   ! resolution estimate (Angstroms); valid only when l_res
-  integer                   :: pop     = 0     ! particle population count; valid only when l_pop
-  logical                   :: l_res   = .false.
-  logical                   :: l_pop   = .false.
-  integer                   :: i       = 1     ! index of this entry within the current batch (IPC routing)
-  integer                   :: i_max   = 1     ! total entries in the current batch (IPC routing)
+  character(len=LONGSTRLEN) :: path       = ''                  ! absolute path to the cavgs JPEG
+  character(len=LONGSTRLEN) :: mrcpath    = ''                  ! absolute path to the cavgs MRC
+  integer                   :: idx        = 0                   ! class index within the MRC
+  type(sprite_sheet_pos)    :: sprite     = sprite_sheet_pos()  ! tile position and sheet dimensions
+  real                      :: res        = 0.0   ! resolution estimate (Angstroms); valid only when l_res
+  integer                   :: pop        = 0     ! particle population count; valid only when l_pop
+  logical                   :: l_res      = .false.
+  logical                   :: l_pop      = .false.
+  integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
+  integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
+  integer                   :: cluster_id = 0  ! cluster ID for this cavg (IPC routing)
 contains
   procedure :: set
   procedure :: get
@@ -71,7 +72,7 @@ contains
   ! Set all class-average fields and mark the object as assigned.
   ! res and pop are optional; omitting them clears the corresponding flag.
   ! i and i_max are required IPC routing fields (batch index / batch size).
-  subroutine set( self, path, mrcpath, idx, sprite, i, i_max, res, pop )
+  subroutine set( self, path, mrcpath, idx, sprite, i, i_max, res, pop, cluster_id )
     class(gui_metadata_cavg2D), intent(inout) :: self
     type(string),               intent(in)    :: path, mrcpath
     integer,                    intent(in)    :: idx
@@ -79,6 +80,7 @@ contains
     integer,                    intent(in)    :: i, i_max
     real,    optional,          intent(in)    :: res
     integer, optional,          intent(in)    :: pop
+    integer, optional,          intent(in)    :: cluster_id
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()
@@ -91,19 +93,21 @@ contains
     if( self%l_res ) self%res = res
     self%l_pop      = present(pop)
     if( self%l_pop ) self%pop = pop
+    if( present(cluster_id) ) self%cluster_id = cluster_id
   end subroutine set
 
   !---------------- getters ----------------
 
   ! Return all fields; result is .true. if the object has been assigned.
   ! res and pop are set only when the corresponding optional was supplied to set().
-  function get( self, path, mrcpath, idx, sprite, res, pop ) result( l_assigned )
+  function get( self, path, mrcpath, idx, sprite, res, pop, cluster_id ) result( l_assigned )
     class(gui_metadata_cavg2D), intent(in)  :: self
     type(string),               intent(out) :: path, mrcpath
     integer,                    intent(out) :: idx
     type(sprite_sheet_pos),     intent(out) :: sprite
     real,    optional,          intent(out) :: res
     integer, optional,          intent(out) :: pop
+    integer, optional,          intent(out) :: cluster_id
     logical                                 :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned
@@ -111,8 +115,9 @@ contains
     mrcpath    = trim(self%mrcpath)
     idx        = self%idx
     sprite     = self%sprite
-    if( present(res) .and. self%l_res ) res = self%res
-    if( present(pop) .and. self%l_pop ) pop = self%pop
+    if( present(res) .and. self%l_res             ) res        = self%res
+    if( present(pop) .and. self%l_pop             ) pop        = self%pop
+    if( present(cluster_id) .and. self%l_assigned ) cluster_id = self%cluster_id
   end function get
 
   ! Return the class index (tile position within the sprite sheet).
@@ -157,6 +162,7 @@ contains
     call json%add(json_ptr, "spriteh", self%sprite%h)
     call json%add(json_ptr, "spritew", self%sprite%w)
     call json%add(json_ptr, "idx",     self%idx)
+    call json%add(json_ptr, "idclust", self%cluster_id)
     if( self%l_res ) call json%add(json_ptr, "res", dble(self%res))
     if( self%l_pop ) call json%add(json_ptr, "pop", self%pop)
   end function jsonise_override

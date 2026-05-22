@@ -353,12 +353,13 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine process_selected_refs( params, imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+    subroutine process_selected_refs_bak( params, imgfile, smpd, selection, selection_clusters, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
         use simple_image_msk, only: automask2d
         class(parameters), intent(inout) :: params
         class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
         integer,         intent(in)    :: selection(:)
+        integer,         intent(in)    :: selection_clusters(:)
         real,            intent(out)   :: mskdiam
         integer,         intent(out)   :: box_for_pick, box_for_extract
         integer,         intent(inout) :: nxtiles, nytiles
@@ -457,6 +458,133 @@ contains
         call mrc2jpeg_tiled(string(STREAM_DESELECTED_REFS)//STK_EXT, string(STREAM_DESELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles_loc, n_ytiles=nytiles_loc)
         write(logfhandle,'(A)')'>>> DESELECTED REFERENCES'
         write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_DESELECTED_REFS)//JPG_EXT
+        write(logfhandle,'(A)')'>>> SELECTED REFERENCES'
+        write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_SELECTED_REFS)//JPG_EXT
+    end subroutine process_selected_refs_bak
+
+    subroutine process_selected_refs( params, imgfiles, smpd, selection, selection_clusters, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+        use simple_image_msk, only: automask2d
+        class(parameters),            intent(inout) :: params
+        type(string),    allocatable, intent(in)    :: imgfiles(:)
+        real,                         intent(in)    :: smpd
+        integer,                      intent(in)    :: selection(:)
+        integer,                      intent(in)    :: selection_clusters(:)
+        real,                         intent(out)   :: mskdiam
+        integer,                      intent(out)   :: box_for_pick, box_for_extract
+        integer,                      intent(inout) :: nxtiles, nytiles
+        type(parameters)               :: local_params
+        type(cmdline)                  :: cline
+        type(stack_io)                 :: stkio_r, stkio_w
+        type(image),       allocatable :: cavgs(:)
+        integer,           allocatable :: selection_cluster(:)
+        real,              allocatable :: diams(:), shifts(:,:)
+        logical,           parameter   :: DEBUG = .true.
+        real    :: maxdiam, mskrad_in_pix, moldiam
+        integer :: ldim(3), icls, ncls, nsel, i, nxtiles_loc, nytiles_loc, i_clust_max, i_clust, nsel_cluster, iwrite
+        nsel = size(selection)
+        if( nsel == 0 ) return
+        write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'
+        write(logfhandle,'(A,A)')'>>> WRITING SELECTED CLUSTERS TO: ', STREAM_SELECTED_REFS // STK_EXT
+        ! set defaults
+        call set_automask2D_defaults(cline)
+        ! parse parameters
+        call local_params%new(cline)
+        ! find largest diameter cluster with selected cavgs. Clusters sorted by size by default so is the highest id
+        i_clust_max = maxval(selection_clusters)
+        ! reverse iterate over clusters
+        box_for_extract = 0
+        iwrite          = 1
+        do i_clust = i_clust_max, 1, -1
+            nsel_cluster = count(selection_clusters == i_clust)
+            if( nsel_cluster == 0 ) cycle
+            call find_ldim_nptcls(imgfiles(i_clust), ldim, ncls)
+            ldim(3)           = 1
+            local_params%msk  = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
+            local_params%smpd = smpd                              ! for automasking
+            allocate(selection_cluster(nsel_cluster))
+            selection_cluster = pack(selection, selection_clusters == i_clust)
+            if( DEBUG )then
+                print *, 'CLUSTER ID:           ', i_clust
+                print *, 'imgfile:              ', imgfiles(i_clust)%to_char()
+                print *, 'file_exists(imgfile): ', file_exists(imgfiles(i_clust))
+                print *, 'ldim:                 ', ldim(1), ldim(2), ldim(3)
+                print *, 'ncls:                 ', ncls
+                print *, 'params%msk:           ', local_params%msk
+                print *, 'params%smpd:          ', local_params%smpd
+                print *, 'nsel:                 ', nsel_cluster
+            endif
+            allocate( cavgs(nsel_cluster) )
+            do icls = 1, nsel_cluster
+                call cavgs(icls)%new([ldim(1),ldim(2),1], smpd)
+            end do
+            call stkio_r%open(imgfiles(i_clust), smpd, 'read', bufsz=ncls)
+            call stkio_r%read_whole
+            do icls = 1, nsel_cluster
+                call stkio_r%get_image(selection_cluster(icls), cavgs(icls))
+            end do  
+            call automask2D(local_params, cavgs, local_params%ngrow, nint(local_params%winsz), local_params%edge, diams, shifts)
+            box_for_pick    = min(round2even(maxval(diams) / smpd + 2. * COSMSKHALFWIDTH), ldim(1))
+            moldiam         = smpd * box_for_pick
+            mskdiam         = moldiam * MSK_EXP_FAC
+            mskrad_in_pix   = (mskdiam / smpd) /2.
+            maxdiam         = moldiam + moldiam * BOX_EXP_FAC
+            if( box_for_extract == 0) then
+                box_for_extract = find_larger_magic_box(round2even(maxdiam / smpd))
+                call stkio_w%open(string(STREAM_SELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=size(selection))
+            end if
+            if( DEBUG )then
+                print *, 'box_for_pick:    ', box_for_pick
+                print *, 'mskdiam (in A):  ', mskdiam
+                print *, 'mskrad_in_pix:   ', mskrad_in_pix
+                print *, 'box_for_extract: ', box_for_extract
+            endif
+            ! mask memoization
+            call cavgs(1)%memoize_mask_coords(box=box_for_extract)
+            do icls=1, nsel_cluster
+                call stkio_r%get_image(selection_cluster(icls), cavgs(icls))
+                if( ldim(1) > box_for_extract ) then
+                    call cavgs(icls)%clip_inplace([box_for_extract,box_for_extract,1])
+                else
+                    call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+                endif
+                call cavgs(icls)%mask2D_softavg(mskrad_in_pix)
+                call stkio_w%write(iwrite, cavgs(icls))
+                iwrite = iwrite + 1
+                call cavgs(icls)%kill
+            end do
+            deallocate(cavgs)
+            deallocate(selection_cluster)
+        end do
+        call stkio_w%close
+        ! write deselected refs for posterity
+        ! allocate( cavgs(ncls-nsel) )
+        ! do icls = 1, ncls-nsel
+        !     call cavgs(icls)%new([ldim(1),ldim(2),1], smpd)
+        ! end do
+        ! call stkio_w%open(string(STREAM_DESELECTED_REFS)//STK_EXT, smpd, 'write', box=box_for_extract, bufsz=ncls-nsel)
+        ! icls = 0
+        ! do i = 1, ncls
+        !     if( any(selection == i) ) cycle
+        !     icls = icls + 1
+        !     call stkio_r%get_image(i, cavgs(icls))
+        !     if( ldim(1) > box_for_extract ) then    
+        !         call cavgs(icls)%clip_inplace([box_for_extract,box_for_extract,1])
+        !     else
+        !         call cavgs(icls)%pad_inplace([box_for_extract,box_for_extract,1])
+        !     endif
+        !     call cavgs(icls)%mask2D_softavg(mskrad_in_pix)
+        !     call stkio_w%write(iwrite, cavgs(icls))
+        !     iwrite = iwrite + 1
+        !     call cavgs(icls)%kill
+        ! end do
+        ! deallocate(cavgs)
+        ! call stkio_w%close
+        ! call stkio_r%close
+        ! write jpeg
+        call mrc2jpeg_tiled(string(STREAM_SELECTED_REFS)//STK_EXT,   string(STREAM_SELECTED_REFS)//JPG_EXT,   n_xtiles=nxtiles,     n_ytiles=nytiles)
+      !  call mrc2jpeg_tiled(string(STREAM_DESELECTED_REFS)//STK_EXT, string(STREAM_DESELECTED_REFS)//JPG_EXT, n_xtiles=nxtiles_loc, n_ytiles=nytiles_loc)
+      !  write(logfhandle,'(A)')'>>> DESELECTED REFERENCES'
+      !  write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_DESELECTED_REFS)//JPG_EXT
         write(logfhandle,'(A)')'>>> SELECTED REFERENCES'
         write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_SELECTED_REFS)//JPG_EXT
     end subroutine process_selected_refs
