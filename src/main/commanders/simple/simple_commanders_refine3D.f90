@@ -118,6 +118,7 @@ contains
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( l_pre_refine3D .and. .not. cline%defined('nspace') ) call cline%set('nspace', NSPACE_PRE_REFINE3D)
+        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',      'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
@@ -181,7 +182,7 @@ contains
             call spproj%kill
         endif
         smpd_target = SMPD_TARGET_DEFAULT
-        if( params%box <= MINBOX )then
+        if( .not. params%l_autoscale .or. params%box <= MINBOX )then
             smpd_target = params%smpd
             smpd_crop   = params%smpd
             box_crop    = params%box
@@ -206,6 +207,9 @@ contains
         if( l_autoscale )then
             call cline%set('box_crop',  box_crop)
             call cline%set('smpd_crop', smpd_crop)
+        else
+            call cline%delete('box_crop')
+            call cline%delete('smpd_crop')
         endif
         ! generate an initial 3D reconstruction
         cline_rec3D = cline

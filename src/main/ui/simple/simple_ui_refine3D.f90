@@ -304,6 +304,8 @@ contains
         ! search controls
         call pre_refine3D%add_input(UI_SRCH, maxits, required_override=.false., gui_submenu="search")
         call pre_refine3D%add_input(UI_SRCH, nspace, required_override=.false., gui_submenu="search")
+        call pre_refine3D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call pre_refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call pre_refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', &
         &'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="search")
@@ -341,6 +343,8 @@ contains
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
+        call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
         ! filter controls
