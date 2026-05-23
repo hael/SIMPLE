@@ -130,8 +130,6 @@ contains
         if( allocated(dmats_mask)         ) deallocate(dmats_mask)
         if( allocated(dmats_aux_mask)     ) deallocate(dmats_aux_mask)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
-        if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
         call release_nu_smooth_norm
     end subroutine release_nu_filter_unary_storage
 
@@ -150,6 +148,7 @@ contains
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
+        if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
         call cleanup_aux_bank
         ldim = 0
         box  = 0
@@ -199,15 +198,13 @@ contains
         end do
     end subroutine stash_aux_volumes
 
-    module subroutine setup_nu_mask_index
+    module subroutine setup_nu_mask_voxels
         integer :: i, j, k, imask
-        if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_index')
-        if( allocated(nu_mask_index)  ) deallocate(nu_mask_index)
+        if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_voxels')
         if( allocated(nu_mask_vox)    ) deallocate(nu_mask_vox)
         call release_nu_smooth_norm
         n_nu_mask = count(nu_lmask)
-        if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_index')
-        allocate(nu_mask_index(ldim(1),ldim(2),ldim(3)), source=0)
+        if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_voxels')
         allocate(nu_mask_vox(3,n_nu_mask), source=0)
         imask = 0
         do k = 1, ldim(3)
@@ -215,15 +212,14 @@ contains
                 do i = 1, ldim(1)
                     if( .not.nu_lmask(i,j,k) ) cycle
                     imask = imask + 1
-                    nu_mask_index(i,j,k) = imask
                     nu_mask_vox(1,imask) = i
                     nu_mask_vox(2,imask) = j
                     nu_mask_vox(3,imask) = k
                 end do
             end do
         end do
-        if( imask /= n_nu_mask ) THROW_HARD('mask voxel count mismatch; setup_nu_mask_index')
-    end subroutine setup_nu_mask_index
+        if( imask /= n_nu_mask ) THROW_HARD('mask voxel count mismatch; setup_nu_mask_voxels')
+    end subroutine setup_nu_mask_voxels
 
     module real function nu_objective_smooth_radius_angstrom( lp_angstrom )
         real, intent(in) :: lp_angstrom

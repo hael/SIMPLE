@@ -36,35 +36,32 @@ contains
         do iter = 1, NU_LABEL_SMOOTH_MAXITS
             nchanged = 0
             do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
-                !$omp parallel do collapse(3) schedule(static) default(shared) &
+                !$omp parallel do schedule(static) default(shared) &
                 !$omp private(i,j,k,imask,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
                 !$omp reduction(+:nchanged) proc_bind(close)
-                do k = 1, ldim(3)
-                    do j = 1, ldim(2)
-                        do i = 1, ldim(1)
-                            if( .not.nu_lmask(i,j,k) ) cycle
-                            if( nu_label_smooth_color(i,j,k) /= color ) cycle
-                            imask = nu_mask_index(i,j,k)
-                            call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
-                            cur_icand  = int(candmap(i,j,k))
-                            best_icand = cur_icand
-                            best_e     = dmats_mask(imask,cur_icand) + beta * &
-                                &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
-                            do icand = 1, n_candidates
-                                if( icand == cur_icand ) cycle
-                                e = dmats_mask(imask,icand) + beta * &
-                                    &nu_label_smooth_neighborhood_cost(icand, candmap, n_full, nsz)
-                                if( nu_label_smooth_is_better(e, best_e) )then
-                                    best_e     = e
-                                    best_icand = icand
-                                endif
-                            end do
-                            if( best_icand /= cur_icand )then
-                                nchanged = nchanged + 1
-                                candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
-                            endif
-                        end do
+                do imask = 1, n_nu_mask
+                    i = nu_mask_vox(1,imask)
+                    j = nu_mask_vox(2,imask)
+                    k = nu_mask_vox(3,imask)
+                    if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                    call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
+                    cur_icand  = int(candmap(i,j,k))
+                    best_icand = cur_icand
+                    best_e     = dmats_mask(imask,cur_icand) + beta * &
+                        &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
+                    do icand = 1, n_candidates
+                        if( icand == cur_icand ) cycle
+                        e = dmats_mask(imask,icand) + beta * &
+                            &nu_label_smooth_neighborhood_cost(icand, candmap, n_full, nsz)
+                        if( nu_label_smooth_is_better(e, best_e) )then
+                            best_e     = e
+                            best_icand = icand
+                        endif
                     end do
+                    if( best_icand /= cur_icand )then
+                        nchanged = nchanged + 1
+                        candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
+                    endif
                 end do
                 !$omp end parallel do
             end do
@@ -77,33 +74,27 @@ contains
 
     module real function estimate_nu_label_smooth_beta( n_candidates )
         integer, intent(in) :: n_candidates
-        integer :: i, j, k, imask, icand, nvox
+        integer :: imask, icand, nvox
         real    :: best_e, second_e, cur_e
         estimate_nu_label_smooth_beta = 0.
         nvox = 0
         if( n_candidates < 2 ) return
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    best_e   = huge(best_e)
-                    second_e = huge(second_e)
-                    do icand = 1, n_candidates
-                        cur_e = dmats_mask(imask,icand)
-                        if( cur_e < best_e )then
-                            second_e = best_e
-                            best_e   = cur_e
-                        else if( cur_e < second_e )then
-                            second_e = cur_e
-                        endif
-                    end do
-                    if( second_e < huge(second_e) )then
-                        estimate_nu_label_smooth_beta = estimate_nu_label_smooth_beta + max(0., second_e - best_e)
-                        nvox = nvox + 1
-                    endif
-                end do
+        do imask = 1, n_nu_mask
+            best_e   = huge(best_e)
+            second_e = huge(second_e)
+            do icand = 1, n_candidates
+                cur_e = dmats_mask(imask,icand)
+                if( cur_e < best_e )then
+                    second_e = best_e
+                    best_e   = cur_e
+                else if( cur_e < second_e )then
+                    second_e = cur_e
+                endif
             end do
+            if( second_e < huge(second_e) )then
+                estimate_nu_label_smooth_beta = estimate_nu_label_smooth_beta + max(0., second_e - best_e)
+                nvox = nvox + 1
+            endif
         end do
         if( nvox > 0 ) estimate_nu_label_smooth_beta = &
             &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_label_smooth_beta / real(nvox)
@@ -180,19 +171,16 @@ contains
         calc_nu_label_smooth_site_energy = 0.
         energy_sum = 0.
         nvox = 0
-        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp parallel do schedule(static) default(shared) &
         !$omp private(i,j,k,imask,n_full,nsz) reduction(+:energy_sum,nvox) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
-                    energy_sum = energy_sum + dmats_mask(imask,int(candmap(i,j,k))) + beta * &
-                        &nu_label_smooth_neighborhood_cost(int(candmap(i,j,k)), candmap, n_full, nsz)
-                    nvox = nvox + 1
-                end do
-            end do
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
+            energy_sum = energy_sum + dmats_mask(imask,int(candmap(i,j,k))) + beta * &
+                &nu_label_smooth_neighborhood_cost(int(candmap(i,j,k)), candmap, n_full, nsz)
+            nvox = nvox + 1
         end do
         !$omp end parallel do
         if( nvox > 0 ) calc_nu_label_smooth_site_energy = energy_sum / real(nvox)

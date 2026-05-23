@@ -26,7 +26,7 @@ contains
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
         if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
-        call setup_nu_mask_index
+        call setup_nu_mask_voxels
         if( present(aux_even) ) then
             if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
             if( size(aux_resolutions) /= size(aux_even) ) THROW_HARD('Auxiliary resolutions size mismatch; setup_nu_dmats')
@@ -142,7 +142,7 @@ contains
     end function get_nu_filter_bank_finest_lp
 
     module integer function get_nu_filtmap_highres_shell_depth()
-        integer :: base_n, finest_label
+        integer :: base_n, finest_label, i, j, k, imask
         get_nu_filtmap_highres_shell_depth = 0
         if( .not.allocated(cutoff_finds) ) return
         if( .not.allocated(filtmap)      ) return
@@ -150,8 +150,15 @@ contains
         if( .not.allocated(nu_lmask)     ) return
         base_n = min(size(lowpass_limits), size(cutoff_finds))
         if( base_n < 1 ) return
-        if( .not.any(nu_lmask .and. srcmap == 1) ) return
-        finest_label = maxval(filtmap, mask=nu_lmask .and. srcmap == 1)
+        finest_label = 0
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( srcmap(i,j,k) /= 1 ) cycle
+            finest_label = max(finest_label, int(filtmap(i,j,k)))
+        end do
+        if( finest_label == 0 ) return
         if( finest_label <= base_n ) return
         finest_label = min(finest_label, size(cutoff_finds))
         get_nu_filtmap_highres_shell_depth = max(0, cutoff_finds(finest_label) - cutoff_finds(base_n))
@@ -163,7 +170,7 @@ contains
         real    :: best_dmat
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
-        if( .not.allocated(nu_mask_index) ) THROW_HARD('nu_mask_index not allocated; run setup_nu_dmats before nonuniform_filter_vol')
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         nx = ldim(1)
         ny = ldim(2)
         nz = ldim(3)
@@ -182,28 +189,21 @@ contains
         allocate(candmap(nx,ny,nz), source=1_NU_LABEL_KIND)
         allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
         allocate(srcmap(nx,ny,nz),  source=1_NU_LABEL_KIND)
-        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp parallel do schedule(static) default(shared) &
         !$omp private(i,j,k,icand,best_icand,best_dmat,imask) proc_bind(close)
-        do k = 1, nz
-            do j = 1, ny
-                do i = 1, nx
-                    if( .not. nu_lmask(i,j,k) )then
-                        filtmap(i,j,k) = 1
-                        srcmap(i,j,k)  = 1
-                        cycle
-                    endif
-                    imask = nu_mask_index(i,j,k)
-                    best_icand = 1
-                    best_dmat = dmats_mask(imask,1)
-                    do icand = 2, n_candidates
-                        if( dmats_mask(imask,icand) < best_dmat ) then
-                            best_dmat = dmats_mask(imask,icand)
-                            best_icand = icand
-                        end if
-                    end do
-                    candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
-                end do
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            best_icand = 1
+            best_dmat = dmats_mask(imask,1)
+            do icand = 2, n_candidates
+                if( dmats_mask(imask,icand) < best_dmat ) then
+                    best_dmat = dmats_mask(imask,icand)
+                    best_icand = icand
+                end if
             end do
+            candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
         call log_nu_aux_unary_margin_stats(n_base)
@@ -221,23 +221,17 @@ contains
     subroutine cache_nu_extension_frontier_dmats( candmap, n_base )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer, intent(in) :: n_base
-        integer :: i, j, k, imask, icand, nx, ny, nz
-        nx = size(candmap, 1)
-        ny = size(candmap, 2)
-        nz = size(candmap, 3)
+        integer :: i, j, k, imask, icand
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(n_nu_mask), source=huge(0.))
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask,icand) proc_bind(close)
-        do k = 1, nz
-            do j = 1, ny
-                do i = 1, nx
-                    if( .not.nu_lmask(i,j,k) ) cycle
-                    icand = int(candmap(i,j,k))
-                    if( nu_effective_base_label_for_candidate(icand, n_base) /= n_base ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    dmat_finest_cached(imask) = dmats_mask(imask,icand)
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(i,j,k,imask,icand) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            icand = int(candmap(i,j,k))
+            if( nu_effective_base_label_for_candidate(icand, n_base) /= n_base ) cycle
+            dmat_finest_cached(imask) = dmats_mask(imask,icand)
         end do
         !$omp end parallel do
     end subroutine cache_nu_extension_frontier_dmats
@@ -245,39 +239,30 @@ contains
     module subroutine candidate_map_to_filt_and_src( candmap, n_base )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer, intent(in) :: n_base
-        integer :: i, j, k, icand, nx, ny, nz
-        nx = size(candmap, 1)
-        ny = size(candmap, 2)
-        nz = size(candmap, 3)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icand) proc_bind(close)
-        do k = 1, nz
-            do j = 1, ny
-                do i = 1, nx
-                    if( allocated(nu_lmask) )then
-                        if( .not.nu_lmask(i,j,k) )then
-                            srcmap(i,j,k)  = 1
-                            filtmap(i,j,k) = 1
-                            cycle
-                        endif
-                    endif
-                    icand = int(candmap(i,j,k))
-                    ! Base-bank winners preserve their low-pass index in filtmap.
-                    ! Auxiliary winners preserve their provenance in srcmap while
-                    ! filtmap stores the nearest effective base-bank label for
-                    ! diagnostics and map visualization.
-                    if( icand <= n_base ) then
-                        srcmap(i,j,k)  = 1
-                        filtmap(i,j,k) = int(icand, kind=NU_LABEL_KIND)
-                    else
-                        ! srcmap numbering:
-                        !   1   -> base low-pass bank
-                        !   2+  -> auxiliary pair 1, 2, ...
-                        srcmap(i,j,k)  = int(icand - n_base + 1, kind=NU_LABEL_KIND)
-                        filtmap(i,j,k) = int(nu_effective_base_label_for_candidate(icand, n_base), &
-                            &kind=NU_LABEL_KIND)
-                    end if
-                end do
-            end do
+        integer :: i, j, k, icand, imask
+        filtmap = 1_NU_LABEL_KIND
+        srcmap  = 1_NU_LABEL_KIND
+        !$omp parallel do schedule(static) default(shared) private(i,j,k,icand,imask) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            icand = int(candmap(i,j,k))
+            ! Base-bank winners preserve their low-pass index in filtmap.
+            ! Auxiliary winners preserve their provenance in srcmap while
+            ! filtmap stores the nearest effective base-bank label for
+            ! diagnostics and map visualization.
+            if( icand <= n_base ) then
+                srcmap(i,j,k)  = 1
+                filtmap(i,j,k) = int(icand, kind=NU_LABEL_KIND)
+            else
+                ! srcmap numbering:
+                !   1   -> base low-pass bank
+                !   2+  -> auxiliary pair 1, 2, ...
+                srcmap(i,j,k)  = int(icand - n_base + 1, kind=NU_LABEL_KIND)
+                filtmap(i,j,k) = int(nu_effective_base_label_for_candidate(icand, n_base), &
+                    &kind=NU_LABEL_KIND)
+            end if
         end do
         !$omp end parallel do
     end subroutine candidate_map_to_filt_and_src
@@ -286,23 +271,29 @@ contains
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer,          intent(in) :: n_base
         character(len=*), intent(in) :: stage
+        integer, allocatable :: cand_counts(:)
         integer :: icand, iaux, n_candidates, nmask, nvox, nbasevox, nauxvox, eff_label
+        integer :: i, j, k, imask
         real    :: pct
         character(len=16) :: auxtag
         if( .not.allocated(nu_lmask) ) return
         if( .not.allocated(candidate_coords) ) return
         n_candidates = size(candidate_coords)
         if( n_candidates <= n_base ) return
-        nmask = count(nu_lmask)
+        nmask = n_nu_mask
         if( nmask == 0 ) return
-        nbasevox = 0
-        do icand = 1, n_base
-            nbasevox = nbasevox + count(nu_lmask .and. candmap == icand)
+        allocate(cand_counts(n_candidates), source=0)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,icand) reduction(+:cand_counts) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            icand = int(candmap(i,j,k))
+            if( icand >= 1 .and. icand <= n_candidates ) cand_counts(icand) = cand_counts(icand) + 1
         end do
-        nauxvox = 0
-        do icand = n_base + 1, n_candidates
-            nauxvox = nauxvox + count(nu_lmask .and. candmap == icand)
-        end do
+        !$omp end parallel do
+        nbasevox = sum(cand_counts(:n_base))
+        nauxvox  = sum(cand_counts(n_base + 1:n_candidates))
         write(logfhandle,'(A,A)') '>>> NU candidate source assignments ', trim(stage)
         write(logfhandle,'(A,I12)') '    Mask voxels:      ', nmask
         pct = 100. * real(nbasevox) / real(nmask)
@@ -313,27 +304,28 @@ contains
         do iaux = 1, n_candidates - n_base
             icand = n_base + iaux
             eff_label = nu_effective_base_label_for_candidate(icand, n_base)
-            nvox = count(nu_lmask .and. candmap == icand)
+            nvox = cand_counts(icand)
             pct = 100. * real(nvox) / real(nmask)
             write(auxtag,'(A,I0)') 'Aux', iaux
             write(logfhandle,'(4X,A8,2X,F7.2,2X,F13.3,2X,I12,2X,F8.2,A)') &
                 &auxtag, candidate_coords(icand), cutoff_find_to_lowpass_limit(eff_label), nvox, pct, '%'
         end do
+        deallocate(cand_counts)
     end subroutine log_nu_candidate_selection_counts
 
     module subroutine log_nu_aux_unary_margin_stats( n_base )
         integer, intent(in) :: n_base
         integer :: iaux, ibase, icand, n_candidates, nmask, nwins, eff_label
-        integer :: i, j, k, imask
+        integer :: imask
         real    :: best_base, margin, margin_sum, win_margin_sum, avg_margin, avg_win_margin, pct
         character(len=16) :: auxtag
         if( .not.allocated(dmats_mask) ) return
         if( .not.allocated(nu_lmask) ) return
         if( .not.allocated(candidate_coords) ) return
-        if( .not.allocated(nu_mask_index) ) return
+        if( .not.allocated(nu_mask_vox) ) return
         n_candidates = size(dmats_mask, 2)
         if( n_candidates <= n_base ) return
-        nmask = count(nu_lmask)
+        nmask = n_nu_mask
         if( nmask == 0 ) return
         write(logfhandle,'(A)') '>>> NU auxiliary unary margins versus best base-bank candidate'
         write(logfhandle,'(A)') '    Positive margin means the auxiliary candidate has the lower unary objective.'
@@ -344,25 +336,19 @@ contains
             nwins = 0
             margin_sum = 0.
             win_margin_sum = 0.
-            !$omp parallel do collapse(3) schedule(static) default(shared) &
-            !$omp private(i,j,k,imask,ibase,best_base,margin) reduction(+:nwins,margin_sum,win_margin_sum) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( .not.nu_lmask(i,j,k) ) cycle
-                        imask = nu_mask_index(i,j,k)
-                        best_base = dmats_mask(imask,1)
-                        do ibase = 2, n_base
-                            best_base = min(best_base, dmats_mask(imask,ibase))
-                        end do
-                        margin = best_base - dmats_mask(imask,icand)
-                        margin_sum = margin_sum + margin
-                        if( margin > 0. )then
-                            nwins = nwins + 1
-                            win_margin_sum = win_margin_sum + margin
-                        endif
-                    end do
+            !$omp parallel do schedule(static) default(shared) &
+            !$omp private(imask,ibase,best_base,margin) reduction(+:nwins,margin_sum,win_margin_sum) proc_bind(close)
+            do imask = 1, n_nu_mask
+                best_base = dmats_mask(imask,1)
+                do ibase = 2, n_base
+                    best_base = min(best_base, dmats_mask(imask,ibase))
                 end do
+                margin = best_base - dmats_mask(imask,icand)
+                margin_sum = margin_sum + margin
+                if( margin > 0. )then
+                    nwins = nwins + 1
+                    win_margin_sum = win_margin_sum + margin
+                endif
             end do
             !$omp end parallel do
             avg_margin = margin_sum / real(nmask)

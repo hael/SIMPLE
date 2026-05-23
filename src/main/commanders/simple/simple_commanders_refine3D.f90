@@ -2,7 +2,7 @@
 module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_refine3D_fnames,   only: refine3D_fsc_fname, refine3D_state_halfvol_fname, refine3D_state_vol_fname
+use simple_refine3D_fnames,   only: refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -50,7 +50,7 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &extend_nu_filter_highres_shells, get_nu_filtmap_finest_selected_lp
+            &extend_nu_filter_highres_shells
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -58,49 +58,25 @@ contains
         type(sp_project)            :: spproj
         type(string)                :: init_vol
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
-        integer, parameter :: NSPACE_PRE_REFINE3D = 5000
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO = 4.0
-        real,    parameter :: TARGET_UPDATES_PER_PARTICLE_PRE_REFINE3D = 2.0
+        character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_AUTO'
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
         integer, parameter :: MINITS_REFINE3D_AUTO = 10
         integer, parameter :: MAXITS_REFINE3D_AUTO_CAP = 50
-        integer, parameter :: MAXITS_PRE_REFINE3D_CAP = 20
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
-        real    :: target_updates_per_particle, bootstrap_nu_align_lp
-        integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_cap, maxits_user, maxits_requested
-        logical :: l_autoscale, l_have_init_vol, l_maxits_defined, l_pre_refine3D
-        character(len=16) :: workflow_label
+        integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
+        logical :: l_autoscale, l_have_init_vol, l_maxits_defined
         ! commanders
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
         maxits_user      = 0
-        maxits_requested = 0
-        l_pre_refine3D = .false.
-        if( cline%defined('prg') ) l_pre_refine3D = cline%get_carg('prg').eq.'pre_refine3D'
-        if( l_pre_refine3D )then
-            workflow_label = 'PRE_REFINE3D'
-            target_updates_per_particle = TARGET_UPDATES_PER_PARTICLE_PRE_REFINE3D
-            maxits_cap = MAXITS_PRE_REFINE3D_CAP
-            bootstrap_nu_align_lp = 0.
-        else
-            workflow_label = 'REFINE3D_AUTO'
-            target_updates_per_particle = TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO
-            maxits_cap = MAXITS_REFINE3D_AUTO_CAP
-            bootstrap_nu_align_lp = 0.
-        endif
         ! hard defaults
         call cline%set('balance',         'no') ! no balancing based on 2D clustering
         call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        if( l_pre_refine3D )then
-            call cline%set('refine',      'prob') ! broad probabilistic pre-refinement
-            call cline%set('filt_mode', 'nonuniform_lpset')
-            call cline%set('nu_refine',     'no')
-        else
-            call cline%set('refine', 'prob_neigh') ! probabilistioc neighborhood 3D refinement
-        endif
+        call cline%set('refine', 'prob_neigh') ! probabilistioc neighborhood 3D refinement
         call cline%set('ml_reg',         'yes') ! ML regularization is on
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
@@ -115,7 +91,6 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
-        if( l_pre_refine3D .and. .not. cline%defined('nspace') ) call cline%set('nspace', NSPACE_PRE_REFINE3D)
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',      'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',           'yes') ! better map with ml_reg='yes'
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
@@ -123,21 +98,11 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
-            maxits_requested = cline%get_iarg('maxits')
-            if( maxits_requested < 1 ) THROW_HARD('maxits must be >= 1 for '//trim(workflow_label))
-            maxits_user = maxits_requested
-            if( l_pre_refine3D )then
-                maxits_user = max(MINITS_REFINE3D_AUTO, min(MAXITS_PRE_REFINE3D_CAP, maxits_user))
-                call cline%set('maxits', maxits_user)
-            endif
+            maxits_user = cline%get_iarg('maxits')
+            if( maxits_user < 1 ) THROW_HARD('maxits must be >= 1 for '//WORKFLOW_LABEL)
             call cline%set('minits', maxits_user)
         else if( cline%defined('minits') )then
-            if( l_pre_refine3D )then
-                call cline%set('minits', max(MINITS_REFINE3D_AUTO, &
-                    &min(MAXITS_PRE_REFINE3D_CAP, cline%get_iarg('minits'))))
-            else
-                call cline%set('minits', max(MINITS_REFINE3D_AUTO, cline%get_iarg('minits')))
-            endif
+            call cline%set('minits', max(MINITS_REFINE3D_AUTO, cline%get_iarg('minits')))
         else
             call cline%set('minits', MINITS_REFINE3D_AUTO)
         endif
@@ -151,10 +116,10 @@ contains
         if( cline%defined('vol1') )then
             init_vol = cline%get_carg('vol1')
             if( .not. file_exists(init_vol) )then
-                THROW_HARD('File: '//init_vol%to_char()//' does not exist! '//trim(workflow_label))
+                THROW_HARD('File: '//init_vol%to_char()//' does not exist! '//WORKFLOW_LABEL)
             endif
             l_have_init_vol = .true.
-            write(logfhandle,'(A,1X,A)') '>>> '//trim(workflow_label)//' USING INPUT VOLUME:', init_vol%to_char()
+            write(logfhandle,'(A,1X,A)') '>>> '//WORKFLOW_LABEL//' USING INPUT VOLUME:', init_vol%to_char()
         else
             call spproj%read_segment('out', params%projfile)
             if( spproj%isthere_in_osout('vol', 1) )then
@@ -162,18 +127,18 @@ contains
                 if( file_exists(init_vol) )then
                     if( project_init_vol_compatible() )then
                         l_have_init_vol = .true.
-                        write(logfhandle,'(A,1X,A)') '>>> '//trim(workflow_label)//' USING PROJECT VOLUME:', init_vol%to_char()
+                        write(logfhandle,'(A,1X,A)') '>>> '//WORKFLOW_LABEL//' USING PROJECT VOLUME:', init_vol%to_char()
                         write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
                     else
                         write(logfhandle,'(A,1X,A)') &
-                            &'>>> '//trim(workflow_label)//' PROJECT VOLUME SAMPLING MISMATCH, RECONSTRUCTING:', &
+                            &'>>> '//WORKFLOW_LABEL//' PROJECT VOLUME SAMPLING MISMATCH, RECONSTRUCTING:', &
                             &init_vol%to_char()
                         write(logfhandle,'(A,I0,A,F8.4)') '>>> PROJECT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
                         write(logfhandle,'(A,I0,A,F8.4)') '>>> CURRENT RUN BOX/SMPD:    ', params%box, '/', params%smpd
                     endif
                 else
                     write(logfhandle,'(A,1X,A)') &
-                        &'>>> '//trim(workflow_label)//' PROJECT VOLUME MISSING, RECONSTRUCTING:', init_vol%to_char()
+                        &'>>> '//WORKFLOW_LABEL//' PROJECT VOLUME MISSING, RECONSTRUCTING:', init_vol%to_char()
                 endif
             endif
             call spproj%kill
@@ -219,12 +184,6 @@ contains
         call cline_rec3D%set('postprocess', 'no')
         call cline_rec3D%set('nu_refine', 'no')
         if( l_have_init_vol ) call prepare_nu_bootstrap_refs_from_raw_halves()
-        if( l_pre_refine3D .and. bootstrap_nu_align_lp > TINY )then
-            call cline%set('lp', bootstrap_nu_align_lp)
-            write(logfhandle,'(A,F8.3,A)') &
-                &'>>> PRE_REFINE3D bootstrap promoted matching low-pass to command line: ', &
-                &bootstrap_nu_align_lp, ' A'
-        endif
         if( l_have_init_vol )then
             call cline%set('vol1', init_vol)
         else
@@ -263,25 +222,19 @@ contains
             type(string)         :: init_even, init_odd, raw_even, raw_odd, candidate
             type(string)         :: out_even, out_odd, out_avg
             type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu, vol_msk
-            type(image), allocatable :: nu_aux_even(:), nu_aux_odd(:)
             type(image_msk)      :: envmsk
             logical, allocatable :: l_mask(:,:,:)
             integer, allocatable :: imat(:,:,:)
             integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy, n_bootstrap_steps
-            real                 :: mskrad_px, aux_lp
-            logical              :: l_reconstruct_bootstrap, l_raw_even_unfil, l_raw_odd_unfil
-            logical              :: l_use_bootstrap_aux
+            real                 :: mskrad_px
+            logical              :: l_reconstruct_bootstrap
             if( .not. params%l_nonuniform ) return
             l_reconstruct_bootstrap = .false.
-            l_raw_even_unfil       = .false.
-            l_raw_odd_unfil        = .false.
-            l_use_bootstrap_aux    = .false.
             init_even      = add2fbody(init_vol, MRC_EXT, '_even')
             init_odd       = add2fbody(init_vol, MRC_EXT, '_odd')
             candidate      = add2fbody(init_even, MRC_EXT, '_unfil')
             if( file_exists(candidate) )then
                 raw_even = candidate
-                l_raw_even_unfil = .true.
             else
                 raw_even = init_even
             endif
@@ -289,14 +242,13 @@ contains
             candidate      = add2fbody(init_odd, MRC_EXT, '_unfil')
             if( file_exists(candidate) )then
                 raw_odd = candidate
-                l_raw_odd_unfil = .true.
             else
                 raw_odd = init_odd
             endif
             call candidate%kill
             if( .not. file_exists(raw_even) .or. .not. file_exists(raw_odd) )then
                 write(logfhandle,'(A)') &
-                    &'>>> '//trim(workflow_label)//' BOOTSTRAP: raw native E/O pair missing; '//&
+                    &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw native E/O pair missing; '//&
                     &'reconstructing startup references'
                 l_reconstruct_bootstrap = .true.
             else
@@ -304,7 +256,7 @@ contains
                 call find_ldim_nptcls(raw_odd,  ldim_odd,  nptcls_dummy)
                 if( any(ldim_even /= [params%box,params%box,params%box]) .or. any(ldim_odd /= ldim_even) )then
                     write(logfhandle,'(A)') &
-                        &'>>> '//trim(workflow_label)//' BOOTSTRAP: raw E/O dimensions incompatible; '//&
+                        &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw E/O dimensions incompatible; '//&
                         &'reconstructing startup references'
                     l_reconstruct_bootstrap = .true.
                 else
@@ -316,7 +268,7 @@ contains
                     if( abs(vol_even_raw%get_smpd() - params%smpd) > 1.e-6 .or. &
                         &abs(vol_odd_raw%get_smpd()  - params%smpd) > 1.e-6 )then
                         write(logfhandle,'(A)') &
-                            &'>>> '//trim(workflow_label)//' BOOTSTRAP: raw E/O sampling incompatible; '//&
+                            &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw E/O sampling incompatible; '//&
                             &'reconstructing startup references'
                         l_reconstruct_bootstrap = .true.
                     endif
@@ -349,39 +301,15 @@ contains
                 mskrad_px = 0.5 * params%mskdiam / params%smpd
                 call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
             endif
-            aux_lp = bootstrap_aux_resolution(vol_even_raw)
-            l_use_bootstrap_aux = l_pre_refine3D .and. params%l_ml_reg .and. .not. params%l_nu_refine .and. &
-                &l_raw_even_unfil .and. l_raw_odd_unfil .and. aux_lp > TINY .and. &
-                &file_exists(init_even) .and. file_exists(init_odd)
-            if( l_use_bootstrap_aux )then
-                allocate(nu_aux_even(1), nu_aux_odd(1))
-                call nu_aux_even(1)%new(ldim, params%smpd)
-                call nu_aux_odd(1)%new(ldim, params%smpd)
-                call nu_aux_even(1)%read(init_even)
-                call nu_aux_odd(1)%read(init_odd)
-                call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [aux_lp], nu_aux_even, nu_aux_odd)
-            else
-                call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
-            endif
+            call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
             if( allocated(l_mask) ) deallocate(l_mask)
             call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
                 write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
             endif
-            if( params%l_nonuniform_lpset )then
-                if( l_use_bootstrap_aux )then
-                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp(aux_resolutions=[aux_lp])
-                else
-                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp()
-                endif
-            endif
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            if( l_use_bootstrap_aux )then
-                call print_nu_filtmap_lowpass_stats(aux_resolutions=[aux_lp])
-            else
-                call print_nu_filtmap_lowpass_stats()
-            endif
+            call print_nu_filtmap_lowpass_stats()
             call analyze_filtmap_neighbor_continuity()
             out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
             out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
@@ -393,7 +321,7 @@ contains
             call vol_even_nu%write(out_avg, del_if_exists=.true.)
             call wait_for_closure(out_avg)
             write(logfhandle,'(A)') &
-                &'>>> '//trim(workflow_label)//' BOOTSTRAP: generated NU-filtered startup references from raw native E/O maps'
+                &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: generated NU-filtered startup references from raw native E/O maps'
             call cleanup_nu_filter()
             call init_even%kill
             call init_odd%kill
@@ -409,56 +337,19 @@ contains
             call vol_odd_nu%kill
             call vol_msk%kill
             call envmsk%kill
-            call cleanup_bootstrap_aux_images(nu_aux_even, nu_aux_odd)
             if( allocated(l_mask) ) deallocate(l_mask)
             if( allocated(imat)   ) deallocate(imat)
         end subroutine prepare_nu_bootstrap_refs_from_raw_halves
-
-        real function bootstrap_aux_resolution( vol_ref ) result(res0143)
-            class(image), intent(in) :: vol_ref
-            type(string) :: fsc_fname
-            real, allocatable :: fsc(:), res(:)
-            real :: fsc05
-            res0143 = 0.
-            fsc_fname = refine3D_fsc_fname(1)
-            if( .not. file_exists(fsc_fname) )then
-                call fsc_fname%kill
-                return
-            endif
-            fsc = file2rarr(fsc_fname)
-            res = vol_ref%get_res()
-            call get_resolution(fsc, res, fsc05, res0143)
-            if( allocated(fsc) ) deallocate(fsc)
-            if( allocated(res) ) deallocate(res)
-            call fsc_fname%kill
-        end function bootstrap_aux_resolution
-
-        subroutine cleanup_bootstrap_aux_images( nu_aux_even, nu_aux_odd )
-            type(image), allocatable, intent(inout) :: nu_aux_even(:), nu_aux_odd(:)
-            integer :: iaux
-            if( allocated(nu_aux_even) )then
-                do iaux = 1, size(nu_aux_even)
-                    call nu_aux_even(iaux)%kill
-                enddo
-                deallocate(nu_aux_even)
-            endif
-            if( allocated(nu_aux_odd) )then
-                do iaux = 1, size(nu_aux_odd)
-                    call nu_aux_odd(iaux)%kill
-                enddo
-                deallocate(nu_aux_odd)
-            endif
-        end subroutine cleanup_bootstrap_aux_images
 
         subroutine set_refine3D_auto_sampling()
             type(sp_project) :: sampling_proj
             integer :: maxits_auto, nptcls_per_iter
             nsample_target = params%nsample
-            if( nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for '//trim(workflow_label))
+            if( nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for '//WORKFLOW_LABEL)
             call sampling_proj%read(params%projfile)
             nptcls_eff = sampling_proj%count_state_gt_zero()
             call sampling_proj%kill
-            if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//trim(workflow_label))
+            if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
             nptcls_per_iter = min(nptcls_eff, nsample_target)
             if( nptcls_eff <= nsample_target )then
                 params%update_frac   = 1.0
@@ -466,7 +357,7 @@ contains
                 params%l_trail_rec   = .false.
                 call cline%delete('update_frac')
                 write(logfhandle,'(A,I0,A,I0,A)') &
-                    &'>>> '//trim(workflow_label)//' ACTIVE PARTICLES/SAMPLE TARGET: ', &
+                    &'>>> '//WORKFLOW_LABEL//' ACTIVE PARTICLES/SAMPLE TARGET: ', &
                     &nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
             else
                 update_frac_auto = real(nsample_target) / real(nptcls_eff)
@@ -476,7 +367,7 @@ contains
                     params%l_trail_rec   = trim(params%trail_rec).eq.'yes'
                     call cline%set('update_frac', update_frac_auto)
                     write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                        &'>>> '//trim(workflow_label)//' ACTIVE PARTICLES/SAMPLE TARGET/UPDATE_FRAC: ', &
+                        &'>>> '//WORKFLOW_LABEL//' ACTIVE PARTICLES/SAMPLE TARGET/UPDATE_FRAC: ', &
                         &nptcls_eff, '/', nsample_target, '/', update_frac_auto
                 else
                     params%update_frac   = 1.0
@@ -484,27 +375,21 @@ contains
                     params%l_trail_rec   = .false.
                     call cline%delete('update_frac')
                     write(logfhandle,'(A,I0,A,I0,A)') &
-                        &'>>> '//trim(workflow_label)//' ACTIVE PARTICLES/SAMPLE TARGET: ', &
+                        &'>>> '//WORKFLOW_LABEL//' ACTIVE PARTICLES/SAMPLE TARGET: ', &
                         &nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
                 endif
             endif
             if( .not. l_maxits_defined )then
-                maxits_auto = ceiling((target_updates_per_particle * real(nptcls_eff)) / real(nptcls_per_iter))
-                maxits_auto = max(params%minits, min(maxits_cap, max(2, maxits_auto)))
+                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO * real(nptcls_eff)) / real(nptcls_per_iter))
+                maxits_auto = max(params%minits, min(MAXITS_REFINE3D_AUTO_CAP, max(2, maxits_auto)))
                 params%maxits = maxits_auto
                 call cline%set('maxits', params%maxits)
-                write(logfhandle,'(A,I0,A,F5.1,A,I0,A)') '>>> '//trim(workflow_label)//' MAXITS: ', &
-                    &params%maxits, ' FOR ~', target_updates_per_particle, &
+                write(logfhandle,'(A,I0,A,F5.1,A,I0,A)') '>>> '//WORKFLOW_LABEL//' MAXITS: ', &
+                    &params%maxits, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO, &
                     &' UPDATES/PARTICLE (MINIMUM: ', params%minits, ')'
             else
-                if( l_pre_refine3D .and. maxits_requested /= params%maxits )then
-                    write(logfhandle,'(A,I0,A,I0)') &
-                        &'>>> '//trim(workflow_label)//' MAXITS COMMAND-LINE REQUEST/CAPPED: ', &
-                        &maxits_requested, ' -> ', params%maxits
-                else
-                    write(logfhandle,'(A,I0)') &
-                        &'>>> '//trim(workflow_label)//' MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
-                endif
+                write(logfhandle,'(A,I0)') &
+                    &'>>> '//WORKFLOW_LABEL//' MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
             endif
         end subroutine set_refine3D_auto_sampling
 

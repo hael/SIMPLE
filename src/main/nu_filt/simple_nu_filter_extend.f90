@@ -13,15 +13,15 @@ contains
         real, optional, intent(in) :: accept_pct
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
-        real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_full(:,:,:), dmat_finest_mask(:)
+        real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_mask(:)
+        integer, allocatable :: frontier_vox(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label, new_label_after_thin
         integer           :: old_radius_px, new_radius_px, n_seed_min
         real              :: accept_pct_eff, pct_finest, x, noise_sigma, new_coord
         real              :: old_radius_angstrom, new_radius_angstrom
-        logical, allocatable :: extend_mask(:,:,:), extend_to_new(:,:,:)
-        integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:,:,:)
+        integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
-        integer           :: i, j, k
+        integer           :: i
         logical           :: l_use_aux_extension, l_permissive_accept
         local_stats%new_limit = new_limit
         accept_pct_eff = NU_HIGHRES_EXTENSION_ACCEPT_PCT
@@ -34,7 +34,7 @@ contains
         sz_old    = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
-        n_total   = count(nu_lmask)
+        n_total   = n_nu_mask
         local_stats%n_mask = n_total
         if( n_total == 0 )then
             if( present(stats) ) stats = local_stats
@@ -43,7 +43,7 @@ contains
         old_label = 0
         n_finest  = 0
         do i = sz_old, 1, -1
-            n_finest = count(nu_lmask .and. srcmap == 1 .and. filtmap == i)
+            n_finest = count_nu_base_label_voxels(i)
             if( n_finest > 0 )then
                 old_label = i
                 exit
@@ -74,6 +74,15 @@ contains
             if( present(stats) ) stats = local_stats
             return   ! trigger not met, nothing to do
         endif
+        call collect_nu_base_label_voxels(sz_old, frontier_vox)
+        if( size(frontier_vox) /= n_finest )then
+            n_finest = size(frontier_vox)
+            local_stats%n_tested = n_finest
+            if( n_finest == 0 )then
+                if( present(stats) ) stats = local_stats
+                return
+            endif
+        endif
         new_find = calc_fourier_index(new_limit, box, smpd)
         if( new_find <= cutoff_finds(sz_old) )then
             if( present(stats) ) stats = local_stats
@@ -92,17 +101,6 @@ contains
             ! generate just this one new filtered pair — cheap, one FFT+filter+IFFT pass
             call generate_single_filtered_pair(vol_even, vol_odd, new_find, even_cache_fname, odd_cache_fname)
         end if
-        ! --- build the extend mask: voxels currently at the finest limit ---
-        allocate(extend_mask(ldim(1),ldim(2),ldim(3)), source=.false.)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k)
-        do k = 1, ldim(3)
-        do j = 1, ldim(2)
-            do i = 1, ldim(1)
-                extend_mask(i,j,k) = (nu_lmask(i,j,k) .and. srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == sz_old)
-            end do
-        end do
-        end do
-        !$omp end parallel do
         ! --- evaluate the new objective only within the mask ---
         allocate(dmat_new(ldim(1),ldim(2),ldim(3)), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)), source=0.)
@@ -118,14 +116,7 @@ contains
         if( allocated(dmat_finest_cached) .and. size(dmat_finest_cached) == n_nu_mask ) then
             dmat_finest_mask = dmat_finest_cached
         else
-            allocate(dmat_finest_full(ldim(1),ldim(2),ldim(3)), source=huge(x))
-            call vol_even_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(sz_old)))
-            call vol_odd_filt_new%read(filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(sz_old)))
-            call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, &
-                &dmat_finest_full, nu_lmask, noise_sigma)
-            call smooth_nu_objective(dmat_finest_full, dmat_tmp, local_stats%old_limit)
-            call pack_nu_dmat_to_mask_vector(dmat_finest_full, dmat_finest_mask)
-            deallocate(dmat_finest_full)
+            call fill_nu_frontier_dmat_from_bank(frontier_vox, sz_old, dmat_finest_mask)
         end if
         deallocate(dmat_tmp)
         ! Keep the smoothed mask-normalization volume across adjacent shell
@@ -133,13 +124,13 @@ contains
         ! --- update filtmap in place for the masked voxels ---
         l_use_aux_extension = l_aux_source_unordered_potts .and. allocated(dmats_aux_mask)
         n_extended = 0
+        allocate(extend_choice(n_finest), source=0_NU_LABEL_KIND)
         if( l_use_aux_extension )then
-            allocate(extend_choice(ldim(1),ldim(2),ldim(3)), source=0_NU_LABEL_KIND)
-            call init_nu_highres_extension_selection_aux(extend_mask, dmat_finest_mask, dmat_new, &
+            call init_nu_highres_extension_selection_aux(frontier_vox, dmat_finest_mask, dmat_new, &
                 &extend_choice, n_extended)
         else
-            allocate(extend_to_new(ldim(1),ldim(2),ldim(3)), source=.false.)
-            call init_nu_highres_extension_selection(extend_mask, dmat_finest_mask, dmat_new, extend_to_new, n_extended)
+            call init_nu_highres_extension_selection(frontier_vox, dmat_finest_mask, dmat_new, &
+                &extend_choice, n_extended)
         endif
         ! The extension experiment is already constrained to the current
         ! finest frontier and one Fourier-shell step, so we deliberately do not
@@ -188,9 +179,8 @@ contains
             call delete_cached_filtered_pair(new_find)
             call vol_even_filt_new%kill
             call vol_odd_filt_new%kill
-            if( allocated(extend_to_new) ) deallocate(extend_to_new)
             if( allocated(extend_choice) ) deallocate(extend_choice)
-            deallocate(extend_mask, dmat_new, dmat_finest_mask)
+            deallocate(dmat_new, dmat_finest_mask)
             if( present(stats) ) stats = local_stats
             return
         end if
@@ -206,9 +196,8 @@ contains
                 call delete_cached_filtered_pair(new_find)
                 call vol_even_filt_new%kill
                 call vol_odd_filt_new%kill
-                if( allocated(extend_to_new) ) deallocate(extend_to_new)
                 if( allocated(extend_choice) ) deallocate(extend_choice)
-                deallocate(extend_mask, dmat_new, dmat_finest_mask)
+                deallocate(dmat_new, dmat_finest_mask)
                 if( present(stats) ) stats = local_stats
                 return
             endif
@@ -218,24 +207,19 @@ contains
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
-        if( l_use_aux_extension )then
-            call apply_nu_highres_extension_selection_aux(extend_choice, sz_old, sz_old + 1)
-        else
-            call apply_nu_highres_extension_selection(extend_to_new, sz_old + 1)
-        endif
+        call apply_nu_highres_extension_selection(frontier_vox, extend_choice, sz_old, sz_old + 1)
         if( allocated(candidate_coords) .and. size(candidate_coords) >= sz_old )then
             new_coord = candidate_coords(sz_old) + real(new_find - cutoff_finds(sz_old))
         else
             new_coord = real(sz_old + 1)
         endif
         call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find, new_coord, new_label_after_thin)
-        call cache_nu_highres_extension_frontier_after_selection(dmat_new, new_label_after_thin)
+        call cache_nu_highres_extension_frontier_after_selection(dmat_new, frontier_vox, extend_choice)
         write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         call vol_even_filt_new%kill
         call vol_odd_filt_new%kill
-        if( allocated(extend_to_new) ) deallocate(extend_to_new)
         if( allocated(extend_choice) ) deallocate(extend_choice)
-        deallocate(extend_mask, dmat_new, dmat_finest_mask)
+        deallocate(dmat_new, dmat_finest_mask)
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
@@ -253,11 +237,11 @@ contains
         sz_old   = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
-        local_stats%n_mask = count(nu_lmask)
+        local_stats%n_mask = n_nu_mask
         frontier_label = 0
         n_frontier = 0
         do ilabel = sz_old, 1, -1
-            n_frontier = count(nu_lmask .and. srcmap == 1 .and. filtmap == ilabel)
+            n_frontier = count_nu_base_label_voxels(ilabel)
             if( n_frontier > 0 )then
                 frontier_label = ilabel
                 exit
@@ -314,7 +298,7 @@ contains
 
     module subroutine refine_nu_extension_filtmap_ordered_labels
         integer(kind=NU_LABEL_KIND), allocatable :: candmap(:,:,:)
-        integer :: i, j, k, n_base, n_candidates, aux_icand
+        integer :: i, j, k, n_base, n_candidates, aux_icand, imask
         if( .not.allocated(filtmap)          ) THROW_HARD('filtmap not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(srcmap)           ) THROW_HARD('srcmap not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(dmats_mask)       ) THROW_HARD('dmats_mask not allocated; refine_nu_extension_filtmap_ordered_labels')
@@ -327,19 +311,17 @@ contains
         if( n_candidates < 2 ) return
         write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
         allocate(candmap(ldim(1),ldim(2),ldim(3)), source=1_NU_LABEL_KIND)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,aux_icand) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) cycle
-                    if( srcmap(i,j,k) == 1 )then
-                        candmap(i,j,k) = int(max(1, min(n_base, int(filtmap(i,j,k)))), kind=NU_LABEL_KIND)
-                    else
-                        aux_icand = n_base + int(srcmap(i,j,k)) - 1
-                        candmap(i,j,k) = int(max(1, min(n_candidates, aux_icand)), kind=NU_LABEL_KIND)
-                    endif
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(i,j,k,aux_icand,imask) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( srcmap(i,j,k) == 1 )then
+                candmap(i,j,k) = int(max(1, min(n_base, int(filtmap(i,j,k)))), kind=NU_LABEL_KIND)
+            else
+                aux_icand = n_base + int(srcmap(i,j,k)) - 1
+                candmap(i,j,k) = int(max(1, min(n_candidates, aux_icand)), kind=NU_LABEL_KIND)
+            endif
         end do
         !$omp end parallel do
         call log_nu_candidate_selection_counts(candmap, n_base, 'before post-extension ordered-label cleanup')
@@ -425,18 +407,17 @@ contains
                 end do
             endif
         end do
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,old_label) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    old_label = int(filtmap(i,j,k))
-                    if( old_label >= 1 .and. old_label <= new_n_base )then
-                        filtmap(i,j,k) = int(drop_to_new(old_label), kind=NU_LABEL_KIND)
-                    else
-                        filtmap(i,j,k) = 1_NU_LABEL_KIND
-                    endif
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,old_label) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            old_label = int(filtmap(i,j,k))
+            if( old_label >= 1 .and. old_label <= new_n_base )then
+                filtmap(i,j,k) = int(drop_to_new(old_label), kind=NU_LABEL_KIND)
+            else
+                filtmap(i,j,k) = 1_NU_LABEL_KIND
+            endif
         end do
         !$omp end parallel do
         call move_alloc(new_cutoff_finds, cutoff_finds)
@@ -527,7 +508,7 @@ contains
         base_keep_n = min(size(lowpass_limits), old_n_base)
         keep(:base_keep_n) = .true.
         do i = base_keep_n + 1, old_n_base
-            keep(i) = any(nu_lmask .and. srcmap == 1 .and. filtmap == i)
+            keep(i) = count_nu_base_label_voxels(i) > 0
         end do
         n_keep = count(keep)
         if( n_keep >= old_n_base )then
@@ -546,23 +527,22 @@ contains
                 call delete_cached_filtered_pair(cutoff_finds(i))
             endif
         end do
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,old_label)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( srcmap(i,j,k) /= 1 ) cycle
-                    old_label = filtmap(i,j,k)
-                    if( old_label >= 1 .and. old_label <= old_n_base )then
-                        if( old_to_new(old_label) > 0 )then
-                            filtmap(i,j,k) = int(old_to_new(old_label), kind=NU_LABEL_KIND)
-                        else
-                            filtmap(i,j,k) = 1
-                        endif
-                    else
-                        filtmap(i,j,k) = 1
-                    endif
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,old_label)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( srcmap(i,j,k) /= 1 ) cycle
+            old_label = filtmap(i,j,k)
+            if( old_label >= 1 .and. old_label <= old_n_base )then
+                if( old_to_new(old_label) > 0 )then
+                    filtmap(i,j,k) = int(old_to_new(old_label), kind=NU_LABEL_KIND)
+                else
+                    filtmap(i,j,k) = 1
+                endif
+            else
+                filtmap(i,j,k) = 1
+            endif
         end do
         !$omp end parallel do
         call move_alloc(new_cutoff_finds, cutoff_finds)
@@ -634,132 +614,169 @@ contains
         !$omp end parallel do
     end subroutine pack_nu_dmat_to_mask_vector
 
-    module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
+    integer function count_nu_base_label_voxels( label ) result(nvox)
+        integer, intent(in) :: label
+        integer :: imask, i, j, k
+        nvox = 0
+        if( label < 1 ) return
+        if( .not.allocated(nu_mask_vox) ) return
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) reduction(+:nvox) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( srcmap(i,j,k) == 1 .and. int(filtmap(i,j,k)) == label ) nvox = nvox + 1
+        end do
+        !$omp end parallel do
+    end function count_nu_base_label_voxels
+
+    subroutine collect_nu_base_label_voxels( label, frontier_vox )
+        integer, intent(in) :: label
+        integer, allocatable, intent(inout) :: frontier_vox(:)
+        integer :: imask, i, j, k, ifront, nfront
+        if( allocated(frontier_vox) ) deallocate(frontier_vox)
+        nfront = count_nu_base_label_voxels(label)
+        allocate(frontier_vox(nfront))
+        if( nfront == 0 ) return
+        ifront = 0
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( srcmap(i,j,k) /= 1 ) cycle
+            if( int(filtmap(i,j,k)) /= label ) cycle
+            ifront = ifront + 1
+            frontier_vox(ifront) = imask
+        end do
+        if( ifront /= nfront ) THROW_HARD('frontier voxel count changed during collection')
+    end subroutine collect_nu_base_label_voxels
+
+    subroutine fill_nu_frontier_dmat_from_bank( frontier_vox, old_label, dmat_finest_mask )
+        integer, intent(in) :: frontier_vox(:), old_label
+        real,    intent(inout) :: dmat_finest_mask(:)
+        integer :: ifront, imask
+        real :: x
+        if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; fill_nu_frontier_dmat_from_bank')
+        if( old_label < 1 .or. old_label > size(dmats_mask,2) ) &
+            &THROW_HARD('old label out of range; fill_nu_frontier_dmat_from_bank')
+        if( size(dmat_finest_mask) /= n_nu_mask ) THROW_HARD('mask-vector size mismatch; fill_nu_frontier_dmat_from_bank')
+        dmat_finest_mask = huge(x)
+        !$omp parallel do schedule(static) default(shared) private(ifront,imask) proc_bind(close)
+        do ifront = 1, size(frontier_vox)
+            imask = frontier_vox(ifront)
+            dmat_finest_mask(imask) = dmats_mask(imask,old_label)
+        end do
+        !$omp end parallel do
+    end subroutine fill_nu_frontier_dmat_from_bank
+
+    module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
+            &extend_choice, n_extended )
+        integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        logical, intent(inout) :: extend_to_new(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
-        integer :: i, j, k, imask
-        extend_to_new = .false.
+        integer :: i, j, k, imask, ifront
+        if( size(extend_choice) /= size(frontier_vox) ) &
+            &THROW_HARD('extension choice/frontier size mismatch; init_nu_highres_extension_selection')
+        extend_choice = 0_NU_LABEL_KIND
         n_extended = 0
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask) reduction(+:n_extended)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.extend_mask(i,j,k) ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    if( dmat_new(i,j,k) < dmat_old(imask) )then
-                        extend_to_new(i,j,k) = .true.
-                        n_extended = n_extended + 1
-                    endif
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(ifront,i,j,k,imask) reduction(+:n_extended) proc_bind(close)
+        do ifront = 1, size(frontier_vox)
+            imask = frontier_vox(ifront)
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( dmat_new(i,j,k) < dmat_old(imask) )then
+                extend_choice(ifront) = 1_NU_LABEL_KIND
+                n_extended = n_extended + 1
+            endif
         end do
         !$omp end parallel do
     end subroutine init_nu_highres_extension_selection
 
-    module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+    module subroutine init_nu_highres_extension_selection_aux( frontier_vox, dmat_old, dmat_new, &
             &extend_choice, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
+        integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
-        integer :: i, j, k, iaux, imask, best_choice
+        integer :: i, j, k, iaux, imask, ifront, best_choice
         real    :: best_dmat, cur_dmat
+        if( size(extend_choice) /= size(frontier_vox) ) &
+            &THROW_HARD('extension choice/frontier size mismatch; init_nu_highres_extension_selection_aux')
         extend_choice = 0_NU_LABEL_KIND
         n_extended = 0
-        !$omp parallel do collapse(3) schedule(static) default(shared) &
-        !$omp private(i,j,k,iaux,imask,best_choice,best_dmat,cur_dmat) reduction(+:n_extended)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.extend_mask(i,j,k) ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    best_choice = 0
-                    best_dmat   = dmat_old(imask)
-                    if( dmat_new(i,j,k) < best_dmat )then
-                        best_choice = 1
-                        best_dmat   = dmat_new(i,j,k)
-                    endif
-                    do iaux = 1, size(dmats_aux_mask,2)
-                        cur_dmat = dmats_aux_mask(imask,iaux)
-                        if( cur_dmat < best_dmat )then
-                            best_choice = iaux + 1
-                            best_dmat   = cur_dmat
-                        endif
-                    end do
-                    extend_choice(i,j,k) = int(best_choice, kind=NU_LABEL_KIND)
-                    if( best_choice == 1 ) n_extended = n_extended + 1
-                end do
+        !$omp parallel do schedule(static) default(shared) &
+        !$omp private(ifront,i,j,k,iaux,imask,best_choice,best_dmat,cur_dmat) reduction(+:n_extended) proc_bind(close)
+        do ifront = 1, size(frontier_vox)
+            imask = frontier_vox(ifront)
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            best_choice = 0
+            best_dmat   = dmat_old(imask)
+            if( dmat_new(i,j,k) < best_dmat )then
+                best_choice = 1
+                best_dmat   = dmat_new(i,j,k)
+            endif
+            do iaux = 1, size(dmats_aux_mask,2)
+                cur_dmat = dmats_aux_mask(imask,iaux)
+                if( cur_dmat < best_dmat )then
+                    best_choice = iaux + 1
+                    best_dmat   = cur_dmat
+                endif
             end do
+            extend_choice(ifront) = int(best_choice, kind=NU_LABEL_KIND)
+            if( best_choice == 1 ) n_extended = n_extended + 1
         end do
         !$omp end parallel do
     end subroutine init_nu_highres_extension_selection_aux
 
-    module subroutine apply_nu_highres_extension_selection( extend_to_new, new_label )
-        logical, intent(in) :: extend_to_new(:,:,:)
-        integer, intent(in) :: new_label
-        integer :: i, j, k
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.extend_to_new(i,j,k) ) cycle
-                    srcmap(i,j,k)  = 1_NU_LABEL_KIND
-                    filtmap(i,j,k) = int(new_label, kind=NU_LABEL_KIND)
-                end do
-            end do
+    module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )
+        integer, intent(in) :: frontier_vox(:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:)
+        integer, intent(in) :: old_label, new_label
+        integer :: i, j, k, imask, ifront, choice, aux_icand
+        if( size(extend_choice) /= size(frontier_vox) ) &
+            &THROW_HARD('extension choice/frontier size mismatch; apply_nu_highres_extension_selection')
+        !$omp parallel do schedule(static) default(shared) private(ifront,imask,i,j,k,choice,aux_icand) proc_bind(close)
+        do ifront = 1, size(frontier_vox)
+            choice = int(extend_choice(ifront))
+            if( choice == 0 ) cycle
+            imask = frontier_vox(ifront)
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( choice == 1 )then
+                srcmap(i,j,k)  = 1_NU_LABEL_KIND
+                filtmap(i,j,k) = int(new_label, kind=NU_LABEL_KIND)
+            else
+                srcmap(i,j,k) = int(choice, kind=NU_LABEL_KIND)
+                aux_icand = old_label + choice - 1
+                filtmap(i,j,k) = int(nu_effective_base_label_for_candidate(aux_icand, old_label), &
+                    &kind=NU_LABEL_KIND)
+            endif
         end do
         !$omp end parallel do
     end subroutine apply_nu_highres_extension_selection
 
-    module subroutine apply_nu_highres_extension_selection_aux( extend_choice, old_label, new_label )
-        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:,:,:)
-        integer, intent(in) :: old_label, new_label
-        integer :: i, j, k, choice, aux_icand
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,choice,aux_icand)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    choice = int(extend_choice(i,j,k))
-                    if( choice == 0 ) cycle
-                    if( choice == 1 )then
-                        srcmap(i,j,k)  = 1_NU_LABEL_KIND
-                        filtmap(i,j,k) = int(new_label, kind=NU_LABEL_KIND)
-                    else
-                        srcmap(i,j,k) = int(choice, kind=NU_LABEL_KIND)
-                        aux_icand = old_label + choice - 1
-                        filtmap(i,j,k) = int(nu_effective_base_label_for_candidate(aux_icand, old_label), &
-                            &kind=NU_LABEL_KIND)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine apply_nu_highres_extension_selection_aux
-
-    subroutine cache_nu_highres_extension_frontier_after_selection( dmat_new, new_label )
+    subroutine cache_nu_highres_extension_frontier_after_selection( dmat_new, frontier_vox, extend_choice )
         real,    intent(in) :: dmat_new(:,:,:)
-        integer, intent(in) :: new_label
-        integer :: i, j, k, imask, iaux
+        integer, intent(in) :: frontier_vox(:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:)
+        integer :: i, j, k, imask, ifront
+        if( size(extend_choice) /= size(frontier_vox) ) &
+            &THROW_HARD('extension choice/frontier size mismatch; cache_nu_highres_extension_frontier_after_selection')
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         allocate(dmat_finest_cached(n_nu_mask), source=huge(0.))
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask,iaux)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) cycle
-                    if( filtmap(i,j,k) /= new_label ) cycle
-                    imask = nu_mask_index(i,j,k)
-                    if( srcmap(i,j,k) == 1 )then
-                        dmat_finest_cached(imask) = dmat_new(i,j,k)
-                    else
-                        iaux = int(srcmap(i,j,k)) - 1
-                        if( iaux < 1 .or. iaux > size(dmats_aux_mask,2) ) cycle
-                        dmat_finest_cached(imask) = dmats_aux_mask(imask,iaux)
-                    endif
-                end do
-            end do
+        !$omp parallel do schedule(static) default(shared) private(ifront,imask,i,j,k) proc_bind(close)
+        do ifront = 1, size(frontier_vox)
+            if( int(extend_choice(ifront)) /= 1 ) cycle
+            imask = frontier_vox(ifront)
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            dmat_finest_cached(imask) = dmat_new(i,j,k)
         end do
         !$omp end parallel do
     end subroutine cache_nu_highres_extension_frontier_after_selection

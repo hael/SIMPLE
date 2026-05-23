@@ -232,16 +232,6 @@ maximum iteration count from the sampled-update size, but that estimate must
 not reduce the run below ten iterations, and normal convergence checks must
 respect that minimum.
 
-`pre_refine3D` is a conservative test entrypoint for preparing difficult
-single-state cases before the coupled `refine3D_auto` NU-ratchet phase. It uses
-the same startup-reference and downsampling policy as `refine3D_auto`, but runs
-`refine=prob`, defaults `nspace=5000`, uses static discrete NU filtering
-(`filt_mode=nonuniform_lpset`, `nu_refine=no`), and plans for roughly two
-particle updates with a ten-iteration minimum and an automatic twenty-iteration
-cap. Static NU filtering may use the ML-regularized half-map pair as an
-auxiliary candidate, and the finest assigned NU candidate, including auxiliary
-assignments, is promoted as the matching low-pass limit for the next iteration.
-
 In staged `abinitio3D`, `filt_mode=nonuniform` follows the same static-lpset
 interpretation: it is normalized to `filt_mode=nonuniform_lpset` with
 `nu_refine=no`. The ML-regularized auxiliary candidate may therefore contribute

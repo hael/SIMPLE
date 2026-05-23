@@ -8,25 +8,38 @@ contains
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
         real, allocatable, intent(inout) :: lowpass_vals(:)
         logical, optional, intent(in)    :: mask(:,:,:)
-        integer :: i, j, k, nvals, ival
+        integer :: i, j, k, imask, nvals, ival
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before pack_filtmap_lowpass_limits')
         call require_valid_stats_mask(mask, 'pack_filtmap_lowpass_limits')
         nvals = count_active_nu_mask(mask, 1)
         if( allocated(lowpass_vals) ) deallocate(lowpass_vals)
         allocate(lowpass_vals(nvals), source=0.)
         ival = 0
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
-                    if( allocated(srcmap) ) then
-                        if( srcmap(i,j,k) /= 1 ) cycle
-                    end if
-                    ival = ival + 1
-                    lowpass_vals(ival) = cutoff_find_to_lowpass_limit(int(filtmap(i,j,k)))
+        if( present(mask) )then
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.mask(i,j,k) ) cycle
+                        if( allocated(srcmap) ) then
+                            if( srcmap(i,j,k) /= 1 ) cycle
+                        end if
+                        ival = ival + 1
+                        lowpass_vals(ival) = cutoff_find_to_lowpass_limit(int(filtmap(i,j,k)))
+                    end do
                 end do
             end do
-        end do
+        else
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( allocated(srcmap) ) then
+                    if( srcmap(i,j,k) /= 1 ) cycle
+                end if
+                ival = ival + 1
+                lowpass_vals(ival) = cutoff_find_to_lowpass_limit(int(filtmap(i,j,k)))
+            end do
+        endif
     end subroutine pack_filtmap_lowpass_limits
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
@@ -68,7 +81,7 @@ contains
         integer, intent(out) :: counts(:)
         real,    intent(out) :: percentages(:)
         logical, optional, intent(in) :: mask(:,:,:)
-        integer :: i, j, k, icut, nselected
+        integer :: i, j, k, imask, icut, nselected
         if( .not.allocated(filtmap)                 ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
         if( .not.allocated(cutoff_finds)            ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
         if( size(counts) /= size(cutoff_finds)      ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
@@ -78,22 +91,39 @@ contains
         counts       = 0
         percentages  = 0.
         if( nselected == 0 ) return
-        !$omp parallel do collapse(3) schedule(static) default(shared) &
-        !$omp private(i,j,k,icut) reduction(+:counts) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
-                    if( allocated(srcmap) )then
-                        if( srcmap(i,j,k) /= 1 ) cycle
-                    endif
-                    icut = int(filtmap(i,j,k))
-                    if( icut < 1 .or. icut > size(cutoff_finds) ) cycle
-                    counts(icut) = counts(icut) + 1
+        if( present(mask) )then
+            !$omp parallel do collapse(3) schedule(static) default(shared) &
+            !$omp private(i,j,k,icut) reduction(+:counts) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.mask(i,j,k) ) cycle
+                        if( allocated(srcmap) )then
+                            if( srcmap(i,j,k) /= 1 ) cycle
+                        endif
+                        icut = int(filtmap(i,j,k))
+                        if( icut < 1 .or. icut > size(cutoff_finds) ) cycle
+                        counts(icut) = counts(icut) + 1
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do schedule(static) default(shared) &
+            !$omp private(imask,i,j,k,icut) reduction(+:counts) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( allocated(srcmap) )then
+                    if( srcmap(i,j,k) /= 1 ) cycle
+                endif
+                icut = int(filtmap(i,j,k))
+                if( icut < 1 .or. icut > size(cutoff_finds) ) cycle
+                counts(icut) = counts(icut) + 1
+            end do
+            !$omp end parallel do
+        endif
         do icut = 1, size(cutoff_finds)
             percentages(icut) = 100. * real(counts(icut)) / real(nselected)
         end do
@@ -438,6 +468,7 @@ contains
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in '//caller)
         else
             if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; '//caller)
+            if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; '//caller)
             if( any(shape(nu_lmask) /= ldim) ) THROW_HARD('internal mask shape mismatch in '//caller)
         endif
     end subroutine require_valid_stats_mask
@@ -455,7 +486,7 @@ contains
     integer function count_active_nu_mask( mask, source_id ) result(nactive)
         logical, optional, intent(in) :: mask(:,:,:)
         integer, intent(in) :: source_id
-        integer :: i, j, k
+        integer :: i, j, k, imask
         nactive = 0
         if( present(mask) )then
             !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
@@ -476,21 +507,19 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( .not.nu_lmask(i,j,k) ) cycle
-                        if( source_id > 0 )then
-                            if( allocated(srcmap) )then
-                                if( int(srcmap(i,j,k)) /= source_id ) cycle
-                            else if( source_id /= 1 )then
-                                cycle
-                            endif
-                        endif
-                        nactive = nactive + 1
-                    end do
-                end do
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) reduction(+:nactive) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( source_id > 0 )then
+                    if( allocated(srcmap) )then
+                        if( int(srcmap(i,j,k)) /= source_id ) cycle
+                    else if( source_id /= 1 )then
+                        cycle
+                    endif
+                endif
+                nactive = nactive + 1
             end do
             !$omp end parallel do
         endif
@@ -499,7 +528,7 @@ contains
     integer function count_active_nu_label( mask, label_id, source_id ) result(nactive)
         logical, optional, intent(in) :: mask(:,:,:)
         integer, intent(in) :: label_id, source_id
-        integer :: i, j, k
+        integer :: i, j, k, imask
         nactive = 0
         if( present(mask) )then
             !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
@@ -521,22 +550,20 @@ contains
             end do
             !$omp end parallel do
         else
-            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( .not.nu_lmask(i,j,k) ) cycle
-                        if( int(filtmap(i,j,k)) /= label_id ) cycle
-                        if( source_id > 0 )then
-                            if( allocated(srcmap) )then
-                                if( int(srcmap(i,j,k)) /= source_id ) cycle
-                            else if( source_id /= 1 )then
-                                cycle
-                            endif
-                        endif
-                        nactive = nactive + 1
-                    end do
-                end do
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) reduction(+:nactive) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( int(filtmap(i,j,k)) /= label_id ) cycle
+                if( source_id > 0 )then
+                    if( allocated(srcmap) )then
+                        if( int(srcmap(i,j,k)) /= source_id ) cycle
+                    else if( source_id /= 1 )then
+                        cycle
+                    endif
+                endif
+                nactive = nactive + 1
             end do
             !$omp end parallel do
         endif

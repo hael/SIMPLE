@@ -106,7 +106,6 @@ integer(kind=NU_LABEL_KIND), allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:)
 logical,          allocatable :: nu_lmask(:,:,:)
-integer,          allocatable :: nu_mask_index(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
 real,             allocatable :: nu_smooth_norm(:,:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
@@ -191,8 +190,8 @@ interface
         type(image), intent(in) :: aux_even(:), aux_odd(:)
     end subroutine stash_aux_volumes
 
-    module subroutine setup_nu_mask_index
-    end subroutine setup_nu_mask_index
+    module subroutine setup_nu_mask_voxels
+    end subroutine setup_nu_mask_voxels
 
     module real function nu_objective_smooth_radius_angstrom( lp_angstrom )
         real, intent(in) :: lp_angstrom
@@ -352,30 +351,27 @@ interface
     module subroutine refine_nu_extension_filtmap_ordered_labels
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
-    module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
+    module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
+            &extend_choice, n_extended )
+        integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        logical, intent(inout) :: extend_to_new(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection
 
-    module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
+    module subroutine init_nu_highres_extension_selection_aux( frontier_vox, dmat_old, dmat_new, &
             &extend_choice, n_extended )
-        logical, intent(in)    :: extend_mask(:,:,:)
+        integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection_aux
 
-    module subroutine apply_nu_highres_extension_selection( extend_to_new, new_label )
-        logical, intent(in) :: extend_to_new(:,:,:)
-        integer, intent(in) :: new_label
-    end subroutine apply_nu_highres_extension_selection
-
-    module subroutine apply_nu_highres_extension_selection_aux( extend_choice, old_label, new_label )
-        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:,:,:)
+    module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )
+        integer, intent(in) :: frontier_vox(:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:)
         integer, intent(in) :: old_label, new_label
-    end subroutine apply_nu_highres_extension_selection_aux
+    end subroutine apply_nu_highres_extension_selection
 
     ! In submodule: simple_nu_filter_apply.f90
     module subroutine nu_filter_vols( vol_even, vol_odd )

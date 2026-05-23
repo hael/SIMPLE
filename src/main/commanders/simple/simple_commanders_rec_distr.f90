@@ -404,8 +404,10 @@ contains
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
             if( allocated(l_mask) ) deallocate(l_mask)
+            call release_nonuniform_aux_inputs()
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
+            call release_nonuniform_base_inputs()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
@@ -543,7 +545,7 @@ contains
         end function nu_highres_steps_fname
 
         subroutine log_nonuniform_filter_stats()
-            if( allocated(nu_aux_even) )then
+            if( use_static_nu_aux_candidate() )then
                 call print_nu_filtmap_lowpass_stats(aux_resolutions=[res0143s(state)])
             else
                 call print_nu_filtmap_lowpass_stats()
@@ -570,7 +572,7 @@ contains
         subroutine record_nu_alignment_lowpass_limit()
             real :: align_lp
             if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
-            if( allocated(nu_aux_even) )then
+            if( use_static_nu_aux_candidate() )then
                 align_lp = get_nu_filtmap_finest_selected_lp(aux_resolutions=[res0143s(state)])
             else
                 align_lp = get_nu_filtmap_finest_selected_lp()
@@ -593,6 +595,17 @@ contains
             if( allocated(l_mask) ) deallocate(l_mask)
             call cleanup_nu_filter()
         end subroutine cleanup_nonuniform_state
+
+        subroutine release_nonuniform_aux_inputs()
+            call cleanup_nu_aux_images()
+            call vol_nu_aux_even%kill
+            call vol_nu_aux_odd%kill
+        end subroutine release_nonuniform_aux_inputs
+
+        subroutine release_nonuniform_base_inputs()
+            call vol_nu_base_even%kill
+            call vol_nu_base_odd%kill
+        end subroutine release_nonuniform_base_inputs
 
         subroutine cleanup_nu_aux_images()
             integer :: i
