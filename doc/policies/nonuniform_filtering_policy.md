@@ -211,8 +211,8 @@ the same iteration may challenge the next Fourier shell; the walk stops at the
 first unattempted challenger or the first challenger below this conservative
 frontier rule. Each challenge logs the old/new Fourier shell, tested frontier
 size, unary wins, and accepted-shell depth for the next iteration. The shell
-extension helper still supports `accept_pct=0` for manual diagnostics, but the
-current `postprocess_nu` policy does not use post-FSC shell walking.
+extension helper still supports `accept_pct=0` for the permissive
+`postprocess_nu` terminal shell walk and manual diagnostics.
 
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected
@@ -240,11 +240,11 @@ the project matching bandwidth.
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
 from raw even/odd half maps without ML-regularized auxiliary candidates. It
-uses the static base bank plus a classical auxiliary candidate at the global
-FSC resolution and does not add high-resolution shell extensions. This
-deliberately keeps standalone postprocessing close to the classical
-FSC-supported bandwidth instead of letting a terminal map create new
-high-resolution support that was not refined during the particle-update loop.
+seeds the base bank through the global FSC resolution, adds a classical
+auxiliary candidate at the global FSC resolution, then walks further
+Fourier-shell challengers permissively for terminal postprocessing. This
+restores the original `postprocess_nu` behavior while still keeping the
+classical FSC-supported transfer map as an explicit source alternative.
 
 Automated `postprocess_nu` is restricted to the terminal all-particle map
 produced by `refine3D_auto` in either NU filter mode, where the particle
@@ -273,13 +273,15 @@ outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
 the mirrored `_pproc_mirr` map when mirroring is enabled. It then inserts the
 classical FSC-filtered half-map pair as an auxiliary candidate in the NU
 half-map competition. This candidate is assigned the global FSC resolution and
-the base bank remains the static discrete bank. If the classical auxiliary
-candidate wins a voxel, the final NU postprocess map copies that voxel from a
-classical transfer map where the global B factor is applied first and the
-FSC-derived filter is applied second, matching the ordinary postprocess
-ordering. Base-bank voxels within `0.5 A` of the global FSC resolution are also
-copied from this classical transfer map so the immediate FSC-resolution
-neighborhood mirrors the ordinary postprocess path exactly.
+the base bank is seeded to that resolution before additional shell challengers
+are tested. If the classical auxiliary candidate wins a voxel, the final NU
+postprocess map copies that voxel from a classical transfer map where the
+global B factor is applied first and the FSC-derived filter is applied second,
+matching the ordinary postprocess ordering. Base-bank voxels within `0.5 A` of
+the global FSC resolution are also copied from this classical transfer map so
+the immediate FSC-resolution neighborhood mirrors the ordinary postprocess path
+exactly. The `_pproc_nu` output itself is not masked; the support mask controls
+only NU candidate selection.
 
 In this postprocess workflow, the classical auxiliary candidate is treated as a
 source alternative rather than an ordered low-pass rung. Its Potts boundary cost

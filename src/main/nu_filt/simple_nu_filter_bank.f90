@@ -247,6 +247,13 @@ contains
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
+                    if( allocated(nu_lmask) )then
+                        if( .not.nu_lmask(i,j,k) )then
+                            srcmap(i,j,k)  = 1
+                            filtmap(i,j,k) = 1
+                            cycle
+                        endif
+                    endif
                     icand = candmap(i,j,k)
                     ! Base-bank winners preserve their low-pass index in filtmap.
                     ! Auxiliary winners preserve their provenance in srcmap while

@@ -27,15 +27,16 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows use the static base bank and add the classical
-! FSC-filtered half-map pair as an auxiliary candidate at the global FSC
-! resolution. They do not add or walk high-resolution shell extensions. The
-! resulting local filter/source map is applied to a merged map using
-! resolution-dependent B factors for base-bank voxels, while caller-supplied
-! classical transfer maps are used for auxiliary voxels and for base-bank bins
-! within the classical FSC-resolution window:
+! Postprocess workflows seed the base bank to the global FSC resolution, add
+! the classical FSC-filtered half-map pair as an auxiliary candidate, then walk
+! further Fourier-shell challengers with accept_pct=0. for permissive terminal
+! postprocessing. The resulting local filter/source map is applied to a merged
+! map using resolution-dependent B factors for base-bank voxels, while
+! caller-supplied classical transfer maps are used for auxiliary voxels and for
+! base-bank bins within the classical FSC-resolution window:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
+!    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
 !    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
