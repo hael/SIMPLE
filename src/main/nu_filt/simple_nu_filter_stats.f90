@@ -32,12 +32,36 @@ contains
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
         type(stats_struct), intent(out) :: statvars
         logical, optional, intent(in)   :: mask(:,:,:)
-        real, allocatable :: lowpass_vals(:)
+        integer, allocatable :: counts(:)
+        real,    allocatable :: percentages(:)
+        integer :: icut, nselected, pos1, pos2
+        real(dp) :: lp_dp, nr_dp, sum_dp, sumsq_dp, var_dp
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_stats')
-        call pack_filtmap_lowpass_limits(lowpass_vals, mask)
-        if( size(lowpass_vals) == 0 ) THROW_HARD('No local resolution values selected in calc_filtmap_lowpass_stats')
-        call calc_stats(lowpass_vals, statvars)
-        deallocate(lowpass_vals)
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_stats')
+        allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
+        call calc_filtmap_lowpass_histogram(counts, percentages, mask)
+        nselected = sum(counts)
+        if( nselected == 0 ) THROW_HARD('No local resolution values selected in calc_filtmap_lowpass_stats')
+        sum_dp = 0._dp
+        sumsq_dp = 0._dp
+        do icut = 1, size(cutoff_finds)
+            if( counts(icut) == 0 ) cycle
+            lp_dp = real(cutoff_find_to_lowpass_limit(icut), dp)
+            sum_dp   = sum_dp   + real(counts(icut), dp) * lp_dp
+            sumsq_dp = sumsq_dp + real(counts(icut), dp) * lp_dp * lp_dp
+        end do
+        nr_dp = real(nselected, dp)
+        statvars%avg = real(sum_dp / nr_dp)
+        var_dp = 0._dp
+        if( nselected > 1 ) var_dp = max(0._dp, (sumsq_dp - sum_dp * sum_dp / nr_dp) / (nr_dp - 1._dp))
+        statvars%sdev = real(sqrt(var_dp))
+        pos1 = (nselected + 1) / 2
+        pos2 = (nselected + 2) / 2
+        statvars%med = 0.5 * (lowpass_histogram_value_at(counts, pos1) + &
+            &lowpass_histogram_value_at(counts, pos2))
+        statvars%minv = lowpass_histogram_value_at(counts, 1)
+        statvars%maxv = lowpass_histogram_value_at(counts, nselected)
+        deallocate(counts, percentages)
     end subroutine calc_filtmap_lowpass_stats
 
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
@@ -54,6 +78,8 @@ contains
         counts       = 0
         percentages  = 0.
         if( nselected == 0 ) return
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,icut) reduction(+:counts) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
@@ -67,6 +93,7 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
         do icut = 1, size(cutoff_finds)
             percentages(icut) = 100. * real(counts(icut)) / real(nselected)
         end do
@@ -430,21 +457,43 @@ contains
         integer, intent(in) :: source_id
         integer :: i, j, k
         nactive = 0
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
-                    if( source_id > 0 )then
-                        if( allocated(srcmap) )then
-                            if( int(srcmap(i,j,k)) /= source_id ) cycle
-                        else if( source_id /= 1 )then
-                            cycle
+        if( present(mask) )then
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.mask(i,j,k) ) cycle
+                        if( source_id > 0 )then
+                            if( allocated(srcmap) )then
+                                if( int(srcmap(i,j,k)) /= source_id ) cycle
+                            else if( source_id /= 1 )then
+                                cycle
+                            endif
                         endif
-                    endif
-                    nactive = nactive + 1
+                        nactive = nactive + 1
+                    end do
                 end do
             end do
-        end do
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        if( source_id > 0 )then
+                            if( allocated(srcmap) )then
+                                if( int(srcmap(i,j,k)) /= source_id ) cycle
+                            else if( source_id /= 1 )then
+                                cycle
+                            endif
+                        endif
+                        nactive = nactive + 1
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end function count_active_nu_mask
 
     integer function count_active_nu_label( mask, label_id, source_id ) result(nactive)
@@ -452,22 +501,60 @@ contains
         integer, intent(in) :: label_id, source_id
         integer :: i, j, k
         nactive = 0
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
-                    if( int(filtmap(i,j,k)) /= label_id ) cycle
-                    if( source_id > 0 )then
-                        if( allocated(srcmap) )then
-                            if( int(srcmap(i,j,k)) /= source_id ) cycle
-                        else if( source_id /= 1 )then
-                            cycle
+        if( present(mask) )then
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.mask(i,j,k) ) cycle
+                        if( int(filtmap(i,j,k)) /= label_id ) cycle
+                        if( source_id > 0 )then
+                            if( allocated(srcmap) )then
+                                if( int(srcmap(i,j,k)) /= source_id ) cycle
+                            else if( source_id /= 1 )then
+                                cycle
+                            endif
                         endif
-                    endif
-                    nactive = nactive + 1
+                        nactive = nactive + 1
+                    end do
                 end do
             end do
-        end do
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) reduction(+:nactive) proc_bind(close)
+            do k = 1, ldim(3)
+                do j = 1, ldim(2)
+                    do i = 1, ldim(1)
+                        if( .not.nu_lmask(i,j,k) ) cycle
+                        if( int(filtmap(i,j,k)) /= label_id ) cycle
+                        if( source_id > 0 )then
+                            if( allocated(srcmap) )then
+                                if( int(srcmap(i,j,k)) /= source_id ) cycle
+                            else if( source_id /= 1 )then
+                                cycle
+                            endif
+                        endif
+                        nactive = nactive + 1
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end function count_active_nu_label
+
+    real function lowpass_histogram_value_at( counts, pos )
+        integer, intent(in) :: counts(:), pos
+        integer :: icut, nseen
+        if( pos < 1 ) THROW_HARD('invalid order statistic position; lowpass_histogram_value_at')
+        nseen = 0
+        do icut = size(counts), 1, -1
+            nseen = nseen + counts(icut)
+            if( nseen >= pos )then
+                lowpass_histogram_value_at = cutoff_find_to_lowpass_limit(icut)
+                return
+            endif
+        end do
+        THROW_HARD('order statistic exceeds histogram count; lowpass_histogram_value_at')
+    end function lowpass_histogram_value_at
 
 end submodule simple_nu_filter_stats

@@ -377,11 +377,6 @@ interface
         integer, intent(in) :: old_label, new_label
     end subroutine apply_nu_highres_extension_selection_aux
 
-    module subroutine append_nu_highres_candidate_coord( old_n_base, new_coord )
-        integer, intent(in) :: old_n_base
-        real,    intent(in) :: new_coord
-    end subroutine append_nu_highres_candidate_coord
-
     ! In submodule: simple_nu_filter_apply.f90
     module subroutine nu_filter_vols( vol_even, vol_odd )
         class(image), intent(out) :: vol_even, vol_odd

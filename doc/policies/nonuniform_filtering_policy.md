@@ -236,9 +236,13 @@ Large-volume memory ownership is deliberately biased toward mask-packed or
 short-lived state. Label/source maps use a compact integer kind, the finest
 frontier objective cache is stored only as a mask-packed vector, and the caller
 mask can be released after `setup_nu_dmats` copies it into the filter state.
-The normalized smoothing support is allocated lazily for the active radius and
-released after candidate-bank or extension smoothing, rather than retained for
-the whole filtering lifecycle.
+The normalized smoothing support is allocated lazily for the active radius. It
+is released after static candidate-bank smoothing, but is kept across adjacent
+high-resolution shell challenges so repeated equal-radius extension steps can
+reuse it; `nu_filter_vols` releases it before output synthesis. Accepted shell
+insertion and stride thinning are combined into one mask-packed bank rebuild so
+the common extension path avoids appending the unary bank and immediately
+copying it again for thinning.
 
 In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
 single matching low-pass limit back to the project. This limit is the finest
