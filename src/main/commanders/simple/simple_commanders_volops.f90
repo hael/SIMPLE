@@ -384,8 +384,8 @@ contains
 
     subroutine postprocess_nu_volume_from_files( fname_vol, fname_even, fname_odd, fname_fsc, box, smpd, params, cline )
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
-            &extend_nu_filter_highres_shells, nu_postprocess_vol, cleanup_nu_filter, &
-            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &nu_postprocess_vol, cleanup_nu_filter, print_nu_filtmap_lowpass_stats, &
+            &analyze_filtmap_neighbor_continuity
         class(string),   intent(in)    :: fname_vol, fname_even, fname_odd, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -399,7 +399,7 @@ contains
         type(image), allocatable :: aux_even(:), aux_odd(:), aux_pproc(:)
         type(image_msk)  :: envmsk
         real    :: fsc0143, fsc05, lplim, mskrad_px
-        integer :: ldim(3), n_nu_postprocess_steps, n_nu_seed_steps
+        integer :: ldim(3), n_nu_seed_steps
         logical :: has_fsc
         fname_even_raw = raw_halfmap_name(fname_even)
         fname_odd_raw  = raw_halfmap_name(fname_odd)
@@ -455,16 +455,19 @@ contains
         write(logfhandle,'(A,F8.3,A,I0,A)') &
             &'>>> NU postprocess classical FSC candidate inserted at ', lplim, &
             &' A; seeded high-resolution shell steps: ', n_nu_seed_steps
-        write(logfhandle,'(A)') '>>> NU postprocess sequential Fourier-shell challenger enabled'
+        write(logfhandle,'(A)') &
+            &'>>> NU postprocess shell extension disabled; transfer bounded by global FSC'
         call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [lplim], aux_even, aux_odd, &
             &n_highres_steps=n_nu_seed_steps, l_aux_source_unordered=.true.)
         call optimize_nu_cutoff_finds()
-        call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, &
-            &nsteps=n_nu_postprocess_steps, accept_pct=0.)
-        write(logfhandle,'(A,I0)') '>>> NU postprocess accepted high-resolution shell steps: ', &
-            &n_nu_postprocess_steps
         call vol_bfac%fft()
-        call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc)
+        if( has_fsc )then
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc, &
+                &global_filter=optlp, l_classical_outside_mask=params%automsk.eq.'no')
+        else
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc, &
+                &l_classical_outside_mask=params%automsk.eq.'no')
+        endif
         call vol_lp%write(fname_lp)
         write(logfhandle,'(A)') &
             &'>>> NU postprocess output is unmasked; support mask only controls local filtering'

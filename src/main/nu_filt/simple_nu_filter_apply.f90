@@ -152,27 +152,37 @@ contains
         call vol_filt%kill
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols, &
+            &global_filter, l_classical_outside_mask )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
         type(image), optional, intent(in) :: aux_vols(:)
+        real, optional, intent(in) :: global_filter(:)
+        logical, optional, intent(in) :: l_classical_outside_mask
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
         real(kind=c_float), pointer :: rmat_aux_classical(:,:,:) => null()
         integer :: icut, winsz
         real    :: edge_mean, local_lp, local_bfac, antialias_lp
-        logical :: l_have_classical_aux, l_classical_window
+        logical :: l_have_classical_aux, l_classical_window, l_classical_outside, l_have_global_filter
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_postprocess_vol')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
+        l_have_global_filter = present(global_filter)
+        if( l_have_global_filter )then
+            if( size(global_filter) /= box ) THROW_HARD('Global FSC filter size mismatch; nu_postprocess_vol')
+        endif
         call validate_nu_postprocess_aux_vols(aux_vols)
         l_have_classical_aux = present(aux_vols)
         if( l_have_classical_aux ) l_have_classical_aux = size(aux_vols) >= 1
         if( l_have_classical_aux ) call aux_vols(1)%get_rmat_ptr(rmat_aux_classical)
+        l_classical_outside = .false.
+        if( present(l_classical_outside_mask) ) l_classical_outside = l_classical_outside_mask
+        l_classical_outside = l_classical_outside .and. l_have_classical_aux
         call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
@@ -181,10 +191,10 @@ contains
             call vol_in_ft%taper_edges_vol(winsz, edge_mean)
             call vol_in_ft%fft
         endif
-        antialias_lp = get_nu_filter_bank_finest_lp()
+        antialias_lp = global_lp
         call vol_lp%copy(vol_in_ft)
         call vol_lp%set_wthreads(.true.)
-        call vol_lp%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
+        call apply_nu_postprocess_global_filter(vol_lp)
         call vol_lp%ifft
         call vol_filt%new(ldim, smpd)
         call vol_filt%set_ft(.true.)
@@ -192,7 +202,8 @@ contains
         call vol_pproc%new(ldim, smpd, wthreads=.false.)
         call vol_pproc%get_rmat_ptr(rmat_pproc)
         rmat_pproc(:ldim(1),:ldim(2),:ldim(3)) = 0.
-        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, antialias_lp, l_have_classical_aux)
+        call log_nu_postprocess_transfer_bank(global_lp, global_bfac, antialias_lp, &
+            &l_have_classical_aux, l_have_global_filter)
         do icut = 1, size(cutoff_finds)
             local_lp = cutoff_find_to_lowpass_limit(icut)
             l_classical_window = l_have_classical_aux .and. &
@@ -203,15 +214,29 @@ contains
                 local_bfac = nu_postprocess_resolution_bfac(local_lp, global_lp, global_bfac)
                 call vol_filt%copy_fast(vol_in_ft)
                 call vol_filt%apply_bfac(local_bfac)
-                call vol_filt%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
+                call apply_nu_postprocess_global_filter(vol_filt)
                 call vol_filt%ifft
                 call vol_filt%get_rmat_ptr(rmat_filt)
                 call copy_nu_postprocess_voxels(icut, rmat_filt, rmat_pproc)
             endif
         end do
         if( present(aux_vols) ) call copy_nu_postprocess_aux_voxels(aux_vols, rmat_pproc)
+        if( l_classical_outside )then
+            call copy_nu_postprocess_outside_mask(rmat_aux_classical, rmat_pproc)
+            write(logfhandle,'(A)') &
+                &'>>> NU postprocess outside spherical support copied from classical FSC transfer'
+        endif
         call vol_in_ft%kill
         call vol_filt%kill
+    contains
+        subroutine apply_nu_postprocess_global_filter( vol )
+            type(image), intent(inout) :: vol
+            if( l_have_global_filter )then
+                call vol%apply_filter(global_filter)
+            else
+                call vol%bp(0., antialias_lp, NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH)
+            endif
+        end subroutine apply_nu_postprocess_global_filter
     end subroutine nu_postprocess_vol
 
     subroutine validate_nu_postprocess_aux_vols( aux_vols )
@@ -239,9 +264,10 @@ contains
         end do
     end subroutine validate_nu_postprocess_aux_vols
 
-    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp, l_have_classical_aux )
+    subroutine log_nu_postprocess_transfer_bank( global_lp, global_bfac, antialias_lp, &
+            &l_have_classical_aux, l_have_global_filter )
         real, intent(in) :: global_lp, global_bfac, antialias_lp
-        logical, intent(in) :: l_have_classical_aux
+        logical, intent(in) :: l_have_classical_aux, l_have_global_filter
         integer :: icut
         real :: local_lp, damp_frac, local_bfac, damping_plateau
         character(len=9) :: mode
@@ -255,9 +281,13 @@ contains
         write(logfhandle,'(4X,A,F5.2,A,F6.2,A,F5.2)') &
             &'B-factor model alpha/mid/width: ', NU_POSTPROCESS_BFAC_ALPHA, '/', &
             &NU_POSTPROCESS_BFAC_SIGMOID_MID, '/', NU_POSTPROCESS_BFAC_SIGMOID_WIDTH
-        write(logfhandle,'(4X,A,F8.3,A,F5.1,A)') &
-            &'Antialias Hann LP(A): ', antialias_lp, '  Width: ', &
-            &NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH, ' Fourier pixels'
+        if( l_have_global_filter )then
+            write(logfhandle,'(4X,A)') 'Antialias filter: global FSC-derived filter'
+        else
+            write(logfhandle,'(4X,A,F8.3,A,F5.1,A)') &
+                &'Antialias Hann LP(A): ', antialias_lp, '  Width: ', &
+                &NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH, ' Fourier pixels'
+        endif
         if( l_have_classical_aux )then
             write(logfhandle,'(4X,A,F5.2,A)') &
                 &'Classical transfer window: +/- ', NU_POSTPROCESS_CLASSICAL_LP_WINDOW_A, &
@@ -356,5 +386,21 @@ contains
             !$omp end parallel do
         end do
     end subroutine copy_nu_postprocess_aux_voxels
+
+    subroutine copy_nu_postprocess_outside_mask( rmat_src, rmat_dst )
+        real(kind=c_float), intent(in)    :: rmat_src(:,:,:)
+        real(kind=c_float), intent(inout) :: rmat_dst(:,:,:)
+        integer :: i, j, k
+        if( .not.allocated(nu_lmask) ) return
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.nu_lmask(i,j,k) ) rmat_dst(i,j,k) = rmat_src(i,j,k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine copy_nu_postprocess_outside_mask
 
 end submodule simple_nu_filter_apply

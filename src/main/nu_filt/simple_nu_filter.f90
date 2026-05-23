@@ -27,16 +27,14 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows seed the base bank to the global FSC resolution, add
-! the classical FSC-filtered half-map pair as an auxiliary candidate, then walk
-! further Fourier-shell challengers with accept_pct=0. for permissive terminal
-! postprocessing. The resulting local filter/source map is applied to a merged
-! map using resolution-dependent B factors for base-bank voxels, while
-! caller-supplied classical transfer maps are used for auxiliary voxels and for
-! base-bank bins within the classical FSC-resolution window:
+! Postprocess workflows seed the base bank to the global FSC resolution and add
+! the classical FSC-filtered half-map pair as an auxiliary candidate. They keep
+! the transfer bounded by the global FSC low-pass while applying
+! resolution-dependent B factors for base-bank voxels. Caller-supplied
+! classical transfer maps are used for auxiliary voxels and for base-bank bins
+! within the classical FSC-resolution window:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call extend_nu_filter_highres_shells(vol_even, vol_odd, accept_pct=0.)
 !    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
@@ -382,11 +380,14 @@ interface
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
 
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols )
+    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols, &
+            &global_filter, l_classical_outside_mask )
         class(image),          intent(in)  :: vol_in
         class(image),          intent(out) :: vol_lp, vol_pproc
         real,                  intent(in)  :: global_lp, global_bfac
         type(image), optional, intent(in)  :: aux_vols(:)
+        real,        optional, intent(in)  :: global_filter(:)
+        logical,     optional, intent(in)  :: l_classical_outside_mask
     end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90
