@@ -24,7 +24,7 @@ implicit none
 !   bins within this distance of the global FSC low-pass reuse the exact
 !   classical postprocess transfer map supplied by the caller.
 real, parameter :: NU_POSTPROCESS_BFAC_ALPHA           = 0.75
-real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -300.
+real, parameter :: NU_POSTPROCESS_DAMPING_BFAC_REF     = -133.333
 real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_MID     = 6.
 real, parameter :: NU_POSTPROCESS_BFAC_SIGMOID_WIDTH   = 1.5
 real, parameter :: NU_POSTPROCESS_ANTIALIAS_HANN_WIDTH = 4.
