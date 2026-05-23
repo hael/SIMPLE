@@ -149,11 +149,10 @@ contains
         real,    intent(in) :: icoord, jcoord
         logical, intent(in) :: l_aux_i, l_aux_j
         if( l_aux_source_unordered_potts .and. (l_aux_i .or. l_aux_j) )then
-            ! In postprocess_nu the classical auxiliary map is a separate
-            ! source alternative, not an ordered resolution-bin label. A zero
-            ! boundary cost keeps Potts smoothing from suppressing classical
-            ! assignments solely because nearby base-bank voxels marched to a
-            ! finer Fourier shell.
+            ! Unordered auxiliary maps are separate source alternatives, not
+            ! ordered resolution-bin labels. A zero boundary cost keeps Potts
+            ! smoothing from suppressing them solely because nearby base-bank
+            ! voxels marched to a finer Fourier shell.
             nu_label_smooth_source_pair_cost = NU_AUX_SOURCE_BOUNDARY_COST
         else
             nu_label_smooth_source_pair_cost = nu_label_smooth_coord_pair_cost(icoord, jcoord)

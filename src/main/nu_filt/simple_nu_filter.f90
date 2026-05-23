@@ -27,15 +27,12 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows seed the base bank to the global FSC resolution and add
-! the classical FSC-filtered half-map pair as an auxiliary candidate. They keep
-! the transfer bounded by the global FSC low-pass while applying
-! resolution-dependent B factors for base-bank voxels. Caller-supplied
-! classical transfer maps are used for auxiliary voxels and for base-bank bins
-! within the classical FSC-resolution window:
+! Postprocess workflows seed the base bank to the global FSC resolution. They
+! keep the transfer bounded by the global FSC low-pass while applying
+! resolution-dependent B factors for base-bank voxels:
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
-!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac, aux_vols)
+!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac)
 !
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
@@ -92,10 +89,10 @@ integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
-! In postprocess_nu the classical FSC-filtered auxiliary candidate is a source
-! alternative, not an ordered resolution-bin label. Keep this at zero to let
-! the unary objective decide aux-vs-base assignments without frequency-ladder
-! Potts bias; raise slightly if a future dataset needs source-boundary cleanup.
+! Optional unordered auxiliary sources are source alternatives rather than
+! ordered resolution-bin labels. Keep this at zero to let the unary objective
+! decide aux-vs-base assignments without frequency-ladder Potts bias; raise
+! slightly if a future dataset needs source-boundary cleanup.
 real,             parameter   :: NU_AUX_SOURCE_BOUNDARY_COST = 0.0
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
@@ -381,13 +378,12 @@ interface
     end subroutine nu_filter_vol
 
     module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols, &
-            &global_filter, l_classical_outside_mask )
+            &global_filter )
         class(image),          intent(in)  :: vol_in
         class(image),          intent(out) :: vol_lp, vol_pproc
         real,                  intent(in)  :: global_lp, global_bfac
         type(image), optional, intent(in)  :: aux_vols(:)
         real,        optional, intent(in)  :: global_filter(:)
-        logical,     optional, intent(in)  :: l_classical_outside_mask
     end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90

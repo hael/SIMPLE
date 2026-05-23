@@ -396,7 +396,6 @@ contains
         integer, allocatable :: imat(:,:,:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_even_raw, fname_odd_raw
         type(image)      :: vol_even_raw, vol_odd_raw, vol_bfac, vol_pproc, vol_lp, vol_msk
-        type(image), allocatable :: aux_even(:), aux_odd(:), aux_pproc(:)
         type(image_msk)  :: envmsk
         real    :: fsc0143, fsc05, lplim, mskrad_px
         integer :: ldim(3), n_nu_seed_steps
@@ -450,23 +449,20 @@ contains
             endif
         endif
         call build_nu_postprocess_mask()
-        call build_classical_postprocess_aux_candidate()
         n_nu_seed_steps = postprocess_nu_seed_highres_steps()
         write(logfhandle,'(A,F8.3,A,I0,A)') &
-            &'>>> NU postprocess classical FSC candidate inserted at ', lplim, &
+            &'>>> NU postprocess base bank seeded through ', lplim, &
             &' A; seeded high-resolution shell steps: ', n_nu_seed_steps
         write(logfhandle,'(A)') &
             &'>>> NU postprocess shell extension disabled; transfer bounded by global FSC'
-        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [lplim], aux_even, aux_odd, &
-            &n_highres_steps=n_nu_seed_steps, l_aux_source_unordered=.true.)
+        call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::], &
+            &n_highres_steps=n_nu_seed_steps)
         call optimize_nu_cutoff_finds()
         call vol_bfac%fft()
         if( has_fsc )then
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc, &
-                &global_filter=optlp, l_classical_outside_mask=params%automsk.eq.'no')
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, global_filter=optlp)
         else
-            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac, aux_vols=aux_pproc, &
-                &l_classical_outside_mask=params%automsk.eq.'no')
+            call nu_postprocess_vol(vol_bfac, vol_lp, vol_pproc, lplim, params%bfac)
         endif
         call vol_lp%write(fname_lp)
         write(logfhandle,'(A)') &
@@ -476,7 +472,7 @@ contains
             call vol_pproc%mirror('x')
             call vol_pproc%write(fname_mirr)
         endif
-        call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[lplim])
+        call print_nu_filtmap_lowpass_stats(l_mask)
         call analyze_filtmap_neighbor_continuity(l_mask)
         call cleanup_nu_filter
         call vol_bfac%kill
@@ -485,7 +481,6 @@ contains
         call vol_pproc%kill
         call vol_lp%kill
         call envmsk%kill
-        call cleanup_classical_postprocess_aux_candidate()
         if( allocated(l_mask) ) deallocate(l_mask)
         if( allocated(imat)   ) deallocate(imat)
 
@@ -521,60 +516,12 @@ contains
                 &'>>> NU postprocess outside-mask voxels use the coarsest base-bank low-pass candidate'
         end subroutine log_nu_postprocess_mask
 
-        subroutine build_classical_postprocess_aux_candidate()
-            allocate(aux_even(1), aux_odd(1), aux_pproc(1))
-            ! The assignment candidate is the classical FSC/LP-filtered
-            ! half-map pair. The output candidate is the classical postprocess
-            ! transfer map: B-factor upweighting first, then the FSC/LP filter.
-            call apply_classical_transfer(vol_even_raw, aux_even(1), l_apply_bfac=.false.)
-            call apply_classical_transfer(vol_odd_raw,  aux_odd(1),  l_apply_bfac=.false.)
-            call apply_classical_transfer(vol_bfac,     aux_pproc(1), l_apply_bfac=.true.)
-        end subroutine build_classical_postprocess_aux_candidate
-
-        subroutine apply_classical_transfer( vol_in, vol_out, l_apply_bfac )
-            class(image), intent(in)  :: vol_in
-            type(image),  intent(inout) :: vol_out
-            logical,      intent(in)  :: l_apply_bfac
-            call vol_out%copy(vol_in)
-            call vol_out%set_wthreads(.true.)
-            if( .not. vol_out%is_ft() ) call vol_out%fft()
-            if( l_apply_bfac ) call vol_out%apply_bfac(params%bfac)
-            if( has_fsc )then
-                call vol_out%apply_filter(optlp)
-            else
-                call vol_out%bp(0., lplim)
-            endif
-            call vol_out%ifft
-        end subroutine apply_classical_transfer
-
         integer function postprocess_nu_seed_highres_steps() result(nsteps)
             integer :: base_find, target_find
             base_find   = calc_fourier_index(4.,     box, smpd)
             target_find = calc_fourier_index(lplim,  box, smpd)
             nsteps = max(0, target_find - base_find)
         end function postprocess_nu_seed_highres_steps
-
-        subroutine cleanup_classical_postprocess_aux_candidate()
-            integer :: i
-            if( allocated(aux_even) )then
-                do i = 1, size(aux_even)
-                    call aux_even(i)%kill
-                end do
-                deallocate(aux_even)
-            endif
-            if( allocated(aux_odd) )then
-                do i = 1, size(aux_odd)
-                    call aux_odd(i)%kill
-                end do
-                deallocate(aux_odd)
-            endif
-            if( allocated(aux_pproc) )then
-                do i = 1, size(aux_pproc)
-                    call aux_pproc(i)%kill
-                end do
-                deallocate(aux_pproc)
-            endif
-        end subroutine cleanup_classical_postprocess_aux_candidate
 
         type(string) function raw_halfmap_name( fname ) result(raw_fname)
             class(string), intent(in) :: fname

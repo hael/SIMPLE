@@ -153,19 +153,18 @@ contains
     end subroutine nu_filter_vol
 
     module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols, &
-            &global_filter, l_classical_outside_mask )
+            &global_filter )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_lp, vol_pproc
         real,         intent(in)  :: global_lp, global_bfac
         type(image), optional, intent(in) :: aux_vols(:)
         real, optional, intent(in) :: global_filter(:)
-        logical, optional, intent(in) :: l_classical_outside_mask
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_pproc(:,:,:)
         real(kind=c_float), pointer :: rmat_aux_classical(:,:,:) => null()
         integer :: icut, winsz
         real    :: edge_mean, local_lp, local_bfac, antialias_lp
-        logical :: l_have_classical_aux, l_classical_window, l_classical_outside, l_have_global_filter
+        logical :: l_have_classical_aux, l_classical_window, l_have_global_filter
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_postprocess_vol')
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
         if( .not.allocated(srcmap)  ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_postprocess_vol')
@@ -177,9 +176,6 @@ contains
         l_have_classical_aux = present(aux_vols)
         if( l_have_classical_aux ) l_have_classical_aux = size(aux_vols) >= 1
         if( l_have_classical_aux ) call aux_vols(1)%get_rmat_ptr(rmat_aux_classical)
-        l_classical_outside = .false.
-        if( present(l_classical_outside_mask) ) l_classical_outside = l_classical_outside_mask
-        l_classical_outside = l_classical_outside .and. l_have_classical_aux
         call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
         call vol_in_ft%set_wthreads(.true.)
@@ -218,11 +214,6 @@ contains
             endif
         end do
         if( present(aux_vols) ) call copy_nu_postprocess_aux_voxels(aux_vols, rmat_pproc)
-        if( l_classical_outside )then
-            call copy_nu_postprocess_outside_mask(rmat_aux_classical, rmat_pproc)
-            write(logfhandle,'(A)') &
-                &'>>> NU postprocess outside spherical support copied from classical FSC transfer'
-        endif
         call vol_in_ft%kill
         call vol_filt%kill
     contains
@@ -383,21 +374,5 @@ contains
             !$omp end parallel do
         end do
     end subroutine copy_nu_postprocess_aux_voxels
-
-    subroutine copy_nu_postprocess_outside_mask( rmat_src, rmat_dst )
-        real(kind=c_float), intent(in)    :: rmat_src(:,:,:)
-        real(kind=c_float), intent(inout) :: rmat_dst(:,:,:)
-        integer :: i, j, k
-        if( .not.allocated(nu_lmask) ) return
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) rmat_dst(i,j,k) = rmat_src(i,j,k)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine copy_nu_postprocess_outside_mask
 
 end submodule simple_nu_filter_apply

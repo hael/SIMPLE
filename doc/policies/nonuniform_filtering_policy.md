@@ -240,11 +240,11 @@ the project matching bandwidth.
 The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
 `volassemble` or the iterative refinement path. It estimates the NU filter map
 from raw even/odd half maps without ML-regularized auxiliary candidates. It
-seeds the base bank through the global FSC resolution, adds a classical
-auxiliary candidate at the global FSC resolution, and keeps the final transfer
-bounded by the global FSC-derived filter. This keeps the classical FSC-supported
-transfer map as an explicit source alternative without allowing tiny local
-islands to extend the postprocess bandwidth.
+seeds the base bank through the global FSC resolution and keeps the final
+transfer bounded by the global FSC-derived filter. This keeps standalone
+postprocessing to a single NU base-bank label field without allowing tiny local
+islands or auxiliary-source patchwork to extend or mix the postprocess
+bandwidth.
 
 Automated `postprocess_nu` is restricted to the terminal all-particle map
 produced by `refine3D_auto` in either NU filter mode, where the particle
@@ -270,25 +270,10 @@ The final ab initio output copy stage must not propagate stale `_pproc_nu` or
 
 `postprocess_nu` first writes the standard classically postprocessed comparison
 outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
-the mirrored `_pproc_mirr` map when mirroring is enabled. It then inserts the
-classical FSC-filtered half-map pair as an auxiliary candidate in the NU
-half-map competition. This candidate is assigned the global FSC resolution and
-the base bank is seeded to that resolution. If the classical auxiliary
-candidate wins a voxel, the final NU postprocess map copies that voxel from a
-classical transfer map where the global B factor is applied first and the
-FSC-derived filter is applied second, matching the ordinary postprocess
-ordering. Base-bank voxels within `0.5 A` of the global FSC resolution are also
-copied from this classical transfer map so the immediate FSC-resolution
-neighborhood mirrors the ordinary postprocess path exactly. The `_pproc_nu`
-output itself is not masked; the support mask controls only NU candidate
-selection. For `automsk=no`, voxels outside the spherical `mskdiam` support are
-copied from the classical FSC transfer map instead of the coarsest NU bank
-member.
-
-In this postprocess workflow, the classical auxiliary candidate is treated as a
-source alternative rather than an ordered low-pass rung. Its Potts boundary cost
-is source-aware, so neighboring base-bank voxels do not suppress assignment to
-the classical map by resolution-distance penalty alone.
+the mirrored `_pproc_mirr` map when mirroring is enabled. It then builds the NU
+base bank through the global FSC resolution without adding a classical
+auxiliary source to the half-map competition. The `_pproc_nu` output itself is
+not masked; the support mask controls only NU candidate selection.
 
 When `automsk=yes` or `automsk=tight`, `postprocess_nu` builds the NU support
 mask from the same automasking machinery used elsewhere. Voxels outside this

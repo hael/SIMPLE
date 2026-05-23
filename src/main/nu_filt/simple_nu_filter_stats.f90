@@ -325,8 +325,97 @@ contains
         else
             write(logfhandle,'(A)') '    Continuity assessment: no neighbor pairs found in mask; analysis is inconclusive'
         end if
+        call log_nu_source_neighbor_continuity(mask)
         write(logfhandle,'(A)') ''
         deallocate(stepdiff_counts)
     end subroutine analyze_filtmap_neighbor_continuity
+
+    subroutine log_nu_source_neighbor_continuity( mask )
+        logical, intent(in) :: mask(:,:,:)
+        integer :: i, j, k, di, dj, dk, ni, nj, nk, nx, ny, nz
+        integer :: n_analyzed, n_base_selected, n_aux_selected
+        integer :: n_source_pairs, n_source_boundary_pairs, n_source_identical_pairs
+        integer :: n_voxels_with_source_boundary, n_boundary_neighbors
+        real    :: pct_aux, pct_pairs, pct_vox
+        if( .not.allocated(srcmap) ) return
+        n_aux_selected = count(mask .and. srcmap /= 1)
+        if( n_aux_selected == 0 ) return
+        n_analyzed      = count(mask)
+        n_base_selected = count(mask .and. srcmap == 1)
+        nx = size(mask, 1)
+        ny = size(mask, 2)
+        nz = size(mask, 3)
+        n_source_pairs                   = 0
+        n_source_boundary_pairs          = 0
+        n_source_identical_pairs         = 0
+        n_voxels_with_source_boundary    = 0
+        !$omp parallel do collapse(3) schedule(static) default(shared) &
+        !$omp private(i,j,k,di,dj,dk,ni,nj,nk,n_boundary_neighbors) &
+        !$omp reduction(+:n_source_pairs,n_source_boundary_pairs,n_source_identical_pairs, &
+        !$omp n_voxels_with_source_boundary)
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.mask(i,j,k) ) cycle
+                    n_boundary_neighbors = 0
+                    do dk = -1, 1
+                        do dj = -1, 1
+                            do di = -1, 1
+                                if( di == 0 .and. dj == 0 .and. dk == 0 ) cycle
+                                ni = i + di
+                                nj = j + dj
+                                nk = k + dk
+                                if( ni < 1 .or. ni > nx ) cycle
+                                if( nj < 1 .or. nj > ny ) cycle
+                                if( nk < 1 .or. nk > nz ) cycle
+                                if( .not.mask(ni,nj,nk) ) cycle
+                                n_source_pairs = n_source_pairs + 1
+                                if( srcmap(i,j,k) == srcmap(ni,nj,nk) )then
+                                    n_source_identical_pairs = n_source_identical_pairs + 1
+                                else
+                                    n_source_boundary_pairs = n_source_boundary_pairs + 1
+                                    n_boundary_neighbors = n_boundary_neighbors + 1
+                                endif
+                            end do
+                        end do
+                    end do
+                    if( n_boundary_neighbors > 0 ) n_voxels_with_source_boundary = &
+                        &n_voxels_with_source_boundary + 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        pct_aux = 0.
+        if( n_analyzed > 0 ) pct_aux = 100. * real(n_aux_selected) / real(n_analyzed)
+        pct_pairs = 0.
+        if( n_source_pairs > 0 ) pct_pairs = 100. * real(n_source_boundary_pairs) / real(n_source_pairs)
+        pct_vox = 0.
+        if( n_analyzed > 0 ) pct_vox = 100. * real(n_voxels_with_source_boundary) / real(n_analyzed)
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') '>>> NU SOURCE CONTINUITY'
+        write(logfhandle,'(A,I12)') '    Mask voxels:      ', n_analyzed
+        write(logfhandle,'(A,I12)') '    Base-bank voxels: ', n_base_selected
+        write(logfhandle,'(A,I12,A,F8.2,A)') '    Auxiliary voxels: ', n_aux_selected, ' (', pct_aux, '%)'
+        write(logfhandle,'(A,I12,A,F8.2,A)') '    Voxels touching a source boundary: ', &
+            &n_voxels_with_source_boundary, ' (', pct_vox, '%)'
+        if( n_source_pairs > 0 )then
+            write(logfhandle,'(A,I14)') '    Neighbor pairs examined: ', n_source_pairs
+            write(logfhandle,'(A,I14)') '      same source:      ', n_source_identical_pairs
+            write(logfhandle,'(A,I14,A,F8.2,A)') '      source boundary:  ', &
+                &n_source_boundary_pairs, ' (', pct_pairs, '%)'
+        endif
+        if( n_source_pairs > 0 )then
+            if( pct_pairs <= 5. )then
+                write(logfhandle,'(A)') &
+                    &'    Source assessment: low aux/base boundary rate'
+            else if( pct_pairs <= 10. )then
+                write(logfhandle,'(A)') &
+                    &'    Source assessment: moderate aux/base boundary rate; inspect auxiliary assignments'
+            else
+                write(logfhandle,'(A)') &
+                    &'    Source assessment: high aux/base boundary rate; auxiliary source may be patchy'
+            endif
+        endif
+    end subroutine log_nu_source_neighbor_continuity
 
 end submodule simple_nu_filter_stats
