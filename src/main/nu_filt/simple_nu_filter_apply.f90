@@ -173,9 +173,6 @@ contains
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_postprocess_vol')
         if( global_lp <= TINY ) THROW_HARD('Global low-pass limit must be positive; nu_postprocess_vol')
         l_have_global_filter = present(global_filter)
-        if( l_have_global_filter )then
-            if( size(global_filter) /= box ) THROW_HARD('Global FSC filter size mismatch; nu_postprocess_vol')
-        endif
         call validate_nu_postprocess_aux_vols(aux_vols)
         l_have_classical_aux = present(aux_vols)
         if( l_have_classical_aux ) l_have_classical_aux = size(aux_vols) >= 1
