@@ -27,13 +27,6 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Postprocess workflows seed the base bank to the global FSC resolution. They
-! keep the transfer bounded by the global FSC low-pass while applying
-! resolution-dependent B factors for base-bank voxels:
-!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
-!    call optimize_nu_cutoff_finds()
-!    call nu_postprocess_vol(vol, vol_lp, vol_pproc, fsc0143, bfac)
-!
 ! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
 ! base low-pass bank during voxelwise optimization.
 !
@@ -45,7 +38,7 @@ use simple_tent_smooth, only: tent_smooth_3d
 use simple_neighs,      only: neigh_8_3D
 implicit none
 
-public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, nu_postprocess_vol, &
+public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
@@ -376,15 +369,6 @@ interface
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_out
     end subroutine nu_filter_vol
-
-    module subroutine nu_postprocess_vol( vol_in, vol_lp, vol_pproc, global_lp, global_bfac, aux_vols, &
-            &global_filter )
-        class(image),          intent(in)  :: vol_in
-        class(image),          intent(out) :: vol_lp, vol_pproc
-        real,                  intent(in)  :: global_lp, global_bfac
-        type(image), optional, intent(in)  :: aux_vols(:)
-        real,        optional, intent(in)  :: global_filter(:)
-    end subroutine nu_postprocess_vol
 
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )

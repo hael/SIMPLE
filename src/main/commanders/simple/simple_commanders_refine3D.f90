@@ -48,7 +48,6 @@ contains
     subroutine exec_refine3D_auto( self, cline )
         use simple_abinitio_utils, only: write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
-        use simple_commanders_volops, only: postprocess_nu_volume_from_files
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &extend_nu_filter_highres_shells, get_nu_filtmap_finest_selected_lp
@@ -71,8 +70,7 @@ contains
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         real    :: target_updates_per_particle, bootstrap_nu_align_lp
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_cap, maxits_user, maxits_requested
-        logical :: l_autoscale, l_have_init_vol, l_maxits_defined, l_final_nu_postprocess
-        logical :: l_pre_refine3D
+        logical :: l_autoscale, l_have_init_vol, l_maxits_defined, l_pre_refine3D
         character(len=16) :: workflow_label
         ! commanders
         type(commander_rec3D)    :: xrec3D
@@ -145,7 +143,6 @@ contains
         endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
-        l_final_nu_postprocess = params%l_nonuniform .and. .not. l_pre_refine3D
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         call set_refine3D_auto_sampling()
         l_have_init_vol = .false.
@@ -241,63 +238,21 @@ contains
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
         call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
-        if( l_final_nu_postprocess )then
-            call cline_rec3D%set('postprocess', 'no')
+        call cline_rec3D%set('postprocess', 'yes')
+        if( params%l_nonuniform )then
             call cline_rec3D%set('filt_mode', 'none')
-        else
-            call cline_rec3D%set('postprocess', 'yes')
         endif
         call cline_rec3D%set('nu_refine', 'no')
         call xrec3D%execute(cline_rec3D)
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params_final_rec%box_crop
         params_final_rec%smpd = params_final_rec%smpd_crop
-        if( l_final_nu_postprocess )then
-            call propagate_final_nu_postprocess_automsk()
-            call postprocess_refine3D_auto_nu_final()
-        endif
         call spproj%read_segment('out', params_final_rec%projfile)
-        call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%res_target, &
-            &l_copy_nu_products=l_final_nu_postprocess)
+        call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%res_target)
         call spproj%kill
         call init_vol%kill
 
     contains
-
-        subroutine postprocess_refine3D_auto_nu_final()
-            type(string) :: fname_vol, fname_even, fname_odd, fname_fsc
-            integer      :: state, nptcls_dummy, ldim_final(3)
-            write(logfhandle,'(A)') '>>> REFINE3D_AUTO FINAL MAP: running automated NU postprocessing'
-            write(logfhandle,'(A,A)') '>>> REFINE3D_AUTO FINAL MAP: postprocess_nu automsk=', &
-                &trim(params_final_rec%automsk)
-            do state = 1, params_final_rec%nstates
-                fname_vol = refine3D_state_vol_fname(state)
-                if( .not. file_exists(fname_vol) )then
-                    call fname_vol%kill
-                    cycle
-                endif
-                fname_even = refine3D_state_halfvol_fname(state, 'even')
-                fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
-                fname_fsc  = refine3D_fsc_fname(state)
-                call find_ldim_nptcls(fname_vol, ldim_final, nptcls_dummy)
-                call postprocess_nu_volume_from_files(fname_vol, fname_even, fname_odd, fname_fsc, &
-                    &ldim_final(1), params_final_rec%smpd, params_final_rec, cline_rec3D)
-                call fname_vol%kill
-                call fname_even%kill
-                call fname_odd%kill
-                call fname_fsc%kill
-            enddo
-        end subroutine postprocess_refine3D_auto_nu_final
-
-        subroutine propagate_final_nu_postprocess_automsk()
-            if( trim(params%automsk) .ne. 'no' )then
-                params_final_rec%automsk = params%automsk
-                call cline_rec3D%set('automsk', params%automsk)
-            else
-                params_final_rec%automsk = 'no'
-                call cline_rec3D%set('automsk', 'no')
-            endif
-        end subroutine propagate_final_nu_postprocess_automsk
 
         logical function project_init_vol_compatible() result( l_compatible )
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &

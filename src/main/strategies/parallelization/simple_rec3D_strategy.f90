@@ -346,7 +346,7 @@ contains
         if( cline%defined('part') )return
         if( params%l_nonuniform )then
             write(logfhandle,'(A)') &
-                &'>>> reconstruct3D postprocess: using classical postprocessing; automated postprocess_nu is refine3D_auto-only'
+                &'>>> reconstruct3D postprocess: using classical postprocessing'
         endif
         do state = 1, params%nstates
             params_pp = params

@@ -164,8 +164,8 @@ competition from one that is removed by the spatial prior.
 ### Ordered-label smoothing
 
 Ordered-label smoothing is always active in the NU filter. Standalone
-`nu_filt3D`, iterative `volassemble`, coupled high-resolution refinement, and
-the `postprocess_nu` transfer workflow all use the same smoothing policy.
+`nu_filt3D`, iterative `volassemble`, and coupled high-resolution refinement
+all use the same smoothing policy.
 
 The Cartesian `volassemble` path and standalone `nu_filt3D` therefore call the
 optimizer without any smoothing switch:
@@ -211,8 +211,7 @@ the same iteration may challenge the next Fourier shell; the walk stops at the
 first unattempted challenger or the first challenger below this conservative
 frontier rule. Each challenge logs the old/new Fourier shell, tested frontier
 size, unary wins, and accepted-shell depth for the next iteration. The shell
-extension helper still supports `accept_pct=0` for manual diagnostics, but
-standalone `postprocess_nu` does not run post-FSC shell extension.
+extension helper still supports `accept_pct=0` for manual diagnostics.
 
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected
@@ -237,22 +236,12 @@ active, user-facing `filt_mode=nonuniform` leaves this lpset path, deletes the
 explicit command-line `lp`, and lets the NU-refined gold-standard policy update
 the project matching bandwidth.
 
-The uncoupled postprocessing workflow is owned by `postprocess_nu`, not by
-`volassemble` or the iterative refinement path. It estimates the NU filter map
-from raw even/odd half maps without ML-regularized auxiliary candidates. It
-seeds the base bank through the global FSC resolution and keeps the final
-transfer bounded by the global FSC-derived filter. This keeps standalone
-postprocessing to a single NU base-bank label field without allowing tiny local
-islands or auxiliary-source patchwork to extend or mix the postprocess
-bandwidth.
-
-Automated `postprocess_nu` is restricted to the terminal all-particle map
-produced by `refine3D_auto` in either NU filter mode, where the particle
-refinement has already been driven by iteratively refined NU references.
-Generic `reconstruct3D` postprocessing, including terminal ab initio
-reconstruction, must use the classical postprocessing path even when earlier
-reconstruction stages used a NU `filt_mode`. The standalone `postprocess_nu`
-command remains available for explicit manual experiments.
+Map postprocessing is classical-only. `postprocess` and the automatic
+`reconstruct3D` postprocess step use the ordinary global FSC/B-factor path even
+when earlier reconstruction stages used a NU `filt_mode`. Nonuniform filtering
+remains a volume-domain reference-generation feature that writes `_nu_filt`
+derived products during assembly; it does not define a separate final-map
+postprocess workflow.
 
 The candidate objective bank should be stored only for voxels inside the NU
 mask. Full-volume objective arrays are temporary work buffers for objective
@@ -261,49 +250,10 @@ unary costs used for candidate selection and ordered-label smoothing are
 mask-packed. Objective values outside the NU mask must not contribute to
 smoothed in-mask unary costs.
 
-Terminal original-sampling `abinitio3D` reconstruction does not automatically
-run `postprocess_nu`. If staged ab initio refinement used a NU `filt_mode`, that
-policy controls the staged `_nu_filt` reference generation, but the terminal
-`reconstruct3D` postprocessing remains classical.
-The final ab initio output copy stage must not propagate stale `_pproc_nu` or
-`_lp_nu` products unless an explicit workflow has produced and requested them.
-
-`postprocess_nu` first writes the standard classically postprocessed comparison
-outputs using the ordinary FSC-derived filtering path: `_pproc` and `_lp`, plus
-the mirrored `_pproc_mirr` map when mirroring is enabled. It then builds the NU
-base bank through the global FSC resolution without adding a classical
-auxiliary source to the half-map competition. The `_pproc_nu` output itself is
-not masked; the support mask controls only NU candidate selection.
-
-When `automsk=yes` or `automsk=tight`, `postprocess_nu` builds the NU support
-mask from the same automasking machinery used elsewhere. Voxels outside this
-support are forced to the coarsest base-bank label during objective
-optimization, so exterior density adopts the lowest-resolution candidate rather
-than participating in the local filter competition. The automated final
-`postprocess_nu` call from `refine3D_auto` forwards the parent `automsk` value
-(`yes` or `tight`) to preserve this automask-specific exterior policy.
-
-Base-bank voxels still use the NU filter map as a local postprocessing
-transfer-function selector for the merged reconstruction. Bins at or better
-than the global FSC resolution use the global B factor exactly. Worse
-local-resolution bins receive an added positive-B damping offset through an
-asymmetric sigmoid, with the default inflection near 8 A. The size of this
-offset is derived by interpolating from the fitted global B factor at the
-global FSC boundary toward a fixed positive-B endpoint. That endpoint is
-computed from a fixed damping reference B factor, not from the fitted global B
-factor used for sharpening. With the current defaults, maximally damped bins
-approach the positive-B endpoint implied by `NU_POSTPROCESS_DAMPING_BFAC_REF`,
-so low-resolution downweighting does not become weak just because the fitted
-global B-factor magnitude is smaller. The sigmoid fraction is normalized to be
-zero at the global FSC resolution, so the B-factor field is continuous at the
-boundary between classically sharpened and damped regions. Base-bank bins are
-then filtered with the same global FSC-derived filter used by the classical
-path. When only an explicit `lp` fallback is available, the transfer uses the
-4-pixel Hann antialiasing window at that global low-pass. The final postprocess
-map therefore remains FSC-bounded while retaining local differential B-factor
-damping. `_lp_nu` is written as the corresponding unsharpened globally filtered
-map. The NU products are written separately as `_pproc_nu` and `_lp_nu`, plus
-`_pproc_nu_mirr` when mirroring is enabled.
+Terminal original-sampling `abinitio3D` reconstruction uses the same classical
+postprocessing policy. If staged ab initio refinement used a NU `filt_mode`,
+that policy controls the staged `_nu_filt` reference generation, but the
+terminal postprocess map remains classical.
 
 ## Strengths of the current design
 

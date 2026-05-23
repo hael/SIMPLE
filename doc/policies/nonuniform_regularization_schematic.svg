@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1260" viewBox="0 0 1800 1260" role="img" aria-labelledby="title desc">
   <title id="title">SIMPLE nonuniform filtering and refinement schematic</title>
-  <desc id="desc">Geometry-first schematic of SIMPLE nonuniform filtering in abinitio3D, refine3D_auto, and postprocess_nu, showing local labels, Potts regularization, and constrained high-resolution refinement.</desc>
+  <desc id="desc">Geometry-first schematic of SIMPLE nonuniform filtering in abinitio3D and refine3D_auto, showing local labels, Potts regularization, constrained high-resolution refinement, and classical final postprocessing.</desc>
   <defs>
     <style>
       .bg { fill: #f6f5ef; }
@@ -322,8 +322,8 @@
   <g transform="translate(1200 498)">
     <rect class="panel gold-stroke" x="0" y="0" width="530" height="642" rx="18" filter="url(#shadow)" />
     <rect x="0" y="0" width="530" height="78" rx="18" fill="#fff4dc" />
-    <text class="panel-title" x="30" y="34">postprocess_nu</text>
-    <text class="small" x="30" y="58">automated only for refine3D_auto final maps; manual otherwise</text>
+    <text class="panel-title" x="30" y="34">classical postprocess</text>
+    <text class="small" x="30" y="58">final maps use the global FSC/B-factor path</text>
 
     <g transform="translate(32 104)">
       <text class="label" x="0" y="0">label map is estimated from half maps</text>
@@ -333,15 +333,15 @@
         <path d="M112,42 C72,48 46,76 47,111 C49,153 89,176 139,171 C194,165 232,134 229,96 C226,59 169,34 112,42 Z" />
       </clipPath>
       <rect x="58" y="57" width="150" height="96" fill="url(#heat)" opacity="0.65" clip-path="url(#postClip)" />
-      <text class="small" x="260" y="66">same local competition</text>
-      <text class="small" x="260" y="88">plus classical FSC aux candidate</text>
-      <text class="small" x="260" y="110">but no E-step coupling</text>
+      <text class="small" x="260" y="66">NU labels remain reference products</text>
+      <text class="small" x="260" y="88">final map postprocessing is classical</text>
+      <text class="small" x="260" y="110">no local transfer-function mixing</text>
     </g>
 
     <line class="arrow" x1="265" y1="256" x2="265" y2="290" />
 
     <g transform="translate(32 296)">
-      <text class="label" x="0" y="0">resolution-dependent sharpening model</text>
+      <text class="label" x="0" y="0">global sharpening model</text>
       <rect class="soft" x="0" y="18" width="466" height="162" rx="12" />
       <line x1="38" y1="138" x2="410" y2="138" stroke="#9aa5af" stroke-width="1.2" />
       <line x1="62" y1="38" x2="62" y2="142" stroke="#9aa5af" stroke-width="1.2" />
@@ -349,17 +349,17 @@
       <line x1="218" y1="46" x2="218" y2="144" stroke="#b94a48" stroke-width="2" stroke-dasharray="6 5" />
       <text class="tiny" x="178" y="160">global FSC</text>
       <text class="tiny" x="74" y="56">global B</text>
-      <text class="tiny" x="300" y="60">fixed-B sigmoid damping</text>
-      <text class="small" x="38" y="184">base bins use NU B/Hann transfer; aux voxels use classical B then FSC filter</text>
+      <text class="tiny" x="300" y="60">classical FSC filter</text>
+      <text class="small" x="38" y="184">final maps use the same B-factor and FSC filter everywhere</text>
     </g>
 
     <line class="arrow" x1="265" y1="486" x2="265" y2="520" />
 
     <g transform="translate(32 526)">
       <rect class="soft" x="0" y="0" width="466" height="82" rx="12" />
-      <text class="label" x="20" y="28">global antialiasing and products</text>
-      <text class="small" x="20" y="52">4-pixel Hann window at the finest active NU bin</text>
-      <text class="mono" x="20" y="72">*_pproc_nu, *_lp_nu, plus classic postprocess</text>
+      <text class="label" x="20" y="28">classical final products</text>
+      <text class="small" x="20" y="52">NU filtering writes *_nu_filt references only</text>
+      <text class="mono" x="20" y="72">*_pproc, *_lp, optional *_pproc_mirr</text>
     </g>
   </g>
 

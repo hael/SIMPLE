@@ -261,11 +261,10 @@ filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
 all-particle `reconstruct3D` pass leaves refinement and writes the final half
-maps and merged map. When a NU `filt_mode` is active, `refine3D_auto` then
-explicitly runs automated `postprocess_nu` for that final map. This is the only
-automated NU postprocessing path, because it is the path where particle
-refinement has already been coupled to iteratively refined NU references.
-Generic `reconstruct3D` postprocessing remains classical.
+maps and merged map. Final-map postprocessing is classical-only, even when the
+refinement iterations used NU-filtered references. Generic `reconstruct3D`
+postprocessing and `refine3D_auto` terminal postprocessing therefore use the
+same global FSC/B-factor path.
 
 In the coupled `nu_refine` path, gold-standard 3D matching must not continue to
 derive its alignment low-pass limit solely from the global FSC once NU-filtered

@@ -546,8 +546,7 @@ contains
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
         logical,               intent(in)    :: l_postprocess
-        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_pproc_nu, vol_lp_nu, &
-            &vol_mirr, sigma_star
+        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         integer      :: state, pop, stkind, ind_in_stk, nptcls, ldim(3), sigma_iter, bootstrap_sigma_iter
         real         :: smpd
@@ -584,16 +583,8 @@ contains
                 if( file_exists(vol_pproc) ) call del_file(vol_pproc)
                 vol_mirr = add2fbody(vol_pproc, MRC_EXT, MIRR_SUFFIX)
                 if( file_exists(vol_mirr) ) call del_file(vol_mirr)
-                vol_lp_nu = add2fbody(vol_name, MRC_EXT, LP_NU_SUFFIX)
-                if( file_exists(vol_lp_nu) ) call del_file(vol_lp_nu)
-                vol_pproc_nu = add2fbody(vol_name, MRC_EXT, PPROC_NU_SUFFIX)
-                if( file_exists(vol_pproc_nu) ) call del_file(vol_pproc_nu)
-                vol_mirr = add2fbody(vol_pproc_nu, MRC_EXT, MIRR_SUFFIX)
-                if( file_exists(vol_mirr) ) call del_file(vol_mirr)
                 call vol_name%kill
                 call vol_pproc%kill
-                call vol_pproc_nu%kill
-                call vol_lp_nu%kill
                 call vol_mirr%kill
             enddo
         endif
@@ -710,19 +701,14 @@ contains
 
     end subroutine calc_final_rec
 
-    subroutine write_final_rec_outputs( params, spproj, lp, l_copy_nu_products )
+    subroutine write_final_rec_outputs( params, spproj, lp )
         class(parameters), intent(in) :: params
         class(sp_project), intent(in) :: spproj
         real,              intent(in) :: lp
-        logical, optional, intent(in) :: l_copy_nu_products
         type(string) :: str_state, vol_name, vol_final, vol_final_lp
         type(string) :: vol_pproc, vol_final_pproc, vol_mirr, vol_final_mirr
-        type(string) :: vol_pproc_nu, vol_final_pproc_nu, vol_lp_nu, vol_final_lp_nu
         integer :: state
         real    :: lp_snapshot
-        logical :: l_copy_nu
-        l_copy_nu = .false.
-        if( present(l_copy_nu_products) ) l_copy_nu = l_copy_nu_products
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)
@@ -745,27 +731,6 @@ contains
             else
                 if( file_exists(vol_final_pproc) ) call del_file(vol_final_pproc)
                 vol_final_mirr = add2fbody(vol_final_pproc, MRC_EXT, MIRR_SUFFIX)
-                if( file_exists(vol_final_mirr) ) call del_file(vol_final_mirr)
-            endif
-            vol_lp_nu       = add2fbody(vol_name,  MRC_EXT, LP_NU_SUFFIX)
-            vol_final_lp_nu = add2fbody(vol_final, MRC_EXT, LP_NU_SUFFIX)
-            if( l_copy_nu .and. file_exists(vol_lp_nu) )then
-                call simple_copy_file(vol_lp_nu, vol_final_lp_nu)
-            else if( file_exists(vol_final_lp_nu) )then
-                call del_file(vol_final_lp_nu)
-            endif
-            vol_pproc_nu       = add2fbody(vol_name,  MRC_EXT, PPROC_NU_SUFFIX)
-            vol_final_pproc_nu = add2fbody(vol_final, MRC_EXT, PPROC_NU_SUFFIX)
-            if( l_copy_nu .and. file_exists(vol_pproc_nu) )then
-                call simple_copy_file(vol_pproc_nu, vol_final_pproc_nu)
-                vol_mirr = add2fbody(vol_pproc_nu, MRC_EXT, MIRR_SUFFIX)
-                if( file_exists(vol_mirr) )then
-                    vol_final_mirr = add2fbody(vol_final_pproc_nu, MRC_EXT, MIRR_SUFFIX)
-                    call simple_copy_file(vol_mirr, vol_final_mirr)
-                endif
-            else
-                if( file_exists(vol_final_pproc_nu) ) call del_file(vol_final_pproc_nu)
-                vol_final_mirr = add2fbody(vol_final_pproc_nu, MRC_EXT, MIRR_SUFFIX)
                 if( file_exists(vol_final_mirr) ) call del_file(vol_final_mirr)
             endif
         enddo

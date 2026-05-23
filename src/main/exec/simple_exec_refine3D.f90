@@ -4,7 +4,7 @@ use simple_cmdline,              only: cmdline
 use simple_string,               only: string
 use simple_exec_helpers,         only: restarted_exec
 use simple_commanders_mask,      only: commander_automask
-use simple_commanders_volops,    only: commander_postprocess, commander_postprocess_nu
+use simple_commanders_volops,    only: commander_postprocess
 use simple_commanders_rec,       only: commander_bootstrap_rec3D, commander_rec3D
 use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto
 implicit none
@@ -14,7 +14,6 @@ private
 
 type(commander_automask)      :: xautomask
 type(commander_postprocess)   :: xpostprocess
-type(commander_postprocess_nu) :: xpostprocess_nu
 type(commander_rec3D)         :: xrec3D
 type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
 type(commander_refine3D_auto) :: xrefine3D_auto
@@ -35,8 +34,6 @@ contains
                 call xautomask%execute(cline)
             case( 'postprocess' )
                 call xpostprocess%execute(cline)
-            case( 'postprocess_nu' )
-                call xpostprocess_nu%execute(cline)
             case( 'reconstruct3D' )
                 call xrec3D%execute(cline)
             case( 'bootstrap_rec3D' )
