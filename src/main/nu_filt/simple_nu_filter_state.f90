@@ -16,7 +16,8 @@ contains
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
         integer, allocatable :: cutoff_finds_tmp(:)
-        integer :: i, n_extra, n_extra_requested, n_valid, new_find, n_added, max_extra, base_find
+        integer :: i, n_extra, n_extra_requested, n_valid, max_extra, base_find
+        integer :: istep, n_extra_retained_requested, n_extra_skip, n_kept_seen
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
         box  = ldim(1)
@@ -32,27 +33,36 @@ contains
             n_extra_requested = min(max(0, n_highres_steps), max(0, box / 2 - base_find))
         endif
         max_extra = max(0, NU_DMAT_CANDIDATE_CAP - size(lowpass_limits) - NU_DMAT_CANDIDATE_HEADROOM)
-        n_extra = min(n_extra_requested, max_extra)
+        n_extra_retained_requested = count_nu_highres_extension_retained_steps(n_extra_requested)
+        n_extra = min(n_extra_retained_requested, max_extra)
+        n_extra_skip = max(0, n_extra_retained_requested - n_extra)
         allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
         do i = 1, size(lowpass_limits)
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
         n_valid = size(lowpass_limits)
-        n_added = 0
-        if( n_extra_requested > n_extra )then
+        if( n_extra_retained_requested > n_extra )then
             write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                 &'>>> NU high-resolution depth ', n_extra_requested, &
                 &' exceeds distance-matrix memory window; using finest ', n_extra, &
-                &' shell step(s) within cap ', NU_DMAT_CANDIDATE_CAP, ' candidates'
+                &' retained shell step(s) within cap ', NU_DMAT_CANDIDATE_CAP, ' candidates'
         endif
-        new_find = cutoff_finds_tmp(n_valid) + max(0, n_extra_requested - n_extra) + 1
-        do while( n_added < n_extra .and. new_find <= box / 2 )
-            if( .not.any(cutoff_finds_tmp(:n_valid) == new_find) )then
+        if( n_extra_requested > 0 .and. NU_HIGHRES_EXTENSION_RETAIN_STRIDE > 1 )then
+            write(logfhandle,'(A,I0,A,I0,A)') &
+                &'>>> NU high-resolution extension bank retention: every ', &
+                &NU_HIGHRES_EXTENSION_RETAIN_STRIDE, &
+                &' shell step(s), plus current terminal shell; requested depth ', &
+                &n_extra_requested
+        endif
+        n_kept_seen = 0
+        do istep = 1, n_extra_requested
+            if( .not.keep_nu_highres_extension_step(istep, n_extra_requested) ) cycle
+            n_kept_seen = n_kept_seen + 1
+            if( n_kept_seen <= n_extra_skip ) cycle
+            if( .not.any(cutoff_finds_tmp(:n_valid) == base_find + istep) )then
                 n_valid = n_valid + 1
-                cutoff_finds_tmp(n_valid) = new_find
-                n_added = n_added + 1
+                cutoff_finds_tmp(n_valid) = base_find + istep
             endif
-            new_find = new_find + 1
         end do
         allocate(cutoff_finds(n_valid))
         cutoff_finds = cutoff_finds_tmp(:n_valid)
@@ -63,6 +73,28 @@ contains
             call butterworth_filter(cutoff_finds(i), bwfilters(:,i))
         end do
     end subroutine init_nu_filter
+
+    module logical function keep_nu_highres_extension_step( istep, finest_step )
+        integer, intent(in) :: istep, finest_step
+        keep_nu_highres_extension_step = .false.
+        if( istep <= 0 .or. finest_step <= 0 ) return
+        if( NU_HIGHRES_EXTENSION_RETAIN_STRIDE <= 1 )then
+            keep_nu_highres_extension_step = .true.
+        else
+            keep_nu_highres_extension_step = &
+                &mod(istep, NU_HIGHRES_EXTENSION_RETAIN_STRIDE) == 0 .or. istep == finest_step
+        endif
+    end function keep_nu_highres_extension_step
+
+    module integer function count_nu_highres_extension_retained_steps( nsteps )
+        integer, intent(in) :: nsteps
+        integer :: istep
+        count_nu_highres_extension_retained_steps = 0
+        do istep = 1, max(0, nsteps)
+            if( keep_nu_highres_extension_step(istep, nsteps) ) &
+                &count_nu_highres_extension_retained_steps = count_nu_highres_extension_retained_steps + 1
+        end do
+    end function count_nu_highres_extension_retained_steps
 
     module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
         class(string), intent(in) :: cache_prefix
@@ -100,9 +132,13 @@ contains
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(nu_mask_index)      ) deallocate(nu_mask_index)
         if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
+        call release_nu_smooth_norm
+    end subroutine release_nu_filter_unary_storage
+
+    module subroutine release_nu_smooth_norm
         if( allocated(nu_smooth_norm)     ) deallocate(nu_smooth_norm)
         nu_smooth_norm_radius = -1
-    end subroutine release_nu_filter_unary_storage
+    end subroutine release_nu_smooth_norm
 
     module subroutine cleanup_nu_filter
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
@@ -168,12 +204,11 @@ contains
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; setup_nu_mask_index')
         if( allocated(nu_mask_index)  ) deallocate(nu_mask_index)
         if( allocated(nu_mask_vox)    ) deallocate(nu_mask_vox)
-        if( allocated(nu_smooth_norm) ) deallocate(nu_smooth_norm)
+        call release_nu_smooth_norm
         n_nu_mask = count(nu_lmask)
         if( n_nu_mask < 1 ) THROW_HARD('l_mask has no true voxels; setup_nu_mask_index')
         allocate(nu_mask_index(ldim(1),ldim(2),ldim(3)), source=0)
         allocate(nu_mask_vox(3,n_nu_mask), source=0)
-        allocate(nu_smooth_norm(ldim(1),ldim(2),ldim(3)), source=0.)
         imask = 0
         do k = 1, ldim(3)
             do j = 1, ldim(2)
@@ -184,12 +219,10 @@ contains
                     nu_mask_vox(1,imask) = i
                     nu_mask_vox(2,imask) = j
                     nu_mask_vox(3,imask) = k
-                    nu_smooth_norm(i,j,k) = 1.
                 end do
             end do
         end do
         if( imask /= n_nu_mask ) THROW_HARD('mask voxel count mismatch; setup_nu_mask_index')
-        nu_smooth_norm_radius = -1
     end subroutine setup_nu_mask_index
 
     module real function nu_objective_smooth_radius_angstrom( lp_angstrom )
@@ -215,7 +248,6 @@ contains
         integer :: i, j, k, radius_px
         real :: x
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; smooth_nu_objective')
-        if( .not.allocated(nu_smooth_norm) ) THROW_HARD('nu_smooth_norm not allocated; smooth_nu_objective')
         if( any(shape(dmat) /= ldim) ) THROW_HARD('dmat shape mismatch; smooth_nu_objective')
         if( any(shape(tmp)  /= ldim) ) THROW_HARD('tmp shape mismatch; smooth_nu_objective')
         radius_px = nu_objective_smooth_radius_pixels(lp_angstrom)
@@ -254,6 +286,9 @@ contains
         integer :: i, j, k
         if( radius_px < 1 ) THROW_HARD('invalid radius; prepare_nu_smooth_norm')
         if( nu_smooth_norm_radius == radius_px ) return
+        if( .not.allocated(nu_smooth_norm) )then
+            allocate(nu_smooth_norm(ldim(1),ldim(2),ldim(3)), source=0.)
+        endif
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)

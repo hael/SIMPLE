@@ -76,6 +76,7 @@ contains
         call vol_even_filt%kill
         call vol_odd_filt%kill
         deallocate(dmat_tmp, dmat_cand)
+        call release_nu_smooth_norm()
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
@@ -105,7 +106,7 @@ contains
     module real function lowpass_limit_to_candidate_coord( lp_angstrom )
         real, intent(in) :: lp_angstrom
         integer :: i, n_base
-        real :: denom, lp_hi, lp_lo
+        real :: coord_hi, coord_lo, denom, lp_hi, lp_lo
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; lowpass_limit_to_candidate_coord')
         n_base = size(cutoff_finds)
         lp_hi = cutoff_find_to_lowpass_limit(1)
@@ -115,7 +116,7 @@ contains
         endif
         lp_lo = cutoff_find_to_lowpass_limit(n_base)
         if( lp_angstrom <= lp_lo )then
-            lowpass_limit_to_candidate_coord = real(n_base)
+            lowpass_limit_to_candidate_coord = nu_candidate_coord_for_label(n_base)
             return
         endif
         do i = 1, n_base - 1
@@ -124,11 +125,14 @@ contains
             if( lp_angstrom <= lp_hi .and. lp_angstrom >= lp_lo )then
                 denom = lp_hi - lp_lo
                 if( denom <= TINY ) cycle
-                lowpass_limit_to_candidate_coord = real(i) + (lp_hi - lp_angstrom) / denom
+                coord_hi = nu_candidate_coord_for_label(i)
+                coord_lo = nu_candidate_coord_for_label(i + 1)
+                lowpass_limit_to_candidate_coord = coord_hi + &
+                    &(coord_lo - coord_hi) * (lp_hi - lp_angstrom) / denom
                 return
             endif
         end do
-        lowpass_limit_to_candidate_coord = real(n_base)
+        lowpass_limit_to_candidate_coord = nu_candidate_coord_for_label(n_base)
     end function lowpass_limit_to_candidate_coord
 
     module real function get_nu_filter_bank_finest_lp()
@@ -154,7 +158,7 @@ contains
     end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
-        integer, allocatable :: candmap(:,:,:)
+        integer(kind=NU_LABEL_KIND), allocatable :: candmap(:,:,:)
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask
         real    :: best_dmat
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -175,9 +179,9 @@ contains
         endif
         if( allocated(filtmap) ) deallocate(filtmap)
         if( allocated(srcmap)  ) deallocate(srcmap)
-        allocate(candmap(nx,ny,nz), source=1)
-        allocate(filtmap(nx,ny,nz), source=1)
-        allocate(srcmap(nx,ny,nz),  source=1)
+        allocate(candmap(nx,ny,nz), source=1_NU_LABEL_KIND)
+        allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
+        allocate(srcmap(nx,ny,nz),  source=1_NU_LABEL_KIND)
         !$omp parallel do collapse(3) schedule(static) default(shared) &
         !$omp private(i,j,k,icand,best_icand,best_dmat,imask) proc_bind(close)
         do k = 1, nz
@@ -197,7 +201,7 @@ contains
                             best_icand = icand
                         end if
                     end do
-                    candmap(i,j,k) = best_icand
+                    candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
                 end do
             end do
         end do
@@ -215,22 +219,23 @@ contains
     end subroutine optimize_nu_cutoff_finds
 
     subroutine cache_nu_extension_frontier_dmats( candmap, n_base )
-        integer, intent(in) :: candmap(:,:,:), n_base
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
         integer :: i, j, k, imask, icand, nx, ny, nz
         nx = size(candmap, 1)
         ny = size(candmap, 2)
         nz = size(candmap, 3)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        allocate(dmat_finest_cached(nx,ny,nz), source=huge(0.))
+        allocate(dmat_finest_cached(n_nu_mask), source=huge(0.))
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,imask,icand) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( .not.nu_lmask(i,j,k) ) cycle
-                    icand = candmap(i,j,k)
+                    icand = int(candmap(i,j,k))
                     if( nu_effective_base_label_for_candidate(icand, n_base) /= n_base ) cycle
                     imask = nu_mask_index(i,j,k)
-                    dmat_finest_cached(i,j,k) = dmats_mask(imask,icand)
+                    dmat_finest_cached(imask) = dmats_mask(imask,icand)
                 end do
             end do
         end do
@@ -238,7 +243,8 @@ contains
     end subroutine cache_nu_extension_frontier_dmats
 
     module subroutine candidate_map_to_filt_and_src( candmap, n_base )
-        integer, intent(in) :: candmap(:,:,:), n_base
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
         integer :: i, j, k, icand, nx, ny, nz
         nx = size(candmap, 1)
         ny = size(candmap, 2)
@@ -254,20 +260,21 @@ contains
                             cycle
                         endif
                     endif
-                    icand = candmap(i,j,k)
+                    icand = int(candmap(i,j,k))
                     ! Base-bank winners preserve their low-pass index in filtmap.
                     ! Auxiliary winners preserve their provenance in srcmap while
                     ! filtmap stores the nearest effective base-bank label for
                     ! diagnostics and map visualization.
                     if( icand <= n_base ) then
                         srcmap(i,j,k)  = 1
-                        filtmap(i,j,k) = icand
+                        filtmap(i,j,k) = int(icand, kind=NU_LABEL_KIND)
                     else
                         ! srcmap numbering:
                         !   1   -> base low-pass bank
                         !   2+  -> auxiliary pair 1, 2, ...
-                        srcmap(i,j,k)  = icand - n_base + 1
-                        filtmap(i,j,k) = nu_effective_base_label_for_candidate(icand, n_base)
+                        srcmap(i,j,k)  = int(icand - n_base + 1, kind=NU_LABEL_KIND)
+                        filtmap(i,j,k) = int(nu_effective_base_label_for_candidate(icand, n_base), &
+                            &kind=NU_LABEL_KIND)
                     end if
                 end do
             end do
@@ -276,7 +283,8 @@ contains
     end subroutine candidate_map_to_filt_and_src
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
-        integer,          intent(in) :: candmap(:,:,:), n_base
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer,          intent(in) :: n_base
         character(len=*), intent(in) :: stage
         integer :: icand, iaux, n_candidates, nmask, nvox, nbasevox, nauxvox, eff_label
         real    :: pct

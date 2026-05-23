@@ -363,6 +363,7 @@ contains
             else
                 call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
             endif
+            if( allocated(l_mask) ) deallocate(l_mask)
             call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
@@ -370,18 +371,18 @@ contains
             endif
             if( params%l_nonuniform_lpset )then
                 if( l_use_bootstrap_aux )then
-                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp(l_mask, aux_resolutions=[aux_lp])
+                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp(aux_resolutions=[aux_lp])
                 else
-                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp(l_mask)
+                    bootstrap_nu_align_lp = get_nu_filtmap_finest_selected_lp()
                 endif
             endif
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             if( l_use_bootstrap_aux )then
-                call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[aux_lp])
+                call print_nu_filtmap_lowpass_stats(aux_resolutions=[aux_lp])
             else
-                call print_nu_filtmap_lowpass_stats(l_mask)
+                call print_nu_filtmap_lowpass_stats()
             endif
-            call analyze_filtmap_neighbor_continuity(l_mask)
+            call analyze_filtmap_neighbor_continuity()
             out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
             out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
             out_avg  = add2fbody(init_vol,  MRC_EXT, NUFILT_SUFFIX)

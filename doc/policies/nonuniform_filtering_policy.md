@@ -213,6 +213,16 @@ frontier rule. Each challenge logs the old/new Fourier shell, tested frontier
 size, unary wins, and accepted-shell depth for the next iteration. The shell
 extension helper still supports `accept_pct=0` for manual diagnostics.
 
+The shell challenge itself stays at the full Fourier sampling rate, but the
+retained high-resolution extension bank is thinned for memory. Accepted odd
+shell steps are kept as temporary frontiers so the next contiguous shell can be
+tested; once the next retained step is accepted, the lower-resolution temporary
+label is dropped and its voxels fall back to the nearest retained coarser base
+label. Persisted high-resolution depth is rebuilt with the same policy: keep
+every second extension shell plus the current terminal shell. This bounds the
+mask-packed unary bank for fine-sampling data sets without skipping any shell
+challenge.
+
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected
 base labels are preserved and unselected high-resolution labels are compacted
@@ -221,6 +231,14 @@ cap remains full after compaction, extension stops rather than allocating an
 unbounded unary bank. Once labels are finalized and no further Potts cleanup is
 needed, the retained unary bank and associated mask-index work arrays are
 released before synthesizing the output volumes.
+
+Large-volume memory ownership is deliberately biased toward mask-packed or
+short-lived state. Label/source maps use a compact integer kind, the finest
+frontier objective cache is stored only as a mask-packed vector, and the caller
+mask can be released after `setup_nu_dmats` copies it into the filter state.
+The normalized smoothing support is allocated lazily for the active radius and
+released after candidate-bank or extension smoothing, rather than retained for
+the whole filtering lifecycle.
 
 In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
 single matching low-pass limit back to the project. This limit is the finest

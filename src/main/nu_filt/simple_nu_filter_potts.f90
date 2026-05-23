@@ -6,7 +6,7 @@ implicit none
 contains
 
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
-        integer, intent(inout) :: candmap(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
         integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged
@@ -46,7 +46,7 @@ contains
                             if( nu_label_smooth_color(i,j,k) /= color ) cycle
                             imask = nu_mask_index(i,j,k)
                             call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
-                            cur_icand  = candmap(i,j,k)
+                            cur_icand  = int(candmap(i,j,k))
                             best_icand = cur_icand
                             best_e     = dmats_mask(imask,cur_icand) + beta * &
                                 &nu_label_smooth_neighborhood_cost(cur_icand, candmap, n_full, nsz)
@@ -61,7 +61,7 @@ contains
                             end do
                             if( best_icand /= cur_icand )then
                                 nchanged = nchanged + 1
-                                candmap(i,j,k) = best_icand
+                                candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
                             endif
                         end do
                     end do
@@ -110,7 +110,8 @@ contains
     end function estimate_nu_label_smooth_beta
 
     module real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )
-        integer, intent(in) :: icand, candmap(:,:,:), neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer, intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer :: ineigh, ni, nj, nk, degree
         nu_label_smooth_neighborhood_cost = 0.
         degree = 0
@@ -121,7 +122,7 @@ contains
             if( .not.nu_lmask(ni,nj,nk) ) cycle
             degree = degree + 1
             nu_label_smooth_neighborhood_cost = nu_label_smooth_neighborhood_cost + &
-                &nu_label_smooth_pair_cost(icand, candmap(ni,nj,nk))
+                &nu_label_smooth_pair_cost(icand, int(candmap(ni,nj,nk)))
         end do
         if( degree > 0 ) nu_label_smooth_neighborhood_cost = nu_label_smooth_neighborhood_cost / real(degree)
     end function nu_label_smooth_neighborhood_cost
@@ -172,7 +173,7 @@ contains
     end function nu_label_smooth_is_better
 
     module real function calc_nu_label_smooth_site_energy( candmap, beta )
-        integer, intent(in) :: candmap(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         real,    intent(in) :: beta
         integer :: i, j, k, imask, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nvox
         real :: energy_sum
@@ -187,8 +188,8 @@ contains
                     if( .not.nu_lmask(i,j,k) ) cycle
                     imask = nu_mask_index(i,j,k)
                     call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
-                    energy_sum = energy_sum + dmats_mask(imask,candmap(i,j,k)) + beta * &
-                        &nu_label_smooth_neighborhood_cost(candmap(i,j,k), candmap, n_full, nsz)
+                    energy_sum = energy_sum + dmats_mask(imask,int(candmap(i,j,k))) + beta * &
+                        &nu_label_smooth_neighborhood_cost(int(candmap(i,j,k)), candmap, n_full, nsz)
                     nvox = nvox + 1
                 end do
             end do

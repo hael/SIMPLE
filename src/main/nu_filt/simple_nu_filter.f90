@@ -13,9 +13,11 @@
 ! empty finer discrete labels do not block shell refinement. Refinement-style
 ! callers accept the next shell only when the challenger wins enough absolute
 ! support and at least 5% of the tested frontier. Diagnostic callers can pass
-! accept_pct=0. for an explicitly permissive shell walk. After the shell walk
-! stops, the final accepted label map is cleaned with the ordered-label Potts
-! prior over the expanded bank.
+! accept_pct=0. for an explicitly permissive shell walk. Accepted extension
+! shells are challenged at the full Fourier sampling rate, but the retained
+! high-resolution bank is thinned to every second shell plus the current
+! terminal shell. After the shell walk stops, the final accepted label map is
+! cleaned with the ordered-label Potts prior over the expanded bank.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -64,6 +66,11 @@ integer,          parameter   :: NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS = 32
 ! When this fills, unselected high-resolution labels are compacted away before
 ! another shell is accepted.
 integer,          parameter   :: NU_DMAT_CANDIDATE_CAP                = 24
+! High-resolution extension still challenges every shell, but retained
+! extension candidates are thinned to this stride. With the default stride of
+! two, odd shell steps are kept only as the temporary frontier needed to test
+! the next even shell step.
+integer,          parameter   :: NU_HIGHRES_EXTENSION_RETAIN_STRIDE    = 2
 integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM           = 2
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
@@ -87,16 +94,17 @@ real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 ! decide aux-vs-base assignments without frequency-ladder Potts bias; raise
 ! slightly if a future dataset needs source-boundary cleanup.
 real,             parameter   :: NU_AUX_SOURCE_BOUNDARY_COST = 0.0
+integer,          parameter   :: NU_LABEL_KIND = selected_int_kind(4)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: dmats_aux_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
-integer,          allocatable :: filtmap(:,:,:)
-integer,          allocatable :: srcmap(:,:,:)
+integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
+integer(kind=NU_LABEL_KIND), allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
-real,             allocatable :: dmat_finest_cached(:,:,:)
+real,             allocatable :: dmat_finest_cached(:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_index(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
@@ -141,6 +149,14 @@ interface
         integer, optional, intent(in) :: n_highres_steps
     end subroutine init_nu_filter
 
+    module logical function keep_nu_highres_extension_step( istep, finest_step )
+        integer, intent(in) :: istep, finest_step
+    end function keep_nu_highres_extension_step
+
+    module integer function count_nu_highres_extension_retained_steps( nsteps )
+        integer, intent(in) :: nsteps
+    end function count_nu_highres_extension_retained_steps
+
     module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
         class(string), intent(in) :: cache_prefix
         integer,       intent(in) :: cutoff_find
@@ -157,6 +173,9 @@ interface
 
     module subroutine release_nu_filter_unary_storage
     end subroutine release_nu_filter_unary_storage
+
+    module subroutine release_nu_smooth_norm
+    end subroutine release_nu_smooth_norm
 
     module subroutine cleanup_nu_filter
     end subroutine cleanup_nu_filter
@@ -243,11 +262,13 @@ interface
     end subroutine optimize_nu_cutoff_finds
 
     module subroutine candidate_map_to_filt_and_src( candmap, n_base )
-        integer, intent(in) :: candmap(:,:,:), n_base
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer, intent(in) :: n_base
     end subroutine candidate_map_to_filt_and_src
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
-        integer,          intent(in) :: candmap(:,:,:), n_base
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+        integer,          intent(in) :: n_base
         character(len=*), intent(in) :: stage
     end subroutine log_nu_candidate_selection_counts
 
@@ -268,7 +289,7 @@ interface
 
     ! In submodule: simple_nu_filter_potts.f90
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
-        integer, intent(inout) :: candmap(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
     end subroutine refine_nu_candidate_map_ordered_labels
 
@@ -277,7 +298,8 @@ interface
     end function estimate_nu_label_smooth_beta
 
     module real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )
-        integer, intent(in) :: icand, candmap(:,:,:), neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer, intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
     end function nu_label_smooth_neighborhood_cost
 
     module real function nu_label_smooth_pair_cost( icand, jcand )
@@ -302,7 +324,7 @@ interface
     end function nu_label_smooth_is_better
 
     module real function calc_nu_label_smooth_site_energy( candmap, beta )
-        integer, intent(in) :: candmap(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         real,    intent(in) :: beta
     end function calc_nu_label_smooth_site_energy
 
@@ -332,7 +354,7 @@ interface
 
     module subroutine init_nu_highres_extension_selection( extend_mask, dmat_old, dmat_new, extend_to_new, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)
-        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
+        real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
         logical, intent(inout) :: extend_to_new(:,:,:)
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection
@@ -340,8 +362,8 @@ interface
     module subroutine init_nu_highres_extension_selection_aux( extend_mask, dmat_old, dmat_new, &
             &extend_choice, n_extended )
         logical, intent(in)    :: extend_mask(:,:,:)
-        real,    intent(in)    :: dmat_old(:,:,:), dmat_new(:,:,:)
-        integer, intent(inout) :: extend_choice(:,:,:)
+        real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:,:,:)
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection_aux
 
@@ -351,7 +373,7 @@ interface
     end subroutine apply_nu_highres_extension_selection
 
     module subroutine apply_nu_highres_extension_selection_aux( extend_choice, old_label, new_label )
-        integer, intent(in) :: extend_choice(:,:,:)
+        integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:,:,:)
         integer, intent(in) :: old_label, new_label
     end subroutine apply_nu_highres_extension_selection_aux
 
@@ -373,37 +395,37 @@ interface
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
         real, allocatable, intent(inout) :: lowpass_vals(:)
-        logical,           intent(in)    :: mask(:,:,:)
+        logical, optional, intent(in)    :: mask(:,:,:)
     end subroutine pack_filtmap_lowpass_limits
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
         type(stats_struct), intent(out) :: statvars
-        logical,            intent(in)  :: mask(:,:,:)
+        logical, optional, intent(in)   :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_stats
 
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
         integer, intent(out) :: counts(:)
         real,    intent(out) :: percentages(:)
-        logical, intent(in)  :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
     module real function get_nu_filtmap_finest_selected_lp( mask, aux_resolutions )
-        logical, intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )
-        logical,        intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
     end subroutine print_filtmap_lowpass_histogram
 
     module subroutine print_nu_filtmap_lowpass_stats( mask, aux_resolutions )
-        logical,        intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
     end subroutine print_nu_filtmap_lowpass_stats
 
     module subroutine analyze_filtmap_neighbor_continuity( mask )
-        logical, intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
     end subroutine analyze_filtmap_neighbor_continuity
 
 end interface

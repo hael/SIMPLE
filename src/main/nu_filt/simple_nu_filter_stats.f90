@@ -7,27 +7,23 @@ contains
 
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
         real, allocatable, intent(inout) :: lowpass_vals(:)
-        logical, intent(in)              :: mask(:,:,:)
+        logical, optional, intent(in)    :: mask(:,:,:)
         integer :: i, j, k, nvals, ival
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before pack_filtmap_lowpass_limits')
-        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in pack_filtmap_lowpass_limits')
-        if( allocated(srcmap) ) then
-            nvals = count(mask .and. srcmap == 1)
-        else
-            nvals = count(mask)
-        end if
+        call require_valid_stats_mask(mask, 'pack_filtmap_lowpass_limits')
+        nvals = count_active_nu_mask(mask, 1)
         if( allocated(lowpass_vals) ) deallocate(lowpass_vals)
         allocate(lowpass_vals(nvals), source=0.)
         ival = 0
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
-                    if( .not. mask(i,j,k) ) cycle
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
                     if( allocated(srcmap) ) then
                         if( srcmap(i,j,k) /= 1 ) cycle
                     end if
                     ival = ival + 1
-                    lowpass_vals(ival) = cutoff_find_to_lowpass_limit(filtmap(i,j,k))
+                    lowpass_vals(ival) = cutoff_find_to_lowpass_limit(int(filtmap(i,j,k)))
                 end do
             end do
         end do
@@ -35,7 +31,7 @@ contains
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
         type(stats_struct), intent(out) :: statvars
-        logical, intent(in)             :: mask(:,:,:)
+        logical, optional, intent(in)   :: mask(:,:,:)
         real, allocatable :: lowpass_vals(:)
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_stats')
         call pack_filtmap_lowpass_limits(lowpass_vals, mask)
@@ -47,33 +43,37 @@ contains
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
         integer, intent(out) :: counts(:)
         real,    intent(out) :: percentages(:)
-        logical, intent(in)  :: mask(:,:,:)
-        integer :: icut, nselected
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer :: i, j, k, icut, nselected
         if( .not.allocated(filtmap)                 ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
         if( .not.allocated(cutoff_finds)            ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_histogram')
         if( size(counts) /= size(cutoff_finds)      ) THROW_HARD('counts size mismatch in calc_filtmap_lowpass_histogram')
         if( size(percentages) /= size(cutoff_finds) ) THROW_HARD('percentages size mismatch in calc_filtmap_lowpass_histogram')
-        if( any(shape(mask) /= shape(filtmap))      ) THROW_HARD('mask shape mismatch in calc_filtmap_lowpass_histogram')
-        if( allocated(srcmap) ) then
-            nselected = count(mask .and. srcmap == 1)
-        else
-            nselected = count(mask)
-        end if
+        call require_valid_stats_mask(mask, 'calc_filtmap_lowpass_histogram')
+        nselected = count_active_nu_mask(mask, 1)
         counts       = 0
         percentages  = 0.
         if( nselected == 0 ) return
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
+                    if( allocated(srcmap) )then
+                        if( srcmap(i,j,k) /= 1 ) cycle
+                    endif
+                    icut = int(filtmap(i,j,k))
+                    if( icut < 1 .or. icut > size(cutoff_finds) ) cycle
+                    counts(icut) = counts(icut) + 1
+                end do
+            end do
+        end do
         do icut = 1, size(cutoff_finds)
-            if( allocated(srcmap) ) then
-                counts(icut) = count(filtmap == icut .and. srcmap == 1 .and. mask)
-            else
-                counts(icut) = count(filtmap == icut .and. mask)
-            end if
             percentages(icut) = 100. * real(counts(icut)) / real(nselected)
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
     module real function get_nu_filtmap_finest_selected_lp( mask, aux_resolutions )
-        logical, intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
         integer :: icut, iaux, ncur
         real    :: selected_lp
@@ -83,14 +83,10 @@ contains
         if( .not.allocated(cutoff_finds) )then
             THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before get_nu_filtmap_finest_selected_lp')
         endif
-        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in get_nu_filtmap_finest_selected_lp')
+        call require_valid_stats_mask(mask, 'get_nu_filtmap_finest_selected_lp')
         get_nu_filtmap_finest_selected_lp = 0.
         do icut = size(cutoff_finds), 1, -1
-            if( allocated(srcmap) )then
-                ncur = count(filtmap == icut .and. srcmap == 1 .and. mask)
-            else
-                ncur = count(filtmap == icut .and. mask)
-            endif
+            ncur = count_active_nu_label(mask, icut, 1)
             if( ncur == 0 ) cycle
             get_nu_filtmap_finest_selected_lp = cutoff_find_to_lowpass_limit(icut)
             exit
@@ -102,7 +98,7 @@ contains
                     &THROW_HARD('aux_resolutions size mismatch in get_nu_filtmap_finest_selected_lp')
             endif
             do iaux = 1, size(aux_resolutions)
-                ncur = count(srcmap == iaux + 1 .and. mask)
+                ncur = count_active_nu_mask(mask, iaux + 1)
                 if( ncur == 0 ) cycle
                 selected_lp = aux_resolutions(iaux)
                 if( selected_lp <= TINY ) cycle
@@ -115,7 +111,7 @@ contains
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )
-        logical,        intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:)
@@ -125,11 +121,7 @@ contains
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
-        if( allocated(srcmap) )then
-            nselected = count(mask .and. srcmap == 1)
-        else
-            nselected = count(mask)
-        endif
+        nselected = count_active_nu_mask(mask, 1)
         write(logfhandle,'(A)') '>>> NU LOW-PASS ASSIGNMENTS (base filter bank)'
         write(logfhandle,'(A,I12)') '    Base-bank voxels: ', nselected
         write(logfhandle,'(A)')     '    Bank  Fourier k  LP limit (A)        Voxels    Pct base'
@@ -140,13 +132,13 @@ contains
         ! Print auxiliary pair assignments if present
         if( allocated(aux_even_bank) .and. present(aux_resolutions) ) then
             if( size(aux_resolutions) /= size(aux_even_bank) ) THROW_HARD('aux_resolutions size mismatch in print_filtmap_lowpass_histogram')
-            nselected = count(mask)
+            nselected = count_active_nu_mask(mask, 0)
             write(logfhandle,'(A)') ''
             write(logfhandle,'(A)')     '>>> NU AUXILIARY SOURCE ASSIGNMENTS'
             write(logfhandle,'(A,I12)') '    Mask voxels:      ', nselected
             write(logfhandle,'(A)')     '    Source    Resolution (A)        Voxels    Pct mask'
             do iaux = 1, size(aux_even_bank)
-                nvox = count(srcmap == iaux + 1 .and. mask)
+                nvox = count_active_nu_mask(mask, iaux + 1)
                 pct = 0.
                 if( nselected > 0 ) pct = 100. * real(nvox) / real(nselected)
                 write(auxtag,'(A,I0,A)') 'Aux', iaux, '@'
@@ -157,12 +149,12 @@ contains
     end subroutine print_filtmap_lowpass_histogram
 
     module subroutine print_nu_filtmap_lowpass_stats( mask, aux_resolutions )
-        logical,        intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         real, optional, intent(in) :: aux_resolutions(:)
         type(stats_struct) :: statvars
         integer :: nbase
         if( allocated(srcmap) ) then
-            nbase = count(srcmap == 1 .and. mask)
+            nbase = count_active_nu_mask(mask, 1)
             if( nbase == 0 ) then
                 write(logfhandle,'(A)') '>>> No base low-pass selections remain after auxiliary-source optimization'
                 call print_filtmap_lowpass_histogram(mask, aux_resolutions)
@@ -170,11 +162,7 @@ contains
             end if
         end if
         call calc_filtmap_lowpass_stats(statvars, mask)
-        if( allocated(srcmap) )then
-            nbase = count(srcmap == 1 .and. mask)
-        else
-            nbase = count(mask)
-        endif
+        nbase = count_active_nu_mask(mask, 1)
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') '>>> NU FILTER LOCAL RESOLUTION SUMMARY'
         write(logfhandle,'(A,I12)') '    Voxels analyzed: ', nbase
@@ -185,16 +173,16 @@ contains
     end subroutine print_nu_filtmap_lowpass_stats
 
     module subroutine analyze_filtmap_neighbor_continuity( mask )
-        logical, intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         integer :: i, j, k, di, dj, dk, ni, nj, nk
         integer :: lp_i, lp_j, lp_diff, max_diff, n_neighbors, n_discontinuous_neighbors
         integer :: n_total_neighbor_pairs, n_discontinuous_pairs, n_voxels_with_discontinuity, nx, ny, nz, ii, thresh, n_analyzed
         integer :: n_identical_pairs, n_tolerated_pairs, max_step_diff
         integer, allocatable :: stepdiff_counts(:)
         real :: pct, pct_vox, pct_pairs
-        if( .not.allocated(filtmap)            ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
-        if( .not.allocated(cutoff_finds)       ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
-        if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in analyze_filtmap_neighbor_continuity')
+        if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
+        call require_valid_stats_mask(mask, 'analyze_filtmap_neighbor_continuity')
         ! One low-pass step is tolerated by the ordered-label prior, so only
         ! neighbor pairs beyond this threshold are counted as discontinuities.
         thresh = DISCONT_STEP_THRESH
@@ -216,11 +204,11 @@ contains
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
-                    if( .not.mask(i,j,k) ) cycle
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
                     if( allocated(srcmap) ) then
                         if( srcmap(i,j,k) /= 1 ) cycle  ! only check base bank voxels
                     end if
-                    lp_i = filtmap(i,j,k)
+                    lp_i = int(filtmap(i,j,k))
                     n_neighbors = 0
                     n_discontinuous_neighbors = 0
                     max_diff = 0
@@ -237,11 +225,11 @@ contains
                                 if( nj < 1 .or. nj > ny ) cycle
                                 if( nk < 1 .or. nk > nz ) cycle
                                 ! Check mask
-                                if( .not.mask(ni,nj,nk) ) cycle
+                                if( .not.active_nu_mask_at(mask, ni, nj, nk) ) cycle
                                 if( allocated(srcmap) ) then
                                     if( srcmap(ni,nj,nk) /= 1 ) cycle
                                 end if
-                                lp_j = filtmap(ni,nj,nk)
+                                lp_j = int(filtmap(ni,nj,nk))
                                 lp_diff = abs(lp_i - lp_j)
                                 n_neighbors = n_neighbors + 1
                                 n_total_neighbor_pairs = n_total_neighbor_pairs + 1
@@ -270,11 +258,7 @@ contains
         end do
         !$omp end parallel do
         ! Count total masked voxels
-        if( allocated(srcmap) ) then
-            n_analyzed = count(mask .and. srcmap == 1)
-        else
-            n_analyzed = count(mask)
-        end if
+        n_analyzed = count_active_nu_mask(mask, 1)
         pct_vox = 0.
         if( n_analyzed > 0 ) pct_vox = 100. * real(n_voxels_with_discontinuity) / real(n_analyzed)
         pct_pairs = 0.
@@ -331,20 +315,21 @@ contains
     end subroutine analyze_filtmap_neighbor_continuity
 
     subroutine log_nu_source_neighbor_continuity( mask )
-        logical, intent(in) :: mask(:,:,:)
+        logical, optional, intent(in) :: mask(:,:,:)
         integer :: i, j, k, di, dj, dk, ni, nj, nk, nx, ny, nz
         integer :: n_analyzed, n_base_selected, n_aux_selected
         integer :: n_source_pairs, n_source_boundary_pairs, n_source_identical_pairs
         integer :: n_voxels_with_source_boundary, n_boundary_neighbors
         real    :: pct_aux, pct_pairs, pct_vox
         if( .not.allocated(srcmap) ) return
-        n_aux_selected = count(mask .and. srcmap /= 1)
+        call require_valid_stats_mask(mask, 'log_nu_source_neighbor_continuity')
+        n_analyzed      = count_active_nu_mask(mask, 0)
+        n_base_selected = count_active_nu_mask(mask, 1)
+        n_aux_selected  = n_analyzed - n_base_selected
         if( n_aux_selected == 0 ) return
-        n_analyzed      = count(mask)
-        n_base_selected = count(mask .and. srcmap == 1)
-        nx = size(mask, 1)
-        ny = size(mask, 2)
-        nz = size(mask, 3)
+        nx = ldim(1)
+        ny = ldim(2)
+        nz = ldim(3)
         n_source_pairs                   = 0
         n_source_boundary_pairs          = 0
         n_source_identical_pairs         = 0
@@ -356,7 +341,7 @@ contains
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
-                    if( .not.mask(i,j,k) ) cycle
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
                     n_boundary_neighbors = 0
                     do dk = -1, 1
                         do dj = -1, 1
@@ -368,7 +353,7 @@ contains
                                 if( ni < 1 .or. ni > nx ) cycle
                                 if( nj < 1 .or. nj > ny ) cycle
                                 if( nk < 1 .or. nk > nz ) cycle
-                                if( .not.mask(ni,nj,nk) ) cycle
+                                if( .not.active_nu_mask_at(mask, ni, nj, nk) ) cycle
                                 n_source_pairs = n_source_pairs + 1
                                 if( srcmap(i,j,k) == srcmap(ni,nj,nk) )then
                                     n_source_identical_pairs = n_source_identical_pairs + 1
@@ -417,5 +402,72 @@ contains
             endif
         endif
     end subroutine log_nu_source_neighbor_continuity
+
+    subroutine require_valid_stats_mask( mask, caller )
+        logical, optional, intent(in) :: mask(:,:,:)
+        character(len=*), intent(in) :: caller
+        if( present(mask) )then
+            if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; '//caller)
+            if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in '//caller)
+        else
+            if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; '//caller)
+            if( any(shape(nu_lmask) /= ldim) ) THROW_HARD('internal mask shape mismatch in '//caller)
+        endif
+    end subroutine require_valid_stats_mask
+
+    logical function active_nu_mask_at( mask, i, j, k )
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer, intent(in) :: i, j, k
+        if( present(mask) )then
+            active_nu_mask_at = mask(i,j,k)
+        else
+            active_nu_mask_at = nu_lmask(i,j,k)
+        endif
+    end function active_nu_mask_at
+
+    integer function count_active_nu_mask( mask, source_id ) result(nactive)
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer, intent(in) :: source_id
+        integer :: i, j, k
+        nactive = 0
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
+                    if( source_id > 0 )then
+                        if( allocated(srcmap) )then
+                            if( int(srcmap(i,j,k)) /= source_id ) cycle
+                        else if( source_id /= 1 )then
+                            cycle
+                        endif
+                    endif
+                    nactive = nactive + 1
+                end do
+            end do
+        end do
+    end function count_active_nu_mask
+
+    integer function count_active_nu_label( mask, label_id, source_id ) result(nactive)
+        logical, optional, intent(in) :: mask(:,:,:)
+        integer, intent(in) :: label_id, source_id
+        integer :: i, j, k
+        nactive = 0
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
+                    if( int(filtmap(i,j,k)) /= label_id ) cycle
+                    if( source_id > 0 )then
+                        if( allocated(srcmap) )then
+                            if( int(srcmap(i,j,k)) /= source_id ) cycle
+                        else if( source_id /= 1 )then
+                            cycle
+                        endif
+                    endif
+                    nactive = nactive + 1
+                end do
+            end do
+        end do
+    end function count_active_nu_label
 
 end submodule simple_nu_filter_stats

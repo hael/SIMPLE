@@ -403,6 +403,7 @@ contains
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
             call build_nonuniform_mask()
             call setup_nonuniform_filter()
+            if( allocated(l_mask) ) deallocate(l_mask)
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
@@ -543,11 +544,11 @@ contains
 
         subroutine log_nonuniform_filter_stats()
             if( allocated(nu_aux_even) )then
-                call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[res0143s(state)])
+                call print_nu_filtmap_lowpass_stats(aux_resolutions=[res0143s(state)])
             else
-                call print_nu_filtmap_lowpass_stats(l_mask)
+                call print_nu_filtmap_lowpass_stats()
             endif
-            call analyze_filtmap_neighbor_continuity(l_mask)
+            call analyze_filtmap_neighbor_continuity()
         end subroutine log_nonuniform_filter_stats
 
         subroutine write_nonuniform_outputs()
@@ -570,9 +571,9 @@ contains
             real :: align_lp
             if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
             if( allocated(nu_aux_even) )then
-                align_lp = get_nu_filtmap_finest_selected_lp(l_mask, aux_resolutions=[res0143s(state)])
+                align_lp = get_nu_filtmap_finest_selected_lp(aux_resolutions=[res0143s(state)])
             else
-                align_lp = get_nu_filtmap_finest_selected_lp(l_mask)
+                align_lp = get_nu_filtmap_finest_selected_lp()
             endif
             if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp

@@ -171,10 +171,11 @@ contains
             call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
         endif
         call setup_nu_dmats(even, odd, l_mask, [real ::])
+        if( allocated(l_mask) ) deallocate(l_mask)
         call optimize_nu_cutoff_finds()
         call nu_filter_vols(even_nu, odd_nu)
-        call print_nu_filtmap_lowpass_stats(l_mask)
-        call analyze_filtmap_neighbor_continuity(l_mask)
+        call print_nu_filtmap_lowpass_stats()
+        call analyze_filtmap_neighbor_continuity()
         odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)
         even_out = add2fbody(params%vols(2), params%ext, NUFILT_SUFFIX)
         if( params%outvol .ne. '' )then
