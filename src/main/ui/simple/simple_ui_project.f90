@@ -560,6 +560,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call selection%add_input(UI_PARM, projfile)
         call selection%add_input(UI_PARM, oritype)
         call selection%add_input(UI_PARM, 'state',           'num',    'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
         call selection%add_input(UI_PARM, prune)
