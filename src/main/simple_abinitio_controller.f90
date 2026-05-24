@@ -155,6 +155,7 @@ contains
         if( l_cavgs ) return
         if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
             cfg%filt_mode = trim(params%filt_mode)
+            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
             cfg%nu_refine = 'no'
             if( cfg%filt_mode.eq.'uniform' )then
                 cfg%lpstart = lpinfo(istage - 1)%lp

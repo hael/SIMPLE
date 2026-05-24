@@ -19,13 +19,12 @@ Supported values:
 `filt_mode=nonuniform` and `filt_mode=nonuniform_lpset` activate the
 nonuniform volume filter path.
 
-In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is always the static
-discrete-bank policy with `nu_refine=no`. It keeps the staged refinement on the
-ordinary explicit low-pass schedule, and lets the ML-regularized auxiliary pair
-replace the finest discrete NU label only when its effective resolution is finer
-than that label. Default `nonuniform` does not promote NU-selected bandwidth
-back into the matching `lp`. Explicit `filt_mode=nonuniform_lpset` remains
-available for testing the static NU path with NU-selected LP promotion.
+In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
+`filt_mode=nonuniform_lpset`. Both names stay on the static discrete-bank
+policy with `nu_refine=no`, let the ML-regularized auxiliary pair replace the
+finest discrete NU label only when its effective resolution is finer than that
+label, and promote the finest selected NU bandwidth back into the matching
+`lp`.
 Automasking may still provide the NU support mask, but it does not switch
 abinitio3D to gold-standard refinement. The high-resolution `nu_refine=yes`
 ratchet is reserved for `refine3D_auto`.
@@ -198,9 +197,9 @@ challengers, and therefore can suppress spatially isolated high-resolution
 islands without changing the shell-by-shell acceptance test itself.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is
-`nu_refine=no`. Staged `abinitio3D` keeps both `filt_mode=nonuniform` and
-explicit `filt_mode=nonuniform_lpset` on the static discrete-bank policy with
-`nu_refine=no` for all stages, including automasked stages. `refine3D_auto`
+`nu_refine=no`. Staged `abinitio3D` normalizes `filt_mode=nonuniform` to
+`filt_mode=nonuniform_lpset`; both names use the static discrete-bank policy
+with `nu_refine=no` for all stages, including automasked stages. `refine3D_auto`
 defaults `nu_refine=yes` and still allows an explicit override.
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven shell ratchet: an
@@ -258,12 +257,10 @@ assigned NU label in the state mask; when an auxiliary ML-regularized
 replacement is active and selected, its actual auxiliary resolution participates
 in that minimum through the replaced finest label.
 
-Default staged `abinitio3D` with `filt_mode=nonuniform` does not use this
-promoted NU limit. Its staged `refine3D` command line carries the standard
-scheduled explicit `lp`, and the NU filter output remains a reference-generation
-product rather than the owner of the next matching bandwidth. Explicit
-`filt_mode=nonuniform_lpset` is the test mode for allowing the promoted NU LP to
-feed the usual lpset matching machinery.
+Default staged `abinitio3D` with `filt_mode=nonuniform` uses this promoted NU
+limit because the commander normalizes it to `filt_mode=nonuniform_lpset`
+before parameter parsing. This lets static NU reference generation influence
+the next matching bandwidth without enabling the high-resolution shell ratchet.
 
 Map postprocessing is classical-only. `postprocess` and the automatic
 `reconstruct3D` postprocess step use the ordinary global FSC/B-factor path even

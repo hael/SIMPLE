@@ -455,6 +455,12 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
+        if( cline%get_carg('filt_mode').eq.'nonuniform' )then
+            call cline%set('filt_mode', 'nonuniform_lpset')
+            write(logfhandle,'(A)') &
+                &'>>> abinitio3D: treating filt_mode=nonuniform as nonuniform_lpset for NU-selected matching LP'
+        endif
+        if( cline%get_carg('filt_mode').eq.'nonuniform_lpset' ) call cline%set('nu_refine', 'no')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')

@@ -232,16 +232,15 @@ maximum iteration count from the sampled-update size, but that estimate must
 not reduce the run below ten iterations, and normal convergence checks must
 respect that minimum.
 
-In staged `abinitio3D`, user-facing `filt_mode=nonuniform` means static
-discrete-bank nonuniform filtering with `nu_refine=no` for all stages. The
-ML-regularized half-map pair may replace the finest discrete NU label only when
-its effective resolution is finer than that label, while the staged `refine3D`
-command line keeps the ordinary scheduled explicit `lp`.
+In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
+`filt_mode=nonuniform_lpset`. Both names mean static discrete-bank nonuniform
+filtering with `nu_refine=no` for all stages. The ML-regularized half-map pair
+may replace the finest discrete NU label only when its effective resolution is
+finer than that label, and the finest selected NU limit is promoted to the next
+matching `lp`.
 Automasking does not switch abinitio3D into gold-standard refinement, does not
-enable the NU high-resolution shell ratchet, and does not let the NU-selected
-bandwidth replace the staged matching LP. Explicit
-`filt_mode=nonuniform_lpset` remains available in abinitio3D as a static
-testing mode for NU-selected LP promotion.
+enable the NU high-resolution shell ratchet, and does not delete the staged
+matching `lp`.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and may promote multiple

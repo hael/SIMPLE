@@ -72,7 +72,7 @@ integer,          parameter   :: NU_DMAT_CANDIDATE_CAP                = 24
 ! two, odd shell steps are kept only as the temporary frontier needed to test
 ! the next even shell step.
 integer,          parameter   :: NU_HIGHRES_EXTENSION_RETAIN_STRIDE    = 2
-integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM           = 2
+integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM            = 2
 ! Candidate-scale objective smoothing. The normalized unary objective for a
 ! candidate with low-pass L is averaged over an AWF-like local support:
 ! radius_A = 0.5 * NU_OBJECTIVE_SMOOTH_AWF * L, capped below. Increasing AWF
@@ -94,7 +94,7 @@ integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
-integer,          parameter   :: NU_LABEL_KIND = selected_int_kind(4)
+integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
