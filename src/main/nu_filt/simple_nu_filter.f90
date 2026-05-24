@@ -86,9 +86,9 @@ real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
 integer,          parameter   :: DISCONT_STEP_THRESH         = 0
 integer,          parameter   :: NU_CONTINUITY_LARGE_STEP_THRESH = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
-! Every nonzero retained-bank coordinate jump contributes to the Potts prior.
-! The quadratic term below makes larger jumps increasingly expensive.
-integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 0
+! Adjacent retained-bank coordinate jumps are tolerated by the ordered-label
+! Potts prior; the quadratic hinge makes larger jumps increasingly expensive.
+integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
