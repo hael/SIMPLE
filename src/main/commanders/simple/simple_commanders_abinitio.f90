@@ -62,6 +62,8 @@ contains
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
+        call cline%set('envfsc',        'no') ! no envelope-based FSC estimation for cavgs route
+        call cline%set('nu_refine',     'no') ! no nonuniform refinement for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('objfun')           ) call cline%set('objfun',       'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',          0.95)
@@ -80,10 +82,9 @@ contains
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         ! set work projfile
         work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
-        ! set class global filt_mode flag for low-pass limit estimation
+        ! set class global filtering flags for staged refine3D policy
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
-        l_staged_nonuniform_mode = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -441,11 +442,13 @@ contains
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
-        logical :: l_cavg_ini_ext, l_user_filt_nonuniform
+        logical :: l_cavg_ini_ext
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('ptclw',         'no')
+        call cline%set('envfsc',        'no') ! no envelope-based FSC estimation
+        call cline%set('nu_refine',     'no') ! no nonuniform refinement
         if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                         'yes')
         if( .not. cline%defined('overlap')             ) call cline%set('overlap',                        0.95)
         if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                     10.)
@@ -454,13 +457,7 @@ contains
         if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
-        l_user_filt_nonuniform = .not. cline%defined('filt_mode')
-        if( cline%defined('filt_mode') ) l_user_filt_nonuniform = cline%get_carg('filt_mode').eq.'nonuniform'
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
-        if( cline%get_carg('filt_mode').eq.'nonuniform' )then
-            call cline%set('filt_mode', 'nonuniform_lpset')
-        endif
-        if( cline%get_carg('filt_mode').eq.'nonuniform_lpset' ) call cline%set('nu_refine', 'no')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
@@ -536,10 +533,9 @@ contains
             start_stage = SYMSRCH_STAGE + 1 ! start after the symmetry search stage
             l_ini3D     = .true.
         endif
-        ! set class global filt_mode flag for low-pass limit estimation
+        ! set class global filtering flags for staged refine3D policy
         l_lpauto     = params%l_lpauto
         l_nonuniform = params%l_nonuniform
-        l_staged_nonuniform_mode = l_user_filt_nonuniform
         nstages_refine3D = NSTAGES
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
