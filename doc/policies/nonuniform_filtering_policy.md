@@ -148,8 +148,8 @@ The smoothing stage is intended to reduce abrupt local jumps in the selected fil
 
 - base low-pass candidates use coordinates `1..n_base`
 - auxiliary candidates are projected onto that same axis from their required effective resolutions
-- one-step differences are tolerated by the current penalty setting
-- jumps larger than one filter-bank step are penalized with a convex hinge to discourage larger jumps more strongly
+- every nonzero retained-bank coordinate difference receives a Potts penalty, so adjacent-label salt-and-pepper structure is not invisible to the prior
+- jumps larger than one retained-bank coordinate step receive an additional convex penalty to discourage larger jumps more strongly
 - neighbor penalties are normalized by the number of in-mask neighbors, so boundary and thin-mask voxels do not receive systematically weaker or stronger regularization
 - ties preserve the current label within a small tolerance instead of drifting to the lowest candidate index
 
@@ -160,6 +160,9 @@ Auxiliary-candidate diagnostics also log the unary aux-vs-best-base margin and
 the auxiliary source assignment counts before and after ordered-label smoothing,
 so workflow logs can distinguish an auxiliary candidate that loses the unary
 competition from one that is removed by the spatial prior.
+Neighbor-continuity diagnostics report unique 26-neighbor links and classify
+all nonzero retained-bank coordinate differences as boundaries, with one-step
+boundaries separated from larger jumps.
 
 ### Ordered-label smoothing
 
@@ -219,9 +222,11 @@ shell steps are kept as temporary frontiers so the next contiguous shell can be
 tested; once the next retained step is accepted, the lower-resolution temporary
 label is dropped and its voxels fall back to the nearest retained coarser base
 label. Persisted high-resolution depth is rebuilt with the same policy: keep
-every second extension shell plus the current terminal shell. This bounds the
-mask-packed unary bank for fine-sampling data sets without skipping any shell
-challenge.
+every second extension shell plus the current terminal shell. The retained
+filter-bank coordinates are compacted after thinning, so adjacent retained
+labels remain one Potts step apart even when they are two Fourier shell samples
+apart. This bounds the mask-packed unary bank for fine-sampling data sets
+without skipping any shell challenge.
 
 The refinement implementation keeps a hard cap on the number of mask-packed
 distance-matrix candidates retained at once. When the cap is reached, selected

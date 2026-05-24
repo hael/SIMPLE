@@ -144,6 +144,7 @@ contains
         call release_nu_filter_unary_storage
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
+        if( allocated(aux_candidate_resolutions) ) deallocate(aux_candidate_resolutions)
         if( allocated(filtmap)            ) deallocate(filtmap)
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
@@ -154,6 +155,7 @@ contains
         box  = 0
         n_nu_mask = 0
         smpd = 0.
+        nu_noise_sigma_cached = 0.
         l_aux_source_unordered_potts = .false.
     end subroutine cleanup_nu_filter
 

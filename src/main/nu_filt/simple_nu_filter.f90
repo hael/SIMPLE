@@ -17,7 +17,7 @@
 ! shells are challenged at the full Fourier sampling rate, but the retained
 ! high-resolution bank is thinned to every second shell plus the current
 ! terminal shell. After the shell walk stops, the final accepted label map is
-! cleaned with the ordered-label Potts prior over the expanded bank.
+! cleaned with the ordered-label Potts prior over the expanded retained bank.
 !    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
@@ -81,9 +81,14 @@ integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM           = 2
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_AWF          = 3.0
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_RADIUS_FRAC  = 0.5
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
-integer,          parameter   :: DISCONT_STEP_THRESH         = 1
+! Report every nonzero retained-bank coordinate jump as a continuity boundary.
+! Larger jumps are still separated in the diagnostics.
+integer,          parameter   :: DISCONT_STEP_THRESH         = 0
+integer,          parameter   :: NU_CONTINUITY_LARGE_STEP_THRESH = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
-integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
+! Every nonzero retained-bank coordinate jump contributes to the Potts prior.
+! The quadratic term below makes larger jumps increasingly expensive.
+integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 0
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
@@ -101,6 +106,7 @@ real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: dmats_aux_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
+real,             allocatable :: aux_candidate_resolutions(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
 integer(kind=NU_LABEL_KIND), allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
@@ -113,6 +119,10 @@ integer :: ldim(3), box
 integer :: n_nu_mask = 0
 integer :: nu_smooth_norm_radius = -1
 real    :: smpd
+! Cache of the raw E/O noise scale used to normalize the Huber unary objective.
+! Computed once per setup_nu_dmats and reused across all shell-extension
+! challenges so the per-shell median/MAD pass is not paid repeatedly.
+real    :: nu_noise_sigma_cached = 0.
 logical :: l_aux_source_unordered_potts = .false.
 
 type :: nu_highres_extension_stats
@@ -246,6 +256,9 @@ interface
         integer, intent(in) :: n_candidates
         real,    intent(in) :: aux_resolutions(:)
     end subroutine setup_nu_candidate_coords
+
+    module subroutine refresh_nu_aux_candidate_coords()
+    end subroutine refresh_nu_aux_candidate_coords
 
     module real function lowpass_limit_to_candidate_coord( lp_angstrom )
         real, intent(in) :: lp_angstrom

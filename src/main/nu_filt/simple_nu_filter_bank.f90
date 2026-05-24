@@ -39,6 +39,10 @@ contains
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
         noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+        ! Cache for reuse during high-resolution shell extension; the raw
+        ! E/O noise scale is candidate-independent so it does not need to be
+        ! recomputed per shell challenge.
+        nu_noise_sigma_cached = noise_sigma
         write(logfhandle,'(A,ES12.4)') '>>> NU normalized Huber objective raw E/O scale: ', noise_sigma
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
@@ -82,26 +86,42 @@ contains
     module subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
         integer, intent(in) :: n_candidates
         real,    intent(in) :: aux_resolutions(:)
-        integer :: i, n_base, iaux, n_discrete_base
+        integer :: i, n_base
+        if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; setup_nu_candidate_coords')
         n_base = size(cutoff_finds)
-        n_discrete_base = min(size(lowpass_limits), n_base)
+        if( n_candidates < n_base ) THROW_HARD('candidate count smaller than base bank in setup_nu_candidate_coords')
         if( allocated(candidate_coords) ) deallocate(candidate_coords)
+        if( allocated(aux_candidate_resolutions) ) deallocate(aux_candidate_resolutions)
         allocate(candidate_coords(n_candidates), source=0.)
         do i = 1, n_base
-            if( i <= n_discrete_base )then
-                candidate_coords(i) = real(i)
-            else
-                candidate_coords(i) = real(n_discrete_base + cutoff_finds(i) - cutoff_finds(n_discrete_base))
-            endif
+            candidate_coords(i) = real(i)
         end do
-        if( n_candidates == n_base ) return
+        if( n_candidates == n_base )then
+            if( size(aux_resolutions) /= 0 ) &
+                &THROW_HARD('aux_resolutions supplied without auxiliary candidates in setup_nu_candidate_coords')
+            return
+        endif
         if( size(aux_resolutions) /= n_candidates - n_base )then
             THROW_HARD('aux_resolutions size mismatch in setup_nu_candidate_coords')
         endif
-        do iaux = 1, size(aux_resolutions)
-            candidate_coords(n_base + iaux) = lowpass_limit_to_candidate_coord(aux_resolutions(iaux))
-        end do
+        allocate(aux_candidate_resolutions(size(aux_resolutions)), source=aux_resolutions)
+        call refresh_nu_aux_candidate_coords()
     end subroutine setup_nu_candidate_coords
+
+    module subroutine refresh_nu_aux_candidate_coords()
+        integer :: iaux, n_base, n_aux
+        if( .not.allocated(candidate_coords)          ) return
+        if( .not.allocated(aux_candidate_resolutions) ) return
+        if( .not.allocated(cutoff_finds)              ) &
+            &THROW_HARD('cutoff_finds not allocated; refresh_nu_aux_candidate_coords')
+        n_base = size(cutoff_finds)
+        n_aux  = size(aux_candidate_resolutions)
+        if( size(candidate_coords) /= n_base + n_aux ) &
+            &THROW_HARD('candidate coordinate bank size mismatch; refresh_nu_aux_candidate_coords')
+        do iaux = 1, n_aux
+            candidate_coords(n_base + iaux) = lowpass_limit_to_candidate_coord(aux_candidate_resolutions(iaux))
+        end do
+    end subroutine refresh_nu_aux_candidate_coords
 
     module real function lowpass_limit_to_candidate_coord( lp_angstrom )
         real, intent(in) :: lp_angstrom

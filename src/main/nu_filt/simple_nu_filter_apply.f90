@@ -88,11 +88,13 @@ contains
         type(image) :: vol_in_ft, vol_filt
         real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_out(:,:,:)
         real, allocatable :: bwfilter(:)
-        integer :: i, j, k, icut, winsz
+        integer :: i, j, k, icut, imask, winsz
         real    :: edge_mean
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vol')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
+        if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nu_filter_vol')
+        if( .not.allocated(nu_mask_vox)  ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nu_filter_vol')
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_filter_vol')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_filter_vol')
         if( any(nu_lmask .and. srcmap /= 1) )then
@@ -111,23 +113,28 @@ contains
         call vol_filt%set_wthreads(.true.)
         call vol_out%new(ldim, smpd, wthreads=.false.)
         call vol_out%get_rmat_ptr(rmat_out)
-        rmat_out(:ldim(1),:ldim(2),:ldim(3)) = 0.
         allocate(bwfilter(box), source=0.)
-        do icut = 1, size(cutoff_finds)
+        ! Seed the output (including outside-mask voxels) with the coarsest
+        ! filter, matching nu_filter_vols semantics, then scatter only the
+        ! mask-packed voxels for the remaining bank entries.
+        call butterworth_filter(cutoff_finds(1), bwfilter)
+        call vol_filt%copy_fast(vol_in_ft)
+        call vol_filt%apply_filter(bwfilter)
+        call vol_filt%ifft
+        call vol_filt%get_rmat_ptr(rmat_filt)
+        rmat_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
+        do icut = 2, size(cutoff_finds)
             call butterworth_filter(cutoff_finds(icut), bwfilter)
             call vol_filt%copy_fast(vol_in_ft)
             call vol_filt%apply_filter(bwfilter)
             call vol_filt%ifft
             call vol_filt%get_rmat_ptr(rmat_filt)
-            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut )then
-                            rmat_out(i,j,k) = rmat_filt(i,j,k)
-                        endif
-                    end do
-                end do
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut ) rmat_out(i,j,k) = rmat_filt(i,j,k)
             end do
             !$omp end parallel do
         end do

@@ -15,9 +15,9 @@ contains
         type(string)      :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_mask(:)
         integer, allocatable :: frontier_vox(:)
-        integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label, new_label_after_thin
+        integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         integer           :: old_radius_px, new_radius_px, n_seed_min
-        real              :: accept_pct_eff, pct_finest, x, noise_sigma, new_coord
+        real              :: accept_pct_eff, pct_finest, x, noise_sigma
         real              :: old_radius_angstrom, new_radius_angstrom
         integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
@@ -108,7 +108,12 @@ contains
         call vol_odd_filt_new%new(ldim, smpd)
         call vol_even_filt_new%read(even_cache_fname)
         call vol_odd_filt_new%read(odd_cache_fname)
-        noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+        if( nu_noise_sigma_cached > TINY )then
+            noise_sigma = nu_noise_sigma_cached
+        else
+            noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+            nu_noise_sigma_cached = noise_sigma
+        endif
         call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, &
             &nu_lmask, noise_sigma)
         call smooth_nu_objective(dmat_new, dmat_tmp, new_limit)
@@ -208,12 +213,7 @@ contains
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
         call apply_nu_highres_extension_selection(frontier_vox, extend_choice, sz_old, sz_old + 1)
-        if( allocated(candidate_coords) .and. size(candidate_coords) >= sz_old )then
-            new_coord = candidate_coords(sz_old) + real(new_find - cutoff_finds(sz_old))
-        else
-            new_coord = real(sz_old + 1)
-        endif
-        call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find, new_coord, new_label_after_thin)
+        call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find)
         call cache_nu_highres_extension_frontier_after_selection(dmat_new, frontier_vox, extend_choice)
         write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         call vol_even_filt_new%kill
@@ -333,15 +333,13 @@ contains
         deallocate(candmap)
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
-    subroutine append_and_thin_nu_highres_candidate( dmat_new, old_n_base, new_find, new_coord, new_label )
+    subroutine append_and_thin_nu_highres_candidate( dmat_new, old_n_base, new_find )
         real,    intent(in)  :: dmat_new(:,:,:)
         integer, intent(in)  :: old_n_base, new_find
-        real,    intent(in)  :: new_coord
-        integer, intent(out) :: new_label
         logical, allocatable :: keep(:)
         integer, allocatable :: old_to_new(:), drop_to_new(:), new_to_old(:), new_cutoff_finds(:)
         real,    allocatable :: new_coords(:), new_bwfilters(:,:), new_dmats(:,:)
-        integer :: new_n_base, n_aux, base_keep_n, n_keep, i, j, k, ikeep, old_label
+        integer :: new_n_base, n_aux, base_keep_n, n_keep, i, j, k, ikeep, old_label, new_label
         integer :: base_find, finest_step, istep, jlabel, src_find, src_label, imask, ibin, iaux
         logical :: l_thinned
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; append_and_thin_nu_highres_candidate')
@@ -443,15 +441,29 @@ contains
         if( allocated(candidate_coords) )then
             allocate(new_coords(n_keep + n_aux), source=0.)
             do ikeep = 1, n_keep
-                src_label = new_to_old(ikeep)
-                if( src_label <= old_n_base )then
-                    new_coords(ikeep) = candidate_coords(src_label)
-                else
-                    new_coords(ikeep) = new_coord
-                endif
+                new_coords(ikeep) = real(ikeep)
             end do
-            if( n_aux > 0 ) new_coords(n_keep + 1:) = candidate_coords(old_n_base + 1:)
             call move_alloc(new_coords, candidate_coords)
+            call refresh_nu_aux_candidate_coords()
+            ! Recompute the effective base-bank label for auxiliary voxels so
+            ! diagnostics (histograms, continuity stats) stay in sync with the
+            ! thinned bank. Filtering output itself is dispatched via srcmap.
+            if( n_aux > 0 .and. allocated(srcmap) )then
+                !$omp parallel do schedule(static) default(shared) &
+                !$omp&  private(imask,i,j,k,iaux) proc_bind(close)
+                do imask = 1, n_nu_mask
+                    i = nu_mask_vox(1,imask)
+                    j = nu_mask_vox(2,imask)
+                    k = nu_mask_vox(3,imask)
+                    iaux = int(srcmap(i,j,k)) - 1
+                    if( iaux >= 1 .and. iaux <= n_aux )then
+                        filtmap(i,j,k) = int( &
+                            &nu_effective_base_label_for_candidate(n_keep + iaux, n_keep), &
+                            &kind=NU_LABEL_KIND)
+                    endif
+                end do
+                !$omp end parallel do
+            endif
         endif
         allocate(new_dmats(n_nu_mask, n_keep + n_aux))
         !$omp parallel do collapse(2) schedule(static) default(shared) &
@@ -565,10 +577,31 @@ contains
             do i = 1, old_n_base
                 if( .not.keep(i) ) cycle
                 ikeep = ikeep + 1
-                new_coords(ikeep) = candidate_coords(i)
+                new_coords(ikeep) = real(ikeep)
             end do
-            if( n_aux > 0 ) new_coords(n_keep + 1:) = candidate_coords(old_n_base + 1:)
             call move_alloc(new_coords, candidate_coords)
+            call refresh_nu_aux_candidate_coords()
+            ! Auxiliary voxels keep their srcmap selection but their filtmap
+            ! records the effective base-bank label for the auxiliary
+            ! candidate. After the base bank is compacted that effective label
+            ! changes, so refresh it here to keep diagnostics (histograms,
+            ! continuity stats) consistent with the new bank.
+            if( n_aux > 0 .and. allocated(srcmap) )then
+                !$omp parallel do schedule(static) default(shared) &
+                !$omp&  private(imask,i,j,k,iaux) proc_bind(close)
+                do imask = 1, n_nu_mask
+                    i = nu_mask_vox(1,imask)
+                    j = nu_mask_vox(2,imask)
+                    k = nu_mask_vox(3,imask)
+                    iaux = int(srcmap(i,j,k)) - 1
+                    if( iaux >= 1 .and. iaux <= n_aux )then
+                        filtmap(i,j,k) = int( &
+                            &nu_effective_base_label_for_candidate(n_keep + iaux, n_keep), &
+                            &kind=NU_LABEL_KIND)
+                    endif
+                end do
+                !$omp end parallel do
+            endif
         endif
         n_aux = max(0, size(dmats_mask,2) - old_n_base)
         allocate(new_dmats(size(dmats_mask,1), n_keep + n_aux))
@@ -804,10 +837,12 @@ contains
         endif
         if( allocated(candidate_coords) )then
             n_aux = max(0, size(candidate_coords) - old_n_base)
-            allocate(new_coords(active_label + n_aux))
-            new_coords(:active_label) = candidate_coords(:active_label)
-            if( n_aux > 0 ) new_coords(active_label + 1:) = candidate_coords(old_n_base + 1:)
+            allocate(new_coords(active_label + n_aux), source=0.)
+            do i = 1, active_label
+                new_coords(i) = real(i)
+            end do
             call move_alloc(new_coords, candidate_coords)
+            call refresh_nu_aux_candidate_coords()
         endif
         if( allocated(dmats_mask) )then
             n_aux = max(0, size(dmats_mask, 2) - old_n_base)

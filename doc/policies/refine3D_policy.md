@@ -241,12 +241,13 @@ LP is kept on the staged `refine3D` command line across automasked stages.
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and may promote multiple
 high-resolution Fourier shells per refinement iteration, but only by testing
-one shell at a time. Each shell is applied/promoted whenever at least one
-tested frontier voxel selects it by unary objective comparison; no Potts prior
-is applied during this constrained extension challenge. The sequential walk
-starts from the finest populated base-bank label and stops at the first
-unattempted challenger or the first challenger with zero selected voxels. In
-this coupled refinement path, NU
+one shell at a time. Each shell is applied/promoted only when the unary
+objective moves enough of the tested frontier to the challenger and satisfies
+the absolute seed floor; no Potts prior is applied during this constrained
+extension challenge. The sequential walk starts from the finest populated
+base-bank label and stops at the first unattempted challenger or the first
+challenger below that frontier-support rule. In this coupled refinement path,
+NU
 filtering does not add the ML-regularized half-map pair as an auxiliary
 candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
