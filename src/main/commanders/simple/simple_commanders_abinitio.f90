@@ -83,6 +83,7 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
+        l_staged_nonuniform_mode = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
         if( cline%defined('nstages') )then
@@ -440,7 +441,7 @@ contains
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
         integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
-        logical :: l_cavg_ini_ext
+        logical :: l_cavg_ini_ext, l_user_filt_nonuniform
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -453,6 +454,8 @@ contains
         if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
+        l_user_filt_nonuniform = .not. cline%defined('filt_mode')
+        if( cline%defined('filt_mode') ) l_user_filt_nonuniform = cline%get_carg('filt_mode').eq.'nonuniform'
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
         if( cline%get_carg('filt_mode').eq.'nonuniform' )then
             call cline%set('filt_mode', 'nonuniform_lpset')
@@ -536,6 +539,7 @@ contains
         ! set class global filt_mode flag for low-pass limit estimation
         l_lpauto     = params%l_lpauto
         l_nonuniform = params%l_nonuniform
+        l_staged_nonuniform_mode = l_user_filt_nonuniform
         nstages_refine3D = NSTAGES
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')

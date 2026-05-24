@@ -46,6 +46,7 @@ logical          :: l_ini3D           = .false.
 logical          :: l_lpauto          = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
+logical          :: l_staged_nonuniform_mode = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
 real             :: update_frac  = 1.0
