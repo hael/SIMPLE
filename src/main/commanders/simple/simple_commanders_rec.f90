@@ -177,16 +177,16 @@ contains
             type(string), intent(out) :: sigma_star
             type(image) :: vol_even, vol_odd, vol_noise
             type(string) :: fname_even, fname_odd
-            real, allocatable :: pspec(:), sigma2(:), group_pspecs(:,:,:), state_scales(:), state_weights(:)
-            real :: total_weight
+            real, allocatable :: pspec(:), sigma2(:), group_pspecs(:,:,:), state_scales(:), state_counts(:)
+            real :: total_count
             integer :: ldim(3), nptcls, state, nstates_used, last_shell, nspec, filtsz
             filtsz = fdim(params%box) - 1
             if( filtsz < 1 ) THROW_HARD('Invalid box for bootstrap_rec3D sigma estimation')
             allocate(sigma2(filtsz), source=0.)
-            call calc_bootstrap_state_scales(state_scales, state_weights)
+            call calc_bootstrap_state_scales(state_scales, state_counts)
             nstates_used = 0
             last_shell   = 0
-            total_weight = 0.
+            total_count  = 0.
             do state = 1, params%nstates
                 fname_even = refine3D_state_halfvol_fname(state, 'even')
                 fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
@@ -205,13 +205,13 @@ contains
                 call vol_noise%spectrum('power', pspec, norm=.true.)
                 nspec = min(size(pspec), filtsz)
                 if( nspec > 0 )then
-                    ! state_weights=Ne+No and state_scales=Ne*No/(Ne+No),
+                    ! state_counts=Ne+No and state_scales=Ne*No/(Ne+No),
                     ! so the numerator is Ne*No*pspec_diff. The final divide
-                    ! by total_weight keeps the state average population-aware.
-                    sigma2(1:nspec) = sigma2(1:nspec) + state_weights(state) * state_scales(state) * pspec(1:nspec)
+                    ! by total_count keeps the state average population-aware.
+                    sigma2(1:nspec) = sigma2(1:nspec) + state_counts(state) * state_scales(state) * pspec(1:nspec)
                     last_shell      = max(last_shell, nspec)
                     nstates_used    = nstates_used + 1
-                    total_weight    = total_weight + state_weights(state)
+                    total_count     = total_count + state_counts(state)
                 endif
                 if( allocated(pspec) ) deallocate(pspec)
                 call vol_even%kill
@@ -221,8 +221,8 @@ contains
                 call fname_odd%kill
             enddo
             if( nstates_used == 0 ) THROW_HARD('No even/odd half maps found after bootstrap_rec3D unregularized reconstruction')
-            if( total_weight > TINY )then
-                sigma2 = sigma2 / total_weight
+            if( total_count > TINY )then
+                sigma2 = sigma2 / total_count
             else
                 sigma2 = sigma2 / real(nstates_used)
             endif
@@ -233,65 +233,56 @@ contains
             group_pspecs(2,1,:) = sigma2
             sigma_star = sigma2_star_from_iter(which_iter)
             call write_groups_starfile(sigma_star, group_pspecs, 1)
-            deallocate(group_pspecs, sigma2, state_scales, state_weights)
+            deallocate(group_pspecs, sigma2, state_scales, state_counts)
         end subroutine write_bootstrap_sigma2_from_halfmaps
 
-        subroutine calc_bootstrap_state_scales( state_scales, state_weights )
+        subroutine calc_bootstrap_state_scales( state_scales, state_counts )
             real, allocatable, intent(out) :: state_scales(:)
-            real, allocatable, intent(out) :: state_weights(:)
+            real, allocatable, intent(out) :: state_counts(:)
             type(sp_project) :: spproj
-            real, allocatable :: eo_weights(:,:)
+            real, allocatable :: eo_counts(:,:)
             real :: denom
             integer :: state
-            allocate(state_scales(params%nstates), state_weights(params%nstates), eo_weights(2,params%nstates), source=0.)
+            allocate(state_scales(params%nstates), state_counts(params%nstates), eo_counts(2,params%nstates), source=0.)
             select case(trim(params%oritype))
                 case('ptcl3D')
                     call spproj%read_segment('ptcl3D', params%projfile)
-                    call accumulate_bootstrap_eo_weights(spproj%os_ptcl3D, eo_weights)
+                    call accumulate_bootstrap_eo_counts(spproj%os_ptcl3D, eo_counts)
                 case('cls3D')
                     call spproj%read_segment('cls3D', params%projfile)
-                    call accumulate_bootstrap_eo_weights(spproj%os_cls3D, eo_weights)
+                    call accumulate_bootstrap_eo_counts(spproj%os_cls3D, eo_counts)
                 case DEFAULT
                     THROW_HARD('bootstrap_rec3D supports ptcl3D and cls3D orientations only')
             end select
             do state = 1, params%nstates
-                denom = eo_weights(1,state) + eo_weights(2,state)
-                if( eo_weights(1,state) > TINY .and. eo_weights(2,state) > TINY )then
-                    state_scales(state) = (eo_weights(1,state) * eo_weights(2,state)) / denom
-                    state_weights(state) = denom
+                denom = eo_counts(1,state) + eo_counts(2,state)
+                if( eo_counts(1,state) > TINY .and. eo_counts(2,state) > TINY )then
+                    state_scales(state) = (eo_counts(1,state) * eo_counts(2,state)) / denom
+                    state_counts(state) = denom
                 else
                     state_scales(state) = 0.5
-                    state_weights(state) = 1.
-                    write(logfhandle,'(A,I0,A)') '>>> WARNING: BOOTSTRAP_REC3D COULD NOT DETERMINE EVEN/ODD WEIGHTS FOR STATE ',&
+                    state_counts(state) = 1.
+                    write(logfhandle,'(A,I0,A)') '>>> WARNING: BOOTSTRAP_REC3D COULD NOT DETERMINE EVEN/ODD COUNTS FOR STATE ',&
                         &state, '; USING UNSCALED HALF-MAP DIFFERENCE'
                 endif
                 write(logfhandle,'(A,I0,A,F12.3)') '>>> BOOTSTRAP_REC3D SIGMA SCALE STATE ', state, ':', state_scales(state)
             enddo
             call spproj%kill
-            deallocate(eo_weights)
+            deallocate(eo_counts)
         end subroutine calc_bootstrap_state_scales
 
-        subroutine accumulate_bootstrap_eo_weights( os, eo_weights )
+        subroutine accumulate_bootstrap_eo_counts( os, eo_counts )
             class(oris), intent(in)    :: os
-            real,        intent(inout) :: eo_weights(:,:)
-            real    :: w
+            real,        intent(inout) :: eo_counts(:,:)
             integer :: eo, iptcl, state
-            logical :: l_have_weights
-            l_have_weights = os%isthere('w')
             do iptcl = 1, os%get_noris()
                 state = os%get_state(iptcl)
-                if( state < 1 .or. state > size(eo_weights,2) )cycle
+                if( state < 1 .or. state > size(eo_counts,2) )cycle
                 eo = os%get_eo(iptcl) + 1
                 if( eo < 1 .or. eo > 2 )cycle
-                if( l_have_weights )then
-                    w = max(0., os%get(iptcl, 'w'))
-                else
-                    w = 1.
-                endif
-                if( w < TINY )cycle
-                eo_weights(eo,state) = eo_weights(eo,state) + w
+                eo_counts(eo,state) = eo_counts(eo,state) + 1.
             enddo
-        end subroutine accumulate_bootstrap_eo_weights
+        end subroutine accumulate_bootstrap_eo_counts
 
         subroutine condition_bootstrap_sigma2( sigma2, last_shell )
             real,    intent(inout) :: sigma2(:)

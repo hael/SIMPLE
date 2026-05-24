@@ -15,7 +15,6 @@ type convergence
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
     type(stats_struct) :: shincarg   !< shift increment
-    type(stats_struct) :: pw         !< particle weights
     type(stats_struct) :: lp         !< low-pass limit
     type(stats_struct) :: lp_est     !< low-pass limit, estimated
     type(stats_struct) :: res        !< resolution @ FSC=0.143
@@ -285,7 +284,6 @@ contains
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call os%stats('frac',       self%frac_srch,  mask=mask)
         call os%stats('shincarg',   self%shincarg,   mask=mask)
-        call os%stats('w',          self%pw,         mask=mask)
         call os%stats('lp',         self%lp,         mask=mask)
         call os%stats('lp_est',     self%lp_est,     mask=mask)
         call os%stats('res',        self%res,        mask=mask)
@@ -308,7 +306,6 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHTS         AVG/SDEV/MIN/MAX:', self%pw%avg,        self%pw%sdev,        self%pw%minv,        self%pw%maxv
         write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv

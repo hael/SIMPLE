@@ -101,7 +101,6 @@ contains
             if( apply_ctf ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
         call build%spproj_field%set_all2single('state', 1.0)
-        call build%spproj_field%set_all2single('w',     1.0)
         ! prepare for image generation
         call build%vol%read(params%vols(1))
         call build%vol%mask3D_soft(params%msk, backgr=0.)

@@ -12,6 +12,22 @@ contains
         cutoff_find_to_lowpass_limit = calc_lowpass_lim(cutoff_finds(icut), box, smpd)
     end function cutoff_find_to_lowpass_limit
 
+    module real function nu_label_lowpass_limit( ilabel )
+        integer, intent(in) :: ilabel
+        if( nu_label_is_aux_replacement(ilabel) )then
+            nu_label_lowpass_limit = nu_aux_replacement_resolution
+        else
+            nu_label_lowpass_limit = cutoff_find_to_lowpass_limit(ilabel)
+        endif
+    end function nu_label_lowpass_limit
+
+    module logical function nu_label_is_aux_replacement( ilabel )
+        integer, intent(in) :: ilabel
+        nu_label_is_aux_replacement = nu_aux_replacement_label > 0 .and. &
+            &ilabel == nu_aux_replacement_label .and. nu_aux_replacement_resolution > TINY .and. &
+            &allocated(aux_even_bank) .and. allocated(aux_odd_bank)
+    end function nu_label_is_aux_replacement
+
     module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
@@ -128,7 +144,6 @@ contains
 
     module subroutine release_nu_filter_unary_storage
         if( allocated(dmats_mask)         ) deallocate(dmats_mask)
-        if( allocated(dmats_aux_mask)     ) deallocate(dmats_aux_mask)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         call release_nu_smooth_norm
     end subroutine release_nu_filter_unary_storage
@@ -144,7 +159,6 @@ contains
         call release_nu_filter_unary_storage
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
-        if( allocated(aux_candidate_resolutions) ) deallocate(aux_candidate_resolutions)
         if( allocated(filtmap)            ) deallocate(filtmap)
         if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
@@ -156,7 +170,6 @@ contains
         n_nu_mask = 0
         smpd = 0.
         nu_noise_sigma_cached = 0.
-        l_aux_source_unordered_potts = .false.
     end subroutine cleanup_nu_filter
 
     module subroutine cleanup_aux_bank
@@ -173,6 +186,8 @@ contains
             end do
             deallocate(aux_odd_bank)
         end if
+        nu_aux_replacement_label = 0
+        nu_aux_replacement_resolution = 0.
     end subroutine cleanup_aux_bank
 
     module subroutine validate_aux_volumes( aux_even, aux_odd )

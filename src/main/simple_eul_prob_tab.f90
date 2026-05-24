@@ -596,7 +596,7 @@ contains
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
         real,                allocatable   :: seed_shifts_loc(:,:)
         logical,             allocatable   :: seed_has_sh_loc(:)
-        integer, allocatable :: pind2glob(:)
+        integer, allocatable :: pind2glob(:), pinds_loc(:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
         if( file_exists(binfname) )then
             call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
@@ -618,9 +618,10 @@ contains
         call fclose(funit)
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab%read_tab_to_glob')
-        call build_pind_lookup(self%pinds, mat_loc(1,:)%pind, pind2glob, max_pind)
+        pinds_loc = mat_loc(1,:)%pind
+        call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
+            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
             return
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
@@ -635,7 +636,7 @@ contains
             endif
         end do
         !$omp end parallel do
-        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
+        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
     end subroutine read_tab_to_glob
 
     subroutine write_state_tab( self, binfname )
@@ -653,7 +654,7 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: state_tab_glob(:,:)
-        integer, allocatable :: pind2glob(:)
+        integer, allocatable :: pind2glob(:), pinds_glob(:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob, pind, max_pind
         headsz = sizeof(nptcls_glob)
         if( .not. file_exists(binfname) )then
@@ -666,9 +667,10 @@ contains
         allocate(state_tab_glob(self%nstates,nptcls_glob))
         read(unit=funit,pos=headsz + 1) state_tab_glob
         call fclose(funit)
-        call build_pind_lookup(state_tab_glob(1,:)%pind, self%pinds, pind2glob, max_pind)
+        pinds_glob = state_tab_glob(1,:)%pind
+        call build_pind_lookup(pinds_glob, self%pinds, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(state_tab_glob, pind2glob)
+            deallocate(state_tab_glob, pind2glob, pinds_glob)
             return
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
@@ -679,7 +681,7 @@ contains
             if( i_glob > 0 ) self%state_tab(:,i_loc) = state_tab_glob(:,i_glob)
         end do
         !$omp end parallel do
-        deallocate(state_tab_glob, pind2glob)
+        deallocate(state_tab_glob, pind2glob, pinds_glob)
     end subroutine read_state_tab
 
     ! write a global assignment map to binary file
@@ -699,7 +701,7 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
         type(ptcl_ref),      allocatable   :: assgn_glob(:)
-        integer, allocatable :: pind2glob(:)
+        integer, allocatable :: pind2glob(:), pinds_glob(:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob, pind, max_pind
         headsz = sizeof(nptcls_glob)
         if( .not. file_exists(binfname) )then
@@ -712,9 +714,10 @@ contains
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
         call fclose(funit)
-        call build_pind_lookup(assgn_glob(:)%pind, self%pinds, pind2glob, max_pind)
+        pinds_glob = assgn_glob(:)%pind
+        call build_pind_lookup(pinds_glob, self%pinds, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(assgn_glob, pind2glob)
+            deallocate(assgn_glob, pind2glob, pinds_glob)
             return
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
@@ -725,7 +728,7 @@ contains
             if( i_glob > 0 ) self%assgn_map(i_loc) = assgn_glob(i_glob)
         end do
         !$omp end parallel do
-        deallocate(assgn_glob, pind2glob)
+        deallocate(assgn_glob, pind2glob, pinds_glob)
     end subroutine read_assignment
 
     ! DESTRUCTOR

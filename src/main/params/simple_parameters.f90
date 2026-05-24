@@ -60,7 +60,6 @@ type :: parameters
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
-    character(len=3)          :: cavgw='no'           !< use class averages weights during 3D ab initio(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
@@ -285,7 +284,6 @@ type :: parameters
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
-    character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs|lsf)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|promote){apply}
@@ -469,7 +467,6 @@ type :: parameters
     real    :: eullims(3,2)=0.
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
-    real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
@@ -539,7 +536,7 @@ type :: parameters
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
-    real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
+    real    :: tau=TAU_DEFAULT     !< fudge factor controlling ML regularization strength
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection

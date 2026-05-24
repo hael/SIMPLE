@@ -21,7 +21,8 @@ if( command_argument_count() /= 4 .and. command_argument_count() /= 6 .and. comm
     write(logfhandle,'(a)') 'smpd    : sampling distance in Angstrom per voxel'
     write(logfhandle,'(a)') 'mskdiam : spherical mask diameter in Angstrom'
     write(logfhandle,'(a)') '[out_even.mrc out_odd.mrc] : optional output volume paths'
-    write(logfhandle,'(a)') '[aux_even.mrc aux_odd.mrc aux_res] : optional auxiliary candidate pair and effective resolution in Angstrom'
+    write(logfhandle,'(a)') '[aux_even.mrc aux_odd.mrc aux_res] : optional auxiliary pair; used only if aux_res is finer than &
+        &the finest bank label'
     stop
 endif
 call get_command_argument(1, even_file)
@@ -87,11 +88,7 @@ endif
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 rt_elapsed = toc(t_start)
-if( allocated(aux_even) )then
-    call print_nu_filtmap_lowpass_stats(l_mask, aux_resolutions=[aux_res])
-else
-    call print_nu_filtmap_lowpass_stats(l_mask)
-endif
+call print_nu_filtmap_lowpass_stats(l_mask)
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
 write(logfhandle,'(a,f10.3,a)') 'nonuniform filtering elapsed wall time: ', rt_elapsed, ' s'

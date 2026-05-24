@@ -11,15 +11,14 @@ private
 
 contains
 
-    subroutine assign_ori( s, ref, inpl, corr, sh, w )
+    subroutine assign_ori( s, ref, inpl, corr, sh )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
         real,                   intent(in)    :: corr
         real,                   intent(in)    :: sh(2)
-        real,         optional, intent(in)    :: w
         type(ori) :: osym, o_prev, o_new
         integer   :: state, neff_states, nrefs_eval, nrefs_tot
-        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
+        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - s%b_ptr%pftc%get_rot(inpl)
         ! stash previous ori
@@ -108,10 +107,6 @@ contains
             frac = 100.0
         endif
         call s%b_ptr%spproj_field%set(s%iptcl, 'frac', frac)
-        ! weight
-        pw = s3D%proj_space_w(ref, s%ithr)
-        if( (trim(s%p_ptr%ptclw) .eq. 'yes') .and. present(w) ) pw = w
-        call s%b_ptr%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
         call o_prev%kill

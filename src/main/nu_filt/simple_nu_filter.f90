@@ -29,8 +29,9 @@
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
 !
-! Auxiliary candidate pairs supplied through setup_nu_dmats compete with the
-! base low-pass bank during voxelwise optimization.
+! Auxiliary pairs supplied through setup_nu_dmats are only used when
+! they extend beyond the finest discrete member. In that case the auxiliary pair
+! replaces the finest discrete label instead of appending a sidecar candidate.
 !
 module simple_nu_filter
 use simple_core_module_api
@@ -81,10 +82,9 @@ integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM           = 2
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_AWF          = 3.0
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_RADIUS_FRAC  = 0.5
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
-! Report every nonzero retained-bank coordinate jump as a continuity boundary.
-! Larger jumps are still separated in the diagnostics.
-integer,          parameter   :: DISCONT_STEP_THRESH         = 0
-integer,          parameter   :: NU_CONTINUITY_LARGE_STEP_THRESH = 1
+! Report continuity health using the same hinge as the ordered-label prior:
+! one-step retained-bank transitions are tolerated, larger jumps are penalized.
+integer,          parameter   :: DISCONT_STEP_THRESH         = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_MAXITS      = 6
 ! Adjacent retained-bank coordinate jumps are tolerated by the ordered-label
 ! Potts prior; the quadratic hinge makes larger jumps increasingly expensive.
@@ -94,19 +94,12 @@ integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
-! Optional unordered auxiliary sources are source alternatives rather than
-! ordered resolution-bin labels. Keep this at zero to let the unary objective
-! decide aux-vs-base assignments without frequency-ladder Potts bias; raise
-! slightly if a future dataset needs source-boundary cleanup.
-real,             parameter   :: NU_AUX_SOURCE_BOUNDARY_COST = 0.0
 integer,          parameter   :: NU_LABEL_KIND = selected_int_kind(4)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
-real,             allocatable :: dmats_aux_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
-real,             allocatable :: aux_candidate_resolutions(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
 integer(kind=NU_LABEL_KIND), allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
@@ -123,7 +116,8 @@ real    :: smpd
 ! Computed once per setup_nu_dmats and reused across all shell-extension
 ! challenges so the per-shell median/MAD pass is not paid repeatedly.
 real    :: nu_noise_sigma_cached = 0.
-logical :: l_aux_source_unordered_potts = .false.
+integer :: nu_aux_replacement_label = 0
+real    :: nu_aux_replacement_resolution = 0.
 
 type :: nu_highres_extension_stats
     logical :: attempted    = .false.
@@ -152,6 +146,14 @@ interface
     module real function cutoff_find_to_lowpass_limit( icut )
         integer, intent(in) :: icut
     end function cutoff_find_to_lowpass_limit
+
+    module real function nu_label_lowpass_limit( ilabel )
+        integer, intent(in) :: ilabel
+    end function nu_label_lowpass_limit
+
+    module logical function nu_label_is_aux_replacement( ilabel )
+        integer, intent(in) :: ilabel
+    end function nu_label_is_aux_replacement
 
     module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
         class(image), intent(in) :: vol_even, vol_odd
@@ -243,26 +245,17 @@ interface
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, l_aux_source_unordered )
+            &n_highres_steps )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
-        logical,     optional, intent(in) :: l_aux_source_unordered
     end subroutine setup_nu_dmats
 
-    module subroutine setup_nu_candidate_coords( n_candidates, aux_resolutions )
+    module subroutine setup_nu_candidate_coords( n_candidates )
         integer, intent(in) :: n_candidates
-        real,    intent(in) :: aux_resolutions(:)
     end subroutine setup_nu_candidate_coords
-
-    module subroutine refresh_nu_aux_candidate_coords()
-    end subroutine refresh_nu_aux_candidate_coords
-
-    module real function lowpass_limit_to_candidate_coord( lp_angstrom )
-        real, intent(in) :: lp_angstrom
-    end function lowpass_limit_to_candidate_coord
 
     module real function get_nu_filter_bank_finest_lp()
     end function get_nu_filter_bank_finest_lp
@@ -283,10 +276,6 @@ interface
         integer,          intent(in) :: n_base
         character(len=*), intent(in) :: stage
     end subroutine log_nu_candidate_selection_counts
-
-    module subroutine log_nu_aux_unary_margin_stats( n_base )
-        integer, intent(in) :: n_base
-    end subroutine log_nu_aux_unary_margin_stats
 
     module subroutine log_nu_candidate_coords
     end subroutine log_nu_candidate_coords
@@ -321,11 +310,6 @@ interface
     module real function nu_label_smooth_coord_pair_cost( icoord, jcoord )
         real, intent(in) :: icoord, jcoord
     end function nu_label_smooth_coord_pair_cost
-
-    module real function nu_label_smooth_source_pair_cost( icoord, jcoord, l_aux_i, l_aux_j )
-        real,    intent(in) :: icoord, jcoord
-        logical, intent(in) :: l_aux_i, l_aux_j
-    end function nu_label_smooth_source_pair_cost
 
     module integer function nu_label_smooth_color( i, j, k )
         integer, intent(in) :: i, j, k
@@ -372,14 +356,6 @@ interface
         integer, intent(out)   :: n_extended
     end subroutine init_nu_highres_extension_selection
 
-    module subroutine init_nu_highres_extension_selection_aux( frontier_vox, dmat_old, dmat_new, &
-            &extend_choice, n_extended )
-        integer, intent(in)    :: frontier_vox(:)
-        real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
-        integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
-        integer, intent(out)   :: n_extended
-    end subroutine init_nu_highres_extension_selection_aux
-
     module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )
         integer, intent(in) :: frontier_vox(:)
         integer(kind=NU_LABEL_KIND), intent(in) :: extend_choice(:)
@@ -413,19 +389,16 @@ interface
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
-    module real function get_nu_filtmap_finest_selected_lp( mask, aux_resolutions )
+    module real function get_nu_filtmap_finest_selected_lp( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        real, optional, intent(in) :: aux_resolutions(:)
     end function get_nu_filtmap_finest_selected_lp
 
-    module subroutine print_filtmap_lowpass_histogram( mask, aux_resolutions )
+    module subroutine print_filtmap_lowpass_histogram( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        real, optional, intent(in) :: aux_resolutions(:)
     end subroutine print_filtmap_lowpass_histogram
 
-    module subroutine print_nu_filtmap_lowpass_stats( mask, aux_resolutions )
+    module subroutine print_nu_filtmap_lowpass_stats( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        real, optional, intent(in) :: aux_resolutions(:)
     end subroutine print_nu_filtmap_lowpass_stats
 
     module subroutine analyze_filtmap_neighbor_continuity( mask )

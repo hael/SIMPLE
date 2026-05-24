@@ -28,7 +28,7 @@ enum, bind(c)
     enumerator :: I_STATE       = 23
     enumerator :: I_STKIND      = 24
     enumerator :: I_UPDATECNT   = 25
-    enumerator :: I_W           = 26
+    enumerator :: I_RETIRED_W   = 26
     enumerator :: I_X           = 27
     enumerator :: I_XINCR       = 28
     enumerator :: I_XPOS        = 29
@@ -57,7 +57,6 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 46
 
 contains
 
@@ -115,8 +114,6 @@ contains
                 get_oriparam_ind = I_STKIND
             case('updatecnt')
                 get_oriparam_ind = I_UPDATECNT
-            case('w')
-                get_oriparam_ind = I_W
             case('x')
                 get_oriparam_ind = I_X
             case('xincr')
@@ -216,8 +213,6 @@ contains
                 flag ='stkind'
             case(I_UPDATECNT)
                 flag ='updatecnt'
-            case(I_W)
-                flag ='w'
             case(I_X)
                 flag ='x'
             case(I_XINCR)
@@ -270,7 +265,7 @@ contains
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
         oriparam_isthere = .false.
-        if( ind < 1 .or. ind > N_NON_EMPTY ) return
+        if( ind < 1 .or. ind > N_PTCL_ORIPARAMS ) return
         select case(ind)
             ! these variables cannot be zero if defined
             case(I_CLASS)
@@ -317,6 +312,10 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_CLASS_MATCH)
                 oriparam_isthere = abs(val) > TINY    
+            case(I_RETIRED_W)
+                oriparam_isthere = .false.
+            case(I_EMPTY8, I_EMPTY9, I_EMPTY10)
+                oriparam_isthere = .false.
             case DEFAULT
                 ! default case is defined
                 oriparam_isthere = .true.

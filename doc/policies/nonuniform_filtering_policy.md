@@ -21,13 +21,14 @@ nonuniform volume filter path.
 
 In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is always the static
 discrete-bank policy with `nu_refine=no`. It keeps the staged refinement on the
-ordinary explicit low-pass schedule, allows the ML-regularized auxiliary
-candidate to compete, and does not promote NU-selected bandwidth back into the
-matching `lp`. Explicit `filt_mode=nonuniform_lpset` remains available for
-testing the static NU path with NU-selected LP promotion. Automasking may still
-provide the NU support mask, but it does not switch abinitio3D to gold-standard
-refinement. The high-resolution `nu_refine=yes` ratchet is reserved for
-`refine3D_auto`.
+ordinary explicit low-pass schedule, and lets the ML-regularized auxiliary pair
+replace the finest discrete NU label only when its effective resolution is finer
+than that label. Default `nonuniform` does not promote NU-selected bandwidth
+back into the matching `lp`. Explicit `filt_mode=nonuniform_lpset` remains
+available for testing the static NU path with NU-selected LP promotion.
+Automasking may still provide the NU support mask, but it does not switch
+abinitio3D to gold-standard refinement. The high-resolution `nu_refine=yes`
+ratchet is reserved for `refine3D_auto`.
 
 ## Execution point
 
@@ -52,8 +53,8 @@ The nonuniform filter consumes:
 
 - the current unfiltered even volume
 - the current unfiltered odd volume
-- optionally, auxiliary pre-filtered even/odd candidate pairs supplied by `volassemble`
-- an auxiliary effective resolution, in Angstrom, for each auxiliary candidate pair
+- optionally, an auxiliary pre-filtered even/odd replacement pair supplied by `volassemble`
+- an auxiliary effective resolution, in Angstrom, for the replacement test
 - a logical support mask
 
 Mask precedence is:
@@ -62,14 +63,7 @@ Mask precedence is:
 2. existing compatible state-specific automask, when `automsk != 'no'`
 3. spherical support mask derived from `mskdiam`
 
-When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base nonuniform input. In the static NU bank path (`nu_refine=no`), it may also supply the ML-regularized even/odd pair as an auxiliary candidate source. In the refinement-ratchet path (`nu_refine=yes`, as in `refine3D_auto`), ML-regularized auxiliary candidates are not supplied; the high-resolution shell challenger owns the refinement experiment. Any supplied pairs are clean of low-resolution insertion and receive any trailing blend before filtering. The auxiliary coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`.
-
-The auxiliary source remains a distinct candidate source. It does not replace a
-base low-pass bank member. When an auxiliary candidate wins, source provenance is
-tracked separately from the effective local low-pass label: `srcmap` identifies
-the auxiliary source used for output synthesis, while `filtmap` stores the
-nearest base-bank label implied by the auxiliary effective-resolution coordinate
-for diagnostics and map visualization.
+When `ml_reg=yes`, `volassemble` uses the `_unfil` even/odd pair as the base nonuniform input. In the static NU bank path (`nu_refine=no`), it may also supply the ML-regularized even/odd pair as an auxiliary replacement source. The auxiliary pair is ignored unless its effective resolution is finer than the finest discrete bank member. If it is finer, it replaces that finest label; it is not appended as an extra label beside the discrete bank. In the refinement-ratchet path (`nu_refine=yes`, as in `refine3D_auto`), ML-regularized auxiliary replacements are not supplied; the high-resolution shell challenger owns the refinement experiment. Any supplied pairs are clean of low-resolution insertion and receive any trailing blend before filtering. The auxiliary effective resolution is derived from the state FSC(0.143) resolution, `res0143s(state)`.
 
 ## Outputs
 
@@ -86,8 +80,8 @@ Actual filenames are built by appending `NUFILT_SUFFIX`, currently `_nu_filt`, t
 The filter currently:
 
 1. builds a bank of low-pass filtered even/odd volumes from the unfiltered pair
-2. optionally appends auxiliary pre-filtered even/odd pairs to that candidate bank only for static-bank NU filtering
-3. maps all candidates onto a shared filter-bank coordinate axis
+2. optionally replaces the finest discrete label with an auxiliary pre-filtered even/odd pair only when the auxiliary resolution is finer
+3. maps all retained labels onto a shared filter-bank coordinate axis
 4. caches the low-pass-filtered base bank on disk
 5. computes voxelwise objective maps across all candidates
 6. applies candidate-scale, mask-normalized AWF-like objective smoothing
@@ -130,7 +124,9 @@ Before voxelwise selection, each candidate objective map is locally averaged
 with a normalized tent kernel over the NU mask. The tent radius is tied to the
 candidate's effective low-pass limit rather than a fixed physical width:
 `radius_A = 0.5 * AWF * LP(A)`, currently with `AWF = 3.0` and an upper cap of
-30 A. Auxiliary candidates use their supplied effective resolution.
+30 A. An auxiliary replacement label uses the supplied effective resolution for
+objective smoothing and low-pass reporting while keeping the finest retained
+label coordinate for Potts regularization.
 
 This is an AWF-like evidence aggregation step: lower-resolution candidates are
 judged from broader local evidence, while high-resolution challengers remain
@@ -145,8 +141,8 @@ voxelwise selector described above and before writing filtered volumes.
 
 The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of ICM-style passes over the label map using the fully connected 26-neighbor 3D voxel neighborhood. Updates use an 8-color parity schedule so voxels updated within the same pass are not neighbors under the full 3x3x3 neighborhood. The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
 
-- base low-pass candidates use coordinates `1..n_base`
-- auxiliary candidates are projected onto that same axis from their required effective resolutions
+- retained low-pass candidates use coordinates `1..n_base`
+- an auxiliary replacement, when active, uses the finest retained coordinate
 - one-step retained-bank coordinate differences are tolerated by the Potts
   hinge, allowing smooth local transitions between adjacent retained filters
 - jumps larger than one retained-bank coordinate step receive a
@@ -154,18 +150,23 @@ The smoothing stage is intended to reduce abrupt local jumps in the selected fil
 - neighbor penalties are normalized by the number of in-mask neighbors, so boundary and thin-mask voxels do not receive systematically weaker or stronger regularization
 - ties preserve the current label within a small tolerance instead of drifting to the lowest candidate index
 
-Auxiliary candidate resolutions are mandatory whenever auxiliary candidate volumes are supplied. In the current `volassemble` ML-regularized static-bank path, the auxiliary candidate is the ML-regularized even/odd pair and its coordinate is derived from the state FSC(0.143) resolution, `res0143s(state)`. When `nu_refine=yes`, no ML-regularized auxiliary candidate is supplied to the initial NU competition.
+Auxiliary replacement resolutions are mandatory whenever auxiliary replacement
+volumes are supplied. In the current `volassemble` ML-regularized static-bank
+path, the auxiliary pair is the ML-regularized even/odd pair and its effective
+resolution is derived from the state FSC(0.143) resolution, `res0143s(state)`.
+When `nu_refine=yes`, no ML-regularized auxiliary pair is supplied to the
+initial NU competition.
 
-Diagnostics log the estimated smoothing beta, candidate and auxiliary counts, jump-penalty settings, candidate coordinates, changed voxels per iteration, and mean site energy.
-Auxiliary-candidate diagnostics also log the unary aux-vs-best-base margin and
-the auxiliary source assignment counts before and after ordered-label smoothing,
-so workflow logs can distinguish an auxiliary candidate that loses the unary
-competition from one that is removed by the spatial prior.
+Diagnostics log the estimated smoothing beta, retained label counts,
+jump-penalty settings, candidate coordinates, changed voxels per iteration, and
+mean site energy. Auxiliary replacement diagnostics also log whether the
+replacement was accepted or ignored, the replacement effective resolution, and
+the unary margin versus the best coarser retained label.
 Neighbor-continuity diagnostics report unique 26-neighbor links and classify
-all nonzero retained-bank coordinate differences as boundaries, with one-step
-boundaries separated from larger jumps. This diagnostic boundary definition is
-stricter than the Potts hinge: one-step boundaries are visible in logs, but they
-are not penalized by the ordered-label smoothing prior.
+retained-bank coordinate differences as identical links, Potts-tolerated
+one-step transitions, or penalized larger jumps. One-step transitions remain
+visible in the log as context, but the continuity health assessment is driven by
+the larger jumps that the ordered-label prior actually penalizes.
 
 ### Ordered-label smoothing
 
@@ -253,9 +254,9 @@ copying it again for thinning.
 
 In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
 single matching low-pass limit back to the project. This limit is the finest
-assigned NU candidate in the state mask; when an auxiliary ML-regularized
-candidate is present and selected, its actual auxiliary resolution participates
-in that minimum rather than being ignored as a non-base source.
+assigned NU label in the state mask; when an auxiliary ML-regularized
+replacement is active and selected, its actual auxiliary resolution participates
+in that minimum through the replaced finest label.
 
 Default staged `abinitio3D` with `filt_mode=nonuniform` does not use this
 promoted NU limit. Its staged `refine3D` command line carries the standard
@@ -311,4 +312,4 @@ Architectural target:
 
 - `volassemble` should orchestrate nonuniform filtering.
 - A dedicated volume postprocessing service should own the filter-bank setup, objective evaluation, and output synthesis.
-- When `ml_reg=yes`, `volassemble` should feed the `_unfil` pair as the base nonuniform input. It may add the ML-regularized pair as an auxiliary candidate source only in static-bank NU filtering (`nu_refine=no`).
+- When `ml_reg=yes`, `volassemble` should feed the `_unfil` pair as the base nonuniform input. It may supply the ML-regularized pair as an auxiliary replacement only in static-bank NU filtering (`nu_refine=no`), and only use it when it extends beyond the finest discrete label.

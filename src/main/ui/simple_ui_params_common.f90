@@ -38,7 +38,6 @@ type(ui_param) :: element
 type(ui_param) :: envfsc
 type(ui_param) :: eo
 type(ui_param) :: flipgain
-type(ui_param) :: frac
 type(ui_param) :: fraca
 type(ui_param) :: fraction_dose_target
 type(ui_param) :: frcs
@@ -311,10 +310,6 @@ subroutine set_ui_params
     call flipgain%set_param(       'flipgain',        'multi',  'Flip the gain reference', &
                                    'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', &
                                    '(no|x|y|xy|yx){no}', .false., 'no')
-
-    call frac%set_param(           'frac',            'num',    'Fraction of particles to include', &
-                                   'Fraction of particles to include based on spectral score (median of FRC between reference and particle)', &
-                                   'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
 
     call fraca%set_param(          'fraca',           'num',    'Amplitude contrast fraction', &
                                    'Fraction of amplitude contrast used for fitting CTF{0.1}', &

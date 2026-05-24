@@ -104,7 +104,7 @@ contains
         real,      target, intent(in)    :: symmats(3,3,nsym)
         real,      target, intent(inout) :: rotmats(2,3,MAXIMGBATCHSZ)
         complex,    allocatable :: fplanes(:,:,:)
-        real,       allocatable :: ctfsqplanes(:,:,:), pws(:)
+        real,       allocatable :: ctfsqplanes(:,:,:)
         logical,    allocatable :: even(:)
         integer(timer_int_kind) :: t
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
@@ -123,10 +123,10 @@ contains
         cdim2D = ubound(fpls(1)%cmplx_plane) - clb2D + 1
         allocate(fplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ),&
             &ctfsqplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ),&
-            &pws(MAXIMGBATCHSZ),even(MAXIMGBATCHSZ))
+            &even(MAXIMGBATCHSZ))
         ! Device storage
         !$omp target enter data map(alloc: ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
-        !$omp& fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ), pws(1:MAXIMGBATCHSZ),&
+        !$omp& fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
         !$omp& rotmats(1:2,1:3,1:MAXIMGBATCHSZ), even(1:MAXIMGBATCHSZ))
         !$omp target enter data map(to: symmats(1:3,1:3,1:nsym),&
         !$omp& rhoexp_e(1:cdim(1),1:cdim(2),1:cdim(3)), rhoexp_o(1:cdim(1),1:cdim(2),1:cdim(3)),&
@@ -135,15 +135,15 @@ contains
         do ibatch = 1,nbatch
             ! prep batch meta-data & matrices
             call update_ptcls_arrays(batchsz, batchlims(1), build%spproj_field, fpls,&
-            & nptcls, pinds, even, pws, rotmats, fplanes, ctfsqplanes)
+            & nptcls, pinds, even, rotmats, fplanes, ctfsqplanes)
             if( DEBUG ) t = tic()
             sz = batchsz    ! For use on device
-            !$omp target update to(fplanes(1:cdim2D(1),1:cdim2D(2),1:sz),even(1:sz), pws(1:sz),&
+            !$omp target update to(fplanes(1:cdim2D(1),1:cdim2D(2),1:sz),even(1:sz),&
             !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:sz), rotmats(1:2,1:3,1:sz))
-            !$omp target data use_device_addr(even, pws, rotmats, symmats, fplanes,&
+            !$omp target data use_device_addr(even, rotmats, symmats, fplanes,&
             !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
             call insert_slices_batch(sz, cdim, cdim2D, clb2D, clb, fpllims, nsym,&
-                &h_edge, nyq, even, pws, rotmats, symmats, fplanes, ctfsqplanes,&
+                &h_edge, nyq, even, rotmats, symmats, fplanes, ctfsqplanes,&
                 &cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
             if( DEBUG ) t_grid = t_grid + toc(t)
             if( ibatch < nbatch )then
@@ -155,12 +155,12 @@ contains
         enddo
         if( DEBUG ) t = tic()
         !$omp target exit data map(delete:fplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
-        !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ), pws(1:MAXIMGBATCHSZ),&
+        !$omp& ctfsqplanes(1:cdim2D(1),1:cdim2D(2),1:MAXIMGBATCHSZ),&
         !$omp& rotmats(1:2,1:3,1:MAXIMGBATCHSZ), even(1:MAXIMGBATCHSZ))
         !$omp target exit data map(from: rhoexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& rhoexp_o(1:cdim(1),1:cdim(2),1:cdim(3)), cmatexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& cmatexp_o(1:cdim(1),1:cdim(2),1:cdim(3))) map(release: symmats(1:3,1:3,1:nsym))
-        deallocate(fplanes, ctfsqplanes, pws, even)
+        deallocate(fplanes, ctfsqplanes, even)
         if( DEBUG ) t_finalize = t_finalize + toc(t)
         contains
 
@@ -183,12 +183,12 @@ contains
     end subroutine insert_all_slices
 
     subroutine insert_slices_batch(sz, cdim, cdim2D, clb2D, clb, fpllims, nsym,&
-        &h_edge, nyq, even, pws, rotmats, symmats, fplanes, ctfsqplanes,&
+        &h_edge, nyq, even, rotmats, symmats, fplanes, ctfsqplanes,&
         &cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
         integer,         intent(in)    :: sz, cdim(3), cdim2D(2), clb2D(2), clb(3), fpllims(3,2)
         integer,         intent(in)    :: nsym, h_edge, nyq
         logical,         intent(in)    :: even(MAXIMGBATCHSZ)
-        real,            intent(in)    :: pws(MAXIMGBATCHSZ), rotmats(2,3,MAXIMGBATCHSZ)
+        real,            intent(in)    :: rotmats(2,3,MAXIMGBATCHSZ)
         real,            intent(in)    :: symmats(3,3,nsym)
         complex,         intent(in)    :: fplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
         real,            intent(in)    :: ctfsqplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
@@ -202,7 +202,7 @@ contains
         complex :: comp
         real    :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM)
         real    :: pf2, pscale, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
-        real    :: w_ctfsq, pw, c_re, c_im
+        real    :: w_ctfsq, c_re, c_im
         integer :: h, i, k, l, m, isym, iy, iz, ky, mz
         integer :: h_sq, k_max_h, k_lo, k_hi, hp, kp, hpb, kpb
         integer :: win(3,2), nyqsq, iwinsz
@@ -212,16 +212,14 @@ contains
         !$omp target teams distribute parallel do nowait collapse(2) proc_bind(close)&
         !$omp& map(to: sz, cdim(1:3), cdim2D(1:2), clb2D(1:2), clb(1:3),&
         !$omp& fpllims(1:3,1:2), nsym, h_edge, nyqsq, pf2, iwinsz)&
-        !$omp& has_device_addr(even, pws, rotmats, symmats, fplanes,&
+        !$omp& has_device_addr(even, rotmats, symmats, fplanes,&
         !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)&
         !$omp& default(shared) private(h,i,k,l,m,pscale,isym,r11,r12,r13,r21,r22,r23,ctfsq,&
-        !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hp,kp,hpb,kpb,comp,pw,&
+        !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hp,kp,hpb,kpb,comp,&
         !$omp& loc,w_ctfsq,c_re,c_im,h_sq,k_max_h,k_lo,k_hi,cmat,rho)
         do i = 1, sz
             do isym = 1, nsym
-                pw = pws(i)
-                if( pw <= TINY ) cycle
-                pscale = pw * pf2
+                pscale = pf2
                 if( even(i) )then
                     cmat => cmatexp_e
                     rho  => rhoexp_e
@@ -268,7 +266,6 @@ contains
                             endif
                             if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
                             comp  = pscale * comp
-                            ctfsq = pw     * ctfsq
                             base = real(win(:,1)) - loc
                             sumx = 0.0; sumy = 0.0; sumz = 0.0
                             do l = 1, WDIM
@@ -309,13 +306,12 @@ contains
     end subroutine insert_slices_batch
 
     subroutine update_ptcls_arrays( bsz, bstart, os, fpls, nptcls, pinds, &
-        & even, pws, rotmats, fplanes, ctfsqplanes )
+        & even, rotmats, fplanes, ctfsqplanes )
         integer,            intent(in)  :: bsz, bstart, nptcls
         class(oris),        intent(in)  :: os
         class(fplane_type), intent(in)  :: fpls(:)
         integer,            intent(in)  :: pinds(nptcls)
         logical,            intent(out) :: even(MAXIMGBATCHSZ)
-        real,               intent(out) :: pws(MAXIMGBATCHSZ)
         real,               intent(out) :: rotmats(2,3,MAXIMGBATCHSZ)
         complex,            intent(out) :: fplanes(:,:,:)
         real,               intent(out) :: ctfsqplanes(:,:,:)
@@ -328,7 +324,6 @@ contains
             j       = bstart + i - 1
             iptcl   = pinds(j)
             even(i) = os%get_eo(iptcl) == 0
-            pws(i)  = os%get(iptcl, 'w')
             rmat               = os%get_mat(iptcl)
             rotmats(:,:,i)     = rmat(1:2,:)
             fplanes(:,:,i)     = fpls(i)%cmplx_plane(:,:)

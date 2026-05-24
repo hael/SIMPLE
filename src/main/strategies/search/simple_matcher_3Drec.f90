@@ -48,16 +48,11 @@ contains
         class(fplane_type), intent(in)    :: fpl
         class(sym),         intent(inout) :: se
         class(ori),         intent(inout) :: o
-        real    :: pw
         integer :: s, eo
         s = o%get_state()
         if( s == 0 ) return
         eo = o%get_eo()
-        pw = 1.0
-        if( o%isthere('w') ) pw = o%get('w')
-        if( pw > TINY )then
-            call build%eorecvols(s)%grid_plane(se, o, fpl, eo, pw)
-        endif
+        call build%eorecvols(s)%grid_plane(se, o, fpl, eo)
     end subroutine grid_ptcl
 
     !> volumetric 3d reconstruction

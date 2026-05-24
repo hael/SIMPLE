@@ -92,7 +92,6 @@ contains
         endif
         call build%spproj_field%set_all2single('state',1.)
         if( params%nstates > 1 ) call build%spproj_field%rnd_states(params%nstates)
-        call build%spproj_field%set_all2single('w',1.)
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call orientation%kill
         call os_even%kill
@@ -282,8 +281,6 @@ contains
             if( params%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) THROW_HARD('need nspace command line arg to provide projstats')
                 noris = build%spproj_field%get_noris()
-                ! setup weights
-                call build%spproj_field%calc_hard_weights(params%frac)
                 ! generate population stats
                 call build%spproj_field%get_pops(tmp, 'proj')
                 nprojs         = size(tmp)
@@ -301,7 +298,7 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! produce a histogram based on clustering into NSPACE_REDUCED even directions
-                ! first, generate a mask based on state flag and w
+                ! first, generate a mask based on state flag
                 ptcl_mask = build%spproj_field%included()
                 allocate(clustering(noris), clustszs(NSPACE_REDUCED))
                 call osubspace%new(NSPACE_REDUCED, is_ptcl=.false.)

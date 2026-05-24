@@ -331,7 +331,7 @@
         - `simple_oris_stats.f90` — routines for calculating statistics of oris (e.g. mean, median, min, max, etc.)
         - `simple_oris_tester.f90` — unit test routines for the oris class
         - `simple_oris_transform.f90` — transform/offset/rotation routines for oris object
-        - `simple_oris_weights.f90` — routines for calculating weights for oris (e.g. for resampling, class averaging, etc.)
+        - `simple_oris_weights.f90` — retired orientation weight submodule retained for source-list stability
       - **pca/** — home of modules implementing principal component analysis: SVD, probabilistic, and nonlinear kernel variants
         - `simple_kpca_svd.f90` — kPCA using 'Learning to Find Pre-Images', using svd for eigvals/eigvecs
         - `simple_pca.f90` — abstract pca strategy base class

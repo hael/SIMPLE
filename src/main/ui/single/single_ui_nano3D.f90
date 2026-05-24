@@ -121,7 +121,6 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call refine3D_nano%add_input(UI_SRCH, maxits)
         call refine3D_nano%add_input(UI_SRCH, update_frac)
-        call refine3D_nano%add_input(UI_SRCH, frac)
         call refine3D_nano%add_input(UI_SRCH, pgrp)
         call refine3D_nano%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls

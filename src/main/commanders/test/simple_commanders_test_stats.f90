@@ -432,7 +432,6 @@ subroutine exec_test_sp_project( self, cline )
         call project1%os_ptcl2D%set_class(i, nint(ran3()*100.))
         call project1%os_ptcl2D%set_state(i, nint(ran3()))
     enddo
-    call project1%os_ptcl2D%set_all2single('w', 1.0)
     project1%os_ptcl3D = project1%os_ptcl2D
     call project1%os_ptcl2D%rnd_oris( trs=5.0, eullims=eullims)
     call project1%os_ptcl2D%delete_entry('z')

@@ -89,8 +89,7 @@ If the expected grouped sigma STAR file for the current starting iteration does 
 
 In shared-memory `refine3D`, this check is performed against
 `sigma2_group_iter_<which_iter>.star` before entering the main loop; if missing,
-`calc_pspec` is executed after enforcing even/odd partitioning and, for
-`startit==1`, unit particle weights. See
+`calc_pspec` is executed after enforcing even/odd partitioning. See
 [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:355).
 
 `abinitio2D` sets `sigma_est='global'` and, unless overridden, uses the default

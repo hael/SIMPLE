@@ -56,12 +56,12 @@ contains
                 if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
                     call assign_ori(self%s, iref, irot, corr,&
                     &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
-                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y], corr)
+                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y])
                 else
-                    call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
+                    call assign_ori(self%s, iref, irot, corr, [0.,0.])
                 endif
             else
-                call assign_ori(self%s, iref, irot, corr, [0.,0.], corr)
+                call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
         else
             call os%reject(self%s%iptcl)

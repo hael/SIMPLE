@@ -75,7 +75,6 @@ contains
             call os%set(i, 'updatecnt', 0.0)
             call os%set(i, 'sampled',   0.0)
             call os%set(i, 'corr',      real(i)/10.0)
-            call os%set(i, 'w',         1.0)
         end do
         ! Basic Euler getters
         call assert_real(20.0, os%e1get(2), 1.0e-4, 'e1get')

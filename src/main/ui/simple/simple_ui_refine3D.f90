@@ -125,7 +125,6 @@ contains
         ! <empty>
         ! search controls
         call reconstruct3D%add_input(UI_SRCH, pgrp)
-        call reconstruct3D%add_input(UI_SRCH, frac)
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
         call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
@@ -162,7 +161,6 @@ contains
         ! <empty>
         ! search controls
         call bootstrap_rec3D%add_input(UI_SRCH, pgrp)
-        call bootstrap_rec3D%add_input(UI_SRCH, frac)
         call bootstrap_rec3D%add_input(UI_SRCH, nstates)
         ! filter controls
         call bootstrap_rec3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
@@ -201,7 +199,6 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, maxits, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, update_frac, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, frac, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")

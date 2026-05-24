@@ -215,12 +215,10 @@ contains
         endif
     end subroutine generate_cluster_centers
 
-    subroutine setup_weights_and_evenodd(build, params)
-        type(builder),    intent(inout) :: build
-        type(parameters), intent(inout) :: params
-        call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
+    subroutine setup_evenodd(build)
+        type(builder), intent(inout) :: build
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-    end subroutine setup_weights_and_evenodd
+    end subroutine setup_evenodd
 
     subroutine write_oritype_segment_for_compute(build, params, l_shmem)
         type(builder),    intent(inout) :: build
@@ -279,7 +277,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! ---- SHARED BODY (overlap with worker) ----
         call generate_cluster_centers(self%build, params, cline)
-        call setup_weights_and_evenodd(self%build, params)
+        call setup_evenodd(self%build)
         call write_oritype_segment_for_compute(self%build, params, l_shmem=.true.)
         call cavger_prepare_and_assemble(params, self%build)
         ! ------------------------------------------
@@ -336,7 +334,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! ---- SHARED BODY (overlap with shmem) ----
         call generate_cluster_centers(self%build, params, cline)
-        call setup_weights_and_evenodd(self%build, params)
+        call setup_evenodd(self%build)
         call write_oritype_segment_for_compute(self%build, params, l_shmem=.false.)
         call cavger_prepare_and_assemble(params, self%build)
         ! ------------------------------------------

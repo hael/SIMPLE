@@ -153,10 +153,10 @@ contains
         type(builder)             :: build
         type(ran_tabu)            :: rt
         type(oris)                :: o_here, os_ran
-        type(ori)                 :: o, o2
+        type(ori)                 :: o2
         integer,      allocatable :: pinds(:)
         type(string)              :: fname
-        integer :: i, s, cnt, nincl, j
+        integer :: i, s, cnt, j
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! ------------------------------------------------------------------
@@ -164,10 +164,8 @@ contains
         ! ------------------------------------------------------------------
         if( cline%defined('nran') ) then
             call handle_random_selection()
-        else if( cline%defined('frac') ) then
-            call handle_fishing_frac_only()
-        else if( (cline%defined('state') .or. cline%defined('class')) .and. .not. cline%defined('frac') ) then
-            call handle_state_class_without_frac()
+        else if( cline%defined('state') .or. cline%defined('class') ) then
+            call handle_state_class_selection()
         else if( params%neg .eq. 'yes' ) then
             ! invert contrast
             call neg_imgfile(params%stk, params%outstk, params%smpd)
@@ -248,90 +246,9 @@ contains
         end subroutine handle_random_selection
 
         ! ------------------------------------------------------------------
-        ! FISHING EXPEDITIONS – FRAC ONLY
+        ! STATE/CLASS SELECTION
         ! ------------------------------------------------------------------
-        subroutine handle_fishing_frac_only()
-            if( params%oritab == '' ) &
-                THROW_HARD('need input orientation doc for fishing expedition; simple_stackops')
-            ! determine how many particles to include
-            if( params%frac < 0.99 ) then
-                nincl = nint(real(params%nptcls)*params%frac)
-            else
-                nincl = params%nptcls
-            end if
-            ! order the particles
-            pinds = build%spproj_field%order()
-            ! fish the best ones out
-            if( cline%defined('state') ) then
-                cnt = 0
-                do i=1,nincl
-                    call progress(i, nincl)
-                    s = nint(build%spproj_field%get(pinds(i), 'state'))
-                    if( s == params%state ) then
-                        cnt = cnt+1
-                        call build%img%read(params%stk, pinds(i))
-                        call build%img%write(params%outstk, cnt)
-                    end if
-                end do
-                ! make orientation structure for the best ones
-                o_here = oris(cnt, is_ptcl=.true.)
-                cnt = 0
-                do i=1,nincl
-                    call progress(i, nincl)
-                    s = nint(build%spproj_field%get(pinds(i), 'state'))
-                    if( s == params%state ) then
-                        cnt = cnt+1
-                        call build%spproj_field%get_ori(pinds(i), o2)
-                        call o_here%set_ori(cnt, o2)
-                    end if
-                end do
-                fname = 'extracted_oris_state'//int2str_pad(params%state,2)//TXT_EXT
-            else if( cline%defined('class') ) then
-                cnt = 0
-                do i=1,nincl
-                    call progress(i, nincl)
-                    s = nint(build%spproj_field%get(pinds(i), 'class'))
-                    if( s == params%class ) then
-                        cnt = cnt+1
-                        call build%img%read(params%stk, pinds(i))
-                        call build%img%write(params%outstk, cnt)
-                    end if
-                end do
-                ! make orientation structure for the best ones
-                o_here = oris(cnt, is_ptcl=.true.)
-                cnt = 0
-                do i=1,nincl
-                    call progress(i, nincl)
-                    s = nint(build%spproj_field%get(pinds(i), 'class'))
-                    if( s == params%class ) then
-                        cnt = cnt+1
-                        call build%spproj_field%get_ori(pinds(i), o2)
-                        call o_here%set_ori(cnt, o2)
-                    end if
-                end do
-                fname = 'extracted_oris_class'//int2str_pad(params%class,5)//TXT_EXT
-            else
-                o_here = oris(nincl, is_ptcl=.true.)
-                do i=1,nincl
-                    call progress(i, nincl)
-                    call build%img%read(params%stk, pinds(i))
-                    call build%img%write(params%outstk, i)
-                    call build%spproj_field%get_ori(pinds(i), o2)
-                    call o_here%set_ori(i, o2)
-                end do
-                fname = 'extracted_oris'//TXT_EXT
-            end if
-            if( cline%defined('outfile') ) then
-                call o_here%write(params%outfile, [1,o_here%get_noris()])
-            else
-                call o_here%write(fname, [1,o_here%get_noris()])
-            end if
-        end subroutine handle_fishing_frac_only
-
-        ! ------------------------------------------------------------------
-        ! FISHING EXPEDITIONS – STATE/CLASS WITHOUT FRAC
-        ! ------------------------------------------------------------------
-        subroutine handle_state_class_without_frac()
+        subroutine handle_state_class_selection()
             if( params%oritab == '' ) &
                 THROW_HARD('need input orientation doc for fishing expedition; simple_stackops')
             if( cline%defined('state') ) then
@@ -388,7 +305,7 @@ contains
             else
                 call o_here%write(fname, [1,o_here%get_noris()])
             end if
-        end subroutine handle_state_class_without_frac
+        end subroutine handle_state_class_selection
 
         ! ------------------------------------------------------------------
         ! COMMON CLEANUP
@@ -396,7 +313,6 @@ contains
         subroutine finish_cleanup()
             call o_here%kill
             call os_ran%kill
-            call o%kill
             call o2%kill
             call rt%kill
             call build%kill_general_tbox

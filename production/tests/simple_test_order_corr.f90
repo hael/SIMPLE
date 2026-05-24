@@ -13,13 +13,12 @@ do i=1,11
 end do
 call os%set(7, 'state', 0.)
 order = os%order()
-call os%calc_hard_weights(0.80)
 do i=1,11
     call os%get_ori(order(i), o)
     call o%print_ori()
 end do
 call o%kill
-if( count(os%get_all('w')>0.5) == 8 )then
+if( size(order) == 11 )then
     print *,'PASSED'
 else
     print *,'FAILED'

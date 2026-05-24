@@ -48,7 +48,6 @@ contains
         type(string)          :: starfile_fname
         real,     allocatable :: pspecs(:,:)
         real(dp), allocatable :: group_weights(:,:), group_pspecs(:,:,:)
-        real(dp)              :: w
         integer               :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -74,15 +73,13 @@ contains
         if( params%l_sigma_glob )then
             ngroups = 1
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
-            !$omp parallel do default(shared) private(iptcl,eo,w)&
+            !$omp parallel do default(shared) private(iptcl,eo)&
             !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
             do iptcl = 1,params%nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 eo = build%spproj_field%get_eo(iptcl) ! 0/1
-                w  = real(build%spproj_field%get(iptcl,'w'),dp)
-                if( w < TINY )cycle
-                group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + w * real(pspecs(:,iptcl),dp)
-                group_weights(eo+1,1)  = group_weights(eo+1,1)   + w
+                group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + real(pspecs(:,iptcl),dp)
+                group_weights(eo+1,1)  = group_weights(eo+1,1)   + 1.d0
             enddo
             !$omp end parallel do
         else
@@ -100,10 +97,8 @@ contains
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 eo     = build%spproj_field%get_eo(iptcl) ! 0/1
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-                w      = real(build%spproj_field%get(iptcl,'w'),dp)
-                if( w < TINY )cycle
-                group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w * real(pspecs(:,iptcl),dp)
-                group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
+                group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + real(pspecs(:,iptcl),dp)
+                group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + 1.d0
             enddo
         endif
         deallocate(pspecs)

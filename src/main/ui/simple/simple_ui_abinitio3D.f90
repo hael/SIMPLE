@@ -74,7 +74,8 @@ contains
             &'(yes|no){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
             &'Filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){nonuniform}; nonuniform applies static bank filtering &
-            &with ML auxiliary competition; nonuniform_lpset also tests NU-selected LP promotion', &
+            &with ML auxiliary replacement of the finest label when it extends resolution; &
+            &nonuniform_lpset also tests NU-selected LP promotion', &
             &'(none|uniform|fsc|nonuniform|nonuniform_lpset){nonuniform}', .false., 'nonuniform', &
             &gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&

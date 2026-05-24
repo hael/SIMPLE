@@ -252,12 +252,11 @@ contains
         s2D%class_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 
-    subroutine assign_ori( self, os, w_in )
+    subroutine assign_ori( self, os )
         class(strategy2D_srch), intent(in)    :: self
         class(oris),            intent(inout) :: os
-        real,         optional, intent(in)    :: w_in
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, frac, w
+        real :: e3, mi_class, frac
         real :: best_corr_local
         integer :: iref, best_class_local, best_rot_local
         logical :: found_valid
@@ -300,9 +299,6 @@ contains
         if( self%prev_class == best_class_local ) mi_class = 1.
         ! search space explored
         frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
-        ! weight
-        w = 1.0
-        if( present(w_in) ) w = w_in
         ! update parameters
         call os%e3set(self%iptcl, e3)
         call os%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
@@ -313,7 +309,6 @@ contains
         call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call os%set(self%iptcl, 'mi_class',   mi_class)
         call os%set(self%iptcl, 'frac',       frac)
-        call os%set(self%iptcl, 'w',          w)
     end subroutine assign_ori
 
     subroutine kill( self )

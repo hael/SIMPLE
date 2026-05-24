@@ -468,16 +468,12 @@ contains
         endif
     end function get_pop_2
 
-    module subroutine get_pops( self, pops, label, maxn, weight )
+    module subroutine get_pops( self, pops, label, maxn )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
         integer, optional,    intent(in)    :: maxn
-        logical, optional,    intent(in)    :: weight
         integer :: i, val, n
-        logical :: consider_w
-        consider_w = .false.
-        if( present(weight) ) consider_w = weight
         n = self%get_n(label)
         if( present(maxn) ) n = max(n, maxn)
         if(allocated(pops)) deallocate(pops)
@@ -485,9 +481,6 @@ contains
         !$omp parallel do private(i,val) default(shared) proc_bind(close) reduction(+:pops)
         do i = 1,self%n
             if( self%o(i)%isstatezero() ) cycle
-            if( consider_w )then
-                if( self%o(i)%get('w') < 1.e-6 ) cycle
-            endif
             val = self%o(i)%get_int(label)
             if( val > 0 ) pops(val) = pops(val) + 1
         end do

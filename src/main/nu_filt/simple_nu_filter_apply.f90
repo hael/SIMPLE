@@ -12,7 +12,7 @@ contains
         real(kind=c_float), pointer :: rmat_filt(:,:,:)
         real(kind=c_float), pointer :: rmat_even_out(:,:,:),  rmat_odd_out(:,:,:)
         real(kind=c_float), pointer :: rmat_aux_even(:,:,:), rmat_aux_odd(:,:,:)
-        integer :: i, j, k, icut, iaux, imask
+        integer :: i, j, k, icut, imask
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
         if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
@@ -30,6 +30,7 @@ contains
         call vol_filt%get_rmat_ptr(rmat_filt)
         rmat_even_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
         do icut = 2, size(cutoff_finds)
+            if( nu_label_is_aux_replacement(icut) ) cycle
             cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(icut))
             if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
             call vol_filt%read(cache_fname)
@@ -49,6 +50,7 @@ contains
         call vol_filt%get_rmat_ptr(rmat_filt)
         rmat_odd_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
         do icut = 2, size(cutoff_finds)
+            if( nu_label_is_aux_replacement(icut) ) cycle
             cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_ODD), cutoff_finds(icut))
             if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
             call vol_filt%read(cache_fname)
@@ -62,22 +64,22 @@ contains
             end do
             !$omp end parallel do
         end do
-        if( allocated(aux_even_bank) ) then
-            do iaux = 1, size(aux_even_bank)
-                call aux_even_bank(iaux)%get_rmat_ptr(rmat_aux_even)
-                call aux_odd_bank(iaux)%get_rmat_ptr(rmat_aux_odd)
-                !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
-                do imask = 1, n_nu_mask
-                    i = nu_mask_vox(1,imask)
-                    j = nu_mask_vox(2,imask)
-                    k = nu_mask_vox(3,imask)
-                    if( srcmap(i,j,k) == iaux + 1 ) then
-                        rmat_even_out(i,j,k) = rmat_aux_even(i,j,k)
-                        rmat_odd_out(i,j,k)  = rmat_aux_odd(i,j,k)
-                    end if
-                end do
-                !$omp end parallel do
+        if( nu_aux_replacement_label > 0 ) then
+            if( .not.allocated(aux_even_bank) .or. .not.allocated(aux_odd_bank) ) &
+                &THROW_HARD('missing NU auxiliary replacement volumes; nu_filter_vols')
+            call aux_even_bank(1)%get_rmat_ptr(rmat_aux_even)
+            call aux_odd_bank(1)%get_rmat_ptr(rmat_aux_odd)
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( srcmap(i,j,k) == 1 .and. int(filtmap(i,j,k)) == nu_aux_replacement_label ) then
+                    rmat_even_out(i,j,k) = rmat_aux_even(i,j,k)
+                    rmat_odd_out(i,j,k)  = rmat_aux_odd(i,j,k)
+                end if
             end do
+            !$omp end parallel do
         end if
         call vol_filt%kill
     end subroutine nu_filter_vols
@@ -99,6 +101,11 @@ contains
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_filter_vol')
         if( any(nu_lmask .and. srcmap /= 1) )then
             THROW_HARD('single-map NU filtering requires a base-bank-only filter map; nu_filter_vol')
+        endif
+        if( nu_aux_replacement_label > 0 )then
+            if( any(nu_lmask .and. filtmap == int(nu_aux_replacement_label, kind=NU_LABEL_KIND)) )then
+                THROW_HARD('single-map NU filtering cannot synthesize an auxiliary replacement label; nu_filter_vol')
+            endif
         endif
         call release_nu_filter_unary_storage
         call vol_in_ft%copy(vol_in)
@@ -124,6 +131,7 @@ contains
         call vol_filt%get_rmat_ptr(rmat_filt)
         rmat_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
         do icut = 2, size(cutoff_finds)
+            if( nu_label_is_aux_replacement(icut) ) cycle
             call butterworth_filter(cutoff_finds(icut), bwfilter)
             call vol_filt%copy_fast(vol_in_ft)
             call vol_filt%apply_filter(bwfilter)

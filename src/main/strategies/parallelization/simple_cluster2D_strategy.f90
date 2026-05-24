@@ -489,7 +489,6 @@ contains
                 do iptcl=1,params%nptcls
                     if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                     call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
-                    call build%spproj_field%set(iptcl, 'w',     1.0)
                     call build%spproj_field%e3set(iptcl,ran3()*360.0)
                 end do
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)

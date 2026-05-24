@@ -375,18 +375,17 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_plane( self, se, o, fpl, eo, pwght )
+    subroutine grid_plane( self, se, o, fpl, eo )
         class(reconstructor_eo), intent(inout) :: self    !< instance
         class(sym),              intent(inout) :: se      !< symmetry elements
         class(ori),              intent(inout) :: o       !< orientation
         class(fplane_type),      intent(in)    :: fpl     !< Forurier & ctf planes
         integer,                 intent(in)    :: eo      !< eo flag
-        real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_plane_oversamp(se, o, fpl, pwght)
+                call self%even%insert_plane_oversamp(se, o, fpl)
             case(1)
-                call self%odd%insert_plane_oversamp(se, o, fpl, pwght)
+                call self%odd%insert_plane_oversamp(se, o, fpl)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_plane')
         end select

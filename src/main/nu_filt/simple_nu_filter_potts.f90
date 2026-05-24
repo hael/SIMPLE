@@ -10,18 +10,17 @@ contains
         integer, intent(in)    :: n_candidates
         integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged
-        integer :: n_base, n_aux
+        integer :: n_base
         real    :: beta, e, best_e, site_energy
         if( n_candidates < 2 ) return
         if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
         if( size(candidate_coords) /= n_candidates ) &
             &THROW_HARD('candidate_coords size mismatch; refine_nu_candidate_map_ordered_labels')
         n_base = size(cutoff_finds)
-        n_aux  = max(0, n_candidates - n_base)
         beta = estimate_nu_label_smooth_beta(n_candidates)
         write(logfhandle,'(A,ES12.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
             &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
-            &', auxiliary=', n_aux, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
+            &', base labels=', n_base, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
         write(logfhandle,'(A,I0,A,I0)') '>>> NU ordered-label smoothing neighborhood: ', &
             &NU_LABEL_SMOOTH_NNEIGH, '-connected, color passes=', NU_LABEL_SMOOTH_NCOLORS
         write(logfhandle,'(A,F6.3)') '>>> NU ordered-label smoothing quadratic jump fraction: ', &
@@ -120,10 +119,8 @@ contains
 
     module real function nu_label_smooth_pair_cost( icand, jcand )
         integer, intent(in) :: icand, jcand
-        integer :: n_base
-        n_base = size(cutoff_finds)
-        nu_label_smooth_pair_cost = nu_label_smooth_source_pair_cost(candidate_coords(icand), &
-            &candidate_coords(jcand), icand > n_base, jcand > n_base)
+        nu_label_smooth_pair_cost = nu_label_smooth_coord_pair_cost(candidate_coords(icand), &
+            &candidate_coords(jcand))
     end function nu_label_smooth_pair_cost
 
     module real function nu_label_smooth_coord_pair_cost( icoord, jcoord )
@@ -136,20 +133,6 @@ contains
             nu_label_smooth_coord_pair_cost = step_jump + NU_LABEL_SMOOTH_QUAD_FRAC * step_jump * step_jump
         endif
     end function nu_label_smooth_coord_pair_cost
-
-    module real function nu_label_smooth_source_pair_cost( icoord, jcoord, l_aux_i, l_aux_j )
-        real,    intent(in) :: icoord, jcoord
-        logical, intent(in) :: l_aux_i, l_aux_j
-        if( l_aux_source_unordered_potts .and. (l_aux_i .or. l_aux_j) )then
-            ! Unordered auxiliary maps are separate source alternatives, not
-            ! ordered resolution-bin labels. A zero boundary cost keeps Potts
-            ! smoothing from suppressing them solely because nearby base-bank
-            ! voxels marched to a finer Fourier shell.
-            nu_label_smooth_source_pair_cost = NU_AUX_SOURCE_BOUNDARY_COST
-        else
-            nu_label_smooth_source_pair_cost = nu_label_smooth_coord_pair_cost(icoord, jcoord)
-        endif
-    end function nu_label_smooth_source_pair_cost
 
     module integer function nu_label_smooth_color( i, j, k )
         integer, intent(in) :: i, j, k

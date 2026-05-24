@@ -92,7 +92,6 @@ end type cavgs_set
 type ptcl_record
     type(ctf)          :: tfun               !< transfer function
     type(ctfparams)    :: ctfparams          !< CTF parameters
-    real               :: pw         = 0.0   !< particle weight
     real               :: dfx        = 0.0   !< defocus in x (microns)
     real               :: dfy        = 0.0   !< defocus in y (microns)
     real               :: angast     = 0.0   !< angle of astigmatism (in degrees)

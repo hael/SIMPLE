@@ -125,7 +125,6 @@ contains
                         call clsdoc_ranked%set(rank, 'pop',  os_ptr%get(i,  'pop'))
                         call clsdoc_ranked%set(rank, 'res',  os_ptr%get(i,  'res'))
                         call clsdoc_ranked%set(rank, 'corr', os_ptr%get(i, 'corr'))
-                        call clsdoc_ranked%set(rank, 'w',    os_ptr%get(i,    'w'))
                         write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
                         &'RANK:', rank ,'POP:', os_ptr%get_int(i, 'pop'),&
                         &'RES:', os_ptr%get(i, 'res')

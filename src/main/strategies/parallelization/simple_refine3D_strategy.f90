@@ -485,11 +485,6 @@ contains
                 call build%spproj_field%partition_eo
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( startit == 1 )then
-                ! make sure we have weights for the initial noise power estimation
-                call build%spproj_field%set_all2single('w', 1.0)
-                call build%spproj%write_segment_inside(params%oritype)
-            endif
             cline_calc_pspec   = cline
             call cline_calc_pspec%set('prg', 'calc_pspec')
             call xcalc_pspec%execute( cline_calc_pspec )
@@ -837,9 +832,6 @@ contains
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            ! generate initial noise power estimates
-            call build%spproj_field%set_all2single('w', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
             call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.

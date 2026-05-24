@@ -124,7 +124,6 @@ contains
             call eulprob_obj_part%new(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
-        call b_ptr%spproj_field%set_all2single('w', 1.0)
         allocate(strategy2Dsrch(batchsz_max))
         rt_align = 0.0
         rt_cavg  = 0.0

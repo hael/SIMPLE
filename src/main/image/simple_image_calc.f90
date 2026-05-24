@@ -1694,7 +1694,7 @@ contains
         end do
         ! Use the raw even/odd difference as a candidate-independent estimate of
         ! half-map noise in the current support. The same normalization is then
-        ! used for every low-pass and auxiliary candidate, so the NU competition
+        ! used for every low-pass label and auxiliary replacement, so the NU competition
         ! is driven by cross-half consistency rather than by candidate-specific
         ! amplitude or scale changes.
         med = median_nocopy(vals)

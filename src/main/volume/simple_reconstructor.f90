@@ -212,13 +212,12 @@ contains
     !! It preserves the original h-strided OpenMP race-avoidance scheme, but
     !! scalarizes rotation, inlines fplane access, and updates the two expanded
     !! matrices in one explicit separable-KB stencil pass.
-    subroutine insert_plane_oversamp( self, se, o, fpl, pwght )
+    subroutine insert_plane_oversamp( self, se, o, fpl )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
-        real,                 intent(in)    :: pwght
         type(ori) :: o_sym
         complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
@@ -297,9 +296,9 @@ contains
                         win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) ) cycle
-                        comp   = pwght * pf2 * cmplx_raw
+                        comp   = pf2 * cmplx_raw
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
-                        ctfval = pwght * ctfsq_raw
+                        ctfval = ctfsq_raw
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
                         do iz = 1, self%wdim
                             mz = win(1,3) + iz - 1
@@ -358,14 +357,13 @@ contains
 
     end subroutine insert_plane_oversamp
 
-    subroutine insert_plane_oversamp_opt( self, se, o, fpl, pwght )
+    subroutine insert_plane_oversamp_opt( self, se, o, fpl )
         use simple_math,       only: ceil_div, floor_div
         use simple_kbinterpol, only: apod_kb15_a2
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
-        real,                 intent(in)    :: pwght
         integer, parameter :: WDIM   = 3
         integer, parameter :: STRIDE = WDIM
         type(ori) :: o_sym
@@ -418,7 +416,7 @@ contains
                 real    :: r21, r22, r23, sx, sy, sz, comp_scale, ctfsq, wyz
                 integer :: h,k,l, h_sq, k_max_h, k_lo,k_hi, hp,kp,hpb,kpb, iy,iz, ky,mz, i
                 integer :: win(3, 2), isym
-                comp_scale = pwght * pf2
+                comp_scale = pf2
                 !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,&
                 !$omp& ctfsq,wx,wy,wz,sx,sy,sz,i,win,loc,r21,r22,r23,isym,iy,iz,ky,mz,wyz,&
                 !$omp& base,hp,kp,hpb,kpb) proc_bind(close)
@@ -461,9 +459,8 @@ contains
                                     ctfsq =       ctfsq_plane(hpb,kpb)
                                 endif
                                 if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
-                                ! particle weighing and FFTW padding scaling
+                                ! FFTW padding scaling
                                 comp  = comp_scale * comp
-                                ctfsq = pwght      * ctfsq
                                 ! precompute and normalize weights
                                 base = real(win(:,1)) - loc
                                 sx = 0.0; sy = 0.0; sz = 0.0

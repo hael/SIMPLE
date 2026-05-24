@@ -22,7 +22,6 @@ type strategy3D_alloc
     real,           allocatable :: proj_space_euls(:,:,:)   !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:)  !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:)    !< reference vs. particle correlations
-    real,           allocatable :: proj_space_w(:,:)        !< weights
     integer,        allocatable :: proj_space_inplinds(:,:) !< in-plane indices
     integer,        allocatable :: srch_order(:,:)          !< stochastic search index
     integer,        allocatable :: inpl_order(:,:)          !< stochastic inpl search index
@@ -51,7 +50,7 @@ contains
             &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nrefs,nthr_glob),&
             &s3D%proj_space_inplinds(nrefs,nthr_glob),&
-            &s3D%proj_space_proj(nrefs),s3D%proj_space_w(nrefs,nthr_glob))
+            &s3D%proj_space_proj(nrefs))
         ! states existence
         if( .not.build%spproj%is_virgin_field(params%oritype) )then
             if( str_has_substr(params%refine,'greedy') )then
@@ -110,7 +109,6 @@ contains
         s3D%proj_space_corrs(   :,ithr) = -HUGE(areal)
         s3D%proj_space_shift( :,:,ithr) = 0.
         s3D%proj_space_inplinds(:,ithr) = 0
-        s3D%proj_space_w(       :,ithr) = 1.
         if(srch_order_allocated)then
             s3D%srch_order(    :,ithr) = 0
             s3D%srch_order_sub(:,ithr) = 0
@@ -130,7 +128,6 @@ contains
         if( allocated(s3D%proj_space_shift)    ) deallocate(s3D%proj_space_shift)
         if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
-        if( allocated(s3D%proj_space_w)        ) deallocate(s3D%proj_space_w)
         if( allocated(s3D%smpl_refs_athres)    ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
         if( allocated(s3D%rts) )then

@@ -94,7 +94,6 @@ contains
             &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
         end do
         ! prep particles field
-        call spproj_field%set_all2single('w',1.)
         call spproj_field%delete_2Dclustering
         call spproj_field%clean_entry('updatecnt', 'sampled')
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
@@ -292,7 +291,6 @@ contains
             call cline_calc_pspec%set('prg',      'calc_pspec')
             ! cluster2D
             call cline_cluster2D%set('prg',       'cluster2D')
-            call cline_cluster2D%set('ptclw',     'no')
             call cline_cluster2D%set('cenlp',     params%cenlp)
             call cline_cluster2D%set('chunk',     'no')
             call set_automask2D_defaults( cline_cluster2D )

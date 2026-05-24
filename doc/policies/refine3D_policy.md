@@ -234,8 +234,9 @@ respect that minimum.
 
 In staged `abinitio3D`, user-facing `filt_mode=nonuniform` means static
 discrete-bank nonuniform filtering with `nu_refine=no` for all stages. The
-ML-regularized half-map pair may compete as an auxiliary candidate, while the
-staged `refine3D` command line keeps the ordinary scheduled explicit `lp`.
+ML-regularized half-map pair may replace the finest discrete NU label only when
+its effective resolution is finer than that label, while the staged `refine3D`
+command line keeps the ordinary scheduled explicit `lp`.
 Automasking does not switch abinitio3D into gold-standard refinement, does not
 enable the NU high-resolution shell ratchet, and does not let the NU-selected
 bandwidth replace the staged matching LP. Explicit
@@ -253,7 +254,7 @@ base-bank label and stops at the first unattempted challenger or the first
 challenger below that frontier-support rule. In this coupled refinement path,
 NU
 filtering does not add the ML-regularized half-map pair as an auxiliary
-candidate; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
+replacement; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
 all-particle `reconstruct3D` pass leaves refinement and writes the final half
 maps and merged map. Final-map postprocessing is classical-only, even when the

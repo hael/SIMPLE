@@ -319,7 +319,6 @@ contains
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
             self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
-            self_out%pparms(I_W)         = self_in%pparms(I_W)
             self_out%pparms(I_EO)        = self_in%pparms(I_EO)
         else
             call self_out%htab%set('class',    self_in%htab%get('class'))
@@ -327,7 +326,6 @@ contains
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
             call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
-            call self_out%htab%set('w',        self_in%htab%get('w'))
             call self_out%htab%set('eo',       self_in%htab%get('eo'))
         endif
         call self_out%set_euler(self_in%get_euler())
@@ -344,7 +342,6 @@ contains
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
             self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
-            self_out%pparms(I_W)         = self_in%pparms(I_W)
             self_out%pparms(I_EO)        = self_in%pparms(I_EO)
         else
             call self_out%htab%set('proj',     self_in%htab%get('proj'))
@@ -352,7 +349,6 @@ contains
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
             call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
-            call self_out%htab%set('w',        self_in%htab%get('w'))
             call self_out%htab%set('eo',       self_in%htab%get('eo'))
         endif
         call self_out%set_euler(self_in%get_euler())

@@ -57,14 +57,13 @@ contains
         do i = 1,nptcls
             iptcl = pinds(i)
             if( iptcl == 0 ) cycle
-            precs(i)%pw = spproj_field%get(iptcl,'w')
             if( l_updated_only )then
                 if( spproj_field%get_updatecnt(iptcl) == 0 )then
                     precs(i)%pind = 0
                     cycle
                 endif
             endif
-            if( (spproj_field%get_state(iptcl)==0).or.(precs(i)%pw<SMALL) )then
+            if( spproj_field%get_state(iptcl)==0 )then
                 precs(i)%pind = 0
             else
                 ithr            = omp_get_thread_num() + 1
@@ -97,12 +96,12 @@ contains
     end subroutine cavger_read_euclid_sigma2
 
     !>  \brief prepares a 2D class document with class index, resolution,
-    !!         population, average correlation and weight
+    !!         population and average correlation
     module subroutine cavger_gen2Dclassdoc()
         class(oris), pointer :: ptcl_field, cls_field
         integer  :: pops(p_ptr%ncls)
-        real(dp) :: corrs(p_ptr%ncls), ws(p_ptr%ncls)
-        real     :: frc05, frc0143, w
+        real(dp) :: corrs(p_ptr%ncls)
+        real     :: frc05, frc0143
         integer  :: iptcl, icls, pop, nptcls
         select case(trim(p_ptr%oritype))
             case('ptcl2D')
@@ -115,28 +114,22 @@ contains
                 THROW_HARD('Unsupported ORITYPE: '//trim(p_ptr%oritype))
         end select
         nptcls = ptcl_field%get_noris()
-        pops   = 0
-        corrs  = 0.d0
-        ws     = 0.d0
-        !$omp parallel do default(shared) private(iptcl,icls,w) schedule(static)&
-        !$omp proc_bind(close) reduction(+:pops,corrs,ws)
+        pops  = 0
+        corrs = 0.d0
+        !$omp parallel do default(shared) private(iptcl,icls) schedule(static)&
+        !$omp proc_bind(close) reduction(+:pops,corrs)
         do iptcl=1,nptcls
             if( ptcl_field%get_state(iptcl) == 0 ) cycle
-            w = ptcl_field%get(iptcl,'w')
-            if( w < SMALL ) cycle
             icls = ptcl_field%get_class(iptcl)
             if( icls<1 .or. icls>p_ptr%ncls )cycle
             pops(icls)  = pops(icls)  + 1
             corrs(icls) = corrs(icls) + real(ptcl_field%get(iptcl,'corr'),dp)
-            ws(icls)    = ws(icls)    + real(w,dp)
         enddo
         !$omp end parallel do
         where(pops>1)
             corrs = corrs / real(pops)
-            ws    = ws / real(pops)
         elsewhere
             corrs = -1.
-            ws    = 0.
         end where
         call cls_field%new(p_ptr%ncls, is_ptcl=.false.)
         do icls=1,p_ptr%ncls
@@ -146,7 +139,6 @@ contains
             call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)
             call cls_field%set(icls, 'corr',      corrs(icls))
-            call cls_field%set(icls, 'w',         ws(icls))
             if( pop > 0 )then
                 call cls_field%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
             else
@@ -413,11 +405,11 @@ contains
                     ! Read from the generated Fourier plane.
                     ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
                     if( kp <= 0 ) then
-                        fcomp  = precs(i)%pw * KB2 * fplanes(ithr)%cmplx_plane(hp, kp)
-                        tvalsq = precs(i)%pw *       fplanes(ithr)%ctfsq_plane(hp, kp)
+                        fcomp  = KB2 * fplanes(ithr)%cmplx_plane(hp, kp)
+                        tvalsq =       fplanes(ithr)%ctfsq_plane(hp, kp)
                     else
-                        fcomp  = precs(i)%pw * KB2 * conjg(fplanes(ithr)%cmplx_plane(-hp, -kp))
-                        tvalsq = precs(i)%pw *       fplanes(ithr)%ctfsq_plane(-hp, -kp)
+                        fcomp  = KB2 * conjg(fplanes(ithr)%cmplx_plane(-hp, -kp))
+                        tvalsq =       fplanes(ithr)%ctfsq_plane(-hp, -kp)
                     endif
                     ! Splat update
                     do l = 1, wdim
@@ -866,7 +858,6 @@ contains
         !$omp proc_bind(close) reduction(+:eo_pops)
         do iptcl = p_ptr%fromp, p_ptr%top
             if( b_ptr%spproj_field%get_state(iptcl) == 0 ) cycle
-            if( b_ptr%spproj_field%get(iptcl,'w') < SMALL )cycle
             eo   = b_ptr%spproj_field%get_eo(iptcl) + 1
             icls = b_ptr%spproj_field%get_class(iptcl)
             if( icls < 1 .or. icls > ncls ) cycle

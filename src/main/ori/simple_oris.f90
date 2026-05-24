@@ -245,13 +245,6 @@ type :: oris
     procedure          :: extremal_bound
     procedure          :: set_extremal_vars
     !======================================================================
-    ! WEIGHTS / SCORING (simple_oris_weights.f90)
-    !======================================================================
-    procedure          :: calc_hard_weights
-    procedure          :: calc_soft_weights, calc_cavg_soft_weights
-    procedure          :: calc_hard_weights2D
-    procedure          :: calc_soft_weights2D
-    !======================================================================
     ! NEIGHBORS / CORRELATION / OVERLAP (simple_oris_neigh.f90)
     !======================================================================
     procedure          :: find_closest_proj
@@ -584,12 +577,11 @@ interface
         integer :: pop
     end function get_pop_2
 
-    module subroutine get_pops( self, pops, label, maxn, weight )
+    module subroutine get_pops( self, pops, label, maxn )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
         integer, optional,    intent(in)    :: maxn
-        logical, optional,    intent(in)    :: weight
     end subroutine get_pops
 
     module subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )
@@ -1619,35 +1611,6 @@ interface
         integer,           intent(out) :: iextr_lim
         real,    optional, intent(in)  :: update_frac
     end subroutine set_extremal_vars
-
-    !======================================================================
-    ! WEIGHTS / SCORING (simple_oris_weights.f90)
-    !======================================================================
-
-    module subroutine calc_hard_weights( self, frac )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-    end subroutine calc_hard_weights
-
-    module subroutine calc_soft_weights( self, frac )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-    end subroutine calc_soft_weights
-
-    module subroutine calc_cavg_soft_weights( self, frac )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-    end subroutine calc_cavg_soft_weights
-
-    module subroutine calc_hard_weights2D( self, frac, ncls )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-        integer,     intent(in)    :: ncls
-    end subroutine calc_hard_weights2D
-
-    module subroutine calc_soft_weights2D( self )
-        class(oris), intent(inout) :: self
-    end subroutine calc_soft_weights2D
 
     !======================================================================
     ! NEIGHBORS / CORRELATION / OVERLAP (simple_oris_neigh.f90)

@@ -72,7 +72,6 @@ contains
         if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',        'cavg')
         if( .not. cline%defined('filt_mode')        ) call cline%set('filt_mode',      'none')
         if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',       'no')
-        if( .not. cline%defined('cavgw')            ) call cline%set('cavgw',            'no')
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', LPSTART_INI3D)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   LPSTOP_INI3D)
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',          'yes')
@@ -218,7 +217,6 @@ contains
                 ! alignment parameters
                 call spproj%os_cls3D%set(icls, 'corr', work_proj%os_ptcl3D%get(cnt, 'corr'))
                 call spproj%os_cls3D%set(icls, 'proj', work_proj%os_ptcl3D%get(cnt, 'proj'))
-                call spproj%os_cls3D%set(icls, 'w',    work_proj%os_ptcl3D%get(cnt, 'w'))
                 call spproj%os_cls3D%set_euler(icls, work_proj%os_ptcl3D%get_euler(cnt))
                 call spproj%os_cls3D%set_shift(icls, work_proj%os_ptcl3D%get_2Dshift(cnt))
                 call spproj%os_cls3D%set_state(icls, work_proj%os_ptcl3D%get_state(cnt))
@@ -446,7 +444,6 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('ptclw',         'no')
         call cline%set('envfsc',        'no') ! no envelope-based FSC estimation
         call cline%set('nu_refine',     'no') ! no nonuniform refinement
         if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                         'yes')

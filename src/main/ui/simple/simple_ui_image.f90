@@ -274,8 +274,6 @@ contains
         &'Standard stack editing',&                  ! descr_short
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER&
         & stacks. To extract a particular state, give oritab and set state.&
-        & To select the fraction of best particles, give oritab&
-        & and set frac. State and frac options can be combined.&
         & To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation&
         & function, set acf=yes. To extract a contiguous subset of images from the stack, set&
         & fromp and top. To extract a number of particle images at random, set nran to the desired number.&
@@ -293,7 +291,6 @@ contains
         call stackops%add_input(UI_PARM, oritab)
         call stackops%add_input(UI_PARM, mirr)
         call stackops%add_input(UI_PARM, nran)
-        call stackops%add_input(UI_PARM, frac)
         call stackops%add_input(UI_PARM, 'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
         call stackops%add_input(UI_PARM, 'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
         call stackops%add_input(UI_PARM, neg)

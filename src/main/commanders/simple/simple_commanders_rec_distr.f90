@@ -164,7 +164,7 @@ contains
             if( params%l_ml_reg )then
                 call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
                 call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
-                if( use_static_nu_aux_candidate() )then
+                if( use_static_nu_aux_replacement() )then
                     call vol_nu_aux_even%new(ldim, params%smpd_crop)
                     call vol_nu_aux_odd%new( ldim, params%smpd_crop)
                     call vol_nu_aux_even%read(eonames(1))
@@ -209,7 +209,7 @@ contains
                 call vol_nu_base_odd%mul(update_frac_trail_rec)
                 call vol_nu_base_even%add(vol_prev_even)
                 call vol_nu_base_odd%add(vol_prev_odd)
-                if( use_static_nu_aux_candidate() )then
+                if( use_static_nu_aux_replacement() )then
                     call vol_nu_aux_even%mul(update_frac_trail_rec)
                     call vol_nu_aux_odd%mul(update_frac_trail_rec)
                     call vol_nu_aux_even%add(vol_prev_even)
@@ -228,9 +228,9 @@ contains
             if( L_BENCH_GLOB ) timings%trail_restored_halves = timings%trail_restored_halves + toc(t_trail)
         end subroutine trail_restored_halves_if_needed
 
-        logical function use_static_nu_aux_candidate() result(l_use_aux)
+        logical function use_static_nu_aux_replacement() result(l_use_aux)
             l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
-        end function use_static_nu_aux_candidate
+        end function use_static_nu_aux_replacement
 
         subroutine cleanup_restore_state()
             call vol_prev_even%kill
@@ -445,7 +445,7 @@ contains
             integer :: n_highres_steps
             n_highres_steps = nu_highres_steps_for_state()
             call cleanup_nu_aux_images()
-            if( use_static_nu_aux_candidate() )then
+            if( use_static_nu_aux_replacement() )then
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
@@ -457,9 +457,9 @@ contains
             endif
         end subroutine setup_nonuniform_filter
 
-        logical function use_static_nu_aux_candidate() result(l_use_aux)
+        logical function use_static_nu_aux_replacement() result(l_use_aux)
             l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
-        end function use_static_nu_aux_candidate
+        end function use_static_nu_aux_replacement
 
         subroutine refine_nonuniform_filter_bank()
             type(nu_highres_extension_stats) :: ext_stats
@@ -545,11 +545,7 @@ contains
         end function nu_highres_steps_fname
 
         subroutine log_nonuniform_filter_stats()
-            if( use_static_nu_aux_candidate() )then
-                call print_nu_filtmap_lowpass_stats(aux_resolutions=[res0143s(state)])
-            else
-                call print_nu_filtmap_lowpass_stats()
-            endif
+            call print_nu_filtmap_lowpass_stats()
             call analyze_filtmap_neighbor_continuity()
         end subroutine log_nonuniform_filter_stats
 
@@ -572,11 +568,7 @@ contains
         subroutine record_nu_alignment_lowpass_limit()
             real :: align_lp
             if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
-            if( use_static_nu_aux_candidate() )then
-                align_lp = get_nu_filtmap_finest_selected_lp(aux_resolutions=[res0143s(state)])
-            else
-                align_lp = get_nu_filtmap_finest_selected_lp()
-            endif
+            align_lp = get_nu_filtmap_finest_selected_lp()
             if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp
             write(logfhandle,'(A,I0,A,F8.3,A)') &
