@@ -57,6 +57,11 @@ contains
             if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
             call cleanup_aux_bank
         end if
+        ! Filter caches are local scratch products. Rebuild the current bank
+        ! after setup so a prior interrupted run cannot satisfy existence-only
+        ! cache checks with stale volumes.
+        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
+        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
@@ -124,7 +129,6 @@ contains
         get_nu_filtmap_highres_shell_depth = 0
         if( .not.allocated(cutoff_finds) ) return
         if( .not.allocated(filtmap)      ) return
-        if( .not.allocated(srcmap)       ) return
         if( .not.allocated(nu_lmask)     ) return
         base_n = min(size(lowpass_limits), size(cutoff_finds))
         if( base_n < 1 ) return
@@ -133,7 +137,6 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            if( srcmap(i,j,k) /= 1 ) cycle
             finest_label = max(finest_label, int(filtmap(i,j,k)))
         end do
         if( finest_label == 0 ) return
@@ -143,7 +146,6 @@ contains
     end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
-        integer(kind=NU_LABEL_KIND), allocatable :: candmap(:,:,:)
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask
         real    :: best_dmat
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -157,10 +159,7 @@ contains
         ! eligible, it backs the finest label rather than appending a new one.
         n_candidates = size(dmats_mask, 2)
         if( allocated(filtmap) ) deallocate(filtmap)
-        if( allocated(srcmap)  ) deallocate(srcmap)
-        allocate(candmap(nx,ny,nz), source=1_NU_LABEL_KIND)
         allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
-        allocate(srcmap(nx,ny,nz),  source=1_NU_LABEL_KIND)
         !$omp parallel do schedule(static) default(shared) &
         !$omp private(i,j,k,icand,best_icand,best_dmat,imask) proc_bind(close)
         do imask = 1, n_nu_mask
@@ -175,19 +174,18 @@ contains
                     best_icand = icand
                 end if
             end do
-            candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
+            filtmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
         call log_nu_aux_replacement_margin_stats()
-        call log_nu_candidate_selection_counts(candmap, n_base, 'before ordered-label smoothing')
-        call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
-        call log_nu_candidate_selection_counts(candmap, n_base, 'after ordered-label smoothing')
-        call candidate_map_to_filt_and_src(candmap, n_base)
-        call cache_nu_extension_frontier_dmats(candmap, n_base)
+        call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
+        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
+        call clamp_nu_filtmap_labels(n_base)
+        call cache_nu_extension_frontier_dmats(filtmap, n_base)
         ! Keep the mask-packed unary bank. High-resolution extension appends
         ! accepted challenger unaries and can then run a final ordered-label
         ! cleanup over the expanded label field.
-        deallocate(candmap)
     end subroutine optimize_nu_cutoff_finds
 
     subroutine cache_nu_extension_frontier_dmats( candmap, n_base )
@@ -208,23 +206,21 @@ contains
         !$omp end parallel do
     end subroutine cache_nu_extension_frontier_dmats
 
-    module subroutine candidate_map_to_filt_and_src( candmap, n_base )
-        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+    module subroutine clamp_nu_filtmap_labels( n_base )
         integer, intent(in) :: n_base
         integer :: i, j, k, icand, imask
-        filtmap = 1_NU_LABEL_KIND
-        srcmap  = 1_NU_LABEL_KIND
+        if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; clamp_nu_filtmap_labels')
+        if( n_base < 1 ) THROW_HARD('empty base bank; clamp_nu_filtmap_labels')
         !$omp parallel do schedule(static) default(shared) private(i,j,k,icand,imask) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            icand = int(candmap(i,j,k))
-            srcmap(i,j,k)  = 1_NU_LABEL_KIND
+            icand = int(filtmap(i,j,k))
             filtmap(i,j,k) = int(max(1, min(n_base, icand)), kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
-    end subroutine candidate_map_to_filt_and_src
+    end subroutine clamp_nu_filtmap_labels
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)

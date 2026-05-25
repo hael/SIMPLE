@@ -74,10 +74,13 @@ contains
     module real function estimate_nu_label_smooth_beta( n_candidates )
         integer, intent(in) :: n_candidates
         integer :: imask, icand, nvox
-        real    :: best_e, second_e, cur_e
+        real    :: best_e, second_e, cur_e, beta_sum
         estimate_nu_label_smooth_beta = 0.
+        beta_sum = 0.
         nvox = 0
         if( n_candidates < 2 ) return
+        !$omp parallel do schedule(static) default(shared) &
+        !$omp private(imask,icand,best_e,second_e,cur_e) reduction(+:beta_sum,nvox) proc_bind(close)
         do imask = 1, n_nu_mask
             best_e   = huge(best_e)
             second_e = huge(second_e)
@@ -91,12 +94,13 @@ contains
                 endif
             end do
             if( second_e < huge(second_e) )then
-                estimate_nu_label_smooth_beta = estimate_nu_label_smooth_beta + max(0., second_e - best_e)
+                beta_sum = beta_sum + max(0., second_e - best_e)
                 nvox = nvox + 1
             endif
         end do
+        !$omp end parallel do
         if( nvox > 0 ) estimate_nu_label_smooth_beta = &
-            &NU_LABEL_SMOOTH_BETA_FRAC * estimate_nu_label_smooth_beta / real(nvox)
+            &NU_LABEL_SMOOTH_BETA_FRAC * beta_sum / real(nvox)
     end function estimate_nu_label_smooth_beta
 
     module real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )

@@ -28,7 +28,6 @@ contains
         if( present(accept_pct) ) accept_pct_eff = max(0., accept_pct)
         l_permissive_accept = present(accept_pct) .and. accept_pct_eff <= TINY
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
-        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
         if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats first')
         if( nu_aux_replacement_label > 0 ) &
@@ -99,10 +98,10 @@ contains
         ! --- build the new Butterworth filter and cache filtered vols ---
         even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), new_find)
         odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  new_find)
-        if( .not.file_exists(even_cache_fname) .or. .not.file_exists(odd_cache_fname) ) then
-            ! generate just this one new filtered pair — cheap, one FFT+filter+IFFT pass
-            call generate_single_filtered_pair(vol_even, vol_odd, new_find, even_cache_fname, odd_cache_fname)
-        end if
+        call delete_cached_filtered_pair(new_find)
+        ! Generate just this one new filtered pair after deleting any stale
+        ! scratch products left by a prior interrupted run.
+        call generate_single_filtered_pair(vol_even, vol_odd, new_find, even_cache_fname, odd_cache_fname)
         ! --- evaluate the new objective only within the mask ---
         allocate(dmat_new(ldim(1),ldim(2),ldim(3)), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)), source=0.)
@@ -118,6 +117,8 @@ contains
         endif
         call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, &
             &nu_lmask, noise_sigma)
+        call vol_even_filt_new%kill
+        call vol_odd_filt_new%kill
         call smooth_nu_objective(dmat_new, dmat_tmp, new_limit)
         allocate(dmat_finest_mask(n_nu_mask), source=huge(x))
         if( allocated(dmat_finest_cached) .and. size(dmat_finest_cached) == n_nu_mask ) then
@@ -178,8 +179,6 @@ contains
                     &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
             endif
             call delete_cached_filtered_pair(new_find)
-            call vol_even_filt_new%kill
-            call vol_odd_filt_new%kill
             if( allocated(extend_choice) ) deallocate(extend_choice)
             deallocate(dmat_new, dmat_finest_mask)
             if( present(stats) ) stats = local_stats
@@ -195,8 +194,6 @@ contains
                     &'>>> NU high-resolution extension stopped: distance-matrix cap full at ', &
                     &NU_DMAT_CANDIDATE_CAP, ' candidates'
                 call delete_cached_filtered_pair(new_find)
-                call vol_even_filt_new%kill
-                call vol_odd_filt_new%kill
                 if( allocated(extend_choice) ) deallocate(extend_choice)
                 deallocate(dmat_new, dmat_finest_mask)
                 if( present(stats) ) stats = local_stats
@@ -212,8 +209,6 @@ contains
         call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find)
         call cache_nu_highres_extension_frontier_after_selection(dmat_new, frontier_vox, extend_choice)
         write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
-        call vol_even_filt_new%kill
-        call vol_odd_filt_new%kill
         if( allocated(extend_choice) ) deallocate(extend_choice)
         deallocate(dmat_new, dmat_finest_mask)
         if( present(stats) ) stats = local_stats
@@ -228,7 +223,6 @@ contains
         real    :: new_limit
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; extend_nu_filter_highres_shell_next')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; extend_nu_filter_highres_shell_next')
-        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; extend_nu_filter_highres_shell_next')
         if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; extend_nu_filter_highres_shell_next')
         sz_old   = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
@@ -293,10 +287,8 @@ contains
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine refine_nu_extension_filtmap_ordered_labels
-        integer(kind=NU_LABEL_KIND), allocatable :: candmap(:,:,:)
-        integer :: i, j, k, n_base, n_candidates, imask
+        integer :: n_base, n_candidates
         if( .not.allocated(filtmap)          ) THROW_HARD('filtmap not allocated; refine_nu_extension_filtmap_ordered_labels')
-        if( .not.allocated(srcmap)           ) THROW_HARD('srcmap not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(dmats_mask)       ) THROW_HARD('dmats_mask not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(candidate_coords) ) &
             &THROW_HARD('candidate_coords not allocated; refine_nu_extension_filtmap_ordered_labels')
@@ -306,22 +298,13 @@ contains
             &THROW_HARD('candidate/unary size mismatch; refine_nu_extension_filtmap_ordered_labels')
         if( n_candidates < 2 ) return
         write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
-        allocate(candmap(ldim(1),ldim(2),ldim(3)), source=1_NU_LABEL_KIND)
-        !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) proc_bind(close)
-        do imask = 1, n_nu_mask
-            i = nu_mask_vox(1,imask)
-            j = nu_mask_vox(2,imask)
-            k = nu_mask_vox(3,imask)
-            candmap(i,j,k) = int(max(1, min(n_base, int(filtmap(i,j,k)))), kind=NU_LABEL_KIND)
-        end do
-        !$omp end parallel do
-        call log_nu_candidate_selection_counts(candmap, n_base, 'before post-extension ordered-label cleanup')
-        call refine_nu_candidate_map_ordered_labels(candmap, n_candidates)
-        call log_nu_candidate_selection_counts(candmap, n_base, 'after post-extension ordered-label cleanup')
-        call candidate_map_to_filt_and_src(candmap, n_base)
+        call clamp_nu_filtmap_labels(n_base)
+        call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
+        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        call clamp_nu_filtmap_labels(n_base)
+        call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
         call compact_nu_highres_dmat_bank_for_capacity()
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
-        deallocate(candmap)
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
     subroutine append_and_thin_nu_highres_candidate( dmat_new, old_n_base, new_find )
@@ -482,7 +465,6 @@ contains
         if( .not.allocated(dmats_mask)   ) return
         if( .not.allocated(cutoff_finds) ) return
         if( .not.allocated(filtmap)      ) return
-        if( .not.allocated(srcmap)       ) return
         if( .not.allocated(nu_lmask)     ) return
         if( size(dmats_mask,2) < NU_DMAT_CANDIDATE_CAP ) return
         old_n_base = size(cutoff_finds)
@@ -515,7 +497,6 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            if( srcmap(i,j,k) /= 1 ) cycle
             old_label = filtmap(i,j,k)
             if( old_label >= 1 .and. old_label <= old_n_base )then
                 if( old_to_new(old_label) > 0 )then
@@ -607,7 +588,7 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            if( srcmap(i,j,k) == 1 .and. int(filtmap(i,j,k)) == label ) nvox = nvox + 1
+            if( int(filtmap(i,j,k)) == label ) nvox = nvox + 1
         end do
         !$omp end parallel do
     end function count_nu_base_label_voxels
@@ -615,21 +596,25 @@ contains
     subroutine collect_nu_base_label_voxels( label, frontier_vox )
         integer, intent(in) :: label
         integer, allocatable, intent(inout) :: frontier_vox(:)
-        integer :: imask, i, j, k, ifront, nfront
+        integer :: imask, i, j, k, ifront, nfront, idx
         if( allocated(frontier_vox) ) deallocate(frontier_vox)
         nfront = count_nu_base_label_voxels(label)
         allocate(frontier_vox(nfront))
         if( nfront == 0 ) return
         ifront = 0
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,idx) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            if( srcmap(i,j,k) /= 1 ) cycle
             if( int(filtmap(i,j,k)) /= label ) cycle
+            !$omp atomic capture
             ifront = ifront + 1
-            frontier_vox(ifront) = imask
+            idx = ifront
+            !$omp end atomic
+            frontier_vox(idx) = imask
         end do
+        !$omp end parallel do
         if( ifront /= nfront ) THROW_HARD('frontier voxel count changed during collection')
     end subroutine collect_nu_base_label_voxels
 
@@ -692,7 +677,6 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            srcmap(i,j,k)  = 1_NU_LABEL_KIND
             filtmap(i,j,k) = int(new_label, kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do

@@ -15,7 +15,6 @@ contains
         integer :: i, j, k, icut, imask
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
-        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
         if( .not.allocated(nu_mask_vox)  ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nu_filter_vols')
         call release_nu_filter_unary_storage
         call vol_filt%new(ldim, smpd)
@@ -40,7 +39,7 @@ contains
                 i = nu_mask_vox(1,imask)
                 j = nu_mask_vox(2,imask)
                 k = nu_mask_vox(3,imask)
-                if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut ) rmat_even_out(i,j,k) = rmat_filt(i,j,k)
+                if( filtmap(i,j,k) == icut ) rmat_even_out(i,j,k) = rmat_filt(i,j,k)
             end do
             !$omp end parallel do
         end do
@@ -60,7 +59,7 @@ contains
                 i = nu_mask_vox(1,imask)
                 j = nu_mask_vox(2,imask)
                 k = nu_mask_vox(3,imask)
-                if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut ) rmat_odd_out(i,j,k) = rmat_filt(i,j,k)
+                if( filtmap(i,j,k) == icut ) rmat_odd_out(i,j,k) = rmat_filt(i,j,k)
             end do
             !$omp end parallel do
         end do
@@ -74,7 +73,7 @@ contains
                 i = nu_mask_vox(1,imask)
                 j = nu_mask_vox(2,imask)
                 k = nu_mask_vox(3,imask)
-                if( srcmap(i,j,k) == 1 .and. int(filtmap(i,j,k)) == nu_aux_replacement_label ) then
+                if( int(filtmap(i,j,k)) == nu_aux_replacement_label ) then
                     rmat_even_out(i,j,k) = rmat_aux_even(i,j,k)
                     rmat_odd_out(i,j,k)  = rmat_aux_odd(i,j,k)
                 end if
@@ -94,14 +93,10 @@ contains
         real    :: edge_mean
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vol')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
-        if( .not.allocated(srcmap)       ) THROW_HARD('srcmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vol')
         if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nu_filter_vol')
         if( .not.allocated(nu_mask_vox)  ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nu_filter_vol')
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('Input volume dimensions differ; nu_filter_vol')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; nu_filter_vol')
-        if( any(nu_lmask .and. srcmap /= 1) )then
-            THROW_HARD('single-map NU filtering requires a base-bank-only filter map; nu_filter_vol')
-        endif
         if( nu_aux_replacement_label > 0 )then
             if( any(nu_lmask .and. filtmap == int(nu_aux_replacement_label, kind=NU_LABEL_KIND)) )then
                 THROW_HARD('single-map NU filtering cannot synthesize an auxiliary replacement label; nu_filter_vol')
@@ -142,7 +137,7 @@ contains
                 i = nu_mask_vox(1,imask)
                 j = nu_mask_vox(2,imask)
                 k = nu_mask_vox(3,imask)
-                if( srcmap(i,j,k) == 1 .and. filtmap(i,j,k) == icut ) rmat_out(i,j,k) = rmat_filt(i,j,k)
+                if( filtmap(i,j,k) == icut ) rmat_out(i,j,k) = rmat_filt(i,j,k)
             end do
             !$omp end parallel do
         end do

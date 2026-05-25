@@ -101,7 +101,6 @@ real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
-integer(kind=NU_LABEL_KIND), allocatable :: srcmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:)
 logical,          allocatable :: nu_lmask(:,:,:)
@@ -266,10 +265,9 @@ interface
     module subroutine optimize_nu_cutoff_finds()
     end subroutine optimize_nu_cutoff_finds
 
-    module subroutine candidate_map_to_filt_and_src( candmap, n_base )
-        integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
+    module subroutine clamp_nu_filtmap_labels( n_base )
         integer, intent(in) :: n_base
-    end subroutine candidate_map_to_filt_and_src
+    end subroutine clamp_nu_filtmap_labels
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)

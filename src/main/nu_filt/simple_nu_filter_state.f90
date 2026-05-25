@@ -125,6 +125,7 @@ contains
         filtered_vols_cached = .false.
         if( .not.allocated(cutoff_finds) ) return
         do i = 1, size(cutoff_finds)
+            if( nu_label_is_aux_replacement(i) ) cycle
             if( .not.file_exists(filtered_vol_fname(cache_prefix, cutoff_finds(i))) ) return
         end do
         filtered_vols_cached = .true.
@@ -160,7 +161,6 @@ contains
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)
-        if( allocated(srcmap)             ) deallocate(srcmap)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
         if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
@@ -379,6 +379,7 @@ contains
         call vol_even_filt%set_wthreads(.true.)
         call vol_odd_filt%set_wthreads(.true.)
         do i = 1, size(cutoff_finds)
+            if( nu_label_is_aux_replacement(i) ) cycle
             even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
             odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
             if( file_exists(even_cache_fname) .and. file_exists(odd_cache_fname) ) cycle
