@@ -405,8 +405,8 @@ contains
         sum_dp    = 0.0_dp
         sum_sq_dp = 0.0_dp
         npix      = 0
-        do i = 1, n1
-            do j = 1, n2
+        do j = 1, n2
+            do i = 1, n1
                 if (.not. lmsk(i,j,1)) then
                     npix = npix + 1
                     x_sp = self%rmat(i,j,1)

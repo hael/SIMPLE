@@ -45,7 +45,7 @@ type :: stack
     type(c_ptr)                            :: plan_fwd    = c_null_ptr  ! forward plan
     type(c_ptr)                            :: plan_bwd    = c_null_ptr  ! backward plan
     type(ftiter)                           :: fit                       ! convenience fourier iterator
-    real(kind=c_float),            pointer :: rmat(:,:,:) => null()     ! pointer to real cagvs array
+    real(kind=c_float),            pointer :: rmat(:,:,:) => null()     ! pointer to real cavgs array
     complex(kind=c_float_complex), pointer :: cmat(:,:,:) => null()     ! pointer to complex cavgs array
     type(matrix_ptrs),         allocatable :: slices(:)                 ! pointers to individual slices/cavgs
     real,                      allocatable :: ctfsq(:,:,:)              ! CTF^2 array
@@ -92,9 +92,6 @@ end type cavgs_set
 type ptcl_record
     type(ctf)          :: tfun               !< transfer function
     type(ctfparams)    :: ctfparams          !< CTF parameters
-    real               :: dfx        = 0.0   !< defocus in x (microns)
-    real               :: dfy        = 0.0   !< defocus in y (microns)
-    real               :: angast     = 0.0   !< angle of astigmatism (in degrees)
     real               :: e3         = 0.0   !< in-plane rotations
     real               :: shift(2)   = 0.0   !< rotational origin shift
     integer            :: pind       = 0     !< particle index
@@ -116,11 +113,8 @@ type(cavgs_set)                  :: cavgs                     !< Class averages
 type(kbinterpol)                 :: kbwin                     !< Kaiser-Bessel interpolation object
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
-complex,             allocatable :: cmats(:,:,:), interp_cmats(:,:,:)           !< Images interpolated values
-real,                allocatable :: tvals(:,:,:), interp_rhos(:,:,:)            !< CTF interpolated values
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
 integer,             allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)  !< Fourier mapping memoization matrices
-integer                          :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
 integer                          :: ncls       = 0            !< # classes
 integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
 integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image

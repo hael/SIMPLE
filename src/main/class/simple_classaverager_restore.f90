@@ -19,8 +19,6 @@ contains
         if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
         call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
         ncls          = p_ptr%ncls
-        ! CTF logics
-        ctfflag       = b_ptr%spproj%get_ctfflag_type('ptcl2D',iptcl=p_ptr%fromp)
         ! smpd
         smpd          = p_ptr%smpd
         smpd_crop     = p_ptr%smpd_crop
@@ -39,12 +37,11 @@ contains
 
     !>  \brief  transfers metadata to the instance for a subset of particles
     module subroutine cavger_transf_oridat( nptcls, pinds, updated_only )
-        integer,  intent(in) :: nptcls
-        integer,  intent(in) :: pinds(nptcls)
+        integer,            intent(in) :: nptcls
+        integer,            intent(in) :: pinds(nptcls)
         logical,  optional, intent(in) :: updated_only
         class(oris), pointer :: spproj_field
-        type(ctfparams)      :: ctfparms(nthr_glob)
-        integer              :: i, iptcl, ithr, stkind
+        integer              :: i, iptcl, stkind
         logical              :: l_updated_only
         l_updated_only = .false.
         if( present(updated_only) ) l_updated_only = updated_only
@@ -53,7 +50,7 @@ contains
         if( nptcls < size(precs) ) precs(nptcls+1:)%pind = 0
         ! fetch data from project
         call b_ptr%spproj%ptr2oritype(p_ptr%oritype, spproj_field)
-        !$omp parallel do default(shared) private(i,iptcl,ithr,stkind) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,iptcl,stkind) schedule(static) proc_bind(close)
         do i = 1,nptcls
             iptcl = pinds(i)
             if( iptcl == 0 ) cycle
@@ -64,16 +61,12 @@ contains
                 endif
             endif
             if( spproj_field%get_state(iptcl)==0 )then
-                precs(i)%pind = 0
+                precs(i)%pind   = 0
             else
-                ithr            = omp_get_thread_num() + 1
                 precs(i)%pind   = iptcl
                 precs(i)%eo     = spproj_field%get_eo(iptcl)
-                ctfparms(ithr)  = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
-                precs(i)%tfun   = ctf(p_ptr%smpd_crop, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
-                precs(i)%dfx    = ctfparms(ithr)%dfx
-                precs(i)%dfy    = ctfparms(ithr)%dfy
-                precs(i)%angast = ctfparms(ithr)%angast
+                precs(i)%ctfparams = b_ptr%spproj%get_ctfparams(p_ptr%oritype,iptcl)
+                precs(i)%tfun   = ctf(p_ptr%smpd_crop, precs(i)%ctfparams%kv, precs(i)%ctfparams%cs, precs(i)%ctfparams%fraca)
                 precs(i)%class  = spproj_field%get_class(iptcl)
                 precs(i)%e3     = spproj_field%e3get(iptcl)
                 precs(i)%shift  = spproj_field%get_2Dshift(iptcl)
@@ -153,7 +146,6 @@ contains
     module subroutine cavger_init_online( maxbatchsz, do_frac_update )
         integer, intent(in) :: maxbatchsz
         logical, intent(in) :: do_frac_update
-        integer :: fdims_croppd(3), cshape_crop(2), wdim
         real, allocatable :: class_update_fracs(:)
         ! Zero sums or set to previous with weight
         if( l_alloc_read_cavgs )then
@@ -175,7 +167,6 @@ contains
         endif
         ! Interpolation variables
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        wdim   = kbwin%get_wdim()
         ! Work images
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! particle records
@@ -189,13 +180,6 @@ contains
         phys_addrk_crop = ft_map_phys_addrk
         ! Memoization for cropped padded image, will be overwritten during search
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
-        ! Work arrays
-        cshape_crop  = cavgs%even%cshape
-        fdims_croppd = ft_map_get_farray_shape()
-        allocate(tvals(fdims_croppd(1),fdims_croppd(2),nthr_glob),&
-                &cmats(fdims_croppd(1),fdims_croppd(2),nthr_glob),&
-                &interp_cmats(cshape_crop(1),cshape_crop(2),maxbatchsz),&
-                &interp_rhos(cshape_crop(1),cshape_crop(2),maxbatchsz))
     end subroutine cavger_init_online
 
     subroutine center_cavgs_for_frac_update
@@ -302,95 +286,94 @@ contains
         if( allocated(tmp_pad_imgs))then
             call forget_ft_maps
             call dealloc_imgarr(tmp_pad_imgs)
-            deallocate(cmats,interp_cmats,tvals,interp_rhos,precs,&
-                &phys_addrh_crop,phys_addrk_crop)
+            deallocate(precs,phys_addrh_crop,phys_addrk_crop)
         endif
     end subroutine cavger_dealloc_online
 
-    !>  \brief  is for updating classes sums in distributed/non-distributed mode
-    !           with provided images using interpolation in Fourier space
-    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
+    subroutine cavger_update_sums( nptcls, ptcl_imgs )
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
         real,   parameter :: KB2 = KBALPHA**2
         type(fplane_type) :: fplanes(nthr_glob)
-        real, allocatable :: wx(:,:), wy(:,:), hvec(:), kvec(:)
-        complex :: fcomp
-        real    :: loc(2), mat(2,2), tvalsq, croppd_scale, w
-        real    :: m11, m12, m21, m22, hrow(2)
-        integer :: win(2,2), flims_crop(3,2), phys(2)
-        integer :: cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: hh,kk,hp,kp,l,m, icls, nyq_crop, nhvec,nkvec,a,b
-        integer :: iptcl, i, iwinsz, wdim, ithr, nyq_disk
-        real    :: eps_norm, inv_wdim, rh,rk, h_sq
-        logical :: l_conjg
+        integer :: flims_crop(3,2), cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
+        integer :: cshape(2), iptcl, ithr, icls, i, iwinsz, wdim, nyq_crop, nyq_disk
         ! Interpolation parameters
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         wdim   = kbwin%get_wdim()
-        allocate(wx(wdim,nthr_glob), wy(wdim,nthr_glob))
         ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
         call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
         ! Dimensions & limits
-        croppd_scale  = real(ldim_croppd(1)) / real(ldim_pd(1))
-        flims_crop    = cavgs%even%flims
-        nyq_crop      = cavgs%even%fit%get_lfny(1)
-        nyq_disk      = nyq_crop * (nyq_crop + 1)
-        cyc_lims_crop = cavgs%even%fit%loop_lims(3)
+        flims_crop     = cavgs%even%flims
+        nyq_crop       = cavgs%even%fit%get_lfny(1)
+        nyq_disk       = nyq_crop * (nyq_crop + 1)
+        cyc_lims_crop  = cavgs%even%fit%loop_lims(3)
         cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
+        cshape         = cavgs%even%cshape
         sigma2_kfromto = [1, nyq_crop]
-        eps_norm = epsilon(1.0)
-        inv_wdim = 1.0 / real(wdim)
         if( p_ptr%l_ml_reg ) then
             sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
         end if
-        ! setting up denser sampling for shells < 2
-        call dense_sampling_near_zero( flims_crop(1,1), flims_crop(1,2), 2, OSMPL_PAD_FAC, hvec )
-        call dense_sampling_near_zero( flims_crop(2,1), flims_crop(2,2), 2, OSMPL_PAD_FAC, kvec )
-        nhvec = size(hvec)
-        nkvec = size(kvec)
-        !$omp parallel default(shared) proc_bind(close) &
-        !$omp private(i,ithr,iptcl,win,mat,hh,kk,l,m,loc,hp,kp,phys,w,tvalsq,l_conjg,fcomp,&
-        !$omp& h_sq,hrow,m11,m12,m21,m22,a,b,rh,rk)
-        !$omp do schedule(static)
-        do i = 1, nptcls
-            iptcl = precs(i)%pind
-            if( iptcl == 0 ) cycle
-            ithr = omp_get_thread_num() + 1
-            ! prep image: noise normalization, edge tapering, padding, fftshift, FFT
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft( b_ptr%lmsk, tmp_pad_imgs(ithr) )
-            ! Get and cache CTF parameters
-            precs(i)%ctfparams         = b_ptr%spproj%get_ctfparams(p_ptr%oritype, iptcl)
-            precs(i)%ctfparams%ctfflag = ctfflag
-            precs(i)%ctfparams%dfx     = precs(i)%dfx
-            precs(i)%ctfparams%dfy     = precs(i)%dfy
-            precs(i)%ctfparams%angast  = precs(i)%angast
-            ! Build Fourier plane with shift, CTF and optional ML regularization
-            if( p_ptr%l_ml_reg ) then
-                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
-                    b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
-            else
-                call tmp_pad_imgs(ithr)%gen_fplane4rec( sigma2_kfromto, p_ptr%smpd_crop, &
-                    precs(i)%ctfparams, precs(i)%shift, fplanes(ithr) )
-            endif
+        !$omp parallel do default(shared) private(icls,i,iptcl,ithr)&
+        !$omp schedule(static,1) proc_bind(close)
+        do icls = 1, ncls
+            do i = 1, nptcls
+                if( precs(i)%pind == 0 )     cycle
+                if( precs(i)%class /= icls ) cycle
+                ithr  = omp_get_thread_num() + 1
+                iptcl = precs(i)%pind
+                ! particle: normalize, pad & forward FT
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk, tmp_pad_imgs(ithr))
+                ! shift, CTF and ML regularization in Fourier plane generation
+                if( p_ptr%l_ml_reg ) then
+                    call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
+                        precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
+                        b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
+                else
+                    call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
+                        precs(i)%ctfparams, precs(i)%shift, fplanes(ithr) )
+                endif
+                ! rotation, interpolation and accumulation
+                select case(precs(i)%eo)
+                case(0,-1)
+                    eo_pops(1,icls) = eo_pops(1,icls) + 1
+                    call update_cluster_with_fplane( precs(i)%e3, fplanes(ithr), &
+                        cshape(1), cshape(2), cavgs%even%slices(icls)%c(:,:), cavgs%even%ctfsq(:,:,icls))
+                case(1)
+                    eo_pops(2,icls) = eo_pops(2,icls) + 1
+                    call update_cluster_with_fplane( precs(i)%e3, fplanes(ithr), &
+                        cshape(1), cshape(2), cavgs%odd%slices(icls)%c(:,:), cavgs%odd%ctfsq(:,:,icls))
+                end select
+            enddo
+        enddo
+        !$omp end parallel do
+    contains
+
+        ! Rotation and Kaiser-Bessel interpolation
+        subroutine update_cluster_with_fplane( e3, fpl, nh, nk, cmat, ctfsq )
+            real,              intent(in)    :: e3
+            type(fplane_type), intent(in)    :: fpl
+            integer,           intent(in)    :: nh, nk
+            complex,           intent(inout) :: cmat(1:nh,1:nk)
+            real,              intent(inout) :: ctfsq(1:nh,1:nk)
+            complex :: fcomp, fc
+            real    :: loc(2), mat(2,2), hrow(2), wx(wdim), wy(wdim), base(2)
+            real    :: m11, m12, m21, m22, tvalsq, w, rh, rk, h_sq, sx, sy
+            integer :: win(2,2), physh, physk, hh, kk, hp, kp, l, m, h,k, iapod
             ! Rotation matrix
-            call rotmat2d( precs(i)%e3, mat )
+            call rotmat2d( e3, mat )
             m11 = mat(1,1); m12 = mat(1,2)
             m21 = mat(2,1); m22 = mat(2,2)
-            ! Kaiser-Bessel interpolation
-            interp_cmats(:,:,i) = CMPLX_ZERO
-            interp_rhos(:,:,i)  = 0.0
             ! loop over cropped original image limits
-            do a = 1,nhvec
-                rh   = hvec(a)
+            do h = flims_crop(1,1), flims_crop(1,2)
+                rh   = real(h)
                 h_sq = rh*rh
                 if( h_sq > real(nyq_disk) ) cycle
                 hp = int(rh * real(OSMPL_PAD_FAC))
                 hrow(1) = rh * m11
                 hrow(2) = rh * m12
-                do b = 1,nkvec
-                    rk = kvec(b)
+                do k = flims_crop(2,1), flims_crop(2,2)
+                    rk = real(k)
                     if( h_sq + rk*rk > real(nyq_disk) ) cycle
                     kp = int(rk * real(OSMPL_PAD_FAC))
                     ! rotation on original lattice
@@ -401,126 +384,46 @@ contains
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
                     ! kernel window
-                    call kb_apod_vecs_2d_fast(loc, wx(:,ithr), wy(:,ithr))
+                    base = real(win(1,:)) - loc
+                    sx = 0.; sy = 0.
+                    do iapod = 1, wdim
+                        wx(iapod) = kbwin%apod_fast(base(1) + real(iapod-1))
+                        wy(iapod) = kbwin%apod_fast(base(2) + real(iapod-1))
+                        sx = sx + wx(iapod)
+                        sy = sy + wy(iapod)
+                    end do
+                    wx = wx / sx; wy = wy / sy
                     ! Read from the generated Fourier plane.
                     ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
                     if( kp <= 0 ) then
-                        fcomp  = KB2 * fplanes(ithr)%cmplx_plane(hp, kp)
-                        tvalsq =       fplanes(ithr)%ctfsq_plane(hp, kp)
+                        fcomp  = KB2 * fpl%cmplx_plane(hp, kp)
+                        tvalsq =       fpl%ctfsq_plane(hp, kp)
                     else
-                        fcomp  = KB2 * conjg(fplanes(ithr)%cmplx_plane(-hp, -kp))
-                        tvalsq =       fplanes(ithr)%ctfsq_plane(-hp, -kp)
+                        fcomp  = KB2 * conjg(fpl%cmplx_plane(-hp, -kp))
+                        tvalsq =       fpl%ctfsq_plane(-hp, -kp)
                     endif
                     ! Splat update
                     do l = 1, wdim
-                        hh      = win(1,1) + l - 1
-                        l_conjg = hh < 0
-                        hh      = cyci_1d(cyc_lims_cropR(:,1), hh)
+                        hh = win(1,1) + l - 1
+                        if( hh < 0 ) then
+                            fc = conjg(fcomp)
+                        else
+                            fc = fcomp
+                        endif
+                        hh = cyci_1d(cyc_lims_cropR(:,1), hh)
                         do m = 1, wdim
-                            kk      = win(1,2) + m - 1
-                            kk      = cyci_1d(cyc_lims_cropR(:,2), kk)
-                            phys(1) = phys_addrh_crop(hh,kk)
-                            phys(2) = phys_addrk_crop(hh,kk)
-                            w       = wx(l,ithr) * wy(m,ithr)
-                            interp_cmats(phys(1),phys(2),i) = interp_cmats(phys(1),phys(2),i) + &
-                                w * merge(conjg(fcomp), fcomp, l_conjg)
-                            interp_rhos(phys(1),phys(2),i)  = interp_rhos(phys(1),phys(2),i)  + &
-                                w * tvalsq
+                            kk    = win(1,2) + m - 1
+                            kk    = cyci_1d(cyc_lims_cropR(:,2), kk)
+                            physh = phys_addrh_crop(hh,kk)
+                            physk = phys_addrk_crop(hh,kk)
+                            w     = wx(l) * wy(m)
+                            cmat(physh,physk)  = cmat(physh,physk)  + w * fc
+                            ctfsq(physh,physk) = ctfsq(physh,physk) + w * tvalsq
                         enddo
                     enddo
                 enddo
             enddo
-        enddo
-        !$omp end do
-        ! Accumulate sums
-        !$omp do schedule(static)
-        do icls = 1, ncls
-            do i = 1, nptcls
-                if( precs(i)%pind == 0 ) cycle
-                if( precs(i)%class == icls ) then
-                    select case(precs(i)%eo)
-                    case(0,-1)
-                        cavgs%even%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + interp_cmats(:,:,i)
-                        cavgs%even%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-                        eo_pops(1,icls) = eo_pops(1,icls) + 1
-                    case(1)
-                        cavgs%odd%cmat(:,:,icls)  = cavgs%odd%cmat(:,:,icls)  + interp_cmats(:,:,i)
-                        cavgs%odd%ctfsq(:,:,icls) = cavgs%odd%ctfsq(:,:,icls) + interp_rhos(:,:,i)
-                        eo_pops(2,icls) = eo_pops(2,icls) + 1
-                    end select
-                endif
-            enddo
-        enddo
-        !$omp end do
-        !$omp end parallel
-        deallocate(wx, wy, hvec, kvec)
-    contains
-
-        pure subroutine kb_apod_vecs_2d_fast( loc, wx, wy )
-            real, intent(in)  :: loc(2)
-            real, intent(out) :: wx(wdim), wy(wdim)
-            integer :: i, win_lo(2)
-            real    :: base(2), ww(2), sx, sy
-            win_lo = nint(loc) - iwinsz
-            base   = real(win_lo) - loc
-            do i = 1, wdim
-                ww    = kbwin%apod_fast(base + real(i-1))
-                wx(i) = ww(1)
-                wy(i) = ww(2)
-            end do
-            sx = sum(wx)
-            sy = sum(wy)
-            if( abs(sx) > eps_norm )then
-                wx = wx * (1.0 / sx)
-            else
-                wx = inv_wdim
-            endif
-            if( abs(sy) > eps_norm )then
-                wy = wy * (1.0 / sy)
-            else
-                wy = inv_wdim
-            endif
-        end subroutine kb_apod_vecs_2d_fast
-
-        !>   generate a vector of Fourier coordinates with unit sampling then
-        !>   increase by steps of 1/osmpl_fac in the [-near;near] range
-        subroutine dense_sampling_near_zero( lb, ub, near, osmpl_fac, vec)
-            integer,           intent(in)   :: lb, ub, near, osmpl_fac
-            real, allocatable, intent(inout):: vec(:)
-            real    :: r
-            integer :: n
-            if( allocated(vec) ) deallocate(vec)
-            ! determine vector size
-            r = real(lb)
-            n = 1
-            do while( r < real(ub)+0.001 )
-                n = n + 1
-                if( r < 0. )then
-                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)+0.001)
-                else
-                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)-0.001)
-                endif
-            end do
-            ! generate vector
-            allocate(vec(n),source=0.)
-            r = real(lb)
-            n = 1
-            do while( r < real(ub)+0.001 )
-                vec(n) = r
-                n      = n + 1
-                if( r < 0. )then
-                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)+0.001)
-                else
-                    r = r + merge(1.0/real(osmpl_fac), 1.0, abs(r) < real(near)-0.001)
-                endif
-            end do
-            n = n - 1
-            if( nint(vec(1)) /= lb .or. nint(vec(n)) /= ub ) then
-                THROW_HARD('Error in dense_sampling_near_zero: generated limits differ from requested ones.')
-                print *, 'Generated vector: ', vec
-                error stop
-            end if
-        end subroutine dense_sampling_near_zero
+        end subroutine update_cluster_with_fplane
 
     end subroutine cavger_update_sums
 
