@@ -158,7 +158,13 @@ contains
         if( cline%defined('stktab') )then
             ! importing from stktab
             call read_filetable(params%stktab, stkfnames)
+            if( .not. allocated(stkfnames) )then
+                THROW_HARD('stktab has no valid stack entries; exec_import_particles')
+            endif
             nstks = size(stkfnames)
+            if( nstks < 1 )then
+                THROW_HARD('stktab has zero stack entries; exec_import_particles')
+            endif
             if( params%mkdir.eq.'yes' )then
                 do i=1,nstks
                     if(stkfnames(i)%to_char([1,1]).ne.'/') stkfnames(i) = PATH_PARENT//stkfnames(i)%to_char()
