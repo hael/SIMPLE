@@ -2,7 +2,7 @@
 ! bindings to CUDAToolkit
 module simple_gpu_utils
 use simple_core_module_api
-use, intrinsic :: iso_c_binding, only: c_float, c_int, c_ptr
+use, intrinsic :: iso_c_binding, only: c_char, c_float, c_int, c_null_char, c_ptr, c_size_t
 implicit none
 #include "simple_local_flags.inc"
 
@@ -17,6 +17,34 @@ integer(c_int), parameter :: CUBLAS_OP_T           = 1_c_int
 integer(c_int), parameter :: CUBLAS_OP_C           = 2_c_int
 
 #ifdef USE_OPENMP_OFFLOAD
+    ! Mirrors the C cudaDeviceProp struct layout (CUDA 11/12, 64-bit Linux).
+    ! Explicit pad1 aligns totalGlobalMem to 8 bytes after luidDeviceNodeMask.
+    ! pad2 extends the type to 2048 bytes
+    type, bind(C) :: cuda_device_prop
+        character(c_char)  :: name(256)
+        character(c_char)  :: uuid(16)
+        character(c_char)  :: luid(8)
+        integer(c_int)     :: luidDeviceNodeMask
+        character(c_char)  :: pad1(4)                ! alignment padding
+        integer(c_size_t)  :: totalGlobalMem
+        integer(c_size_t)  :: sharedMemPerBlock
+        integer(c_int)     :: regsPerBlock
+        integer(c_int)     :: warpSize
+        integer(c_size_t)  :: memPitch
+        integer(c_int)     :: maxThreadsPerBlock
+        integer(c_int)     :: maxThreadsDim(3)
+        integer(c_int)     :: maxGridSize(3)
+        integer(c_int)     :: clockRate
+        integer(c_size_t)  :: totalConstMem
+        integer(c_int)     :: major
+        integer(c_int)     :: minor
+        integer(c_size_t)  :: textureAlignment
+        integer(c_size_t)  :: texturePitchAlignment
+        integer(c_int)     :: deviceOverlap
+        integer(c_int)     :: multiProcessorCount
+        character(c_char)  :: pad2(1656)             ! pad to 2048 bytes total
+    end type cuda_device_prop
+
 interface
 
     integer(c_int) function cudaSetDevice(device) bind(C, name='cudaSetDevice')
@@ -96,6 +124,17 @@ interface
        real(c_float),  intent(in) :: alpha, beta
        type(c_ptr),    value :: a, b, c
     end function cublasSgemm
+
+    integer(c_int) function cudaGetDeviceProperties(prop, device) bind(C, name='cudaGetDeviceProperties')
+       import :: c_int, cuda_device_prop
+       type(cuda_device_prop), intent(out) :: prop
+       integer(c_int), value :: device
+    end function cudaGetDeviceProperties
+
+    integer(c_int) function cudaMemGetInfo(free_mem, total_mem) bind(C, name='cudaMemGetInfo')
+       import :: c_int, c_size_t
+       integer(c_size_t), intent(out) :: free_mem, total_mem
+    end function cudaMemGetInfo
 end interface
 #endif
 
@@ -165,5 +204,58 @@ contains
         write(logfhandle, '(A,I0)') '>>> OpenMP offload device ID: ', id
 #endif
     end subroutine set_offload_device_2
+
+    subroutine print_gpu_specs( id )
+        integer, intent(in) :: id
+#ifdef USE_OPENMP_OFFLOAD
+        type(cuda_device_prop) :: prop
+        integer(c_int)         :: ierr
+        integer(c_size_t)      :: free_mem, total_mem
+        character(len=256)     :: devname
+        integer                :: i
+        ierr = cudaGetDeviceProperties(prop, int(id, c_int))
+        if( ierr /= CUDA_SUCCESS ) then
+            write(logfhandle, '(A,I0,A,I0)') &
+                '>>> WARNING: cudaGetDeviceProperties failed for device ', id, ', status = ', ierr
+            return
+        endif
+        ierr = cudaMemGetInfo(free_mem, total_mem)
+        if( ierr /= CUDA_SUCCESS ) then
+            write(logfhandle, '(A,I0,A,I0)') &
+                '>>> WARNING: cudaMemGetInfo failed for device ', id, ', status = ', ierr
+            free_mem  = 0_c_size_t
+            total_mem = prop%totalGlobalMem
+        endif
+        ! Parse null-terminated device name into a Fortran string
+        devname = ' '
+        do i = 1, 256
+            if( prop%name(i) == c_null_char ) exit
+            devname(i:i) = prop%name(i)
+        end do
+        write(logfhandle, '(/,A)')          '>>> GPU DEVICE PROPERTIES'
+        write(logfhandle, '(A,I0)')         '    Device ID              : ', id
+        write(logfhandle, '(A,A)')          '    Name                   : ', trim(devname)
+        write(logfhandle, '(A,I0,A,I0)')   '    Compute capability     : ', prop%major, '.', prop%minor
+        write(logfhandle, '(A,I0)')         '    Multiprocessors        : ', prop%multiProcessorCount
+        write(logfhandle, '(A,F8.3,A)')    '    Total global memory    : ', &
+            dble(prop%totalGlobalMem) / (1024.d0**3), ' GB'
+        write(logfhandle, '(A,F8.3,A,F8.3,A)') '    Memory free / in use   : ', &
+            dble(free_mem)            / (1024.d0**3), ' GB / ', &
+            dble(total_mem - free_mem)/ (1024.d0**3), ' GB'
+        write(logfhandle, '(A,I0,A)')      '    Shared mem / block     : ', &
+            prop%sharedMemPerBlock / 1024, ' KB'
+        write(logfhandle, '(A,I0,A)')      '    Constant memory        : ', &
+            prop%totalConstMem     / 1024, ' KB'
+        write(logfhandle, '(A,I0)')        '    Registers / block      : ', prop%regsPerBlock
+        write(logfhandle, '(A,I0)')        '    Warp size              : ', prop%warpSize
+        write(logfhandle, '(A,I0)')        '    Max threads / block    : ', prop%maxThreadsPerBlock
+        write(logfhandle, '(A,3(I0,1X))') '    Max block dimensions   : ', prop%maxThreadsDim
+        write(logfhandle, '(A,3(I0,1X))') '    Max grid dimensions    : ', prop%maxGridSize
+        write(logfhandle, '(A,F8.3,A)')   '    Clock rate             : ', &
+            real(prop%clockRate) / 1.0e6, ' GHz'
+#else
+        write(logfhandle, '(A)') '>>> GPU specs unavailable: build with USE_OPENMP_OFFLOAD=ON'
+#endif
+    end subroutine print_gpu_specs
 
 end module simple_gpu_utils

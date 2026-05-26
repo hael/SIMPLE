@@ -184,7 +184,6 @@ type :: polarft_calc
     procedure          :: gen_many_objfun_vals
     procedure          :: gen_many_euclids
     procedure          :: gen_many_euclids_gpu
-    procedure          :: gen_many_euclids_cufft
     procedure          :: gen_many2many_euclids_cufft
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
@@ -763,11 +762,6 @@ interface
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
     end subroutine gen_many_euclids_gpu
-
-    module subroutine gen_many_euclids_cufft( self, iptcl )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-    end subroutine gen_many_euclids_cufft
 
     module subroutine gen_many2many_euclids_cufft( self, pfromto )
         class(polarft_calc), intent(inout) :: self

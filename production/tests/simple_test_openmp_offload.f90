@@ -7,7 +7,14 @@ use simple_cmdline,    only: cmdline
 use simple_gpu_utils
 use simple_fftw3
 use omp_lib
+use omp_lib_kinds
 implicit none
+
+type dummytype
+    integer           :: i
+    real, allocatable :: a(:)
+end type dummytype
+
 type(cmdline)      :: cline
 type(parameters)   :: p
 integer(dp) :: t
@@ -41,8 +48,13 @@ if( device_id /= p%device ) then
     stop 'Fatal error: offloading failed, could not set the correct device'
 endif
 print *, 'Setup test successful'
+
+print *, 'From OpenMP Number of teams  : ', nteams
+print *, 'From OpenMP Number of threads: ', nthreads
+call print_gpu_specs(p%device)
 call numerical_test
 call persistence_test
+call persistence_test2
 call async_test
 call test_fftw_vs_cufft_1d_in_place
 call test_fftw_vs_cufft_2d_in_place
@@ -91,6 +103,43 @@ contains
         deallocate(a, b)
         print *, 'Persistence test successful'
     end subroutine persistence_test
+
+    subroutine persistence_test2
+        integer,  parameter :: n = 256
+        real(sp), dimension(:), allocatable :: b
+        type(dummytype) :: dt
+        integer :: i,j,k
+        call banner('TEST: Memory persistence test of type bound allocatable')
+        ! dummy type init
+        dt%i = 42
+        allocate(dt%a(n),source=1.)
+        allocate(b(n))
+        b = 2.
+        !$omp target enter data map(to: dt%a, b)
+        !$omp target teams distribute parallel do map(alloc: dt%a, b)
+        do i = 1, n
+            dt%a(i) = dt%a(i) + b(i)
+        end do
+        !$omp end target teams distribute parallel do
+        ! a & b should still be on device, a set to 3
+        ! next setting b to 6
+        !$omp target teams distribute parallel do map(alloc: dt%a, b)
+        do i = 1, n
+            b(i) = dt%a(i) * 2.0d0
+        end do
+        !$omp end target teams distribute parallel do
+        !$omp target exit data map(from: dt%a, b) 
+        print *, '  Final result (b(1)) : ', b(1)
+        print *, '  Final result (b(N)) : ', b(N)
+        if( abs(b(1) - 6.0d0) > 1e-10 ) then
+            stop 'Fatal error: persistence test2 failed, data did not persist on device'
+        endif
+        if( abs(b(N) - 6.0d0) > 1e-10 ) then
+            stop 'Fatal error: persistence test2 failed, data did not persist on device'
+        endif
+        deallocate(dt%a, b)
+        print *, 'Persistence test2 successful'
+    end subroutine persistence_test2
 
     subroutine numerical_test
         integer, parameter :: N = 10000
@@ -906,8 +955,9 @@ contains
         real(c_float) :: alpha, beta, maxerr
         type(c_ptr) :: handle, d_a, d_b, d_c
         integer(c_int) :: ierr
-        integer :: i, j
+        integer :: i, j, id
         call banner('TEST: CUBLAS SGEMM')
+        id = p%device
         allocate(a(m,k), b(k,n), c(m,n), cref(m,n))
         do j = 1, k
             do i = 1, m
@@ -923,26 +973,23 @@ contains
         cref  = matmul(a, b)
         alpha = 1.0_c_float
         beta  = 0.0_c_float
-
         handle = c_null_ptr
         ierr = cublasCreate(handle)
         if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasCreate failed'
         if( .not. c_associated(handle) ) stop 'Fatal error: cublasCreate returned null handle'
-
-        !$omp target data map(to:a,b) map(from:c)
-            d_a = omp_get_mapped_ptr(c_loc(a(1,1)), 0)
-            d_b = omp_get_mapped_ptr(c_loc(b(1,1)), 0)
-            d_c = omp_get_mapped_ptr(c_loc(c(1,1)), 0)
-            if( .not. c_associated(d_a) ) stop 'Fatal error: CUBLAS SGEMM A is not mapped'
-            if( .not. c_associated(d_b) ) stop 'Fatal error: CUBLAS SGEMM B is not mapped'
-            if( .not. c_associated(d_c) ) stop 'Fatal error: CUBLAS SGEMM C is not mapped'
-            ierr = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, int(m,c_int), int(n,c_int), int(k,c_int),&
-                &alpha, d_a, int(m,c_int), d_b, int(k,c_int), beta, d_c, int(m,c_int))
-            if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasSgemm failed'
-            ierr = cudaDeviceSynchronize()
-            if( ierr /= CUDA_SUCCESS ) stop 'Fatal error: cudaDeviceSynchronize failed after cublasSgemm'
+        !$omp target data map(to:a,b,id) map(from:c)
+        d_a = omp_get_mapped_ptr(c_loc(a(1,1)), id)
+        d_b = omp_get_mapped_ptr(c_loc(b(1,1)), id)
+        d_c = omp_get_mapped_ptr(c_loc(c(1,1)), id)
+        if( .not. c_associated(d_a) ) stop 'Fatal error: CUBLAS SGEMM A is not mapped'
+        if( .not. c_associated(d_b) ) stop 'Fatal error: CUBLAS SGEMM B is not mapped'
+        if( .not. c_associated(d_c) ) stop 'Fatal error: CUBLAS SGEMM C is not mapped'
+        ierr = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, int(m,c_int), int(n,c_int), int(k,c_int),&
+            &alpha, d_a, int(m,c_int), d_b, int(k,c_int), beta, d_c, int(m,c_int))
+        if( ierr /= CUBLAS_STATUS_SUCCESS ) stop 'Fatal error: cublasSgemm failed'
+        ierr = cudaDeviceSynchronize()
+        if( ierr /= CUDA_SUCCESS ) stop 'Fatal error: cudaDeviceSynchronize failed after cublasSgemm'
         !$omp end target data
-
         maxerr = maxval(abs(c - cref))
         print *, 'CUBLAS SGEMM max error = ', maxerr
         if( maxerr > 1.0e-5_c_float ) stop 'Fatal error: CUBLAS SGEMM accuracy test failed'
@@ -1057,7 +1104,6 @@ contains
         endif
     end subroutine test_pointers
 
-    ! such tar the arrays loose allocatable status, can change indexing and gain target status
     subroutine pointer_kernel(nx,ny,nz, re, ro, ce, co, flag)
         integer,         intent(in)    :: nx, ny, nz
         real,    target, intent(inout) :: re(nx,ny,nz), ro(nx,ny,nz)

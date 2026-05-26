@@ -1226,7 +1226,7 @@ contains
         complex(sp) :: c
         real(dp)    :: A, v
         real(sp)    :: wk, shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, ind, iref, p
+        integer     :: k, kk, k0, i, j, ithr, iref, p
         logical     :: even
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
@@ -1401,198 +1401,72 @@ contains
 
     ! Benchmark for comparison of euclid calculation between
     ! openmp offload gpu and cpu host
-    module subroutine gen_many_euclids_cufft( self, iptcl )
-        use  simple_gpu_utils
-        use, intrinsic :: iso_c_binding, only: c_loc, c_f_pointer
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        type(c_ptr) :: p_c
-        complex(sp) :: c,d
-        real(sp)    :: ftvals(self%nrots), ftvals_ref1(self%nrots)
-        real(sp)    :: w(self%kfromto(1):self%kfromto(2)), wk
-        integer(dp) :: t
-        integer     :: i, k, iref, p,j
-        integer     :: worst_ref, worst_rot
-        real(dp)    :: A, df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
-        logical     :: even
-        integer(c_int) :: plan_cufft, ierr
-        integer(c_int) :: n(1), inembed(1), onembed(1)
-        integer(c_int) :: howmany, idist, odist
-        complex(sp), allocatable, target :: buffer_c(:,:)
-        real(sp),                pointer :: buffer(:,:)
-#ifdef USE_OPENMP_OFFLOAD
-        howmany    = int(self%nrefs, c_int)
-        idist      = int(self%pftsz+1, c_int)
-        odist      = int(self%nrots+2, c_int)
-        allocate(buffer_c(idist, howmany), source=cmplx(0.,0.,sp))
-        p_c = c_loc(buffer_c(1,1))
-        call c_f_pointer(p_c, buffer, [odist, int(howmany)])
-        n(1)       = int(self%nrots, c_int)
-        inembed(1) = idist
-        onembed(1) = odist
-        ierr = cufftPlanMany(plan_cufft, 1_c_int, n, inembed, 1_c_int, idist, onembed, 1_c_int, odist, CUFFT_C2R, howmany)
-        if (ierr /= 0) stop 68
-
-        ! particle index
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
-        ! particle variance and shell weights
-        do k = self%kfromto(1),self%kfromto(2)
-            w(k) = real(k) / real(self%sigma2_noise(k,iptcl))
-        enddo
-        A = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
-
-        t = tic()
-        !$omp target data map(from:buffer_c)
-        !$omp target teams distribute parallel do collapse(2)&
-        !$omp& map(to:self%kfromto,self%pftsz,self%nrefs,w,i)&
-        !$omp& map(to:self%ft_ctf2(:,:,i),self%ft_ref2_even)&
-        !$omp& map(to:self%ft_ptcl_ctf(:,:,i),self%ft_ref_even)&
-        !$omp& private(k,c,d)
-        do iref = 1, self%nrefs
-            do p = 1, self%pftsz
-                d = cmplx(0.,0.,sp)
-                do k = self%kfromto(1), self%kfromto(2)
-                    c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                    c = c - 2. * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
-                    d = d + w(k) * c
-                end do
-                buffer_c(p, iref) = d
-            enddo
-        enddo
-        !$omp end target teams distribute parallel do
-        p_c  = omp_get_mapped_ptr(c_loc(buffer_c(1,1)), 0)
-        ierr = cufftExecC2R(plan_cufft, p_c, p_c)
-        !$omp end target data
-        ! apply normalization & exponentiation on CPU (buffer_c is now back on host)
-        do iref = 1,self%nrefs
-            do p = 1, self%nrots
-                buffer(p,iref) = real(exp(-(1.d0 + real(buffer(p,iref), dp) / A)), sp)
-            enddo
-        enddo
-        print *,'GPU: ',toc(t)
-        t = tic()
-        do j = i,i
-            max_abs   = 0.d0
-            max_rel   = 0.d0
-            sumsq     = 0.d0
-            worst_ref = 1
-            worst_rot = 1
-            ftvals_ref1 = 0.0
-            do iref = 1, self%nrefs
-                call self%gen_euclids(iref, iptcl, [0.,0.], ftvals)
-                if (iref == 1) ftvals_ref1 = ftvals
-                do p = 1, self%nrots
-                    f_gpu = real(buffer(p,iref), dp)
-                    f_cpu = real(ftvals(p), dp)
-                    df = abs(f_gpu - f_cpu)
-                    sumsq = sumsq + df * df
-                    if (df > max_abs) then
-                        max_abs = df
-                        worst_ref = iref
-                        worst_rot = p
-                    endif
-                    max_rel = max(max_rel, df / max(abs(f_cpu), 1.d-14))
-                enddo
-            end do
-            rms = sqrt(sumsq / real(self%nrefs * self%nrots, dp))
-        enddo
-        print *,'CPU: ',toc(t)
-        print '(a,3es16.7)', 'CUFFT/gen_euclids max_abs/max_rel/rms=', max_abs, max_rel, rms
-        print '(a,2i8)', 'CUFFT/gen_euclids worst ref/rot=', worst_ref, worst_rot
-        print *,buffer(1:10,1)
-        print *,ftvals_ref1(1:10)
-        print *,buffer(self%nrots-10:,1)
-        print *,ftvals_ref1(self%nrots-10:)
-        ierr = cufftDestroy(plan_cufft)
-        if (ierr /= 0) stop 71
-        deallocate(buffer_c)
-#endif
-    end subroutine gen_many_euclids_cufft
-
-    ! Benchmark for comparison of euclid calculation between
-    ! openmp offload gpu and cpu host
     module subroutine gen_many2many_euclids_cufft( self, pfromto )
-        use  simple_gpu_utils
+        use simple_gpu_utils
         use, intrinsic :: iso_c_binding, only: c_loc, c_f_pointer
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: pfromto(2)
         type(c_ptr) :: p_c
         complex(sp), allocatable, target :: buffer_c(:,:)
-        real(sp),                pointer :: buffer(:,:)
+        real(sp),                pointer :: buffer_r(:,:)
         real(sp),    allocatable         :: ftvals(:,:),wks(:,:)
-        complex(sp)    :: c,d
+        real(dp)       :: df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
         integer(dp)    :: t
-        integer        :: i, k, iref, p,j, iptcl, nptcls, is,ie
-        integer        :: worst_ref, worst_rot
-        real(dp)       :: A, df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
-        logical        :: even
+        integer        :: i, k, iref, p,j, iptcl, nptcls
         integer(c_int) :: plan_cufft, ierr
         integer(c_int) :: n(1), inembed(1), onembed(1), howmany, idist, odist
         nptcls = pfromto(2) - pfromto(1) + 1
 #ifdef USE_OPENMP_OFFLOAD
-        howmany    = int(self%nrefs*nptcls, c_int)
-        idist      = int(self%pftsz+1, c_int)
-        odist      = int(self%nrots+2, c_int)
+        ! Planning
+        howmany = int(self%nrefs*nptcls, c_int)
+        idist   = int(self%pftsz+1, c_int)
+        odist   = int(self%nrots+2, c_int)
         allocate(buffer_c(idist, howmany), source=cmplx(0.,0.,sp))
-        p_c        = c_loc(buffer_c(1,1))
-        call c_f_pointer(p_c, buffer, [odist, int(howmany)])
+        p_c     = c_loc(buffer_c(1,1))
+        call c_f_pointer(p_c, buffer_r, [odist, int(howmany)])
         n(1)       = int(self%nrots, c_int)
         inembed(1) = idist
-        onembed(1) = odist
-        ierr       = cufftPlan1D(plan_cufft, n(1), CUFFT_C2R, howmany)
+        onembed(1) = int(self%nrots, c_int)
+        ! In-place batched c2R
+        ierr = cufftPlan1d(plan_cufft, n(1), CUFFT_C2R, howmany)
+        ! ierr = cufftPlanMany(plan_cufft, 1_c_int, n, inembed, 1_c_int, idist,&
+        !       &onembed, 1_c_int, odist, CUFFT_C2R, howmany)
         if (ierr /= 0) stop 6
-        allocate(wks(self%kfromto(1):self%kfromto(2),pfromto(1):pfromto(2)), source=0.)
-        do iptcl = pfromto(1),pfromto(2)
+        ! Some allocations
+        allocate(wks(self%kfromto(1):self%kfromto(2),nptcls), source=0.)
+        do iptcl = 1,nptcls
+            i = self%pinds(pfromto(1) + iptcl - 1)
             do k = self%kfromto(1),self%kfromto(2)
-                wks(k,iptcl) = real(k) / real(self%sigma2_noise(k,iptcl))
+                wks(k,iptcl) = real(k) / real(self%sigma2_noise(k,pfromto(1) + iptcl - 1))
             enddo
         enddo
-        is = self%pinds(pfromto(1))
-        ie = self%pinds(pfromto(2))
+        ! associate arays to avoid memory allocation, device attachment issues
+        ! and the self object inside of the kernel
         t = tic()
-        !$omp target data map(from:buffer_c)
-        !$omp target teams distribute parallel do collapse(2)&
-        !$omp& map(to:self%kfromto, self%pftsz, self%nrefs, wks)&
-        !$omp& map(to:self%ft_ref2_even, self%ft_ref_even)&
-        !$omp& map(to:self%pinds(is:ie))&
-        !$omp& map(to:self%ft_ctf2(:,:,is:ie),pfromto)&
-        !$omp& map(to:self%ft_ptcl_ctf(:,:,is:ie))&
-        !$omp& private(i,k,c,d,iref,iptcl,p,j)
-        do iptcl = pfromto(1), pfromto(2)
-            do iref = 1, self%nrefs
-                i = self%pinds(iptcl)
-                j = (iptcl - pfromto(1))*self%nrefs + iref
-                do p = 1, self%pftsz+1
-                    d = cmplx(0.,0.,sp)
-                    do k = self%kfromto(1), self%kfromto(2)
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0_sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
-                        d = d + wks(k,iptcl) * c
-                    end do
-                    buffer_c(p, j) = d
-                enddo
-            enddo
-        enddo
-        !$omp end target teams distribute parallel do
-        p_c  = omp_get_mapped_ptr(c_loc(buffer_c(1,1)), 0)
-        ierr = cufftExecC2R(plan_cufft, p_c, p_c)
+        associate(ft_ref_even  => self%ft_ref_even,&
+                & ft_ref2_even => self%ft_ref2_even,&
+                & ft_ref_odd   => self%ft_ref_odd,&
+                & ft_ref2_odd  => self%ft_ref2_odd)
+        !$omp target enter data map(to:ft_ref_even, ft_ref2_even, ft_ref_odd, ft_ref2_odd)&
+        !$omp& map(alloc:buffer_c)
+        print *,'GPU - persistent data transfer time: ',toc(t)
+        t = tic()
+        call gen_many2many_euclids_cufft_kernel( self%kfromto, self%pftsz, self%nrefs,&
+            &nptcls, self%nrots, plan_cufft, wks, howmany, self%wsqsums_ptcls(pfromto(1):pfromto(2)),&
+            &ft_ref_even, ft_ref2_even, ft_ref_odd, ft_ref2_odd,&
+            &self%ft_ctf2(:,:,pfromto(1):pfromto(2)), self%ft_ptcl_ctf(:,:,pfromto(1):pfromto(2)),&
+            &buffer_c, ierr)
         if (ierr /= 0) stop 7
-        !$omp end target data
-        ! apply normalization & exponentiation on CPU
-        do iptcl = pfromto(1), pfromto(2)
-            i = self%pinds(iptcl)
-            A = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
-            do iref = 1,self%nrefs
-                j = (iptcl - pfromto(1))*self%nrefs + iref
-                do p = 1, self%nrots
-                    buffer(p,j) = real(exp(-(1.d0 + real(buffer(p,j), dp) / A)), sp)
-                enddo
-            enddo
-        enddo
+        ! transfer computed values to host
+        !$omp target update from(buffer_c)
+        ! frees up device memory and association
+        !$omp target exit data map(delete:ft_ref_even, ft_ref2_even, ft_ref_odd, ft_ref2_odd)
+        !$omp target exit data map(delete:buffer_c)
+        end associate
         print *,'GPU: ',toc(t)
         ierr = cufftDestroy(plan_cufft)
         if (ierr /= 0) stop 9
+        ! Host computation for comparison
         allocate(ftvals(self%nrots,howmany))
         t = tic()
         do iptcl = pfromto(1), pfromto(2)
@@ -1601,31 +1475,93 @@ contains
                 call self%gen_euclids(iref, iptcl, [0.,0.], ftvals(:,j))
             enddo
         enddo
+        print *,'CPU: ',toc(t)
         max_abs   = 0.d0
         max_rel   = 0.d0
         sumsq     = 0.d0
-        worst_ref = 1
-        worst_rot = 1
         do j = 1, howmany
             do p = 1, self%nrots
-                f_gpu = real(buffer(p,j), dp)
+                f_gpu = real(buffer_r(p,j), dp)
                 f_cpu = real(ftvals(p,j), dp)
                 df = abs(f_gpu - f_cpu)
                 sumsq = sumsq + df * df
                 if (df > max_abs) then
                     max_abs = df
-                    worst_ref = j
-                    worst_rot = p
                 endif
                 max_rel = max(max_rel, df / max(abs(f_cpu), 1.d-14))
             enddo
         enddo
         rms = sqrt(sumsq / real(howmany * self%nrots, dp))
-        print *,'CPU: ',toc(t)
         print '(a,3es16.7)', 'CUFFT/gen_euclids max_abs/max_rel/rms=', max_abs, max_rel, rms
-        print '(a,2i8)', 'CUFFT/gen_euclids worst slot/rot=', worst_ref, worst_rot
         deallocate(buffer_c, ftvals, wks)
 #endif
     end subroutine gen_many2many_euclids_cufft
+
+    subroutine gen_many2many_euclids_cufft_kernel( kfromto, pftsz, nrefs, nptcls, nrots,&
+        &plan_cufft, wks, howmany, wsqsums_ptcls, &
+        &ft_ref_even, ft_ref2_even, ft_ref_odd, ft_ref2_odd,&
+        &ft_ctf2, ft_ptcl_ctf, buffer_c, ierr )
+        use  simple_gpu_utils
+        use, intrinsic :: iso_c_binding, only: c_loc, c_int, c_ptr
+        integer,             intent(in)    :: kfromto(2), pftsz, nrefs, nptcls, nrots, howmany
+        integer(c_int),      intent(in)    :: plan_cufft
+        real(sp),            intent(in)    :: wks(kfromto(1):kfromto(2), nptcls)
+        real(dp),            intent(in)    :: wsqsums_ptcls(nptcls)
+        complex(sp),         intent(in)    :: ft_ref_even(pftsz+1,  kfromto(1):kfromto(2), nrefs)
+        complex(sp),         intent(in)    :: ft_ref2_even(pftsz+1, kfromto(1):kfromto(2), nrefs)
+        complex(sp),         intent(in)    :: ft_ref_odd(pftsz+1,   kfromto(1):kfromto(2), nrefs)
+        complex(sp),         intent(in)    :: ft_ref2_odd( pftsz+1, kfromto(1):kfromto(2), nrefs)
+        complex(sp),         intent(in)    :: ft_ctf2 (    pftsz+1, kfromto(1):kfromto(2), nptcls)
+        complex(sp),         intent(in)    :: ft_ptcl_ctf( pftsz+1, kfromto(1):kfromto(2), nptcls)
+        complex(sp), target, intent(inout) :: buffer_c(pftsz+1,howmany)
+        integer(c_int),      intent(out)   :: ierr
+        type(c_ptr) :: p_c
+        complex(sp) :: c, d
+        real(dp)    :: A
+        integer     :: iptcl, iref, p, k, j
+#ifdef USE_OPENMP_OFFLOAD
+        !$omp target teams distribute parallel do collapse(3)&
+        !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks)&
+        !$omp& map(present, to:ft_ref2_even, ft_ref_even, ft_ref2_odd, ft_ref_odd)&
+        !$omp& map(present, alloc:buffer_c)&
+        !$omp& map(to:ft_ctf2, ft_ptcl_ctf)&
+        !$omp& private(k,c,d,iref,iptcl,p,j)
+        do iptcl = 1, nptcls
+            do iref = 1, nrefs
+                do p = 1, pftsz+1
+                    j = (iptcl - 1)*nrefs + iref
+                    d = cmplx(0.,0.,sp)
+                    do k = kfromto(1), kfromto(2)
+                        c = ft_ctf2(p,k,iptcl) * ft_ref2_even(p,k,iref)
+                        c = c - 2.0_sp * ft_ptcl_ctf(p,k,iptcl) * conjg(ft_ref_even(p,k,iref))
+                        d = d + wks(k,iptcl) * c
+                    end do
+                    buffer_c(p,j) = d
+                enddo
+            enddo
+        enddo
+        !$omp end target teams distribute parallel do
+        ! backwards FT
+        p_c  = omp_get_mapped_ptr(c_loc(buffer_c(1,1)), 0)
+        ierr = cufftExecC2R(plan_cufft, p_c, p_c)
+        ! Normalization is performed on complex values for convenience
+        !$omp target teams distribute parallel do collapse(2)&
+        !$omp& map(to:nrots, wsqsums_ptcls)&
+        !$omp& private(iptcl,A,iref,j,p)
+        do iptcl = 1,nptcls
+            do iref = 1,nrefs
+                A = wsqsums_ptcls(iptcl) * real(2*nrots, dp)
+                j = (iptcl-1) * nrefs + iref
+                do p = 1, pftsz
+                    buffer_c(p,j)%re = real(exp(-(1.d0 + real(buffer_c(p,j)%re, dp) / A)), sp)
+                    buffer_c(p,j)%im = real(exp(-(1.d0 + real(buffer_c(p,j)%im, dp) / A)), sp)
+                enddo
+            enddo
+        enddo
+        !$omp end target teams distribute parallel do
+#else
+        ierr = 0_c_int
+#endif
+    end subroutine gen_many2many_euclids_cufft_kernel
 
 end submodule simple_polarft_corr
