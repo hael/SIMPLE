@@ -60,7 +60,7 @@
                     {% if "diam_clusters" in jobstats and jobstats.diam_clusters|length > 0 %}
                         {% for diam_cluster in jobstats.diam_clusters %}
                             <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                                <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">pick range {{ forloop.counter }}: {{ diam_cluster.low }}Å - {{ diam_cluster.high }}Å</p>
+                                <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">pick range: {{ diam_cluster.low }}Å - {{ diam_cluster.high }}Å ({{ diam_cluster.mask_diam }}Å mask)</p>
                             </div>
                             <div class="flex flex-1 flex-row items-baseline m-auto overflow-y-scroll w-full">
                                 <div class="flex flex-row w-full">
@@ -73,6 +73,9 @@
                                                     <span class="text-[10px] text-streamlabel">{{ template.res|floatformat:1 }}Å</span>
                                                 </div>
                                                     <div onclick="toggleTemplate(this)" oncontextmenu="showMenu(this, event)" data-pop="{{ template.pop }}" data-idx="{{ template.idx }}" data-idcluster="{{ template.idclust }}" data-path="{{ template.mrcpath }}" class="picktemplate disabledbutton bg-black h-[80px] w-[80px] overflow-hidden rounded m-auto">
+                                                        {% if "mskscale" in jobstats and "mask_diam" in jobstats and jobstats.mask_diam > 0 %}
+                                                            <canvas class="mskcanvas z-1 absolute" height=80 width=80 data-mskscale="{{ diam_cluster.mask_scale }}" data-mskdiam="{{ diam_cluster.mask_diam }}"></canvas>
+                                                        {% endif %}
                                                         <div style="background: url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%; filter:contrast(var(--genpickrefs-contrast)) brightness(var(--genpickrefs-brightness));" class="picktemplateimg bg-black h-[80px] w-[80px] relative">
                                                             <div class="xmark h-[30px] w-[30px] text-streamerror flex items-center justify-center top-[0px] absolute">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">

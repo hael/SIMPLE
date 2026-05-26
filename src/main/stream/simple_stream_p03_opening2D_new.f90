@@ -252,7 +252,7 @@ contains
                             ncavgs = meta_update%get_pickrefs_selection_length()
                             if( ncavgs > 0 ) then
                                 call meta_opening2D%set_user_input(.false.)
-                                call process_selected_refs(params, imgfiles, smpd_stk,            &
+                                call process_selected_refs_2(params, imgfiles, smpd_stk,            &
                                     &meta_update%get_pickrefs_selection(),                        &
                                     &meta_update%get_pickrefs_clusters(),                         &
                                     &mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)

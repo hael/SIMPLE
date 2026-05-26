@@ -353,13 +353,12 @@ contains
         write(stream_datestr, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
     end function stream_datestr
 
-    subroutine process_selected_refs_bak( params, imgfile, smpd, selection, selection_clusters, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+    subroutine process_selected_refs( params, imgfile, smpd, selection, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
         use simple_image_msk, only: automask2d
         class(parameters), intent(inout) :: params
         class(string),   intent(in)    :: imgfile
         real,            intent(in)    :: smpd
         integer,         intent(in)    :: selection(:)
-        integer,         intent(in)    :: selection_clusters(:)
         real,            intent(out)   :: mskdiam
         integer,         intent(out)   :: box_for_pick, box_for_extract
         integer,         intent(inout) :: nxtiles, nytiles
@@ -460,9 +459,9 @@ contains
         write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_DESELECTED_REFS)//JPG_EXT
         write(logfhandle,'(A)')'>>> SELECTED REFERENCES'
         write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_SELECTED_REFS)//JPG_EXT
-    end subroutine process_selected_refs_bak
+    end subroutine process_selected_refs
 
-    subroutine process_selected_refs( params, imgfiles, smpd, selection, selection_clusters, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
+    subroutine process_selected_refs_2( params, imgfiles, smpd, selection, selection_clusters, mskdiam, box_for_pick, box_for_extract, nxtiles, nytiles )
         use simple_image_msk, only: automask2d
         class(parameters),            intent(inout) :: params
         type(string),    allocatable, intent(in)    :: imgfiles(:)
@@ -587,7 +586,7 @@ contains
       !  write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_DESELECTED_REFS)//JPG_EXT
         write(logfhandle,'(A)')'>>> SELECTED REFERENCES'
         write(logfhandle,'(A)')'>>> JPEG '// trim(STREAM_SELECTED_REFS)//JPG_EXT
-    end subroutine process_selected_refs
+    end subroutine process_selected_refs_2
     
     function get_latest_optics_map_id(optics_dir) result (lastmap)
         class(string), optional, intent(in)   :: optics_dir
