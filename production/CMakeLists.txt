@@ -11,6 +11,7 @@ set(SINGLE_EXE          single_exec)
 set(STREAM_EXE          simple_stream)
 set(SIMPLE_PRIVATE_EXE  simple_private_exec)
 set(SIMPLE_WORKER_EXE   simple_persistent_worker)
+set(SIMPLE_COARRAY_EXE  simple_coarray_exec)
 
 add_executable(${SIMPLE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec.f90")
@@ -24,6 +25,10 @@ add_executable(${SIMPLE_PRIVATE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec.f90")
 add_executable(${SIMPLE_WORKER_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_persistent_worker.f90")
+if(USE_COARRAYS)
+    add_executable(${SIMPLE_COARRAY_EXE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/simple_coarray_exec.f90")
+endif()
 
 set(SIMPLE_EXECUTABLES
     ${SIMPLE_EXE}
@@ -33,6 +38,10 @@ set(SIMPLE_EXECUTABLES
     ${SIMPLE_PRIVATE_EXE}
     ${SIMPLE_WORKER_EXE}
 )
+
+if(USE_COARRAYS)
+    list(APPEND SIMPLE_EXECUTABLES ${SIMPLE_COARRAY_EXE})
+endif()
 
 foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     target_link_libraries(${exe}

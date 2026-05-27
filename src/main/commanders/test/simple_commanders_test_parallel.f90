@@ -9,6 +9,11 @@ type, extends(commander_base) :: commander_test_coarrays
     procedure :: execute      => exec_test_coarrays
 end type commander_test_coarrays
 
+type, extends(commander_base) :: commander_test_coarray_matrix_sum
+  contains
+    procedure :: execute      => exec_test_coarray_matrix_sum
+end type commander_test_coarray_matrix_sum
+
 type, extends(commander_base) :: commander_test_openacc
   contains
     procedure :: execute      => exec_test_openacc
@@ -82,6 +87,22 @@ subroutine exec_test_coarrays( self, cline )
     ! sync all
     call simple_end('**** SIMPLE_TEST_COARRAYS_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_coarrays
+
+subroutine exec_test_coarray_matrix_sum( self, cline )
+    use simple_coarray_matrix_sum_strategy, only: coarray_matrix_sum_strategy, create_coarray_matrix_sum_strategy
+    class(commander_test_coarray_matrix_sum), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
+    class(coarray_matrix_sum_strategy), allocatable :: strategy
+    character(len=:), allocatable :: end_msg
+    strategy = create_coarray_matrix_sum_strategy(cline)
+    call strategy%initialize(cline)
+    call strategy%execute()
+    call strategy%finalize_run()
+    call strategy%cleanup()
+    end_msg = strategy%end_message()
+    if( len_trim(end_msg) > 0 ) call simple_end(end_msg)
+    if( allocated(strategy) ) deallocate(strategy)
+end subroutine exec_test_coarray_matrix_sum
 
 subroutine exec_test_openacc( self, cline )
     class(commander_test_openacc),    intent(inout) :: self

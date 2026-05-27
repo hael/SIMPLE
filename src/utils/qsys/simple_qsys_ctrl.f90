@@ -5,6 +5,7 @@ use simple_qsys_base,                only: qsys_base
 use simple_qsys_slurm,               only: qsys_slurm
 use simple_qsys_lsf,                 only: qsys_lsf
 use simple_qsys_persistent_worker,   only: qsys_persistent_worker
+use simple_qsys_coarray,             only: qsys_coarray
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: parameters
 use simple_syslib,                   only: simple_rmfile
@@ -676,6 +677,53 @@ contains
 
     ! SUBMISSION TO QSYS
 
+    !> Derive the coarray driver path from SIMPLE_COARRAY_EXEC when set, otherwise
+    !! from the directory containing the normal private executor.
+    function coarray_exec_path( exec_binary ) result( coarray_exec )
+        class(string), intent(in) :: exec_binary
+        type(string)              :: coarray_exec
+        character(len=XLONGSTRLEN) :: env_exec
+        character(len=:), allocatable :: exec_path
+        integer :: envlen, envstat, pos
+        call get_environment_variable('SIMPLE_COARRAY_EXEC', value=env_exec, length=envlen, status=envstat)
+        if( envstat == 0 .and. envlen > 0 )then
+            coarray_exec = trim(adjustl(env_exec(:envlen)))
+            return
+        endif
+        exec_path = exec_binary%to_char()
+        pos = scan(exec_path, '/\', back=.true.)
+        if( pos > 0 )then
+            coarray_exec = trim(exec_path(:pos))//'simple_coarray_exec'
+        else
+            coarray_exec = 'simple_coarray_exec'
+        endif
+    end function coarray_exec_path
+
+    !> Submit the whole partition range through one multi-image coarray run.
+    !! Each image executes part numbers image, image+nimages, ... by invoking
+    !! the already-generated per-partition shell scripts.
+    subroutine submit_coarray_scripts( self )
+        class(qsys_ctrl), intent(inout) :: self
+        type(string) :: qsys_cmd, coarray_exec, script_prefix
+        integer      :: nimages, nparts_here, submission_exitstat
+        if( all(self%jobs_submitted) ) return
+        if( self%ncomputing_units_avail <= 0 ) return
+        nparts_here = self%fromto_part(2) - self%fromto_part(1) + 1
+        nimages     = max(1, min(self%ncomputing_units, nparts_here))
+        coarray_exec = coarray_exec_path(self%exec_binary)
+        if( .not. file_exists(coarray_exec) ) &
+            write(logfhandle,'(A,A)') 'FILE DOES NOT EXIST: ', coarray_exec%to_char()
+        script_prefix = filepath(string(CWD_GLOB), string('distr_simple_script_'))
+        qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//coarray_exec%to_char()//' '//&
+            &script_prefix%to_char()//' '//int2str(self%fromto_part(1))//' '//int2str(self%fromto_part(2))//' '//&
+            &int2str(self%numlen)
+        self%jobs_submitted(:)        = .true.
+        self%ncomputing_units_avail   = 0
+        submission_exitstat = -1
+        call exec_cmdline(qsys_cmd, exitstat=submission_exitstat)
+        if( submission_exitstat /= 0 ) THROW_HARD('coarray execution failed; see SIMPLE_SUBPROC_OUTPUT and stderrout logs')
+    end subroutine submit_coarray_scripts
+
     !> Submit all unsubmitted scripts in the partition range, up to ncomputing_units_avail
     !! concurrency.  For the persistent worker backend each script is enqueued via
     !! dispatch_task_to_persistent_worker; for local/SLURM/LSF it is launched directly
@@ -686,6 +734,11 @@ contains
         type(string)                     :: qsys_cmd, script_name
         integer                          :: ipart, submission_exitstat, submission_retry
         logical                          :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_coarray)
+                call submit_coarray_scripts(self)
+                return
+        end select
         ! Build a submission mask: mark each unsubmitted job that fits in available slots.
         submit_or_not = .false.
         do ipart = self%fromto_part(1), self%fromto_part(2)
@@ -742,6 +795,9 @@ contains
         select type( pmyqsys => self%myqsys )
             class is (qsys_local)
                 cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)//' '//SUPPRESS_MSG//'&'
+            class is (qsys_coarray)
+                ! Single ad-hoc scripts have no partition range; run them directly.
+                cmd = string('bash ')//filepath(string(CWD_GLOB),script_name)
             class is (qsys_persistent_worker)
                 call self%dispatch_task_to_persistent_worker(filepath(string(CWD_GLOB),script_name), self%nthr_worker)
                 return

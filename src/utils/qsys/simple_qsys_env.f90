@@ -2,19 +2,20 @@
 module simple_qsys_env
 use simple_core_module_api
 use simple_defs_environment
-use simple_cmdline,           only: cmdline
-use simple_qsys_funs,         only: qsys_watcher, qsys_cleanup
-use simple_qsys_factory,      only: qsys_factory
-use simple_qsys_base,         only: qsys_base
-use simple_qsys_local,        only: qsys_local
-use simple_qsys_slurm,        only: qsys_slurm
-use simple_qsys_persistent_worker, only: qsys_persistent_worker
-use simple_qsys_lsf,          only: qsys_lsf
-use simple_qsys_pbs,          only: qsys_pbs
-use simple_qsys_sge,          only: qsys_sge
-use simple_qsys_ctrl,         only: qsys_ctrl
-use simple_parameters,        only: parameters
+use simple_cmdline,                  only: cmdline
+use simple_parameters,               only: parameters
 use simple_persistent_worker_server, only: persistent_worker
+use simple_qsys_base,                only: qsys_base
+use simple_qsys_coarray,             only: qsys_coarray
+use simple_qsys_ctrl,                only: qsys_ctrl
+use simple_qsys_factory,             only: qsys_factory
+use simple_qsys_funs,                only: qsys_watcher, qsys_cleanup
+use simple_qsys_local,               only: qsys_local
+use simple_qsys_lsf,                 only: qsys_lsf
+use simple_qsys_persistent_worker,   only: qsys_persistent_worker
+use simple_qsys_pbs,                 only: qsys_pbs
+use simple_qsys_slurm,               only: qsys_slurm
+use simple_qsys_sge,                 only: qsys_sge
 implicit none
 
 public :: qsys_env
@@ -296,6 +297,8 @@ contains
                 aarray = .false.
             class is(qsys_persistent_worker)
                 aarray = .false.
+            class is(qsys_coarray)
+                aarray = .false.
         end select
         if( present(extra_params) ) then
             call qsys_cleanup(extra_params)
@@ -506,6 +509,8 @@ contains
                 qsys = 'pbs'
             class is(qsys_persistent_worker)
                 qsys = 'persistent_worker'
+            class is(qsys_coarray)
+                qsys = 'coarray'
         end select
     end function get_qsys
 

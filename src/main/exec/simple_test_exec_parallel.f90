@@ -2,16 +2,18 @@
 module simple_test_exec_parallel
 use simple_cmdline,                  only: cmdline
 use simple_commanders_test_parallel, only: commander_test_coarrays, commander_test_openacc, &
-                                           commander_test_openmp, commander_test_simd
+                                           commander_test_openmp, commander_test_simd, &
+                                           commander_test_coarray_matrix_sum
 implicit none
 
 public :: exec_test_parallel_commander
 private
 
-type(commander_test_coarrays) :: xcoarrays
-type(commander_test_openacc)  :: xopenacc
-type(commander_test_openmp)   :: xopenmp
-type(commander_test_simd)     :: xsimd
+type(commander_test_coarrays)           :: xcoarrays
+type(commander_test_coarray_matrix_sum) :: xcoarray_matrix_sum
+type(commander_test_openacc)            :: xopenacc
+type(commander_test_openmp)             :: xopenmp
+type(commander_test_simd)               :: xsimd
 
 contains
 
@@ -26,6 +28,8 @@ contains
         select case(trim(which))
             case( 'coarrays' )
                 call xcoarrays%execute(cline)
+            case( 'coarray_matrix_sum' )
+                call xcoarray_matrix_sum%execute(cline)
             case( 'openacc' )
                 call xopenacc%execute(cline)
             case( 'openmp' )

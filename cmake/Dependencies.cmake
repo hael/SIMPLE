@@ -85,6 +85,7 @@ if(USE_COARRAYS)
     if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         message(FATAL_ERROR "Coarrays currently only wired for GFortran.")
     endif()
+    add_compile_definitions(USE_COARRAYS)
     find_package(OpenCoarrays REQUIRED)
     find_library(COARRAYS_LIBRARY NAMES caf_mpi libcaf_mpi 
         PATHS /mnt/nasapps/development/modules_elmlund/opencoarrays/2.10.3/lib64
