@@ -50,7 +50,7 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &extend_nu_filter_highres_shells
+            &extend_nu_filter_highres_shells, write_nu_local_resolution_map
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -220,7 +220,7 @@ contains
 
         subroutine prepare_nu_bootstrap_refs_from_raw_halves()
             type(string)         :: init_even, init_odd, raw_even, raw_odd, candidate
-            type(string)         :: out_even, out_odd, out_avg
+            type(string)         :: out_even, out_odd, out_avg, out_locres
             type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu, vol_msk
             type(image_msk)      :: envmsk
             logical, allocatable :: l_mask(:,:,:)
@@ -314,12 +314,15 @@ contains
             out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
             out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
             out_avg  = add2fbody(init_vol,  MRC_EXT, NUFILT_SUFFIX)
+            out_locres = add2fbody(init_vol, MRC_EXT, NULOCRES_SUFFIX)
             call vol_even_nu%write(out_even, del_if_exists=.true.)
             call vol_odd_nu%write(out_odd, del_if_exists=.true.)
             call vol_even_nu%add(vol_odd_nu)
             call vol_even_nu%mul(0.5)
             call vol_even_nu%write(out_avg, del_if_exists=.true.)
+            call write_nu_local_resolution_map(out_locres)
             call wait_for_closure(out_avg)
+            call wait_for_closure(out_locres)
             write(logfhandle,'(A)') &
                 &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: generated NU-filtered startup references from raw native E/O maps'
             call cleanup_nu_filter()
@@ -330,6 +333,7 @@ contains
             call out_even%kill
             call out_odd%kill
             call out_avg%kill
+            call out_locres%kill
             call candidate%kill
             call vol_even_raw%kill
             call vol_odd_raw%kill

@@ -251,7 +251,7 @@ contains
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
-            &get_nu_filtmap_highres_shell_depth
+            &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -550,19 +550,23 @@ contains
         end subroutine log_nonuniform_filter_stats
 
         subroutine write_nonuniform_outputs()
-            type(string) :: eonames_nu(2), volname_nu
+            type(string) :: eonames_nu(2), volname_nu, locres_name
             eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
             eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
             volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
+            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
             call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
             call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
             call vol_even_nu%add(vol_odd_nu)
             call vol_even_nu%mul(0.5)
             call vol_even_nu%write(volname_nu, del_if_exists=.true.)
+            call write_nu_local_resolution_map(locres_name)
             call wait_for_closure(volname_nu)
+            call wait_for_closure(locres_name)
             call eonames_nu(1)%kill
             call eonames_nu(2)%kill
             call volname_nu%kill
+            call locres_name%kill
         end subroutine write_nonuniform_outputs
 
         subroutine record_nu_alignment_lowpass_limit()

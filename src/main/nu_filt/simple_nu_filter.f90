@@ -47,7 +47,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
-          get_nu_filtmap_highres_shell_depth
+          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
 private
 #include "simple_local_flags.inc"
 
@@ -402,6 +402,12 @@ interface
     module subroutine analyze_filtmap_neighbor_continuity( mask )
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine analyze_filtmap_neighbor_continuity
+
+    module subroutine write_nu_local_resolution_map( fname, mask, max_frequency )
+        class(string), intent(in) :: fname
+        logical, optional, intent(in) :: mask(:,:,:)
+        real,    optional, intent(in) :: max_frequency
+    end subroutine write_nu_local_resolution_map
 
 end interface
 

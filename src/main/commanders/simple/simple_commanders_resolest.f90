@@ -141,13 +141,13 @@ contains
 
     subroutine exec_nu_filt3D(self, cline)
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
-            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity
+            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
         type(image)          :: even, odd, even_nu, odd_nu, vol_msk
         type(image_msk)      :: envmsk
-        type(string)         :: even_out, odd_out, avg_out
+        type(string)         :: even_out, odd_out, avg_out, locres_out
         logical, allocatable :: l_mask(:,:,:)
         integer, allocatable :: imat(:,:,:)
         real                 :: mskrad_px
@@ -183,12 +183,15 @@ contains
         else
             avg_out = 'vol_nufilt'//params%ext%to_char()
         endif
+        locres_out = add2fbody(avg_out, params%ext, NULOCRES_SUFFIX)
         call odd_nu%write(odd_out, del_if_exists=.true.)
         call even_nu%write(even_out, del_if_exists=.true.)
         call even_nu%add(odd_nu)
         call even_nu%mul(0.5)
         call even_nu%write(avg_out, del_if_exists=.true.)
+        call write_nu_local_resolution_map(locres_out)
         call wait_for_closure(avg_out)
+        call wait_for_closure(locres_out)
         call cleanup_nu_filter()
         call odd_nu%kill
         call even_nu%kill
@@ -196,6 +199,7 @@ contains
         call even%kill
         call vol_msk%kill
         call envmsk%kill
+        call locres_out%kill
         if( allocated(l_mask) ) deallocate(l_mask)
         call simple_end('**** SIMPLE_nu_filt3D NORMAL STOP ****')
     end subroutine exec_nu_filt3D

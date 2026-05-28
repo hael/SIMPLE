@@ -1,8 +1,8 @@
 program simple_test_nu_filter
 use simple_core_module_api
 use simple_image,     only: image
-use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, print_nu_filtmap_lowpass_stats,&
-&print_filtmap_lowpass_histogram
+use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
+&print_nu_filtmap_lowpass_stats, print_filtmap_lowpass_histogram, write_nu_local_resolution_map
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)         :: even_file, odd_file, aux_even_file, aux_odd_file, out_even_file, out_odd_file
@@ -89,6 +89,7 @@ call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 rt_elapsed = toc(t_start)
 call print_nu_filtmap_lowpass_stats(l_mask)
+call write_nu_local_resolution_map(string('nu_local_resolution_frequency.mrc'), l_mask)
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
 write(logfhandle,'(a,f10.3,a)') 'nonuniform filtering elapsed wall time: ', rt_elapsed, ' s'

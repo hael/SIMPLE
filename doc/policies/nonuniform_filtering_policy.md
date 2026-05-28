@@ -72,8 +72,14 @@ For each state, the filter produces:
 - `vol_state_even_nu_filt.mrc`
 - `vol_state_odd_nu_filt.mrc`
 - `vol_state_nu_filt.mrc`
+- `vol_state_nu_locres.mrc`
 
 Actual filenames are built by appending `NUFILT_SUFFIX`, currently `_nu_filt`, to the base even, odd, and merged state volume names. These are derived products. The base even/odd and merged volumes remain the primary reconstruction outputs.
+The local-resolution map appends `NULOCRES_SUFFIX`, currently `_nu_locres`, to
+the merged state volume name. Its voxel values are spatial frequencies in
+inverse Angstrom, not Fourier shell indices. Voxels outside the NU support mask
+and any values above the Nyquist frequency are written as zero, matching the
+convention used by Chimera surface coloring workflows.
 
 ## Current implementation strategy
 
@@ -90,6 +96,7 @@ The filter currently:
 9. logs selected-low-pass statistics and neighbor-continuity diagnostics
 10. synthesizes filtered even/odd outputs from the selected candidate map
 11. writes the merged `_nu_filt` volume as the average of the filtered even/odd outputs
+12. writes a same-grid `_nu_locres` map for Chimera coloring
 
 This design is scientifically reasonable and easy to debug, but it pays a large I/O and memory-traffic cost.
 
