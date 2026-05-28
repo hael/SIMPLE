@@ -1,13 +1,14 @@
 !@descr: execution of resolution estimation commanders
 module simple_exec_res
 use simple_cmdline,             only: cmdline
-use simple_commanders_resolest, only: commander_fsc
+use simple_commanders_resolest, only: commander_fsc, commander_fsc_area_score
 implicit none
 
 public :: exec_res_commander
 private
 
 type(commander_fsc)      :: xfsc
+type(commander_fsc_area_score) :: xfsc_area_score
 
 contains
 
@@ -22,6 +23,8 @@ contains
         select case(trim(which))
             case( 'fsc' )
                 call xfsc%execute(cline)
+            case( 'fsc_area_score' )
+                call xfsc_area_score%execute(cline)
             case default
                 l_did_execute = .false.
         end select

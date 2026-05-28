@@ -288,6 +288,73 @@ contains
         corrs = real(corrs_8)
     end subroutine fsc
 
+    module subroutine conical_fsc( self1, self2, dirs, cone_half_angle_deg, min_count, corrs, counts )
+        class(image), intent(in)  :: self1, self2
+        real,         intent(in)  :: dirs(:,:)
+        real,         intent(in)  :: cone_half_angle_deg
+        integer,      intent(in)  :: min_count
+        real,         intent(out) :: corrs(:,:)
+        integer,      intent(out) :: counts(:,:)
+        complex(dp), allocatable :: nums(:)
+        real(dp),    allocatable :: sumasq(:), sumbsq(:)
+        integer,     allocatable :: cnt(:)
+        complex(dp) :: comp1, comp2
+        real(dp)    :: cos_half, dot, norm, dir(3)
+        integer     :: n, ndirs, lims(3,2), phys(3), sh, h, k, l, idir, min_count_eff
+        if( .not. (self1 .eqdims. self2) ) THROW_HARD('non-equal dimensions; conical_fsc')
+        if( .not. self1%ft .or. .not. self2%ft ) THROW_HARD('input images must be Fourier transformed; conical_fsc')
+        n     = self1%get_filtsz()
+        ndirs = size(dirs,2)
+        if( size(dirs,1) /= 3 ) THROW_HARD('dirs must have shape (3,ndirs); conical_fsc')
+        if( size(corrs,1) /= n .or. size(corrs,2) /= ndirs ) THROW_HARD('corrs has wrong shape; conical_fsc')
+        if( size(counts,1) /= n .or. size(counts,2) /= ndirs ) THROW_HARD('counts has wrong shape; conical_fsc')
+        min_count_eff = max(1, min_count)
+        lims          = self1%fit%loop_lims(2)
+        cos_half      = cos(deg2rad(real(cone_half_angle_deg, kind=dp)))
+        corrs         = 0.
+        counts        = 0
+        !$omp parallel default(shared) private(idir,h,k,l,phys,sh,comp1,comp2,dot,norm,dir,nums,sumasq,sumbsq,cnt) proc_bind(close)
+        allocate(nums(n), sumasq(n), sumbsq(n), cnt(n))
+        !$omp do schedule(dynamic)
+        do idir = 1, ndirs
+            nums   = cmplx(0.d0,0.d0,kind=dp)
+            sumasq = 0.d0
+            sumbsq = 0.d0
+            cnt    = 0
+            dir    = real(dirs(:,idir), kind=dp)
+            do k = lims(2,1), lims(2,2)
+                do h = lims(1,1), lims(1,2)
+                    do l = lims(3,1), lims(3,2)
+                        sh = nint(hyp(h,k,l))
+                        if( sh == 0 .or. sh > n ) cycle
+                        norm = sqrt(real(h*h + k*k + l*l, kind=dp))
+                        if( norm <= 0.d0 ) cycle
+                        dot = abs((real(h,kind=dp)*dir(1) + real(k,kind=dp)*dir(2) + real(l,kind=dp)*dir(3)) / norm)
+                        if( dot < cos_half ) cycle
+                        phys  = self1%fit%comp_addr_phys(h,k,l)
+                        comp1 = self1%cmat(phys(1),phys(2),phys(3))
+                        comp2 = self2%cmat(phys(1),phys(2),phys(3))
+                        nums(sh)   = nums(sh)   + comp1 * conjg(comp2)
+                        sumasq(sh) = sumasq(sh) + csq(comp1)
+                        sumbsq(sh) = sumbsq(sh) + csq(comp2)
+                        cnt(sh)    = cnt(sh)    + 1
+                    end do
+                end do
+            end do
+            counts(:,idir) = cnt
+            do sh = 1, n
+                if( cnt(sh) >= min_count_eff .and. sumasq(sh) > 0.d0 .and. sumbsq(sh) > 0.d0 )then
+                    corrs(sh,idir) = real(real(nums(sh), kind=dp) / sqrt(sumasq(sh) * sumbsq(sh)))
+                else
+                    corrs(sh,idir) = 0.
+                endif
+            end do
+        end do
+        !$omp end do
+        deallocate(nums, sumasq, sumbsq, cnt)
+        !$omp end parallel
+    end subroutine conical_fsc
+
     ! Calculates the un-normalized Fourier shell variance
     module subroutine fsvar( self, sz, vars )
         class(image), intent(in)  :: self

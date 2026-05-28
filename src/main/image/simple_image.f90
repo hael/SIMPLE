@@ -219,6 +219,7 @@ contains
     procedure          :: guinier_bfac
     procedure          :: guinier
     procedure          :: fsc
+    procedure          :: conical_fsc
     procedure          :: fsvar
     procedure          :: get_res
     procedure          :: frc_pspec
@@ -1431,6 +1432,15 @@ interface
         class(image), intent(in)  :: self1, self2
         real,         intent(out) :: corrs(fdim(self1%ldim(1))-1)
     end subroutine fsc
+
+    module subroutine conical_fsc( self1, self2, dirs, cone_half_angle_deg, min_count, corrs, counts )
+        class(image), intent(in)  :: self1, self2
+        real,         intent(in)  :: dirs(:,:)
+        real,         intent(in)  :: cone_half_angle_deg
+        integer,      intent(in)  :: min_count
+        real,         intent(out) :: corrs(:,:)
+        integer,      intent(out) :: counts(:,:)
+    end subroutine conical_fsc
 
     module subroutine fsvar( self, sz, vars )
         class(image), intent(in)  :: self

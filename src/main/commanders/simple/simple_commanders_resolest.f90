@@ -13,6 +13,11 @@ type, extends(commander_base) :: commander_fsc
     procedure :: execute      => exec_fsc
 end type commander_fsc
 
+type, extends(commander_base) :: commander_fsc_area_score
+  contains
+    procedure :: execute      => exec_fsc_area_score
+end type commander_fsc_area_score
+
 type, extends(commander_base) :: commander_uniform_filter2D
   contains
     procedure :: execute      => exec_uniform_filter2D
@@ -98,6 +103,50 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
+
+    !> calculates a CryoSPARC-like conical FSC area ratio from Even/Odd Volume pairs
+    subroutine exec_fsc_area_score( self, cline )
+        class(commander_fsc_area_score), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)             :: params
+        type(image)                  :: even, odd
+        type(image_msk)              :: mskvol
+        type(fsc_area_score_result)  :: result
+        type(string)                 :: fbody
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('athres')     ) call cline%set('athres', 20.)
+        if( .not. cline%defined('nspace')     ) call cline%set('nspace', 256)
+        if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.143)
+        call params%new(cline)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd%read(params%vols(1))
+        call even%read(params%vols(2))
+        if( params%automsk .ne. 'no' )then
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
+            call even%zero_env_background(mskvol)
+            call odd%zero_env_background(mskvol)
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
+        else
+            call even%mask3D_soft(params%msk)
+            call odd%mask3D_soft(params%msk)
+        endif
+        call even%fft()
+        call odd%fft()
+        call calc_fsc_area_score(even, odd, params%nspace, params%athres, params%lplim_crit, 1, result)
+        if( cline%defined('fbody') )then
+            fbody = params%fbody
+        else
+            fbody = 'fsc_area_score'
+        endif
+        call write_fsc_area_score_outputs(result, fbody%to_char())
+        call even%kill
+        call odd%kill
+        call mskvol%kill
+        call simple_end('**** SIMPLE_FSC_AREA_SCORE NORMAL STOP ****')
+    end subroutine exec_fsc_area_score
 
     subroutine exec_uniform_filter3D(self, cline)
         use simple_opt_filter, only: estimate_lplim
