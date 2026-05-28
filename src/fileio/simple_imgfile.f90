@@ -40,6 +40,7 @@ contains
     procedure          :: open
     procedure, private :: open_local
     procedure          :: close
+    procedure          :: allocate_tmp_read_array
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
     procedure          :: rSlices
@@ -193,6 +194,44 @@ contains
         self%existence      = .false.
     end subroutine close
 
+    subroutine allocate_tmp_read_array( self, dims )
+        class(imgfile), intent(inout) :: self
+        integer,        intent(in)    :: dims(3)
+        integer :: byteperpix
+        logical :: alloc
+        alloc      = .false.
+        byteperpix = self%overall_head%bytesPerPix()
+        select case(byteperpix)
+            case(1)
+                if( allocated(tmp_byte_array) )then
+                    if( any(size(tmp_byte_array) .ne. dims) )then
+                        deallocate(tmp_byte_array)
+                        alloc = .true.
+                    endif
+                else
+                    alloc = .true.
+                endif
+                if( alloc )then
+                    allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
+                endif
+            case(2)
+                if( allocated(tmp_16bit_int_array) )then
+                    if( any(size(tmp_16bit_int_array) .ne. dims) )then
+                        deallocate(tmp_16bit_int_array)
+                        alloc = .true.
+                    endif
+                else
+                    alloc = .true.
+                endif
+                if( alloc )then
+                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
+                endif
+            case DEFAULT
+                ! no allocation required
+                return
+        end select
+    end subroutine allocate_tmp_read_array
+
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
@@ -267,7 +306,6 @@ contains
         character(len=100)          :: io_message
         integer                     :: io_stat,dims(3),tmparrdims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
-        logical                     :: alloc_tmparr
         class(ImgHead), pointer     :: ptr=>null()
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         dims       = self%overall_head%getDims()
@@ -277,6 +315,13 @@ contains
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                 &*int(product(dims(1:2)),kind=8)*byteperpix
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
+        elseif( is_mrc .and. byteperpix == 2 .and. self%overall_head%getMode() == 12 )then
+            ! fast mode 12: 16-bit real, read as 16-bit integer and convert manually
+            call self%allocate_tmp_read_array( dims )
+            first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+                &*int(product(dims(1:2)),kind=8)*byteperpix
+            read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:,:)
+            rarr(:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:,:))
         else
             ! slower, polymorphic read with more checkpoints
             ! set pointer to overall header
@@ -307,21 +352,7 @@ contains
             rarr = 0. ! initialize to zero
             select case(byteperpix)
                 case(1) ! Byte data
-                    if( allocated(tmp_byte_array) )then
-                        tmparrdims(1) = size(tmp_byte_array,1)
-                        tmparrdims(2) = size(tmp_byte_array,2)
-                        tmparrdims(3) = size(tmp_byte_array,3)
-                        alloc_tmparr  = .false.
-                        if( any(tmparrdims .ne. dims) )then
-                            deallocate(tmp_byte_array)
-                            alloc_tmparr = .true.
-                        endif
-                    else
-                        alloc_tmparr = .true.
-                    endif
-                    if( alloc_tmparr )then
-                        allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
-                    endif
+                    call self%allocate_tmp_read_array( dims )
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
                     ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
                     ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey
@@ -334,28 +365,19 @@ contains
                     else
                         rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
                     endif
-                case(2) ! 16-bit data, assumed to be integer
-                    if( allocated(tmp_16bit_int_array) )then
-                        tmparrdims(1) = size(tmp_16bit_int_array,1)
-                        tmparrdims(2) = size(tmp_16bit_int_array,2)
-                        tmparrdims(3) = size(tmp_16bit_int_array,3)
-                        alloc_tmparr  = .false.
-                        if( any(tmparrdims .ne. dims) )then
-                            deallocate(tmp_16bit_int_array)
-                            alloc_tmparr = .true.
-                        endif
-                    else
-                        alloc_tmparr = .true.
-                    endif
-                    if( alloc_tmparr )then
-                        allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
-                    endif
+                case(2) ! 16-bit data, always read as 16-bit integer
+                    call self%allocate_tmp_read_array( dims )
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
-                    if( self%overall_head%pixIsSigned() )then
-                        rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
+                    if( self%overall_head%getMode() == 12 )then
+                        ! mode 12: 16-bit real, not supported by all compilers, read as 16-bit integer and convert manually
+                        rarr(1:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
                     else
-                        rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
-                            &int(huge(int(1,kind=2)), kind=4)))
+                        if( self%overall_head%pixIsSigned() )then
+                            rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
+                        else
+                            rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
+                                &int(huge(int(1,kind=2)), kind=4)))
+                        endif
                     endif
                 case(4)
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
@@ -372,6 +394,29 @@ contains
             THROW_HARD('I/O')
         endif
         self%was_written_to = .false.
+    contains
+
+        pure elemental function real16_to_real32( h ) result( x )
+            ! Branchless IEEE 754 half-precision to single-precision conversion.
+            ! Uses direct bit manipulation + TRANSFER so the compiler can auto-vectorize
+            ! (SIMD) the elemental call across a full image plane.
+            ! Handles: zero, normal, infinity, NaN.  Subnormal halfs map to f32 subnormals
+            ! with incorrect magnitude.
+            use iso_fortran_env, only : int16, int32, real32
+            integer(int16), intent(in) :: h  ! half-precision bits as a 16-bit integer
+            real(real32)   :: x
+            integer(int32) :: raw, sign, exp16, mant, exp32
+            raw   = int(h, int32)
+            sign  = ishft(iand(raw, 32768_int32), 16)   ! bit 15 → bit 31
+            exp16 = iand(ishft(raw, -10), 31_int32)     ! bits 14:10 → 0..31
+            mant  = iand(raw, 1023_int32)               ! bits  9: 0
+            ! Remap exponent: half bias 15 → single bias 127 (add 112)
+            exp32 = exp16 + 112_int32                           ! normal numbers
+            exp32 = merge(0_int32,   exp32, exp16 == 0_int32)   ! zero/subnormal: exp=0
+            exp32 = merge(255_int32, exp32, exp16 == 31_int32)  ! inf/NaN: exp=255
+            x     = transfer(ior(sign, ior(ishft(exp32, 23), ishft(mant, 13))), 0.0_real32)
+        end function real16_to_real32
+
     end subroutine rSlices
 
     !>  \brief  reads a set of TIFF contiguous slices of the image file from disk into memory.

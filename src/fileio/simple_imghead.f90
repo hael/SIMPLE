@@ -33,9 +33,6 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter         :: NREALS          = 104
-integer, parameter, public :: dataRbytes      = 1
-integer, parameter, public :: dataRinteger    = 2
-integer, parameter, public :: dataRfloat      = 3
 integer, parameter         :: NREMAINS        = 14
 integer, parameter         :: CLOSE2THEANSWER = 43
 integer, parameter         :: MRCHEADSZ       = 1024
@@ -64,7 +61,6 @@ contains
     procedure          :: CloseTiff
     procedure          :: bytesPerPix
     procedure          :: pixIsSigned
-    procedure          :: getPixType
     procedure          :: pixIsComplex
     procedure          :: firstDataByte
     procedure          :: getMinPixVal
@@ -843,7 +839,7 @@ contains
                 select case( self%mode )
                     case(0)
                         bytesPerPix = 1
-                    case(1,3,6)
+                    case(1,3,6,12)
                         bytesPerPix = 2
                     case(2,4)
                         bytesPerPix = 4
@@ -863,25 +859,6 @@ contains
             end select
         end select
     end function pixIsSigned
-
-    !>  \brief  Work out whether pixel data are byte, integer or float
-    !!          All SPIDER image files consist of unformatted, direct access records.
-    !!          Each record contains NX 4-byte words which are stored as floating point numbers.
-    integer function getPixType(self)
-        class(ImgHead), intent(in) :: self
-        getPixType = dataRfloat
-        select type( self )
-        type is( MrcImgHead )
-            select case( self%mode )
-                case( 0 )
-                    getPixType = dataRbytes
-                case( 1,3,6 )
-                    getPixType = dataRinteger
-                case( 2,4 )
-                    getPixType = dataRfloat
-            end select
-        end select
-    end function getPixType
 
     !>  \brief  Does the header indicate that pixel density values are complex numbers
     logical function pixIsComplex(self)
