@@ -73,9 +73,9 @@ contains
             &'Use lpstart/lpstop directly for abinitio3D low-pass stages instead of class-FRC-derived limits(yes|no){no}', &
             &'(yes|no){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-            &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform_lpset}; abinitio3D treats nonuniform &
-            &as nonuniform_lpset so NU-selected local resolution can promote the next matching LP', &
-            &'(none|nonuniform|nonuniform_lpset){nonuniform_lpset}', .false., 'nonuniform_lpset', &
+            &'Filtering mode(none|nonuniform){nonuniform}; nonuniform filtering promotes the finest selected &
+            &NU frontier to the next matching low-pass limit', &
+            &'(none|nonuniform){nonuniform}', .false., 'nonuniform', &
             &gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
@@ -83,6 +83,9 @@ contains
             &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., gui_submenu="filter")
         ! mask controls
         call abinitio3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
+            &'Whether to generate/apply an envelope mask from the staged automasking point(yes|tight|no){yes}', &
+            &'(yes|tight|no){yes}', .false., 'yes', gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
         call abinitio3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call abinitio3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_advanced=.false.)

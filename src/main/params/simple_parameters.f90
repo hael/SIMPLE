@@ -96,7 +96,7 @@ type :: parameters
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
     character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
-    character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}
+    character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform){none}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
@@ -576,7 +576,6 @@ type :: parameters
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
-    logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_prob_inpl       = .false.

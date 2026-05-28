@@ -62,19 +62,18 @@ contains
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
-        call cline%set('envfsc',        'no') ! no envelope-based FSC estimation for cavgs route
         call cline%set('nu_refine',     'no') ! no nonuniform refinement for cavgs route
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',           'yes')
-        if( .not. cline%defined('objfun')           ) call cline%set('objfun',       'euclid') ! noise normalized Euclidean distances from the start
-        if( .not. cline%defined('overlap')          ) call cline%set('overlap',          0.95)
-        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',       90.) ! reduces # failed runs on trpv1 from 4->2/10
-        if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',   CENLP_DEFAULT)
-        if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',        'cavg')
-        if( .not. cline%defined('filt_mode')        ) call cline%set('filt_mode',      'none')
-        if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',       'no')
-        if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', LPSTART_INI3D)
-        if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   LPSTOP_INI3D)
-        if( .not. cline%defined('gauref')           ) call cline%set('gauref',          'yes')
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
+        if( .not. cline%defined('objfun')           ) call cline%set('objfun',                  'euclid') ! noise normalized Euclidean distances from the start
+        if( .not. cline%defined('overlap')          ) call cline%set('overlap',                     0.95)
+        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                  90.) ! reduces # failed runs on trpv1 from 4->2/10
+        if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',   abinitio_cenlp_default())
+        if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                   'cavg')
+        if( .not. cline%defined('filt_mode')        ) call cline%set('filt_mode',                 'none')
+        if( .not. cline%defined('noise_norm')       ) call cline%set('noise_norm',                  'no')
+        if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', abinitio_lpstart_ini3D())
+        if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   abinitio_lpstop_ini3D())
+        if( .not. cline%defined('gauref')           ) call cline%set('gauref',                     'yes')
         ! make master parameters
         call params%new(cline)
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
@@ -84,9 +83,9 @@ contains
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = .false.
         ! set nstages_ini3D
-        nstages_ini3D = NSTAGES_INI3D_MAX
+        nstages_ini3D = abinitio_nstages_ini3D_max()
         if( cline%defined('nstages') )then
-            nstages_ini3D = min(NSTAGES_INI3D_MAX,params%nstages)   
+            nstages_ini3D = min(abinitio_nstages_ini3D_max(),params%nstages)
         endif
         nstages_refine3D = nstages_ini3D
         ! prepare class command lines
@@ -192,7 +191,7 @@ contains
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
-            if( istage == SYMSRCH_STAGE )then
+            if( istage == abinitio_symsrch_stage() )then
                 call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
             endif
         end do
@@ -224,7 +223,7 @@ contains
         call spproj%os_cls3D%set_all2single('stkind', 1)    ! revert splitting
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
-        if( nstages_ini3D == NSTAGES_INI3D_MAX )then ! produce validation info
+        if( nstages_ini3D == abinitio_nstages_ini3D_max() )then ! produce validation info
             call find_ldim_nptcls(orig_stk, cavg_ldim, cavg_nimgs)
             cavg_smpd = params%smpd
             if( cavg_nimgs < ncavgs ) THROW_HARD('fewer images in cavgs stack than expected; abinitio3D_cavgs')
@@ -238,7 +237,7 @@ contains
             ! add rec_final to os_out
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
-                final_vol = REC_FBODY//int2str_pad(s,2)//MRC_EXT
+                final_vol = abinitio_rec_fbody()//int2str_pad(s,2)//MRC_EXT
                 if( file_exists(final_vol) )then
                     call spproj%add_vol2os_out(final_vol, cavg_smpd, s, 'vol_cavg')
                 endif
@@ -250,7 +249,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
-                call cline_reproject%set('vol'//int2str(s), REC_FBODY//int2str_pad(s,2)//LP_SUFFIX//MRC_EXT)
+                call cline_reproject%set('vol'//int2str(s), abinitio_rec_fbody()//int2str_pad(s,2)//LP_SUFFIX//MRC_EXT)
             enddo
             call cline_reproject%set('box',  cavg_ldim(1))
             call cline_reproject%set('smpd', cavg_smpd)
@@ -283,7 +282,7 @@ contains
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! rank classes based on agreement to volume (after writing)
-        if( nstages_ini3D == NSTAGES_INI3D_MAX )then
+        if( nstages_ini3D == abinitio_nstages_ini3D_max() )then
             if( trim(params%rank_cavgs).eq.'yes' ) call rank_cavgs
         endif
         ! end gracefully
@@ -443,22 +442,21 @@ contains
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
-        call cline%set('envfsc',        'no') ! no envelope-based FSC estimation
         call cline%set('nu_refine',     'no') ! no nonuniform refinement
-        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                         'yes')
-        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                        0.95)
-        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                     10.)
-        if( .not. cline%defined('center')              ) call cline%set('center',                         'no')
-        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp',                 CENLP_DEFAULT)
-        if( .not. cline%defined('oritype')             ) call cline%set('oritype',                    'ptcl3D')
-        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
-        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
-        if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
-        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
-        if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
-        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
+        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                    'yes')
+        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                   0.95)
+        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                10.)
+        if( .not. cline%defined('center')              ) call cline%set('center',                    'no')
+        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp', abinitio_cenlp_default())
+        if( .not. cline%defined('oritype')             ) call cline%set('oritype',               'ptcl3D')
+        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                      'c1')
+        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                'c1')
+        if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
+        if( .not. cline%defined('automsk')             ) call cline%set('automsk',                  'yes')
+        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                'sphere')
+        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
         ! splitting stage
-        split_stage = HET_DOCKED_STAGE
+        split_stage = abinitio_het_docked_stage()
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
         ! adjust default multivol_mode unless given on command line
         if( cline%defined('nstates') )then
@@ -472,19 +470,10 @@ contains
         select case(trim(params%filt_mode))
             case('uniform','fsc')
                 THROW_HARD('abinitio3D no longer supports automatic low-pass filt_mode=uniform|fsc; &
-                    &use none|nonuniform|nonuniform_lpset')
-            case('nonuniform')
-                call cline%set('filt_mode', 'nonuniform_lpset')
-                call cline%set('nu_refine', 'no')
-                write(logfhandle,'(A)') &
-                    &'>>> abinitio3D: treating filt_mode=nonuniform as nonuniform_lpset for NU-selected matching LP'
-                call params%new(cline)
-            case('nonuniform_lpset')
-                call cline%set('nu_refine', 'no')
+                    &use none|nonuniform')
         end select
         call cline%set('mkdir', 'no')
         call cline%delete('algorithm')
-        call cline%delete('maxits_between')
         ! Multiple states
         nstates_glob = params%nstates
         select case(trim(params%multivol_mode))
@@ -516,7 +505,7 @@ contains
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
-            start_stage = NSTAGES_INI3D - 1 ! compute reduced to two overlapping stages
+            start_stage = abinitio_nstages_ini3D() - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
         else
@@ -539,12 +528,12 @@ contains
             ! symmetry axis search is skipped: input orientations are assumed already symmetrized
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
-            start_stage = SYMSRCH_STAGE + 1 ! start after the symmetry search stage
+            start_stage = abinitio_symsrch_stage() + 1 ! start after the symmetry search stage
             l_ini3D     = .true.
         endif
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = params%l_nonuniform
-        nstages_refine3D = NSTAGES
+        nstages_refine3D = abinitio_nstages()
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! prepare class command lines
@@ -559,9 +548,9 @@ contains
         else
             update_frac = 1.0
             nptcls_eff  = spproj%count_state_gt_zero()
-            if( .not. cline%defined('nsample') ) params%nsample = NSAMPLE_ABINITIO3D_DEFAULT
+            if( .not. cline%defined('nsample') ) params%nsample = abinitio_nsample_default()
             update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
-            update_frac = min(UPDATE_FRAC_MAX, update_frac) ! to ensure fractional update is always on
+            update_frac = min(abinitio_update_frac_max(), update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
             rstates = spproj%os_cls2D%get_all('state')
             if( trim(params%partition).eq.'yes' )then
@@ -667,7 +656,7 @@ contains
         ! nice
         nice_comm%stat_root%stage = "starting workflow"
         call nice_comm%cycle()
-        do istage = start_stage, NSTAGES
+        do istage = start_stage, abinitio_nstages()
             ! nice
              if( nice_comm%stop )then
                 ! termination
@@ -681,15 +670,19 @@ contains
             nice_comm%stat_root%stage = "running workflow"
             call nice_comm%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
             call nice_comm%cycle()
-            write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
-                update_frac    = min(update_frac * nstates_glob, UPDATE_FRAC_MAX)
+                update_frac    = min(update_frac * nstates_glob, abinitio_update_frac_max())
             endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(params, istage, l_cavgs=.false.)
+            write(logfhandle,'(A)')'>>>'
+            if( cline_refine3D%defined('lp') )then
+                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', cline_refine3D%get_rarg('lp')
+            else
+                write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH NU-SELECTED MATCHING LP'
+            endif
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 call randomize_states(params, spproj, params%projfile, xrec3D, split_stage)
@@ -705,7 +698,7 @@ contains
             call flush(logfhandle)
             call print_states(params, istage)
             ! Symmetrization
-            if( istage == SYMSRCH_STAGE )then
+            if( istage == abinitio_symsrch_stage() )then
                 call symmetrize(params, istage, spproj, params%projfile, xrec3D)
             endif
             ! nice
@@ -736,10 +729,10 @@ contains
             type(string),    allocatable     :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
             cline_ini3D = cline
-            call cline_ini3D%set('nstages', NSTAGES_INI3D)
+            call cline_ini3D%set('nstages', abinitio_nstages_ini3D())
             ! Resolution limits
-            if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', LPSTART_INI3D)
-            if( .not. cline_ini3D%defined('lpstop_ini3D')  ) call cline_ini3D%set('lpstop_ini3D',  LPSTOP_INI3D)
+            if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', abinitio_lpstart_ini3D())
+            if( .not. cline_ini3D%defined('lpstop_ini3D')  ) call cline_ini3D%set('lpstop_ini3D',  abinitio_lpstop_ini3D())
             if( cline%defined('lpstart_ini3D') )then
                 call cline_ini3D%set('lpstart', params%lpstart_ini3D)
                 call cline_ini3D%delete('lpstart_ini3D')

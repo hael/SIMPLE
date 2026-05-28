@@ -567,7 +567,7 @@ contains
 
         subroutine record_nu_alignment_lowpass_limit()
             real :: align_lp
-            if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
+            if( .not. params%l_nonuniform ) return
             align_lp = get_nu_filtmap_finest_selected_lp()
             if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp
@@ -645,7 +645,6 @@ contains
             real    :: align_lp
             integer :: istate, selected_state
             if( .not. l_nonuniform_mode ) return
-            if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
             if( .not. allocated(nu_align_lps) ) return
             if( .not. allocated(state_pops) ) return
             ! Match the classical multi-state policy: the best resolved

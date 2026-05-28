@@ -2,13 +2,41 @@ submodule(simple_abinitio_utils) simple_abinitio_controller
 implicit none
 #include "simple_local_flags.inc"
 
-integer, parameter :: NSPACE(8)                  = [500,1000,1000,1000,2500,2500,5000,5000]
-integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement  stages 1-2
-integer, parameter :: PROB_REFINE_STAGE          = 3     ! prob refinement       stages 3-5
-integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 6     ! prob_neigh refinement stages 6-8
-integer, parameter :: STOCH_SAMPL_STAGE          = 5     ! we switch from greedy to stochastic balanced class sampling
-integer, parameter :: NU_FILTER_STAGE            = 3     ! we switch on staged NU filtering
-integer, parameter :: NSPACE_SUB                 = 126
+! Output naming
+character(len=*), parameter :: REC_FBODY               = 'rec_final_state'
+
+! Stage schedule and search-space sizes
+integer,          parameter :: NSTAGES                 = 8
+integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
+integer,          parameter :: NSTAGES_INI3D_MAX       = 7
+integer,          parameter :: MAXITS(8)               = [20,20,17,17,17,15,15,30]
+integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
+integer,          parameter :: NSPACE_SUB              = 126
+
+! Stage transition policy
+integer,          parameter :: GAUREF_LAST_STAGE       = 2    ! stop gaussian filtering after early stages
+integer,          parameter :: SYMSRCH_STAGE           = 3    ! search symmetry axis
+integer,          parameter :: PROB_REFINE_STAGE       = 3    ! prob refinement stages 3-5
+integer,          parameter :: NU_FILTER_STAGE         = 4    ! switch on staged NU filtering
+integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5    ! first stage where trail_rec behavior changes
+integer,          parameter :: STOCH_SAMPL_STAGE       = 5    ! switch from greedy to stochastic sampling
+integer,          parameter :: GOLD_STD_STAGE          = 5    ! switch on single-state gold-standard refinement
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6    ! prob_neigh refinement stages 6-8
+integer,          parameter :: AUTOMSK_STAGE           = 6    ! switch on automasking
+integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
+integer,          parameter :: HET_DOCKED_STAGE        = NSTAGES
+
+! Filtering and low-pass defaults
+real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
+real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
+real,             parameter :: CENLP_DEFAULT           = 30.
+real,             parameter :: LPSYMSRCH_LB            = 12.
+real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for abinitio3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for abinitio3D_cavgs/cavgs_ini
+
+! Sampling and update defaults
+real,             parameter :: UPDATE_FRAC_MAX         = 0.9  ! ensures fractional update remains on
+integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
@@ -20,9 +48,81 @@ end type refine3D_stage_cfg
 
 contains
 
-    integer function active_refine3D_nstages() result(nstages)
-        nstages = min(nstages_refine3D, size(NSPACE), size(MAXITS))
-        if( allocated(lpinfo) ) nstages = min(nstages, size(lpinfo))
+    module function abinitio_rec_fbody() result(fbody)
+        character(len=15) :: fbody
+        fbody = REC_FBODY
+    end function abinitio_rec_fbody
+
+    module function abinitio_lpstop_bounds() result(bounds)
+        real :: bounds(2)
+        bounds = LPSTOP_BOUNDS
+    end function abinitio_lpstop_bounds
+
+    module function abinitio_lpstart_bounds() result(bounds)
+        real :: bounds(2)
+        bounds = LPSTART_BOUNDS
+    end function abinitio_lpstart_bounds
+
+    module function abinitio_cenlp_default() result(cenlp)
+        real :: cenlp
+        cenlp = CENLP_DEFAULT
+    end function abinitio_cenlp_default
+
+    module function abinitio_lpsymsrch_lb() result(lp)
+        real :: lp
+        lp = LPSYMSRCH_LB
+    end function abinitio_lpsymsrch_lb
+
+    module function abinitio_update_frac_max() result(frac)
+        real :: frac
+        frac = UPDATE_FRAC_MAX
+    end function abinitio_update_frac_max
+
+    module function abinitio_lpstart_ini3D() result(lp)
+        real :: lp
+        lp = LPSTART_INI3D
+    end function abinitio_lpstart_ini3D
+
+    module function abinitio_lpstop_ini3D() result(lp)
+        real :: lp
+        lp = LPSTOP_INI3D
+    end function abinitio_lpstop_ini3D
+
+    module function abinitio_nstages() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES
+    end function abinitio_nstages
+
+    module function abinitio_nstages_ini3D() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INI3D
+    end function abinitio_nstages_ini3D
+
+    module function abinitio_nstages_ini3D_max() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INI3D_MAX
+    end function abinitio_nstages_ini3D_max
+
+    module function abinitio_symsrch_stage() result(istage)
+        integer :: istage
+        istage = SYMSRCH_STAGE
+    end function abinitio_symsrch_stage
+
+    module function abinitio_het_docked_stage() result(istage)
+        integer :: istage
+        istage = HET_DOCKED_STAGE
+    end function abinitio_het_docked_stage
+
+    module function abinitio_nsample_default() result(nsample)
+        integer :: nsample
+        nsample = NSAMPLE_ABINITIO3D_DEFAULT
+    end function abinitio_nsample_default
+
+    integer function active_refine3D_nstages() result(nstages_active)
+        nstages_active = nstages_refine3D
+        if( nstages_active <= 0 ) nstages_active = NSTAGES
+        nstages_active = min(nstages_active, size(NSPACE), size(MAXITS))
+        if( allocated(lpinfo) ) nstages_active = min(nstages_active, size(lpinfo))
     end function active_refine3D_nstages
 
     module procedure set_cline_refine3D
@@ -153,7 +253,6 @@ contains
         if( l_cavgs ) return
         if( istage >= NU_FILTER_STAGE .and. l_nonuniform )then
             cfg%filt_mode = trim(params%filt_mode)
-            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
             cfg%nu_refine = 'no'
         endif
     end subroutine set_refine3D_filtering_policy
@@ -230,7 +329,13 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         call cline_refine3D%set('prg',                     'refine3D')
-        call cline_refine3D%set('envfsc',                  'no')
+        if( l_cavgs )then
+            call cline_refine3D%set('envfsc',              'no')
+        else if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
+            call cline_refine3D%set('envfsc',              'yes')
+        else
+            call cline_refine3D%set('envfsc',              'no')
+        endif
         if( istage == active_refine3D_nstages() )then
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%set('fillin',             cfg%fillin)
@@ -250,9 +355,13 @@ contains
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
         call cline_refine3D%set('automsk',                cfg%automsk)
-        ! abinitio3D remains explicit-LP/refinement-limited even when automasking
-        ! is enabled; automasks are used for volume-domain support only.
-        call cline_refine3D%set('lp',                     lpinfo(istage)%lp)
+        if( istage >= GOLD_STD_STAGE )then
+            ! Past this point, NU filtering promotes the selected matching
+            ! bandwidth; the controller no longer injects schedule LP.
+            call cline_refine3D%delete('lp')
+        else
+            call cline_refine3D%set('lp',                 lpinfo(istage)%lp)
+        endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)

@@ -587,6 +587,11 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
+        if( self%nstates > 1 .and. self%l_envfsc )then
+            THROW_WARN('envfsc disabled for nstates > 1')
+            self%envfsc  = 'no'
+            self%l_envfsc = .false.
+        endif
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         self%l_corrw = self%wcrit .ne. 'no'
@@ -702,9 +707,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
-        self%l_lpauto           = .false.
-        self%l_nonuniform       = .false.
-        self%l_nonuniform_lpset = .false.
+        self%l_lpauto     = .false.
+        self%l_nonuniform = .false.
         select case(trim(self%filt_mode))
             case('none')
             case('uniform')
@@ -715,9 +719,6 @@ contains
                 self%l_lpset = .true.
             case('nonuniform')
                 self%l_nonuniform = .true.
-            case('nonuniform_lpset')
-                self%l_nonuniform       = .true.
-                self%l_nonuniform_lpset = .true.
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select

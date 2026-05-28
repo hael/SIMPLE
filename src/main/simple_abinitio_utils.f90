@@ -1,47 +1,22 @@
 !@descr: utilities for ab initio 3D reconstruction used by commanders_abinitio
 module simple_abinitio_utils
 use simple_commanders_api
-use simple_commanders_rec, only: commander_bootstrap_rec3D
-use simple_commanders_volops, only: commander_symmetrize_map
-use simple_cluster_seed,      only: gen_labelling
-use simple_class_frcs,        only: class_frcs
-use simple_euclid_sigma2,     only: sigma2_star_from_iter
+use simple_commanders_rec,       only: commander_bootstrap_rec3D
+use simple_commanders_volops,    only: commander_symmetrize_map
+use simple_cluster_seed,         only: gen_labelling
+use simple_class_frcs,           only: class_frcs
+use simple_euclid_sigma2,        only: sigma2_star_from_iter
 use simple_matcher_refvol_utils, only: remove_ref_section_files
-use simple_parameters,        only: parameters
-use simple_refine3D_fnames,   only: refine3D_fsc_fname, refine3D_startvol_fbody, &
+use simple_parameters,           only: parameters
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
 
-! singleton constants
-character(len=*), parameter :: REC_FBODY             = 'rec_final_state'
-character(len=*), parameter :: STR_STATE_GLOB        = '01'
-real,             parameter :: LPSTOP_BOUNDS(2)      = [4.5,6.0]
-real,             parameter :: LPSTART_BOUNDS(2)     = [10.,20.]
-real,             parameter :: CENLP_DEFAULT         = 30.
-real,             parameter :: LPSYMSRCH_LB          = 12.
-real,             parameter :: UPDATE_FRAC_MAX       = 0.9                  ! to ensure fractional update is always on
-real,             parameter :: LPSTART_INI3D         = 20.                  ! Default lpstart for abinitio3D_cavgs/cavgs_ini
-real,             parameter :: LPSTOP_INI3D          = 8.                   ! Default lpstop for abinitio3D_cavgs/cavgs_ini
-integer,          parameter :: NSTAGES               = 8
-integer,          parameter :: NSTAGES_INI3D         = 4 ! # of ini3D stages used for initialization
-integer,          parameter :: NSTAGES_INI3D_MAX     = 7
-integer,          parameter :: MAXITS(8)             = [20,20,17,17,17,15,15,30]
-integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))     ! the last stage is omitted in this estimate since the sampling method changes
-integer,          parameter :: SYMSRCH_STAGE         = 3
-integer,          parameter :: TRAILREC_STAGE_SINGLE = 5                    ! first stage where trail_rec behavior changes
-integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! first stage where trail_rec is enabled for independent mode
-integer,          parameter :: AUTOMSK_STAGE         = 6                    ! switch on automasking
-integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
-integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
-integer,          parameter :: GAUREF_LAST_STAGE     = 2                    ! When to stop gaussian filtering in early stages
-integer,          parameter :: MAXITS_BETWEEN        = 10                   ! Development
-integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000           ! default # particles sampled per state
-
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis    = .false., l_symran        = .false.
+logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
@@ -49,10 +24,66 @@ type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
 real             :: update_frac  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0
-integer          :: nstages_refine3D = NSTAGES
+integer          :: nstages_refine3D = 0
 
 ! In submodule: simple_abinitio_controller.f90
 interface
+    module function abinitio_rec_fbody() result(fbody)
+        character(len=15) :: fbody
+    end function abinitio_rec_fbody
+
+    module function abinitio_lpstop_bounds() result(bounds)
+        real :: bounds(2)
+    end function abinitio_lpstop_bounds
+
+    module function abinitio_lpstart_bounds() result(bounds)
+        real :: bounds(2)
+    end function abinitio_lpstart_bounds
+
+    module function abinitio_cenlp_default() result(cenlp)
+        real :: cenlp
+    end function abinitio_cenlp_default
+
+    module function abinitio_lpsymsrch_lb() result(lp)
+        real :: lp
+    end function abinitio_lpsymsrch_lb
+
+    module function abinitio_update_frac_max() result(frac)
+        real :: frac
+    end function abinitio_update_frac_max
+
+    module function abinitio_lpstart_ini3D() result(lp)
+        real :: lp
+    end function abinitio_lpstart_ini3D
+
+    module function abinitio_lpstop_ini3D() result(lp)
+        real :: lp
+    end function abinitio_lpstop_ini3D
+
+    module function abinitio_nstages() result(nstages_out)
+        integer :: nstages_out
+    end function abinitio_nstages
+
+    module function abinitio_nstages_ini3D() result(nstages_out)
+        integer :: nstages_out
+    end function abinitio_nstages_ini3D
+
+    module function abinitio_nstages_ini3D_max() result(nstages_out)
+        integer :: nstages_out
+    end function abinitio_nstages_ini3D_max
+
+    module function abinitio_symsrch_stage() result(istage)
+        integer :: istage
+    end function abinitio_symsrch_stage
+
+    module function abinitio_het_docked_stage() result(istage)
+        integer :: istage
+    end function abinitio_het_docked_stage
+
+    module function abinitio_nsample_default() result(nsample)
+        integer :: nsample
+    end function abinitio_nsample_default
+
     module subroutine set_cline_refine3D( params, istage, l_cavgs )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
@@ -83,7 +114,7 @@ contains
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
         if( .not. cline_symmap%defined('cenlp') )then
-        call cline_symmap%set('cenlp',                 CENLP_DEFAULT)
+        call cline_symmap%set('cenlp',                 abinitio_cenlp_default())
         endif
         call cline_symmap%set('hp',                        params%hp)
         ! re-reconstruct volume
@@ -240,14 +271,16 @@ contains
         type(string)     :: frcs_fname
         type(class_frcs) :: clsfrcs
         real             :: lpfinal
-        integer          :: filtsz
+        real             :: lpstart_bounds(2), lpstop_bounds(2)
+        integer          :: filtsz, nstages
+        nstages = abinitio_nstages()
         if( trim(params%force_lp_range).eq.'yes' )then
             if( .not.(present(lpstart) .and. present(lpstop)) )then
                 THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
             endif
             if( allocated(lpinfo) ) deallocate(lpinfo)
-            allocate(lpinfo(NSTAGES))
-            call lpstages_fast(params%box, NSTAGES, params%smpd, lpstart, lpstop, lpinfo)
+            allocate(lpinfo(nstages))
+            call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
             return
         endif
         ! retrieve FRC info
@@ -260,16 +293,18 @@ contains
         states = nint(spproj%os_cls2D%get_all('state'))
         call clsfrcs%avg_frc_getter(frcs_avg, states)
         if( allocated(lpinfo) ) deallocate(lpinfo)
-        allocate(lpinfo(NSTAGES))
-        lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
-        lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
+        allocate(lpinfo(nstages))
+        lpstop_bounds  = abinitio_lpstop_bounds()
+        lpstart_bounds = abinitio_lpstart_bounds()
+        lpfinal = max(lpstop_bounds(1),calc_lplim_final_stage(3))
+        lpfinal = min(lpstop_bounds(2),lpfinal)
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
         if( present(lpstart) )then
-            call lpstages(params%box, NSTAGES, frcs_avg, params%smpd,&
+            call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true.)
         else
-            call lpstages(params%box, NSTAGES, frcs_avg, params%smpd,&
-            &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
+            call lpstages(params%box, nstages, frcs_avg, params%smpd,&
+            &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
         endif
         ! cleanup
         call clsfrcs%kill
@@ -335,7 +370,7 @@ contains
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
-            lpsym = max(LPSYMSRCH_LB,lpinfo(SYMSRCH_STAGE)%lp)
+            lpsym = max(abinitio_lpsymsrch_lb(),lpinfo(abinitio_symsrch_stage())%lp)
             write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
             write(logfhandle,'(A)') '>>>'
             if( params%nstates > 1 )then
@@ -413,7 +448,7 @@ contains
         logical           :: have_even_stage, have_odd_stage
         ! Reconstruction
         pgrp = trim(params%pgrp)
-        if( istage <= SYMSRCH_STAGE ) pgrp = trim(params%pgrp_start)
+        if( istage <= abinitio_symsrch_stage() ) pgrp = trim(params%pgrp_start)
         cline_rec = cline_refine3D
         call cline_rec%set('prg',       'reconstruct3D')
         call cline_rec%set('mkdir',     'no')
@@ -713,7 +748,7 @@ contains
             str_state      = int2str_pad(state,2)
             vol_name       = refine3D_state_vol_fname(state) ! reconstruction from particles stored in project
             if( .not. file_exists(vol_name) )cycle
-            vol_final      = string(REC_FBODY)//str_state//MRC_EXT
+            vol_final      = string(abinitio_rec_fbody())//str_state//MRC_EXT
             call simple_copy_file(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, params%box, params%smpd, lp)

@@ -14,21 +14,21 @@ Supported values:
 - `uniform`
 - `fsc`
 - `nonuniform`
-- `nonuniform_lpset`
 
-`filt_mode=nonuniform` and `filt_mode=nonuniform_lpset` activate the
-nonuniform volume filter path.
+`filt_mode=nonuniform` activates the nonuniform volume filter path.
 
-In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
-`filt_mode=nonuniform_lpset`. Both names stay on the static discrete-bank
-policy with `nu_refine=no`, let the ML-regularized auxiliary pair replace the
-finest discrete NU label only when its effective resolution is finer than that
-label, and promote the finest selected NU bandwidth back into the matching
-`lp`. The older abinitio3D automatic low-pass modes, `filt_mode=uniform` and
-`filt_mode=fsc`, are not supported.
-Automasking may still provide the NU support mask, but it does not switch
-abinitio3D to gold-standard refinement. The high-resolution `nu_refine=yes`
-ratchet is reserved for `refine3D_auto`.
+In staged `abinitio3D`, `filt_mode=nonuniform` stays on the static
+discrete-bank policy with `nu_refine=no`, lets the ML-regularized auxiliary
+pair replace the finest discrete NU label only when its effective resolution is
+finer than that label, and promotes the finest selected NU bandwidth back into
+the matching `lp`. The older abinitio3D automatic low-pass modes,
+`filt_mode=uniform` and `filt_mode=fsc`, are not supported. From
+`GOLD_STD_STAGE=5`, single-state abinitio3D enables envelope-masked
+gold-standard FSC reporting and removes the scheduled stage `lp`; the matching
+bandwidth still comes from the NU-selected project `lp`. Multi-state
+abinitio3D keeps gold-standard matching and `envfsc` off, while still allowing
+automasking and the NU-selected matching `lp`. The high-resolution
+`nu_refine=yes` ratchet is reserved for `refine3D_auto`.
 
 ## Execution point
 
@@ -93,30 +93,28 @@ The filter currently:
 
 This design is scientifically reasonable and easy to debug, but it pays a large I/O and memory-traffic cost.
 
-In nonuniform mode, matcher reference loading tries `_nu_filt` even/odd references first, falls back to the regular even/odd references before filtered products exist, and avoids applying the ordinary low-pass filter on top of the nonuniform reference path.
+In nonuniform mode, single-state matcher reference loading tries `_nu_filt`
+even/odd references first, falls back to the regular even/odd references before
+filtered products exist, and avoids applying the ordinary low-pass filter on
+top of the nonuniform reference path. Multi-state matcher reference loading
+uses the merged state reference instead of independent even/odd half-map
+references; when NU products exist, it uses the merged `_nu_filt` state volume.
 
-When `filt_mode=nonuniform`, `nu_refine=yes`, and the user has not set an
-explicit `lp`, the 3D matching/reprojection low-pass limit follows the finest
-accepted NU filter-bank limit from the previous `volassemble` pass instead of
-the global FSC resolution. Candidate bins that fail the 5% tested-frontier
-acceptance threshold do not advance the global matching bandwidth. After
-writing the matching `_nu_filt` even/odd products, `volassemble` updates the
-ordinary project `lp` field to that selected NU limit.
+When `filt_mode=nonuniform` and the user has not set an explicit `lp`, the 3D
+matching/reprojection low-pass limit follows the finest selected NU
+filter-bank limit from the previous `volassemble` pass instead of the global
+FSC resolution. In `nu_refine=yes` shell-extension runs, candidate bins that
+fail the 5% tested-frontier acceptance threshold do not advance the global
+matching bandwidth. After writing the matching `_nu_filt` even/odd products,
+`volassemble` updates the ordinary project `lp` field to that selected NU
+limit.
 The matcher reads that project `lp` value on the next iteration; a fresh first
 iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
 policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
-selected matching bandwidth.
-
-`filt_mode=nonuniform_lpset` is an experimental variant for testing the same
-NU-refined bandwidth without continuing gold-standard matching. It runs the same
-NU filter-bank generation as `filt_mode=nonuniform`, but after `volassemble`
-writes the NU-refined project `lp`, the refinement strategy promotes that value
-onto the active command line. On the next iteration the ordinary explicit-`lp`
-policy is active. The matcher then uses the merged `_nu_filt` reference in both
-channels when it is available, so the registration model is built from the
-nonuniformly filtered map rather than independent even/odd NU references. A
-fresh run still behaves like ordinary `nonuniform` until a NU-refined project
-`lp` exists; `lpstop` remains a cap.
+selected matching bandwidth. The NU-derived matching LP is independent of the
+reference topology: single-state gold-standard runs consume even/odd
+NU-filtered references independently, while multi-state runs consume merged
+state references and keep `envfsc` disabled.
 
 ## Candidate-scale objective smoothing
 
@@ -198,9 +196,8 @@ challengers, and therefore can suppress spatially isolated high-resolution
 islands without changing the shell-by-shell acceptance test itself.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is
-`nu_refine=no`. Staged `abinitio3D` normalizes `filt_mode=nonuniform` to
-`filt_mode=nonuniform_lpset`; both names use the static discrete-bank policy
-with `nu_refine=no` for all stages, including automasked stages. `refine3D_auto`
+`nu_refine=no`. Staged `abinitio3D` uses the static discrete-bank policy with
+`nu_refine=no` for all stages, including automasked stages. `refine3D_auto`
 defaults `nu_refine=yes` and still allows an explicit override.
 
 When `nu_refine=yes`, `volassemble` uses an evidence-driven shell ratchet: an
@@ -252,16 +249,13 @@ insertion and stride thinning are combined into one mask-packed bank rebuild so
 the common extension path avoids appending the unary bank and immediately
 copying it again for thinning.
 
-In `filt_mode=nonuniform_lpset`, static discrete NU filtering also writes a
-single matching low-pass limit back to the project. This limit is the finest
-assigned NU label in the state mask; when an auxiliary ML-regularized
-replacement is active and selected, its actual auxiliary resolution participates
-in that minimum through the replaced finest label.
-
-Default staged `abinitio3D` with `filt_mode=nonuniform` uses this promoted NU
-limit because the commander normalizes it to `filt_mode=nonuniform_lpset`
-before parameter parsing. This lets static NU reference generation influence
-the next matching bandwidth without enabling the high-resolution shell ratchet.
+Static discrete NU filtering writes a single matching low-pass limit back to
+the project. This limit is the finest assigned NU label in the state mask; when
+an auxiliary ML-regularized replacement is active and selected, its actual
+auxiliary resolution participates in that minimum through the replaced finest
+label. Staged `abinitio3D` uses this promoted NU limit with
+`filt_mode=nonuniform`, so static NU reference generation influences the next
+matching bandwidth without enabling the high-resolution shell ratchet.
 
 Map postprocessing is classical-only. `postprocess` and the automatic
 `reconstruct3D` postprocess step use the ordinary global FSC/B-factor path even
