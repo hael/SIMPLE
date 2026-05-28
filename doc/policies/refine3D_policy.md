@@ -237,7 +237,8 @@ In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
 filtering with `nu_refine=no` for all stages. The ML-regularized half-map pair
 may replace the finest discrete NU label only when its effective resolution is
 finer than that label, and the finest selected NU limit is promoted to the next
-matching `lp`.
+matching `lp`. The old abinitio3D automatic low-pass modes, `filt_mode=uniform` and
+`filt_mode=fsc`, are no longer supported.
 Automasking does not switch abinitio3D into gold-standard refinement, does not
 enable the NU high-resolution shell ratchet, and does not delete the staged
 matching `lp`.

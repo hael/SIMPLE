@@ -7,14 +7,14 @@ integer, parameter :: SHC_REFINE_STAGE           = 1     ! shc-style refinement 
 integer, parameter :: PROB_REFINE_STAGE          = 3     ! prob refinement       stages 3-5
 integer, parameter :: PROB_NEIGH_REFINE_STAGE    = 6     ! prob_neigh refinement stages 6-8
 integer, parameter :: STOCH_SAMPL_STAGE          = 5     ! we switch from greedy to stochastic balanced class sampling
-integer, parameter :: LPAUTO_STAGE               = 6     ! we switch on automatic low-pass limit
+integer, parameter :: NU_FILTER_STAGE            = 3     ! we switch on staged NU filtering
 integer, parameter :: NSPACE_SUB                 = 126
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine
     integer :: iter, inspace, inspace_sub, imaxits
-    real    :: trs, frac_best, overlap, fracsrch, lpstart, lpstop
+    real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
 
@@ -150,21 +150,11 @@ contains
         logical,                  intent(in)    :: l_cavgs
         cfg%filt_mode  = 'none'
         cfg%nu_refine  = 'no'
-        cfg%lpstart    = 0.
-        cfg%lpstop     = 0.
         if( l_cavgs ) return
-        if( istage >= LPAUTO_STAGE .and. (l_lpauto .or. l_nonuniform) )then
+        if( istage >= NU_FILTER_STAGE .and. l_nonuniform )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
             cfg%nu_refine = 'no'
-            if( cfg%filt_mode.eq.'uniform' )then
-                cfg%lpstart = lpinfo(istage - 1)%lp
-                if( istage == active_refine3D_nstages() )then
-                    cfg%lpstop = lpinfo(istage)%smpd_crop * 2.
-                else
-                    cfg%lpstop = lpinfo(istage + 1)%lp
-                endif
-            endif
         endif
     end subroutine set_refine3D_filtering_policy
 
@@ -257,13 +247,8 @@ contains
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
-        if( cfg%filt_mode.eq.'uniform' )then
-            call cline_refine3D%set('lpstart',            cfg%lpstart)
-            call cline_refine3D%set('lpstop',             cfg%lpstop)
-        else
-            call cline_refine3D%delete('lpstart')
-            call cline_refine3D%delete('lpstop')
-        endif
+        call cline_refine3D%delete('lpstart')
+        call cline_refine3D%delete('lpstop')
         call cline_refine3D%set('automsk',                cfg%automsk)
         ! abinitio3D remains explicit-LP/refinement-limited even when automasking
         ! is enabled; automasks are used for volume-domain support only.

@@ -32,7 +32,7 @@ integer,          parameter :: MAXITS_GLOB           = SUM(MAXITS(1:7))     ! th
 integer,          parameter :: SYMSRCH_STAGE         = 3
 integer,          parameter :: TRAILREC_STAGE_SINGLE = 5                    ! first stage where trail_rec behavior changes
 integer,          parameter :: TRAILREC_STAGE_MULTI  = NSTAGES              ! first stage where trail_rec is enabled for independent mode
-integer,          parameter :: AUTOMSK_STAGE         = 6                    ! switch on automasking when lpauto is switched on
+integer,          parameter :: AUTOMSK_STAGE         = 6                    ! switch on automasking
 integer,          parameter :: HET_DOCKED_STAGE      = NSTAGES              ! stage at which state splitting is done when multivol_mode==docked
 integer,          parameter :: STREAM_ANALYSIS_STAGE = 5                    ! when streaming on some analysis will be performed
 integer,          parameter :: GAUREF_LAST_STAGE     = 2                    ! When to stop gaussian filtering in early stages
@@ -43,7 +43,6 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000           ! de
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran        = .false.
 logical          :: l_ini3D           = .false.
-logical          :: l_lpauto          = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
 type(sym)        :: se1, se2

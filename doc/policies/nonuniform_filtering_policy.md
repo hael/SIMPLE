@@ -24,7 +24,8 @@ In staged `abinitio3D`, user-facing `filt_mode=nonuniform` is normalized to
 policy with `nu_refine=no`, let the ML-regularized auxiliary pair replace the
 finest discrete NU label only when its effective resolution is finer than that
 label, and promote the finest selected NU bandwidth back into the matching
-`lp`.
+`lp`. The older abinitio3D automatic low-pass modes, `filt_mode=uniform` and
+`filt_mode=fsc`, are not supported.
 Automasking may still provide the NU support mask, but it does not switch
 abinitio3D to gold-standard refinement. The high-resolution `nu_refine=yes`
 ratchet is reserved for `refine3D_auto`.

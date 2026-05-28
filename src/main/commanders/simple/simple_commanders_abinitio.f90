@@ -82,7 +82,6 @@ contains
         ! set work projfile
         work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! set class global filtering flags for staged refine3D policy
-        params%l_lpauto = .false.; l_lpauto=.false. ! global parameter for low-pass limit estimation
         l_nonuniform = .false.
         ! set nstages_ini3D
         nstages_ini3D = NSTAGES_INI3D_MAX
@@ -455,12 +454,6 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                           'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                     'c1')
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',              'nonuniform')
-        if( cline%get_carg('filt_mode').eq.'nonuniform' )then
-            call cline%set('filt_mode', 'nonuniform_lpset')
-            write(logfhandle,'(A)') &
-                &'>>> abinitio3D: treating filt_mode=nonuniform as nonuniform_lpset for NU-selected matching LP'
-        endif
-        if( cline%get_carg('filt_mode').eq.'nonuniform_lpset' ) call cline%set('nu_refine', 'no')
         if( .not. cline%defined('inivol')              ) call cline%set('inivol',                     'sphere')
         if( .not. cline%defined('maxits_between')      ) call cline%set('maxits_between',       MAXITS_BETWEEN)
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                        'yes')
@@ -476,6 +469,19 @@ contains
         endif
         ! make master parameters
         call params%new(cline)
+        select case(trim(params%filt_mode))
+            case('uniform','fsc')
+                THROW_HARD('abinitio3D no longer supports automatic low-pass filt_mode=uniform|fsc; &
+                    &use none|nonuniform|nonuniform_lpset')
+            case('nonuniform')
+                call cline%set('filt_mode', 'nonuniform_lpset')
+                call cline%set('nu_refine', 'no')
+                write(logfhandle,'(A)') &
+                    &'>>> abinitio3D: treating filt_mode=nonuniform as nonuniform_lpset for NU-selected matching LP'
+                call params%new(cline)
+            case('nonuniform_lpset')
+                call cline%set('nu_refine', 'no')
+        end select
         call cline%set('mkdir', 'no')
         call cline%delete('algorithm')
         call cline%delete('maxits_between')
@@ -537,7 +543,6 @@ contains
             l_ini3D     = .true.
         endif
         ! set class global filtering flags for staged refine3D policy
-        l_lpauto     = params%l_lpauto
         l_nonuniform = params%l_nonuniform
         nstages_refine3D = NSTAGES
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
