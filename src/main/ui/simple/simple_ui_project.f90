@@ -284,6 +284,8 @@ contains
         &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
         call import_particles%add_input(UI_ALT, 'stk', 'file', 'Stack of particles',&
         &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
+        call import_particles%add_input(UI_ALT, 'starfile', 'file', 'Particles Metadata starfile', 'Path to starfile containing particle metadata',&
+        &'e.g. shiny.star', .false., '', gui_submenu="data", gui_advanced=.false.)
         ! search controls
         ! <empty>
         ! filter controls

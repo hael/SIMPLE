@@ -151,21 +151,21 @@ contains
     end subroutine get_rlnflagindex
 
     subroutine split_dataline(line, splitline)
-        class(string), intent(in)    :: line
-        class(string), intent(inout) :: splitline(:)
-        character(len=XLONGSTRLEN)   :: buffer
+        class(string),  intent(in)    :: line
+        class(string),  intent(inout) :: splitline(:)
+        character(len=:), allocatable :: linechar
         integer :: iend, istart, flagid, end
         flagid = 1
         iend   = 1
         istart = 1
-        do while (flagid <= size(splitline))
-            do while (line%to_char([istart,istart + 1]) .eq. " ")
+        end      = line%strlen_trim()
+        linechar = line%to_char()
+        do while( (flagid <= size(splitline)) .and. (istart < end) )
+            do while (linechar(istart:istart + 1) .eq. " ")
                 istart = istart + 1
             end do
-            end  = line%strlen_trim()
-            iend = index(line%to_char([istart + 1,end]), ' ') + istart
-            call line%to_static([istart,iend], buffer)
-            splitline(flagid) = trim(buffer)
+            iend = index(linechar(istart + 1:end), ' ') + istart
+            splitline(flagid) = trim(linechar(istart:iend))
             istart = iend + 1
             flagid = flagid + 1
         end do

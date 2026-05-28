@@ -27,6 +27,7 @@ contains
     procedure          :: import_ptcls2D
     procedure          :: import_cls2D
     procedure          :: import_ptcls3D
+    procedure          :: import_ptcls
     procedure, private :: import_stardata
     procedure, private :: populate_stkmap
     procedure, private :: read_starheaders
@@ -194,7 +195,8 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
-        integer                           :: i
+        type(string) :: tmpstr
+        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls2D"
@@ -202,14 +204,16 @@ contains
         endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
-        self%starfile%rootdir = cline%get_carg("import_dir")
+        tmpstr = cline%get_carg("import_dir")
+        self%starfile%rootdir = tmpstr%to_char()
+        call tmpstr%kill
         call self%read_starheaders()
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
         do i=1, spproj%os_stk%get_noris()
             call spproj%os_stk%set(i, "imgkind", "ptcl")
-            call spproj%os_stk%set(i, "ctf", "yes")
+            call spproj%os_stk%set(i, "ctf",     "yes")
             call spproj%os_stk%set(i, "stkkind", "split")
         end do
     end subroutine import_ptcls2D
@@ -219,6 +223,7 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
+        type(string) :: tmpstr
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to cls2D"
@@ -226,7 +231,9 @@ contains
         endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
-        self%starfile%rootdir  = cline%get_carg("import_dir")
+        tmpstr = cline%get_carg("import_dir")
+        self%starfile%rootdir = tmpstr%to_char()
+        call tmpstr%kill
         call self%read_starheaders()
         call self%import_stardata(self%starfile%clusters2D, spproj%os_cls2D, .false.)
     end subroutine import_cls2D
@@ -237,6 +244,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         integer                           :: i
+        type(string) :: tmpstr
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls3D"
@@ -244,7 +252,9 @@ contains
         endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
-        self%starfile%rootdir  = cline%get_carg("import_dir")
+        tmpstr = cline%get_carg("import_dir")
+        self%starfile%rootdir = tmpstr%to_char()
+        call tmpstr%kill
         call self%read_starheaders()
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
@@ -255,6 +265,54 @@ contains
             call spproj%os_stk%set(i, "stkkind", "split")
         end do
     end subroutine import_ptcls3D
+
+    ! imports into 2D & 3D, preserves poses
+    subroutine import_ptcls(self, filename, spproj, ctfflag )
+        class(starproject), intent(inout) :: self
+        class(string),      intent(in)    :: filename
+        class(sp_project),  intent(inout) :: spproj
+        class(string),      intent(in)    :: ctfflag
+        integer :: i, nstks
+        write(logfhandle,'(A,A)')'>>> Importing ' , filename%to_char()
+        if(.not. self%starfile%initialised) call self%initialise()
+        self%starfile%filename = filename
+        self%starfile%rootdir  = stemname(filename)
+        call self%read_starheaders()
+        call self%populate_opticsmap(spproj%os_optics)
+        call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
+        ! 3D field
+        call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
+        nstks = spproj%os_stk%get_noris()
+        do i = 1, nstks
+            call spproj%os_stk%set(i, 'imgkind', 'ptcl')
+            call spproj%os_stk%set(i, 'ctf',     ctfflag)
+            call spproj%os_stk%set(i, 'stkkind', 'split')
+        end do
+        ! CTF
+        select case(lowercase(ctfflag%to_char()))
+            case('no')
+                call spproj%os_ptcl3D%set_all2single('dfx',0.)
+                call spproj%os_ptcl3D%set_all2single('dfy',0.)
+                call spproj%os_ptcl3D%set_all2single('phshift',0.)
+                call spproj%os_ptcl3D%set_all2single('angast',0.)
+                call spproj%os_stk%set_all2single('dfx',0.)
+                call spproj%os_stk%set_all2single('dfy',0.)
+                call spproj%os_stk%set_all2single('phshift',0.)
+                call spproj%os_stk%set_all2single('angast',0.)
+            case('yes', 'flip')
+                ! all good
+            case DEFAULT
+                THROW_HARD('ctf flag: '//ctfflag%to_char()//' not supported; exec_import_particles')
+        end select
+        ! 2D field = 3D field minus theta & psi
+        call spproj%os_ptcl2D%copy(spproj%os_ptcl3D)
+        call spproj%os_ptcl2D%set_all2single('e1',0.)
+        call spproj%os_ptcl2D%set_all2single('e2',0.)
+        ! finalize
+        call self%check_stk_params(spproj)
+        if( allocated(self%starfile%stkstates)) call spproj%report_state2stk(self%starfile%stkstates)
+        if( spproj%get_nstks() > 0 ) call spproj%prune_particles()
+    end subroutine import_ptcls
 
     subroutine import_stardata(self, stardata, sporis, isptcl, spoptics)
         class(starproject),    intent(inout) :: self
@@ -333,7 +391,6 @@ contains
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, rval)
                     end if
-
                 end if
             end do
             if(present(spoptics)) then
@@ -352,21 +409,27 @@ contains
             call sporis%set_state(projindex, 1)
         end do
         call fclose(fhandle)
-        call splitline%kill
+        call splitline(:)%kill
+        deallocate(splitline)
         call opticsori%kill
         call spori%kill
+        call cwd%kill
+        call line%kill
+        call entrystr%kill
+        call splitimage%kill
+        call fname%kill
     end subroutine import_stardata
 
     subroutine populate_stkmap(self, stkoris, opticsoris)
         class(starproject), intent(inout)    :: self
         class(oris),        intent(inout)    :: stkoris
         class(oris),        intent(inout)    :: opticsoris
-        type(string), allocatable :: stknames(:)
+        type(string), allocatable :: stknames(:), stks(:)
         integer,      allocatable :: stkzmax(:), stkoriids(:), seppos(:)
         type(string) :: entrystr, searchstr
         type(oris)   :: stktmp
         type(ori)    :: oritmpin, oritmpout
-        integer      :: i, j, top, fromp, sepstart, sepend
+        integer      :: i, j, top, fromp, sepstart, sepend, stkind, nstks
         logical      :: newstack, stkexists
         allocate(stknames(0))
         allocate(stkzmax(0))
@@ -374,29 +437,34 @@ contains
         sepstart = 1
         sepend   = 1
         call self%import_stardata(self%starfile%stacks, stktmp, .false., opticsoris)
-        allocate(self%starfile%stkmap(stktmp%get_noris(), 2))
-        do i = 1,stktmp%get_noris()
+        nstks = stktmp%get_noris()
+        allocate(self%starfile%stkmap(nstks, 2), stks(nstks))
+        do i = 1,nstks
+            stks(i) = stktmp%get_str(i, "stk")
+        enddo
+        do i = 1,nstks
             newstack = .true.
             do j = 1, size(stknames)
-                if(stknames(j) .eq. stktmp%get_str(i, "stk")) then
-                    newstack = .false.
-                    if(stkzmax(j) < stktmp%get_int(i, "stkind")) then
-                        stkzmax(j) = stktmp%get_int(i, "stkind")
-                    end if
+                if(stknames(j) .eq. stks(i)) then
+                    newstack   = .false.
+                    stkind     = stktmp%get_int(i, 'stkind')
+                    stkzmax(j) = max(stkzmax(j), stkind)
                     self%starfile%stkmap(i, 1) = j
-                    self%starfile%stkmap(i, 2) = stktmp%get_int(i, "stkind")
+                    self%starfile%stkmap(i, 2) = stkind
                     exit
                 end if
             end do
             if(newstack) then
-                entrystr = stktmp%get_str(i, "stk")
-                stknames = [stknames, entrystr]
-                stkzmax = [stkzmax, stktmp%get_int(i, "stkind")]
+                stkind    = stktmp%get_int(i, 'stkind')
+                stknames  = [stknames, stks(i)]
+                stkzmax   = [stkzmax, stkind]
                 stkoriids = [stkoriids, i]
                 self%starfile%stkmap(i, 1) = size(stkoriids)
-                self%starfile%stkmap(i, 2) = stktmp%get_int(i, "stkind")
+                self%starfile%stkmap(i, 2) = stkind
             end if
         end do
+        call stks(:)%kill
+        deallocate(stks)
         call stkoris%new(size(stknames), .false.)
         allocate(self%starfile%stkstates(size(stknames)))
         do i = 1,size(stknames)
@@ -450,7 +518,8 @@ contains
         do i = 1,stktmp%get_noris()
             self%starfile%stkmap(i, 2) = self%starfile%stkmap(i, 2) + stkoris%get_int(self%starfile%stkmap(i, 1), "fromp") - 1
         end do
-        call stknames%kill
+        call stknames(:)%kill
+        deallocate(stknames)
         if(allocated(stkzmax))   deallocate(stkzmax)
         if(allocated(stkoriids)) deallocate(stkoriids)
         if(allocated(seppos))    deallocate(seppos)
