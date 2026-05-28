@@ -369,6 +369,7 @@ type :: parameters
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: niceprocid=0        !< # id of process in nice database
+    integer :: nicedispid=0        !< # display id of process in nice database
     integer :: ninipick=0          !< # of micrographs to run inipick preprocessing on in preprocess
     integer :: ninit=3             !< # of micrographs to use during diameter estimation global search
     integer :: nits_per_stage=5    !< # of iterations per stage

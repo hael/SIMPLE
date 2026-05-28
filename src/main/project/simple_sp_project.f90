@@ -862,14 +862,16 @@ interface
         integer, optional,          intent(in)    :: fromto(2)
     end subroutine segwriter_inside
 
-    module subroutine write_mics_star( self, fname )
+    module subroutine write_mics_star( self, fname, optics_offset )
         class(sp_project),       intent(inout) :: self
         class(string), optional, intent(in)    :: fname
+        integer,       optional, intent(in)    :: optics_offset
     end subroutine write_mics_star
 
-    module subroutine write_ptcl2D_star( self, fname )
+    module subroutine write_ptcl2D_star( self, fname, optics_offset )
         class(sp_project),       intent(inout) :: self
         class(string), optional, intent(in)    :: fname
+        integer,       optional, intent(in)    :: optics_offset
     end subroutine write_ptcl2D_star
 
     module subroutine write_optics_map( self, fname_prefix )

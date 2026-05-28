@@ -24,7 +24,8 @@ module simple_starfile
         type(string) :: fname
         type(string) :: ftmp
         type(string) :: relroot
-        logical      :: verbose = .false.
+        integer      :: optics_offset = 0
+        logical      :: verbose       = .false.
       contains
         procedure :: init
         procedure :: complete
@@ -42,13 +43,15 @@ contains
     !   verbose – (optional) enable timing diagnostics; default .false.
     ! Removes any stale .tmp file left by a previous run.
     ! -------------------------------------------------------------------------
-    subroutine init( self, fname, verbose )
+    subroutine init( self, fname, verbose, optics_offset )
         class(starfile),   intent(inout) :: self
         class(string),     intent(in)    :: fname
         logical, optional, intent(in)    :: verbose
+        integer, optional, intent(in)    :: optics_offset
         type(string) :: cwd
         call simple_getcwd(cwd)
-        if( present(verbose) ) self%verbose = verbose
+        if( present(verbose)       ) self%verbose = verbose
+        if( present(optics_offset) ) self%optics_offset = optics_offset
         self%fname   = fname
         self%ftmp    = fname%to_char() // '.tmp'
         self%relroot = basename(stemname(cwd))
@@ -150,7 +153,7 @@ contains
                 call starfile_table__addObject(part_table)
                 nobj = nobj + 1
                 ! ints
-                if( optics_oris%isthere(igrp, 'ogid')  ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, optics_oris%get_int(igrp, 'ogid'))
+                if( optics_oris%isthere(igrp, 'ogid')  ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, optics_oris%get_int(igrp, 'ogid') + self%optics_offset)
                 if( optics_oris%isthere(igrp, 'pop')   ) call starfile_table__setValue_int(part_table, SMPL_OPTICS_POPULATION,  optics_oris%get_int(igrp, 'pop' ))
                 ! doubles
                 if( optics_oris%isthere(igrp, 'kv')    ) call starfile_table__setValue_double(part_table, EMDL_CTF_VOLTAGE,      real(optics_oris%get(igrp, 'kv'),    dp))
@@ -255,7 +258,7 @@ contains
                 call starfile_table__addObject(part_table)
                 nobj = nobj + 1
                 ! ints
-                if( mics_oris%isthere(imic, 'ogid'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, mics_oris%get_int(imic, 'ogid'   ))
+                if( mics_oris%isthere(imic, 'ogid'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, mics_oris%get_int(imic, 'ogid'   ) + self%optics_offset)
                 if( mics_oris%isthere(imic, 'xdim'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_SIZE_X,       mics_oris%get_int(imic, 'xdim'   ))
                 if( mics_oris%isthere(imic, 'ydim'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_SIZE_Y,       mics_oris%get_int(imic, 'ydim'   ))
                 if( mics_oris%isthere(imic, 'nframes') ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_SIZE_Z,       mics_oris%get_int(imic, 'nframes'))
@@ -378,7 +381,7 @@ contains
             call starfile_table__addObject(ptcl_table)
             half_boxsize = floor(stk_oris%get(stkind, 'box') / 2.0)
             ! ints
-            if( ptcl2d_oris%isthere(iptcl, 'ogid'   ) ) call starfile_table__setValue_int(ptcl_table, EMDL_IMAGE_OPTICS_GROUP, ptcl2d_oris%get_int(iptcl, 'ogid'))
+            if( ptcl2d_oris%isthere(iptcl, 'ogid'   ) ) call starfile_table__setValue_int(ptcl_table, EMDL_IMAGE_OPTICS_GROUP, ptcl2d_oris%get_int(iptcl, 'ogid') + self%optics_offset)
             if( ptcl2d_oris%isthere(iptcl, 'class'  ) ) call starfile_table__setValue_int(ptcl_table, EMDL_PARTICLE_CLASS,     ptcl2d_oris%get_class(iptcl))
             if( ptcl2d_oris%isthere(iptcl, 'gid'    ) ) call starfile_table__setValue_int(ptcl_table, EMDL_MLMODEL_GROUP_NO,   ptcl2d_oris%get_int(iptcl, 'gid'))
             ! doubles (defocus: microns → Angstroms; coords: pixel + half-box offset)
@@ -503,7 +506,7 @@ contains
                 nobj = nobj + 1
                 half_boxsize = floor(stk_oris%get(stkind, 'box') / 2.0)
                 ! ints
-                if( ptcl2d_oris%isthere(iptcl, 'ogid'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, ptcl2d_oris%get_int(iptcl, 'ogid'))
+                if( ptcl2d_oris%isthere(iptcl, 'ogid'   ) ) call starfile_table__setValue_int(part_table, EMDL_IMAGE_OPTICS_GROUP, ptcl2d_oris%get_int(iptcl, 'ogid') + self%optics_offset)
                 if( ptcl2d_oris%isthere(iptcl, 'class'  ) ) call starfile_table__setValue_int(part_table, EMDL_PARTICLE_CLASS,     ptcl2d_oris%get_class(iptcl))
                 if( ptcl2d_oris%isthere(iptcl, 'gid'    ) ) call starfile_table__setValue_int(part_table, EMDL_MLMODEL_GROUP_NO,   ptcl2d_oris%get_int(iptcl, 'gid'))
                 ! doubles (defocus: microns → Angstroms; coords: pixel + half-box offset)

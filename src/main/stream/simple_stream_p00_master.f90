@@ -167,6 +167,7 @@ contains
         if( cline%defined('pickrefs') )    l_existing_pickrefs = .true.
         if( cline%defined('box_extract') ) l_existing_box      = .true.
         ! init params
+        call cline%printline()
         call params%new(cline)
         call simple_getcwd(cwd)
         ! init assembler and http handler
@@ -853,6 +854,7 @@ contains
             call cline_pool2D%set('mkdir',                                   'yes')
             call cline_pool2D%set('nparts',                                      6)
             call cline_pool2D%set('ncls',                                      150)
+            call cline_pool2D%set('nicedispid',                  params%nicedispid)
             call cline_pool2D%set('worker_priority',                        'high')
             if( server_address%strlen() > 0 ) call cline_pool2D%set('worker_server', server_address)
         end subroutine init_cline_pool2D

@@ -1262,35 +1262,43 @@ contains
         end select
     end subroutine segwriter_inside
 
-    module subroutine write_mics_star( self, fname )
+    module subroutine write_mics_star( self, fname, optics_offset )
         class(sp_project),       intent(inout) :: self
         class(string), optional, intent(in)    :: fname
+        integer,       optional, intent(in)    :: optics_offset
         type(starfile) :: star
         type(string)   :: l_fname
+        integer        :: offset_optics
+        offset_optics = 0
+        if( present(optics_offset) ) offset_optics = optics_offset
         if( self%os_mic%get_noris() == 0 ) return
         if(present(fname)) then 
             l_fname = fname
         else
             l_fname = MICS_STAR_BODY // STAR_EXT
         end if
-        call star%init(l_fname, verbose=.true.)
+        call star%init(l_fname, verbose=.true., optics_offset=offset_optics)
         call star%write_optics_table(self%os_optics)
         call star%write_mics_table(self%os_mic)
         call star%complete()
     end subroutine write_mics_star
 
-    module subroutine write_ptcl2D_star( self, fname )
+    module subroutine write_ptcl2D_star( self, fname, optics_offset )
         class(sp_project),       intent(inout) :: self
         class(string), optional, intent(in)    :: fname
+        integer,       optional, intent(in)    :: optics_offset
         type(starfile) :: star
         type(string)   :: l_fname
+        integer        :: offset_optics
+        offset_optics = 0
+        if( present(optics_offset) ) offset_optics = optics_offset
         if( self%os_mic%get_noris() == 0 ) return
         if(present(fname)) then 
             l_fname = fname
         else
             l_fname = PTCL2D_STAR_BODY // STAR_EXT
         end if
-        call star%init(l_fname, verbose=.true.)
+        call star%init(l_fname, verbose=.true., optics_offset=offset_optics)
         call star%write_optics_table(self%os_optics)
         call star%write_ptcl2D_table(self%os_ptcl2D, self%os_stk, mics_oris=self%os_mic)
         call star%complete()

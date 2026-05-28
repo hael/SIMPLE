@@ -559,11 +559,12 @@ contains
     end subroutine update_user_params2D
 
     !> produces consolidated project
-    subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir)
+    subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir, optics_offset)
         class(parameters), intent(inout) :: params
         logical,       optional, intent(in) :: write_star
         logical,       optional, intent(in) :: clspath
         class(string), optional, intent(in) :: snapshot_projfile, snapshot_starfile_base, optics_dir
+        integer,       optional, intent(in) :: optics_offset
         logical, parameter :: DEBUG_HERE = .false.
         integer            :: snapshot_complete_jobid = 0 ! nice job id for completed snapshot
         type(class_frcs)   :: frcs
@@ -573,14 +574,16 @@ contains
         type(string)       :: projfile, projfname, cavgsfname, frcsfname, mapfileprefix
         type(string)       :: pool_refs, l_frcsname, l_stkname
         real               :: l_smpd
-        integer            :: lastmap, l_ncls
+        integer            :: lastmap, l_ncls, offset_optics
         logical            :: l_write_star, l_clspath, l_snapshot, snapshot_proj_found
         l_write_star        = .false.
         l_clspath           = .false.
         l_snapshot          = .false.
         snapshot_proj_found = .false.
-        if(present(write_star)) l_write_star = write_star
-        if(present(clspath))    l_clspath    = clspath
+        offset_optics       = 0
+        if(present(write_star))    l_write_star  = write_star
+        if(present(clspath))       l_clspath     = clspath
+        if(present(optics_offset)) offset_optics = optics_offset
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, MRC_EXT, separator=.false.)
@@ -633,9 +636,9 @@ contains
                 call snapshot_proj%write(snapshot_projfile)
                 if(present(snapshot_starfile_base)) then
                     if( DEBUG_HERE ) t = tic()
-                    call snapshot_proj%write_mics_star(snapshot_starfile_base // "_micrographs.star")
+                    call snapshot_proj%write_mics_star(snapshot_starfile_base // "_micrographs.star", optics_offset=offset_optics)
                     if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
-                    call snapshot_proj%write_ptcl2D_star(snapshot_starfile_base // "_particles.star")
+                    call snapshot_proj%write_ptcl2D_star(snapshot_starfile_base // "_particles.star", optics_offset=offset_optics)
                     if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
                 endif
                 call set_snapshot_time()

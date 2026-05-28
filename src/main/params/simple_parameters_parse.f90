@@ -332,6 +332,7 @@ contains
         call reg%add_int('nframes', self%nframes)
         call reg%add_int('ngrow', self%ngrow)
         call reg%add_int('niceprocid', self%niceprocid)
+        call reg%add_int('nicedispid', self%nicedispid)
         call reg%add_int('ninipick', self%ninipick)
         call reg%add_int('ninit', self%ninit)
         call reg%add_int('nits_per_stage', self%nits_per_stage)

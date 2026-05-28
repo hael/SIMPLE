@@ -61,6 +61,7 @@ contains
     subroutine exec_stream_p06_pool2D( self, cline )
         class(stream_p06_pool2D), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
+        integer,                  parameter     :: OPTICS_ID_DELTA = 500
         character(len=:),           allocatable   :: meta_buffer
         type(parameters)                          :: params
         type(rec_list)                            :: setslist
@@ -80,7 +81,7 @@ contains
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
-        integer                                   :: state_1_particle_rate
+        integer                                   :: state_1_particle_rate, optics_id_offset
         logical                                   :: l_pause, l_terminate, l_once, l_changed
         real                                      :: final_mskdiam
         l_once               = .true.
@@ -128,6 +129,8 @@ contains
         ! master parameters
         call params%new(cline)
         call cline%set('mkdir', 'no')
+        optics_id_offset = max(params%nicedispid - 1, 0) * OPTICS_ID_DELTA
+        write(logfhandle,'(A, I8)')'>>> OPTICS ID OFFSET', optics_id_offset
         ! wait if dir_target doesn't exist yet
         call send_meta(string('waiting on particle sieving'))
         call wait_for_folder2(params%dir_target)
@@ -292,10 +295,11 @@ contains
                                 ! build the snapshot directory path once
                                 snapshot_dir = string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // &
                                               swap_suffix(snapshot_filename, "", ".simple")
-                                call write_project_stream2D(params,                                                          &
-                                    snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                       &
+                                call write_project_stream2D(params,                                                                &
+                                    snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                             &
                                     snapshot_starfile_base = snapshot_dir // '/' // swap_suffix(snapshot_filename, "", ".simple"), &
-                                    optics_dir             = params%optics_dir)
+                                    optics_dir             = params%optics_dir,                                                    &
+                                    optics_offset          = optics_id_offset)
                                 last_snapshot_id = snapshot_id
                                 call send_meta_snapshot2D()
                             end if
