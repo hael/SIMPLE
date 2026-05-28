@@ -14,18 +14,20 @@ Supported values:
 - `uniform`
 - `fsc`
 - `nonuniform`
+- `nonuniform_lpset`
 
 `filt_mode=nonuniform` activates the nonuniform volume filter path.
+`filt_mode=nonuniform_lpset` activates the same NU filter, but also promotes
+the NU-selected matching bandwidth into an explicit LP-set run. LP-set matching
+uses the merged reference topology.
 
-In staged `abinitio3D`, `filt_mode=nonuniform` stays on the static
-discrete-bank policy with `nu_refine=no`, lets the ML-regularized auxiliary
-pair replace the finest discrete NU label only when its effective resolution is
-finer than that label, and promotes the finest selected NU bandwidth back into
-the matching `lp`. The older abinitio3D automatic low-pass modes,
-`filt_mode=uniform` and `filt_mode=fsc`, are not supported. From
-`GOLD_STD_STAGE=5`, single-state abinitio3D enables envelope-masked
-gold-standard FSC reporting and removes the scheduled stage `lp`; the matching
-bandwidth still comes from the NU-selected project `lp`. Multi-state
+In staged `abinitio3D`, the user-facing default remains
+`filt_mode=nonuniform`. Before `GOLD_STD_STAGE`, the controller emits
+`nonuniform_lpset`, so the static discrete NU bank promotes the selected
+frontier into the matching `lp` and uses merged-reference matching. From
+`GOLD_STD_STAGE=7`, single-state abinitio3D switches back to plain
+`nonuniform`, enables envelope-masked gold-standard FSC reporting, removes the
+scheduled stage `lp`, and uses independent half-map references. Multi-state
 abinitio3D keeps gold-standard matching and `envfsc` off, while still allowing
 automasking and the NU-selected matching `lp`. The high-resolution
 `nu_refine=yes` ratchet is reserved for `refine3D_auto`.
@@ -100,12 +102,15 @@ The filter currently:
 
 This design is scientifically reasonable and easy to debug, but it pays a large I/O and memory-traffic cost.
 
-In nonuniform mode, single-state matcher reference loading tries `_nu_filt`
-even/odd references first, falls back to the regular even/odd references before
-filtered products exist, and avoids applying the ordinary low-pass filter on
-top of the nonuniform reference path. Multi-state matcher reference loading
-uses the merged state reference instead of independent even/odd half-map
-references; when NU products exist, it uses the merged `_nu_filt` state volume.
+In nonuniform mode, matcher reference loading follows the same topology rule as
+the rest of 3D matching: LP-set matching uses a merged registration reference,
+while non-LP-set single-state matching uses independent half-map references.
+Thus `nonuniform_lpset` uses the merged state reference, preferring the merged
+`_nu_filt` product once it exists. Plain `nonuniform` uses independent
+`_nu_filt` even/odd references for single-state matching and falls back to the
+regular even/odd references before filtered products exist. Multi-state
+matching always uses the merged state reference. The ordinary low-pass filter
+is not applied on top of the nonuniform reference path.
 
 When `filt_mode=nonuniform` and the user has not set an explicit `lp`, the 3D
 matching/reprojection low-pass limit follows the finest selected NU
@@ -118,10 +123,10 @@ limit.
 The matcher reads that project `lp` value on the next iteration; a fresh first
 iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
 policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
-selected matching bandwidth. The NU-derived matching LP is independent of the
-reference topology: single-state gold-standard runs consume even/odd
-NU-filtered references independently, while multi-state runs consume merged
-state references and keep `envfsc` disabled.
+selected matching bandwidth. The selected NU LP does not by itself choose the
+reference topology; `l_lpset` does. `nonuniform_lpset` deliberately sets that
+LP-set topology, while plain `nonuniform` leaves gold-standard half-map
+matching intact.
 
 ## Candidate-scale objective smoothing
 

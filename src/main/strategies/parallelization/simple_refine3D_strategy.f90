@@ -265,6 +265,10 @@ contains
             l_log_promotion = abs(params%lp - promoted_lp) > 1.e-3
             params%kfromto(2) = project_find
             params%lp         = promoted_lp
+            if( params%l_nonuniform_lpset )then
+                params%l_lpset = .true.
+                call cline%set('lp', params%lp)
+            endif
             if( l_log_promotion )then
                 write(logfhandle,'(A,F8.3,A)') &
                     &'>>> NU filter promoted matching low-pass: ', params%lp, ' A'
@@ -381,6 +385,9 @@ contains
         call refbuild%build_general_tbox(params, cline_ref, do3d=.true.)
         call refbuild%build_strategy3D_tbox(params)
         call set_bp_range3D(params, refbuild, cline_ref)
+        if( params%l_nonuniform_lpset .and. params%l_lpset .and. cline_ref%defined('lp') )then
+            call cline%set('lp', params%lp)
+        endif
         call materialize_reprojection_model_from_volumes(params, refbuild, cline_ref, cleanup_pftc=.true.)
         call refbuild%spproj%write_segment_inside(params%oritype)
         call refbuild%kill_strategy3D_tbox
@@ -984,6 +991,7 @@ contains
         call cline%set(          'extr_iter',  params%extr_iter)
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
+        if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)
         endif
@@ -1061,6 +1069,7 @@ contains
         endif
         if( trim(params%volrec).eq.'yes' )then
             call refresh_matching_lp_from_project(params, build, cline)
+            if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         endif
         ! convergence
         ! For strict same-iteration metrics, evaluate convergence after assembly

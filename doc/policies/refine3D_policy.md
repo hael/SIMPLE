@@ -235,17 +235,19 @@ respect that minimum.
 In staged `abinitio3D`, `filt_mode=nonuniform` means static discrete-bank
 nonuniform filtering with `nu_refine=no`. The ML-regularized half-map pair may
 replace the finest discrete NU label only when its effective resolution is
-finer than that label, and the finest selected NU limit is promoted to the next
-matching `lp`. The old abinitio3D automatic low-pass modes,
-`filt_mode=uniform` and `filt_mode=fsc`, are no longer supported. At
-`GOLD_STD_STAGE=5`, single-state abinitio3D enables envelope-masked
-gold-standard FSC reporting and stops injecting the scheduled stage `lp`;
-when NU filtering is active, the matching bandwidth is still promoted from the
-NU-selected project `lp` rather than from the static schedule. Multi-state
-abinitio3D does not enable gold-standard matching or `envfsc`; it may still
-automask, and NU mode still promotes the selected matching `lp`, but matching
-uses the merged state reference, or the merged `_nu_filt` reference when
-available. Automasking does not enable the NU high-resolution shell ratchet.
+finer than that label. Before `GOLD_STD_STAGE`, the controller emits
+`nonuniform_lpset`, which promotes the finest selected NU limit into an
+explicit LP-set matching run and therefore uses the merged reference topology.
+The old abinitio3D automatic low-pass modes, `filt_mode=uniform` and
+`filt_mode=fsc`, are no longer supported. At `GOLD_STD_STAGE=7`, single-state
+abinitio3D enables envelope-masked gold-standard FSC reporting, switches back to
+plain `nonuniform`, and stops injecting the scheduled stage `lp`; when NU
+filtering is active, the matching bandwidth is still read from the NU-selected
+project `lp` rather than from the static schedule. Multi-state abinitio3D does
+not enable gold-standard matching or `envfsc`; it may still automask, and NU
+mode still promotes the selected matching `lp`, but matching uses the merged
+state reference, or the merged `_nu_filt` reference when available. Automasking
+does not enable the NU high-resolution shell ratchet.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
 `nu_refine` ratchet is coupled to 3D refinement and may promote multiple
@@ -256,8 +258,7 @@ the absolute seed floor; no Potts prior is applied during this constrained
 extension challenge. The sequential walk starts from the finest populated
 base-bank label and stops at the first unattempted challenger or the first
 challenger below that frontier-support rule. In this coupled refinement path,
-NU
-filtering does not add the ML-regularized half-map pair as an auxiliary
+NU filtering does not add the ML-regularized half-map pair as an auxiliary
 replacement; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
 the shell challenger sequence is the only refinement experiment. The terminal
 all-particle `reconstruct3D` pass leaves refinement and writes the final half
@@ -278,10 +279,10 @@ matching LP. A fresh first iteration or missing project `lp` falls back to the
 ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard override, and
 `lpstop` remains a cap on the final matcher bandwidth.
 
-The NU-refined project `lp` is a matching-bandwidth handoff only. It does not
-choose the reference topology. Single-state gold-standard runs continue to
-consume even/odd NU-filtered references independently, while multi-state runs
-consume merged state references and keep `envfsc` disabled.
+The NU-refined project `lp` is a matching-bandwidth handoff only. The `l_lpset`
+flag chooses the reference topology. LP-set runs consume merged state
+references, preferring merged `_nu_filt` products when NU is active. Non-LP-set
+single-state runs consume even/odd NU-filtered references independently.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction

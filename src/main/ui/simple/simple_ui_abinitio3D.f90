@@ -73,9 +73,9 @@ contains
             &'Use lpstart/lpstop directly for abinitio3D low-pass stages instead of class-FRC-derived limits(yes|no){no}', &
             &'(yes|no){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-            &'Filtering mode(none|nonuniform){nonuniform}; nonuniform filtering promotes the finest selected &
-            &NU frontier to the next matching low-pass limit', &
-            &'(none|nonuniform){nonuniform}', .false., 'nonuniform', &
+            &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}; nonuniform_lpset promotes the &
+            &NU frontier into an explicit merged-reference LP-set matching run', &
+            &'(none|nonuniform|nonuniform_lpset){nonuniform}', .false., 'nonuniform', &
             &gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")

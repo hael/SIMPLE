@@ -253,6 +253,10 @@ contains
         if( l_cavgs ) return
         if( istage >= NU_FILTER_STAGE .and. l_nonuniform )then
             cfg%filt_mode = trim(params%filt_mode)
+            if( cfg%filt_mode.eq.'nonuniform' .and. &
+                &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'
+            if( cfg%filt_mode.eq.'nonuniform_lpset' .and. &
+                &params%nstates == 1 .and. istage >= GOLD_STD_STAGE ) cfg%filt_mode = 'nonuniform'
             cfg%nu_refine = 'no'
         endif
     end subroutine set_refine3D_filtering_policy
@@ -355,7 +359,7 @@ contains
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
         call cline_refine3D%set('automsk',                cfg%automsk)
-        if( istage >= GOLD_STD_STAGE )then
+        if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
             ! Past this point, NU filtering promotes the selected matching
             ! bandwidth; the controller no longer injects schedule LP.
             call cline_refine3D%delete('lp')

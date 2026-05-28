@@ -236,7 +236,7 @@ contains
         integer :: filtsz
         logical :: have_even, have_odd, l_nonuniform_mode, l_use_half_refs
         l_nonuniform_mode    = params%l_nonuniform
-        l_use_half_refs      = params%nstates == 1
+        l_use_half_refs      = params%nstates == 1 .and. .not. params%l_lpset
         if( l_nonuniform_mode )then
             vol_avg = add2fbody(params%vols(s), MRC_EXT, NUFILT_SUFFIX)
             if( .not. file_exists(vol_avg) ) vol_avg = params%vols(s)
@@ -245,9 +245,9 @@ contains
         endif
         have_even = .false.
         have_odd  = .false.
-        ! Single-state gold-standard matching uses half-map refs. Multi-state
-        ! matching uses the merged state volume; automasking and NU filtering
-        ! are still applied during volume assembly.
+        ! LP-set matching uses a merged registration reference. Without an
+        ! explicit LP, single-state matching keeps independent half-map refs.
+        ! Multi-state matching always uses the merged state volume.
         if( l_use_half_refs )then
             if( l_nonuniform_mode )then
                 vol_even = add2fbody(params%vols_even(s), MRC_EXT, NUFILT_SUFFIX)
