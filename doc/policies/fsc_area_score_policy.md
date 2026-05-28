@@ -145,21 +145,25 @@ For an output file body `fbody`, SIMPLE writes:
 - `fbody_curves.csv`: wave number, resolution, and one cFSC curve per axis
 - `fbody_directions.csv`: axis coordinates, `wAuC`, threshold crossing, and
   number of included shells per axis
+- `fbody_plot.png`: backend CPlot2D rendering of the directional cFSC summary
 
 These CSV files are diagnostic outputs from the native calculation. SIMPLE does
 not use them as inputs and does not validate external CSV files.
 
-The helper:
+The backend plot is generated unconditionally from the in-memory
+`fsc_area_score_result`. It includes the directional mean curve, +/- one
+standard-deviation envelope, min/max envelope, FSC threshold, and relative
+occurrence of directional threshold crossings.
+
+The optional Python helper can be used to reproduce or customize the PNG from
+the CSV diagnostics:
 
 ```bash
 python3 scripts/plot_fsc_area_score.py fsc_area_score
 ```
 
-reads `fsc_area_score_summary.txt`, `fsc_area_score_curves.csv`, and
-`fsc_area_score_directions.csv`, then writes `fsc_area_score_plot.png`. The plot
-shows the directional mean cFSC curve, +/- one standard deviation, min/max
-directional envelope, the FSC threshold, and a relative-occurrence histogram of
-directional threshold crossings with best/worst crossing resolutions.
+It reads `fsc_area_score_summary.txt`, `fsc_area_score_curves.csv`, and
+`fsc_area_score_directions.csv`, then writes `fsc_area_score_plot.png`.
 
 ## Interpretation
 

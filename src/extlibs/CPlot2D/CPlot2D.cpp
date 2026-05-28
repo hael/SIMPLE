@@ -268,6 +268,26 @@ void CPlot2D::DrawDataPostScript()
 
 	CDataPoint point;
 
+	if (m_dataSets[i].GetFillArea()) {
+	    outputFile << "newpath" << "\n";
+
+	    point=m_dataSets[i].GetDataPoint(0);
+	    outputFile << m_dLeftFrameSize+(-m_dMinXStartPoint+point.GetX())*m_dXScale
+		       << " " << m_dBottomFrameSize+(-m_dMinYStartPoint+point.GetY())*m_dYScale << " moveto" << "\n";
+	    for (int j=1;j<m_dataSets[i].GetNumberOfDataPointsInSet();++j) {
+		point=m_dataSets[i].GetDataPoint(j);
+		outputFile << m_dLeftFrameSize+(-m_dMinXStartPoint+point.GetX())*m_dXScale
+			   << " " << m_dBottomFrameSize+(-m_dMinYStartPoint+point.GetY())*m_dYScale << " lineto" << "\n";
+	    }
+	    outputFile << "closepath" << "\n";
+
+	    double r,g,b;
+	    m_dataSets[i].GetDatasetColor(&r,&g,&b);
+
+	    outputFile << r << " " << g << " " << b << " setrgbcolor" << "\n";
+	    outputFile << "fill" << "\n";
+	}
+
 	if (m_dataSets[i].GetDrawLine()) {
 
 	    if (!m_dataSets[i].GetDashedLine()) {
@@ -1031,6 +1051,21 @@ void CDataSet__SetDrawLine(CDataSet* This, bool flag)
 void CDataSet__SetMarkerSize(CDataSet* This, double size)
 {
   This->SetMarkerSize(size);
+}
+
+void CDataSet__SetLineWidth(CDataSet* This, double width)
+{
+  This->SetLineWidth(width);
+}
+
+void CDataSet__SetDashedLine(CDataSet* This, bool flag)
+{
+  This->SetDashedLine(flag);
+}
+
+void CDataSet__SetFillArea(CDataSet* This, bool flag)
+{
+  This->SetFillArea(flag);
 }
 
 void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b)

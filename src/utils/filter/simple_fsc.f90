@@ -5,7 +5,7 @@ use simple_image, only: image
 use CPlot2D_wrapper_module
 implicit none
 
-public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc
+public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc, plot_fsc_area_score
 public :: fsc_area_score_result, calc_fsc_area_score, write_fsc_area_score_outputs
 private
 #include "simple_local_flags.inc"
@@ -230,6 +230,265 @@ contains
         call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_phrand_fsc
+
+    subroutine plot_fsc_area_score( result, fbody )
+        type(fsc_area_score_result), intent(in) :: result
+        character(len=*),            intent(in) :: fbody
+        type(string)              :: title
+        type(CPlot2D_type)        :: plot2D
+        character(len=LONGSTRLEN) :: fname_eps, fname_png, plot_title
+        character(len=XLONGSTRLEN):: ps2png_cmd
+        real, allocatable :: freq(:), mean(:), stdev(:), minv(:), maxv(:), lower(:), upper(:), crossings(:)
+        logical, allocatable :: valid_shell(:)
+        real(dp) :: sumv, sumsq, mu, sig
+        real     :: val, max_freq, best_res, worst_res
+        integer  :: n, k, idir, cnt, ibin, ncross, iostat
+        if( result%nfreqs <= 0 ) THROW_HARD('Empty FSC area score result; plot_fsc_area_score')
+        if( .not.allocated(result%res) .or. .not.allocated(result%cfsc) .or. .not.allocated(result%counts) )then
+            THROW_HARD('Incomplete FSC area score result; plot_fsc_area_score')
+        endif
+        n = result%nfreqs
+        allocate(freq(n), mean(n), stdev(n), minv(n), maxv(n), lower(n), upper(n), crossings(n), source=0.)
+        allocate(valid_shell(n), source=.false.)
+        do k = 1,n
+            if( result%res(k) > 0. ) freq(k) = 1. / result%res(k)
+            sumv = 0.d0
+            sumsq = 0.d0
+            cnt = 0
+            minv(k) = huge(1.)
+            maxv(k) = -huge(1.)
+            do idir = 1,result%ndirs
+                if( result%counts(k,idir) < result%min_count ) cycle
+                val = max(0., min(1., result%cfsc(k,idir)))
+                sumv = sumv + real(val,dp)
+                sumsq = sumsq + real(val,dp) * real(val,dp)
+                cnt = cnt + 1
+                minv(k) = min(minv(k), val)
+                maxv(k) = max(maxv(k), val)
+            end do
+            if( cnt > 0 )then
+                mu = sumv / real(cnt,dp)
+                sig = sqrt(max(0.d0, sumsq / real(cnt,dp) - mu * mu))
+                mean(k)  = real(mu)
+                stdev(k) = real(sig)
+                valid_shell(k) = .true.
+            else
+                mean(k)  = 0.
+                stdev(k) = 0.
+                minv(k)  = 0.
+                maxv(k)  = 0.
+            endif
+            lower(k) = max(0., mean(k) - stdev(k))
+            upper(k) = min(1., mean(k) + stdev(k))
+        end do
+        ncross   = 0
+        best_res = huge(1.)
+        worst_res = -huge(1.)
+        if( allocated(result%crossing_find) .and. allocated(result%crossing_res) )then
+            do idir = 1,result%ndirs
+                if( result%crossing_find(idir) <= 0. .or. result%crossing_res(idir) <= 0. ) cycle
+                ibin = nint(result%crossing_find(idir))
+                if( ibin < 1 .or. ibin > n ) cycle
+                crossings(ibin) = crossings(ibin) + 1.
+                ncross = ncross + 1
+                best_res  = min(best_res,  result%crossing_res(idir))
+                worst_res = max(worst_res, result%crossing_res(idir))
+            end do
+            if( ncross > 0 ) crossings = crossings / real(ncross)
+        endif
+        max_freq = maxval(freq)
+        if( max_freq <= 0. ) THROW_HARD('Invalid resolution axis; plot_fsc_area_score')
+        if( ncross > 0 )then
+            write(plot_title,'(A,F6.3,A,F6.2,A,F6.2,A)') 'Directional FSC area score  cFAR=', &
+                &result%cfar, '  worst=', worst_res, ' A  best=', best_res, ' A'
+        else
+            write(plot_title,'(A,F6.3)') 'Directional FSC area score  cFAR=', result%cfar
+        endif
+        fname_eps = trim(fbody)//'_plot.eps'
+        fname_png = trim(fbody)//'_plot.png'
+        call CPlot2D__new(plot2D, trim(plot_title)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 560.d0)
+        call CPlot2D__SetYAxisSize(plot2D, 320.d0)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetDrawXAxisGridLines(plot2D, C_FALSE)
+        call CPlot2D__SetDrawYAxisGridLines(plot2D, C_TRUE)
+        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call add_invisible_bounds
+        call add_filled_band(minv, maxv, 0.71_c_double, 0.83_c_double, 0.96_c_double)
+        call add_filled_band(lower, upper, 0.54_c_double, 0.73_c_double, 0.91_c_double)
+        call add_crossing_bars
+        call add_segment(0., result%threshold, max_freq, result%threshold, &
+            &0.53_c_double, 0.53_c_double, 0.50_c_double, 1.0_c_double, C_TRUE)
+        call add_curve(mean, 0.09_c_double, 0.37_c_double, 0.65_c_double, 2.2_c_double, C_FALSE)
+        title = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
+        title = 'FSC / relative occurrence'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ps2png_cmd = 'gs -q -sDEVICE=png16m -dNOPAUSE -dBATCH -dSAFER -dEPSCrop -r144 '&
+            &//'-dGraphicsAlphaBits=4 -dTextAlphaBits=4 -sOutputFile='//trim(fname_png)//' '//trim(fname_eps)
+        call exec_cmdline(ps2png_cmd, suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+        write(logfhandle,'(A,1X,A)') '>>> FSC area score plot:', trim(fname_png)
+        deallocate(freq, mean, stdev, minv, maxv, lower, upper, crossings, valid_shell)
+    contains
+        subroutine add_invisible_bounds
+            type(CDataSet_type) :: dataSet
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDrawLine(dataSet, C_FALSE)
+            call CDataSet_addpoint(dataSet, 0., 0.)
+            call CDataSet_addpoint(dataSet, max_freq, 1.)
+            call CPlot2D__AddDataSet(plot2D, dataSet)
+            call CDataSet__delete(dataSet)
+        end subroutine add_invisible_bounds
+
+        subroutine add_filled_band( lo, hi, r, g, b )
+            real,           intent(in) :: lo(n), hi(n)
+            real(C_double), intent(in) :: r, g, b
+            integer :: first, last, kk
+            first = 0
+            last  = 0
+            do kk = 1,n
+                if( valid_shell(kk) )then
+                    if( first == 0 ) first = kk
+                    last = kk
+                else if( first > 0 )then
+                    call add_filled_band_segment(lo, hi, first, last, r, g, b)
+                    first = 0
+                    last  = 0
+                endif
+            end do
+            if( first > 0 ) call add_filled_band_segment(lo, hi, first, last, r, g, b)
+        end subroutine add_filled_band
+
+        subroutine add_filled_band_segment( lo, hi, first, last, r, g, b )
+            real,           intent(in) :: lo(n), hi(n)
+            integer,        intent(in) :: first, last
+            real(C_double), intent(in) :: r, g, b
+            type(CDataSet_type) :: dataSet
+            integer :: kk
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDrawLine(dataSet, C_FALSE)
+            call CDataSet__SetFillArea(dataSet, C_TRUE)
+            call CDataSet__SetDatasetColor(dataSet, r, g, b)
+            do kk = first,last
+                call CDataSet_addpoint(dataSet, freq(kk), hi(kk))
+            end do
+            do kk = last,first,-1
+                call CDataSet_addpoint(dataSet, freq(kk), lo(kk))
+            end do
+            call CPlot2D__AddDataSet(plot2D, dataSet)
+            call CDataSet__delete(dataSet)
+        end subroutine add_filled_band_segment
+
+        subroutine add_crossing_bars
+            real :: left_edge, right_edge, half_width
+            integer :: kk
+            if( ncross == 0 ) return
+            do kk = 1,n
+                if( crossings(kk) <= 0. ) cycle
+                call bar_edges(kk, left_edge, right_edge)
+                half_width = 0.43 * (right_edge - left_edge)
+                call add_filled_rect(max(0., freq(kk) - half_width), freq(kk) + half_width, 0., crossings(kk), &
+                    &0.23_c_double, 0.43_c_double, 0.07_c_double)
+            end do
+        end subroutine add_crossing_bars
+
+        subroutine bar_edges( kk, left_edge, right_edge )
+            integer, intent(in)  :: kk
+            real,    intent(out) :: left_edge, right_edge
+            if( n == 1 )then
+                left_edge  = max(0., freq(kk) - 0.01)
+                right_edge = freq(kk) + 0.01
+            else if( kk == 1 )then
+                left_edge  = max(0., freq(kk) - 0.5 * (freq(kk+1) - freq(kk)))
+                right_edge = 0.5 * (freq(kk) + freq(kk+1))
+            else if( kk == n )then
+                left_edge  = 0.5 * (freq(kk-1) + freq(kk))
+                right_edge = freq(kk) + 0.5 * (freq(kk) - freq(kk-1))
+            else
+                left_edge  = 0.5 * (freq(kk-1) + freq(kk))
+                right_edge = 0.5 * (freq(kk) + freq(kk+1))
+            endif
+        end subroutine bar_edges
+
+        subroutine add_filled_rect( xlo, xhi, ylo, yhi, r, g, b )
+            real,           intent(in) :: xlo, xhi, ylo, yhi
+            real(C_double), intent(in) :: r, g, b
+            type(CDataSet_type) :: dataSet
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDrawLine(dataSet, C_FALSE)
+            call CDataSet__SetFillArea(dataSet, C_TRUE)
+            call CDataSet__SetDatasetColor(dataSet, r, g, b)
+            call CDataSet_addpoint(dataSet, xlo, ylo)
+            call CDataSet_addpoint(dataSet, xlo, yhi)
+            call CDataSet_addpoint(dataSet, xhi, yhi)
+            call CDataSet_addpoint(dataSet, xhi, ylo)
+            call CPlot2D__AddDataSet(plot2D, dataSet)
+            call CDataSet__delete(dataSet)
+        end subroutine add_filled_rect
+
+        subroutine add_curve( y, r, g, b, linewidth, dashed )
+            real,           intent(in) :: y(n)
+            real(C_double), intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in):: dashed
+            integer :: first, last, kk
+            first = 0
+            last  = 0
+            do kk = 1,n
+                if( valid_shell(kk) )then
+                    if( first == 0 ) first = kk
+                    last = kk
+                else if( first > 0 )then
+                    call add_curve_segment(y, first, last, r, g, b, linewidth, dashed)
+                    first = 0
+                    last  = 0
+                endif
+            end do
+            if( first > 0 ) call add_curve_segment(y, first, last, r, g, b, linewidth, dashed)
+        end subroutine add_curve
+
+        subroutine add_curve_segment( y, first, last, r, g, b, linewidth, dashed )
+            real,           intent(in) :: y(n)
+            integer,        intent(in) :: first, last
+            real(C_double), intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in):: dashed
+            type(CDataSet_type) :: dataSet
+            integer :: kk
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDrawLine(dataSet, C_TRUE)
+            call CDataSet__SetLineWidth(dataSet, linewidth)
+            call CDataSet__SetDashedLine(dataSet, dashed)
+            call CDataSet__SetDatasetColor(dataSet, r, g, b)
+            do kk = first,last
+                call CDataSet_addpoint(dataSet, freq(kk), y(kk))
+            end do
+            call CPlot2D__AddDataSet(plot2D, dataSet)
+            call CDataSet__delete(dataSet)
+        end subroutine add_curve_segment
+
+        subroutine add_segment( x1, y1, x2, y2, r, g, b, linewidth, dashed )
+            real,           intent(in) :: x1, y1, x2, y2
+            real(C_double), intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in):: dashed
+            type(CDataSet_type) :: dataSet
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDrawLine(dataSet, C_TRUE)
+            call CDataSet__SetLineWidth(dataSet, linewidth)
+            call CDataSet__SetDashedLine(dataSet, dashed)
+            call CDataSet__SetDatasetColor(dataSet, r, g, b)
+            call CDataSet_addpoint(dataSet, x1, y1)
+            call CDataSet_addpoint(dataSet, x2, y2)
+            call CPlot2D__AddDataSet(plot2D, dataSet)
+            call CDataSet__delete(dataSet)
+        end subroutine add_segment
+    end subroutine plot_fsc_area_score
 
     subroutine calc_fsc_area_score( even, odd, ndirs, cone_half_angle_deg, threshold, min_count, result )
         class(image),                intent(inout) :: even, odd

@@ -94,6 +94,21 @@ interface
         type(C_ptr), value :: this
         real(C_double), value :: size
     end subroutine C_CDataSet__SetMarkerSize
+    subroutine C_CDataSet__SetLineWidth(this, width) bind(C,name="CDataSet__SetLineWidth")
+        import
+        type(C_ptr), value :: this
+        real(C_double), value :: width
+    end subroutine C_CDataSet__SetLineWidth
+    subroutine C_CDataSet__SetDashedLine(this, flag) bind(C,name="CDataSet__SetDashedLine")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CDataSet__SetDashedLine
+    subroutine C_CDataSet__SetFillArea(this, flag) bind(C,name="CDataSet__SetFillArea")
+        import
+        type(C_ptr), value :: this
+        logical(C_bool), value :: flag
+    end subroutine C_CDataSet__SetFillArea
     subroutine C_CDataSet__SetDatasetColor(this, r, g, b) bind(C,name="CDataSet__SetDatasetColor")
         import
         type(C_ptr), value :: this
@@ -200,6 +215,21 @@ contains
         real(C_double), intent(in) :: size
         call C_CDataSet__SetMarkerSize(this%object, size)
     end subroutine CDataSet__SetMarkerSize
+    subroutine CDataSet__SetLineWidth(this, width)
+        type(CDataSet_type), intent(inout) :: this
+        real(C_double), intent(in) :: width
+        call C_CDataSet__SetLineWidth(this%object, width)
+    end subroutine CDataSet__SetLineWidth
+    subroutine CDataSet__SetDashedLine(this, flag)
+        type(CDataSet_type), intent(inout) :: this
+        logical(C_bool), intent(in) :: flag
+        call C_CDataSet__SetDashedLine(this%object, flag)
+    end subroutine CDataSet__SetDashedLine
+    subroutine CDataSet__SetFillArea(this, flag)
+        type(CDataSet_type), intent(inout) :: this
+        logical(C_bool), intent(in) :: flag
+        call C_CDataSet__SetFillArea(this%object, flag)
+    end subroutine CDataSet__SetFillArea
     subroutine CDataSet__SetDatasetColor(this, r, g, b)
         type(CDataSet_type), intent(inout) :: this
         real(C_double), intent(in) :: r, g, b

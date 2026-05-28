@@ -142,6 +142,7 @@ contains
             fbody = 'fsc_area_score'
         endif
         call write_fsc_area_score_outputs(result, fbody%to_char())
+        call plot_fsc_area_score(result, fbody%to_char())
         call even%kill
         call odd%kill
         call mskvol%kill

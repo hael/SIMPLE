@@ -126,6 +126,7 @@ typedef float RFLOAT;
 	 m_bDrawMarker=true;
 	 m_bDrawMarkerFilled=true;
 	 m_bDashedLine=false;
+	 m_bFillArea=false;
 	 m_iDashedLinePattern="dash";
 	 m_strDatasetTitle="";
 	 m_strDatasetLegendFont="Times";
@@ -403,6 +404,22 @@ typedef float RFLOAT;
      };
 
      /*!
+      Sets whether the dataset path should be closed and filled.
+      */
+     void SetFillArea(bool fill)
+     {
+	 m_bFillArea=fill;
+     };
+
+     /*!
+      Gets whether the dataset path should be closed and filled.
+      */
+     bool GetFillArea()
+     {
+	 return (m_bFillArea);
+     };
+
+     /*!
       Sets the string used in the plot legend denoting this
       dataset.
       */
@@ -455,6 +472,7 @@ typedef float RFLOAT;
      bool m_bDrawMarker; /*!< Boolean flag to enable/disable drawing of the marker at the location of data points. */
      bool m_bDrawMarkerFilled; /*!< Boolean flag to enable/disable infilling of the marker at the location of data points. */
      bool m_bDashedLine; /*!< Boolean flag to enable/disable drawing of a dashed line connecting data points. */
+     bool m_bFillArea; /*!< Boolean flag to close and fill the path represented by the data points. */
 
      // data storage
      std::vector<CDataPoint> m_dDataPoints; /*!< A vector storage for the data points. */
@@ -1517,6 +1535,9 @@ extern "C"
   void CDataSet__SetDrawLine(CDataSet* This, bool flag);
   void CDataSet__SetDrawMarker(CDataSet* This, bool flag);
   void CDataSet__SetMarkerSize(CDataSet* This, double size);
+  void CDataSet__SetLineWidth(CDataSet* This, double width);
+  void CDataSet__SetDashedLine(CDataSet* This, bool flag);
+  void CDataSet__SetFillArea(CDataSet* This, bool flag);
   void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b);
   CDataPoint* CDataPoint__new2(double x, double y);
   void CDataPoint__delete(CDataPoint* This);
