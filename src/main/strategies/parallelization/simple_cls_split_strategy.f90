@@ -551,8 +551,7 @@ contains
                                       l_write_ptcls, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
                                       normal_ptcls, den_ptcls, coeff_ptcls)
-        use simple_diffusion_maps,   only: diffusion_map_generate_subavg_vectors, &
-                                           steerable_transport_denoise, steerable_coeffproj_denoise
+        use simple_diffusion_maps,   only: steerable_transport_denoise, steerable_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -569,13 +568,11 @@ contains
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
         type(image) :: cavg_raw, cavg_den, cavg_coeff
         real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:), steer_aff(:,:), steer_theta(:,:)
-        real, allocatable :: preimg_avg(:), preimg_pcavecs(:,:)
-        real, allocatable :: diffmap_den_subavg_vecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: i_medoids(:)
-        integer :: nptcls, npix, preimg_npix, nsplit_count, j, k, class_ldim(3)
+        integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
-        logical :: l_diffmap_vec_den
+        logical :: l_so3_split
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(labels) ) deallocate(labels)
@@ -621,12 +618,16 @@ contains
                 call imgs_ppca(j)%norm
             end do
         endif
-        call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        if( trim(params%pca_mode) == 'diffusion_maps' )then
-            call make_pcavecs(imgs, preimg_npix, preimg_avg, preimg_pcavecs, transp=.false.)
+        l_so3_split = trim(params%pca_mode) == 'diff_map_so3'
+        if( .not. l_so3_split )then
+            call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         endif
         if( l_write_ptcls ) normal_ptcls = copy_imgarr(imgs_ppca)
-        call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
+        if( l_so3_split )then
+            call make_so3_split_embedding(params, spproj, pinds, cls_id, nptcls, imgs_ppca, coords, eigvals)
+        else
+            call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
+        endif
         if( trim(params%pca_mode) == 'steerable_diff_map' )then
             call steerable_transport_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, den_ptcls)
             call steerable_coeffproj_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, coeff_ptcls)
@@ -666,11 +667,6 @@ contains
                 ' max=', params%nsubcls_max, ' selected=', nsplit
             call flush(logfhandle)
         endif
-        l_diffmap_vec_den = .false.
-        ! if( trim(params%pca_mode) == 'diffusion_maps' ) then
-        !     call diffusion_map_generate_subavg_vectors(params, cls_id, coords, preimg_pcavecs, preimg_avg, labels, nsplit, &
-        !                                                 diffmap_den_subavg_vecs, l_diffmap_vec_den)
-        ! endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         if( allocated(coeff_ptcls) ) call cavg_coeff%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
@@ -682,21 +678,15 @@ contains
             do k = 1, size(labels)
                 if( labels(k) /= j ) cycle
                 call cavg_raw%add(imgs(k))
-                if( .not. l_diffmap_vec_den )then
-                    if( allocated(den_ptcls) )then
-                        call cavg_den%add(den_ptcls(k))
-                    else
-                        call cavg_den%add(imgs_ppca(k))
-                    endif
+                if( allocated(den_ptcls) )then
+                    call cavg_den%add(den_ptcls(k))
+                else
+                    call cavg_den%add(imgs_ppca(k))
                 endif
                 if( allocated(coeff_ptcls) ) call cavg_coeff%add(coeff_ptcls(k))
             end do
             call cavg_raw%div(real(max(count(labels == j), 1)))
-            if( l_diffmap_vec_den )then
-                call cavg_den%unserialize(diffmap_den_subavg_vecs(:,j))
-            else
-                call cavg_den%div(real(max(count(labels == j), 1)))
-            endif
+            call cavg_den%div(real(max(count(labels == j), 1)))
             if( allocated(coeff_ptcls) ) call cavg_coeff%div(real(max(count(labels == j), 1)))
             call raw_subavgs(j)%copy(cavg_raw)
             call den_subavgs(j)%copy(cavg_den)
@@ -713,9 +703,6 @@ contains
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
-        if( allocated(preimg_avg)   ) deallocate(preimg_avg)
-        if( allocated(preimg_pcavecs) ) deallocate(preimg_pcavecs)
-        if( allocated(diffmap_den_subavg_vecs) ) deallocate(diffmap_den_subavg_vecs)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
         if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
@@ -866,11 +853,89 @@ contains
         call flush(logfhandle)
     end subroutine make_split_embedding
 
+    subroutine make_so3_split_embedding(params, spproj, pinds, cls_id, nptcls, imgs_ppca, coords, eigvals)
+        use simple_diff_map_graphs, only: build_so3_split_affinity
+        use simple_diffusion_maps,   only: embed_affinity, embed_so2_steerable_affinity, embed_se2_steerable_affinity
+        type(parameters),  intent(inout) :: params
+        type(sp_project),  intent(inout) :: spproj
+        integer,           intent(in)    :: pinds(:), cls_id, nptcls
+        type(image),       intent(inout) :: imgs_ppca(:)
+        real, allocatable, intent(out)   :: coords(:,:), eigvals(:)
+        real, allocatable :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
+        real :: se2_shift_scale
+        character(len=STDLEN) :: so3_graph, so3_steering
+        integer :: neigs, neigs_scan, neigs_used
+        logical :: l_auto_neigs
+
+        if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('pca_mode=diff_map_so3 requires oritype=ptcl3D')
+        so3_graph = lowercase(trim(params%so3_graph))
+        select case(trim(so3_graph))
+            case('cluster2d', 'projection_registration')
+            case DEFAULT
+                THROW_HARD('so3_graph must be cluster2d or projection_registration')
+        end select
+        so3_steering = lowercase(trim(params%so3_steering))
+        select case(trim(so3_steering))
+            case('none', 'so2', 'se2')
+            case DEFAULT
+                THROW_HARD('so3_steering must be none, so2, or se2')
+        end select
+        l_auto_neigs = params%neigs <= 0
+        if( l_auto_neigs )then
+            neigs_scan = cls_split_auto_neigs_scan(trim(params%pca_mode), nptcls)
+        else
+            neigs_scan = params%neigs
+        endif
+        neigs = min(max(neigs_scan, 1), max(nptcls - 2, 1))
+        call build_so3_split_affinity(params, spproj, pinds, imgs_ppca, aff, theta, shift_x, shift_y)
+        select case(trim(so3_steering))
+            case('none')
+                call embed_affinity(aff, neigs, coords, eigvals)
+            case('se2')
+                se2_shift_scale = estimate_se2_shift_scale(params, aff, shift_x, shift_y)
+                write(logfhandle,'(A,I8,A,F10.4)') 'SO3 SE2 steering: class=', cls_id, &
+                    ' shift_scale=', se2_shift_scale
+                call flush(logfhandle)
+                call embed_se2_steerable_affinity(aff, theta, shift_x, shift_y, neigs, params%steerable_nmodes, &
+                    se2_shift_scale, coords, eigvals)
+            case('so2')
+                call embed_so2_steerable_affinity(aff, theta, neigs, params%steerable_nmodes, coords, eigvals)
+        end select
+        if( l_auto_neigs .and. allocated(eigvals) )then
+            neigs_used = select_neigs_icm(eigvals, trim(params%pca_mode), size(coords,1), cls_id)
+            call trim_split_embedding(coords, eigvals, neigs_used)
+            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto neigs: mode=', trim(params%pca_mode), &
+                ' class=', cls_id, ' size=', nptcls, ' scan=', neigs, ' selected=', size(coords,1)
+            call flush(logfhandle)
+        endif
+        write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', trim(params%pca_mode), &
+            ' so3_graph=', trim(so3_graph), ' so3_steering=', trim(so3_steering), &
+            ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1)
+        call flush(logfhandle)
+        if( allocated(aff)   ) deallocate(aff)
+        if( allocated(theta) ) deallocate(theta)
+        if( allocated(shift_x) ) deallocate(shift_x)
+        if( allocated(shift_y) ) deallocate(shift_y)
+    end subroutine make_so3_split_embedding
+
+    real function estimate_se2_shift_scale(params, aff, shift_x, shift_y) result(shift_scale)
+        type(parameters), intent(in) :: params
+        real,             intent(in) :: aff(:,:), shift_x(:,:), shift_y(:,:)
+        real :: observed
+        if( any(aff > DTINY) )then
+            observed = max(maxval(abs(shift_x), mask=(aff > DTINY)), maxval(abs(shift_y), mask=(aff > DTINY)))
+        else
+            observed = 0.
+        endif
+        shift_scale = max(1., observed)
+        if( params%trs > 0. ) shift_scale = max(shift_scale, params%trs)
+    end function estimate_se2_shift_scale
+
     integer function cls_split_auto_neigs_scan(mode, nptcls) result(neigs_scan)
         character(len=*), intent(in) :: mode
         integer,          intent(in) :: nptcls
         select case(trim(mode))
-            case('diffusion_maps')
+            case('diffusion_maps', 'diff_map_so3')
                 neigs_scan = min(24, max(1, nptcls - 2))
                 if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
             case DEFAULT
@@ -996,7 +1061,7 @@ contains
         character(len=*), intent(in) :: mode
         integer,          intent(in) :: max_neigs
         nmin_rank = 1
-        if( trim(mode) .eq. 'diffusion_maps' .and. max_neigs >= 2 ) nmin_rank = 2
+        if( (trim(mode) .eq. 'diffusion_maps' .or. trim(mode) .eq. 'diff_map_so3') .and. max_neigs >= 2 ) nmin_rank = 2
     end function cls_split_min_neigs
 
     integer function cls_split_initial_neigs_from_gap(spec, nmin_rank) result(nkeep)

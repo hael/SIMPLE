@@ -16,9 +16,12 @@ implicit none
 private
 public :: diffusion_map_embedder
 public :: steerable_diffusion_map_embedder
-public :: diffusion_map_generate_subavg_vectors
 public :: steerable_transport_denoise
 public :: steerable_coeffproj_denoise
+public :: embed_affinity
+public :: embed_so2_steerable_affinity
+public :: embed_se2_steerable_affinity
+integer, parameter :: SE2_NTRANS_MODES = 2
 
 type :: diffusion_map_embedder
     integer :: ndiff = 4  !< 0 requests automatic dimensionality selection from the diffusion spectrum
@@ -448,106 +451,6 @@ contains
         kth = work(min(max(1, k_used), k))
     end subroutine kth_distance_for_point
 
-    subroutine kth_distance_with_self(d2row, k_used, kth)
-        real,    intent(in)  :: d2row(:)
-        integer, intent(in)  :: k_used
-        real,    intent(out) :: kth
-        real :: work(size(d2row))
-        work = d2row
-        call hpsort(work)
-        kth = work(min(max(1, k_used), size(work)))
-    end subroutine kth_distance_with_self
-
-    subroutine diffusion_map_generate_subavg_vectors(params, context_id, coords, pcavecs, avg, labels, nlabels, &
-                                                     subavg_vecs, l_generated)
-        type(parameters),  intent(in)  :: params
-        integer,           intent(in)  :: context_id, nlabels
-        real,              intent(in)  :: coords(:,:), pcavecs(:,:), avg(:)
-        integer,           intent(in)  :: labels(:)
-        real, allocatable, intent(out) :: subavg_vecs(:,:)
-        logical,           intent(out) :: l_generated
-        real, allocatable :: d2(:,:), kth_d2(:)
-        integer, allocatable :: pops(:)
-        real :: tau, w, wsum, scale
-        integer :: nptcls, ndim, npix, k_used, i, j, lab, nedges, nfinite
-        l_generated = .false.
-        nptcls = size(coords, 2)
-        ndim   = size(coords, 1)
-        npix   = size(avg)
-        if( nptcls < 2 .or. ndim < 1 .or. nlabels < 1 ) return
-        if( size(pcavecs, 1) /= npix .or. size(pcavecs, 2) /= nptcls .or. size(labels) /= nptcls )then
-            write(logfhandle,'(A,I8)') 'Diffusion map vector preimage skipped: shape mismatch context=', context_id
-            call flush(logfhandle)
-            return
-        endif
-        if( .not. all(ieee_is_finite(coords)) )then
-            write(logfhandle,'(A,I8)') 'Diffusion map vector preimage skipped: nonfinite coords context=', context_id
-            call flush(logfhandle)
-            return
-        endif
-        k_used = min(max(2, params%k_nn), nptcls)
-        allocate(d2(nptcls,nptcls), kth_d2(nptcls), source=0.)
-        allocate(pops(nlabels), source=0)
-        allocate(subavg_vecs(npix,nlabels), source=0.)
-        do i = 1, nptcls - 1
-            do j = i + 1, nptcls
-                d2(i,j) = sum((coords(1:ndim,i) - coords(1:ndim,j))**2)
-                d2(j,i) = d2(i,j)
-            end do
-        end do
-        do i = 1, nptcls
-            call kth_distance_with_self(d2(i,:), k_used, kth_d2(i))
-        end do
-        tau = median(kth_d2)
-        if( .not. ieee_is_finite(tau) .or. tau < DTINY )then
-            nfinite = count(ieee_is_finite(kth_d2))
-            if( nfinite > 0 ) tau = max(sum(kth_d2, mask=ieee_is_finite(kth_d2)) / real(nfinite), 1.e-6)
-        endif
-        if( .not. ieee_is_finite(tau) .or. tau < DTINY )then
-            write(logfhandle,'(A,I8)') 'Diffusion map vector preimage skipped: invalid bandwidth context=', context_id
-            call flush(logfhandle)
-            deallocate(d2, kth_d2, pops, subavg_vecs)
-            return
-        endif
-        nedges = 0
-        do i = 1, nptcls
-            lab = labels(i)
-            if( lab < 1 .or. lab > nlabels ) cycle
-            wsum = 0.
-            do j = 1, nptcls
-                if( d2(i,j) > kth_d2(i) ) cycle
-                w = exp(-d2(i,j) / tau)
-                if( w <= DTINY .or. .not. ieee_is_finite(w) ) cycle
-                wsum = wsum + w
-            end do
-            pops(lab) = pops(lab) + 1
-            if( wsum <= DTINY )then
-                subavg_vecs(:,lab) = subavg_vecs(:,lab) + pcavecs(:,i)
-            else
-                do j = 1, nptcls
-                    if( d2(i,j) > kth_d2(i) ) cycle
-                    w = exp(-d2(i,j) / tau)
-                    if( w <= DTINY .or. .not. ieee_is_finite(w) ) cycle
-                    scale = w / wsum
-                    subavg_vecs(:,lab) = subavg_vecs(:,lab) + scale * pcavecs(:,j)
-                    nedges = nedges + 1
-                end do
-            endif
-        end do
-        do lab = 1, nlabels
-            if( pops(lab) > 0 )then
-                subavg_vecs(:,lab) = avg + subavg_vecs(:,lab) / real(pops(lab))
-            else
-                subavg_vecs(:,lab) = avg
-            endif
-        end do
-        l_generated = .true.
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,ES10.3)') 'Diffusion map vector preimage: context=', context_id, &
-            ' nlabels=', nlabels, ' directed_edges=', nedges, ' tau=', tau
-        call flush(logfhandle)
-        deallocate(d2, kth_d2, pops)
-    end subroutine diffusion_map_generate_subavg_vectors
-
     subroutine steerable_set_params(self, ndiff, k_nn, nmodes)
         class(steerable_diffusion_map_embedder), intent(inout) :: self
         integer,                                 intent(in)    :: ndiff, k_nn, nmodes
@@ -700,6 +603,123 @@ contains
         deallocate(d2, aff, kth_d2, deg, norm_aff, theta, cand_coords, cand_eigvals, out_eigvals)
     end subroutine steerable_embed
 
+    subroutine embed_affinity( aff, ndiff_req, coords, eigvals )
+        real,              intent(inout) :: aff(:,:)
+        integer,           intent(in)    :: ndiff_req
+        real, allocatable, intent(out)   :: coords(:,:), eigvals(:)
+        real, allocatable :: norm_aff(:,:), deg(:), evals(:), evecs(:,:)
+        integer :: n, ndiff_scan, nev, i, k, idx
+        n = size(aff,1)
+        if( n < 3 )then
+            allocate(coords(1,n), eigvals(1), source=0.)
+            return
+        endif
+        if( size(aff,2) /= n ) THROW_HARD('affinity matrix must be square; embed_affinity')
+        if( ndiff_req <= 0 )then
+            ndiff_scan = min(4, max(1, n-2))
+        else
+            ndiff_scan = min(max(1, ndiff_req), max(1, n-2))
+        endif
+        call normalize_graph_affinity(aff, norm_aff, deg)
+        nev = ndiff_scan + 1
+        allocate(evals(n), evecs(n,n))
+        call eigh(n, norm_aff, nev, evals, evecs)
+        allocate(coords(ndiff_scan,n), eigvals(ndiff_scan), source=0.)
+        do k = 1,ndiff_scan
+            idx = nev - k
+            eigvals(k) = evals(idx)
+            do i = 1,n
+                coords(k,i) = evals(idx) * evecs(i,idx)
+            end do
+        end do
+        call normalize_coords(coords)
+        deallocate(norm_aff, deg, evals, evecs)
+    end subroutine embed_affinity
+
+    subroutine embed_so2_steerable_affinity( aff, theta, ndiff_req, nmodes_req, coords, eigvals )
+        real,              intent(inout) :: aff(:,:)
+        real,              intent(in)    :: theta(:,:)
+        integer,           intent(in)    :: ndiff_req, nmodes_req
+        real, allocatable, intent(out)   :: coords(:,:), eigvals(:)
+        real, allocatable :: norm_aff(:,:), deg(:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
+        integer :: n, ndiff_scan, ncand, nmodes
+        n = size(aff,1)
+        if( n < 3 )then
+            allocate(coords(1,n), eigvals(1), source=0.)
+            return
+        endif
+        if( size(aff,2) /= n .or. size(theta,1) /= n .or. size(theta,2) /= n )then
+            THROW_HARD('affinity/theta matrix shape mismatch; embed_so2_steerable_affinity')
+        endif
+        if( ndiff_req <= 0 )then
+            ndiff_scan = min(4, max(1, n-2))
+        else
+            ndiff_scan = min(max(1, ndiff_req), max(1, n-2))
+        endif
+        nmodes = min(max(0, nmodes_req), max(0, n - 1))
+        call normalize_graph_affinity(aff, norm_aff, deg)
+        allocate(cand_coords(n, max(1, ndiff_scan * (nmodes + 1))), &
+                 cand_eigvals(max(1, ndiff_scan * (nmodes + 1))), source=0.)
+        call collect_steerable_candidates(norm_aff, theta, nmodes, ndiff_scan, cand_coords, cand_eigvals, ncand)
+        call select_output_candidates(cand_coords, cand_eigvals, ncand, ndiff_scan, coords, out_eigvals)
+        allocate(eigvals(size(out_eigvals)), source=out_eigvals)
+        call normalize_coords(coords)
+        deallocate(norm_aff, deg, cand_coords, cand_eigvals, out_eigvals)
+    end subroutine embed_so2_steerable_affinity
+
+    subroutine embed_se2_steerable_affinity( aff, theta, shift_x, shift_y, ndiff_req, nmodes_req, shift_scale, coords, eigvals )
+        real,              intent(inout) :: aff(:,:)
+        real,              intent(in)    :: theta(:,:), shift_x(:,:), shift_y(:,:), shift_scale
+        integer,           intent(in)    :: ndiff_req, nmodes_req
+        real, allocatable, intent(out)   :: coords(:,:), eigvals(:)
+        real, allocatable :: norm_aff(:,:), deg(:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
+        integer :: n, ndiff_scan, ncand, nmodes, max_cand
+        n = size(aff,1)
+        if( n < 3 )then
+            allocate(coords(1,n), eigvals(1), source=0.)
+            return
+        endif
+        if( size(aff,2) /= n .or. size(theta,1) /= n .or. size(theta,2) /= n .or. &
+            size(shift_x,1) /= n .or. size(shift_x,2) /= n .or. size(shift_y,1) /= n .or. size(shift_y,2) /= n )then
+            THROW_HARD('affinity/SE2 matrix shape mismatch; embed_se2_steerable_affinity')
+        endif
+        if( ndiff_req <= 0 )then
+            ndiff_scan = min(4, max(1, n-2))
+        else
+            ndiff_scan = min(max(1, ndiff_req), max(1, n-2))
+        endif
+        nmodes = min(max(0, nmodes_req), max(0, n - 1))
+        call normalize_graph_affinity(aff, norm_aff, deg)
+        max_cand = ndiff_scan * (1 + nmodes + (nmodes + 1) * SE2_NTRANS_MODES)
+        allocate(cand_coords(n, max(1, max_cand)), cand_eigvals(max(1, max_cand)), source=0.)
+        call collect_se2_steerable_candidates(norm_aff, theta, shift_x, shift_y, nmodes, ndiff_scan, &
+            max(shift_scale, 1.e-6), cand_coords, cand_eigvals, ncand)
+        call select_output_candidates(cand_coords, cand_eigvals, ncand, ndiff_scan, coords, out_eigvals)
+        allocate(eigvals(size(out_eigvals)), source=out_eigvals)
+        call normalize_coords(coords)
+        deallocate(norm_aff, deg, cand_coords, cand_eigvals, out_eigvals)
+    end subroutine embed_se2_steerable_affinity
+
+    subroutine normalize_graph_affinity( aff, norm_aff, deg )
+        real,              intent(inout) :: aff(:,:)
+        real, allocatable, intent(out)   :: norm_aff(:,:), deg(:)
+        integer :: n, i, j
+        n = size(aff,1)
+        allocate(deg(n), norm_aff(n,n), source=0.)
+        deg = sum(aff, dim=2)
+        do i = 1,n
+            if( deg(i) > DTINY ) cycle
+            aff(i,i) = 1.
+        end do
+        deg = sum(aff, dim=2)
+        do i = 1,n
+            do j = 1,n
+                if( aff(i,j) <= DTINY ) cycle
+                norm_aff(i,j) = aff(i,j) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+            end do
+        end do
+    end subroutine normalize_graph_affinity
+
     subroutine prepare_steerable_pft_params(params, ldim, smpd, params_pft)
         type(parameters), intent(in)  :: params
         integer,          intent(in)  :: ldim(3)
@@ -754,6 +774,42 @@ contains
         deallocate(feat)
     end subroutine collect_steerable_candidates
 
+    subroutine collect_se2_steerable_candidates(norm_aff, theta, shift_x, shift_y, nmodes, ndiff_scan, shift_scale, &
+            cand_coords, cand_eigvals, ncand)
+        real,    intent(in)    :: norm_aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:), shift_scale
+        integer, intent(in)    :: nmodes, ndiff_scan
+        real,    intent(inout) :: cand_coords(:,:), cand_eigvals(:)
+        integer, intent(out)   :: ncand
+        real, allocatable :: mat(:,:), evals(:), evecs(:,:), feat(:)
+        real :: kx(SE2_NTRANS_MODES), ky(SE2_NTRANS_MODES), trans_factor
+        integer :: n, n2, nev, mode, tmode, idx
+        n = size(norm_aff,1)
+        n2 = 2 * n
+        call collect_steerable_candidates(norm_aff, theta, nmodes, ndiff_scan, cand_coords, cand_eigvals, ncand)
+        if( ncand >= size(cand_eigvals) ) return
+        kx = [1., 0.]
+        ky = [0., 1.]
+        trans_factor = TWOPI / max(2. * shift_scale, 1.e-6)
+        allocate(feat(n))
+        do mode = 0, nmodes
+            do tmode = 1, SE2_NTRANS_MODES
+                if( ncand >= size(cand_eigvals) ) exit
+                nev = min(2 * ndiff_scan + 2, n2)
+                allocate(mat(n2,n2), evals(n2), evecs(n2,n2))
+                call build_se2_connection_block(norm_aff, theta, shift_x, shift_y, mode, kx(tmode), ky(tmode), trans_factor, mat)
+                call eigh(n2, mat, nev, evals, evecs)
+                do idx = nev, 1, -1
+                    feat = evals(idx) * sqrt(evecs(1:n,idx)**2 + evecs(n+1:n2,idx)**2)
+                    call add_steerable_candidate(feat, evals(idx), cand_coords, cand_eigvals, ncand)
+                    if( ncand >= size(cand_eigvals) ) exit
+                end do
+                deallocate(mat, evals, evecs)
+            end do
+            if( ncand >= size(cand_eigvals) ) exit
+        end do
+        deallocate(feat)
+    end subroutine collect_se2_steerable_candidates
+
     subroutine build_connection_block(norm_aff, theta, mode, conn_block)
         real,    intent(in)  :: norm_aff(:,:), theta(:,:)
         integer, intent(in)  :: mode
@@ -775,6 +831,28 @@ contains
             end do
         end do
     end subroutine build_connection_block
+
+    subroutine build_se2_connection_block(norm_aff, theta, shift_x, shift_y, mode, kx, ky, trans_factor, conn_block)
+        real,    intent(in)  :: norm_aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:), kx, ky, trans_factor
+        integer, intent(in)  :: mode
+        real,    intent(out) :: conn_block(:,:)
+        real :: a, b, phase
+        integer :: n, i, j
+        n = size(norm_aff,1)
+        conn_block = 0.
+        do i = 1, n
+            do j = 1, n
+                if( norm_aff(i,j) <= DTINY ) cycle
+                phase = real(mode) * theta(i,j) + trans_factor * (kx * shift_x(i,j) + ky * shift_y(i,j))
+                a = norm_aff(i,j) * cos(phase)
+                b = norm_aff(i,j) * sin(phase)
+                conn_block(i,   j)   =  a
+                conn_block(i,   n+j) = -b
+                conn_block(n+i, j)   =  b
+                conn_block(n+i, n+j) =  a
+            end do
+        end do
+    end subroutine build_se2_connection_block
 
     subroutine add_steerable_candidate(feat, eigval, cand_coords, cand_eigvals, ncand)
         real,    intent(in)    :: feat(:), eigval
