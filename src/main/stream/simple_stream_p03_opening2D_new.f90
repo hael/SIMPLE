@@ -295,7 +295,7 @@ contains
             ! Delete all files in the working directory and re-create a clean project,
             ! called when the user requests more micrographs before picking references.
             subroutine cleanup_previous()
-                type(string), allocatable :: list(:)
+                type(string), allocatable :: list(:), folders(:)
                 integer :: i, nfiles
                 call spproj%kill
                 call cline%set('projfile', '')
@@ -305,6 +305,13 @@ contains
                 do i = 1, nfiles
                     call del_file(list(i))
                 enddo
+                folders = simple_list_dirs('.')
+                if( allocated(folders) )then
+                    do i = 1,size(folders)
+                        if( folders(i)%has_substr('extract_cluster_')    ) call simple_rmdir(folders(i))
+                        if( folders(i)%has_substr('abinitio2D_cluster_') ) call simple_rmdir(folders(i))
+                    enddo
+                endif
                 call cline%set('projname', params%projname)
                 call cline%set('projfile', params%projfile)
                 call spproj%update_projinfo(cline)
