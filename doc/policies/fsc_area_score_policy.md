@@ -7,8 +7,9 @@ The implementation is a native half-map conical FSC area ratio, inspired by the
 public cFAR description used in orientation-diagnostics tools. It is not a
 claim of bitwise compatibility with any external package.
 
-The diagnostic is implemented in Fortran and does not have a Python helper,
-CryoSPARC `csfsc.csv` reader, or CSV validation mode.
+The diagnostic is implemented in Fortran. A Python plotting helper can render
+the native CSV outputs in a CryoSPARC-like summary style, but SIMPLE does not
+have a CryoSPARC `csfsc.csv` reader or CSV validation mode.
 
 ## Public interface
 
@@ -147,6 +148,18 @@ For an output file body `fbody`, SIMPLE writes:
 
 These CSV files are diagnostic outputs from the native calculation. SIMPLE does
 not use them as inputs and does not validate external CSV files.
+
+The helper:
+
+```bash
+python3 scripts/plot_fsc_area_score.py fsc_area_score
+```
+
+reads `fsc_area_score_summary.txt`, `fsc_area_score_curves.csv`, and
+`fsc_area_score_directions.csv`, then writes `fsc_area_score_plot.png`. The plot
+shows the directional mean cFSC curve, +/- one standard deviation, min/max
+directional envelope, the FSC threshold, and a relative-occurrence histogram of
+directional threshold crossings with best/worst crossing resolutions.
 
 ## Interpretation
 
