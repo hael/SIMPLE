@@ -430,7 +430,7 @@ contains
         ! SSNR
         do k = 1,frcsz
             cc      = min(0.999,max(0.001,frc(k)))
-            ssnr(k) = fudge * cc / (1.-cc)
+            ssnr(k) = cc / (1.-cc)
         enddo
         ! Noise
         do h = self%flims(1,1),self%flims(1,2)
