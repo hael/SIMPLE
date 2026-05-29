@@ -8,9 +8,10 @@ class Command(BaseCommand):
     help = "Ensures local user is present - do not use on non-local installs"
 
     def handle(self, *args, **options):
-        if not User.objects.filter(username=os.getlogin()).exists():
-            User.objects.create_superuser(os.getlogin())
-        localuser = User.objects.get(username=os.getlogin())
+        user_name = os.environ["USER"] or os.environ["LOGNAME"] or os.environ["USERNAME"] or os.getlogin()
+        if not User.objects.filter(username=user_name).exists():
+            User.objects.create_superuser(user_name)
+        localuser = User.objects.get(username=user_name)
         localuser.set_password("simple")
         localuser.save()
         
