@@ -14,15 +14,15 @@ integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,250
 integer,          parameter :: NSPACE_SUB              = 126
 
 ! Stage transition policy
-integer,          parameter :: GAUREF_LAST_STAGE       = 2    ! stop gaussian filtering after early stages
-integer,          parameter :: SYMSRCH_STAGE           = 3    ! search symmetry axis
-integer,          parameter :: PROB_REFINE_STAGE       = 3    ! prob refinement stages 3-5
-integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5    ! first stage where trail_rec behavior changes
-integer,          parameter :: STOCH_SAMPL_STAGE       = 5    ! switch from greedy to stochastic sampling
-integer,          parameter :: NU_FILTER_STAGE         = 6    ! switch on staged NU filtering
-integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6    ! prob_neigh refinement stages 6-8
-integer,          parameter :: GOLD_STD_STAGE          = 7    ! switch on single-state gold-standard refinement
-integer,          parameter :: AUTOMSK_STAGE           = 7    ! switch on automasking
+integer,          parameter :: GAUREF_LAST_STAGE       = 2       ! stop gaussian filtering after early stages
+integer,          parameter :: SYMSRCH_STAGE           = 3       ! search symmetry axis
+integer,          parameter :: PROB_REFINE_STAGE       = 3       ! prob refinement stages 3-5
+integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5       ! first stage where trail_rec behavior changes
+integer,          parameter :: STOCH_SAMPL_STAGE       = 5       ! switch from greedy to stochastic sampling
+integer,          parameter :: NU_FILTER_STAGE         = 5       ! switch on staged NU filtering
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6       ! prob_neigh refinement stages 6-8
+integer,          parameter :: GOLD_STD_STAGE          = NSTAGES ! switch on single-state gold-standard refinement
+integer,          parameter :: AUTOMSK_STAGE           = NSTAGES ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = NSTAGES
 
