@@ -209,6 +209,7 @@ module simple_microchunked2D
     integer                     :: n_rejected_ptcls  = 0
     integer                     :: last_import       = 0
     real                        :: mskdiam           = 0.0
+    logical                     :: skip_pass_2       = .false.
   contains
     procedure :: new
     procedure :: kill
@@ -257,10 +258,11 @@ contains
   ! limit, mask diameter, and thread count; imports any existing chunks from a
   ! previous run; creates all four output directories; allocates empty chunk
   ! arrays; and initialises the queue environment.
-  subroutine new( self, params, completedir )
+  subroutine new( self, params, completedir, skip_pass_2 )
     class(microchunked2D), intent(inout) :: self
     type(parameters),      intent(in)    :: params
     type(string),          intent(in)    :: completedir
+    logical,     optional, intent(in)    :: skip_pass_2
     type(string)                         :: cwd
     integer(timer_int_kind)              :: t0
     t0 = timer_start()
@@ -271,6 +273,8 @@ contains
     self%mskdiam                   = params%mskdiam
     self%nthr                      = params%nthr
     self%nparts                    = params%nparts
+    self%skip_pass_2               = .false.
+    if( present(skip_pass_2) ) self%skip_pass_2 = skip_pass_2
     self%outdir_microchunks_pass_1 = string(cwd%to_char() // '/microchunks_pass_1')
     self%outdir_microchunks_pass_2 = string(cwd%to_char() // '/microchunks_pass_2')
     self%outdir_microchunks_match  = string(cwd%to_char() // '/microchunks_match')
@@ -281,7 +285,7 @@ contains
     ! Import existing chunks before creating directories; refchunk is imported
     ! before match so self%refs is set when match clines are regenerated on restart
     if( dir_exists(self%outdir_microchunks_pass_1) ) call self%import_existing_microchunks_pass_1()
-    if( dir_exists(self%outdir_microchunks_pass_2) ) call self%import_existing_microchunks_pass_2()
+    if( .not. self%skip_pass_2 .and. dir_exists(self%outdir_microchunks_pass_2) ) call self%import_existing_microchunks_pass_2()
     if( dir_exists(self%outdir_refchunk)           ) call self%import_existing_refchunk()
     if( dir_exists(self%outdir_microchunks_match)  ) call self%import_existing_microchunks_match()
     call simple_mkdir(self%outdir_microchunks_pass_1)
@@ -580,7 +584,7 @@ contains
     t0 = timer_start()
     call self%collect_and_reject()
     call self%generate_microchunks_pass_1(project_list)
-    call self%generate_microchunks_pass_2()
+    if( .not. self%skip_pass_2 ) call self%generate_microchunks_pass_2()
     call self%generate_refchunk()
     call self%generate_microchunks_match()
     call self%submit()
@@ -688,11 +692,13 @@ contains
     if( .not. get_finished ) return
     get_finished = all(self%microchunks_pass_1(:)%complete .or. self%microchunks_pass_1(:)%failed)
     if( .not. get_finished ) return
-    ! pass-2: must have at least one chunk and all must be complete
-    get_finished = self%get_n_microchunks_pass_2() > 0
-    if( .not. get_finished ) return
-    get_finished = all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed)
-    if( .not. get_finished ) return
+    if( .not. self%skip_pass_2 ) then
+      ! pass-2: must have at least one chunk and all must be complete
+      get_finished = self%get_n_microchunks_pass_2() > 0
+      if( .not. get_finished ) return
+      get_finished = all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed)
+      if( .not. get_finished ) return
+    end if
     ! refchunk: the reference class-average chunk must be done and not failed
     get_finished = self%refchunk%complete .and. .not. self%refchunk%failed
     if( .not. get_finished ) return
@@ -1019,6 +1025,7 @@ contains
     type(sp_project)              :: chunk_project
     integer(timer_int_kind)       :: t0
     integer                       :: i, chunk_nptcls, chunk_nptcls_selected, n_consumed
+    integer                       :: selected_available
 
     t0 = timer_start()
 
@@ -1027,27 +1034,49 @@ contains
       call timer_stop(t0, string('generate_refchunk'))
       return
     end if
-    if( self%get_n_pass_2_non_rejected_ptcls() < REFCHUNK_THRESHOLD ) then
+    if( self%skip_pass_2 ) then
+      selected_available = self%get_n_pass_1_non_rejected_ptcls()
+    else
+      selected_available = self%get_n_pass_2_non_rejected_ptcls()
+    end if
+    if( selected_available < REFCHUNK_THRESHOLD ) then
       call timer_stop(t0, string('generate_refchunk'))
       return
     end if
 
-    allocate(projfiles(self%get_n_microchunks_pass_2()))
+    if( self%skip_pass_2 ) then
+      allocate(projfiles(self%get_n_microchunks_pass_1()))
+    else
+      allocate(projfiles(self%get_n_microchunks_pass_2()))
+    end if
     chunk_nptcls          = 0
     chunk_nptcls_selected = 0
     n_consumed            = 0
 
-    ! Consume all rejection-complete pass-2 chunks (marked complete after match)
-    do i = 1, self%get_n_microchunks_pass_2()
-      associate( src => self%microchunks_pass_2(i) )
-        if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
-          n_consumed            = n_consumed            + 1
-          chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
-          chunk_nptcls          = chunk_nptcls          + src%nptcls
-          projfiles(n_consumed) = src%projfile
-        end if
-      end associate
-    end do
+    ! Consume all rejection-complete source chunks (marked complete after match)
+    if( self%skip_pass_2 ) then
+      do i = 1, self%get_n_microchunks_pass_1()
+        associate( src => self%microchunks_pass_1(i) )
+          if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
+            n_consumed            = n_consumed            + 1
+            chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
+            chunk_nptcls          = chunk_nptcls          + src%nptcls
+            projfiles(n_consumed) = src%projfile
+          end if
+        end associate
+      end do
+    else
+      do i = 1, self%get_n_microchunks_pass_2()
+        associate( src => self%microchunks_pass_2(i) )
+          if( src%rejection_complete .and. .not. src%complete .and. .not. src%failed ) then
+            n_consumed            = n_consumed            + 1
+            chunk_nptcls_selected = chunk_nptcls_selected + src%nptcls_selected
+            chunk_nptcls          = chunk_nptcls          + src%nptcls
+            projfiles(n_consumed) = src%projfile
+          end if
+        end associate
+      end do
+    end if
     projfiles = projfiles(:n_consumed)
 
     ! Populate reference chunk fields
@@ -1102,33 +1131,61 @@ contains
       return
     end if
 
-    do i = 1, self%get_n_microchunks_pass_2()
-      associate( src => self%microchunks_pass_2(i) )
-        if( src%failed )                   cycle
-        if( .not. src%rejection_complete ) cycle
-        if( src%complete )                 cycle
-        chunk_id                  = self%get_n_microchunks_match() + 1
-        chunk_folder              = string(self%outdir_microchunks_match%to_char() // &
-                                           '/microchunk_match_' // int2str(chunk_id))
-        call simple_mkdir(chunk_folder)
-        new_chunk%id              = chunk_id
-        new_chunk%nptcls          = src%nptcls
-        new_chunk%nptcls_selected = src%nptcls_selected
-        new_chunk%folder          = simple_abspath(chunk_folder)
-        new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                           '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
-        call self%generate_microchunk_match_cline(new_chunk)
-        call simple_copy_file(src%projfile, new_chunk%projfile)
-        src%complete = .true.
-        call simple_touch(src%folder%to_char() // '/COMPLETE')
-        call self%append_microchunk_match(new_chunk)
-        self%last_import = c_time(0_c_long)
-        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK MATCH # ', chunk_id, &
-          ' GENERATED WITH ', src%nptcls_selected, '/', src%nptcls, ' PARTICLES'
-      end associate
-    end do
+    if( self%skip_pass_2 ) then
+      do i = 1, self%get_n_microchunks_pass_1()
+        associate( src => self%microchunks_pass_1(i) )
+          if( src%failed )                   cycle
+          if( .not. src%rejection_complete ) cycle
+          if( src%complete )                 cycle
+          chunk_id                  = self%get_n_microchunks_match() + 1
+          chunk_folder              = string(self%outdir_microchunks_match%to_char() // &
+                                             '/microchunk_match_' // int2str(chunk_id))
+          call simple_mkdir(chunk_folder)
+          new_chunk%id              = chunk_id
+          new_chunk%nptcls          = src%nptcls
+          new_chunk%nptcls_selected = src%nptcls_selected
+          new_chunk%folder          = simple_abspath(chunk_folder)
+          new_chunk%projfile        = string(new_chunk%folder%to_char() // &
+                                             '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
+          call self%generate_microchunk_match_cline(new_chunk)
+          call simple_copy_file(src%projfile, new_chunk%projfile)
+          src%complete = .true.
+          call simple_touch(src%folder%to_char() // '/COMPLETE')
+          call self%append_microchunk_match(new_chunk)
+          self%last_import = c_time(0_c_long)
+          write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK MATCH # ', chunk_id, &
+            ' GENERATED WITH ', src%nptcls_selected, '/', src%nptcls, ' PARTICLES'
+        end associate
+      end do
+    else
+      do i = 1, self%get_n_microchunks_pass_2()
+        associate( src => self%microchunks_pass_2(i) )
+          if( src%failed )                   cycle
+          if( .not. src%rejection_complete ) cycle
+          if( src%complete )                 cycle
+          chunk_id                  = self%get_n_microchunks_match() + 1
+          chunk_folder              = string(self%outdir_microchunks_match%to_char() // &
+                                             '/microchunk_match_' // int2str(chunk_id))
+          call simple_mkdir(chunk_folder)
+          new_chunk%id              = chunk_id
+          new_chunk%nptcls          = src%nptcls
+          new_chunk%nptcls_selected = src%nptcls_selected
+          new_chunk%folder          = simple_abspath(chunk_folder)
+          new_chunk%projfile        = string(new_chunk%folder%to_char() // &
+                                             '/microchunk_match_' // int2str(chunk_id) // METADATA_EXT)
+          call self%generate_microchunk_match_cline(new_chunk)
+          call simple_copy_file(src%projfile, new_chunk%projfile)
+          src%complete = .true.
+          call simple_touch(src%folder%to_char() // '/COMPLETE')
+          call self%append_microchunk_match(new_chunk)
+          self%last_import = c_time(0_c_long)
+          write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK MATCH # ', chunk_id, &
+            ' GENERATED WITH ', src%nptcls_selected, '/', src%nptcls, ' PARTICLES'
+        end associate
+      end do
+    end if
 
-    if( self%last_import > 0_c_long .and. c_time(0_c_long) - self%last_import > LAST_IMPORT_TIMEOUT .and. &
+    if( .not. self%skip_pass_2 .and. self%last_import > 0_c_long .and. c_time(0_c_long) - self%last_import > LAST_IMPORT_TIMEOUT .and. &
         all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed) .and.             &
         self%refchunk%complete .and. .not. self%refchunk%failed) then
       allocate(projfiles(self%get_n_microchunks_pass_1()), consumed(self%get_n_microchunks_pass_1()))
