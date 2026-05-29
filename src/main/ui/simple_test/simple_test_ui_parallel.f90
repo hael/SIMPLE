@@ -71,6 +71,8 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         call coarray_matrix_sum%add_input(UI_PARM, 'box', 'num', 'Matrix size', &
         &'N for the N by N coarray matrix sum test', 'N matrix dimension{4}', .false., 4.)
+        call coarray_matrix_sum%add_input(UI_COMP, 'nparts', 'num', 'Number of partitions', &
+        &'Number of partition scripts to run through the coarray backend', '# partitions{4}', .false., 4.)
         ! add to ui_hash
         call add_ui_program('coarray_matrix_sum', coarray_matrix_sum, tsttab)
     end subroutine new_coarray_matrix_sum
