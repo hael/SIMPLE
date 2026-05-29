@@ -85,8 +85,8 @@ contains
         ! mask controls
         call abinitio3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
-            &'Whether to generate/apply an envelope mask from the staged automasking point(yes|tight|no){yes}', &
-            &'(yes|tight|no){yes}', .false., 'yes', gui_submenu="mask", gui_advanced=.false.)
+            &'Whether to generate/apply an envelope mask from the staged automasking point(yes|tight|no){no}', &
+            &'(yes|tight|no){no}', .false., 'no', gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
         call abinitio3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call abinitio3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_advanced=.false.)

@@ -454,7 +454,7 @@ contains
         if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                      'c1')
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
-        if( .not. cline%defined('automsk')             ) call cline%set('automsk',                  'yes')
+        if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
         ! splitting stage
         split_stage = abinitio_het_docked_stage()

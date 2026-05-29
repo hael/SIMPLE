@@ -16,21 +16,21 @@ Supported values:
 - `nonuniform`
 - `nonuniform_lpset`
 
-`filt_mode=nonuniform` activates the nonuniform volume filter path.
+`filt_mode=nonuniform` activates the nonuniform volume filter path and, after
+NU-filtered references exist, uses the finest selected NU frontier as the next
+matching low-pass limit. It does not by itself activate LP-set matching.
 `filt_mode=nonuniform_lpset` activates the same NU filter, but also promotes
 the NU-selected matching bandwidth into an explicit LP-set run. LP-set matching
 uses the merged reference topology.
 
 In staged `abinitio3D`, the user-facing default remains
-`filt_mode=nonuniform`. Before `GOLD_STD_STAGE`, the controller emits
-`nonuniform_lpset`, so the static discrete NU bank promotes the selected
-frontier into the matching `lp` and uses merged-reference matching. From
-`GOLD_STD_STAGE=7`, single-state abinitio3D switches back to plain
-`nonuniform`, enables envelope-masked gold-standard FSC reporting, removes the
-scheduled stage `lp`, and uses independent half-map references. Multi-state
-abinitio3D keeps gold-standard matching and `envfsc` off, while still allowing
-automasking and the NU-selected matching `lp`. The high-resolution
-`nu_refine=yes` ratchet is reserved for `refine3D_auto`.
+`filt_mode=nonuniform`, but abinitio3D is not a gold-standard workflow. From
+`NU_FILTER_STAGE`, the controller emits `nonuniform_lpset`, keeps the scheduled
+stage `lp` on the refine3D command line, keeps `envfsc=no`, and uses merged
+reference matching. `GOLD_STD_STAGE` is currently disabled for abinitio3D.
+Automasking is exposed but opt-in (`automsk=no` by default) and, when enabled,
+is volume-domain masking only. The high-resolution `nu_refine=yes` ratchet is
+reserved for `refine3D_auto`.
 
 ## Execution point
 

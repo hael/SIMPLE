@@ -235,18 +235,13 @@ respect that minimum.
 In staged `abinitio3D`, `filt_mode=nonuniform` means static discrete-bank
 nonuniform filtering with `nu_refine=no`. The ML-regularized half-map pair may
 replace the finest discrete NU label only when its effective resolution is
-finer than that label. Before `GOLD_STD_STAGE`, the controller emits
-`nonuniform_lpset`, which promotes the finest selected NU limit into an
-explicit LP-set matching run and therefore uses the merged reference topology.
-The old abinitio3D automatic low-pass modes, `filt_mode=uniform` and
-`filt_mode=fsc`, are no longer supported. At `GOLD_STD_STAGE=7`, single-state
-abinitio3D enables envelope-masked gold-standard FSC reporting, switches back to
-plain `nonuniform`, and stops injecting the scheduled stage `lp`; when NU
-filtering is active, the matching bandwidth is still read from the NU-selected
-project `lp` rather than from the static schedule. Multi-state abinitio3D does
-not enable gold-standard matching or `envfsc`; it may still automask, and NU
-mode still promotes the selected matching `lp`, but matching uses the merged
-state reference, or the merged `_nu_filt` reference when available. Automasking
+finer than that label. abinitio3D currently keeps gold-standard refinement
+disabled: `GOLD_STD_STAGE` is off, `envfsc=no`, and the controller keeps a
+scheduled `lp` on the refine3D command line. From `NU_FILTER_STAGE`, the
+controller emits `nonuniform_lpset`, so the NU frontier is promoted into an
+explicit LP-set matching run and the merged reference topology is used. The old
+abinitio3D automatic low-pass modes, `filt_mode=uniform` and `filt_mode=fsc`,
+are no longer supported. Automasking is opt-in (`automsk=no` by default) and
 does not enable the NU high-resolution shell ratchet.
 
 `refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
@@ -267,7 +262,7 @@ refinement iterations used NU-filtered references. Generic `reconstruct3D`
 postprocessing and `refine3D_auto` terminal postprocessing therefore use the
 same global FSC/B-factor path.
 
-In the coupled `nu_refine` path, gold-standard 3D matching must not continue to
+In plain `filt_mode=nonuniform`, gold-standard 3D matching must not continue to
 derive its alignment low-pass limit solely from the global FSC once NU-filtered
 references exist. If `lp` was not set by the user, the reprojection model uses
 the project `lp` value written by the previous `volassemble` pass, where
@@ -282,7 +277,10 @@ ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard override, and
 The NU-refined project `lp` is a matching-bandwidth handoff only. The `l_lpset`
 flag chooses the reference topology. LP-set runs consume merged state
 references, preferring merged `_nu_filt` products when NU is active. Non-LP-set
-single-state runs consume even/odd NU-filtered references independently.
+single-state runs consume even/odd NU-filtered references independently. Thus
+plain `nonuniform` preserves gold-standard topology, while
+`nonuniform_lpset` deliberately activates LP-set-style merged-reference
+matching.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction

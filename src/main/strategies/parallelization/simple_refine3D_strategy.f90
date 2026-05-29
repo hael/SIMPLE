@@ -265,6 +265,8 @@ contains
             l_log_promotion = abs(params%lp - promoted_lp) > 1.e-3
             params%kfromto(2) = project_find
             params%lp         = promoted_lp
+            ! Plain nonuniform keeps gold-standard topology; only the lpset
+            ! variant promotes the NU frontier into explicit LP-set matching.
             if( params%l_nonuniform_lpset )then
                 params%l_lpset = .true.
                 call cline%set('lp', params%lp)
