@@ -690,6 +690,17 @@ contains
         endif
     end subroutine rnd_proj_space
 
+    module subroutine rnd_cls( self, ncls )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: ncls
+        integer :: i
+        do i = 1,self%n
+            if( self%o(i)%get_state() > 0 ) then
+                call self%o(i)%set_class( irnd_uni(ncls) )
+            endif
+        end do
+    end subroutine rnd_cls
+
     module subroutine revshsgn( self )
         class(oris), intent(inout) :: self
         integer :: i

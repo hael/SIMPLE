@@ -17,7 +17,7 @@ public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast, edit_lpstages4polar
+public :: lpstages, lpstages_fast, lpstages_setlims
 private
 #include "simple_local_flags.inc"
 
@@ -393,30 +393,37 @@ contains
 
     end subroutine lpstages_fast
 
-    subroutine edit_lpstages4polar( steps, nstages, lpinfo )
-        integer,           intent(in)    :: steps(3), nstages
-        type(lp_crop_inf), intent(inout) :: lpinfo(nstages)
-        integer :: i
-        lpinfo(         1:steps(1)-1)%smpd_crop = lpinfo(steps(1))%smpd_crop
-        lpinfo(steps(1)+1:steps(2)-1)%smpd_crop = lpinfo(steps(2))%smpd_crop
-        lpinfo(steps(2)+1:steps(3)-1)%smpd_crop = lpinfo(steps(3))%smpd_crop
-        lpinfo(         1:steps(1)-1)%box_crop  = lpinfo(steps(1))%box_crop
-        lpinfo(steps(1)+1:steps(2)-1)%box_crop  = lpinfo(steps(2))%box_crop
-        lpinfo(steps(2)+1:steps(3)-1)%box_crop  = lpinfo(steps(3))%box_crop
-        lpinfo(         1:steps(1)-1)%scale     = lpinfo(steps(1))%scale
-        lpinfo(steps(1)+1:steps(2)-1)%scale     = lpinfo(steps(2))%scale
-        lpinfo(steps(2)+1:steps(3)-1)%scale     = lpinfo(steps(3))%scale
-        lpinfo(         1:steps(1)-1)%trslim    = lpinfo(steps(1))%trslim
-        lpinfo(steps(1)+1:steps(2)-1)%trslim    = lpinfo(steps(2))%trslim
-        lpinfo(steps(2)+1:steps(3)-1)%trslim    = lpinfo(steps(3))%trslim
-        print *, '########## res info'
-        do i = 1, nstages
-            print *, 'frc_crit/l_lpset/lp ', lpinfo(i)%frc_crit, lpinfo(i)%l_lpset, lpinfo(i)%lp
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo)
+        use simple_magic_boxes
+        integer,           intent(in)  :: box, nstages
+        real,              intent(in)  :: smpd, lpstart, lpstop
+        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
+        real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
+        real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
+        real,    parameter :: LP2SMPD_TARGET   = 1./3.
+        real,    parameter :: SMPD_TARGET_MIN  = 2.0
+        integer :: i, box_trial
+        real    :: rbox_stepsz, smpd_target
+        lpinfo(:)%l_lpset = .true.
+        do i = 1,nstages
+            lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            smpd_target  = max(SMPD_TARGET_MIN, (lpinfo(i)%lp * LP2SMPD_TARGET))
+            call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
+            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
+            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+        enddo
+        rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
+        do i = 2, nstages - 1 ! linear box_crop scheme
+            box_trial             = nint(real(lpinfo(1)%box_crop) + real(i-1)*rbox_stepsz)
+            lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
+            lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
+            lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
+            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
+            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
         end do
-        print *, '########## scale info'
         do i = 1, nstages
-            print *, 'scale/box_crop/smpd_crop/trslim ',lpinfo(i)%scale, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+            print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
         end do
-    end subroutine edit_lpstages4polar
+    end subroutine lpstages_setlims
 
 end module simple_estimate_ssnr

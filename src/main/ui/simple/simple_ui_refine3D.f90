@@ -245,7 +245,8 @@ contains
         &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call refine3D_auto%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
+        & for particle matching', 'input starting volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -265,7 +266,7 @@ contains
         & '(yes|no){yes}', .false., 'yes', gui_submenu="filter")
         call refine3D_auto%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         call refine3D_auto%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
-        & 'Resolutiuon target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
+        & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
         ! mask controls
         call refine3D_auto%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls

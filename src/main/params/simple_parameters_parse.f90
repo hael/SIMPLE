@@ -93,7 +93,6 @@ contains
         call reg%add_char('icm', self%icm)
         call reg%add_char('imgkind', self%imgkind)
         call reg%add_char('incrreslim', self%incrreslim)
-        call reg%add_char('inivol', self%inivol)
         call reg%add_char('interactive', self%interactive)
         call reg%add_char('iterstats', self%iterstats)
         call reg%add_char('json', self%json)

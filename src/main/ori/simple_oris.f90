@@ -153,6 +153,7 @@ type :: oris
     procedure          :: rnd_lps
     procedure          :: rnd_corrs
     procedure          :: rnd_proj_space
+    procedure          :: rnd_cls
     procedure          :: revshsgn
     procedure          :: revorisgn
     procedure          :: ini_tseries
@@ -1134,6 +1135,11 @@ interface
         real,       optional, intent(inout) :: eullims(3,2)
         real,       optional, intent(in)    :: thres
     end subroutine rnd_proj_space
+
+    module subroutine rnd_cls( self, ncls )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: ncls
+    end subroutine rnd_cls
 
     module subroutine revshsgn( self )
         class(oris), intent(inout) :: self

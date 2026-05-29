@@ -43,7 +43,8 @@ contains
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call abinitio3D%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
+        & for particle matching', 'input starting volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         ! <empty>
         ! alternative inputs

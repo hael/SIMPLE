@@ -437,8 +437,10 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
-        integer :: istage, icls, start_stage, nptcls2update, noris, nstates_on_cline, nstates_in_project, split_stage
-        logical :: l_cavg_ini_ext
+        real    :: lprange(2)
+        integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
+        integer :: nstates_in_project, split_stage
+        logical :: l_cavg_ini_ext, l_vol_ini_ext
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -453,7 +455,6 @@ contains
         if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                  'yes')
-        if( .not. cline%defined('inivol')              ) call cline%set('inivol',                'sphere')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
         ! splitting stage
         split_stage = abinitio_het_docked_stage()
@@ -531,6 +532,33 @@ contains
             start_stage = abinitio_symsrch_stage() + 1 ! start after the symmetry search stage
             l_ini3D     = .true.
         endif
+        ! initialization of input volumes originating from outside the workflow
+        l_vol_ini_ext = cline%defined('vol1')
+        if( l_vol_ini_ext )then
+            ! sanity checks, it is also assumed no 2D clustering info has been performed
+            ! resolution limits have to be defined
+            select case(trim(params%multivol_mode))
+            case('single','independent','docked')
+                ! volume input only allowed for these modes
+                if( (params%nstates > 1)  )then
+                    ! making sure all volumes are present (for 'docked', nstates==1 here)
+                    do state = 2, params%nstates
+                        if( .not. cline%defined('vol'//int2str(state)) )then
+                            THROW_HARD('vol'//int2str(state)//' must be defined for state s='//int2str(state))
+                        endif
+                    enddo
+                endif
+            case DEFAULT
+                THROW_HARD('Unsupported volume input and multivol_mode: '//trim(params%multivol_mode))
+            end select
+            if( l_ini3D ) THROW_HARD('Cannot have both class initialization and an input volume')
+            if( trim(params%partition).eq.'yes' ) THROW_HARD('Volume input not currently supported with partition=yes')
+            ! setting up random classes for particles sampling
+            call spproj%os_ptcl2D%rnd_cls(100)
+            call spproj%write_segment_inside('ptcl2D', params%projfile)
+            call spproj%os_cls2D%new(100, is_ptcl=.false.)
+            call spproj%os_cls2D%set_all2single('state', 1)
+        endif
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = params%l_nonuniform
         nstages_refine3D = abinitio_nstages()
@@ -577,14 +605,26 @@ contains
             endif
         endif
         ! set low-pass limits and downscaling info from FRCs
-         if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
-        else if( cline%defined('lpstart') )then
-            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
-        else if( cline%defined('lpstop') )then
-            call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
+        if( l_vol_ini_ext )then
+            ! limits based on dimensions or input
+            call mskdiam2lplimits( params%mskdiam, lprange(1), lprange(2), params%cenlp )
+            if( .not.cline%defined('lpstart') ) params%lpstart = lprange(1)
+            if( .not.cline%defined('lpstop')  )then
+                params%lpstop = lprange(2)
+                lprange       = abinitio_lpstop_bounds()
+                params%lpstop = min(params%lpstop, lprange(1))
+            endif
+            call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
         else
-            call set_lplims_from_frcs(params, spproj, l_cavgs=.false.)
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+            else if( cline%defined('lpstart') )then
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
+            else if( cline%defined('lpstop') )then
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
+            else
+                call set_lplims_from_frcs(params, spproj, l_cavgs=.false.)
+            endif
         endif
         ! starting volume logics
         if( str_has_substr(params%multivol_mode,'input_oris') )then
@@ -629,8 +669,13 @@ contains
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
-            ! create noise starting volume(s)
-            call generate_random_volumes(params, lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D)
+            if( l_vol_ini_ext )then
+                ! user provided input volumes
+                call normalize_input_volumes(params, cline_refine3D)
+            else
+                ! create noise starting volume(s)
+                call generate_random_volumes(params, lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D)
+            endif
         else
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then

@@ -325,6 +325,17 @@ contains
 
     end subroutine set_lplims_from_frcs
 
+    subroutine set_lplims_from_input( params, spproj, lpstart, lpstop )
+        class(parameters), intent(inout) :: params
+        class(sp_project), intent(in)    :: spproj
+        real,              intent(in)    :: lpstart, lpstop
+        integer :: nstages
+        nstages = abinitio_nstages()
+        if( allocated(lpinfo) ) deallocate(lpinfo)
+        allocate(lpinfo(nstages))
+        call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+    end subroutine set_lplims_from_input
+
     subroutine exec_refine3D( params, istage, xrefine3D )
         class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: istage
@@ -812,6 +823,34 @@ contains
         call signal%kill
         call noisevol%kill
     end subroutine generate_random_volumes
+
+    subroutine normalize_input_volumes( params, cline )
+        class(parameters), intent(in)    :: params
+        type(cmdline),     intent(inout) :: cline
+        type(string) :: vol_name
+        type(image)  :: vol
+        real         :: smpd, msk, ave, stdev, maxv, minv, v
+        integer      :: ldim(3), s, n
+        do s = 1, params%nstates
+            if( .not. file_exists(params%vols(s)) )then
+                THROW_HARD('Input volume for state '//int2str(s)//' does not exist: '//params%vols(s)%to_char())
+            endif
+            call find_ldim_nptcls(params%vols(s), ldim, n)
+            smpd = find_img_smpd(params%vols(s))
+            msk  = params%mskdiam / smpd
+            call vol%new(ldim, smpd)
+            call vol%read(params%vols(s))
+            ! normalization of inner mask region to 1/box
+            call vol%stats('foreground', ave, stdev, maxv, minv, msk=msk)
+            v = stdev*real(ldim(1))
+            call vol%norm_ext(ave, v)
+            vol_name = refine3D_startvol_fname(s)
+            call vol%write(vol_name)
+            call cline%set('vol'//int2str(s), vol_name)
+        enddo
+        call vol%kill
+        call vol_name%kill
+    end subroutine normalize_input_volumes
 
     subroutine print_states( params, istage )
         class(parameters), intent(in) :: params
