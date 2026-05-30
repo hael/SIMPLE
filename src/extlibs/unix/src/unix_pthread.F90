@@ -5,7 +5,7 @@
 module unix_pthread
     use, intrinsic :: iso_c_binding
     implicit none
-    private
+    public
 
 #if defined (__linux__) || defined (_WIN32)
 

@@ -34,12 +34,18 @@ program simple_persistent_worker
                                      c_pthread_t, c_pthread_mutex_t,           &
                                      c_pthread_create, c_pthread_join,         &
                                      c_pthread_cancel,                         &
+                                     c_pthread_detach,                         &
+                                     c_pthread_setcancelstate,                 &
+                                     c_pthread_setcanceltype,                  &
                                      c_pthread_mutex_init,                     &
                                      c_pthread_mutex_destroy,                  &
                                      c_pthread_mutex_lock,                     &
                                      c_pthread_mutex_unlock,                   &
                                      c_null_ptr, c_funloc, c_usleep,           &
-                                     c_getpid, c_pid_t
+                                     c_getpid, c_pid_t,                        &
+                                     PTHREAD_CANCEL_ENABLE,                    &
+                                     PTHREAD_CANCEL_ASYNCHRONOUS
+    use iso_c_binding,                              only: c_int
     use iso_fortran_env,                            only: output_unit
     use simple_jiffys,                              only: simple_print_git_version, simple_print_timer
     use simple_ipc_tcp_socket_client,               only: ipc_tcp_socket_client
@@ -58,6 +64,8 @@ program simple_persistent_worker
     integer, parameter :: HEARTBEAT_TIMEOUT_MS = 5000  !< send_recv_msg timeout (ms)
     integer, parameter :: HEARTBEAT_MAX_RETRY  = 5     !< retries before giving up
     integer, parameter :: POLL_TIME_US         = 200000  !< poll timeout for worker threads (us)
+    integer, parameter :: JOIN_TIMEOUT_MS      = 10000 !< max wait before abandoning blocking join
+    integer, parameter :: JOIN_POLL_US         = 100000 !< polling interval while waiting for completion
 
     ! ------------------------------------------------------------------
     ! Per-thread state: task description + pthread bookkeeping
@@ -99,6 +107,8 @@ program simple_persistent_worker
 
     ! Loop / scratch
     logical                :: found, l_terminate
+    logical                :: cleanup_hard_fail
+    logical                :: joined_ok
     logical                :: slot_started, slot_complete
     logical                :: safe_path
     integer                :: argcnt, iarg, cmdlen, reply_len, buffer_type, i, rc, server_len
@@ -114,6 +124,7 @@ program simple_persistent_worker
     ! Initialise
     ! ------------------------------------------------------------------
     l_terminate = .false.
+    cleanup_hard_fail = .false.
     t0          = tic()
 
     ! ------------------------------------------------------------------
@@ -252,6 +263,7 @@ program simple_persistent_worker
     ! Cleanup
     ! ------------------------------------------------------------------
     do i = 1, size(threads)
+        joined_ok = .false.
         rc = c_pthread_mutex_lock(threads(i)%mutex)
         if( rc /= 0 ) then
             write(*,*) 'Worker: c_pthread_mutex_lock failed in cleanup for slot', i, 'rc=', rc
@@ -272,23 +284,30 @@ program simple_persistent_worker
                     write(*,*) 'Worker: c_pthread_cancel failed in cleanup for slot', i, 'rc=', rc
                 end if
             end if
-            rc = c_pthread_join(threads(i)%thread, thread_retval)
-            if( rc /= 0 ) then
-                write(*,*) 'Worker: c_pthread_join failed in cleanup for slot', i, 'rc=', rc
-            end if
-            rc = c_pthread_mutex_lock(threads(i)%mutex)
-            if( rc == 0 ) then
-                threads(i)%started  = .false.
-                threads(i)%complete = .true.
-                threads(i)%nthr     = 0
-                rc = c_pthread_mutex_unlock(threads(i)%mutex)
+            call join_slot_with_timeout(i, JOIN_TIMEOUT_MS, joined_ok)
+            if( joined_ok ) then
+                rc = c_pthread_mutex_lock(threads(i)%mutex)
+                if( rc == 0 ) then
+                    threads(i)%started  = .false.
+                    threads(i)%complete = .true.
+                    threads(i)%nthr     = 0
+                    rc = c_pthread_mutex_unlock(threads(i)%mutex)
+                end if
+            else
+                write(*,*) 'Worker: timed out waiting for join in cleanup for slot', i
+                call force_cancel_slot_thread(i)
+                cleanup_hard_fail = .true.
             end if
         end if
+        if( slot_started .and. (.not. joined_ok) ) cycle
         rc = c_pthread_mutex_destroy(threads(i)%mutex)
         if( rc /= 0 ) then
             write(*,*) 'Worker: c_pthread_mutex_destroy failed for slot', i, 'rc=', rc
         end if
     end do
+    if( cleanup_hard_fail ) then
+        error stop 'Worker: forced cancellation required for stuck thread during cleanup'
+    end if
     deallocate(threads)
     if( logfhandle /= output_unit )then
         if( is_open(logfhandle) ) call fclose(logfhandle)
@@ -400,8 +419,18 @@ contains
     subroutine worker_task_thread( arg_ptr ) bind(c)
         type(c_ptr), value,        intent(in) :: arg_ptr
         type(worker_thread_args),     pointer :: thread_args
+        integer(kind=c_int) :: cancel_old_state, cancel_old_type
         integer :: lock_rc, exitstat
         call c_f_pointer(arg_ptr, thread_args)
+        ! Make cancellation as aggressive as possible for cleanup timeouts.
+        lock_rc = c_pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, cancel_old_state)
+        if( lock_rc /= 0 ) then
+            write(*,*) 'Worker thread: failed to set cancel state for job_id', thread_args%task_msg%job_id, 'rc=', lock_rc
+        end if
+        lock_rc = c_pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, cancel_old_type)
+        if( lock_rc /= 0 ) then
+            write(*,*) 'Worker thread: failed to set cancel type for job_id', thread_args%task_msg%job_id, 'rc=', lock_rc
+        end if
         write(*,*) 'Worker thread: starting job_id', thread_args%task_msg%job_id, &
                    'script:', trim(thread_args%task_msg%script_path)
         ! Execute the script; exitstat receives the shell exit code
@@ -423,6 +452,22 @@ contains
         end if
     end subroutine worker_task_thread
 
+    !> Attempt an aggressive thread termination for a stuck slot.
+    subroutine force_cancel_slot_thread(slot_i)
+        integer, intent(in) :: slot_i
+        integer :: cancel_rc, detach_rc
+
+        cancel_rc = c_pthread_cancel(threads(slot_i)%thread)
+        if( cancel_rc /= 0 ) then
+            write(*,*) 'Worker: force-cancel failed for slot', slot_i, 'rc=', cancel_rc
+            return
+        end if
+        detach_rc = c_pthread_detach(threads(slot_i)%thread)
+        if( detach_rc /= 0 ) then
+            write(*,*) 'Worker: detach after force-cancel failed for slot', slot_i, 'rc=', detach_rc
+        end if
+    end subroutine force_cancel_slot_thread
+
     !> Return the total number of thread-slots in use (sum of nthr fields).
     !> Each slot is locked individually to avoid holding multiple mutexes.
     function get_nthr_used() result( nthr_used )
@@ -436,6 +481,50 @@ contains
             lock_rc   = c_pthread_mutex_unlock(threads(idx)%mutex)
         end do
     end function get_nthr_used
+
+    !> Wait for a worker slot to report completion and then join it.
+    !> Returns joined_ok=.false. if completion does not happen in timeout_ms.
+    subroutine join_slot_with_timeout(slot_i, timeout_ms, joined_ok)
+        integer, intent(in)  :: slot_i
+        integer, intent(in)  :: timeout_ms
+        logical, intent(out) :: joined_ok
+        integer  :: elapsed_us, lock_rc, sleep_rc
+        logical  :: is_complete
+
+        joined_ok   = .false.
+        elapsed_us  = 0
+        is_complete = .false.
+
+        do while( elapsed_us < timeout_ms * 1000 )
+            lock_rc = c_pthread_mutex_lock(threads(slot_i)%mutex)
+            if( lock_rc /= 0 ) then
+                write(*,*) 'Worker: c_pthread_mutex_lock failed while waiting join for slot', slot_i, 'rc=', lock_rc
+                return
+            end if
+            is_complete = threads(slot_i)%complete
+            lock_rc = c_pthread_mutex_unlock(threads(slot_i)%mutex)
+            if( lock_rc /= 0 ) then
+                write(*,*) 'Worker: c_pthread_mutex_unlock failed while waiting join for slot', slot_i, 'rc=', lock_rc
+                return
+            end if
+            if( is_complete ) exit
+            sleep_rc = c_usleep(JOIN_POLL_US)
+            if( sleep_rc /= 0 ) then
+                write(*,*) 'Worker: c_usleep failed while waiting join for slot', slot_i, 'rc=', sleep_rc
+                return
+            end if
+            elapsed_us = elapsed_us + JOIN_POLL_US
+        end do
+
+        if( .not. is_complete ) return
+
+        rc = c_pthread_join(threads(slot_i)%thread, thread_retval)
+        if( rc /= 0 ) then
+            write(*,*) 'Worker: c_pthread_join failed in cleanup for slot', slot_i, 'rc=', rc
+            return
+        end if
+        joined_ok = .true.
+    end subroutine join_slot_with_timeout
 
     !> Validate script path from server before execution.
     !> Rules: absolute path, file exists, and only safe ASCII path chars.
