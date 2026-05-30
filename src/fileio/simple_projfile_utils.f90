@@ -252,20 +252,19 @@ contains
         type(sp_project), allocatable :: projects(:)
         type(string) :: projfile_abs, projdir, stage_dir, projfile_stage
         type(binoris_seginfo), allocatable :: seginfos(:), hint_infos(:)
-        integer, allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:)
-        integer, allocatable :: ncls2Ds(:), ncls3Ds(:), nouts(:), noptics(:)
+        integer, allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:), noptics(:)
         integer, allocatable :: mic_offsets(:), stk_offsets(:), ptcl2D_offsets(:), ptcl3D_offsets(:)
-        integer, allocatable :: cls2D_offsets(:), cls3D_offsets(:), out_offsets(:), opt_offsets(:)
+        integer, allocatable :: opt_offsets(:)
         integer, allocatable :: src_ogid_maxs(:), ogid_offsets(:)
         integer, allocatable :: seginds(:), hint_inds(:)
-        integer :: nprojs, iproj, imic, istk, iptcl, icls, iout, iopt, iseg, idir_dummy
+        integer :: nprojs, iproj, imic, istk, iptcl, iopt, iseg, idir_dummy
         integer :: imic_glob, istk_glob, iptcl2D_glob, iptcl3D_glob
-        integer :: icls2D_glob, icls3D_glob, iout_glob, iopt_glob
-        integer :: stk_offset, ptcl2D_offset, ptcl3D_offset, cls2D_offset, cls3D_offset
+        integer :: iopt_glob
+        integer :: stk_offset, ptcl2D_offset, ptcl3D_offset
         integer :: fromp, top, range_offset
         integer :: ogid_offset, ogid_glob_max, ogid
         logical :: l_write_proj, l_has_mics, l_has_stks, l_has_ptcl2D, l_has_ptcl3D
-        logical :: l_has_cls2D, l_has_cls3D, l_has_out, l_has_optics, l_has_any_data
+        logical :: l_has_optics, l_has_any_data
         nprojs = size(project_fnames)
         if( nprojs < 2 ) THROW_HARD('merge_selected_project_files requires at least two input projects')
         if( fname2format(projfile_out) /= 'O' )then
@@ -273,15 +272,14 @@ contains
         endif
         l_write_proj = .false.
         if( present(write_proj) ) l_write_proj = write_proj
-        allocate(projects(nprojs), nmics(nprojs), nstks(nprojs), nptcl2Ds(nprojs), nptcl3Ds(nprojs))
-        allocate(ncls2Ds(nprojs), ncls3Ds(nprojs), nouts(nprojs), noptics(nprojs))
+        allocate(projects(nprojs), nmics(nprojs), nstks(nprojs), nptcl2Ds(nprojs), nptcl3Ds(nprojs), noptics(nprojs))
         do iproj = 1,nprojs
             projfile_abs = simple_abspath(project_fnames(iproj))
             call projects(iproj)%read_segments_info(projfile_abs, seginds, seginfos)
             if( .not.data_segments_present(seginds) )then
                 write(logfhandle,*) 'projtab entry: ', projfile_abs%to_char()
-                write(logfhandle,*) 'This SIMPLE project file has no mic/stk/ptcl/cls/out/optics data segments.'
-                write(logfhandle,*) 'It appears to be a metadata-only project root.'
+                write(logfhandle,*) 'This SIMPLE project file has no mergeable mic/stk/ptcl/optics data segments.'
+                write(logfhandle,*) 'Analysis products cls2D, cls3D, and out are ignored by merge_projects.'
                 projdir = get_fpath(projfile_abs)
                 stage_dir  = ''
                 idir_dummy = find_next_int_dir_prefix(projdir, stage_dir)
@@ -303,9 +301,6 @@ contains
             nstks(iproj)    = 0
             nptcl2Ds(iproj) = 0
             nptcl3Ds(iproj) = 0
-            ncls2Ds(iproj)  = 0
-            ncls3Ds(iproj)  = 0
-            nouts(iproj)    = 0
             noptics(iproj)  = 0
             if( allocated(seginds) )then
                 do iseg = 1,size(seginds)
@@ -322,15 +317,8 @@ contains
                         case(PTCL3D_SEG)
                             call projects(iproj)%read_segment('ptcl3D', projfile_abs)
                             nptcl3Ds(iproj) = projects(iproj)%os_ptcl3D%get_noris()
-                        case(CLS2D_SEG)
-                            call projects(iproj)%read_segment('cls2D', projfile_abs)
-                            ncls2Ds(iproj) = projects(iproj)%os_cls2D%get_noris()
-                        case(CLS3D_SEG)
-                            call projects(iproj)%read_segment('cls3D', projfile_abs)
-                            ncls3Ds(iproj) = projects(iproj)%os_cls3D%get_noris()
-                        case(OUT_SEG)
-                            call projects(iproj)%read_segment('out', projfile_abs)
-                            nouts(iproj) = projects(iproj)%os_out%get_noris()
+                        case(CLS2D_SEG, CLS3D_SEG, OUT_SEG)
+                            ! Analysis products are intentionally dropped by merge_projects.
                         case(OPTICS_SEG)
                             call projects(iproj)%read_segment('optics', projfile_abs)
                             noptics(iproj) = projects(iproj)%os_optics%get_noris()
@@ -349,26 +337,18 @@ contains
         call validate_field_presence(nstks,   'stk')
         call validate_field_presence(nptcl2Ds,'ptcl2D')
         call validate_field_presence(nptcl3Ds,'ptcl3D')
-        call validate_field_presence(ncls2Ds, 'cls2D')
-        call validate_field_presence(ncls3Ds, 'cls3D')
-        call validate_field_presence(nouts,   'out')
         call validate_field_presence(noptics, 'optics')
         l_has_mics    = nmics(1)    > 0
         l_has_stks    = nstks(1)    > 0
         l_has_ptcl2D  = nptcl2Ds(1) > 0
         l_has_ptcl3D  = nptcl3Ds(1) > 0
-        l_has_cls2D   = ncls2Ds(1)  > 0
-        l_has_cls3D   = ncls3Ds(1)  > 0
-        l_has_out     = nouts(1)    > 0
         l_has_optics  = noptics(1)  > 0
-        l_has_any_data = l_has_mics .or. l_has_stks .or. l_has_ptcl2D .or. l_has_ptcl3D .or. &
-                         l_has_cls2D .or. l_has_cls3D .or. l_has_out .or. l_has_optics
+        l_has_any_data = l_has_mics .or. l_has_stks .or. l_has_ptcl2D .or. l_has_ptcl3D .or. l_has_optics
         if( .not.l_has_any_data )then
             do iproj = 1,nprojs
                 write(logfhandle,*) 'input project ', iproj, ': ', project_fnames(iproj)%to_char()
-                write(logfhandle,*) 'mic/stk/ptcl2D/ptcl3D/cls2D/cls3D/out/optics counts: ', &
-                    nmics(iproj), nstks(iproj), nptcl2Ds(iproj), nptcl3Ds(iproj), &
-                    ncls2Ds(iproj), ncls3Ds(iproj), nouts(iproj), noptics(iproj)
+                write(logfhandle,*) 'mic/stk/ptcl2D/ptcl3D/optics counts: ', &
+                    nmics(iproj), nstks(iproj), nptcl2Ds(iproj), nptcl3Ds(iproj), noptics(iproj)
             enddo
             THROW_HARD('input projects contain no mergeable data fields beyond project metadata')
         endif
@@ -386,20 +366,14 @@ contains
         if( l_has_stks   ) call merged_proj%os_stk%new(   sum(nstks),    is_ptcl=.false.)
         if( l_has_ptcl2D ) call merged_proj%os_ptcl2D%new(sum(nptcl2Ds), is_ptcl=.true.)
         if( l_has_ptcl3D ) call merged_proj%os_ptcl3D%new(sum(nptcl3Ds), is_ptcl=.true.)
-        if( l_has_cls2D  ) call merged_proj%os_cls2D%new( sum(ncls2Ds),  is_ptcl=.false.)
-        if( l_has_cls3D  ) call merged_proj%os_cls3D%new( sum(ncls3Ds),  is_ptcl=.false.)
-        if( l_has_out    ) call merged_proj%os_out%new(   sum(nouts),    is_ptcl=.false.)
         if( l_has_optics ) call merged_proj%os_optics%new(sum(noptics),  is_ptcl=.false.)
         allocate(mic_offsets(nprojs), stk_offsets(nprojs), ptcl2D_offsets(nprojs), ptcl3D_offsets(nprojs))
-        allocate(cls2D_offsets(nprojs), cls3D_offsets(nprojs), out_offsets(nprojs), opt_offsets(nprojs))
+        allocate(opt_offsets(nprojs))
         allocate(src_ogid_maxs(nprojs), ogid_offsets(nprojs))
         call make_prefix_offsets(nmics,    mic_offsets)
         call make_prefix_offsets(nstks,    stk_offsets)
         call make_prefix_offsets(nptcl2Ds, ptcl2D_offsets)
         call make_prefix_offsets(nptcl3Ds, ptcl3D_offsets)
-        call make_prefix_offsets(ncls2Ds,  cls2D_offsets)
-        call make_prefix_offsets(ncls3Ds,  cls3D_offsets)
-        call make_prefix_offsets(nouts,    out_offsets)
         call make_prefix_offsets(noptics,  opt_offsets)
         do iproj = 1,nprojs
             src_ogid_maxs(iproj) = source_max_ogid(projects(iproj))
@@ -418,8 +392,6 @@ contains
             stk_offset    = stk_offsets(iproj)
             ptcl2D_offset = ptcl2D_offsets(iproj)
             ptcl3D_offset = ptcl3D_offsets(iproj)
-            cls2D_offset  = cls2D_offsets(iproj)
-            cls3D_offset  = cls3D_offsets(iproj)
             ogid_offset   = ogid_offsets(iproj)
             if( l_has_ptcl2D )then
                 range_offset = ptcl2D_offset
@@ -453,41 +425,19 @@ contains
             enddo
             !$omp end parallel do
 
-            !$omp parallel do default(shared) private(icls, icls2D_glob) schedule(static) if(ncls2Ds(iproj) > 1000)
-            do icls = 1,ncls2Ds(iproj)
-                icls2D_glob = cls2D_offset + icls
-                call copy_class_row(projects(iproj)%os_cls2D, merged_proj%os_cls2D, icls, &
-                    icls2D_glob, cls2D_offset, ogid_offset)
-            enddo
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(icls, icls3D_glob) schedule(static) if(ncls3Ds(iproj) > 1000)
-            do icls = 1,ncls3Ds(iproj)
-                icls3D_glob = cls3D_offset + icls
-                call copy_class_row(projects(iproj)%os_cls3D, merged_proj%os_cls3D, icls, &
-                    icls3D_glob, cls3D_offset, ogid_offset)
-            enddo
-            !$omp end parallel do
-
             !$omp parallel do default(shared) private(iptcl, iptcl2D_glob) schedule(static) if(nptcl2Ds(iproj) > 10000)
             do iptcl = 1,nptcl2Ds(iproj)
                 iptcl2D_glob = ptcl2D_offset + iptcl
                 call copy_particle_row(projects(iproj)%os_ptcl2D, merged_proj%os_ptcl2D, iptcl, &
-                    iptcl2D_glob, stk_offset, cls2D_offset, ogid_offset, l_has_stks, l_has_cls2D)
+                    iptcl2D_glob, stk_offset, 0, ogid_offset, l_has_stks, .false.)
+                call merged_proj%os_ptcl2D%delete_2Dclustering(iptcl2D_glob)
             enddo
             !$omp end parallel do
             !$omp parallel do default(shared) private(iptcl, iptcl3D_glob) schedule(static) if(nptcl3Ds(iproj) > 10000)
             do iptcl = 1,nptcl3Ds(iproj)
                 iptcl3D_glob = ptcl3D_offset + iptcl
                 call copy_particle_row(projects(iproj)%os_ptcl3D, merged_proj%os_ptcl3D, iptcl, &
-                    iptcl3D_glob, stk_offset, cls3D_offset, ogid_offset, l_has_stks, l_has_cls3D)
-            enddo
-            !$omp end parallel do
-
-            !$omp parallel do default(shared) private(iout, iout_glob) schedule(static) if(nouts(iproj) > 1000)
-            do iout = 1,nouts(iproj)
-                iout_glob = out_offsets(iproj) + iout
-                call merged_proj%os_out%transfer_ori(iout_glob, projects(iproj)%os_out, iout)
-                call remap_row_ogid(merged_proj%os_out, iout_glob, ogid_offset)
+                    iptcl3D_glob, stk_offset, 0, ogid_offset, l_has_stks, .false.)
             enddo
             !$omp end parallel do
 
@@ -526,8 +476,7 @@ contains
                 else
                     data_segments_present = any(segments == MIC_SEG)    .or. any(segments == STK_SEG)   .or. &
                                             any(segments == PTCL2D_SEG) .or. any(segments == PTCL3D_SEG).or. &
-                                            any(segments == CLS2D_SEG)  .or. any(segments == CLS3D_SEG) .or. &
-                                            any(segments == OUT_SEG)    .or. any(segments == OPTICS_SEG)
+                                            any(segments == OPTICS_SEG)
                 endif
             end function data_segments_present
 
@@ -743,19 +692,6 @@ contains
                 call remap_row_ogid(os_dst, i_dst, ogid_off)
             end subroutine copy_particle_row
 
-            subroutine copy_class_row( os_src, os_dst, i_src, i_dst, cls_off, ogid_off )
-                class(oris), intent(in)    :: os_src
-                class(oris), intent(inout) :: os_dst
-                integer,     intent(in)    :: i_src, i_dst, cls_off, ogid_off
-                integer :: val
-                call os_dst%transfer_ori(i_dst, os_src, i_src)
-                if( os_dst%isthere(i_dst, 'class') )then
-                    val = os_dst%get_int(i_dst, 'class')
-                    if( val > 0 ) call os_dst%set_class(i_dst, val + cls_off)
-                endif
-                call remap_row_ogid(os_dst, i_dst, ogid_off)
-            end subroutine copy_class_row
-
             subroutine require_row_field( os, irow, key, segment, iproj )
                 class(oris),      intent(in) :: os
                 integer,          intent(in) :: irow, iproj
@@ -805,9 +741,6 @@ contains
                 source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_stk))
                 source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_ptcl2D))
                 source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_ptcl3D))
-                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_cls2D))
-                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_cls3D))
-                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_out))
                 source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_optics))
             end function source_max_ogid
 

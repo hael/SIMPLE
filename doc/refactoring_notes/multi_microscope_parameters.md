@@ -34,7 +34,7 @@ and `compenv` are rejected because there is no data segment to merge.
 
 The helper currently:
 
-- validates all populated data segments as all-or-none across inputs
+- validates all populated mergeable data segments as all-or-none across inputs
 - validates stack box and sampling distance when stack rows carry those fields
 - validates micrograph sampling distance when mic-only rows carry `smpd`
 - validates row-level CTF-model fields on `os_mic` and `os_stk` when CTF is
@@ -42,13 +42,13 @@ The helper currently:
 - validates particle `stkind` when particles are merged with stacks
 - preserves complete rows with `transfer_ori`
 - precomputes output row offsets and parallelizes independent row
-  transfer/remap loops for mic, stack, class, output, optics, `ptcl2D`, and
-  `ptcl3D` segments
+  transfer/remap loops for mic, stack, optics, `ptcl2D`, and `ptcl3D` segments
 - parallelizes large particle validation scans and row-level `ogid` discovery
   while reporting deterministic first failing rows
 - preserves exact `os_ptcl2D%state` values when `ptcl2D` exists
 - remaps stack `fromp` / `top` only when particle rows are present, remaps
-  particle `stkind`, particle/class `class`, and row-level `ogid`
+  particle `stkind` and row-level `ogid`, and clears stale `ptcl2D` clustering
+  fields while preserving `ptcl2D%state`
 - remaps `ogid` independently of whether `os_optics` exists
 - copies/remaps `os_optics` only when the optics segment is part of the matching
   input field set
@@ -111,10 +111,9 @@ the same sampling distance and compatible box size. Mismatches should fail
 validation with an actionable message.
 
 Do not attempt to scientifically reconcile per-project class averages,
-reconstructions, or output artifacts. If `cls2D`, `cls3D`, or `out` segments are
-part of the matching input field set, the generic merger may concatenate and
-remap their project rows, but it does not create a newly optimized combined
-analysis product.
+reconstructions, or output artifacts. For `merge_projects`, `cls2D`, `cls3D`,
+and `out` are intentionally ignored on input and left empty in the merged
+output.
 
 ## Target Policy
 
@@ -192,9 +191,6 @@ project:
 - `os_stk`
 - `os_ptcl2D`
 - `os_ptcl3D`
-- `os_cls2D`
-- `os_cls3D`
-- `os_out`
 - `os_optics`
 
 Every segment must be either populated in all inputs or empty in all inputs.
@@ -204,6 +200,13 @@ project can merge with another movie-only project; a particle project can merge
 with another particle project that has the same populated particle/support
 segments. A stack-only project should not be silently merged with a
 stack-plus-particle project.
+
+`merge_projects` is an acquisition/particle merge for heterogeneous CTF models,
+not an analysis-product merge. The helper should ignore `os_cls2D`, `os_cls3D`,
+and `os_out` when reading input shape and must not populate those fields in the
+merged output. Existing class-average and output rows are considered stale after
+cross-microscope merge; users should re-run 2D/3D analysis from the merged
+particle/stack state.
 
 Metadata-only segments such as `projinfo`, `jobproc`, and `compenv` are not a
 data shape. The merged project should copy them from the first input and update
@@ -339,15 +342,17 @@ The shared helper should:
 4. Validate row-level CTF-model data where CTF is enabled.
 5. Validate identical analysis sampling distance and particle box dimensions
    when those fields exist. Do not run `reextract` in this merge path.
-6. Allocate every populated output segment up front.
+6. Allocate every populated mergeable output segment up front, excluding
+   `os_cls2D`, `os_cls3D`, and `os_out`.
 7. Copy source rows with `transfer_ori`.
 8. Remap only merge-local fields: stack `fromp` / `top` when particles are
-   present, particle `stkind`, particle/class `class`, and row-level `ogid`.
+   present, particle `stkind`, and row-level `ogid`.
 9. Preserve row-level CTF-model values by transferring complete `os_mic` and
    `os_stk` rows. Do not overwrite `kv`, `cs`, `fraca`, `ctf`, `phaseplate`, or
    `smpd` from global parameters.
 10. Preserve particle-level CTF values and exact `os_ptcl2D%state` flags by
-    transferring complete particle rows.
+    transferring complete particle rows. Clear stale `ptcl2D` clustering fields
+    after transfer because class rows are intentionally not carried forward.
 11. Remap row-level `ogid` assignments for every copied segment that carries
     `ogid`, independent of whether the source project has `os_optics`.
 12. Preserve/remap `os_optics` only when it is part of the matching input field
