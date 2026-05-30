@@ -97,7 +97,7 @@ The filter currently:
 5. computes voxelwise objective maps across all candidates
 6. applies candidate-scale, mask-normalized AWF-like objective smoothing
 7. chooses the best candidate per voxel
-8. optionally refines the candidate map with an ordered-label spatial smoothing prior
+8. regularizes the candidate map with mandatory ordered-label Potts smoothing
 9. logs selected-low-pass statistics and neighbor-continuity diagnostics
 10. synthesizes filtered even/odd outputs from the selected candidate map
 11. writes the merged `_nu_filt` volume as the average of the filtered even/odd outputs
@@ -152,8 +152,12 @@ plus the persistent mask-packed objective bank.
 
 ## Ordered-label smoothing regularization
 
-The nonuniform filter always applies ordered-label smoothing after the unary
-voxelwise selector described above and before writing filtered volumes.
+The nonuniform filter always applies ordered-label Potts smoothing after the
+unary voxelwise selector described above and before writing filtered volumes.
+This regularization is required for scientifically usable NU maps. The only
+allowed no-op cases are degenerate implementation exits, such as a single
+candidate label or an estimated smoothing strength at numerical zero; these are
+not user-selectable policy modes.
 
 The smoothing stage is intended to reduce abrupt local jumps in the selected filter-bank label. It initializes from the ordinary voxelwise argmin, then runs a small number of ICM-style passes over the label map using the fully connected 26-neighbor 3D voxel neighborhood. Updates use an 8-color parity schedule so voxels updated within the same pass are not neighbors under the full 3x3x3 neighborhood. The neighborhood penalty is evaluated on a candidate-coordinate axis rather than on raw label indices:
 
@@ -205,13 +209,14 @@ currently assigned to the finest populated base-bank label, prunes any empty
 finer base-bank labels, evaluates the next high-resolution candidate only
 within that local extension mask, and then updates only those eligible voxels.
 This challenge is unary-only: the full-bank Potts prior is not applied during
-extension because the extension experiment is already constrained to a
-one-shell step on the current finest populated frontier. After the sequential
-extension walk stops, the accepted label field is cleaned with the ordinary
-ordered-label Potts prior over the final accepted bank. This cleanup uses the
-mask-packed unary costs for all active labels, including accepted shell
-challengers, and therefore can suppress spatially isolated high-resolution
-islands without changing the shell-by-shell acceptance test itself.
+the accept/reject test because the extension experiment is already constrained
+to a one-shell step on the current finest populated frontier. This does not make
+Potts optional. After the sequential extension walk stops, any accepted label
+field must be cleaned with the ordinary ordered-label Potts prior over the
+final accepted bank. This cleanup uses the mask-packed unary costs for all
+active labels, including accepted shell challengers, and therefore can suppress
+spatially isolated high-resolution islands without changing the shell-by-shell
+acceptance test itself.
 
 Iterative workflows gate this behavior through `nu_refine`. The default is
 `nu_refine=no`. Staged `abinitio3D` uses the static discrete-bank policy with
@@ -311,7 +316,7 @@ terminal postprocess map remains classical.
 
 - Disk-backed cache files add avoidable filesystem traffic inside an already expensive volume step.
 - The cutoff search still performs repeated full-volume passes.
-- Ordered-label smoothing regularization is controlled by the NU filter implementation rather than by workflow-level flags.
+- Ordered-label smoothing regularization is mandatory and controlled by the NU filter implementation rather than by workflow-level flags.
 - Policy and execution are mixed together in `volassemble`, which makes the commander harder to reason about.
 - The nonuniform filter depends on module-level cached state, which limits composability and future concurrency.
 
@@ -321,7 +326,7 @@ Medium-term improvements:
 
 - Option to dynamically change the filter bank?
 - Return both the selected cutoff map and summary statistics as explicit outputs.
-- Promote ordered-label smoothing activation and strength to explicit workflow parameters if validation supports it.
+- Keep ordered-label Potts regularization mandatory. Expose diagnostic strength or tuning controls only if validation supports them; do not add an activation switch.
 
 Architectural target:
 
