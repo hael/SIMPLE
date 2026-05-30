@@ -3,6 +3,7 @@ module simple_projfile_utils
 use simple_core_module_api
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
+use simple_oris,          only: oris
 use simple_euclid_sigma2, only: average_sigma2_groups
 use simple_class_frcs
 implicit none
@@ -241,5 +242,600 @@ contains
             call frcs_chunk%kill
         endif
     end subroutine merge_chunk_projfiles
+
+    subroutine merge_selected_project_files( project_fnames, projfile_out, merged_proj, write_proj )
+        class(string),     intent(in)    :: project_fnames(:) ! SIMPLE project files to merge
+        class(string),     intent(in)    :: projfile_out      ! output project file
+        class(sp_project), intent(inout) :: merged_proj       ! output project
+        logical, optional, intent(in)    :: write_proj        ! write project file
+        real, parameter :: SMPD_TOL = 0.001
+        type(sp_project), allocatable :: projects(:)
+        type(string) :: projfile_abs, projdir, stage_dir, projfile_stage
+        type(binoris_seginfo), allocatable :: seginfos(:), hint_infos(:)
+        integer, allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:)
+        integer, allocatable :: ncls2Ds(:), ncls3Ds(:), nouts(:), noptics(:)
+        integer, allocatable :: mic_offsets(:), stk_offsets(:), ptcl2D_offsets(:), ptcl3D_offsets(:)
+        integer, allocatable :: cls2D_offsets(:), cls3D_offsets(:), out_offsets(:), opt_offsets(:)
+        integer, allocatable :: src_ogid_maxs(:), ogid_offsets(:)
+        integer, allocatable :: seginds(:), hint_inds(:)
+        integer :: nprojs, iproj, imic, istk, iptcl, icls, iout, iopt, iseg, idir_dummy
+        integer :: imic_glob, istk_glob, iptcl2D_glob, iptcl3D_glob
+        integer :: icls2D_glob, icls3D_glob, iout_glob, iopt_glob
+        integer :: stk_offset, ptcl2D_offset, ptcl3D_offset, cls2D_offset, cls3D_offset
+        integer :: fromp, top, range_offset
+        integer :: ogid_offset, ogid_glob_max, ogid
+        logical :: l_write_proj, l_has_mics, l_has_stks, l_has_ptcl2D, l_has_ptcl3D
+        logical :: l_has_cls2D, l_has_cls3D, l_has_out, l_has_optics, l_has_any_data
+        nprojs = size(project_fnames)
+        if( nprojs < 2 ) THROW_HARD('merge_selected_project_files requires at least two input projects')
+        if( fname2format(projfile_out) /= 'O' )then
+            THROW_HARD('output file must be a SIMPLE project (*.simple): '//trim(projfile_out%to_char()))
+        endif
+        l_write_proj = .false.
+        if( present(write_proj) ) l_write_proj = write_proj
+        allocate(projects(nprojs), nmics(nprojs), nstks(nprojs), nptcl2Ds(nprojs), nptcl3Ds(nprojs))
+        allocate(ncls2Ds(nprojs), ncls3Ds(nprojs), nouts(nprojs), noptics(nprojs))
+        do iproj = 1,nprojs
+            projfile_abs = simple_abspath(project_fnames(iproj))
+            call projects(iproj)%read_segments_info(projfile_abs, seginds, seginfos)
+            if( .not.data_segments_present(seginds) )then
+                write(logfhandle,*) 'projtab entry: ', projfile_abs%to_char()
+                write(logfhandle,*) 'This SIMPLE project file has no mic/stk/ptcl/cls/out/optics data segments.'
+                write(logfhandle,*) 'It appears to be a metadata-only project root.'
+                projdir = get_fpath(projfile_abs)
+                stage_dir  = ''
+                idir_dummy = find_next_int_dir_prefix(projdir, stage_dir)
+                if( idir_dummy > 1 .and. stage_dir /= '' )then
+                    projfile_stage = projdir//stage_dir//'/'//basename(projfile_abs)
+                    if( file_exists(projfile_stage) )then
+                        call projects(iproj)%read_segments_info(projfile_stage, hint_inds, hint_infos)
+                        if( data_segments_present(hint_inds) )then
+                            write(logfhandle,*) 'Did you mean to list this data-bearing stage project?'
+                            write(logfhandle,*) projfile_stage%to_char()
+                        endif
+                        if( allocated(hint_inds)  ) deallocate(hint_inds)
+                        if( allocated(hint_infos) ) deallocate(hint_infos)
+                    endif
+                endif
+                THROW_HARD('merge_projects projtab entry has no project data segments')
+            endif
+            nmics(iproj)    = 0
+            nstks(iproj)    = 0
+            nptcl2Ds(iproj) = 0
+            nptcl3Ds(iproj) = 0
+            ncls2Ds(iproj)  = 0
+            ncls3Ds(iproj)  = 0
+            nouts(iproj)    = 0
+            noptics(iproj)  = 0
+            if( allocated(seginds) )then
+                do iseg = 1,size(seginds)
+                    select case(seginds(iseg))
+                        case(MIC_SEG)
+                            call projects(iproj)%read_segment('mic', projfile_abs)
+                            nmics(iproj) = projects(iproj)%os_mic%get_noris()
+                        case(STK_SEG)
+                            call projects(iproj)%read_segment('stk', projfile_abs)
+                            nstks(iproj) = projects(iproj)%os_stk%get_noris()
+                        case(PTCL2D_SEG)
+                            call projects(iproj)%read_segment('ptcl2D', projfile_abs)
+                            nptcl2Ds(iproj) = projects(iproj)%os_ptcl2D%get_noris()
+                        case(PTCL3D_SEG)
+                            call projects(iproj)%read_segment('ptcl3D', projfile_abs)
+                            nptcl3Ds(iproj) = projects(iproj)%os_ptcl3D%get_noris()
+                        case(CLS2D_SEG)
+                            call projects(iproj)%read_segment('cls2D', projfile_abs)
+                            ncls2Ds(iproj) = projects(iproj)%os_cls2D%get_noris()
+                        case(CLS3D_SEG)
+                            call projects(iproj)%read_segment('cls3D', projfile_abs)
+                            ncls3Ds(iproj) = projects(iproj)%os_cls3D%get_noris()
+                        case(OUT_SEG)
+                            call projects(iproj)%read_segment('out', projfile_abs)
+                            nouts(iproj) = projects(iproj)%os_out%get_noris()
+                        case(OPTICS_SEG)
+                            call projects(iproj)%read_segment('optics', projfile_abs)
+                            noptics(iproj) = projects(iproj)%os_optics%get_noris()
+                        case(PROJINFO_SEG)
+                            call projects(iproj)%read_segment('projinfo', projfile_abs)
+                        case(JOBPROC_SEG)
+                            call projects(iproj)%read_segment('jobproc', projfile_abs)
+                        case(COMPENV_SEG)
+                            call projects(iproj)%read_segment('compenv', projfile_abs)
+                    end select
+                enddo
+                deallocate(seginds, seginfos)
+            endif
+        enddo
+        call validate_field_presence(nmics,   'mic')
+        call validate_field_presence(nstks,   'stk')
+        call validate_field_presence(nptcl2Ds,'ptcl2D')
+        call validate_field_presence(nptcl3Ds,'ptcl3D')
+        call validate_field_presence(ncls2Ds, 'cls2D')
+        call validate_field_presence(ncls3Ds, 'cls3D')
+        call validate_field_presence(nouts,   'out')
+        call validate_field_presence(noptics, 'optics')
+        l_has_mics    = nmics(1)    > 0
+        l_has_stks    = nstks(1)    > 0
+        l_has_ptcl2D  = nptcl2Ds(1) > 0
+        l_has_ptcl3D  = nptcl3Ds(1) > 0
+        l_has_cls2D   = ncls2Ds(1)  > 0
+        l_has_cls3D   = ncls3Ds(1)  > 0
+        l_has_out     = nouts(1)    > 0
+        l_has_optics  = noptics(1)  > 0
+        l_has_any_data = l_has_mics .or. l_has_stks .or. l_has_ptcl2D .or. l_has_ptcl3D .or. &
+                         l_has_cls2D .or. l_has_cls3D .or. l_has_out .or. l_has_optics
+        if( .not.l_has_any_data )then
+            do iproj = 1,nprojs
+                write(logfhandle,*) 'input project ', iproj, ': ', project_fnames(iproj)%to_char()
+                write(logfhandle,*) 'mic/stk/ptcl2D/ptcl3D/cls2D/cls3D/out/optics counts: ', &
+                    nmics(iproj), nstks(iproj), nptcl2Ds(iproj), nptcl3Ds(iproj), &
+                    ncls2Ds(iproj), ncls3Ds(iproj), nouts(iproj), noptics(iproj)
+            enddo
+            THROW_HARD('input projects contain no mergeable data fields beyond project metadata')
+        endif
+        do iproj = 1,nprojs
+            call validate_source_project(projects(iproj), iproj)
+        enddo
+        if( l_has_stks ) call validate_stack_dimensions
+        if( l_has_mics .and. .not.l_has_stks ) call validate_mic_sampling
+        call merged_proj%kill
+        call merged_proj%projinfo%copy(projects(1)%projinfo)
+        call merged_proj%jobproc%copy(projects(1)%jobproc)
+        call merged_proj%compenv%copy(projects(1)%compenv)
+        call merged_proj%update_projinfo(projfile_out)
+        if( l_has_mics   ) call merged_proj%os_mic%new(   sum(nmics),    is_ptcl=.false.)
+        if( l_has_stks   ) call merged_proj%os_stk%new(   sum(nstks),    is_ptcl=.false.)
+        if( l_has_ptcl2D ) call merged_proj%os_ptcl2D%new(sum(nptcl2Ds), is_ptcl=.true.)
+        if( l_has_ptcl3D ) call merged_proj%os_ptcl3D%new(sum(nptcl3Ds), is_ptcl=.true.)
+        if( l_has_cls2D  ) call merged_proj%os_cls2D%new( sum(ncls2Ds),  is_ptcl=.false.)
+        if( l_has_cls3D  ) call merged_proj%os_cls3D%new( sum(ncls3Ds),  is_ptcl=.false.)
+        if( l_has_out    ) call merged_proj%os_out%new(   sum(nouts),    is_ptcl=.false.)
+        if( l_has_optics ) call merged_proj%os_optics%new(sum(noptics),  is_ptcl=.false.)
+        allocate(mic_offsets(nprojs), stk_offsets(nprojs), ptcl2D_offsets(nprojs), ptcl3D_offsets(nprojs))
+        allocate(cls2D_offsets(nprojs), cls3D_offsets(nprojs), out_offsets(nprojs), opt_offsets(nprojs))
+        allocate(src_ogid_maxs(nprojs), ogid_offsets(nprojs))
+        call make_prefix_offsets(nmics,    mic_offsets)
+        call make_prefix_offsets(nstks,    stk_offsets)
+        call make_prefix_offsets(nptcl2Ds, ptcl2D_offsets)
+        call make_prefix_offsets(nptcl3Ds, ptcl3D_offsets)
+        call make_prefix_offsets(ncls2Ds,  cls2D_offsets)
+        call make_prefix_offsets(ncls3Ds,  cls3D_offsets)
+        call make_prefix_offsets(nouts,    out_offsets)
+        call make_prefix_offsets(noptics,  opt_offsets)
+        do iproj = 1,nprojs
+            src_ogid_maxs(iproj) = source_max_ogid(projects(iproj))
+        enddo
+        ogid_glob_max = 0
+        do iproj = 1,nprojs
+            if( src_ogid_maxs(iproj) > 0 )then
+                ogid_offsets(iproj) = ogid_glob_max
+                ogid_glob_max       = ogid_glob_max + src_ogid_maxs(iproj)
+            else
+                ogid_offsets(iproj) = 0
+            endif
+        enddo
+
+        do iproj = 1,nprojs
+            stk_offset    = stk_offsets(iproj)
+            ptcl2D_offset = ptcl2D_offsets(iproj)
+            ptcl3D_offset = ptcl3D_offsets(iproj)
+            cls2D_offset  = cls2D_offsets(iproj)
+            cls3D_offset  = cls3D_offsets(iproj)
+            ogid_offset   = ogid_offsets(iproj)
+            if( l_has_ptcl2D )then
+                range_offset = ptcl2D_offset
+            else if( l_has_ptcl3D )then
+                range_offset = ptcl3D_offset
+            else
+                range_offset = 0
+            endif
+
+            !$omp parallel do default(shared) private(imic, imic_glob) schedule(static) if(nmics(iproj) > 1000)
+            do imic = 1,nmics(iproj)
+                imic_glob = mic_offsets(iproj) + imic
+                call merged_proj%os_mic%transfer_ori(imic_glob, projects(iproj)%os_mic, imic)
+                call remap_row_ogid(merged_proj%os_mic, imic_glob, ogid_offset)
+            enddo
+            !$omp end parallel do
+
+            !$omp parallel do default(shared) private(istk, istk_glob, fromp, top) schedule(static) if(nstks(iproj) > 1000)
+            do istk = 1,nstks(iproj)
+                istk_glob = stk_offset + istk
+                call merged_proj%os_stk%transfer_ori(istk_glob, projects(iproj)%os_stk, istk)
+                if( (l_has_ptcl2D .or. l_has_ptcl3D) .and. &
+                    merged_proj%os_stk%isthere(istk_glob, 'fromp') .and. &
+                    merged_proj%os_stk%isthere(istk_glob, 'top') )then
+                    fromp = projects(iproj)%os_stk%get_fromp(istk)
+                    top   = projects(iproj)%os_stk%get_top(istk)
+                    call merged_proj%os_stk%set(istk_glob, 'fromp', fromp + range_offset)
+                    call merged_proj%os_stk%set(istk_glob, 'top',   top   + range_offset)
+                endif
+                call remap_row_ogid(merged_proj%os_stk, istk_glob, ogid_offset)
+            enddo
+            !$omp end parallel do
+
+            !$omp parallel do default(shared) private(icls, icls2D_glob) schedule(static) if(ncls2Ds(iproj) > 1000)
+            do icls = 1,ncls2Ds(iproj)
+                icls2D_glob = cls2D_offset + icls
+                call copy_class_row(projects(iproj)%os_cls2D, merged_proj%os_cls2D, icls, &
+                    icls2D_glob, cls2D_offset, ogid_offset)
+            enddo
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(icls, icls3D_glob) schedule(static) if(ncls3Ds(iproj) > 1000)
+            do icls = 1,ncls3Ds(iproj)
+                icls3D_glob = cls3D_offset + icls
+                call copy_class_row(projects(iproj)%os_cls3D, merged_proj%os_cls3D, icls, &
+                    icls3D_glob, cls3D_offset, ogid_offset)
+            enddo
+            !$omp end parallel do
+
+            !$omp parallel do default(shared) private(iptcl, iptcl2D_glob) schedule(static) if(nptcl2Ds(iproj) > 10000)
+            do iptcl = 1,nptcl2Ds(iproj)
+                iptcl2D_glob = ptcl2D_offset + iptcl
+                call copy_particle_row(projects(iproj)%os_ptcl2D, merged_proj%os_ptcl2D, iptcl, &
+                    iptcl2D_glob, stk_offset, cls2D_offset, ogid_offset, l_has_stks, l_has_cls2D)
+            enddo
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(iptcl, iptcl3D_glob) schedule(static) if(nptcl3Ds(iproj) > 10000)
+            do iptcl = 1,nptcl3Ds(iproj)
+                iptcl3D_glob = ptcl3D_offset + iptcl
+                call copy_particle_row(projects(iproj)%os_ptcl3D, merged_proj%os_ptcl3D, iptcl, &
+                    iptcl3D_glob, stk_offset, cls3D_offset, ogid_offset, l_has_stks, l_has_cls3D)
+            enddo
+            !$omp end parallel do
+
+            !$omp parallel do default(shared) private(iout, iout_glob) schedule(static) if(nouts(iproj) > 1000)
+            do iout = 1,nouts(iproj)
+                iout_glob = out_offsets(iproj) + iout
+                call merged_proj%os_out%transfer_ori(iout_glob, projects(iproj)%os_out, iout)
+                call remap_row_ogid(merged_proj%os_out, iout_glob, ogid_offset)
+            enddo
+            !$omp end parallel do
+
+            !$omp parallel do default(shared) private(iopt, iopt_glob, ogid) schedule(static) if(noptics(iproj) > 1000)
+            do iopt = 1,noptics(iproj)
+                iopt_glob = opt_offsets(iproj) + iopt
+                call merged_proj%os_optics%transfer_ori(iopt_glob, projects(iproj)%os_optics, iopt)
+                call remap_row_ogid(merged_proj%os_optics, iopt_glob, ogid_offset)
+                if( merged_proj%os_optics%isthere(iopt_glob, 'ogid') )then
+                    ogid = merged_proj%os_optics%get_int(iopt_glob, 'ogid')
+                    if( ogid > 0 ) call merged_proj%os_optics%set(iopt_glob, 'ogname', 'opticsgroup'//int2str(ogid))
+                endif
+            enddo
+            !$omp end parallel do
+
+            call projects(iproj)%kill
+        enddo
+
+        if( l_has_ptcl2D .and. (.not.l_has_ptcl3D) )then
+            call merged_proj%os_ptcl3D%new(sum(nptcl2Ds), is_ptcl=.true.)
+            !$omp parallel do default(shared) private(iptcl) schedule(static) if(sum(nptcl2Ds) > 10000)
+            do iptcl = 1,sum(nptcl2Ds)
+                call merged_proj%os_ptcl3D%transfer_ori(iptcl, merged_proj%os_ptcl2D, iptcl)
+                call merged_proj%os_ptcl3D%delete_2Dclustering(iptcl)
+            enddo
+            !$omp end parallel do
+        endif
+        if( l_write_proj ) call merged_proj%write(projfile_out)
+
+        contains
+
+            logical function data_segments_present( segments )
+                integer, allocatable, intent(in) :: segments(:)
+                if( .not.allocated(segments) )then
+                    data_segments_present = .false.
+                else
+                    data_segments_present = any(segments == MIC_SEG)    .or. any(segments == STK_SEG)   .or. &
+                                            any(segments == PTCL2D_SEG) .or. any(segments == PTCL3D_SEG).or. &
+                                            any(segments == CLS2D_SEG)  .or. any(segments == CLS3D_SEG) .or. &
+                                            any(segments == OUT_SEG)    .or. any(segments == OPTICS_SEG)
+                endif
+            end function data_segments_present
+
+            subroutine make_prefix_offsets( counts, offsets )
+                integer, intent(in)  :: counts(:)
+                integer, intent(out) :: offsets(:)
+                integer :: ip
+                offsets(1) = 0
+                do ip = 2,size(counts)
+                    offsets(ip) = offsets(ip - 1) + counts(ip - 1)
+                enddo
+            end subroutine make_prefix_offsets
+
+            subroutine validate_field_presence( counts, segment )
+                integer,          intent(in) :: counts(:)
+                character(len=*), intent(in) :: segment
+                integer :: ip
+                if( any(counts > 0) .and. any(counts == 0) )then
+                    write(logfhandle,*) 'project field mismatch for segment: ', trim(segment)
+                    do ip = 1,size(counts)
+                        write(logfhandle,*) 'input project, count: ', ip, counts(ip)
+                        write(logfhandle,*) project_fnames(ip)%to_char()
+                    enddo
+                    THROW_HARD('project field mismatch: '//trim(segment)//' is populated in only some input projects')
+                endif
+            end subroutine validate_field_presence
+
+            subroutine validate_source_project( proj, iproj )
+                class(sp_project), intent(inout) :: proj
+                integer,           intent(in)    :: iproj
+                integer :: imic, istk, iopt, nrange
+                logical :: lctf
+                if( l_has_mics )then
+                    do imic = 1,proj%os_mic%get_noris()
+                        if( proj%os_mic%isthere(imic, 'ctf') )then
+                            lctf = ctf_enabled_for_row(proj%os_mic, imic, iproj, 'os_mic')
+                            if( lctf )then
+                                call require_row_field(proj%os_mic, imic, 'smpd',       'os_mic', iproj)
+                                call require_row_field(proj%os_mic, imic, 'kv',         'os_mic', iproj)
+                                call require_row_field(proj%os_mic, imic, 'cs',         'os_mic', iproj)
+                                call require_row_field(proj%os_mic, imic, 'fraca',      'os_mic', iproj)
+                                call require_row_field(proj%os_mic, imic, 'phaseplate', 'os_mic', iproj)
+                            endif
+                        endif
+                    enddo
+                endif
+                if( l_has_stks )then
+                    nrange = count_stack_particles(proj, iproj, l_has_ptcl2D .or. l_has_ptcl3D)
+                    if( l_has_ptcl2D .and. nrange > 0 .and. nrange /= proj%os_ptcl2D%get_noris() )then
+                        THROW_HARD('stack particle ranges do not match os_ptcl2D size in input project '//int2str(iproj))
+                    endif
+                    if( l_has_ptcl3D .and. nrange > 0 .and. nrange /= proj%os_ptcl3D%get_noris() )then
+                        THROW_HARD('stack particle ranges do not match os_ptcl3D size in input project '//int2str(iproj))
+                    endif
+                    do istk = 1,proj%os_stk%get_noris()
+                        if( proj%os_stk%isthere(istk, 'ctf') )then
+                            lctf = ctf_enabled_for_row(proj%os_stk, istk, iproj, 'os_stk')
+                            if( lctf )then
+                                call require_row_field(proj%os_stk, istk, 'smpd',       'os_stk', iproj)
+                                call require_row_field(proj%os_stk, istk, 'kv',         'os_stk', iproj)
+                                call require_row_field(proj%os_stk, istk, 'cs',         'os_stk', iproj)
+                                call require_row_field(proj%os_stk, istk, 'fraca',      'os_stk', iproj)
+                                call require_row_field(proj%os_stk, istk, 'phaseplate', 'os_stk', iproj)
+                            endif
+                        endif
+                    enddo
+                endif
+                if( l_has_ptcl2D ) call validate_particle_field(proj%os_ptcl2D, proj, iproj, 'os_ptcl2D')
+                if( l_has_ptcl3D ) call validate_particle_field(proj%os_ptcl3D, proj, iproj, 'os_ptcl3D')
+                if( l_has_optics )then
+                    do iopt = 1,proj%os_optics%get_noris()
+                        call require_row_field(proj%os_optics, iopt, 'ogid', 'os_optics', iproj)
+                    enddo
+                endif
+            end subroutine validate_source_project
+
+            subroutine validate_particle_field( os, proj, iproj, segment )
+                class(oris),       intent(in)    :: os
+                class(sp_project), intent(inout) :: proj
+                integer,           intent(in)    :: iproj
+                character(len=*),  intent(in)    :: segment
+                integer, parameter :: NO_BAD = huge(1)
+                integer :: iptcl, stkind, nptcls, nstks_here
+                integer :: bad_stkind_missing, bad_stkind_range, bad_dfx, bad_angast, bad_phshift
+                logical, allocatable :: stack_ctf(:), stack_phaseplate(:)
+                if( .not.l_has_stks ) return
+                nptcls = os%get_noris()
+                nstks_here = proj%os_stk%get_noris()
+                allocate(stack_ctf(nstks_here), stack_phaseplate(nstks_here))
+                stack_ctf        = .false.
+                stack_phaseplate = .false.
+                do stkind = 1,nstks_here
+                    if( proj%os_stk%isthere(stkind, 'ctf') )then
+                        stack_ctf(stkind) = ctf_enabled_for_row(proj%os_stk, stkind, iproj, 'os_stk')
+                        if( stack_ctf(stkind) )then
+                            stack_phaseplate(stkind) = phaseplate_enabled_for_row(proj%os_stk, stkind, iproj, 'os_stk')
+                        endif
+                    endif
+                enddo
+                bad_stkind_missing = NO_BAD
+                bad_stkind_range   = NO_BAD
+                bad_dfx            = NO_BAD
+                bad_angast         = NO_BAD
+                bad_phshift        = NO_BAD
+                !$omp parallel do default(shared) private(iptcl, stkind) schedule(static) &
+                !$omp& reduction(min:bad_stkind_missing,bad_stkind_range,bad_dfx,bad_angast,bad_phshift) if(nptcls > 10000)
+                do iptcl = 1,nptcls
+                    if( .not.os%isthere(iptcl, 'stkind') )then
+                        bad_stkind_missing = min(bad_stkind_missing, iptcl)
+                    else
+                        stkind = os%get_int(iptcl, 'stkind')
+                        if( stkind < 1 .or. stkind > nstks_here )then
+                            bad_stkind_range = min(bad_stkind_range, iptcl)
+                        else if( stack_ctf(stkind) )then
+                            if( .not.os%isthere(iptcl, 'dfx') ) bad_dfx = min(bad_dfx, iptcl)
+                            if( os%isthere(iptcl, 'dfy') .and. (.not.os%isthere(iptcl, 'angast')) )then
+                                bad_angast = min(bad_angast, iptcl)
+                            endif
+                            if( stack_phaseplate(stkind) .and. (.not.os%isthere(iptcl, 'phshift')) )then
+                                bad_phshift = min(bad_phshift, iptcl)
+                            endif
+                        endif
+                    endif
+                enddo
+                !$omp end parallel do
+                if( bad_stkind_missing /= NO_BAD )then
+                    call require_row_field(os, bad_stkind_missing, 'stkind', trim(segment), iproj)
+                endif
+                if( bad_stkind_range /= NO_BAD )then
+                    write(logfhandle,*) 'segment, row, input project: ', trim(segment), bad_stkind_range, iproj
+                    THROW_HARD('particle stkind out of range in input project '//int2str(iproj))
+                endif
+                if( bad_dfx /= NO_BAD ) call require_row_field(os, bad_dfx, 'dfx', trim(segment), iproj)
+                if( bad_angast /= NO_BAD ) call require_row_field(os, bad_angast, 'angast', trim(segment), iproj)
+                if( bad_phshift /= NO_BAD ) call require_row_field(os, bad_phshift, 'phshift', trim(segment), iproj)
+            end subroutine validate_particle_field
+
+            integer function count_stack_particles( proj, iproj, require_ranges )
+                class(sp_project), intent(inout) :: proj
+                integer,           intent(in)    :: iproj
+                logical,           intent(in)    :: require_ranges
+                integer :: istk
+                count_stack_particles = 0
+                do istk = 1,proj%os_stk%get_noris()
+                    if( proj%os_stk%isthere(istk, 'nptcls') )then
+                        count_stack_particles = count_stack_particles + proj%os_stk%get_int(istk, 'nptcls')
+                    else if( proj%os_stk%isthere(istk, 'fromp') .and. proj%os_stk%isthere(istk, 'top') )then
+                        count_stack_particles = count_stack_particles + &
+                            proj%os_stk%get_top(istk) - proj%os_stk%get_fromp(istk) + 1
+                    else if( require_ranges )then
+                        THROW_HARD('missing stack nptcls/fromp/top for input project '//int2str(iproj))
+                    endif
+                enddo
+            end function count_stack_particles
+
+            subroutine validate_stack_dimensions
+                real    :: smpd_ref, smpd_here
+                integer :: box_ref, box_here, ip, is
+                logical :: check_box, check_smpd
+                check_box  = projects(1)%os_stk%isthere(1, 'box')
+                check_smpd = projects(1)%os_stk%isthere(1, 'smpd')
+                if( check_box  ) box_ref  = projects(1)%os_stk%get_int(1, 'box')
+                if( check_smpd ) smpd_ref = projects(1)%os_stk%get(1, 'smpd')
+                do ip = 1,nprojs
+                    do is = 1,projects(ip)%os_stk%get_noris()
+                        if( check_box )then
+                            call require_row_field(projects(ip)%os_stk, is, 'box', 'os_stk', ip)
+                            box_here = projects(ip)%os_stk%get_int(is, 'box')
+                            if( box_here /= box_ref ) THROW_HARD('project merge requires identical stack boxes')
+                        endif
+                        if( check_smpd )then
+                            call require_row_field(projects(ip)%os_stk, is, 'smpd', 'os_stk', ip)
+                            smpd_here = projects(ip)%os_stk%get(is, 'smpd')
+                            if( abs(smpd_here - smpd_ref) > SMPD_TOL )then
+                                THROW_HARD('project merge requires identical stack sampling distance')
+                            endif
+                        endif
+                    enddo
+                enddo
+            end subroutine validate_stack_dimensions
+
+            subroutine validate_mic_sampling
+                real :: smpd_ref, smpd_here
+                integer :: ip, im
+                if( .not.projects(1)%os_mic%isthere(1, 'smpd') ) return
+                smpd_ref = projects(1)%os_mic%get(1, 'smpd')
+                do ip = 1,nprojs
+                    do im = 1,projects(ip)%os_mic%get_noris()
+                        call require_row_field(projects(ip)%os_mic, im, 'smpd', 'os_mic', ip)
+                        smpd_here = projects(ip)%os_mic%get(im, 'smpd')
+                        if( abs(smpd_here - smpd_ref) > SMPD_TOL )then
+                            THROW_HARD('project merge requires identical micrograph sampling distance')
+                        endif
+                    enddo
+                enddo
+            end subroutine validate_mic_sampling
+
+            subroutine copy_particle_row( os_src, os_dst, i_src, i_dst, stk_off, cls_off, ogid_off, remap_stk, remap_cls )
+                class(oris), intent(in)    :: os_src
+                class(oris), intent(inout) :: os_dst
+                integer,     intent(in)    :: i_src, i_dst, stk_off, cls_off, ogid_off
+                logical,     intent(in)    :: remap_stk, remap_cls
+                integer :: val
+                call os_dst%transfer_ori(i_dst, os_src, i_src)
+                if( remap_stk .and. os_dst%isthere(i_dst, 'stkind') )then
+                    val = os_dst%get_int(i_dst, 'stkind')
+                    if( val > 0 ) call os_dst%set_stkind(i_dst, val + stk_off)
+                endif
+                if( remap_cls .and. os_dst%isthere(i_dst, 'class') )then
+                    val = os_dst%get_int(i_dst, 'class')
+                    if( val > 0 ) call os_dst%set_class(i_dst, val + cls_off)
+                endif
+                call remap_row_ogid(os_dst, i_dst, ogid_off)
+            end subroutine copy_particle_row
+
+            subroutine copy_class_row( os_src, os_dst, i_src, i_dst, cls_off, ogid_off )
+                class(oris), intent(in)    :: os_src
+                class(oris), intent(inout) :: os_dst
+                integer,     intent(in)    :: i_src, i_dst, cls_off, ogid_off
+                integer :: val
+                call os_dst%transfer_ori(i_dst, os_src, i_src)
+                if( os_dst%isthere(i_dst, 'class') )then
+                    val = os_dst%get_int(i_dst, 'class')
+                    if( val > 0 ) call os_dst%set_class(i_dst, val + cls_off)
+                endif
+                call remap_row_ogid(os_dst, i_dst, ogid_off)
+            end subroutine copy_class_row
+
+            subroutine require_row_field( os, irow, key, segment, iproj )
+                class(oris),      intent(in) :: os
+                integer,          intent(in) :: irow, iproj
+                character(len=*), intent(in) :: key, segment
+                if( .not. os%isthere(irow, key) )then
+                    write(logfhandle,*) 'missing field: ', trim(key)
+                    write(logfhandle,*) 'segment, row, input project: ', trim(segment), irow, iproj
+                    THROW_HARD('missing required row field during project merge')
+                endif
+            end subroutine require_row_field
+
+            logical function ctf_enabled_for_row( os, irow, iproj, segment )
+                class(oris),       intent(in) :: os
+                integer,           intent(in) :: irow, iproj
+                character(len=*),  intent(in) :: segment
+                character(len=STDLEN) :: ctf_flag
+                call os%get_static(irow, 'ctf', ctf_flag)
+                select case(trim(ctf_flag))
+                    case('no')
+                        ctf_enabled_for_row = .false.
+                    case('yes','flip')
+                        ctf_enabled_for_row = .true.
+                    case DEFAULT
+                        THROW_HARD('unsupported ctf flag in '//trim(segment)//' for input project '//int2str(iproj))
+                end select
+            end function ctf_enabled_for_row
+
+            logical function phaseplate_enabled_for_row( os, irow, iproj, segment )
+                class(oris),       intent(in) :: os
+                integer,           intent(in) :: irow, iproj
+                character(len=*),  intent(in) :: segment
+                character(len=STDLEN) :: phaseplate
+                call os%get_static(irow, 'phaseplate', phaseplate)
+                select case(trim(phaseplate))
+                    case('yes')
+                        phaseplate_enabled_for_row = .true.
+                    case('no')
+                        phaseplate_enabled_for_row = .false.
+                    case DEFAULT
+                        THROW_HARD('unsupported phaseplate flag in '//trim(segment)//' for input project '//int2str(iproj))
+                end select
+            end function phaseplate_enabled_for_row
+
+            integer function source_max_ogid( proj )
+                class(sp_project), intent(inout) :: proj
+                source_max_ogid = max_ogid_in_oris(proj%os_mic)
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_stk))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_ptcl2D))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_ptcl3D))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_cls2D))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_cls3D))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_out))
+                source_max_ogid = max(source_max_ogid, max_ogid_in_oris(proj%os_optics))
+            end function source_max_ogid
+
+            integer function max_ogid_in_oris( os ) result(max_ogid)
+                class(oris), intent(in) :: os
+                integer :: i, ogid, noris
+                max_ogid = 0
+                noris = os%get_noris()
+                !$omp parallel do default(shared) private(i, ogid) reduction(max:max_ogid) schedule(static) if(noris > 10000)
+                do i = 1,noris
+                    if( os%isthere(i, 'ogid') )then
+                        ogid = os%get_int(i, 'ogid')
+                        if( ogid > max_ogid ) max_ogid = ogid
+                    endif
+                enddo
+                !$omp end parallel do
+            end function max_ogid_in_oris
+
+            subroutine remap_row_ogid( os, irow, offset )
+                class(oris), intent(inout) :: os
+                integer,     intent(in)    :: irow, offset
+                integer :: ogid
+                if( os%isthere(irow, 'ogid') )then
+                    ogid = os%get_int(irow, 'ogid')
+                    if( ogid > 0 ) call os%set_ogid(irow, ogid + offset)
+                endif
+            end subroutine remap_row_ogid
+
+    end subroutine merge_selected_project_files
 
 end module simple_projfile_utils

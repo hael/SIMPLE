@@ -76,6 +76,7 @@ subroutine exec_test_units( self, cline )
     use simple_online_var,            only: test_online_var
     use simple_ui,                    only: validate_ui_json
     use simple_starfile_tester,       only: run_all_starfile_tests
+    use simple_project_merge_tester,  only: run_all_project_merge_tests
     class(commander_test_units),  intent(inout) :: self
     class(cmdline),               intent(inout) :: cline
     character(8)          :: datestr
@@ -110,6 +111,7 @@ subroutine exec_test_units( self, cline )
     call run_all_microchunked2D_tests
     call run_all_cluster2D_rejector_tests
     call run_all_starfile_tests
+    call run_all_project_merge_tests
     call report_summary()
     ! hand-written unit tests
     write(*,*)'VALIDATING UI JSON FILE:'

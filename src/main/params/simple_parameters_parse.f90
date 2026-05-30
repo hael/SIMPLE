@@ -245,6 +245,7 @@ contains
         call reg%add_file('projfile', self%projfile,'O')
         call reg%add_file('projfile_ref', self%projfile_ref,'O')
         call reg%add_file('projfile_target', self%projfile_target,'O')
+        call reg%add_file('projtab', self%projtab,'T')
         call reg%add_file('refs', self%refs,notAllowed='T')
         call reg%add_file('starfile', self%starfile,'R')
         call reg%add_file('star_mic', self%star_mic,'R')

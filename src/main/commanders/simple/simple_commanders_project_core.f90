@@ -270,90 +270,42 @@ contains
     end subroutine exec_update_project
 
     subroutine exec_merge_projects( self, cline )
-        use simple_commanders_pick, only: commander_extract
+        use simple_projfile_utils, only: merge_selected_project_files
         class(commander_merge_projects), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)                :: params
-        type(cmdline)                   :: cline_reextract
-        type(commander_extract) :: xreextract
-        type(sp_project),   allocatable :: spprojs(:)
-        integer,            allocatable :: boxes(:), nmics(:)
-        real,               allocatable :: smpds(:)
-        real    :: smpd
-        integer :: nprojs, iproj, box
-        logical :: l_reextract, l_has_ptcls
-        if( .not.cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
-        if( .not.cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
-        if( .not.cline%defined('outside')      ) call cline%set('outside',      'no')
-        if( .not.cline%defined('backgr_subtr') ) call cline%set('backgr_subtr', 'no')
-        if( .not.cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
-        ! parameters
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(string), allocatable :: fnames(:)
+        type(string) :: projfile_out, projtab_dir
+        integer :: iproj
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not.cline%defined('projtab') )then
+            THROW_HARD('merge_projects requires projtab with one SIMPLE project file per line')
+        endif
+        if( .not.cline%defined('projfile_merged') )then
+            THROW_HARD('merge_projects requires projfile_merged for the output SIMPLE project')
+        endif
         call params%new(cline)
-        call cline%set('mkdir','no')
-        ! projects info & dimensions
-        nprojs = 2 ! only 2 at a time for now
-        allocate(spprojs(nprojs),boxes(nprojs),smpds(nprojs),nmics(nprojs))
-        call spprojs(1)%read(params%projfile)
-        call spprojs(2)%read(params%projfile_target)
-        ! all projects have particles?
-        l_has_ptcls = spprojs(1)%os_ptcl2D%get_noris() > 0
-        do iproj = 2,nprojs
-            l_has_ptcls = l_has_ptcls .and. (spprojs(iproj)%os_ptcl2D%get_noris() > 0)
-        enddo
-        ! gather dimensions
-        l_reextract = .false.
-        if( l_has_ptcls )then
-            do iproj = 1,nprojs
-                boxes(iproj) = spprojs(iproj)%get_box()
-                smpds(iproj) = spprojs(iproj)%get_smpd()
-                nmics(iproj) = spprojs(iproj)%get_nintgs()
-            enddo
-            l_reextract = any(boxes/=boxes(1)) .or. any(abs(smpds-smpds(1)) > 0.001)
-            if( l_reextract .and. any(nmics==0) )then
-                THROW_HARD('Cannot merge projects with different particle/pixel sizes without micrographs!')
-            endif
-        endif
-        ! append projects iteratively
-        do iproj = 2,nprojs
-            call spprojs(1)%append_project(spprojs(iproj))
-            call spprojs(iproj)%kill
-        enddo
-        ! write project
-        call spprojs(1)%write(params%projfile)
-        call spprojs(1)%kill
-        deallocate(spprojs)
-        ! reextract/scale particles if necessary
-        if( l_reextract )then
-            cline_reextract = cline
-            call cline_reextract%set('prg', 'reextract')
-            if( all(abs(smpds-smpds(1)) < 0.001) )then
-                ! all projects have the same pixel size but different particle size
-                smpd = smpds(1)
-                if( .not.cline%defined('box') )then
-                    ! defaults to largest box
-                    box = maxval(boxes)
-                else
-                    box = params%box
-                endif
+        call read_filetable(params%projtab, fnames)
+        if( .not.allocated(fnames) ) THROW_HARD('merge_projects projtab is empty')
+        if( size(fnames) < 2 ) THROW_HARD('merge_projects requires at least two project files')
+        projtab_dir = get_fpath(params%projtab)
+        do iproj = 1,size(fnames)
+            if( fnames(iproj)%to_char([1,1]) == '/' )then
+                fnames(iproj) = simple_abspath(fnames(iproj))
             else
-                ! some projects have different pixel size
-                ! defaults to largets pixel size
-                smpd = maxval(smpds)
-                ! defaults to largest particle physical size
-                if( .not.cline%defined('box') )then
-                    box = floor(maxval(smpds*real(boxes)) / smpd)
-                    box = find_larger_magic_box(box)
-                else
-                    box = params%box
-                endif
+                fnames(iproj) = simple_abspath(projtab_dir//fnames(iproj))
             endif
-            call cline_reextract%set('osmpd', smpd)
-            call cline_reextract%set('box',   box)
-            ! reextract
-            write(logfhandle,'(A,F6.3)')'>>> NEW PIXEL    SIZE: ',smpd
-            write(logfhandle,'(A,I6)')  '>>> NEW PARTICLE SIZE: ',box
-            call xreextract%execute(cline_reextract)
+        enddo
+        if( params%projfile_merged%to_char([1,1]) == '/' )then
+            projfile_out = params%projfile_merged
+        else
+            projfile_out = filepath(params%cwd, params%projfile_merged)
         endif
+        call merge_selected_project_files(fnames, projfile_out, spproj, write_proj=.true.)
+        call spproj%kill
+        call fnames%kill
+        deallocate(fnames)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects

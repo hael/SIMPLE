@@ -119,6 +119,7 @@ type(ui_param) :: projfile_merged
 type(ui_param) :: projfile_ref
 type(ui_param) :: projfile_target
 type(ui_param) :: projname
+type(ui_param) :: projtab
 type(ui_param) :: prune
 type(ui_param) :: pspecsz
 type(ui_param) :: quality_mode
@@ -615,6 +616,10 @@ subroutine set_ui_params
     call projname%set_param(       'projname',        'str',    'Project name', &
                                    'Name of project to create ./myproject/myproject.simple file for', &
                                    'e.g. to create ./myproject/myproject.simple', .true., '')
+
+    call projtab%set_param(        'projtab',         'file',   'Project file table', &
+                                   'Text file listing SIMPLE project files (*.simple)', &
+                                   'e.g. projtab.txt', .true., '')
 
     call prune%set_param(          'prune',           'binary', 'Automated particles pruning', &
                                    'Whether to prune deselected particles(yes|no){no}', &

@@ -218,6 +218,7 @@ type :: parameters
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
+    type(string)              :: projtab              !< table of SIMPLE *.simple project files
     type(string)              :: refs                 !< initial2Dreferences.ext
     type(string)              :: refs_even
     type(string)              :: refs_odd

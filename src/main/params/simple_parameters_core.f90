@@ -62,6 +62,7 @@ contains
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name
+        self%projtab=''           !< table of SIMPLE *.simple project files
         self%refs=''              !< initial2Dreferences.ext
         self%refs_even=''
         self%refs_odd=''

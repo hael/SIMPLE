@@ -352,26 +352,21 @@ contains
         ! PROGRAM SPECIFICATION
         call merge_projects%new(&
         &'merge_projects', &                                            ! name
-        &'Merge two projects',&                                         ! descr_short
-        &'is a program to merge two projects into one', &               ! descr_long
+        &'Merge selected projects',&                                    ! descr_short
+        &'is a program to merge a file table of SIMPLE projects with matching populated project fields', & ! descr_long
         &'simple_exec',&                                                ! executable
-        &.true.)                                                        ! requires sp_project
+        &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call merge_projects%add_input(UI_PARM, projfile_target,&
-        &descr_short_override       = 'Project to merge',&
-        &descr_long_override        = 'Location of project file to append',&
+        call merge_projects%add_input(UI_PARM, projtab,&
+        &descr_long_override        = 'Text file listing SIMPLE project files (*.simple) to merge',&
+        &descr_placeholder_override = 'e.g. projtab.txt',&
+        &required_override          = .true.,&
         &gui_submenu="data", gui_advanced=.false.)
-        call merge_projects%add_input(UI_PARM, oritype,&
-        &descr_long_override        = 'Oritype segment in project(ptcl2D|ptcl3D){ptcl2D}',&
-        &descr_placeholder_override = '(ptcl2D|ptcl3D){ptcl2D}',&
-        gui_submenu="extract", gui_advanced=.false.)
-        call merge_projects%add_input(UI_PARM, box, required_override=.false., gui_submenu="extract", gui_advanced=.false.)
-        call merge_projects%add_input(UI_PARM, pcontrast, gui_submenu="extract")
-        call merge_projects%add_input(UI_PARM, backgr_subtr, gui_submenu="extract")
-        call merge_projects%add_input(UI_PARM, outside, gui_submenu="extract")
+        ! parameter input/output
+        call merge_projects%add_input(UI_PARM, projfile_merged,&
+        &required_override          = .true.,&
+        &gui_submenu="data", gui_advanced=.false.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -381,8 +376,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call merge_projects%add_input(UI_COMP, nparts, gui_submenu="compute")
-        call merge_projects%add_input(UI_COMP, nthr,   gui_submenu="compute")
+        ! <empty>
         ! add to ui_hash
         call add_ui_program('merge_projects', merge_projects, prgtab)
     end subroutine new_merge_projects
