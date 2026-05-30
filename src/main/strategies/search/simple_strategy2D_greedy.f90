@@ -55,7 +55,7 @@ contains
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
                 ! updates global best
-                if( inpl_corr >= corr )then
+                if( inpl_corr > corr )then
                     corr              = inpl_corr
                     self%s%best_class = iref
                     self%s%best_corr  = inpl_corr

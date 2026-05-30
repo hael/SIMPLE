@@ -1,7 +1,7 @@
 !@descr: common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
 module simple_strategy2D_srch
 use simple_pftc_srch_api
-use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D
+use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_builder,          only: builder
@@ -107,8 +107,7 @@ contains
         self%nsolns     = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
-        l_fresh_start = self%p_ptr%startit <= 1 .and. self%p_ptr%which_iter <= self%p_ptr%startit &
-            &.and. trim(self%p_ptr%continue) /= 'yes' .and. .not. self%p_ptr%l_fillin
+        l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
         if( l_fresh_start )then
             self%prev_class = 0
         else

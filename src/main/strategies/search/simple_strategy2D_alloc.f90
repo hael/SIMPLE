@@ -4,7 +4,7 @@ use simple_pftc_srch_api
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
-public :: prep_strategy2D_thread, set_strategy2D_stoch_bound
+public :: prep_strategy2D_thread, set_strategy2D_stoch_bound, is_fresh_2D_start
 private
 #include "simple_local_flags.inc"
 
@@ -30,6 +30,13 @@ end type strategy2D_alloc
 type(strategy2D_alloc) :: s2D
 
 contains
+
+    logical function is_fresh_2D_start( params, which_iter )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: which_iter
+        is_fresh_2D_start = params%startit <= 1 .and. which_iter <= params%startit &
+            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+    end function is_fresh_2D_start
 
     subroutine clean_strategy2D
         ! per class
@@ -61,8 +68,7 @@ contains
         real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff, l_fresh_start
         ! gather class populations
-        l_fresh_start = params%startit <= 1 .and. params%which_iter <= params%startit &
-            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+        l_fresh_start = is_fresh_2D_start(params, params%which_iter)
         zero_oris = spproj%os_cls2D%get_noris() == 0
         ncls_diff = spproj%os_cls2D%get_noris() /= params%ncls
         if( l_fresh_start )then
@@ -138,8 +144,7 @@ contains
         integer        :: i,iptcl,prev_class
         logical        :: l_alloc, l_fresh_start
         l_alloc = .true.
-        l_fresh_start = params%startit <= 1 .and. which_iter <= params%startit &
-            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+        l_fresh_start = is_fresh_2D_start(params, which_iter)
         if( allocated(s2D%do_inplsrch) )then
             l_alloc = size(s2D%do_inplsrch) /= nptcls
             if( l_alloc ) deallocate(s2D%do_inplsrch,s2D%srch_order)

@@ -6,6 +6,7 @@ use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd
 use simple_image,                only: image
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_parameters,           only: parameters
+use simple_strategy2D_alloc,     only: is_fresh_2D_start
 implicit none
 
 public :: prep_pftc4align2D
@@ -27,8 +28,9 @@ contains
         type(image), allocatable :: match_imgs(:)
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd, centype, ithr, pdim_srch(3)
-        logical      :: do_center, has_been_searched, input_center
-        has_been_searched = .not.build%spproj%is_virgin_field(params%oritype)
+        logical      :: do_center, has_been_searched, input_center, l_fresh_start
+        l_fresh_start     = is_fresh_2D_start(params, which_iter)
+        has_been_searched = (.not. l_fresh_start) .and. (.not.build%spproj%is_virgin_field(params%oritype))
         input_center      = trim(params%center) .eq. 'yes'
         ! create the polarft_calc object
         call build%pftc%new(params, params%ncls, [1,batchsz_max], params%kfromto, nmany_refs=nmany_refs)
