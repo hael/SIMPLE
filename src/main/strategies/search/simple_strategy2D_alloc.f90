@@ -59,11 +59,17 @@ contains
         integer,           intent(in)    :: nrots
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
-        logical :: zero_oris, ncls_diff
+        logical :: zero_oris, ncls_diff, l_fresh_start
         ! gather class populations
+        l_fresh_start = params%startit <= 1 .and. params%which_iter <= params%startit &
+            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
         zero_oris = spproj%os_cls2D%get_noris() == 0
         ncls_diff = spproj%os_cls2D%get_noris() /= params%ncls
-        if( spproj%os_ptcl2D%isthere('class') )then
+        if( l_fresh_start )then
+            ! A fresh run with freshly generated references must not inherit
+            ! class populations from a previous/streamed 2D assignment.
+            allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
+        else if( spproj%os_ptcl2D%isthere('class') )then
             if( zero_oris .or. ncls_diff  )then
                 ! the ==0    is to overcome bug in shared-memory version
                 ! the ==ncls is to be able to restart after having run cleanup with fewer classes
@@ -130,8 +136,10 @@ contains
         integer,            intent(in) :: pinds(nptcls)
         type(ran_tabu) :: rt
         integer        :: i,iptcl,prev_class
-        logical        :: l_alloc
+        logical        :: l_alloc, l_fresh_start
         l_alloc = .true.
+        l_fresh_start = params%startit <= 1 .and. which_iter <= params%startit &
+            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
         if( allocated(s2D%do_inplsrch) )then
             l_alloc = size(s2D%do_inplsrch) /= nptcls
             if( l_alloc ) deallocate(s2D%do_inplsrch,s2D%srch_order)
@@ -145,8 +153,12 @@ contains
         do i = 1,nptcls
             iptcl = pinds(i)
             call rt%ne_ran_iarr(s2D%srch_order(:,i))
-            prev_class = nint(spproj%os_ptcl2D%get(iptcl,'class'))
-            call put_last(prev_class, s2D%srch_order(:,i))
+            if( l_fresh_start )then
+                prev_class = 0
+            else
+                prev_class = nint(spproj%os_ptcl2D%get(iptcl,'class'))
+            endif
+            if( prev_class > 0 .and. prev_class <= params%ncls ) call put_last(prev_class, s2D%srch_order(:,i))
         enddo
         call rt%kill
         if( any(s2D%srch_order == 0) ) THROW_HARD('Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch')

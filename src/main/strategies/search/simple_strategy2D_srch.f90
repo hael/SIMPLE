@@ -102,11 +102,18 @@ contains
         class(strategy2D_srch), intent(inout) :: self
         class(oris),            intent(inout) :: os
         real    :: corrs(self%b_ptr%pftc%get_nrots())
+        logical :: l_fresh_start
         self%nrefs_eval = 0
         self%nsolns     = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
-        self%prev_class = nint(os%get(self%iptcl,'class'))                ! class index
+        l_fresh_start = self%p_ptr%startit <= 1 .and. self%p_ptr%which_iter <= self%p_ptr%startit &
+            &.and. trim(self%p_ptr%continue) /= 'yes' .and. .not. self%p_ptr%l_fillin
+        if( l_fresh_start )then
+            self%prev_class = 0
+        else
+            self%prev_class = nint(os%get(self%iptcl,'class'))            ! class index
+        endif
         self%prev_rot   = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = os%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.

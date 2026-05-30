@@ -77,11 +77,9 @@ contains
         call determine_abinitio2D_stages(params, nstages)
         ! override # stages
         if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
-        if( allocated(stage_parms) ) deallocate(stage_parms)
         allocate(stage_parms(nstages))
         ! read project
         call spproj%read(params%projfile)
-        call cleanup_stale_run_artifacts
         call set_dims                   ! set downscaling
         call inirefs                    ! deal with initial references
         call set_lplims(nstages)        ! set resolutions limits
@@ -96,16 +94,10 @@ contains
             &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
         end do
         ! prep particles field
-        ! Fresh abinitio2D starts must not carry previous alignment shifts
-        ! into the new random-reference class averages.
-        call spproj_field%delete_2Dclustering(keepshifts=.false., keepcls=.false.)
+        call spproj_field%delete_2Dclustering
         call spproj_field%clean_entry('updatecnt', 'sampled')
-        call spproj%os_cls2D%kill
-        call spproj%os_cls3D%kill
         if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
-        ! Full rewrite omits killed class segments; write_segment_inside
-        ! cannot delete zero-length segments from an existing project file.
-        call spproj%write(params%projfile)
+        call spproj%write_segment_inside(params%oritype, params%projfile)
         ! Frequency marching
         do istage = 1,nstages
             write(logfhandle,'(A)')'>>>'
@@ -185,11 +177,6 @@ contains
             stage_parms(:)%trslim    = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
             if( cline%defined('trs') ) stage_parms(2:)%trslim = params%trs
         end subroutine set_dims
-
-        subroutine cleanup_stale_run_artifacts
-            call del_file(FRCS_FILE)
-            call del_file(ABINITIO2D_FINISHED)
-        end subroutine cleanup_stale_run_artifacts
 
         ! Deals with initial references dimensions when *not* abinitio
         subroutine inirefs
