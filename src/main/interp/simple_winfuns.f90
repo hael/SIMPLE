@@ -78,8 +78,8 @@ contains
         self%Whalf = Whalf
         self%alpha = alpha
         self%W=2.*self%Whalf
-        if( self%Whalf <= 1.5 )then
-            self%beta = 7.4
+        if( abs(self%Whalf - KBWINSZ) <= 1.e-6 .and. abs(self%alpha - KBALPHA) <= 1.e-6 )then
+            self%beta = KB_BETA_KB15_A2
         else
             self%beta=pi*sqrt((self%W**2./self%alpha**2.)*(self%alpha-0.5)**2.-0.8)
         endif

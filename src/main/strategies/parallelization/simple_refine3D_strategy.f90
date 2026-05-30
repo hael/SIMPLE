@@ -179,17 +179,6 @@ contains
         endif
     end subroutine invalidate_fresh_start_refs_from_volumes
 
-    subroutine refresh_initial_matching_lp_from_project( params, build, cline, startit )
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        type(cmdline),    intent(inout) :: cline
-        integer,          intent(in)    :: startit
-        if( .not. params%l_nonuniform ) return
-        if( cline%defined('lp') ) return
-        if( startit <= 1 .and. trim(params%continue).ne.'yes' ) return
-        call refresh_matching_lp_from_project(params, build, cline)
-    end subroutine refresh_initial_matching_lp_from_project
-
     subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
@@ -238,6 +227,7 @@ contains
         integer :: project_find, lpstop_find
         logical :: l_has_lp, l_log_promotion
         if( .not. params%l_nonuniform ) return
+        if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
         l_has_lp   = .false.
@@ -256,24 +246,22 @@ contains
         end select
         if( l_has_lp .and. project_lp > TINY )then
             call build%spproj_field%set_all2single('lp', project_lp)
-            project_find = calc_fourier_index(project_lp, params%box, params%smpd)
-            if( cline%defined('lpstop') )then
-                lpstop_find  = calc_fourier_index(params%lpstop, params%box, params%smpd)
-                project_find = min(project_find, lpstop_find)
-            endif
-            promoted_lp     = calc_lowpass_lim(project_find, params%box, params%smpd)
-            l_log_promotion = abs(params%lp - promoted_lp) > 1.e-3
-            params%kfromto(2) = project_find
-            params%lp         = promoted_lp
-            ! Plain nonuniform keeps gold-standard topology; only the lpset
-            ! variant promotes the NU frontier into explicit LP-set matching.
             if( params%l_nonuniform_lpset )then
-                params%l_lpset = .true.
+                project_find = calc_fourier_index(project_lp, params%box, params%smpd)
+                if( cline%defined('lpstop') )then
+                    lpstop_find  = calc_fourier_index(params%lpstop, params%box, params%smpd)
+                    project_find = min(project_find, lpstop_find)
+                endif
+                promoted_lp     = calc_lowpass_lim(project_find, params%box, params%smpd)
+                l_log_promotion = (.not. cline%defined('lp')) .or. abs(params%lp - promoted_lp) > 1.e-3
+                params%kfromto(2) = project_find
+                params%lp         = promoted_lp
+                params%l_lpset    = .true.
                 call cline%set('lp', params%lp)
-            endif
-            if( l_log_promotion )then
-                write(logfhandle,'(A,F8.3,A)') &
-                    &'>>> NU filter promoted matching low-pass: ', params%lp, ' A'
+                if( l_log_promotion )then
+                    write(logfhandle,'(A,F8.3,A)') &
+                        &'>>> NU filter promoted matching low-pass to command line: ', params%lp, ' A'
+                endif
             endif
         endif
         call lp_project%kill
@@ -487,7 +475,6 @@ contains
             l_proj_dirty = .true.
         endif
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
-        call refresh_initial_matching_lp_from_project(params, build, cline, startit)
         ! objfun=euclid initialisation
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
         self%cline_calc_group_sigmas = cline
@@ -895,7 +882,6 @@ contains
             endif
         endif
         ! prepare job description
-        call refresh_initial_matching_lp_from_project(params, build, cline, params%startit)
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('prg', 'refine3D')
         ! Keep consistent iteration counters

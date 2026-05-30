@@ -16,9 +16,12 @@ Supported values:
 - `nonuniform`
 - `nonuniform_lpset`
 
-`filt_mode=nonuniform` activates the nonuniform volume filter path and, after
-NU-filtered references exist, uses the finest selected NU frontier as the next
-matching low-pass limit. It does not by itself activate LP-set matching.
+`filt_mode=nonuniform` activates the nonuniform volume filter path. It does not
+by itself activate LP-set matching, and static plain nonuniform filtering does
+not by itself promote project-carried NU `lp` into the matcher bandwidth. When
+`nu_refine=yes`, a non-fresh later iteration may use the finest selected NU
+frontier from the previous assembly pass as the next matching low-pass limit
+while preserving half-map reference topology.
 `filt_mode=nonuniform_lpset` activates the same NU filter, but also promotes
 the NU-selected matching bandwidth into an explicit LP-set run. LP-set matching
 uses the merged reference topology.
@@ -104,29 +107,32 @@ This design is scientifically reasonable and easy to debug, but it pays a large 
 
 In nonuniform mode, matcher reference loading follows the same topology rule as
 the rest of 3D matching: LP-set matching uses a merged registration reference,
-while non-LP-set single-state matching uses independent half-map references.
-Thus `nonuniform_lpset` uses the merged state reference, preferring the merged
-`_nu_filt` product once it exists. Plain `nonuniform` uses independent
-`_nu_filt` even/odd references for single-state matching and falls back to the
-regular even/odd references before filtered products exist. Multi-state
-matching always uses the merged state reference. The ordinary low-pass filter
-is not applied on top of the nonuniform reference path.
+while non-LP-set matching prefers independent half-map references. Thus
+`nonuniform_lpset` with active `l_lpset` uses the merged state reference,
+preferring the merged `_nu_filt` product once it exists. Otherwise, reference
+preparation first tries independent `_nu_filt` even/odd references, then falls
+back to regular even/odd references before filtered products exist, and only
+uses the merged state volume when half references are unavailable. State count
+alone must not force merged-reference matching. The ordinary low-pass filter is
+not applied on top of the nonuniform reference path.
 
-When `filt_mode=nonuniform` and the user has not set an explicit `lp`, the 3D
-matching/reprojection low-pass limit follows the finest selected NU
-filter-bank limit from the previous `volassemble` pass instead of the global
-FSC resolution. In `nu_refine=yes` shell-extension runs, candidate bins that
-fail the 5% tested-frontier acceptance threshold do not advance the global
-matching bandwidth. After writing the matching `_nu_filt` even/odd products,
-`volassemble` updates the ordinary project `lp` field to that selected NU
-limit.
-The matcher reads that project `lp` value on the next iteration; a fresh first
-iteration or missing project `lp` falls back to the ordinary FSC/project-`lp`
+After writing the matching `_nu_filt` even/odd products, `volassemble` updates
+the ordinary project `lp` field to the selected NU limit. This handoff is
+consumed narrowly. The matcher may read that project `lp` only when
+`nu_refine=yes` or `nonuniform_lpset` is active, and only after the fresh stage
+start has passed (`which_iter > startit` unless `continue=yes`). A fresh first
+iteration, a fresh stage start, missing project `lp`, or static plain
+`nonuniform` with `nu_refine=no` falls back to the ordinary FSC/project-`lp`
 policy. Explicit `lp` remains a hard user override, and `lpstop` still caps the
-selected matching bandwidth. The selected NU LP does not by itself choose the
-reference topology; `l_lpset` does. `nonuniform_lpset` deliberately sets that
-LP-set topology, while plain `nonuniform` leaves gold-standard half-map
-matching intact.
+selected matching bandwidth. In `nu_refine=yes` shell-extension runs, candidate
+bins that fail the 5% tested-frontier acceptance threshold do not advance the
+global matching bandwidth.
+
+The selected NU LP does not by itself choose the reference topology; `l_lpset`
+does. `nonuniform_lpset` deliberately promotes the selected project `lp` to the
+command line and activates LP-set topology. Plain `nonuniform` may use a
+NU-refined project `lp` as a later-iteration bandwidth handoff, but it leaves
+gold-standard half-map matching intact.
 
 ## Candidate-scale objective smoothing
 
@@ -250,9 +256,10 @@ needed, the retained unary bank and associated mask-index work arrays are
 released before synthesizing the output volumes.
 
 Large-volume memory ownership is deliberately biased toward mask-packed or
-short-lived state. Label/source maps use a compact integer kind, the finest
-frontier objective cache is stored only as a mask-packed vector, and the caller
-mask can be released after `setup_nu_dmats` copies it into the filter state.
+short-lived state. The persistent label map uses a compact integer kind and
+there is no separate full-volume source map. The finest frontier objective
+cache is stored only as a mask-packed vector, and the caller mask can be
+released after `setup_nu_dmats` copies it into the filter state.
 The normalized smoothing support is allocated lazily for the active radius. It
 is released after static candidate-bank smoothing, but is kept across adjacent
 high-resolution shell challenges so repeated equal-radius extension steps can
@@ -265,9 +272,13 @@ Static discrete NU filtering writes a single matching low-pass limit back to
 the project. This limit is the finest assigned NU label in the state mask; when
 an auxiliary ML-regularized replacement is active and selected, its actual
 auxiliary resolution participates in that minimum through the replaced finest
-label. Staged `abinitio3D` uses this promoted NU limit with
-`filt_mode=nonuniform`, so static NU reference generation influences the next
-matching bandwidth without enabling the high-resolution shell ratchet.
+label. The stored value is a handoff for later non-fresh `nu_refine=yes` or
+`nonuniform_lpset` matching. It is not a blanket instruction for static plain
+`nonuniform` to override the ordinary matching bandwidth. Staged `abinitio3D`
+uses static NU filtering with `nu_refine=no`; from `NU_FILTER_STAGE` its
+controller enters `nonuniform_lpset`, seeds the stage with the scheduled `lp`,
+and lets only that explicit LP-set path promote a NU project `lp` into later
+matching bandwidth.
 
 Map postprocessing is classical-only. `postprocess` and the automatic
 `reconstruct3D` postprocess step use the ordinary global FSC/B-factor path even

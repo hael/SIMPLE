@@ -68,8 +68,8 @@ contains
         self%alpha  = alpha_in
         self%W      = 2.0 * self%Whalf
         self%piW    = pi * self%W
-        if( self%Whalf <= 1.5 .and. nint(self%alpha) == 2 )then
-            self%beta = 7.4
+        if( abs(self%Whalf - KBWINSZ) <= 1.e-6 .and. abs(self%alpha - KBALPHA) <= 1.e-6 )then
+            self%beta = KB_BETA_KB15_A2
         else
             self%beta = pi * sqrt((self%W**2.0 / self%alpha**2.0) * &
                 &(self%alpha - 0.5)**2.0 - 0.8)
@@ -133,7 +133,8 @@ contains
     !!
     !! Method used:
     !!   apod(x) = (1/W) * I0(beta * sqrt(u)), u = 1 - (2x/W)^2.
-    !! For beta=7.4 this is evaluated as a degree-14 polynomial in u using
+    !! For the configured KBWINSZ=1.5, KBALPHA=2 beta this is evaluated as a
+    !! degree-14 polynomial in u using
     !! the modified Bessel I0 power series,
     !!   I0(beta*sqrt(u)) = sum_k ((beta^2/4)^k / (k!)^2) * u^k.
     !! The coefficients below are those terms for k=0..14, evaluated with
@@ -145,9 +146,9 @@ contains
         real,              intent(in) :: x
         real :: r
         real(sp), parameter :: coeffs(0:14) = [&
-            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
-            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
-            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+            1.0000000_sp, 1.0517297e1_sp, 2.7653385e1_sp, 3.2315430e1_sp, 2.1241936e1_sp,&
+            8.9363103_sp, 2.6107175_sp, 5.6036106e-1_sp, 9.2085685e-2_sp, 1.1956698e-2_sp,&
+            1.2575214e-3_sp, 1.0930353e-4_sp, 7.9831782e-6_sp, 4.9681336e-7_sp, 2.6658846e-8_sp]
         real(sp) :: p, q, u
         integer  :: i
         if( abs(x) > self%Whalf )then
@@ -435,9 +436,9 @@ contains
         real,             intent(in) :: x
         real :: r
         real(sp), parameter :: coeffs(0:14) = [&
-            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
-            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
-            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+            1.0000000_sp, 1.0517297e1_sp, 2.7653385e1_sp, 3.2315430e1_sp, 2.1241936e1_sp,&
+            8.9363103_sp, 2.6107175_sp, 5.6036106e-1_sp, 9.2085685e-2_sp, 1.1956698e-2_sp,&
+            1.2575214e-3_sp, 1.0930353e-4_sp, 7.9831782e-6_sp, 4.9681336e-7_sp, 2.6658846e-8_sp]
         real(sp) :: p, q, u
         integer  :: i
         if( abs(x) > self%Whalf )then
@@ -463,9 +464,9 @@ contains
         real(sp), parameter :: twooW = 2.0_sp / 3.0_sp
         real(sp), parameter :: oneoW = 1.0_sp / 3.0_sp
         real(sp), parameter :: coeffs(0:14) = [&
-            1.0000000_sp, 1.3690000e1_sp, 4.6854025e1_sp, 7.1270178e1_sp, 6.0980546e1_sp,&
-            3.3392947e1_sp, 1.2698596e1_sp, 3.5478321_sp, 7.5890347e-1_sp, 1.2826406e-1_sp,&
-            1.7559349e-2_sp, 1.9866735e-3_sp, 1.8887194e-4_sp, 1.5299745e-5_sp, 1.0686404e-6_sp]
+            1.0000000_sp, 1.0517297e1_sp, 2.7653385e1_sp, 3.2315430e1_sp, 2.1241936e1_sp,&
+            8.9363103_sp, 2.6107175_sp, 5.6036106e-1_sp, 9.2085685e-2_sp, 1.1956698e-2_sp,&
+            1.2575214e-3_sp, 1.0930353e-4_sp, 7.9831782e-6_sp, 4.9681336e-7_sp, 2.6658846e-8_sp]
         real     :: r
         real(sp) :: q, u
         if( x*x > 2.25_sp )then

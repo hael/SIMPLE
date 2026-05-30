@@ -78,6 +78,8 @@ real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
 integer, parameter    :: OSMPL_PAD_FAC             = 2         !< factor by which to pad for oversampled gridding
 real,    parameter    :: KBALPHA                   = real(OSMPL_PAD_FAC) !< interpolation alpha (oversampling constant)
+real,    parameter    :: KB_BETA_KB15_A2           = PI * sqrt(((2.0 * KBWINSZ)**2.0 / KBALPHA**2.0) * &
+                                                            &(KBALPHA - 0.5)**2.0 - 0.8)
 ! real constants that control search and convergence
 real,    parameter    :: FRAC_SH_LIM               = 75.0      !< at what frac to turn on the shift search
 real,    parameter    :: NEIGH_MINFRAC             = 0.3       !< minimum fraction of search space scanned in refine=neigh

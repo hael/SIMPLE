@@ -74,6 +74,9 @@ and assembly commands.
 `which_iter` is the current iteration. `startit` is the stage start and must
 remain available to workers and assembly because stage planning depends on the
 full stage interval.
+Fresh-start checks that decide whether to consume project-carried matching
+metadata must use the stage interval (`which_iter <= startit`), not only global
+iteration 1.
 
 Before a matcher iteration writes partition-local Cartesian partials, stale
 per-iteration partial reconstruction inputs must be removed.
@@ -167,6 +170,14 @@ In `lp`-set mode, the matcher consumes a merged reference generated from the
 current merged volume. Assembly must not do low-resolution even/odd docking
 insertion. If trailing is active, assembly first trails even and odd against
 their corresponding previous half volumes and merges the trailed half volumes.
+
+Reference loading is controlled by topology, not by state count alone. In
+nonuniform LP-set matching (`nonuniform_lpset` with active `l_lpset`), the
+registration model is built from the merged state reference, preferring the
+merged `_nu_filt` product when present. Otherwise reference preparation first
+tries independent even/odd references, preferring `_nu_filt` half references in
+nonuniform mode, then falling back to regular even/odd half references, and
+only then to the merged state volume when half references are unavailable.
 
 FSCs and FSC-derived stage diagnostics are calculated from dense Cartesian
 half-volumes, not from sparse, intermediate, or low-resolution-blended
@@ -262,25 +273,20 @@ refinement iterations used NU-filtered references. Generic `reconstruct3D`
 postprocessing and `refine3D_auto` terminal postprocessing therefore use the
 same global FSC/B-factor path.
 
-In plain `filt_mode=nonuniform`, gold-standard 3D matching must not continue to
-derive its alignment low-pass limit solely from the global FSC once NU-filtered
-references exist. If `lp` was not set by the user, the reprojection model uses
-the project `lp` value written by the previous `volassemble` pass, where
-`volassemble` records the finest actually selected NU filter-bank limit after
-writing `_nu_filt` even/odd references. Candidate bins with zero voxel
-assignments do not advance the global matching bandwidth, but any finer
-base-bank bin with at least one voxel assignment is allowed to define the next
-matching LP. A fresh first iteration or missing project `lp` falls back to the
-ordinary FSC/project-`lp` policy. Explicit `lp` remains a hard override, and
-`lpstop` remains a cap on the final matcher bandwidth.
+Project-carried NU `lp` is a matching-bandwidth handoff, but it is deliberately
+narrow. It may be consumed only when NU refinement is active (`nu_refine=yes`)
+or when the workflow is explicitly in `nonuniform_lpset`; fresh stage starts
+(`which_iter <= startit` with `continue != yes`) must ignore it. Static plain
+`filt_mode=nonuniform` with `nu_refine=no` writes NU products but does not by
+itself promote the project `lp` into the matcher bandwidth. Explicit `lp`
+remains a hard override, and `lpstop` remains a cap on the final matcher
+bandwidth.
 
-The NU-refined project `lp` is a matching-bandwidth handoff only. The `l_lpset`
-flag chooses the reference topology. LP-set runs consume merged state
-references, preferring merged `_nu_filt` products when NU is active. Non-LP-set
-single-state runs consume even/odd NU-filtered references independently. Thus
-plain `nonuniform` preserves gold-standard topology, while
-`nonuniform_lpset` deliberately activates LP-set-style merged-reference
-matching.
+Only `nonuniform_lpset` promotes a project-carried NU `lp` into an explicit
+command-line `lp` and activates `l_lpset`. Plain `nonuniform` may use a
+NU-refined project `lp` as a later-iteration bandwidth handoff when
+`nu_refine=yes`, but it must not switch reference topology: non-LP-set matching
+continues to prefer independent even/odd references.
 
 For 3D refinement workflows, grouped sigma files are run-local noise-model
 state. They may be written and consumed inside a running reconstruction
