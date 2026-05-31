@@ -147,13 +147,15 @@ contains
         ! Sampling
         ! Because this is always run prior to reconstruction/search, sampling is not always informed
         ! or may change with workflows. Instead of setting a sampling for the following operations when
-        ! l_update_frac, we sample uniformly AND do not write the corresponding field
+        ! l_update_frac, we sample uniformly AND do not write the corresponding field. Group sigmas need
+        ! direct spectra for every active particle in each stack group; only the global estimate uses
+        ! the sampled/bootstrap path.
         l_scale_update_frac = .false.
-        if( params%l_update_frac )then
+        if( params%l_sigma_glob .and. params%l_update_frac )then
             call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
             sig2_mul = 1.0 / (2.0 * params%update_frac)
-        else if( params%nsample > 0 )then
+        else if( params%l_sigma_glob .and. params%nsample > 0 )then
             nptcls_active_tot = build%spproj%count_state_gt_zero()
             update_frac_eff = min(1.0, real(params%nsample) / real(max(1, nptcls_active_tot)))
             call build%spproj_field%sample4update_rnd([params%fromp,params%top], update_frac_eff, nptcls_part_sel, pinds, .false. )

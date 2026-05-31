@@ -24,6 +24,7 @@ integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch fr
 integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
 integer,          parameter :: NSAMPLE_PER_CLS    = 200
+integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
 
 ! convenience type
@@ -164,7 +165,7 @@ contains
         select case(cfg%iphase)
             case(1)
                 cfg%extr_iter = 0
-                cfg%imaxits = nint(real(istage)*real(maxits)/real(PHASES(1)))
+                cfg%imaxits = phase1_stage_endit(maxits, istage, stage_parms(istage)%update_frac)
                 cfg%minits  = cfg%imaxits
                 select case(istage)
                     case(1)
@@ -186,7 +187,7 @@ contains
                         call set_cluster2D_stage_regular_refs( cfg, params, stage_parms, istage )
                 end select
             case(2)
-                cfg%imaxits   = cfg%iter + params%nits_per_stage - 1
+                cfg%imaxits   = cfg%iter + sampled_stage_nits(stage_parms(istage)%update_frac, params%nits_per_stage) - 1
                 cfg%trs       = stage_parms(istage)%trslim
                 cfg%center    = trim(params%center)
                 cfg%extr_iter = params%extr_lim+1
@@ -194,8 +195,48 @@ contains
                 cfg%ml_reg    = params%ml_reg
                 cfg%gauref    = 'no'
                 cfg%minits    = cfg%iter + 1
+                if( cfg%imaxits >= cfg%iter + params%nits_per_stage ) cfg%minits = cfg%imaxits
         end select
     end subroutine set_cluster2D_stage_reference_policy
+
+    integer function phase1_stage_endit( maxits, istage, update_frac ) result( endit )
+        integer, intent(in) :: maxits, istage
+        real,    intent(in) :: update_frac
+        integer :: default_endit, first_endit, post_default_nits, guarded_nits
+        default_endit = nint(real(istage) * real(maxits) / real(PHASES(1)))
+        if( istage <= STICKY_SAMPL_STAGE )then
+            endit = default_endit
+            return
+        endif
+        first_endit       = nint(real(STICKY_SAMPL_STAGE) * real(maxits) / real(PHASES(1)))
+        post_default_nits = max(1, nint(real(maxits - first_endit) / real(max(1, PHASES(1) - STICKY_SAMPL_STAGE))))
+        guarded_nits      = sample_coverage_nits(update_frac)
+        if( guarded_nits <= post_default_nits )then
+            endit = default_endit
+        else
+            endit = first_endit + (istage - STICKY_SAMPL_STAGE) * guarded_nits
+        endif
+    end function phase1_stage_endit
+
+    integer function sampled_stage_nits( update_frac, default_nits ) result( nits )
+        real,    intent(in) :: update_frac
+        integer, intent(in) :: default_nits
+        nits = max(default_nits, sample_coverage_nits(update_frac))
+    end function sampled_stage_nits
+
+    integer function sample_coverage_nits( update_frac ) result( nits )
+        real, intent(in) :: update_frac
+        integer :: coverage_stages
+        real    :: nupdates_needed
+        coverage_stages = max(1, PHASES(1) - STICKY_SAMPL_STAGE)
+        if( update_frac <= 0. )then
+            nits = COVERAGE_NITS_CAP
+            return
+        endif
+        nupdates_needed = max(0., (1. / update_frac) - 1.)
+        nits = ceiling(nupdates_needed / real(coverage_stages))
+        nits = max(1, min(COVERAGE_NITS_CAP, nits))
+    end function sample_coverage_nits
 
     subroutine set_cluster2D_stage_regular_refs( cfg, params, stage_parms, istage )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
