@@ -71,6 +71,9 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_refs_even(:,:,:)    !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp), allocatable :: pfts_refs_odd(:,:,:)     !< -"-, odd
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
+    type(ctfparams), allocatable :: ctfparams_ptcls(:)   !< CTF model used for each indexed particle
+    logical,         allocatable :: ctfparams_ptcls_set(:), ctfparams_scored(:) !< diagnostics for CTF model consumption
+    type(ctfparams), allocatable :: ctf_models_seen(:), ctf_models_scored(:) !< accumulated diagnostic CTF models
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
     type(c_ptr) :: plan_fwd1_many, plan_bwd1_single, plan_mem_r2c_many
@@ -96,6 +99,10 @@ type :: polarft_calc
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
     real,    pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
+    integer              :: nctf_models_seen = 0        !< diagnostic: microscope models consumed by CTF path
+    integer              :: nctf_models_scored = 0      !< diagnostic: microscope models consumed by score path
+    logical              :: ctf_model_audit = .false.    !< diagnostic: CTF matrix creation consumed models
+    logical              :: ctf_scoring_audit = .false.  !< diagnostic: score path consumed CTF models
     logical              :: with_ctf  = .false.         !< CTF flag
     logical              :: existence = .false.         !< to indicate existence
   contains
@@ -138,6 +145,12 @@ type :: polarft_calc
     procedure          :: get_nptcls
     procedure          :: get_pinds
     procedure          :: is_with_ctf
+    procedure          :: reset_ctf_model_audit
+    procedure          :: get_nctf_models_seen
+    procedure          :: disable_ctf_model_audit
+    procedure          :: get_nctf_models_scored
+    procedure          :: reset_ctf_scoring_audit
+    procedure          :: disable_ctf_scoring_audit
     procedure          :: allocate_pft
     procedure          :: allocate_ptcl_pft
     procedure          :: get_precalc_objfun_vals
@@ -414,6 +427,30 @@ interface
     module pure logical function is_with_ctf( self )
         class(polarft_calc), intent(in) :: self
     end function is_with_ctf
+
+    module pure integer function get_nctf_models_seen(self)
+        class(polarft_calc), intent(in) :: self
+    end function get_nctf_models_seen
+
+    module subroutine reset_ctf_model_audit(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine reset_ctf_model_audit
+
+    module subroutine disable_ctf_model_audit(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine disable_ctf_model_audit
+
+    module integer function get_nctf_models_scored(self)
+        class(polarft_calc), intent(in) :: self
+    end function get_nctf_models_scored
+
+    module subroutine reset_ctf_scoring_audit(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine reset_ctf_scoring_audit
+
+    module subroutine disable_ctf_scoring_audit(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine disable_ctf_scoring_audit
 
     module function allocate_pft( self ) result( pft )
         class(polarft_calc),  intent(in)  :: self

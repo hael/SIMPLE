@@ -8,6 +8,8 @@ use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_bat
 use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
+use simple_matcher_2Dprep,           only: prepimg4align_reset_ctf_model_audit, prepimg4align_get_nctf_models_seen, &
+                                           prepimg4align_disable_ctf_model_audit
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
@@ -55,6 +57,7 @@ type :: cluster2D_ctrl
     logical :: l_prob_align
     logical :: l_restore_cavgs
     logical :: l_assignment_only
+    logical :: l_ctf_model_audit
     logical :: do_bench
   contains
     procedure :: display
@@ -89,6 +92,7 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
+        integer :: nctf_models_project, nctf_models_update
         p_ptr => params
         b_ptr => build
         call init_ctrl()
@@ -98,6 +102,7 @@ contains
         endif
         frac_srch_space = b_ptr%spproj_field%get_avg('frac')
         call sample_particles_for_update()
+        call detect_ctf_models_for_audit()
         call compute_neigh_frac( neigh_frac )
         if( file_exists(p_ptr%frcs) ) call b_ptr%clsfrcs%read(p_ptr%frcs)
         call prepare_batches()
@@ -117,6 +122,7 @@ contains
         endif
         call set_strategy2D_stoch_bound(params%ncls, neigh_frac)
         call prepare_alignment_references(batchsz_max)
+        call enable_ctf_model_audit()
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
         call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
@@ -168,6 +174,7 @@ contains
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
         call write_orientations()
+        call report_ctf_model_audit()
         call finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
         call b_ptr%esig%kill
         call b_ptr%pftc%kill
@@ -187,6 +194,7 @@ contains
             ctrl%l_prob_align    = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_assignment_only = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
+            ctrl%l_ctf_model_audit = .false.
             ctrl%l_np_cls_defined= cline%defined('nptcls_per_cls')
             ctrl%do_bench        = L_BENCH_GLOB
             if( p_ptr%startit == 1 )then
@@ -218,6 +226,112 @@ contains
             endif
             ctrl%l_ctf = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp) .ne. 'no'
         end subroutine init_ctrl
+
+        subroutine detect_ctf_models_for_audit()
+            nctf_models_project = 0
+            nctf_models_update  = 0
+            nctf_models_project = count_ctf_models_in_field()
+            if( nctf_models_project < 1 ) return
+            nctf_models_update = count_ctf_models_in_update_set()
+            ctrl%l_ctf_model_audit = nctf_models_project > 1
+        end subroutine detect_ctf_models_for_audit
+
+        integer function count_ctf_models_in_field()
+            type(ctfparams), allocatable :: models(:)
+            type(ctfparams) :: ctfvars
+            integer :: i, j, nptcls, nmodels
+            logical :: model_seen
+            count_ctf_models_in_field = 0
+            nptcls = b_ptr%spproj_field%get_noris()
+            if( nptcls < 1 ) return
+            allocate(models(nptcls))
+            nmodels = 0
+            do i = 1,nptcls
+                if( b_ptr%spproj_field%get_state(i) == 0 ) cycle
+                ctfvars = b_ptr%spproj%get_ctfparams(p_ptr%oritype, i)
+                model_seen = .false.
+                do j = 1,nmodels
+                    if( same_ctf_model(ctfvars, models(j)) )then
+                        model_seen = .true.
+                        exit
+                    endif
+                enddo
+                if( .not. model_seen )then
+                    nmodels = nmodels + 1
+                    models(nmodels) = ctfvars
+                endif
+            enddo
+            count_ctf_models_in_field = nmodels
+            deallocate(models)
+        end function count_ctf_models_in_field
+
+        integer function count_ctf_models_in_update_set()
+            type(ctfparams), allocatable :: models(:)
+            type(ctfparams) :: ctfvars
+            integer :: i, j, nmodels
+            logical :: model_seen
+            count_ctf_models_in_update_set = 0
+            if( nptcls2update < 1 ) return
+            allocate(models(nptcls2update))
+            nmodels = 0
+            do i = 1,nptcls2update
+                ctfvars = b_ptr%spproj%get_ctfparams(p_ptr%oritype, pinds(i))
+                model_seen = .false.
+                do j = 1,nmodels
+                    if( same_ctf_model(ctfvars, models(j)) )then
+                        model_seen = .true.
+                        exit
+                    endif
+                enddo
+                if( .not. model_seen )then
+                    nmodels = nmodels + 1
+                    models(nmodels) = ctfvars
+                endif
+            enddo
+            count_ctf_models_in_update_set = nmodels
+            deallocate(models)
+        end function count_ctf_models_in_update_set
+
+        subroutine enable_ctf_model_audit()
+            if( .not. ctrl%l_ctf_model_audit ) return
+            call prepimg4align_reset_ctf_model_audit(nptcls2update)
+            call b_ptr%pftc%reset_ctf_model_audit()
+            call b_ptr%pftc%reset_ctf_scoring_audit()
+            if( .not. ctrl%l_assignment_only ) call cavger_reset_ctf_model_audit()
+            write(logfhandle,'(A,I0,A)') '>>> CTF MODEL AUDIT ENABLED: loaded ptcl2D field has ', &
+                nctf_models_project, ' microscope model(s)'
+        end subroutine enable_ctf_model_audit
+
+        subroutine report_ctf_model_audit()
+            if( .not. ctrl%l_ctf_model_audit ) return
+            write(logfhandle,'(A)')     '>>> CTF MODEL AUDIT REPORT'
+            write(logfhandle,'(A,I0,A,I0)') '    part                                  : ', p_ptr%part, '/', p_ptr%nparts
+            write(logfhandle,'(A,I0,A,I0)') '    particle range                        : ', p_ptr%fromp, '-', p_ptr%top
+            write(logfhandle,'(A,I0)')  '    loaded ptcl2D field models             : ', nctf_models_project
+            write(logfhandle,'(A,I0)')  '    current part/update-set models         : ', nctf_models_update
+            write(logfhandle,'(A,I0)')  '    alignment image prep models found      : ', prepimg4align_get_nctf_models_seen()
+            write(logfhandle,'(A,I0)')  '    PFT abs-CTF matrix models found        : ', b_ptr%pftc%get_nctf_models_seen()
+            write(logfhandle,'(A,I0)')  '    PFT scoring models found               : ', b_ptr%pftc%get_nctf_models_scored()
+            if( ctrl%l_assignment_only )then
+                write(logfhandle,'(A)') '    class averager models found            : skipped'
+            else
+                write(logfhandle,'(A,I0)') '    class averager models found            : ', cavger_get_nctf_models_seen()
+            endif
+            call prepimg4align_disable_ctf_model_audit()
+            call b_ptr%pftc%disable_ctf_scoring_audit()
+            call b_ptr%pftc%disable_ctf_model_audit()
+            if( .not. ctrl%l_assignment_only ) call cavger_disable_ctf_model_audit()
+        end subroutine report_ctf_model_audit
+
+        logical function same_ctf_model(lhs, rhs)
+            type(ctfparams), intent(in) :: lhs, rhs
+            real, parameter :: CTFTOL = 1.0e-5
+            same_ctf_model = (lhs%ctfflag == rhs%ctfflag) .and. &
+                (lhs%l_phaseplate .eqv. rhs%l_phaseplate) .and. &
+                (abs(lhs%kv    - rhs%kv)    <= CTFTOL) .and. &
+                (abs(lhs%cs    - rhs%cs)    <= CTFTOL) .and. &
+                (abs(lhs%fraca - rhs%fraca) <= CTFTOL)
+        end function same_ctf_model
 
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)

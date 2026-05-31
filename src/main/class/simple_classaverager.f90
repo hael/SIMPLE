@@ -15,7 +15,8 @@ implicit none
 ! Module public data & routines are prefixed with cavger_
 ! Init & book-keeping
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
-public :: cavger_read_euclid_sigma2, cavger_kill
+public :: cavger_read_euclid_sigma2, cavger_reset_ctf_model_audit, cavger_get_nctf_models_seen
+public :: cavger_disable_ctf_model_audit, cavger_kill
 ! Interpolation & restoration
 public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
 public :: cavger_assemble_sums, cavger_restore_cavgs
@@ -116,6 +117,9 @@ class(parameters),    pointer    :: p_ptr => null()           !< active paramete
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
 integer,             allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)  !< Fourier mapping memoization matrices
 integer                          :: ncls       = 0            !< # classes
+integer                          :: nctf_models_seen = 0     !< diagnostic: microscope models consumed by class path
+logical                          :: ctf_model_audit = .false. !< diagnostic guard for CTF model counting
+type(ctfparams),     allocatable :: ctf_models_seen(:)        !< diagnostic CTF models seen by class path
 integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
 integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
 integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimension of image, padded
@@ -365,5 +369,24 @@ interface
     end subroutine transform_ptcls
 
 end interface
+
+contains
+
+    subroutine cavger_reset_ctf_model_audit()
+        ctf_model_audit  = .true.
+        nctf_models_seen = 0
+        if( allocated(ctf_models_seen) ) deallocate(ctf_models_seen)
+        allocate(ctf_models_seen(16))
+    end subroutine cavger_reset_ctf_model_audit
+
+    integer function cavger_get_nctf_models_seen()
+        cavger_get_nctf_models_seen = nctf_models_seen
+    end function cavger_get_nctf_models_seen
+
+    subroutine cavger_disable_ctf_model_audit()
+        ctf_model_audit  = .false.
+        nctf_models_seen = 0
+        if( allocated(ctf_models_seen) ) deallocate(ctf_models_seen)
+    end subroutine cavger_disable_ctf_model_audit
 
 end module simple_classaverager

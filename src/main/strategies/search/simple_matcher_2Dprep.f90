@@ -12,10 +12,16 @@ implicit none
 
 ! Particle image processing for alignment
 public :: prepimg4align, prepimg4align_bench
+public :: prepimg4align_reset_ctf_model_audit, prepimg4align_get_nctf_models_seen
+public :: prepimg4align_disable_ctf_model_audit
 ! Reference processing for alignment
 public :: prep2Dref, calc_2Dref_offset
 private
 #include "simple_local_flags.inc"
+
+logical                       :: prepimg4align_ctf_model_audit = .false.
+integer                       :: prepimg4align_nctf_models_seen = 0
+type(ctfparams), allocatable  :: prepimg4align_ctf_models_seen(:)
 
 contains
 
@@ -36,6 +42,7 @@ contains
         shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+        if( prepimg4align_ctf_model_audit ) call audit_ctf_model(ctfparms)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! fused noise normalization, FFT, clip & shift
@@ -71,6 +78,7 @@ contains
         shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+        if( prepimg4align_ctf_model_audit ) call audit_ctf_model(ctfparms)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! fused noise normalization, FFT, clip & shift
@@ -163,5 +171,68 @@ contains
         ! mask, pad, FFT
         call img%mask_pad_fft(params%msk_crop, img_pd)
     end subroutine prep2Dref
+
+    subroutine prepimg4align_reset_ctf_model_audit(capacity)
+        integer, optional, intent(in) :: capacity
+        integer :: capacity_here
+        capacity_here = 16
+        if( present(capacity) ) capacity_here = max(1, capacity)
+        prepimg4align_ctf_model_audit = .true.
+        prepimg4align_nctf_models_seen = 0
+        if( allocated(prepimg4align_ctf_models_seen) ) deallocate(prepimg4align_ctf_models_seen)
+        allocate(prepimg4align_ctf_models_seen(capacity_here))
+    end subroutine prepimg4align_reset_ctf_model_audit
+
+    integer function prepimg4align_get_nctf_models_seen()
+        prepimg4align_get_nctf_models_seen = prepimg4align_nctf_models_seen
+    end function prepimg4align_get_nctf_models_seen
+
+    subroutine prepimg4align_disable_ctf_model_audit()
+        prepimg4align_ctf_model_audit = .false.
+        prepimg4align_nctf_models_seen = 0
+        if( allocated(prepimg4align_ctf_models_seen) ) deallocate(prepimg4align_ctf_models_seen)
+    end subroutine prepimg4align_disable_ctf_model_audit
+
+    subroutine audit_ctf_model(ctfparms)
+        type(ctfparams), intent(in) :: ctfparms
+        integer :: imodel
+        logical :: model_seen
+        if( .not. prepimg4align_ctf_model_audit ) return
+        !$omp critical(prepimg4align_ctf_audit)
+        if( .not. allocated(prepimg4align_ctf_models_seen) ) allocate(prepimg4align_ctf_models_seen(16))
+        model_seen = .false.
+        do imodel = 1,prepimg4align_nctf_models_seen
+            if( same_ctf_model(ctfparms, prepimg4align_ctf_models_seen(imodel)) )then
+                model_seen = .true.
+                exit
+            endif
+        enddo
+        if( .not. model_seen )then
+            if( prepimg4align_nctf_models_seen == size(prepimg4align_ctf_models_seen) ) call grow_ctf_model_audit
+            prepimg4align_nctf_models_seen = prepimg4align_nctf_models_seen + 1
+            prepimg4align_ctf_models_seen(prepimg4align_nctf_models_seen) = ctfparms
+        endif
+        !$omp end critical(prepimg4align_ctf_audit)
+    end subroutine audit_ctf_model
+
+    subroutine grow_ctf_model_audit()
+        type(ctfparams), allocatable :: tmp(:)
+        integer :: oldsz, newsz
+        oldsz = size(prepimg4align_ctf_models_seen)
+        newsz = max(1, 2 * oldsz)
+        allocate(tmp(newsz))
+        tmp(1:oldsz) = prepimg4align_ctf_models_seen
+        call move_alloc(tmp, prepimg4align_ctf_models_seen)
+    end subroutine grow_ctf_model_audit
+
+    logical function same_ctf_model(lhs, rhs)
+        type(ctfparams), intent(in) :: lhs, rhs
+        real, parameter :: CTFTOL = 1.0e-5
+        same_ctf_model = (lhs%ctfflag == rhs%ctfflag) .and. &
+            (lhs%l_phaseplate .eqv. rhs%l_phaseplate) .and. &
+            (abs(lhs%kv    - rhs%kv)    <= CTFTOL) .and. &
+            (abs(lhs%cs    - rhs%cs)    <= CTFTOL) .and. &
+            (abs(lhs%fraca - rhs%fraca) <= CTFTOL)
+    end function same_ctf_model
 
 end module simple_matcher_2Dprep

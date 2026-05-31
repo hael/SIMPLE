@@ -119,6 +119,10 @@ contains
         self%wsqsums_ptcls  = 0.d0
         ! CTF
         self%ctfmats = 1.0
+        self%nctf_models_seen = 0
+        self%nctf_models_scored = 0
+        self%ctf_model_audit = .false.
+        self%ctf_scoring_audit = .false.
         self%with_ctf = .false.
         if( self%p_ptr%ctf .ne. 'no' ) self%with_ctf = .true.
         ! Eagerly initialize memoization buffers/plans at construction time.
@@ -141,6 +145,11 @@ contains
                     self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
             end do
             if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
+            if( allocated(self%ctfparams_ptcls) ) deallocate(self%ctfparams_ptcls)
+            if( allocated(self%ctfparams_ptcls_set) ) deallocate(self%ctfparams_ptcls_set)
+            if( allocated(self%ctfparams_scored) ) deallocate(self%ctfparams_scored)
+            if( allocated(self%ctf_models_seen) ) deallocate(self%ctf_models_seen)
+            if( allocated(self%ctf_models_scored) ) deallocate(self%ctf_models_scored)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
                 &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
@@ -149,6 +158,10 @@ contains
             call self%kill_memo_workspace
             nullify(self%sigma2_noise)
             self%p_ptr => null()
+            self%nctf_models_seen = 0
+            self%nctf_models_scored = 0
+            self%ctf_model_audit = .false.
+            self%ctf_scoring_audit = .false.
             self%existence = .false.
         endif
     end subroutine kill
@@ -161,6 +174,9 @@ contains
         self%pfromto(1) = minval(pinds)
         self%pfromto(2) = maxval(pinds)
         if( allocated(self%pinds) ) deallocate(self%pinds)
+        if( allocated(self%ctfparams_ptcls) ) deallocate(self%ctfparams_ptcls)
+        if( allocated(self%ctfparams_ptcls_set) ) deallocate(self%ctfparams_ptcls_set)
+        if( allocated(self%ctfparams_scored) ) deallocate(self%ctfparams_scored)
         if( self%nptcls == nptcls )then
             ! just need to update particles indexing
         else
@@ -180,6 +196,8 @@ contains
         endif
         self%pfts_ptcls    = zero
         self%ctfmats       = 1.0
+        if( .not. self%ctf_model_audit ) self%nctf_models_seen = 0
+        if( .not. self%ctf_scoring_audit ) self%nctf_models_scored = 0
         self%sqsums_ptcls  = 0.d0
         self%ksqsums_ptcls = 0.d0
         self%wsqsums_ptcls = 0.d0
