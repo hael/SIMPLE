@@ -32,24 +32,33 @@ contains
         ! set Fourier index range
         params%kfromto(1) = 1
         params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
-        ! generate average power spectrum
+        ! generate average power spectrum for global sigma bootstrapping
         nptcls     = build%spproj_field%get_noris(consider_state=.false.)
-        nptcls_sel = build%spproj_field%get_noris(consider_state=.true.)
-        call avg_img%new([params%box,params%box,1], params%smpd)
-        call avg_img%zero_and_flag_ft
-        do ipart = 1,params%nparts
-            call build%img%zero_and_flag_ft
-            part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
-            call build%img%read(part_fname)
-            call avg_img%add(build%img)
-            call del_file(part_fname)
-        enddo
-        call avg_img%div(real(nptcls_sel))
-        ! calculate power spectrum
-        call avg_img%spectrum('power',pspec_ave,norm=.true.)
-        pspec_ave = pspec_ave / 2.0
-        nyq = avg_img%get_nyq()
-        call avg_img%kill
+        nptcls_sel = build%spproj_field%count_state_gt_zero()
+        if( nptcls_sel < 1 ) THROW_HARD('No active particles found; exec_calc_pspec_assemble')
+        nyq = build%img%get_nyq()
+        if( params%l_sigma_glob )then
+            call avg_img%new([params%box,params%box,1], params%smpd)
+            call avg_img%zero_and_flag_ft
+            do ipart = 1,params%nparts
+                call build%img%zero_and_flag_ft
+                part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
+                call build%img%read(part_fname)
+                call avg_img%add(build%img)
+                call del_file(part_fname)
+            enddo
+            call avg_img%div(real(nptcls_sel))
+            ! calculate power spectrum
+            call avg_img%spectrum('power',pspec_ave,norm=.true.)
+            pspec_ave = pspec_ave / 2.0
+            nyq = avg_img%get_nyq()
+            call avg_img%kill
+        else
+            do ipart = 1,params%nparts
+                part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
+                call del_file(part_fname)
+            enddo
+        endif
         ! read power spectra of particles
         allocate(pspecs(nyq,params%nptcls),sigma2_arrays(params%nparts))
         do ipart = 1,params%nparts
@@ -70,7 +79,7 @@ contains
             nstks   = build%spproj%get_nstks()
             ngroups = 0
             do iptcl = 1,nptcls
-                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
                 igroup  = build%spproj_field%get_int(iptcl,'stkind')
                 if( igroup < 1 .or. igroup > nstks )then
                     write(logfhandle,*) 'iptcl/stkind/nstks: ', iptcl, igroup, nstks
@@ -82,7 +91,7 @@ contains
         allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(group_weights(2,ngroups),source=0)
         do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
             eo = build%spproj_field%get_eo(iptcl) ! 0/1
             if( params%l_sigma_glob )then
                 igroup = 1
@@ -96,7 +105,7 @@ contains
             do igroup = 1,ngroups
                 if( group_weights(eo,igroup) < 1 ) cycle
                 group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup),dp)
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - real(pspec_ave(:),dp)
+                if( params%l_sigma_glob ) group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - real(pspec_ave(:),dp)
                 call remove_negative_sigmas(eo, igroup)
             end do
         end do
@@ -109,7 +118,7 @@ contains
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
         ! update sigmas in binfiles to match averages
         do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
             eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
             if( params%l_sigma_glob )then
                 igroup = 1
@@ -136,7 +145,8 @@ contains
             call sigma2_arrays(ipart)%fname%kill
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
-        deallocate(sigma2_arrays,group_pspecs,pspec_ave,pspecs,group_weights)
+        deallocate(sigma2_arrays,group_pspecs,pspecs,group_weights)
+        if( allocated(pspec_ave) ) deallocate(pspec_ave)
         call binfile%kill
         call build%kill_general_tbox
         call simple_touch('CALC_PSPEC_FINISHED')
@@ -150,7 +160,7 @@ contains
             logical :: fixed_from_prev
             integer :: nn, idx
             if( .not. any(group_pspecs(eo,igroup,:) > DTINY) )then
-                write(logfhandle,*) 'eo/igroup: ', eo, igroup
+                write(logfhandle,*) 'eo/igroup/weight: ', eo, igroup, group_weights(eo,igroup)
                 THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum')
             endif
             ! remove any negative sigma2 noise values: replace by positive neighboring value
@@ -170,7 +180,7 @@ contains
                         do while (.not. is_positive)
                             nn = nn + 1
                             if( nn > size(group_pspecs,3) )then
-                                write(logfhandle,*) 'eo/igroup: ', eo, igroup
+                                write(logfhandle,*) 'eo/igroup/weight: ', eo, igroup, group_weights(eo,igroup)
                                 THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum')
                             end if
                             if( group_pspecs(eo,igroup,nn) > DTINY )then

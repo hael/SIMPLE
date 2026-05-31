@@ -13,7 +13,7 @@ contains
         integer,                   intent(out)   :: ind_in_stk
         class(oris), pointer                     :: ptcl_field
         real    :: smpd
-        integer :: nptcls, fromp, top, box, nstks
+        integer :: nptcls, nptcls_stk, fromp, top, box, nstks
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -54,12 +54,23 @@ contains
             write(logfhandle,*) 'nstks : ', nstks
             THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
         endif
+        fromp = self%os_stk%get_fromp(stkind)
+        top   = self%os_stk%get_top(stkind)
+        if( self%os_stk%isthere(stkind, 'nptcls') )then
+            nptcls_stk = self%os_stk%get_int(stkind, 'nptcls')
+        else
+            nptcls_stk = top - fromp + 1
+        endif
         if( ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
+            if( ind_in_stk < 1 .or. ind_in_stk > nptcls_stk )then
+                write(logfhandle,*) 'iptcl             : ', iptcl
+                write(logfhandle,*) 'stkind            : ', stkind
+                write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
+                THROW_HARD('particle indstk out of stack range; map_ptcl_ind2stk_ind')
+            endif
         else
             ! third sanity check, particle index in range
-            fromp = self%os_stk%get_fromp(stkind)
-            top   = self%os_stk%get_top(stkind)
             if( iptcl < fromp .or. iptcl > top )then
                 write(logfhandle,*) 'iptcl            : ', iptcl
                 write(logfhandle,*) 'stkind           : ', stkind

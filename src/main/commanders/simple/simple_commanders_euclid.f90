@@ -76,7 +76,7 @@ contains
             !$omp parallel do default(shared) private(iptcl,eo)&
             !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
             do iptcl = 1,params%nptcls
-                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
                 eo = build%spproj_field%get_eo(iptcl) ! 0/1
                 group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + real(pspecs(:,iptcl),dp)
                 group_weights(eo+1,1)  = group_weights(eo+1,1)   + 1.d0
@@ -87,14 +87,14 @@ contains
             !$omp parallel do default(shared) private(iptcl,igroup)&
             !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
             do iptcl = 1,params%nptcls
-                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
                 igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
                 ngroups = max(igroup,ngroups)
             enddo
             !$omp end parallel do
             allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
             do iptcl = 1,params%nptcls
-                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
                 eo     = build%spproj_field%get_eo(iptcl) ! 0/1
                 igroup = nint(build%spproj_field%get(iptcl,'stkind'))
                 group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + real(pspecs(:,iptcl),dp)
