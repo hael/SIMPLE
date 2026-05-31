@@ -651,6 +651,8 @@ contains
         integer              :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
         integer              :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
         integer              :: nstks_part, nptcls_part, stkind, nstks_prev, ptcl_glob
+        integer              :: numlen, state_select
+        logical              :: l_state_select
         ! init
         call params%new(cline)
         if( params%dir .eq. '' )then
@@ -663,9 +665,15 @@ contains
         nptcls_tot = spproj%os_ptcl2D%get_noris()
         allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot))
         nptcls_part = 0
+        l_state_select = cline%defined('state')
+        state_select   = params%state
         !$omp parallel do proc_bind(close) default(shared) private(iptcl) reduction(+:nptcls_part)
         do iptcl=1,nptcls_tot
-            ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) > 0
+            if( l_state_select )then
+                ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) == state_select
+            else
+                ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) > 0
+            endif
             if( ptcls_mask(iptcl) )then
                 stkinds(iptcl) = spproj%os_ptcl2D%get_int(iptcl,'stkind')
                 if( stkinds(iptcl) >= params%fromp .and. stkinds(iptcl) <= params%top )then
@@ -705,6 +713,7 @@ contains
         ! new stacks
         box  = spproj%get_box()
         smpd = spproj%get_smpd()
+        numlen = len(int2str(nstks_tot))
         write(logfhandle,'(A)')'>>> GENERATING STACK(S)'
         call img%new([box,box,1],smpd)
         call simple_mkdir(stkdir)
@@ -725,7 +734,8 @@ contains
             call spproj%os_stk%get_ori(istk, o_stk)
             call o_stk%getter('stk',stkname)
             ext        = fname2ext(stkname)
-            newstkname = stkdir//get_fbody(basename(stkname),ext)//STK_EXT
+            newstkname = stkdir//get_fbody(basename(stkname),ext)//'_stk'&
+                &//int2str_pad(istk,numlen)//STK_EXT
             fromp = o_stk%get_fromp()
             top   = o_stk%get_top()
             fromp_glob = top_glob+1
@@ -743,7 +753,7 @@ contains
                     ! write(logfhandle, *) "STK2 " // int2str(spproj%os_ptcl2D%get_int(iptcl,'indstk'))
                     call img%read(stkname, iptcl-fromp+1)
                 endif
-                call img%write(newstkname, ptcl_cnt)
+                call img%write(newstkname, ptcl_cnt, del_if_exists=(ptcl_cnt == 1))
                 ! update orientations
                 call spproj_out%os_ptcl2D%transfer_ori(ptcl_glob, spproj%os_ptcl2D, iptcl)
                 call spproj_out%os_ptcl3D%transfer_ori(ptcl_glob, spproj%os_ptcl3D, iptcl)

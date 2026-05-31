@@ -544,8 +544,14 @@ contains
                         endif
                     enddo
                 endif
-                if( l_has_ptcl2D ) call validate_particle_field(proj%os_ptcl2D, proj, iproj, 'os_ptcl2D')
-                if( l_has_ptcl3D ) call validate_particle_field(proj%os_ptcl3D, proj, iproj, 'os_ptcl3D')
+                if( l_has_ptcl2D )then
+                    call validate_particle_field(proj%os_ptcl2D, proj, iproj, 'os_ptcl2D')
+                    if( l_has_stks ) call validate_stack_particle_ranges(proj, proj%os_ptcl2D, iproj, 'os_ptcl2D')
+                endif
+                if( l_has_ptcl3D )then
+                    call validate_particle_field(proj%os_ptcl3D, proj, iproj, 'os_ptcl3D')
+                    if( l_has_stks ) call validate_stack_particle_ranges(proj, proj%os_ptcl3D, iproj, 'os_ptcl3D')
+                endif
                 if( l_has_optics )then
                     do iopt = 1,proj%os_optics%get_noris()
                         call require_row_field(proj%os_optics, iopt, 'ogid', 'os_optics', iproj)
@@ -559,16 +565,26 @@ contains
                 integer,           intent(in)    :: iproj
                 character(len=*),  intent(in)    :: segment
                 integer, parameter :: NO_BAD = huge(1)
-                integer :: iptcl, stkind, nptcls, nstks_here
-                integer :: bad_stkind_missing, bad_stkind_range, bad_dfx, bad_angast, bad_phshift
+                integer :: iptcl, stkind, nptcls, nstks_here, fromp, top, indstk
+                integer :: bad_stkind_missing, bad_stkind_range, bad_indstk, bad_dfx, bad_angast, bad_phshift
+                integer, allocatable :: stack_nptcls(:)
                 logical, allocatable :: stack_ctf(:), stack_phaseplate(:)
                 if( .not.l_has_stks ) return
                 nptcls = os%get_noris()
                 nstks_here = proj%os_stk%get_noris()
-                allocate(stack_ctf(nstks_here), stack_phaseplate(nstks_here))
+                allocate(stack_ctf(nstks_here), stack_phaseplate(nstks_here), stack_nptcls(nstks_here))
                 stack_ctf        = .false.
                 stack_phaseplate = .false.
+                stack_nptcls     = 0
                 do stkind = 1,nstks_here
+                    if( proj%os_stk%isthere(stkind, 'nptcls') )then
+                        stack_nptcls(stkind) = proj%os_stk%get_int(stkind, 'nptcls')
+                    else if( proj%os_stk%isthere(stkind, 'fromp') .and. &
+                        proj%os_stk%isthere(stkind, 'top') )then
+                        fromp = proj%os_stk%get_fromp(stkind)
+                        top   = proj%os_stk%get_top(stkind)
+                        stack_nptcls(stkind) = max(0, top - fromp + 1)
+                    endif
                     if( proj%os_stk%isthere(stkind, 'ctf') )then
                         stack_ctf(stkind) = ctf_enabled_for_row(proj%os_stk, stkind, iproj, 'os_stk')
                         if( stack_ctf(stkind) )then
@@ -578,11 +594,14 @@ contains
                 enddo
                 bad_stkind_missing = NO_BAD
                 bad_stkind_range   = NO_BAD
+                bad_indstk         = NO_BAD
                 bad_dfx            = NO_BAD
                 bad_angast         = NO_BAD
                 bad_phshift        = NO_BAD
                 !$omp parallel do default(shared) private(iptcl, stkind) schedule(static) &
-                !$omp& reduction(min:bad_stkind_missing,bad_stkind_range,bad_dfx,bad_angast,bad_phshift) if(nptcls > 10000)
+                !$omp& private(indstk) &
+                !$omp& reduction(min:bad_stkind_missing,bad_stkind_range,bad_indstk,bad_dfx,bad_angast,bad_phshift) &
+                !$omp& if(nptcls > 10000)
                 do iptcl = 1,nptcls
                     if( .not.os%isthere(iptcl, 'stkind') )then
                         bad_stkind_missing = min(bad_stkind_missing, iptcl)
@@ -590,13 +609,21 @@ contains
                         stkind = os%get_int(iptcl, 'stkind')
                         if( stkind < 1 .or. stkind > nstks_here )then
                             bad_stkind_range = min(bad_stkind_range, iptcl)
-                        else if( stack_ctf(stkind) )then
-                            if( .not.os%isthere(iptcl, 'dfx') ) bad_dfx = min(bad_dfx, iptcl)
-                            if( os%isthere(iptcl, 'dfy') .and. (.not.os%isthere(iptcl, 'angast')) )then
-                                bad_angast = min(bad_angast, iptcl)
+                        else
+                            if( os%isthere(iptcl, 'indstk') )then
+                                indstk = os%get_int(iptcl, 'indstk')
+                                if( indstk < 1 .or. indstk > stack_nptcls(stkind) )then
+                                    bad_indstk = min(bad_indstk, iptcl)
+                                endif
                             endif
-                            if( stack_phaseplate(stkind) .and. (.not.os%isthere(iptcl, 'phshift')) )then
-                                bad_phshift = min(bad_phshift, iptcl)
+                            if( stack_ctf(stkind) )then
+                                if( .not.os%isthere(iptcl, 'dfx') ) bad_dfx = min(bad_dfx, iptcl)
+                                if( os%isthere(iptcl, 'dfy') .and. (.not.os%isthere(iptcl, 'angast')) )then
+                                    bad_angast = min(bad_angast, iptcl)
+                                endif
+                                if( stack_phaseplate(stkind) .and. (.not.os%isthere(iptcl, 'phshift')) )then
+                                    bad_phshift = min(bad_phshift, iptcl)
+                                endif
                             endif
                         endif
                     endif
@@ -609,10 +636,81 @@ contains
                     write(logfhandle,*) 'segment, row, input project: ', trim(segment), bad_stkind_range, iproj
                     THROW_HARD('particle stkind out of range in input project '//int2str(iproj))
                 endif
+                if( bad_indstk /= NO_BAD )then
+                    write(logfhandle,*) 'segment, row, input project: ', trim(segment), bad_indstk, iproj
+                    THROW_HARD('particle indstk out of range in input project '//int2str(iproj))
+                endif
                 if( bad_dfx /= NO_BAD ) call require_row_field(os, bad_dfx, 'dfx', trim(segment), iproj)
                 if( bad_angast /= NO_BAD ) call require_row_field(os, bad_angast, 'angast', trim(segment), iproj)
                 if( bad_phshift /= NO_BAD ) call require_row_field(os, bad_phshift, 'phshift', trim(segment), iproj)
             end subroutine validate_particle_field
+
+            subroutine validate_stack_particle_ranges( proj, os, iproj, segment )
+                class(sp_project), intent(inout) :: proj
+                class(oris),       intent(in)    :: os
+                integer,           intent(in)    :: iproj
+                character(len=*),  intent(in)    :: segment
+                integer :: istk, iptcl, stkind, nptcls, nstks_here, fromp, top, nptcls_stk
+                integer :: expected_fromp, bad_iptcl
+                nptcls       = os%get_noris()
+                nstks_here   = proj%os_stk%get_noris()
+                expected_fromp = 1
+                do istk = 1,nstks_here
+                    call require_row_field(proj%os_stk, istk, 'fromp', 'os_stk', iproj)
+                    call require_row_field(proj%os_stk, istk, 'top',   'os_stk', iproj)
+                    fromp = proj%os_stk%get_fromp(istk)
+                    top   = proj%os_stk%get_top(istk)
+                    if( proj%os_stk%isthere(istk, 'nptcls') )then
+                        nptcls_stk = proj%os_stk%get_int(istk, 'nptcls')
+                    else
+                        nptcls_stk = top - fromp + 1
+                    endif
+                    if( nptcls_stk < 0 )then
+                        THROW_HARD('negative stack nptcls in input project '//int2str(iproj))
+                    endif
+                    if( fromp /= expected_fromp )then
+                        write(logfhandle,*) 'segment, stack, input project: ', trim(segment), istk, iproj
+                        write(logfhandle,*) 'expected/fromp: ', expected_fromp, fromp
+                        THROW_HARD('non-contiguous stack particle ranges in input project '//int2str(iproj))
+                    endif
+                    if( nptcls_stk == 0 )then
+                        if( top >= fromp )then
+                            THROW_HARD('zero-particle stack has non-empty range in input project '//int2str(iproj))
+                        endif
+                    else
+                        if( top < fromp .or. top > nptcls )then
+                            write(logfhandle,*) 'segment, stack, input project: ', trim(segment), istk, iproj
+                            write(logfhandle,*) 'fromp/top/nptcls: ', fromp, top, nptcls
+                            THROW_HARD('stack particle range out of bounds in input project '//int2str(iproj))
+                        endif
+                        if( top - fromp + 1 /= nptcls_stk )then
+                            write(logfhandle,*) 'segment, stack, input project: ', trim(segment), istk, iproj
+                            write(logfhandle,*) 'fromp/top/nptcls: ', fromp, top, nptcls_stk
+                            THROW_HARD('stack nptcls inconsistent with fromp/top in input project '//int2str(iproj))
+                        endif
+                        bad_iptcl = 0
+                        do iptcl = fromp,top
+                            call require_row_field(os, iptcl, 'stkind', trim(segment), iproj)
+                            stkind = os%get_int(iptcl, 'stkind')
+                            if( stkind /= istk )then
+                                bad_iptcl = iptcl
+                                exit
+                            endif
+                        enddo
+                        if( bad_iptcl > 0 )then
+                            write(logfhandle,*) 'segment, particle, input project: ', trim(segment), bad_iptcl, iproj
+                            write(logfhandle,*) 'expected/stkind: ', istk, os%get_int(bad_iptcl, 'stkind')
+                            THROW_HARD('particle stkind does not match stack range in input project '//int2str(iproj))
+                        endif
+                    endif
+                    expected_fromp = expected_fromp + nptcls_stk
+                enddo
+                if( expected_fromp /= nptcls + 1 )then
+                    write(logfhandle,*) 'segment, input project: ', trim(segment), iproj
+                    write(logfhandle,*) 'stack ranges cover/project particles: ', expected_fromp - 1, nptcls
+                    THROW_HARD('stack ranges do not cover all particles in input project '//int2str(iproj))
+                endif
+            end subroutine validate_stack_particle_ranges
 
             integer function count_stack_particles( proj, iproj, require_ranges )
                 class(sp_project), intent(inout) :: proj

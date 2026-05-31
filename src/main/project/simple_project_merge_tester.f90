@@ -24,6 +24,7 @@ contains
         type(string) :: projfile1, projfile2, merged_file
         type(ctfparams) :: ctfvars
         integer, parameter :: NPTCLS1 = 3, NPTCLS2 = 2, NCLS = 2
+        integer :: i
         write(*,'(A)') 'test_merge_2d_selection_heterogeneous_ctf'
         projfile1   = 'merge_project_src1.simple'
         projfile2   = 'merge_project_src2.simple'
@@ -57,6 +58,16 @@ contains
         call assert_int(NPTCLS1 + NPTCLS2, reread%os_stk%get_top(2), 'project 2 stack top remapped')
         call assert_int(1, reread%os_ptcl2D%get_int(1, 'stkind'), 'project 1 particle stkind')
         call assert_int(2, reread%os_ptcl2D%get_int(NPTCLS1 + 1, 'stkind'), 'project 2 particle stkind remapped')
+        do i = 1,NPTCLS1
+            call assert_int(1, reread%os_ptcl2D%get_int(i, 'stkind'), 'project 1 particle stkind range')
+            call assert_int(i, reread%os_ptcl2D%get_int(i, 'indstk'), 'project 1 particle indstk preserved')
+        enddo
+        do i = 1,NPTCLS2
+            call assert_int(2, reread%os_ptcl2D%get_int(NPTCLS1 + i, 'stkind'), &
+                &'project 2 particle stkind range remapped')
+            call assert_int(i, reread%os_ptcl2D%get_int(NPTCLS1 + i, 'indstk'), &
+                &'project 2 particle indstk preserved')
+        enddo
         call assert_int(0, reread%os_ptcl2D%get_class(1), 'project 1 particle class reset')
         call assert_int(0, reread%os_ptcl2D%get_class(NPTCLS1 + 1), 'project 2 particle class reset')
         call assert_int(1, reread%os_ptcl2D%get_state(1), 'project 1 selected ptcl2D state preserved')
@@ -139,6 +150,7 @@ contains
         type(oris), intent(inout) :: os
         integer,    intent(in)    :: i, state, cls, ogid
         call os%set_stkind(i, 1)
+        call os%set(i, 'indstk', i)
         call os%set_state(i, state)
         call os%set_class(i, cls)
         call os%set_dfx(i, 1.50 + 0.01 * real(i))
