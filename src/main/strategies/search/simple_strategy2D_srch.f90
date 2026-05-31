@@ -45,6 +45,7 @@ type strategy2D_srch
     real                    :: best_corr       = -1.  !< best corr found by search
     real                    :: trs             =  0.  !< shift boundary
     logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
+    logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
   contains
     procedure :: new
     procedure :: prep4srch
@@ -75,6 +76,7 @@ contains
         self%iptcl_map   = spec%iptcl_map
         self%nrefs       = self%p_ptr%ncls
         self%nrots       = self%b_ptr%pftc%get_nrots()
+        if( self%nrots < 1 ) THROW_HARD('strategy2D_srch constructed before PFTC rotations were initialized')
         self%nrefs_eval  = 0
         ! construct composites
         self%trs        =  self%p_ptr%trs
@@ -101,20 +103,22 @@ contains
     subroutine prep4srch( self, os )
         class(strategy2D_srch), intent(inout) :: self
         class(oris),            intent(inout) :: os
-        real    :: corrs(self%b_ptr%pftc%get_nrots())
-        logical :: l_fresh_start
+        real    :: corrs(self%nrots)
         self%nrefs_eval = 0
         self%nsolns     = 0
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
-        l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
-        if( l_fresh_start )then
+        self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
+        if( self%l_fresh_start )then
             self%prev_class = 0
+            self%prev_rot   = 1
+            self%prev_shvec = 0.
         else
             self%prev_class = nint(os%get(self%iptcl,'class'))            ! class index
+            self%prev_rot   = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
+            if( self%prev_rot < 1 .or. self%prev_rot > self%nrots ) THROW_HARD('Invalid previous in-plane rotation index')
+            self%prev_shvec = os%get_2Dshift(self%iptcl)                  ! shift vector
         endif
-        self%prev_rot   = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
-        self%prev_shvec = os%get_2Dshift(self%iptcl)                      ! shift vector
         self%best_shvec = 0.
         if( self%prev_class > 0 )then
             if( s2D%cls_pops(self%prev_class) > 0 )then
@@ -293,16 +297,20 @@ contains
         e3 = s2D%class_space_e3s(best_class_local, ithr)
         if( e3 == 0. ) e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
         ! calculate in-plane rot dist (radians)
-        u(1) = 0.
-        u(2) = 1.
-        call rotmat2d(e3, mat)
-        x1   = matmul(u,mat)
-        call rotmat2d(os%e3get(self%iptcl), mat)
-        x2   = matmul(u,mat)
-        dist = myacos(dot_product(x1,x2))
+        if( self%l_fresh_start )then
+            dist = 0.
+        else
+            u(1) = 0.
+            u(2) = 1.
+            call rotmat2d(e3, mat)
+            x1   = matmul(u,mat)
+            call rotmat2d(os%e3get(self%iptcl), mat)
+            x2   = matmul(u,mat)
+            dist = myacos(dot_product(x1,x2))
+        endif
         ! calculate overlap between distributions
         mi_class = 0.
-        if( self%prev_class == best_class_local ) mi_class = 1.
+        if( (.not. self%l_fresh_start) .and. self%prev_class == best_class_local ) mi_class = 1.
         ! search space explored
         frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
         ! update parameters
