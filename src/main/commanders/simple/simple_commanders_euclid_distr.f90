@@ -1,5 +1,6 @@
 !@descr: for distributed sigma2 calculations in objfun=euclid 2D and 3D refinement
 module simple_commanders_euclid_distr
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_commanders_api
 use simple_sigma2_binfile, only: sigma2_binfile
 implicit none
@@ -22,6 +23,7 @@ contains
         type(sigma_array), allocatable   :: sigma2_arrays(:)
         type(string)                     :: part_fname,starfile_fname,outbin_fname
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
+        integer                          :: ninvalid_pspecs
         real(dp),          allocatable   :: group_pspecs(:,:,:)
         real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
         integer,           allocatable   :: group_weights(:,:)
@@ -90,8 +92,10 @@ contains
         endif
         allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(group_weights(2,ngroups),source=0)
+        ninvalid_pspecs = 0
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+            if( sanitize_pspec_curve(pspecs(:,iptcl)) ) ninvalid_pspecs = ninvalid_pspecs + 1
             eo = build%spproj_field%get_eo(iptcl) ! 0/1
             if( params%l_sigma_glob )then
                 igroup = 1
@@ -101,6 +105,8 @@ contains
             group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
         enddo
+        if( ninvalid_pspecs > 0 ) write(logfhandle,*) &
+            '>>> WARNING: calc_pspec_assemble floored invalid particle sigma spectra to 1.0:', ninvalid_pspecs
         do eo = 1,2
             do igroup = 1,ngroups
                 if( group_weights(eo,igroup) < 1 ) cycle
@@ -159,9 +165,12 @@ contains
             logical :: is_positive
             logical :: fixed_from_prev
             integer :: nn, idx
+            where( .not. ieee_is_finite(group_pspecs(eo,igroup,:)) ) group_pspecs(eo,igroup,:) = 1.d0
             if( .not. any(group_pspecs(eo,igroup,:) > DTINY) )then
-                write(logfhandle,*) 'eo/igroup/weight: ', eo, igroup, group_weights(eo,igroup)
-                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum')
+                write(logfhandle,*) '>>> WARNING: calc_pspec_assemble floored empty sigma2 spectrum to 1.0; eo/igroup/weight: ', &
+                    eo, igroup, group_weights(eo,igroup)
+                group_pspecs(eo,igroup,:) = 1.d0
+                return
             endif
             ! remove any negative sigma2 noise values: replace by positive neighboring value
             do idx = 1, size(group_pspecs, 3)
@@ -180,8 +189,8 @@ contains
                         do while (.not. is_positive)
                             nn = nn + 1
                             if( nn > size(group_pspecs,3) )then
-                                write(logfhandle,*) 'eo/igroup/weight: ', eo, igroup, group_weights(eo,igroup)
-                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum')
+                                group_pspecs(eo,igroup,idx) = 1.d0
+                                exit
                             end if
                             if( group_pspecs(eo,igroup,nn) > DTINY )then
                                 is_positive = .true.
@@ -192,6 +201,17 @@ contains
                 end if
             end do
         end subroutine remove_negative_sigmas
+
+        logical function sanitize_pspec_curve(pspec)
+            real, intent(inout) :: pspec(:)
+            logical :: had_nonfinite
+            had_nonfinite = any(.not.ieee_is_finite(pspec))
+            if( had_nonfinite )then
+                where( .not.ieee_is_finite(pspec) ) pspec = 1.0
+            endif
+            sanitize_pspec_curve = had_nonfinite .or. (.not. any(pspec > real(DTINY)))
+            if( .not. any(pspec > real(DTINY)) ) pspec = 1.0
+        end function sanitize_pspec_curve
 
     end subroutine exec_calc_pspec_assemble
 
