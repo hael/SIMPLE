@@ -45,7 +45,6 @@ contains
         logical              :: l_updated_only
         l_updated_only = .false.
         if( present(updated_only) ) l_updated_only = updated_only
-        if( .not. ctf_model_audit ) nctf_models_seen = 0
         ! indices
         precs(1:nptcls)%pind = pinds(:)
         if( nptcls < size(precs) ) precs(nptcls+1:)%pind = 0
@@ -75,45 +74,7 @@ contains
             endif
         end do
         !$omp end parallel do
-        if( ctf_model_audit ) call add_ctf_models_seen()
         nullify(spproj_field)
-    contains
-
-        subroutine add_ctf_models_seen()
-            integer :: i
-            do i = 1,nptcls
-                if( precs(i)%pind == 0 ) cycle
-                call add_ctf_model_seen(precs(i)%ctfparams)
-            enddo
-        end subroutine add_ctf_models_seen
-
-        subroutine add_ctf_model_seen(ctfparms)
-            type(ctfparams), intent(in) :: ctfparms
-            type(ctfparams), allocatable :: tmp(:)
-            integer :: i, oldsz
-            if( .not. allocated(ctf_models_seen) ) allocate(ctf_models_seen(16))
-            do i = 1,nctf_models_seen
-                if( same_ctf_model(ctfparms, ctf_models_seen(i)) ) return
-            enddo
-            if( nctf_models_seen == size(ctf_models_seen) )then
-                oldsz = size(ctf_models_seen)
-                allocate(tmp(max(1, 2 * oldsz)))
-                tmp(1:oldsz) = ctf_models_seen
-                call move_alloc(tmp, ctf_models_seen)
-            endif
-            nctf_models_seen = nctf_models_seen + 1
-            ctf_models_seen(nctf_models_seen) = ctfparms
-        end subroutine add_ctf_model_seen
-
-        logical function same_ctf_model(lhs, rhs)
-            type(ctfparams), intent(in) :: lhs, rhs
-            real, parameter :: CTFTOL = 1.0e-5
-            same_ctf_model = (lhs%ctfflag == rhs%ctfflag) .and. &
-                (lhs%l_phaseplate .eqv. rhs%l_phaseplate) .and. &
-                (abs(lhs%kv    - rhs%kv)    <= CTFTOL) .and. &
-                (abs(lhs%cs    - rhs%cs)    <= CTFTOL) .and. &
-                (abs(lhs%fraca - rhs%fraca) <= CTFTOL)
-        end function same_ctf_model
     end subroutine cavger_transf_oridat
 
     !>  \brief  for loading sigma2
@@ -884,9 +845,6 @@ contains
             call dealloc_cavgs
         endif
         if( allocated(eo_pops) ) deallocate(eo_pops)
-        nctf_models_seen = 0
-        ctf_model_audit  = .false.
-        if( allocated(ctf_models_seen) ) deallocate(ctf_models_seen)
     end subroutine cavger_kill
 
     !>  \brief submodule private destructor utility

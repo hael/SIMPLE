@@ -163,56 +163,6 @@ contains
         is_with_ctf = self%with_ctf
     end function is_with_ctf
 
-    module pure integer function get_nctf_models_seen(self)
-        class(polarft_calc), intent(in) :: self
-        get_nctf_models_seen = self%nctf_models_seen
-    end function get_nctf_models_seen
-
-    module subroutine reset_ctf_model_audit(self)
-        class(polarft_calc), intent(inout) :: self
-        self%ctf_model_audit = .true.
-        self%nctf_models_seen = 0
-        if( allocated(self%ctf_models_seen) ) deallocate(self%ctf_models_seen)
-        allocate(self%ctf_models_seen(max(1,self%nptcls)))
-        if( allocated(self%ctfparams_ptcls) ) deallocate(self%ctfparams_ptcls)
-        if( allocated(self%ctfparams_ptcls_set) ) deallocate(self%ctfparams_ptcls_set)
-        allocate(self%ctfparams_ptcls(1:self%nptcls), self%ctfparams_ptcls_set(1:self%nptcls))
-        self%ctfparams_ptcls_set = .false.
-        if( allocated(self%ctfparams_scored) ) self%ctfparams_scored = .false.
-    end subroutine reset_ctf_model_audit
-
-    module subroutine disable_ctf_model_audit(self)
-        class(polarft_calc), intent(inout) :: self
-        self%ctf_model_audit = .false.
-        self%nctf_models_seen = 0
-        if( allocated(self%ctf_models_seen) ) deallocate(self%ctf_models_seen)
-        if( allocated(self%ctfparams_ptcls) ) deallocate(self%ctfparams_ptcls)
-        if( allocated(self%ctfparams_ptcls_set) ) deallocate(self%ctfparams_ptcls_set)
-    end subroutine disable_ctf_model_audit
-
-    module integer function get_nctf_models_scored(self)
-        class(polarft_calc), intent(in) :: self
-        get_nctf_models_scored = self%nctf_models_scored
-    end function get_nctf_models_scored
-
-    module subroutine reset_ctf_scoring_audit(self)
-        class(polarft_calc), intent(inout) :: self
-        self%ctf_scoring_audit = .true.
-        self%nctf_models_scored = 0
-        if( allocated(self%ctf_models_scored) ) deallocate(self%ctf_models_scored)
-        allocate(self%ctf_models_scored(max(1,self%nptcls)))
-        if( .not. allocated(self%ctfparams_scored) ) allocate(self%ctfparams_scored(1:self%nptcls))
-        self%ctfparams_scored = .false.
-    end subroutine reset_ctf_scoring_audit
-
-    module subroutine disable_ctf_scoring_audit(self)
-        class(polarft_calc), intent(inout) :: self
-        self%ctf_scoring_audit = .false.
-        self%nctf_models_scored = 0
-        if( allocated(self%ctf_models_scored) ) deallocate(self%ctf_models_scored)
-        if( allocated(self%ctfparams_scored) ) deallocate(self%ctfparams_scored)
-    end subroutine disable_ctf_scoring_audit
-
     module function allocate_pft( self ) result( pft )
         class(polarft_calc),  intent(in)  :: self
         complex(sp), allocatable :: pft(:,:)
@@ -231,15 +181,5 @@ contains
         real,                 intent(out) :: vals(self%nrots)
         vals(:) = self%crmat_many(ithr)%r(1:self%nrots, ind)
     end subroutine get_precalc_objfun_vals
-
-    logical function same_ctf_model(lhs, rhs)
-        type(ctfparams), intent(in) :: lhs, rhs
-        real, parameter :: CTFTOL = 1.0e-5
-        same_ctf_model = (lhs%ctfflag == rhs%ctfflag) .and. &
-            (lhs%l_phaseplate .eqv. rhs%l_phaseplate) .and. &
-            (abs(lhs%kv    - rhs%kv)    <= CTFTOL) .and. &
-            (abs(lhs%cs    - rhs%cs)    <= CTFTOL) .and. &
-            (abs(lhs%fraca - rhs%fraca) <= CTFTOL)
-    end function same_ctf_model
 
 end submodule simple_polarft_access

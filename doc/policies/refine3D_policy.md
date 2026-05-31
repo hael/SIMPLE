@@ -1,317 +1,309 @@
 # Refine3D Policy
 
-This document records durable workflow contracts for `refine3D`. It is policy,
-not a line-by-line implementation map.
+This document records the current policy for the base `refine3D` command. It
+does not describe the staged `abinitio3D` controller, the class-average
+`abinitio3D_cavgs` initializer, or the automated wrapper `refine3D_auto`.
 
-## 1. Core Model
+Related workflow policies:
 
-`refine3D` is a layered fixed-point workflow:
+- [abinitio3D_policy.md](abinitio3D_policy.md)
+- [abinitio3D_cavgs_policy.md](abinitio3D_cavgs_policy.md)
+- [refine3D_auto_policy.md](refine3D_auto_policy.md)
+- [automasking_policy.md](automasking_policy.md)
+- [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
+- [sigma_calculation_policy.md](sigma_calculation_policy.md)
 
-1. initialize iteration state and execution mode
-2. generate the iteration reprojection model from the current Cartesian volumes
+## 1. Scope
+
+`refine3D` is an iterative projection-matching workflow over an existing
+project and one or more starting 3D references. Its durable contract is:
+
+1. initialize project state and execution mode
+2. materialize the iteration reprojection model from current Cartesian volumes
 3. optionally run probabilistic pre-alignment
-4. run particle-domain search and assignment
+4. run particle-domain search and hard assignment
 5. write partition-local Cartesian reconstruction inputs
-6. run volume assembly
-7. persist project state for the next pass
+6. run volume assembly when volume reconstruction is enabled
+7. persist project state for the next iteration or caller
 
-The supported reconstruction path is Cartesian. The old `polar` command-line
-branch selector and its non-Cartesian branches have been removed.
-Cartesian matching still uses polar Fourier central sections internally, but
-those sections are derived directly from the current Cartesian volumes.
+The supported reconstruction path is Cartesian. Cartesian matching still uses
+polar Fourier central sections internally, but those sections are generated
+from the current Cartesian volumes. `refine3D` does not own a separate
+non-Cartesian reconstruction branch.
 
-Particle-domain work stays in probabilistic alignment, matcher preparation,
-search strategies, pose/state/shift updates, and partial reconstruction writing.
-Assembled-reference work stays in `commander_volassemble` and the
-volume postprocessing helpers it calls.
+Particle-domain work stays in the probabilistic pre-step, matcher preparation,
+search strategies, pose/state/shift updates, sigma updates during Euclidean
+matching, and partial reconstruction writing. Volume-domain work stays in
+`volassemble` and the volume postprocessing helpers it calls.
 
 Shared-memory and distributed `refine3D` must preserve the same scientific
-workflow and artifact contracts. Only process launch and scheduling should
-differ.
+workflow and artifact contracts. Only toolbox lifetime, process launch, and
+scheduling differ.
 
-## 2. Ownership
+## 2. Entry Points and Execution Mode
 
-`simple_commanders_refine3D.f90` is the thin entry point. It owns top-level
-defaults and strategy selection through `create_refine3D_strategy`.
+The public command is `refine3D`, registered in `simple_ui_refine3D.f90` and
+routed by `simple_exec_refine3D.f90`.
 
-`simple_refine3D_strategy.f90` owns iteration control, shared-memory versus
-distributed orchestration, scheduler interaction, probabilistic pre-step
-dispatch, matcher dispatch, volume assembly dispatch, run-finalization
-bookkeeping, and the per-iteration reprojection-model handoff. It must not
-absorb numerical postprocessing or assembled-reference construction.
+`simple_commanders_refine3D.f90` performs the thin command-level setup:
 
-`simple_commanders_prob.f90` plus `simple_eul_prob_tab*.f90` own probabilistic
-pre-alignment: particle sampling, probability-table generation, aggregation, and
-the assignment artifact consumed by the matcher.
+- validate multi-volume input against `nstates`
+- set local defaults such as `mkdir`, `cenlp`, `oritype`, and `prg`
+- select a strategy through `create_refine3D_strategy`
+- run the iteration loop
+- delegate finalization and cleanup to the selected strategy
 
-`simple_strategy3D_matcher.f90` owns `refine3D_exec`, including consuming the
-driver-generated reprojection model, search-strategy dispatch, candidate
-evaluation, pose/state/shift updates, Euclidean sigma updates during search,
-and writing partition-local Cartesian partial reconstructions.
+Strategy selection is command-line shaped:
 
-`simple_commanders_rec_distr.f90` owns `commander_volassemble` /
-`exec_volassemble`: reducing Cartesian partials, restoring even/odd
-volumes, calculating FSCs, postprocessing volumes, and writing resolution
-metadata. It does not generate matcher reprojections.
+- `nparts` without `part` selects the distributed master strategy
+- otherwise the shared-memory strategy is used
+- distributed workers run the partition command path with `part` and `outfile`
+
+`maxits` is the number of iterations to run in the current invocation.
+`which_iter` starts at `startit`, and `extr_iter` follows the same per-call
+counter unless supplied by a caller.
+
+Shared-memory `refine3D` currently rejects `continue=yes`. Distributed
+`continue=yes` resumes from project-carried output volumes, FSC files, and
+run-local artifacts that match the requested partitioning and sigma mode.
+
+## 3. Ownership
+
+`simple_commanders_refine3D.f90` owns the base command entry point and the
+shared iteration loop. It should stay thin.
+
+`simple_refine3D_strategy.f90` owns:
+
+- shared-memory versus distributed orchestration
+- scheduler interaction
+- iteration counters and convergence checks
+- probabilistic pre-step dispatch
+- matcher dispatch
+- volume assembly dispatch
+- per-iteration reprojection-model materialization
+- run finalization
+
+It must not absorb numerical volume postprocessing or assembled-reference
+construction.
+
+`simple_strategy3D_matcher.f90` owns `refine3D_exec`: consuming the
+driver-generated reprojection model, selecting and running the search strategy,
+updating orientations/states/shifts, updating Euclidean sigma estimates during
+search, and writing partition-local Cartesian partial reconstructions.
+
+`simple_commanders_prob.f90` plus `simple_eul_prob_tab*.f90` own
+probabilistic pre-alignment and assignment artifacts consumed by the matcher.
+
+`simple_commanders_rec_distr.f90` owns `commander_volassemble`: reducing
+partials, restoring even/odd volumes, calculating FSCs, running volume
+postprocessing, writing state volumes, and updating resolution metadata.
 
 `simple_vol_pproc_policy.f90` owns volume postprocessing decisions such as
-automask action, state-mask compatibility, and nonuniform-mask source.
+automask action, state-mask compatibility, and NU mask source.
 
-## 3. Builder and Iteration State
+## 4. Project and Builder State
 
-The `builder` owns derived execution state, not durable workflow state. Its
-contents are valid only for the command line and parsed `parameters` used to
-build it.
+The project is durable workflow state. The `builder` owns derived execution
+state for one parsed command line and must not be treated as durable policy
+state.
 
-Shared-memory `refine3D` rebuilds the strategy toolbox each iteration after the
-iteration command line has settled stage policy. Persist any initial
-particle-state changes, such as random orientations or sampling-counter cleanup,
-before the first rebuild.
+Shared-memory `refine3D` rebuilds its strategy toolbox each iteration after
+the iteration command line has settled. Persist any initial project mutations,
+such as random orientations, sampling-counter cleanup, or state initialization,
+before the next rebuild reads the project.
 
-Distributed execution follows the same scientific policy through fresh worker
-and assembly commands.
+Distributed `refine3D` keeps prototype command lines for worker, probability,
+sigma, assembly, and postprocess steps. These command lines are execution
+templates, not independent workflow policies.
 
-`which_iter` is the current iteration. `startit` is the stage start and must
-remain available to workers and assembly because stage planning depends on the
-full stage interval.
 Fresh-start checks that decide whether to consume project-carried matching
-metadata must use the stage interval (`which_iter <= startit`), not only global
-iteration 1.
+metadata must use the stage interval: `which_iter <= startit` with
+`continue != yes` is fresh, even when `startit` is greater than one.
 
 Before a matcher iteration writes partition-local Cartesian partials, stale
-per-iteration partial reconstruction inputs must be removed.
+partial reconstruction files for the active states and partitions must be
+removed.
 
-## 4. Reference Preparation
+## 5. Startup and State Initialization
 
-The refine3D strategy prepares the iteration reprojection model before
-probabilistic pre-alignment or matcher work starts. It reads the current
-Cartesian volumes, applies the normal masking/filtering/centering policy, and
-writes even/odd PFTC reference sections for the active matching shell range.
+If multiple starting volumes are supplied, `nstates` must be defined and
+greater than one. Multi-state startup requires either all `vol1..volN` inputs
+or none.
 
-`volassemble` must not generate or promote matcher reprojections. Volume assembly
-produces Cartesian volumes and FSC metadata only; the next iteration's
-reprojection model is generated by the refine3D strategy from those volumes.
+When orientations are absent, `refine3D` randomizes 3D orientations. When
+projection indices are absent, distributed initialization sets them from the
+Euler sampling.
 
-`simple_strategy3D_matcher.f90` and probabilistic table workers are consumers
-of the driver-generated reprojection model. They must not re-read volumes or
-reproject references locally. The model file header is the authority for the
-matching shell range consumed downstream.
+For multi-state distributed startup:
 
-Reference preparation projects only the active high-pass/low-pass shell range
-used for matching in that iteration. Do not silently project to the crop's
-interpolation limit unless the matching policy explicitly asks for that range.
+- existing state assignments must match the requested `nstates`
+- if complete starting volumes are supplied, state labels are randomized
+  uniformly
+- otherwise prior objective values are required and labels are randomized with
+  squared-uniform seeding
+- probabilistic multi-state startup requires each state to exceed the minimum
+  population guard
 
-### Particle Image I/O Contract
+Even/odd partitioning is required for consistent half-map reconstruction. If it
+is absent, initialization partitions the active orientation segment and writes
+that state back to the project.
 
-The 3D matcher must preserve a single particle-stack read per batch. When
-Cartesian partial reconstruction is active, batch construction should retain the
-already-read raw particle images for reconstruction preparation, and the
-matcher should consume those in-memory images after assignment within the same
-batch.
+## 6. Reference Preparation
 
-Do not move partial reconstruction into a separate full particle pass that
-re-reads image stacks merely to reduce peak memory. That regresses the
-distributed performance contract and must be treated as an explicit policy
-change if it is ever chosen. The accepted online reconstruction tradeoff is
-temporary co-residence of the matcher reprojection model, per-state
-reconstruction objects, and per-batch raw image copies; large volume objects,
-probability tables, and assignment matrices should still be released as soon as
-their downstream artifacts have been materialized.
+The strategy materializes the iteration reprojection model before
+probabilistic pre-alignment or matcher work starts. Reference preparation:
 
-## 5. Volume Assembly
+1. reads the current Cartesian reference volumes
+2. applies reference masking/filtering/centering policy
+3. determines the active high-pass/low-pass shell range
+4. writes even/odd PFTC reference sections for the matcher
 
-Volume assembly reduces partition-local Cartesian reconstruction updates,
-restores even/odd half volumes, applies sampling-density correction, writes
-merged state volumes, updates per-particle FSC-derived resolution metadata, runs
-volume postprocessing, and persists project metadata. It does not refresh
-projected matcher references.
+`volassemble` must not generate or promote matcher reprojections. The next
+iteration's reprojection model is generated by the strategy from the current
+Cartesian outputs.
 
-Standalone or terminal `reconstruct3D` calls follow the same assembly rule:
-assemble volumes only.
+The model file header is the authority for the matching shell range consumed
+by matcher workers and probabilistic table workers.
 
-`bootstrap_rec3D` is the supported fast route for generating an
-ML-regularized reconstruction when orientations exist but grouped sigma files
-do not. It first runs the normal `reconstruct3D` commander without
-regularization to produce even/odd half maps, estimates a global sigma2 table
-from the half-map difference scaled by the effective even/odd reconstruction
-weights, writes the standard `sigma2_groups*.star` artifact, and then reruns
-the normal `reconstruct3D` commander with `objfun=euclid` and `ml_reg=yes`.
-This is a bootstrap reconstruction workflow, not an online refinement matcher
-path, so its two reconstruction passes are an explicit part of the algorithm
-rather than a change to the single-read matcher batch contract.
-Project-file-driven reconstruction commands must derive native sampling from
-the project. Child command lines should not restate native `box`/`smpd`, and
-should not pass redundant `smpd_crop`; pass `box_crop` only when a deliberate
-crop is requested. A terminal/original-sampling `bootstrap_rec3D` call from a
-staged workflow should therefore omit `box*`/`smpd*` entirely.
+Reference preparation must project only the active matching shell range. It
+must not silently project to the crop interpolation limit unless matching
+policy explicitly asks for that range.
 
-The shared helper `restore_state_from_parts` owns the restoration
-sequence. Changes to ML ordering, sampling-density correction, FSC-prior
-handling, trailing reconstruction, low-resolution even/odd insertion, or
-`lp`-set behavior must go through that shared helper rather than duplicated
-branches.
+The 3D low-pass range comes from one of these sources:
 
-Benchmark files should stay simple: context plus one `TIMINGS (s)` section.
-Labels should be coarse, operation-level buckets such as setup, matcher,
-assembly/reconstruction, postprocessing, metadata I/O, and cleanup. Avoid
-separate comparable/non-comparable sections and duplicate detail or percentage
-blocks in the emitted files.
+- explicit LP-set `lp`
+- project-carried NU handoff when `nu_refine=yes` or `nonuniform_lpset`
+  permits it
+- current FSC files
+- an existing project `lp` field
 
-## 6. Gold-Standard, `lp`-Set, and Trailing
+`lpstop` caps the selected matching bandwidth. The crop Nyquist limit caps the
+final Fourier index after the matching policy has selected a candidate range.
 
-Gold-standard refinement keeps even and odd volumes independent. If
-low-resolution even/odd docking is needed for 3D registration, it is applied
-only after reference read/mask/filter and immediately before reprojection-model
-generation. Assembly writes clean restored half-volumes without low-resolution
-insertion. Trailing reconstruction blends even with previous even and odd with
-previous odd before automasking and derived reference filtering.
+## 7. Matching Topology
 
-In `lp`-set mode, the matcher consumes a merged reference generated from the
-current merged volume. Assembly must not do low-resolution even/odd docking
-insertion. If trailing is active, assembly first trails even and odd against
-their corresponding previous half volumes and merges the trailed half volumes.
+Gold-standard matching keeps even and odd references independent.
 
-Reference loading is controlled by topology, not by state count alone. In
-nonuniform LP-set matching (`nonuniform_lpset` with active `l_lpset`), the
-registration model is built from the merged state reference, preferring the
-merged `_nu_filt` product when present. Otherwise reference preparation first
-tries independent even/odd references, preferring `_nu_filt` half references in
-nonuniform mode, then falling back to regular even/odd half references, and
-only then to the merged state volume when half references are unavailable.
+If low-resolution even/odd docking is needed for registration, it is applied
+only after reference read/mask/filter and immediately before PFTC generation.
+Those blended references are not written as half-map outputs and do not feed
+FSC, automasking, NU filtering, or ordinary half-map handoff.
 
-FSCs and FSC-derived stage diagnostics are calculated from dense Cartesian
+LP-set matching uses a merged registration reference. State count alone must
+not force merged-reference matching; topology is controlled by LP-set policy.
+
+In nonuniform mode, reference loading follows the NU policy:
+
+- plain `nonuniform` prefers independent `_nu_filt` even/odd references and
+  falls back to regular even/odd references before using a merged map
+- `nonuniform_lpset` with active LP-set matching uses the merged reference and
+  prefers the merged `_nu_filt` product when present
+
+The ordinary reference low-pass filter is not applied on top of a NU reference
+path. NU and ML-regularized references are treated as already filtered during
+volume assembly.
+
+## 8. Probabilistic and Matcher Work
+
+The current workflow is probabilistic pre-alignment followed by hard particle
+assignment. It is not a monolithic soft-assignment volume-integrated EM
+implementation.
+
+Use the terms "probabilistic pre-alignment" and "hard-assignment particle
+update" unless the ownership, artifacts, and update model actually change.
+
+`refine=prob*` modes run the probability pre-step before the main matcher.
+`prob_neigh` dispatches to the neighborhood probability command. The matcher
+then consumes the generated assignment artifact.
+
+The matcher must preserve a single particle-stack read per batch. When
+Cartesian partial reconstruction is active, batch construction retains the
+already-read raw particle images and reconstruction consumes those in-memory
+images after assignment within the same batch.
+
+Do not move partial reconstruction into a second full particle pass that
+re-reads image stacks unless the performance contract is explicitly changed.
+
+## 9. Volume Assembly
+
+When `volrec=yes`, matcher workers write partition-local Cartesian partials and
+the strategy dispatches `volassemble`.
+
+`volassemble`:
+
+- reduces partition-local partial reconstructions
+- restores dense even/odd half-volumes
+- calculates FSC curves and state resolutions
+- restores merged state volumes
+- runs automask and NU postprocessing decisions
+- writes derived reference products
+- records resolution and NU matching metadata in the project
+
+Volume assembly does not refresh matcher PFTC references. It only produces
+Cartesian volumes and metadata for the next iteration.
+
+The shared helper `restore_state_from_parts` owns the restoration sequence.
+Changes to ML ordering, sampling-density correction, FSC handling, trailing
+reconstruction, low-resolution even/odd insertion, or LP-set behavior must go
+through that shared helper rather than duplicated assembly branches.
+
+FSCs and FSC-derived diagnostics are calculated from dense Cartesian
 half-volumes, not from sparse, intermediate, or low-resolution-blended
 registration-reference representations.
 
-## 7. Reference Grid and Stage Transitions
+## 10. Trailing and Combined Even/Odd
 
-Each stage owns the `nspace` used by its current particle-matching pass. The
-next stage generates its matcher PFTC references at the start of its iteration
-from the current volumes using its own `nspace` and matching frequency policy.
-Do not pass a future reference grid through volume assembly.
+Trailing reconstruction blends even with previous even and odd with previous
+odd. It runs before automasking and derived reference filtering.
 
-## 8. Abinitio3D Stage Snapshots
+In LP-set mode, if trailing is active, assembly trails the even and odd
+half-volumes first and then merges the trailed halves. Assembly must not use
+low-resolution even/odd docking insertion for LP-set outputs.
 
-`abinitio3D` and `abinitio3D_cavgs` write stage snapshots through
-`simple_abinitio_utils.f90`.
+When `combine_eo=yes`, distributed `refine3D` schedules one additional final
+iteration after convergence or run-length termination. That final iteration:
 
-`lpinfo(istage)%lp` controls staged search/reference scheduling. It is not the
-policy cutoff for saved `_stageNN_lp.mrc` diagnostic volumes.
+- disables fractional update
+- forces full update
+- sets `combine_eo=yes`
+- tightens the low-pass criterion to at most 0.143
 
-Saved stage `_lp` volumes must be filtered to the current state FSC resolution
-when an FSC exists. The planned stage LP is only a fallback.
+The combined even/odd iteration is part of base `refine3D`, not a terminal
+`refine3D_auto` or ab initio reconstruction step.
 
-When an ab initio route starts in multi-state mode and transitions from
-`pgrp_start` to a target point-group symmetry, the symmetry-axis search at the
-symmetry-search stage is state-local. Each active state must determine its own
-axis from its own current map, apply that transform only to orientations assigned
-to that state, and only then proceed to the following point-group refinement
-stage.
+## 11. Finalization and Artifacts
 
-The terminal original-sampling ab initio reconstruction must inherit the
-scientific reconstruction policy from the last `refine3D` stage. If the final
-stage used `objfun=euclid` and `ml_reg=yes`, the terminal reconstruction must
-use compatible grouped sigma estimates when they are already local to the
-workflow, otherwise it should bootstrap sigmas locally before producing the
-regularized map. This terminal reconstruction is still a fresh reconstruction
-from selected particles: it must not apply fractional-update sampling or
-trailing-average blending, and it also must not inherit staged search or
-mask-generation controls such as `refine`, `lp`, `automsk`, `envfsc`, `gauref`,
-or a NU `filt_mode`; those belong to the staged refinement schedule, not
-to the terminal original-sampling reconstruction. Terminal ab initio
-postprocessing is classical even when the staged workflow used NU-filtered
-references. Build the terminal reconstruction command line from a small
-whitelist instead of copying the staged `refine3D` command and deleting keys.
+On each iteration, strategy benchmark files should stay simple: context plus
+one `TIMINGS (s)` section. Labels should be coarse operation buckets such as
+setup, probabilistic pre-step, matcher/scheduler, assembly/postprocess, and
+total time.
 
-For single-state continuation into `refine3D_auto`, an existing project
-`os_out` state-1 `vol` entry is a valid initializer when the referenced file is
-present. Explicit `vol1` on the command line takes precedence. `refine3D_auto`
-should reconstruct an initializer only when neither source is available. In NU
-filter mode, an existing initializer is accepted only if a same-stem raw native
-even/odd pair exists. `refine3D_auto` then generates fresh same-stem `_nu_filt`
-bootstrap references from that raw pair before the first matcher pass. When
-`nu_refine=yes`, this bootstrap pass runs the sequential shell challenger from
-the finest populated base-bank label, so an empty 4 A discrete-bank member does
-not block higher-resolution probing. If the
-raw native even/odd pair is missing or incompatible, `refine3D_auto` uses its
-existing startup reconstruction path to create the missing reference material
-instead of trusting stale derived NU products.
+Distributed matching writes partition alignment documents and merges them into
+the project after worker completion. Shared-memory matching writes the project
+directly after each iteration.
 
-`refine3D_auto` must run at least ten refinement iterations. Its automatic
-iteration planner aims for roughly four particle updates when deriving the
-maximum iteration count from the sampled-update size, but that estimate must
-not reduce the run below ten iterations, and normal convergence checks must
-respect that minimum.
+On finalization:
 
-In staged `abinitio3D`, `filt_mode=nonuniform` means static discrete-bank
-nonuniform filtering with `nu_refine=no`. The ML-regularized half-map pair may
-replace the finest discrete NU label only when its effective resolution is
-finer than that label. abinitio3D currently keeps gold-standard refinement
-disabled: `GOLD_STD_STAGE` is off, `envfsc=no`, and the controller keeps a
-scheduled `lp` on the refine3D command line. From `NU_FILTER_STAGE`, the
-controller emits `nonuniform_lpset`, so the NU frontier is promoted into an
-explicit LP-set matching run and the merged reference topology is used. The old
-abinitio3D automatic low-pass modes, `filt_mode=uniform` and `filt_mode=fsc`,
-are no longer supported. Automasking is opt-in (`automsk=no` by default) and
-does not enable the NU high-resolution shell ratchet.
+- `endit` is written to the command line
+- `startit` is removed from the command line
+- active state volumes and FSCs are registered in `os_out`
+- empty states are removed from `os_out`
+- `cls3D` distributed runs map class-orientation output back to particles
+- `JOB_FINISHED` is touched by the shared-memory path
 
-`refine3D_auto` may use two NU resolution-expansion lifetimes. The iterative
-`nu_refine` ratchet is coupled to 3D refinement and may promote multiple
-high-resolution Fourier shells per refinement iteration, but only by testing
-one shell at a time. Each shell is applied/promoted only when the unary
-objective moves enough of the tested frontier to the challenger and satisfies
-the absolute seed floor; no Potts prior is applied during this constrained
-extension challenge. The sequential walk starts from the finest populated
-base-bank label and stops at the first unattempted challenger or the first
-challenger below that frontier-support rule. In this coupled refinement path,
-NU filtering does not add the ML-regularized half-map pair as an auxiliary
-replacement; the `_unfil` pair remains the base-bank input when `ml_reg=yes`, and
-the shell challenger sequence is the only refinement experiment. The terminal
-all-particle `reconstruct3D` pass leaves refinement and writes the final half
-maps and merged map. Final-map postprocessing is classical-only, even when the
-refinement iterations used NU-filtered references. Generic `reconstruct3D`
-postprocessing and `refine3D_auto` terminal postprocessing therefore use the
-same global FSC/B-factor path.
+Grouped sigma files are run-local noise-model state. They may be written and
+consumed inside a running refinement, but they are not registered as `os_out`
+handoff artifacts for a later `refine3D` execution.
 
-Project-carried NU `lp` is a matching-bandwidth handoff, but it is deliberately
-narrow. It may be consumed only when NU refinement is active (`nu_refine=yes`)
-or when the workflow is explicitly in `nonuniform_lpset`; fresh stage starts
-(`which_iter <= startit` with `continue != yes`) must ignore it. Static plain
-`filt_mode=nonuniform` with `nu_refine=no` writes NU products but does not by
-itself promote the project `lp` into the matcher bandwidth. Explicit `lp`
-remains a hard override, and `lpstop` remains a cap on the final matcher
-bandwidth.
+## 12. Refactor Rules
 
-Only `nonuniform_lpset` promotes a project-carried NU `lp` into an explicit
-command-line `lp` and activates `l_lpset`. Plain `nonuniform` may use a
-NU-refined project `lp` as a later-iteration bandwidth handoff when
-`nu_refine=yes`, but it must not switch reference topology: non-LP-set matching
-continues to prefer independent even/odd references.
-
-For 3D refinement workflows, grouped sigma files are run-local noise-model
-state. They may be written and consumed inside a running reconstruction
-workflow, but they are not registered as `os_out` project handoff artifacts for
-a later `refine3D` execution.
-
-## 9. Probabilistic Refinement
-
-The current workflow is probabilistic pre-alignment followed by hard particle
-assignment, not a monolithic soft-assignment EM implementation.
-
-Use "probabilistic pre-alignment" and "hard-assignment particle update". Avoid
-describing the implementation as fully soft volume-integrated EM unless the
-ownership, workflow, and artifact contracts actually change.
-
-## 10. Refactor Rules
-
-- Preserve the particle-domain versus assembled-reference boundary.
+- Preserve the particle-domain versus volume-domain boundary.
 - Keep shared-memory and distributed workflows behaviorally aligned.
 - Keep volume assembly as the owner of assembled-reference work.
 - Do not move assembled-volume postprocessing into `refine3D_strategy`.
 - Do not merge probabilistic particle-update logic with volume postprocessing.
 - Do not introduce a second ambiguous source of matching references.
-- Preserve the single image-stack read per matcher batch; reconstruction must
-  reuse the already-read batch images in online refine3D paths.
+- Preserve the single image-stack read per matcher batch.
 - Treat assignment maps, partition-local partials, state volumes, even/odd
-  volumes, FSC files, and automasks as explicit workflow contracts, not
-  incidental files.
+  volumes, FSC files, automasks, and NU outputs as explicit workflow
+  contracts.

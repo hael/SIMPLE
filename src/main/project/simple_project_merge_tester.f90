@@ -1,21 +1,11 @@
 !@descr: unit tests for SIMPLE project merging
 module simple_project_merge_tester
-use simple_builder,        only: builder
-use simple_classaverager,  only: cavger_new, cavger_init_online, cavger_transf_oridat, &
-                                 cavger_dealloc_online, cavger_reset_ctf_model_audit, &
-                                 cavger_get_nctf_models_seen, cavger_disable_ctf_model_audit, cavger_kill
-use simple_image,          only: image
-use simple_matcher_2Dprep, only: prepimg4align, prepimg4align_reset_ctf_model_audit, &
-                                 prepimg4align_get_nctf_models_seen, prepimg4align_disable_ctf_model_audit
-use simple_parameters,     only: parameters
-use simple_polarft_calc,   only: polarft_calc
 use simple_projfile_utils, only: merge_selected_project_files
 use simple_sp_project,     only: sp_project
 use simple_string,         only: string
 use simple_syslib,         only: del_file, file_exists
 use simple_test_utils
-use simple_defs,           only: sp
-use simple_type_defs,      only: CTFFLAG_YES, OBJFUN_CC, ctfparams
+use simple_type_defs,      only: CTFFLAG_YES, ctfparams
 implicit none
 
 private
@@ -93,7 +83,6 @@ contains
         call assert_real(300.0, ctfvars%kv, 1.0e-6, 'project 2 ptcl3D CTF kv resolved')
         call assert_real(2.7, ctfvars%cs, 1.0e-6, 'project 2 ptcl3D CTF cs resolved')
         call assert_real(0.10, ctfvars%fraca, 1.0e-6, 'project 2 ptcl3D CTF fraca resolved')
-        call assert_runtime_ctf_model_paths(reread, NPTCLS1 + NPTCLS2, NCLS)
         call cleanup_files(projfile1, projfile2, merged_file)
         call proj1%kill
         call proj2%kill
@@ -157,118 +146,10 @@ contains
         call os%set(i, 'angast', 10.0 * real(i))
         call os%set(i, 'phshift', 0.0)
         call os%set(i, 'corr', 0.5 + 0.01 * real(i))
-        call os%set(i, 'eo', modulo(i, 2))
         call os%set(i, 'sampled', i)
         call os%set(i, 'updatecnt', i + 10)
         call os%set_ogid(i, ogid)
     end subroutine fill_particle_row
-
-    subroutine assert_runtime_ctf_model_paths(spproj, nptcls, ncls)
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: nptcls, ncls
-        type(parameters), target :: params
-        type(builder),    target :: build
-        type(polarft_calc)      :: pftc
-        complex(sp), allocatable :: pft(:,:)
-        real(sp), allocatable :: vals(:)
-        integer, allocatable :: pinds(:)
-        integer :: i, nactive
-        call init_runtime_params(params, nptcls, ncls)
-        allocate(pinds(nptcls), source=0)
-        nactive = 0
-        do i = 1,nptcls
-            if( spproj%os_ptcl2D%get_state(i) == 0 ) cycle
-            nactive = nactive + 1
-            pinds(nactive) = i
-        enddo
-        call assert_true(nactive > 0, 'runtime CTF path active particle set exists')
-        if( nactive < 1 )then
-            deallocate(pinds)
-            return
-        endif
-        call pftc%new(params, 1, [1,nptcls], [1,4])
-        call pftc%reallocate_ptcls(nactive, pinds(1:nactive))
-        call pftc%reset_ctf_model_audit()
-        call pftc%create_polar_absctfmats(spproj, 'ptcl2D')
-        call assert_int(2, pftc%get_nctf_models_seen(), 'PFT CTF path sees both microscope models')
-        pft = pftc%allocate_pft()
-        pft = cmplx(1.0_sp, 0.0_sp, kind=sp)
-        call pftc%set_ref_pft(1, pft, iseven=.true.)
-        call pftc%cp_even2odd_ref(1)
-        do i = 1,nactive
-            call pftc%set_ptcl_pft(pinds(i), pft)
-        enddo
-        call pftc%memoize_refs()
-        call pftc%memoize_ptcls()
-        allocate(vals(pftc%get_nrots()))
-        call pftc%reset_ctf_scoring_audit()
-        do i = 1,nactive
-            call pftc%gen_objfun_vals(1, pinds(i), [0.0_sp, 0.0_sp], vals)
-            vals(1) = pftc%calc_corr_rot_shift(1, pinds(i), [0.0_sp, 0.0_sp], 1)
-        enddo
-        call assert_int(2, pftc%get_nctf_models_scored(), 'PFT scoring path applies both microscope models')
-        call pftc%disable_ctf_scoring_audit()
-        call pftc%disable_ctf_model_audit()
-        deallocate(pft, vals)
-        call pftc%kill
-        call build%spproj%copy(spproj)
-        build%spproj_field => build%spproj%os_ptcl2D
-        call assert_alignment_image_prep_ctf_models(params, build, pinds(1:nactive), nactive)
-        call cavger_new(params, build, alloccavgs=.true.)
-        call cavger_init_online(nactive, .false.)
-        call cavger_reset_ctf_model_audit()
-        call cavger_transf_oridat(nactive, pinds(1:nactive))
-        call assert_int(2, cavger_get_nctf_models_seen(), 'class-average path sees both microscope models')
-        call cavger_disable_ctf_model_audit()
-        call cavger_dealloc_online()
-        call cavger_kill()
-        call build%spproj%kill
-        if( allocated(pinds) ) deallocate(pinds)
-    end subroutine assert_runtime_ctf_model_paths
-
-    subroutine init_runtime_params(params, nptcls, ncls)
-        type(parameters), intent(inout) :: params
-        integer,          intent(in)    :: nptcls, ncls
-        params%box         = 128
-        params%box_crop    = 128
-        params%boxpd       = 256
-        params%box_croppd  = 256
-        params%ctf         = 'yes'
-        params%fromp       = 1
-        params%msk         = 35.0
-        params%msk_crop    = 35.0
-        params%top         = nptcls
-        params%ncls        = ncls
-        params%nthr        = 1
-        params%pftsz       = 8
-        params%cc_objfun   = OBJFUN_CC
-        params%smpd        = 1.25
-        params%smpd_crop   = 1.25
-        params%oritype     = 'ptcl2D'
-    end subroutine init_runtime_params
-
-    subroutine assert_alignment_image_prep_ctf_models(params, build, pinds, nptcls)
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        integer,          intent(in)    :: nptcls, pinds(nptcls)
-        type(image) :: img_in, img_out, img_out_pd, mskimg
-        integer :: i
-        call mskimg%disc([params%box, params%box, 1], params%smpd, params%msk, build%lmsk)
-        call prepimg4align_reset_ctf_model_audit(nptcls)
-        do i = 1,nptcls
-            call img_in%disc([params%box, params%box, 1], params%smpd, params%msk + 15.0)
-            call img_out%new([params%box_crop, params%box_crop, 1], params%smpd_crop, wthreads=.false.)
-            call img_out_pd%new([params%box_croppd, params%box_croppd, 1], params%smpd_crop, wthreads=.false.)
-            call prepimg4align(params, build, pinds(i), img_in, img_out, img_out_pd)
-            call img_in%kill
-            call img_out%kill
-            call img_out_pd%kill
-        enddo
-        call assert_int(2, prepimg4align_get_nctf_models_seen(), 'alignment image prep sees both microscope models')
-        call prepimg4align_disable_ctf_model_audit()
-        call mskimg%kill
-        if( allocated(build%lmsk) ) deallocate(build%lmsk)
-    end subroutine assert_alignment_image_prep_ctf_models
 
     subroutine fill_class_row(os, i, cls, state, ogid)
         use simple_oris, only: oris

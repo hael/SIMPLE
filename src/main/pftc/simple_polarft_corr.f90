@@ -22,7 +22,6 @@ contains
         kw = .true.
         if( present(kweight) ) kw = kweight
         calc_corr_rot_shift = 0.
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         i           = self%pinds(iptcl)
         ithr        = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
@@ -105,8 +104,7 @@ contains
         integer,             intent(in)    :: iref, iptcl
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: vals(self%nrots)
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
-        select case(self%p_ptr%cc_objfun)
+         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corrs(iref, iptcl, shift, vals)
             case(OBJFUN_EUCLID)
@@ -120,7 +118,6 @@ contains
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('gen_best_objfun_val not implemented for OBJFUN_CC')
@@ -138,7 +135,6 @@ contains
         integer,             intent(out)   :: irot
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('gen_prob_objfun_val not implemented for OBJFUN_CC')
@@ -157,7 +153,6 @@ contains
         integer,             intent(out)   :: irot
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('gen_prob_power_objfun_val not implemented for OBJFUN_CC')
@@ -502,7 +497,6 @@ contains
         integer,                     intent(in)    :: iref, iptcl, irot
         complex(dp), pointer :: pft_ref_8(:,:)
         integer :: ithr, i
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         i         = self%pinds(iptcl)
         ithr      = omp_get_thread_num() + 1
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
@@ -527,7 +521,6 @@ contains
         integer,                     intent(in)    :: irot
         complex(dp), pointer :: pft_ref_8(:,:)
         integer :: ithr, i
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         i         = self%pinds(iptcl)
         ithr      = omp_get_thread_num() + 1
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
@@ -1215,8 +1208,7 @@ contains
         integer,             intent(in)    :: irefs(nr)
         integer,             intent(in)    :: iptcl
         real(sp),            intent(in)    :: shift(2)
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
-        select case(self%p_ptr%cc_objfun)
+         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 THROW_HARD('Not implemented yet')
             case(OBJFUN_EUCLID)
@@ -1236,7 +1228,6 @@ contains
         real(sp)    :: wk, shift_mag_sq
         integer     :: k, kk, k0, i, j, ithr, iref, p
         logical     :: even
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         even  = self%iseven(i)
@@ -1345,7 +1336,6 @@ contains
         real        :: sqsumptcl, acc, acc_c
         integer(dp) :: t
         integer     :: i, k, rot, rot_c, ir, jr, ref
-        if( self%ctf_scoring_audit ) call audit_scored_ctf_model(self, iptcl)
 #ifdef USE_OPENMP_OFFLOAD
         ! particle index
         i = self%pinds(iptcl)
@@ -1573,50 +1563,5 @@ contains
         ierr = 0_c_int
 #endif
     end subroutine gen_many2many_euclids_cufft_kernel
-
-    subroutine audit_scored_ctf_model(self, iptcl)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        integer :: ind
-        if( .not. self%with_ctf ) return
-        if( .not. allocated(self%ctfparams_ptcls_set) ) return
-        if( .not. allocated(self%ctfparams_scored) ) return
-        if( .not. allocated(self%ctf_models_scored) ) return
-        ind = self%pinds(iptcl)
-        if( ind < 1 .or. ind > size(self%ctfparams_scored) ) return
-        if( .not. self%ctfparams_ptcls_set(ind) ) return
-        !$omp critical(pftc_ctf_scoring_audit)
-        self%ctfparams_scored(ind) = .true.
-        call add_scored_ctf_model(self, ind)
-        !$omp end critical(pftc_ctf_scoring_audit)
-    end subroutine audit_scored_ctf_model
-
-    subroutine add_scored_ctf_model(self, ind)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: ind
-        type(ctfparams), allocatable :: tmp(:)
-        integer :: i, oldsz
-        do i = 1,self%nctf_models_scored
-            if( same_ctf_model(self%ctfparams_ptcls(ind), self%ctf_models_scored(i)) ) return
-        enddo
-        if( self%nctf_models_scored == size(self%ctf_models_scored) )then
-            oldsz = size(self%ctf_models_scored)
-            allocate(tmp(max(1, 2 * oldsz)))
-            tmp(1:oldsz) = self%ctf_models_scored
-            call move_alloc(tmp, self%ctf_models_scored)
-        endif
-        self%nctf_models_scored = self%nctf_models_scored + 1
-        self%ctf_models_scored(self%nctf_models_scored) = self%ctfparams_ptcls(ind)
-    end subroutine add_scored_ctf_model
-
-    logical function same_ctf_model(lhs, rhs)
-        type(ctfparams), intent(in) :: lhs, rhs
-        real, parameter :: CTFTOL = 1.0e-5
-        same_ctf_model = (lhs%ctfflag == rhs%ctfflag) .and. &
-            (lhs%l_phaseplate .eqv. rhs%l_phaseplate) .and. &
-            (abs(lhs%kv    - rhs%kv)    <= CTFTOL) .and. &
-            (abs(lhs%cs    - rhs%cs)    <= CTFTOL) .and. &
-            (abs(lhs%fraca - rhs%fraca) <= CTFTOL)
-    end function same_ctf_model
 
 end submodule simple_polarft_corr

@@ -51,7 +51,7 @@ contains
         endif
         fillin_iter_report = 0
         call cline%set('oritype',   'ptcl2D')
-        call cline%set('sigma_est', 'global')
+        if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',     'global')
         if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
         if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')        ) call cline%set('center',        'yes')
