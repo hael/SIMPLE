@@ -63,25 +63,34 @@ contains
         endif
         if( ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
-            if( ind_in_stk < 1 .or. ind_in_stk > nptcls_stk )then
-                write(logfhandle,*) 'iptcl             : ', iptcl
-                write(logfhandle,*) 'stkind            : ', stkind
-                write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
-                THROW_HARD('particle indstk out of stack range; map_ptcl_ind2stk_ind')
+            if( ind_in_stk > 0 )then
+                if( ind_in_stk > nptcls_stk )then
+                    write(logfhandle,*) 'iptcl             : ', iptcl
+                    write(logfhandle,*) 'stkind            : ', stkind
+                    write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
+                    THROW_HARD('particle indstk out of stack range; map_ptcl_ind2stk_ind')
+                endif
+            else
+                call set_indstk_from_range
             endif
         else
-            ! third sanity check, particle index in range
-            if( iptcl < fromp .or. iptcl > top )then
-                write(logfhandle,*) 'iptcl            : ', iptcl
-                write(logfhandle,*) 'stkind           : ', stkind
-                write(logfhandle,*) 'prange for micstk: ', fromp, top
-                THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
-            endif
-            ! output index in stack
-            ind_in_stk = iptcl - fromp + 1
+            call set_indstk_from_range
         endif
         ! cleanup
         nullify(ptcl_field)
+
+        contains
+
+            subroutine set_indstk_from_range
+                if( iptcl < fromp .or. iptcl > top )then
+                    write(logfhandle,*) 'iptcl            : ', iptcl
+                    write(logfhandle,*) 'stkind           : ', stkind
+                    write(logfhandle,*) 'prange for micstk: ', fromp, top
+                    THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
+                endif
+                ind_in_stk = iptcl - fromp + 1
+            end subroutine set_indstk_from_range
+
     end subroutine map_ptcl_ind2stk_ind
 
     module subroutine map_cavgs_selection( self, states )

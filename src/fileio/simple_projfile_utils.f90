@@ -147,6 +147,7 @@ contains
         do ic = 1,nchunks
             projname = chunk_fnames(ic)
             call chunks(ic)%read_segment('stk', projname)
+            call absolutize_project_stack_paths(chunks(ic), simple_abspath(projname, check_exists=.false.))
             call chunks(ic)%read_segment('ptcl2D',projname)
             ! classes frcs & info
             ncls = chunks(ic)%os_cls2D%get_noris()
@@ -310,6 +311,7 @@ contains
                             nmics(iproj) = projects(iproj)%os_mic%get_noris()
                         case(STK_SEG)
                             call projects(iproj)%read_segment('stk', projfile_abs)
+                            call absolutize_project_stack_paths(projects(iproj), projfile_abs)
                             nstks(iproj) = projects(iproj)%os_stk%get_noris()
                         case(PTCL2D_SEG)
                             call projects(iproj)%read_segment('ptcl2D', projfile_abs)
@@ -465,6 +467,7 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call validate_source_project(merged_proj, 0)
         if( l_write_proj ) call merged_proj%write(projfile_out)
 
         contains
@@ -612,7 +615,7 @@ contains
                         else
                             if( os%isthere(iptcl, 'indstk') )then
                                 indstk = os%get_int(iptcl, 'indstk')
-                                if( indstk < 1 .or. indstk > stack_nptcls(stkind) )then
+                                if( indstk > stack_nptcls(stkind) )then
                                     bad_indstk = min(bad_indstk, iptcl)
                                 endif
                             endif
@@ -868,5 +871,31 @@ contains
             end subroutine remap_row_ogid
 
     end subroutine merge_selected_project_files
+
+    subroutine absolutize_project_stack_paths( proj, projfile )
+        class(sp_project), intent(inout) :: proj
+        class(string),     intent(in)    :: projfile
+        type(string) :: projdir, fname, absfname
+        integer :: istk, nstks
+        projdir = get_fpath(projfile)
+        nstks = proj%os_stk%get_noris()
+        do istk = 1,nstks
+            if( proj%os_stk%isthere(istk, 'stk') )then
+                call proj%os_stk%getter(istk, 'stk', fname)
+                if( fname%to_char([1,1]) /= '/' ) fname = filepath(projdir, fname)
+                absfname = simple_abspath(fname, check_exists=.false.)
+                call proj%os_stk%set(istk, 'stk', absfname)
+            endif
+            if( proj%os_stk%isthere(istk, 'boxfile') )then
+                call proj%os_stk%getter(istk, 'boxfile', fname)
+                if( fname%to_char([1,1]) /= '/' ) fname = filepath(projdir, fname)
+                absfname = simple_abspath(fname, check_exists=.false.)
+                call proj%os_stk%set(istk, 'boxfile', absfname)
+            endif
+        enddo
+        call fname%kill
+        call absfname%kill
+        call projdir%kill
+    end subroutine absolutize_project_stack_paths
 
 end module simple_projfile_utils

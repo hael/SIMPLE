@@ -486,7 +486,7 @@ contains
         real,             allocatable :: states(:)
         type(string)                  :: fname
         logical,          allocatable :: part_mask(:)
-        integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
+        integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl,numlen
         integer :: nstks_orig,nptcls_orig,nmics_orig,i
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -519,6 +519,11 @@ contains
         call cline_distr%set('nthr',    1)
         call cline_distr%set('oritype', 'stk')
         nparts = min(params%nparts, nstks)
+        numlen = len(int2str(nparts))
+        params%nparts  = nparts
+        params%numlen  = numlen
+        call cline_distr%set('nparts', nparts)
+        call cline_distr%set('numlen', numlen)
         allocate(spproj_part(nparts),part_mask(nparts))
         parts     = split_nobjs_even(nstks, nparts)
         part_mask = .true.
@@ -531,11 +536,18 @@ contains
         call qenv%new(params, nparts)
         ! prepare job description
         call cline_distr%gen_job_descr(job_descr)
+        ! Remove legacy unpadded part documents as well as current padded names.
+        ! qsys_cleanup only knows about padded names once nparts >= 10.
+        do ipart = 1,nparts
+            call del_file(ALGN_FBODY//int2str(ipart)//METADATA_EXT)
+            call del_file(ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT)
+        enddo
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, &
+            algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! ASSEMBLY
         do ipart = 1,nparts
-            fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
+            fname = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
             part_mask(ipart) = file_exists(fname)
         enddo
         ! copy updated micrographs
@@ -544,7 +556,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('mic',fname)
                 cnt = cnt + spproj_part(ipart)%os_mic%get_noris()
             enddo
@@ -569,7 +581,7 @@ contains
         cnt = 0
         do ipart = 1,nparts
             if( .not.part_mask(ipart) ) cycle
-            fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
+            fname = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
             call spproj_part(ipart)%read_segment('stk',fname)
             cnt = cnt + spproj_part(ipart)%os_stk%get_noris()
         enddo
@@ -590,7 +602,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('ptcl2D',fname)
                 cnt = cnt + spproj_part(ipart)%os_ptcl2D%get_noris()
             enddo
@@ -610,7 +622,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
-                fname = ALGN_FBODY//int2str(ipart)//METADATA_EXT
+                fname = ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT
                 call spproj_part(ipart)%read_segment('ptcl3D',fname)
                 if( spproj_part(ipart)%os_ptcl3D%get_noris() == 0 ) cycle
                 do iptcl = 1,spproj_part(ipart)%os_ptcl3D%get_noris()
@@ -630,6 +642,7 @@ contains
             call part_params(ipart)%kill
             call spproj_part(ipart)%kill
             call del_file(ALGN_FBODY//int2str(ipart)//METADATA_EXT)
+            call del_file(ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT)
         enddo
         deallocate(spproj_part,part_params)
         ! end gracefully
@@ -651,6 +664,7 @@ contains
         integer              :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
         integer              :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
         integer              :: nstks_part, nptcls_part, stkind, nstks_prev, ptcl_glob
+        integer              :: src_stkind, ind_in_stk
         integer              :: numlen, state_select
         logical              :: l_state_select
         ! init
@@ -749,8 +763,8 @@ contains
             call spproj%os_stk%get_ori(istk, o_stk)
             call o_stk%getter('stk',stkname)
             ext        = fname2ext(stkname)
-            newstkname = stkdir//get_fbody(basename(stkname),ext)//'_stk'&
-                &//int2str_pad(istk,numlen)//STK_EXT
+            newstkname = filepath(stkdir, get_fbody(basename(stkname),ext)//'_stk'&
+                &//int2str_pad(istk,numlen)//STK_EXT)
             fromp = o_stk%get_fromp()
             top   = o_stk%get_top()
             fromp_glob = top_glob+1
@@ -760,14 +774,12 @@ contains
                 ptcl_glob = ptcl_glob + 1
                 top_glob  = top_glob+1
                 ptcl_cnt  = ptcl_cnt+1
-                ! copy image
-                if(spproj%os_ptcl2D%isthere(iptcl, 'indstk') .and. spproj%os_ptcl2D%get(iptcl, 'indstk') > 0.0) then
-                    ! write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
-                    call img%read(stkname, spproj%os_ptcl2D%get_int(iptcl,'indstk'))
-                else
-                    ! write(logfhandle, *) "STK2 " // int2str(spproj%os_ptcl2D%get_int(iptcl,'indstk'))
-                    call img%read(stkname, iptcl-fromp+1)
+                call spproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, src_stkind, ind_in_stk)
+                if( src_stkind /= istk )then
+                    write(logfhandle,*) 'iptcl/src_stkind/istk: ', iptcl, src_stkind, istk
+                    THROW_HARD('particle stkind inconsistent with stack loop; exec_prune_project')
                 endif
+                call img%read(stkname, ind_in_stk)
                 call img%write(newstkname, ptcl_cnt, del_if_exists=(ptcl_cnt == 1))
                 ! update orientations
                 call spproj_out%os_ptcl2D%transfer_ori(ptcl_glob, spproj%os_ptcl2D, iptcl)
@@ -794,7 +806,11 @@ contains
         spproj_out%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris() > 0 ) spproj_out%jobproc = spproj%jobproc
         call spproj%kill
-        call spproj_out%write(string(ALGN_FBODY)//int2str(params%part)//METADATA_EXT)
+        if( cline%defined('outfile') )then
+            call spproj_out%write(params%outfile)
+        else
+            call spproj_out%write(string(ALGN_FBODY)//int2str_pad(params%part,max(1,params%numlen))//METADATA_EXT)
+        endif
         ! cleanup
         call spproj_out%kill
         call img%kill

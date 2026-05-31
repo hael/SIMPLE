@@ -24,7 +24,7 @@ contains
         type(string) :: projfile1, projfile2, merged_file
         type(ctfparams) :: ctfvars
         integer, parameter :: NPTCLS1 = 3, NPTCLS2 = 2, NCLS = 2
-        integer :: i
+        integer :: i, stkind, ind_in_stk
         write(*,'(A)') 'test_merge_2d_selection_heterogeneous_ctf'
         projfile1   = 'merge_project_src1.simple'
         projfile2   = 'merge_project_src2.simple'
@@ -32,6 +32,8 @@ contains
         call cleanup_files(projfile1, projfile2, merged_file)
         call make_project(proj1, projfile1, NPTCLS1, NCLS, 200.0, 1.0, 0.07, &
             [1, 0, 1], [1, 2, 1], 1)
+        call proj1%os_ptcl2D%set(2, 'indstk', 0)
+        call proj1%write(projfile1)
         call make_project(proj2, projfile2, NPTCLS2, NCLS, 300.0, 2.7, 0.10, &
             [0, 1], [1, 2], 1)
         allocate(project_files(2))
@@ -60,7 +62,14 @@ contains
         call assert_int(2, reread%os_ptcl2D%get_int(NPTCLS1 + 1, 'stkind'), 'project 2 particle stkind remapped')
         do i = 1,NPTCLS1
             call assert_int(1, reread%os_ptcl2D%get_int(i, 'stkind'), 'project 1 particle stkind range')
-            call assert_int(i, reread%os_ptcl2D%get_int(i, 'indstk'), 'project 1 particle indstk preserved')
+            if( i == 2 )then
+                call assert_int(0, reread%os_ptcl2D%get_int(i, 'indstk'), 'project 1 zero indstk preserved')
+                call reread%map_ptcl_ind2stk_ind('ptcl2D', i, stkind, ind_in_stk)
+                call assert_int(1, stkind, 'zero indstk fallback stkind')
+                call assert_int(i, ind_in_stk, 'zero indstk fallback index')
+            else
+                call assert_int(i, reread%os_ptcl2D%get_int(i, 'indstk'), 'project 1 particle indstk preserved')
+            endif
         enddo
         do i = 1,NPTCLS2
             call assert_int(2, reread%os_ptcl2D%get_int(NPTCLS1 + i, 'stkind'), &

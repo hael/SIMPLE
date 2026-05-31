@@ -143,6 +143,7 @@ contains
         real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
         integer :: batchlims(2), kfromto(2)
         integer :: i, iptcl, imatch, nyq, nptcls_part_sel, nptcls_active_tot, batchsz_max, nbatch
+        integer :: ninvalid_sigma2
         logical :: l_scale_update_frac
         logical :: l_add_to_sum
         real    :: sig2_mul, update_frac_eff
@@ -174,6 +175,7 @@ contains
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
         allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1))
+        ninvalid_sigma2 = 0
         if( nptcls_part_sel > 0 )then
             batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
             call prepimgbatch(params, build, batchsz_max)
@@ -187,13 +189,13 @@ contains
                 ! allocate contigous local sigma2 array for optimal caching in parallell loop
                 cmat_thr_sum = dcmplx(0.d0, 0.d0)
                 !$omp parallel do default(shared) private(iptcl,imatch,l_add_to_sum)&
-                !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum)
+                !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum,ninvalid_sigma2)
                  do imatch = 1, nbatch
                     iptcl = pinds(batchlims(1) + imatch - 1)
                     call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
                     sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
                     l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
-                    call sanitize_computed_sigma2(sigma2_batch(:,imatch))
+                    if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
                     ! thread average
                     if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:))
                 end do
@@ -207,6 +209,10 @@ contains
                 end do
             end do
             deallocate(sigma2_batch)
+        endif
+        if( ninvalid_sigma2 > 0 )then
+            write(logfhandle,*) '>>> WARNING: calc_pspec floored invalid computed sigma spectra to 1.0; part/fromp/top/count/selected: ', &
+                params%part, params%fromp, params%top, ninvalid_sigma2, nptcls_part_sel
         endif
         call sum_img%set_cmat(cmat_sum)
         call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
@@ -225,13 +231,20 @@ contains
 
     contains
 
-        subroutine sanitize_computed_sigma2(sigma2_curve)
+        logical function sanitize_computed_sigma2(sigma2_curve)
             real, intent(inout) :: sigma2_curve(:)
+            logical :: invalid
+            invalid = .false.
             if( .not. all(ieee_is_finite(sigma2_curve)) )then
                 where( .not. ieee_is_finite(sigma2_curve) ) sigma2_curve = 1.0
+                invalid = .true.
             endif
-            if( .not. any(sigma2_curve > real(DTINY)) ) sigma2_curve = 1.0
-        end subroutine sanitize_computed_sigma2
+            if( .not. any(sigma2_curve > real(DTINY)) )then
+                sigma2_curve = 1.0
+                invalid = .true.
+            endif
+            sanitize_computed_sigma2 = invalid
+        end function sanitize_computed_sigma2
 
     end subroutine inmem_execute
 
@@ -269,6 +282,7 @@ contains
         endif
         ! Parse parameters (mkdir default kept as provided/assigned by commander-level defaults)
         call params%new(cline)
+        call cleanup_calc_pspec_outputs(params)
         ! Build project ONLY (no general toolbox)
         call build%build_spproj(params, cline)
         ! Sanity check + ensure EO partition exists and is persisted
@@ -327,6 +341,23 @@ contains
     ! =====================================================================
     ! Internal helpers
     ! =====================================================================
+
+    subroutine cleanup_calc_pspec_outputs(params)
+        type(parameters), intent(in) :: params
+        type(string) :: fname
+        integer :: ipart
+        do ipart = 1,params%nparts
+            fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            call del_file(fname)
+            fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
+            call del_file(fname)
+            fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+            call del_file(fname)
+        enddo
+        call del_file('CALC_PSPEC_FINISHED')
+        call del_file(CALCPSPEC_FINISHED)
+        call fname%kill
+    end subroutine cleanup_calc_pspec_outputs
 
     subroutine sanity_check_calc_pspec_input(params, build)
         type(parameters), intent(in)    :: params
