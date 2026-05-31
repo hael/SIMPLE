@@ -439,7 +439,7 @@ contains
         type(simple_nice_comm)          :: nice_comm
         real    :: lprange(2)
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
-        integer :: nstates_in_project, split_stage
+        integer :: nstates_in_project, split_stage, last_stage
         logical :: l_cavg_ini_ext, l_vol_ini_ext
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -475,6 +475,12 @@ contains
         end select
         call cline%set('mkdir', 'no')
         call cline%delete('algorithm')
+        ! optional early stop stage, matching the abinitio3D_cavgs nstages policy
+        last_stage = abinitio_nstages()
+        if( cline%defined('nstages') )then
+            if( params%nstages < 1 ) THROW_HARD('nstages must be >= 1 for abinitio3D')
+            last_stage = min(abinitio_nstages(), params%nstages)
+        endif
         ! Multiple states
         nstates_glob = params%nstates
         select case(trim(params%multivol_mode))
@@ -499,6 +505,7 @@ contains
         l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
             if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
+            if( last_stage < abinitio_nstages_ini3D() - 1 ) THROW_HARD('nstages must be >= first executable abinitio3D stage')
             ! nice
             nice_comm%stat_root%stage = "initialising 3D volume from class averages"
             call nice_comm%cycle()
@@ -521,6 +528,7 @@ contains
         ! initialization on class averages done outside this workflow (externally)?
         l_cavg_ini_ext = trim(params%cavg_ini_ext).eq.'yes'
         if( l_cavg_ini_ext )then
+            if( last_stage < abinitio_symsrch_stage() + 1 ) THROW_HARD('nstages must be >= first executable abinitio3D stage')
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for abinitio workflow when cavg_ini_ext is set to yes')
@@ -561,7 +569,11 @@ contains
         endif
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = params%l_nonuniform
-        nstages_refine3D = abinitio_nstages()
+        nstages_refine3D = last_stage
+        if( str_has_substr(params%multivol_mode,'input_oris') ) start_stage = split_stage
+        if( nstages_refine3D < start_stage )then
+            THROW_HARD('nstages must be >= first executable abinitio3D stage')
+        endif
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! prepare class command lines
@@ -706,12 +718,18 @@ contains
             ! create starting volume(s)
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
+        if( cline%defined('nstages') )then
+            write(logfhandle,'(A,I0,A,I0)')'>>> ABINITIO3D STAGE RANGE: ', start_stage, ' -> ', nstages_refine3D
+            if( nstages_refine3D < abinitio_nstages() )then
+                write(logfhandle,'(A)')'>>> ABINITIO3D EARLY STAGE STOP: SKIPPING FINAL ALL-PARTICLE RECONSTRUCTION'
+            endif
+        endif
         ! Frequency marching
         call print_states(params, 0)
         ! nice
         nice_comm%stat_root%stage = "starting workflow"
         call nice_comm%cycle()
-        do istage = start_stage, abinitio_nstages()
+        do istage = start_stage, nstages_refine3D
             ! nice
              if( nice_comm%stop )then
                 ! termination
@@ -760,12 +778,17 @@ contains
             call nice_comm%update_ini3D(last_stage_completed=.true.) 
             call nice_comm%cycle()
         enddo
-        ! calculate 3D reconstruction at original sampling
-        call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)
-        ! for visualization
-        call gen_ortho_reprojs4viz(params, spproj)
-        ! final raw and low-pass diagnostic 3D reconstruction outputs
-        call write_final_rec_outputs(params, spproj, lpinfo(nstages_refine3D)%lp)
+        if( nstages_refine3D == abinitio_nstages() )then
+            ! calculate 3D reconstruction at original sampling
+            call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)
+            ! for visualization
+            call gen_ortho_reprojs4viz(params, spproj)
+            ! final raw and low-pass diagnostic 3D reconstruction outputs
+            call write_final_rec_outputs(params, spproj, lpinfo(nstages_refine3D)%lp)
+        else
+            write(logfhandle,'(A,I0)')'>>> ABINITIO3D EARLY STOP AFTER STAGE ', nstages_refine3D
+            write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
+        endif
         ! termination
         nice_comm%stat_root%stage = "terminating"
         call nice_comm%cycle()

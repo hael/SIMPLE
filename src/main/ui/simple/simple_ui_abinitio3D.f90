@@ -62,6 +62,9 @@ contains
         call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting number of particles to sample',&
             &'Starting number of particles to sample before ramping to nsample by stage 5',&
             &'starting # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio3D%add_input(UI_SRCH, 'nstages', 'num', 'Last ab initio stage to run',&
+            &'Last ab initio3D stage to run; values below the full stage count skip the final all-particle reconstruction',&
+            &'last stage', .false., 8., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         ! filter controls
