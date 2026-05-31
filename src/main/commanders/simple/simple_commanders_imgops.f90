@@ -912,6 +912,7 @@ contains
         real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer          :: istk, nstks, ptcl_fromp, ptcl_top
+        integer          :: numlen
         type(string)     :: fname, stkin, stkout, ext
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
@@ -923,6 +924,7 @@ contains
             call build%spproj%read_segment('stk',params%projfile)
             nstks = build%spproj%os_stk%get_noris()
             if( nstks == 0 ) THROW_HARD('NO EXISTING STACK IN PROJECT')
+            numlen = len(int2str(nstks))
             if( cline%defined('newbox') )then
                 ldim_scaled  = [params%newbox,params%newbox,1]
                 params%scale = real(params%newbox) / real(params%box)
@@ -940,9 +942,10 @@ contains
                 ptcl_top   = build%spproj%os_stk%get_top(istk)
                 ext        = string('.')//fname2ext(stkin)
                 if( cline%defined('dir_target') )then
-                    stkout = filepath(params%dir_target,add2fbody(basename(stkin),ext,SCALE_SUFFIX))
+                    stkout = filepath(params%dir_target,add2fbody(basename(stkin),ext,&
+                        &SCALE_SUFFIX//'_stk'//int2str_pad(istk,numlen)))
                 else
-                    stkout = add2fbody(stkin,ext,SCALE_SUFFIX)
+                    stkout = add2fbody(stkin,ext,SCALE_SUFFIX//'_stk'//int2str_pad(istk,numlen))
                 endif
                 call scale_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new)
             enddo

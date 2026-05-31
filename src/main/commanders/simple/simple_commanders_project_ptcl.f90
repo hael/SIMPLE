@@ -667,7 +667,7 @@ contains
         nptcls_part = 0
         l_state_select = cline%defined('state')
         state_select   = params%state
-        !$omp parallel do proc_bind(close) default(shared) private(iptcl) reduction(+:nptcls_part)
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl)
         do iptcl=1,nptcls_tot
             if( l_state_select )then
                 ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) == state_select
@@ -676,17 +676,11 @@ contains
             endif
             if( ptcls_mask(iptcl) )then
                 stkinds(iptcl) = spproj%os_ptcl2D%get_int(iptcl,'stkind')
-                if( stkinds(iptcl) >= params%fromp .and. stkinds(iptcl) <= params%top )then
-                    nptcls_part = nptcls_part+1
-                endif
             else
                 stkinds(iptcl) = 0
             endif
         enddo
         !$omp end parallel do
-        call spproj%read_segment('ptcl3D', params%projfile)
-        call spproj_out%os_ptcl2D%new(nptcls_part, is_ptcl=.true.)
-        call spproj_out%os_ptcl3D%new(nptcls_part, is_ptcl=.true.)
         ! stacks
         call spproj%read_segment('stk', params%projfile)
         nstks_tot = spproj%get_nstks()
@@ -696,6 +690,22 @@ contains
             stks_mask(istk) = spproj%os_stk%get_state(istk) > 0
             if( count(stkinds==istk) == 0 ) stks_mask(istk) = .false.
         enddo
+        nptcls_part = 0
+        do iptcl=1,nptcls_tot
+            if( .not.ptcls_mask(iptcl) ) cycle
+            if( stkinds(iptcl) < 1 .or. stkinds(iptcl) > nstks_tot )then
+                write(logfhandle,*) 'iptcl/stkind/nstks: ', iptcl, stkinds(iptcl), nstks_tot
+                THROW_HARD('selected particle stkind out of range; exec_prune_project')
+            endif
+            if( .not.stks_mask(stkinds(iptcl)) )then
+                ptcls_mask(iptcl) = .false.
+            else if( stkinds(iptcl) >= params%fromp .and. stkinds(iptcl) <= params%top )then
+                nptcls_part = nptcls_part+1
+            endif
+        enddo
+        call spproj%read_segment('ptcl3D', params%projfile)
+        call spproj_out%os_ptcl2D%new(nptcls_part, is_ptcl=.true.)
+        call spproj_out%os_ptcl3D%new(nptcls_part, is_ptcl=.true.)
         nstks = count(stks_mask)
         nstks_part = count(stks_mask(params%fromp:params%top))
         if( nstks_part == 0 )then
@@ -717,15 +727,20 @@ contains
         write(logfhandle,'(A)')'>>> GENERATING STACK(S)'
         call img%new([box,box,1],smpd)
         call simple_mkdir(stkdir)
-        nstks_prev = count(stks_mask(:params%fromp-1))
+        if( params%fromp == 1 )then
+            nstks_prev = 0
+        else
+            nstks_prev = count(stks_mask(:params%fromp-1))
+        endif
         stkind     = nstks_prev
         stk_cnt    = 0
-        if( params%fromp == 1 )then
-            top_glob   = 0
-        else
-            top       = spproj%os_stk%get_top(params%fromp-1)
-            top_glob  = count(ptcls_mask(1:top))
-        endif
+        top_glob   = 0
+        do istk=1,params%fromp-1
+            if( .not.stks_mask(istk) ) cycle
+            fromp    = spproj%os_stk%get_fromp(istk)
+            top      = spproj%os_stk%get_top(istk)
+            top_glob = top_glob + count(ptcls_mask(fromp:top))
+        enddo
         ptcl_glob  = 0
         do istk=params%fromp,params%top
             if( .not.stks_mask(istk) ) cycle

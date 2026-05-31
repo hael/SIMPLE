@@ -21,10 +21,10 @@ contains
         type(sigma2_binfile)             :: binfile
         type(sigma_array), allocatable   :: sigma2_arrays(:)
         type(string)                     :: part_fname,starfile_fname,outbin_fname
-        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
-        real(dp),          allocatable   :: group_pspecs(:,:,:)
+        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
+        real(dp),          allocatable   :: group_pspecs(:,:,:), global_pspecs(:,:)
         real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
-        integer,           allocatable   :: group_weights(:,:)
+        integer,           allocatable   :: group_weights(:,:), global_weights(:)
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -67,18 +67,22 @@ contains
         if( params%l_sigma_glob )then
             ngroups = 1
         else
+            nstks   = build%spproj%get_nstks()
             ngroups = 0
-            !$omp parallel do default(shared) private(iptcl,igroup)&
-            !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
             do iptcl = 1,nptcls
                 if( build%spproj_field%get_state(iptcl) == 0 ) cycle
                 igroup  = build%spproj_field%get_int(iptcl,'stkind')
+                if( igroup < 1 .or. igroup > nstks )then
+                    write(logfhandle,*) 'iptcl/stkind/nstks: ', iptcl, igroup, nstks
+                    THROW_HARD('commander_euclid; exec_calc_pspec_assemble; particle stkind out of range')
+                endif
                 ngroups = max(igroup,ngroups)
             enddo
-            !$omp end parallel do
         endif
         allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(group_weights(2,ngroups),source=0)
+        allocate(global_pspecs(2,nyq),source=0.d0)
+        allocate(global_weights(2),source=0)
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo = build%spproj_field%get_eo(iptcl) ! 0/1
@@ -89,6 +93,14 @@ contains
             endif
             group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
+            global_pspecs(eo+1,:)        = global_pspecs(eo+1,:)        + real(pspecs(:, iptcl),dp)
+            global_weights(eo+1)         = global_weights(eo+1)         + 1
+        enddo
+        do eo = 1,2
+            if( global_weights(eo) < 1 ) cycle
+            global_pspecs(eo,:) = global_pspecs(eo,:) / real(global_weights(eo),dp)
+            global_pspecs(eo,:) = global_pspecs(eo,:) - real(pspec_ave(:),dp)
+            call condition_global_sigmas(eo)
         enddo
         do eo = 1,2
             do igroup = 1,ngroups
@@ -134,7 +146,7 @@ contains
             call sigma2_arrays(ipart)%fname%kill
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
-        deallocate(sigma2_arrays,group_pspecs,pspec_ave,pspecs,group_weights)
+        deallocate(sigma2_arrays,group_pspecs,global_pspecs,pspec_ave,pspecs,group_weights,global_weights)
         call binfile%kill
         call build%kill_general_tbox
         call simple_touch('CALC_PSPEC_FINISHED')
@@ -142,18 +154,57 @@ contains
 
     contains
 
+        subroutine condition_global_sigmas(eo)
+            integer, intent(in) :: eo
+            integer :: idx
+            if( any(global_pspecs(eo,:) > DTINY) )then
+                do idx = 1, size(global_pspecs, 2)
+                    if( global_pspecs(eo,idx) <= DTINY ) global_pspecs(eo,idx) = nearest_positive_global(eo, idx)
+                enddo
+            endif
+        end subroutine condition_global_sigmas
+
+        real(dp) function nearest_positive_global(eo, idx) result(val)
+            integer, intent(in) :: eo, idx
+            integer :: nn
+            if( idx > 1 )then
+                if( global_pspecs(eo,idx-1) > DTINY )then
+                    val = global_pspecs(eo,idx-1)
+                    return
+                endif
+            endif
+            do nn = idx + 1, size(global_pspecs,2)
+                if( global_pspecs(eo,nn) > DTINY )then
+                    val = global_pspecs(eo,nn)
+                    return
+                endif
+            enddo
+            val = DTINY
+        end function nearest_positive_global
+
         subroutine remove_negative_sigmas(eo, igroup)
             integer, intent(in) :: eo, igroup
             logical :: is_positive
             logical :: fixed_from_prev
             integer :: nn, idx
+            if( .not. any(group_pspecs(eo,igroup,:) > DTINY) )then
+                if( any(global_pspecs(eo,:) > DTINY) )then
+                    group_pspecs(eo,igroup,:) = global_pspecs(eo,:)
+                    write(logfhandle,'(A,I0,A,I0,A)') '>>> WARNING: calc_pspec_assemble used global bootstrap sigma2 for eo=',&
+                        &eo, ', group=', igroup, ' because the group curve had no positive values'
+                    return
+                else
+                    write(logfhandle,*) 'eo/igroup: ', eo, igroup
+                    THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum')
+                endif
+            endif
             ! remove any negative sigma2 noise values: replace by positive neighboring value
             do idx = 1, size(group_pspecs, 3)
-                if( group_pspecs(eo,igroup,idx) < 0.d0 )then
+                if( group_pspecs(eo,igroup,idx) <= DTINY )then
                     ! first try the previous value
                     fixed_from_prev = .false.
                     if( idx - 1 >= 1 )then
-                        if( group_pspecs(eo,igroup,idx-1) > 0.d0 )then
+                        if( group_pspecs(eo,igroup,idx-1) > DTINY )then
                             group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
                             fixed_from_prev = .true.
                         end if
@@ -164,9 +215,10 @@ contains
                         do while (.not. is_positive)
                             nn = nn + 1
                             if( nn > size(group_pspecs,3) )then
-                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // int2str(eo) // ', igroup=' // int2str(igroup))
+                                group_pspecs(eo,igroup,idx) = global_pspecs(eo,idx)
+                                exit
                             end if
-                            if( group_pspecs(eo,igroup,nn) > 0.d0 )then
+                            if( group_pspecs(eo,igroup,nn) > DTINY )then
                                 is_positive = .true.
                                 group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
                             end if

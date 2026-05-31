@@ -6,7 +6,7 @@ implicit none
 
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
 public :: set_abinitio2D_sampling_policy
-public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NPTCLS2SAMPLE_2D
+public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE
 public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
 #include "simple_local_flags.inc"
@@ -23,7 +23,7 @@ integer,          parameter :: PROBREFINE_STAGE   = 5
 integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: NPTCLS2SAMPLE_2D   = 200000
+integer,          parameter :: NSAMPLE_PER_CLS    = 200
 character(len=3), parameter :: EO_STAGE           = 'yes'
 
 ! convenience type
@@ -83,7 +83,7 @@ contains
         if( params%nsample > 0 )then
             nsample_target_2D = params%nsample
         else
-            nsample_target_2D = NPTCLS2SAMPLE_2D
+            nsample_target_2D = params%ncls * NSAMPLE_PER_CLS
         endif
         if( nsample_target_2D < 1 ) THROW_HARD('nsample must be >= 1 for abinitio2D sampled update')
         stage_parms(:)%max_cls_pop = 0

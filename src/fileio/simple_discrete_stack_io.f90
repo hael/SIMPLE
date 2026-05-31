@@ -58,6 +58,7 @@ contains
         if( self%stknames(ithr).ne.stkname ) call self%open(stkname)
         if( .not. self%l_open(ithr) ) THROW_HARD('stack not opened')
         if( ind_in_stk < 1 .or. ind_in_stk > self%nptcls(ithr) )then
+            write(logfhandle,*) 'stack: ', trim(stkname%to_char())
             THROW_HARD('index i out of range: '//int2str(ind_in_stk)//' / '//int2str(self%nptcls(ithr)))
         endif
         call img%set_ft(self%fts(ithr))

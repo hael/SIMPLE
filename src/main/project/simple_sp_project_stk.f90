@@ -602,8 +602,9 @@ contains
         class(sp_project),       intent(inout) :: self
         class(string), optional, intent(in)    :: dir
         type(string) :: newname, stkname, abs_dir, nametmp, ext
-        integer      :: imic, nmics
+        integer      :: imic, nmics, numlen
         nmics = self%os_stk%get_noris()
+        numlen = len(int2str(nmics))
         if( present(dir) )then
             call simple_mkdir(dir)
             abs_dir = simple_abspath(dir)
@@ -612,10 +613,12 @@ contains
             call self%os_stk%getter(imic, 'stk', stkname)
             ext = fname2ext(stkname)
             if(present(dir))then
-                nametmp = basename(add2fbody(stkname, '.'//ext%to_char(), SCALE_SUFFIX))
+                nametmp = basename(add2fbody(stkname, '.'//ext%to_char(),&
+                    &SCALE_SUFFIX//'_stk'//int2str_pad(imic,numlen)))
                 newname = filepath(abs_dir, nametmp)
             else
-                newname = add2fbody(stkname, '.'//ext%to_char(), SCALE_SUFFIX)
+                newname = add2fbody(stkname, '.'//ext%to_char(),&
+                    &SCALE_SUFFIX//'_stk'//int2str_pad(imic,numlen))
             endif
             newname = fname_new_ext(newname, ext)
             call self%os_stk%set(imic, 'stk', newname)

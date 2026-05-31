@@ -69,10 +69,7 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
-        call abinitio2D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting # of particles per class to sample',&
-        &'Starting # of particles per class to sample', 'min # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call abinitio2D%add_input(UI_SRCH, 'nsample_stop',  'num', 'Maximum # of particles per class to sample',&
-        &'Dynamic particle sampling upper bound to sample', 'max # particles per class to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call abinitio2D%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
