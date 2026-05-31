@@ -1,4 +1,5 @@
 submodule(simple_abinitio_utils) simple_abinitio_controller
+use simple_decay_funs, only: inv_cos_decay
 implicit none
 #include "simple_local_flags.inc"
 
@@ -42,7 +43,7 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine
-    integer :: iter, inspace, inspace_sub, imaxits
+    integer :: iter, inspace, inspace_sub, imaxits, nsample_stage
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -164,16 +165,47 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        real :: update_frac_stage
+        cfg%nsample_stage = stage_nsample(params, istage)
+        update_frac_stage = stage_update_frac(params, cfg%nsample_stage)
         if( istage == active_refine3D_nstages() )then
             cfg%fillin = 'yes'
             if( params%nstates > 1 ) cfg%fillin = 'no'
-            cfg%update_frac_dyn = update_frac
+            cfg%update_frac_dyn = update_frac_stage
         else
             cfg%fillin = 'no'
-            cfg%update_frac_dyn = update_frac
+            cfg%update_frac_dyn = update_frac_stage
         endif
         cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, cfg%update_frac_dyn)
     end subroutine set_refine3D_update_policy
+
+    integer function stage_nsample( params, istage ) result( nsample_stage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        real    :: nsample_bounds(2)
+        integer :: ramp_it, ramp_maxit
+        nsample_stage = params%nsample
+        if( params%nsample_start <= 0 ) return
+        ramp_maxit = max(1, STOCH_SAMPL_STAGE - 1)
+        ramp_it    = min(max(0, istage - 1), ramp_maxit)
+        nsample_bounds = real([params%nsample_start, params%nsample])
+        if( istage >= STOCH_SAMPL_STAGE )then
+            nsample_stage = params%nsample
+        else
+            nsample_stage = nint(inv_cos_decay(ramp_it, ramp_maxit, nsample_bounds))
+        endif
+        nsample_stage     = max(1, nsample_stage)
+    end function stage_nsample
+
+    real function stage_update_frac( params, nsample_stage ) result( update_frac_stage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: nsample_stage
+        update_frac_stage = update_frac
+        if( params%nsample_start <= 0 ) return
+        if( nptcls_eff < 1 ) return
+        update_frac_stage = real(nsample_stage * params%nstates) / real(nptcls_eff)
+        update_frac_stage = min(UPDATE_FRAC_MAX, update_frac_stage)
+    end function stage_update_frac
 
     subroutine set_refine3D_symmetry_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -345,9 +377,10 @@ contains
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%set('fillin',             cfg%fillin)
         else
-            call cline_refine3D%set('update_frac',        update_frac)
+            call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%delete('fillin')
         endif
+        if( params%nsample_start > 0 ) call cline_refine3D%set('nsample', cfg%nsample_stage)
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)

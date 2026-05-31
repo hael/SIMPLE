@@ -577,6 +577,16 @@ contains
             update_frac = 1.0
             nptcls_eff  = spproj%count_state_gt_zero()
             if( .not. cline%defined('nsample') ) params%nsample = abinitio_nsample_default()
+            if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio3D sampled update')
+            if( cline%defined('nsample_start') )then
+                if( params%nsample_start < 1 ) THROW_HARD('nsample_start must be >= 1 for abinitio3D sampled update')
+                if( params%nsample_start > params%nsample )then
+                    THROW_HARD('nsample_start must be <= nsample for abinitio3D sampled update ramp')
+                endif
+                write(logfhandle,'(A,I0,A,I0,A,I0)') &
+                    &'>>> ABINITIO3D NSAMPLE RAMP: ', params%nsample_start, ' -> ', params%nsample, &
+                    &' BY STAGE ', abinitio_symsrch_stage() + 2
+            endif
             update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
             update_frac = min(abinitio_update_frac_max(), update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk

@@ -59,6 +59,9 @@ contains
             &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}', &
             &'(yes|no){no}', .false., 'no', gui_submenu="model", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting number of particles to sample',&
+            &'Starting number of particles to sample before ramping to nsample by stage 5',&
+            &'starting # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         ! filter controls
