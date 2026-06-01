@@ -64,6 +64,8 @@ contains
                 write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
                 THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
             endif
+            fromp = self%os_stk%get_fromp(stkind)
+            top   = self%os_stk%get_top(stkind)
         else
             ! For backwards compatibility, only when no pruning has been performed
             fromp = self%os_stk%get_fromp(stkind)
