@@ -75,6 +75,8 @@ contains
             ! A fresh run with freshly generated references must not inherit
             ! class populations from a previous/streamed 2D assignment.
             allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
+            ! Previous shift are also zeroed prior to and consistently with search
+            call spproj%os_ptcl2D%zero_shifts
         else if( spproj%os_ptcl2D%isthere('class') )then
             if( zero_oris .or. ncls_diff  )then
                 ! the ==0    is to overcome bug in shared-memory version

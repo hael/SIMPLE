@@ -152,13 +152,13 @@ contains
             call cavgs%zero_set(.true.)
             if( do_frac_update )then
                 call cavger_readwrite_partial_sums('read')
-                call center_cavgs_for_frac_update
+                ! call center_cavgs_for_frac_update ! TO BE VERIFIED
                 call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
                 call apply_weights2cavgs(class_update_fracs)
             endif
         else
             if( do_frac_update )then
-                call center_cavgs_for_frac_update
+                ! call center_cavgs_for_frac_update
                 call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
                 call apply_weights2cavgs(class_update_fracs)
             else
