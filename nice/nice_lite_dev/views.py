@@ -116,7 +116,7 @@ def create_project(request):
 # ------------------------------------------------------------------
 
 @login_required(login_url="/login")
-def file_browser(request, browser_type, path=None):
+def file_browser(request, type, path=None):
     """
     Render the file browser page.
 
@@ -134,5 +134,5 @@ def file_browser(request, browser_type, path=None):
             path = project.absdir or "/"
         else:
             path = "/"
-    filebrowserview = FileBrowserView(request, browser_type, path)
+    filebrowserview = FileBrowserView(request, type, path)
     return filebrowserview.render()
