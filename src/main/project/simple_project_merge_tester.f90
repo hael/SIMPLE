@@ -1,6 +1,6 @@
 !@descr: unit tests for SIMPLE project merging
 module simple_project_merge_tester
-use simple_projfile_utils, only: merge_selected_project_files
+use simple_projfile_utils, only: merge_selected_project_files, validate_and_repair_project_file
 use simple_sp_project,     only: sp_project
 use simple_string,         only: string
 use simple_syslib,         only: del_file, file_exists
@@ -15,6 +15,7 @@ contains
     subroutine run_all_project_merge_tests()
         write(*,'(A)') '**** running all project merge tests ****'
         call test_merge_pruned_stack_indexing_heterogeneous_ctf()
+        call test_validate_projfile_normalizes_legacy_stack_indices()
     end subroutine run_all_project_merge_tests
 
     subroutine test_merge_pruned_stack_indexing_heterogeneous_ctf()
@@ -108,6 +109,52 @@ contains
         call reread%kill
         if( allocated(project_files) ) deallocate(project_files)
     end subroutine test_merge_pruned_stack_indexing_heterogeneous_ctf
+
+    subroutine test_validate_projfile_normalizes_legacy_stack_indices()
+        type(sp_project) :: proj, validated
+        type(string) :: projfile, validated_file
+        integer, parameter :: NPTCLS = 3, NCLS = 2
+        integer, parameter :: BAD_INDSTKS(NPTCLS) = [99, 0, 3]
+        integer :: i, stkind, ind_in_stk
+        write(*,'(A)') 'test_validate_projfile_normalizes_legacy_stack_indices'
+        projfile       = 'validate_project_src.simple'
+        validated_file = 'validate_project_src_validated.simple'
+        call del_file(projfile)
+        call del_file(validated_file)
+        call make_project(proj, projfile, NPTCLS, 0, NCLS, 200.0, 1.0, 0.07, &
+            [1, 0, 1], [1, 2, 1], BAD_INDSTKS, 1)
+        call proj%os_ptcl2D%delete_entry(2, 'indstk')
+        call proj%os_ptcl3D%delete_entry(2, 'indstk')
+        call proj%write(projfile)
+        call assert_false(proj%os_stk%isthere(1, 'nptcls_stk'), 'legacy source lacks nptcls_stk')
+        call validate_and_repair_project_file(projfile, validated_file)
+        call assert_true(file_exists(validated_file), 'validate_projfile creates validated project')
+        call validated%read(validated_file)
+        call assert_int(1, validated%os_stk%get_noris(), 'validated stack count')
+        call assert_int(NPTCLS, validated%os_ptcl2D%get_noris(), 'validated ptcl2D count includes state 0')
+        call assert_int(NPTCLS, validated%os_ptcl3D%get_noris(), 'validated ptcl3D count includes state 0')
+        call assert_int(1, validated%os_stk%get_fromp(1), 'validated fromp')
+        call assert_int(NPTCLS, validated%os_stk%get_top(1), 'validated top')
+        call assert_int(NPTCLS, validated%os_stk%get_int(1, 'nptcls'), 'validated project nptcls')
+        call assert_int(NPTCLS, validated%os_stk%get_int(1, 'nptcls_stk'), 'validated fallback nptcls_stk')
+        do i = 1,NPTCLS
+            call assert_int(1, validated%os_ptcl2D%get_int(i, 'stkind'), 'validated ptcl2D stkind')
+            call assert_int(i, validated%os_ptcl2D%get_int(i, 'indstk'), 'validated ptcl2D legacy indstk')
+            call validated%map_ptcl_ind2stk_ind('ptcl2D', i, stkind, ind_in_stk)
+            call assert_int(1, stkind, 'validated ptcl2D mapped stkind')
+            call assert_int(i, ind_in_stk, 'validated ptcl2D mapped indstk')
+            call assert_int(1, validated%os_ptcl3D%get_int(i, 'stkind'), 'validated ptcl3D stkind')
+            call assert_int(i, validated%os_ptcl3D%get_int(i, 'indstk'), 'validated ptcl3D legacy indstk')
+            call validated%map_ptcl_ind2stk_ind('ptcl3D', i, stkind, ind_in_stk)
+            call assert_int(1, stkind, 'validated ptcl3D mapped stkind')
+            call assert_int(i, ind_in_stk, 'validated ptcl3D mapped indstk')
+        enddo
+        call assert_int(0, validated%os_ptcl2D%get_state(2), 'state 0 row remains present after validation')
+        call del_file(projfile)
+        call del_file(validated_file)
+        call proj%kill
+        call validated%kill
+    end subroutine test_validate_projfile_normalizes_legacy_stack_indices
 
     subroutine make_project(proj, projfile, nptcls, nptcls_stk, ncls, kv, cs, fraca, states, classes, &
         indstks, ogid)

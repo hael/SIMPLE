@@ -261,6 +261,11 @@ Project validation should check:
 Validation must not silently convert physical `indstk` values into project-row
 indices.
 
+The `validate_projfile` program applies this policy to an input project and
+writes `input_name_validated.simple`. It reports warnings, errors, and repairs
+encountered during validation, but writes a best-effort repaired project so that
+legacy stream outputs can be normalized before downstream 2D or 3D analysis.
+
 ## Test Policy
 
 Tests for merge, prune, and stack readers should include pruned-style projects

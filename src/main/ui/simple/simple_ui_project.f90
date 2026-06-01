@@ -20,6 +20,7 @@ type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
 type(ui_program), target :: update_project
+type(ui_program), target :: validate_projfile
 type(ui_program), target :: zero_project_shifts
 type(ui_program), target :: write_mic_filetab
 
@@ -44,6 +45,7 @@ contains
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
         call new_update_project(prgtab)
+        call new_validate_projfile(prgtab)
         call new_zero_project_shifts(prgtab)
         call new_write_mic_filetab(prgtab)
     end subroutine construct_project_programs
@@ -68,6 +70,7 @@ contains
         write(logfhandle,'(A)') replace_project_field%name%to_char()
         write(logfhandle,'(A)') selection%name%to_char()
         write(logfhandle,'(A)') update_project%name%to_char()
+        write(logfhandle,'(A)') validate_projfile%name%to_char()
         write(logfhandle,'(A)') zero_project_shifts%name%to_char()
         write(logfhandle,'(A)') write_mic_filetab%name%to_char()
         write(logfhandle,'(A)') ''
@@ -380,6 +383,36 @@ contains
         ! add to ui_hash
         call add_ui_program('merge_projects', merge_projects, prgtab)
     end subroutine new_merge_projects
+
+    subroutine new_validate_projfile( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call validate_projfile%new(&
+        &'validate_projfile', &                                         ! name
+        &'Validate and repair a project',&                              ! descr_short
+        &'is a program to validate SIMPLE project stack indexing metadata and write a repaired project', & ! descr_long
+        &'simple_exec',&                                                ! executable
+        &.true.)                                                        ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call validate_projfile%add_input(UI_PARM, projfile,&
+        &required_override          = .true.,&
+        &gui_submenu="data", gui_advanced=.false.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('validate_projfile', validate_projfile, prgtab)
+    end subroutine new_validate_projfile
 
     subroutine new_new_project( prgtab )
         class(ui_hash), intent(inout) :: prgtab

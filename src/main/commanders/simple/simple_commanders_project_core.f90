@@ -35,6 +35,11 @@ type, extends(commander_base) :: commander_merge_projects
     procedure :: execute      => exec_merge_projects
 end type commander_merge_projects
 
+type, extends(commander_base) :: commander_validate_projfile
+  contains
+    procedure :: execute      => exec_validate_projfile
+end type commander_validate_projfile
+
 type, extends(commander_base) :: commander_replace_project_field
   contains
     procedure :: execute      => exec_replace_project_field
@@ -309,6 +314,21 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects
+
+    subroutine exec_validate_projfile( self, cline )
+        use simple_projfile_utils, only: validate_and_repair_project_file
+        class(commander_validate_projfile), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters) :: params
+        type(string)     :: projfile_out
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
+        call params%new(cline)
+        if( params%projfile .eq. '' )then
+            THROW_HARD('validate_projfile requires projfile')
+        endif
+        call validate_and_repair_project_file(params%projfile, projfile_out)
+        call simple_end('**** SIMPLE_VALIDATE_PROJFILE NORMAL STOP ****')
+    end subroutine exec_validate_projfile
 
     subroutine exec_replace_project_field( self, cline )
         class(commander_replace_project_field), intent(inout) :: self
