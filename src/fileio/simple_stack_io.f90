@@ -83,6 +83,7 @@ contains
         stk_is_open = self%l_open
     end function stk_is_open
 
+    ! # of particles in stack
     function get_nptcls( self ) result( nptcls )
         class(stack_io), intent(in) :: self
         integer :: nptcls

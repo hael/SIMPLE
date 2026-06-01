@@ -791,10 +791,11 @@ contains
             enddo
             ! update stack
             absstkname = simple_abspath(newstkname)
-            call o_stk%set('stk',   absstkname)
-            call o_stk%set('fromp', fromp_glob)
-            call o_stk%set('top',   top_glob)
-            call o_stk%set('nptcls',ptcl_cnt)
+            call o_stk%set('stk',       absstkname)
+            call o_stk%set('fromp',     fromp_glob)
+            call o_stk%set('top',       top_glob)
+            call o_stk%set('nptcls',    ptcl_cnt)
+            call o_stk%set('nptcls_stk',ptcl_cnt)
             call spproj_out%os_stk%set_ori(stk_cnt, o_stk)
             ! update micrograph
             if( nmics_tot > 0 ) then

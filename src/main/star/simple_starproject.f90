@@ -196,7 +196,6 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         type(string) :: tmpstr
-        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls2D"
@@ -211,11 +210,6 @@ contains
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
-        do i=1, spproj%os_stk%get_noris()
-            call spproj%os_stk%set(i, "imgkind", "ptcl")
-            call spproj%os_stk%set(i, "ctf",     "yes")
-            call spproj%os_stk%set(i, "stkkind", "split")
-        end do
     end subroutine import_ptcls2D
 
     subroutine import_cls2D(self, cline, spproj, filename)
@@ -243,7 +237,6 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
-        integer                           :: i
         type(string) :: tmpstr
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
@@ -259,11 +252,6 @@ contains
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
-        do i=1, spproj%os_stk%get_noris()
-            call spproj%os_stk%set(i, "imgkind", "ptcl")
-            call spproj%os_stk%set(i, "ctf", "yes")
-            call spproj%os_stk%set(i, "stkkind", "split")
-        end do
     end subroutine import_ptcls3D
 
     ! imports into 2D & 3D, preserves poses
@@ -272,7 +260,6 @@ contains
         class(string),      intent(in)    :: filename
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: ctfflag
-        integer :: i, nstks
         write(logfhandle,'(A,A)')'>>> Importing ' , filename%to_char()
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
@@ -282,12 +269,6 @@ contains
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         ! 3D field
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
-        nstks = spproj%os_stk%get_noris()
-        do i = 1, nstks
-            call spproj%os_stk%set(i, 'imgkind', 'ptcl')
-            call spproj%os_stk%set(i, 'ctf',     ctfflag)
-            call spproj%os_stk%set(i, 'stkkind', 'split')
-        end do
         ! CTF
         select case(lowercase(ctfflag%to_char()))
             case('no')
@@ -426,10 +407,10 @@ contains
         class(oris),        intent(inout)    :: opticsoris
         type(string), allocatable :: stknames(:), stks(:)
         integer,      allocatable :: stkzmax(:), stkoriids(:), seppos(:)
-        type(string) :: entrystr, searchstr
+        type(string) :: entrystr, searchstr, stkname
         type(oris)   :: stktmp
         type(ori)    :: oritmpin, oritmpout
-        integer      :: i, j, top, fromp, sepstart, sepend, stkind, nstks
+        integer      :: ldim(3),i, j, top, fromp, sepstart, sepend, stkind, nstks, nptcls_stk
         logical      :: newstack, stkexists
         allocate(stknames(0))
         allocate(stkzmax(0))
@@ -465,9 +446,10 @@ contains
         end do
         call stks(:)%kill
         deallocate(stks)
-        call stkoris%new(size(stknames), .false.)
-        allocate(self%starfile%stkstates(size(stknames)))
-        do i = 1,size(stknames)
+        nstks = size(stknames)
+        call stkoris%new(nstks, .false.)
+        allocate(self%starfile%stkstates(nstks))
+        do i = 1,nstks
             call stktmp%get_ori(stkoriids(i), oritmpin)
             call stkoris%get_ori(i, oritmpout)
             call oritmpout%append_ori(oritmpin)
@@ -507,19 +489,35 @@ contains
         end do
         fromp = 1
         self%starfile%stkptclcount = 0
-        do i = 1, size(stknames)
+        do i = 1, nstks
             top = fromp + stkzmax(i)
-            call stkoris%set(i, "nptcls", stkzmax(i))
-            call stkoris%set(i, "fromp",  fromp)
-            call stkoris%set(i, "top",    top - 1)
+            stkname = stkoris%get_str(i, 'stk')
+            call find_ldim_nptcls(stkname, ldim, nptcls_stk)
+            call stkoris%set(i, 'nptcls_stk', nptcls_stk)
+            call stkoris%set(i, 'nptcls',     stkzmax(i))
+            call stkoris%set(i, 'fromp',      fromp)
+            call stkoris%set(i, 'top',        top - 1)
             fromp = top
             self%starfile%stkptclcount = self%starfile%stkptclcount + stkzmax(i)
         end do
         do i = 1,stktmp%get_noris()
             self%starfile%stkmap(i, 2) = self%starfile%stkmap(i, 2) + stkoris%get_int(self%starfile%stkmap(i, 1), "fromp") - 1
         end do
+        ! Finalize
+        do i = 1, nstks
+            call stkoris%set(i, 'imgkind',    'ptcl')
+            call stkoris%set(i, 'ctf',        'yes')
+            call stkoris%set(i, 'stkkind',    'split')
+        end do
+        ! cleanup
+        call entrystr%kill
+        call searchstr%kill
+        call stkname%kill
         call stknames(:)%kill
         deallocate(stknames)
+        call stktmp%kill
+        call oritmpin%kill
+        call oritmpout%kill
         if(allocated(stkzmax))   deallocate(stkzmax)
         if(allocated(stkoriids)) deallocate(stkoriids)
         if(allocated(seppos))    deallocate(seppos)

@@ -580,8 +580,8 @@ contains
                 stack_phaseplate = .false.
                 stack_nptcls     = 0
                 do stkind = 1,nstks_here
-                    if( proj%os_stk%isthere(stkind, 'nptcls') )then
-                        stack_nptcls(stkind) = proj%os_stk%get_int(stkind, 'nptcls')
+                    if( proj%os_stk%isthere(stkind, 'nptcls_stk') )then
+                        stack_nptcls(stkind) = proj%os_stk%get_int(stkind, 'nptcls_stk')
                     else if( proj%os_stk%isthere(stkind, 'fromp') .and. &
                         proj%os_stk%isthere(stkind, 'top') )then
                         fromp = proj%os_stk%get_fromp(stkind)
@@ -715,10 +715,11 @@ contains
                 endif
             end subroutine validate_stack_particle_ranges
 
+            ! count number of particles imported in docs regardless of selection
             integer function count_stack_particles( proj, iproj, require_ranges )
-                class(sp_project), intent(inout) :: proj
-                integer,           intent(in)    :: iproj
-                logical,           intent(in)    :: require_ranges
+                class(sp_project), intent(in) :: proj
+                integer,           intent(in) :: iproj
+                logical,           intent(in) :: require_ranges
                 integer :: istk
                 count_stack_particles = 0
                 do istk = 1,proj%os_stk%get_noris()

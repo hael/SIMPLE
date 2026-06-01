@@ -54,17 +54,31 @@ contains
             write(logfhandle,*) 'nstks : ', nstks
             THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
         endif
-        fromp = self%os_stk%get_fromp(stkind)
-        top   = self%os_stk%get_top(stkind)
-        if( self%os_stk%isthere(stkind, 'nptcls') )then
-            nptcls_stk = self%os_stk%get_int(stkind, 'nptcls')
+        ! Physical number of images in stack
+        nptcls_stk = 0
+        if( self%os_stk%isthere('nptcls_stk') )then
+            nptcls_stk = self%os_stk%get_int(stkind, 'nptcls_stk')
+            if( nptcls_stk < 1 )then
+                write(logfhandle,*) 'iptcl : ', iptcl
+                write(logfhandle,*) 'stkind: ', stkind
+                write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
+                THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
+            endif
         else
-            nptcls_stk = top - fromp + 1
+            ! For backwards compatibility, only when no pruning has been performed
+            fromp = self%os_stk%get_fromp(stkind)
+            top   = self%os_stk%get_top(stkind)
+            if( self%os_stk%isthere(stkind, 'nptcls') )then
+                nptcls_stk = self%os_stk%get_int(stkind, 'nptcls')
+            else
+                nptcls_stk = top - fromp + 1
+            endif
         endif
         if( ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
             if( ind_in_stk > 0 )then
                 if( ind_in_stk > nptcls_stk )then
+                    call self%os_stk%print(stkind)
                     write(logfhandle,*) 'iptcl             : ', iptcl
                     write(logfhandle,*) 'stkind            : ', stkind
                     write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
@@ -409,11 +423,12 @@ contains
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self
         type(oris)                :: os_ptcl2d, os_ptcl3d, os_stk, os_mic
+        type(string)              :: stkname
         logical,      allocatable :: stks_mask(:), ptcls_mask(:)
         integer,      allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
-        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
+        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt, ldim(3)
         integer                   :: nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
-        integer                   :: stkind, ptcl_glob, nptcls_eff, indstk
+        integer                   :: stkind, ptcl_glob, nptcls_eff, indstk, nptcls_stk
         nstks_tot  = self%get_nstks()
         if( nstks_tot == 0 ) THROW_HARD('No particles to operate on!')
         ! particles reverse indexing
@@ -478,6 +493,12 @@ contains
             call os_stk%set(stk_cnt, 'fromp',  fromp_glob)
             call os_stk%set(stk_cnt, 'top',    top_glob)
             call os_stk%set(stk_cnt, 'nptcls', ptcl_cnt)
+            if( .not.self%os_stk%isthere(stk_cnt, 'nptcls_stk') )then
+                ! backwards compatibility
+                stkname = os_stk%get_str(stk_cnt, 'stk')
+                call find_ldim_nptcls(stkname, ldim, nptcls_stk)
+                call os_stk%set(stk_cnt, 'nptcls_stk', nptcls_stk)
+            endif
             ! update micrograph
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
@@ -488,10 +509,12 @@ contains
         self%os_mic    = os_mic
         self%os_ptcl2d = os_ptcl2D
         self%os_ptcl3d = os_ptcl3D
+        ! cleanup
         call os_stk%kill
         call os_mic%kill
         call os_ptcl2d%kill
         call os_ptcl3d%kill
+        call stkname%kill
     end subroutine prune_particles
 
     module subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )

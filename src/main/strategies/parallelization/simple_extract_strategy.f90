@@ -288,7 +288,8 @@ contains
                     nptcls = boxfile%get_ndatalines()
                 endif
                 if( nptcls == 0 )then
-                    call spproj%os_mic%set(imic, 'nptcls', 0)
+                    call spproj%os_mic%set(imic, 'nptcls',     0)
+                    call spproj%os_mic%set(imic, 'nptcls_stk', 0)
                     cycle
                 endif
                 allocate( boxdata(boxfile%get_nrecs_per_line(),nptcls) )
@@ -308,8 +309,9 @@ contains
             prog = 0.0
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )then
-                    call spproj%os_mic%set(imic, 'nptcls', 0)
-                    call spproj%os_mic%set_state(imic, 0)
+                    call spproj%os_mic%set(imic, 'nptcls_stk', 0)
+                    call spproj%os_mic%set(imic, 'nptcls',     0)
+                    call spproj%os_mic%set_state(imic,         0)
                     cycle
                 endif
                 call spproj%os_mic%get_ori(imic, o_mic)
@@ -339,8 +341,8 @@ contains
                     oris_mask(iptcl) = (trim(params%outside).eq.'yes') .or. box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box)
                 end do
                 nptcls2extract = count(oris_mask)
-                call spproj%os_mic%set(imic, 'nptcls', nptcls2extract)
-
+                call spproj%os_mic%set(imic, 'nptcls',     nptcls2extract)
+                call spproj%os_mic%set(imic, 'nptcls_stk', nptcls2extract)
                 if( nptcls2extract == 0 )then
                     mics_mask(imic) = .false.
                     cycle
@@ -401,7 +403,12 @@ contains
                     iptcl    = ptcl_inds(i)
                     iptcl_g  = iptcl_glob + i
                     ptcl_pos = boxdata(1:2,iptcl)
+                    ! index in physical stack
+                    call spproj%os_ptcl2D%set(iptcl_g, 'indstk', i)
+                    call spproj%os_ptcl3D%set(iptcl_g, 'indstk', i)
+                    ! picking position
                     call spproj%set_boxcoords(iptcl_g, nint(ptcl_pos))
+                    ! CTF parameters
                     if( l_ctfpatch )then
                         ptcl_pos = ptcl_pos+1.+real(params%box/2)
                         call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
@@ -410,12 +417,11 @@ contains
                         call spproj%os_ptcl3D%set_dfx(iptcl_g,dfx)
                         call spproj%os_ptcl3D%set_dfy(iptcl_g,dfy)
                     endif
-
+                    ! optical group
                     if( l_ogid_present )then
                         call spproj%os_ptcl2D%set(iptcl_g,'ogid',o_mic%get('ogid'))
                         call spproj%os_ptcl3D%set(iptcl_g,'ogid',o_mic%get('ogid'))
                     endif
-
                     if( l_gid_present )then
                         call spproj%os_ptcl2D%set(iptcl_g,'gid',o_mic%get('gid'))
                         call spproj%os_ptcl3D%set(iptcl_g,'gid',o_mic%get('gid'))

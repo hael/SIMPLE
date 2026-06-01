@@ -128,6 +128,7 @@ contains
         call proj%os_stk%set(1, 'fraca',      fraca)
         call proj%os_stk%set(1, 'box',        128)
         call proj%os_stk%set(1, 'nptcls',     nptcls)
+        call proj%os_stk%set(1, 'nptcls_stk', nptcls)
         call proj%os_stk%set(1, 'fromp',      1)
         call proj%os_stk%set(1, 'top',        nptcls)
         call proj%os_stk%set_ogid(1, ogid)

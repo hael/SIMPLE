@@ -386,10 +386,11 @@ contains
                     else
                         call micrograph%update_header_stats(stack, [stk_min, stk_max, stk_mean, stk_sdev])
                     endif
-                    call spproj_in%os_stk%set(stk_ind,'stk',   simple_abspath(stack,check_exists=.false.))
-                    call spproj_in%os_stk%set(stk_ind,'box',   params%box)
-                    call spproj_in%os_stk%set(stk_ind,'nptcls',nptcls2extract)
-                    call spproj_in%os_mic%set(imic,   'nptcls',nptcls2extract)
+                    call spproj_in%os_stk%set(stk_ind,'stk',       simple_abspath(stack,check_exists=.false.))
+                    call spproj_in%os_stk%set(stk_ind,'box',       params%box)
+                    call spproj_in%os_stk%set(stk_ind,'nptcls',    nptcls2extract)
+                    call spproj_in%os_stk%set(stk_ind,'nptcls_stk',nptcls2extract)
+                    call spproj_in%os_mic%set(imic,   'nptcls',    nptcls2extract)
                     call spproj_in%os_mic%delete_entry(imic,'boxfile')
                 else
                     call spproj_in%os_stk%set(stk_ind,'state',0)

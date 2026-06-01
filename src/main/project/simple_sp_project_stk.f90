@@ -46,13 +46,14 @@ contains
             top   = fromp + nptcls - 1
         endif
         ! updates oris_objects
-        call self%os_stk%set(n_os_stk, 'stk',     stk_relpath)
-        call self%os_stk%set(n_os_stk, 'box',     ldim(1))
-        call self%os_stk%set(n_os_stk, 'nptcls',  nptcls)
-        call self%os_stk%set(n_os_stk, 'fromp',   fromp)
-        call self%os_stk%set(n_os_stk, 'top',     top)
-        call self%os_stk%set(n_os_stk, 'stkkind', 'split')
-        call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
+        call self%os_stk%set(n_os_stk, 'stk',       stk_relpath) ! Physical relative location
+        call self%os_stk%set(n_os_stk, 'box',       ldim(1))     ! square dimension
+        call self%os_stk%set(n_os_stk, 'nptcls',    nptcls)      ! number of particles of this stack in the document
+        call self%os_stk%set(n_os_stk, 'nptcls_stk',nptcls)      ! number of physical particles in the stack
+        call self%os_stk%set(n_os_stk, 'fromp',     fromp)       ! global particles range within document (start)
+        call self%os_stk%set(n_os_stk, 'top',       top)         ! global particles range within document (end)
+        call self%os_stk%set(n_os_stk, 'stkkind',   'split')
+        call self%os_stk%set(n_os_stk, 'imgkind',   'ptcl')
         call self%os_stk%set(n_os_stk, 'state',   1) ! default on import
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO,CTFFLAG_YES,CTFFLAG_FLIP)
@@ -70,6 +71,7 @@ contains
             call o%set('angast', ctfvars%angast)
             if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', n_os_stk)
+            call o%set('indstk', i)
             call o%set('state',  1)         ! default on import
             call o%set('pind',   pind)      ! to keep track of particle indices
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
@@ -113,7 +115,8 @@ contains
         endif
         ! set particle indices
         do pind = 1,os%get_noris()
-            call os%set(pind, 'pind', pind)
+            call os%set(pind, 'pind',   pind)
+            call os%set(pind, 'indstk', pind)
         end do
         ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
@@ -133,18 +136,19 @@ contains
         endif
         ! records
         call self%os_stk%new(1, is_ptcl=.false.)
-        call self%os_stk%set(1, 'stk',     stk_abspath)
-        call self%os_stk%set(1, 'box',     ldim(1))
-        call self%os_stk%set(1, 'nptcls',  nptcls)
-        call self%os_stk%set(1, 'fromp',   1)
-        call self%os_stk%set(1, 'top',     nptcls)
-        call self%os_stk%set(1, 'stkkind', 'single')
-        call self%os_stk%set(1, 'imgkind', 'ptcl')
-        call self%os_stk%set(1, 'smpd',    ctfvars%smpd)
-        call self%os_stk%set(1, 'kv',      ctfvars%kv)
-        call self%os_stk%set(1, 'cs',      ctfvars%cs)
-        call self%os_stk%set(1, 'fraca',   ctfvars%fraca)
-        call self%os_stk%set(1, 'state',   1) ! default on import
+        call self%os_stk%set(1, 'stk',        stk_abspath)
+        call self%os_stk%set(1, 'box',        ldim(1))
+        call self%os_stk%set(1, 'nptcls',     nptcls)
+        call self%os_stk%set(1, 'nptcls_stk', nptcls)
+        call self%os_stk%set(1, 'fromp',      1)
+        call self%os_stk%set(1, 'top',        nptcls)
+        call self%os_stk%set(1, 'stkkind',    'single')
+        call self%os_stk%set(1, 'imgkind',    'ptcl')
+        call self%os_stk%set(1, 'smpd',       ctfvars%smpd)
+        call self%os_stk%set(1, 'kv',         ctfvars%kv)
+        call self%os_stk%set(1, 'cs',         ctfvars%cs)
+        call self%os_stk%set(1, 'fraca',      ctfvars%fraca)
+        call self%os_stk%set(1, 'state',      1) ! default on import
         if( ctfvars%l_phaseplate )then
             if( .not. os%isthere('phshift') ) THROW_HARD('phaseplate=yes & input oris lack phshift; add_single_stk')
             call self%os_stk%set(1, 'phaseplate', 'yes')
@@ -244,13 +248,14 @@ contains
             stk_ind = n_os_stk + istk
             ! updates stk segment
             call self%os_stk%set_ori(stk_ind, o_stk)
-            call self%os_stk%set(stk_ind, 'stk',     stkfnames(istk))
-            call self%os_stk%set(stk_ind, 'box',     ldim(1))
-            call self%os_stk%set(stk_ind, 'nptcls',  nptcls_arr(istk))
-            call self%os_stk%set(stk_ind, 'fromp',   fromp)
-            call self%os_stk%set(stk_ind, 'top',     top)
-            call self%os_stk%set(stk_ind, 'stkkind', 'split')
-            call self%os_stk%set(stk_ind, 'imgkind', 'ptcl')
+            call self%os_stk%set(stk_ind, 'stk',        stkfnames(istk))
+            call self%os_stk%set(stk_ind, 'box',        ldim(1))
+            call self%os_stk%set(stk_ind, 'nptcls',     nptcls_arr(istk))
+            call self%os_stk%set(stk_ind, 'nptcls_stk', nptcls_arr(istk))
+            call self%os_stk%set(stk_ind, 'fromp',      fromp)
+            call self%os_stk%set(stk_ind, 'top',        top)
+            call self%os_stk%set(stk_ind, 'stkkind',    'split')
+            call self%os_stk%set(stk_ind, 'imgkind',    'ptcl')
             istate = 1 ! default on import
             if( o_stk%isthere('state') ) istate = o_stk%get_state()
             call self%os_stk%set(stk_ind, 'state', istate)
@@ -264,7 +269,8 @@ contains
             call o_ptcl%set_state(istate)
             pind = fromp
             do i=1,nptcls_arr(istk)
-                call o_ptcl%set('pind', pind) ! to keep track of particle indices
+                call o_ptcl%set('pind',   pind) ! to keep track of particle indices
+                call o_ptcl%set('indstk', i)    ! physical particle index in stack
                 call self%os_ptcl2D%set_ori(fromp+i-1, o_ptcl)
                 call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
                 pind = pind + 1
@@ -346,18 +352,19 @@ contains
             stk_ind = n_os_stk + istk
             ! updates stk segment
             call o_stk%new(is_ptcl=.false.)
-            call o_stk%set('stk',     stkfnames(istk))
-            call o_stk%set('box',     ldim(1))
-            call o_stk%set('nptcls',  nptcls_arr(istk))
-            call o_stk%set('fromp',   fromp)
-            call o_stk%set('top',     top)
-            call o_stk%set('stkkind', 'split')
-            call o_stk%set('imgkind', 'ptcl')
-            call o_stk%set('smpd',    ctfvars%smpd)
-            call o_stk%set('kv',      ctfvars%kv)
-            call o_stk%set('cs',      ctfvars%cs)
-            call o_stk%set('fraca',   ctfvars%fraca)
-            call o_stk%set('state',   1.0) ! default on import
+            call o_stk%set('stk',        stkfnames(istk))
+            call o_stk%set('box',        ldim(1))
+            call o_stk%set('nptcls',     nptcls_arr(istk))
+            call o_stk%set('nptcls_stk', nptcls_arr(istk))
+            call o_stk%set('fromp',      fromp)
+            call o_stk%set('top',        top)
+            call o_stk%set('stkkind',    'split')
+            call o_stk%set('imgkind',    'ptcl')
+            call o_stk%set('smpd',       ctfvars%smpd)
+            call o_stk%set('kv',         ctfvars%kv)
+            call o_stk%set('cs',         ctfvars%cs)
+            call o_stk%set('fraca',      ctfvars%fraca)
+            call o_stk%set('state',      1.0) ! default on import
             if( ctfvars%l_phaseplate )then
                 call o_stk%set('phaseplate', 'yes')
                 call o_stk%set('phshift',    ctfvars%phshift)
@@ -381,6 +388,7 @@ contains
                 call os%get_ori(pind, o_ptcl)
                 call o_ptcl%set_stkind(stk_ind)
                 call o_ptcl%set('pind',   pind) ! to keep track of particle indices
+                call o_ptcl%set('indstk', i)    ! physical particle index in stack
                 istate = 1
                 if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
                 call o_ptcl%set_state(istate)
@@ -492,11 +500,12 @@ contains
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
             ! override
-            call self%os_stk%set(istk, 'stk',     stk_relpath)
-            call self%os_stk%set(istk, 'nptcls',  nptcls_part)
-            call self%os_stk%set(istk, 'fromp',   parts(istk,1))
-            call self%os_stk%set(istk, 'top',     parts(istk,2))
-            call self%os_stk%set(istk, 'stkkind', 'split')
+            call self%os_stk%set(istk, 'stk',       stk_relpath)
+            call self%os_stk%set(istk, 'nptcls',    nptcls_part)
+            call self%os_stk%set(istk, 'nptcls_stk',nptcls_part)
+            call self%os_stk%set(istk, 'fromp',     parts(istk,1))
+            call self%os_stk%set(istk, 'top',       parts(istk,2))
+            call self%os_stk%set(istk, 'stkkind',   'split')
             ind_in_stk = 0
             do iptcl=parts(istk,1),parts(istk,2)
                 call self%os_ptcl2D%set(iptcl,'stkind', istk)
@@ -655,7 +664,7 @@ contains
                 nptcls = self%os_stk%get_int(istk,'nptcls')
                 if(top-fromp+1 /= nptcls)then
                     call self%os_stk%print(istk)
-                    THROW_HARD('Incorrect # number of particles in stack '//int2str(istk)//'; report_state2stk')
+                    THROW_HARD('Incorrect # number of particles in range '//int2str(istk)//'; report_state2stk')
                 endif
                 if( states(istk) > 0 )then
                     ! preserve existing states
