@@ -124,6 +124,7 @@ contains
         endif
         if( L_BENCH_GLOB ) t_phase = tic()
         call cavger_new(params, build)
+        call cavger_read_euclid_sigma2
         call cavger_assemble_sums_from_parts
         if( L_BENCH_GLOB ) rt_reduce_partials = toc(t_phase)
         if( L_BENCH_GLOB ) t_phase = tic()

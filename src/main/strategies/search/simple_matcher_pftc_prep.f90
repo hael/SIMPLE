@@ -28,10 +28,11 @@ contains
         type(image), allocatable :: match_imgs(:)
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd, centype, ithr, pdim_srch(3)
-        logical      :: do_center, has_been_searched, input_center, l_fresh_start
+        logical      :: do_center, has_been_searched, input_center, l_fresh_start, l_use_merged_ref
         l_fresh_start     = is_fresh_2D_start(params, which_iter)
         has_been_searched = (.not. l_fresh_start) .and. (.not.build%spproj%is_virgin_field(params%oritype))
         input_center      = trim(params%center) .eq. 'yes'
+        l_use_merged_ref  = params%l_lpset .and. (.not.params%l_nonuniform .or. params%l_nonuniform_lpset)
         ! create the polarft_calc object
         call build%pftc%new(params, params%ncls, [1,batchsz_max], params%kfromto, nmany_refs=nmany_refs)
         ! objective functions & sigma
@@ -74,7 +75,7 @@ contains
                     xyz = 0.0
                 endif
                 ! Prepare the references
-                if( params%l_lpset )then
+                if( l_use_merged_ref )then
                     ! merged class average in both even and odd positions
                     call match_imgs(icls)%copy_fast(cavgs_m(icls))
                     call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))

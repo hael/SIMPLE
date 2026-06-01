@@ -3,6 +3,9 @@ submodule (simple_classaverager) simple_classaverager_restore
 use simple_imgarr_utils,     only: alloc_imgarr, dealloc_imgarr
 use simple_strategy2D_utils, only: calc_cavg_offset
 use simple_gridding,         only: prep2D_inv_instrfun4mul
+use simple_nu_filter2D,      only: nu_filter2D_state
+use simple_nu_filter2D_stats, only: nu_filter2D_stats, merge_nu_filter2D_stats, print_nu_filter2D_stats, &
+    &kill_nu_filter2D_stats
 implicit none
 #include "simple_local_flags.inc"
 
@@ -474,14 +477,18 @@ contains
     module subroutine cavger_restore_cavgs( frcs_fname )
         class(string), intent(in) :: frcs_fname
         real, allocatable :: frcs(:,:)
-        type(cavgs_set)   :: cavgs_bak
+        type(cavgs_set)   :: cavgs_bak, cavgs_unreg
         type(stack)       :: even_tmp, odd_tmp
         type(image)       :: gridcorr_img
         integer           :: eo_pop(2), icls, ithr, find, pop, filtsz_crop
+        logical           :: l_run_nonuniform2D, l_regularize_avg
         ! temporary objects for frc calculation & regularization
         filtsz_crop = fdim(ldim_crop(1))-1
+        l_run_nonuniform2D = p_ptr%l_nonuniform
+        l_regularize_avg   = p_ptr%l_ml_reg
         allocate(frcs(filtsz_crop,ncls),source=0.0)
         call cavgs_bak%new_set(ldim_crop, ncls)
+        if( l_run_nonuniform2D ) call cavgs_unreg%new_set(ldim_crop, ncls)
         call even_tmp%new_stack(ldim_crop, nthr_glob, alloc_ctfsq=.false.)
         call odd_tmp%new_stack( ldim_crop, nthr_glob, alloc_ctfsq=.false.)
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
@@ -498,13 +505,18 @@ contains
                 call cavgs%even%zero_slice(icls, .false.)
                 call cavgs%odd%zero_slice(icls, .false.)
                 call cavgs%merged%zero_slice(icls, .false.)
+                if( l_run_nonuniform2D )then
+                    call cavgs_unreg%even%zero_slice(icls, .false.)
+                    call cavgs_unreg%odd%zero_slice(icls, .false.)
+                    call cavgs_unreg%merged%zero_slice(icls, .false.)
+                endif
             else
                 ! even + odd
                 cavgs%merged%slices(icls)%ft = .true.
                 cavgs%merged%cmat(:,:,icls)  = cavgs%even%cmat(:,:,icls)  + cavgs%odd%cmat(:,:,icls)
                 cavgs%merged%ctfsq(:,:,icls) = cavgs%even%ctfsq(:,:,icls) + cavgs%odd%ctfsq(:,:,icls)
                 ! backup current classes
-                if( p_ptr%l_ml_reg ) call cavgs_bak%copy_fast(cavgs, icls, .true.)
+                if( l_regularize_avg ) call cavgs_bak%copy_fast(cavgs, icls, .true.)
                 ! CTF2 density correction
                 if( eo_pop(1) > 1 ) call cavgs%even%ctf_dens_correct(icls)
                 if( eo_pop(2) > 1 ) call cavgs%odd%ctf_dens_correct(icls)
@@ -513,6 +525,7 @@ contains
                 call cavgs%even%ifft(icls)
                 call cavgs%odd%ifft(icls)
                 call cavgs%merged%ifft(icls)
+                if( l_run_nonuniform2D ) call cavgs_unreg%copy_fast(cavgs, icls, .false.)
                 ! FRC calculation
                 even_tmp%rmat(:,:,ithr)  = cavgs%even%rmat(:,:,icls)
                 odd_tmp%rmat(:,:,ithr)   = cavgs%odd%rmat(:,:,icls)
@@ -524,7 +537,7 @@ contains
                 call odd_tmp%fft(ithr)
                 call even_tmp%frc(odd_tmp, ithr, frcs(:,icls))
                 ! ML-regularization: add inverse of noise power to ctfsq & normalize again
-                if( p_ptr%l_ml_reg )then
+                if( l_regularize_avg )then
                     ! add noise power term to denominator
                     call cavgs_bak%even%add_invnoisepower2rho(icls, filtsz_crop, frcs(:,icls))
                     call cavgs_bak%odd%add_invnoisepower2rho(icls, filtsz_crop, frcs(:,icls))
@@ -548,6 +561,16 @@ contains
                 call cavgs%odd%fft(icls)
                 call cavgs%even%insert_lowres_serial(cavgs%merged, icls, find)
                 call cavgs%odd%insert_lowres_serial(cavgs%merged, icls, find)
+                if( l_run_nonuniform2D )then
+                    call cavgs_unreg%merged%fft(icls)
+                    call cavgs_unreg%even%fft(icls)
+                    call cavgs_unreg%odd%fft(icls)
+                    call cavgs_unreg%even%insert_lowres_serial(cavgs_unreg%merged, icls, find)
+                    call cavgs_unreg%odd%insert_lowres_serial(cavgs_unreg%merged, icls, find)
+                    call cavgs_unreg%merged%ifft(icls)
+                    call cavgs_unreg%even%ifft(icls)
+                    call cavgs_unreg%odd%ifft(icls)
+                endif
                 ! gridding correction
                 call cavgs%merged%ifft(icls)
                 call cavgs%even%ifft(icls)
@@ -555,11 +578,17 @@ contains
                 call gridcorr_img%mul_rmat(cavgs%even%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
                 call gridcorr_img%mul_rmat(cavgs%odd%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
                 call gridcorr_img%mul_rmat(cavgs%merged%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
+                if( l_run_nonuniform2D )then
+                    call gridcorr_img%mul_rmat(cavgs_unreg%even%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
+                    call gridcorr_img%mul_rmat(cavgs_unreg%odd%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
+                    call gridcorr_img%mul_rmat(cavgs_unreg%merged%rmat(:ldim_crop(1),:ldim_crop(2),icls:icls))
+                endif
             endif
             ! store FRC
             call b_ptr%clsfrcs%set_frc(icls, frcs(:,icls), 1)
         end do
         !$omp end parallel do
+        if( l_run_nonuniform2D ) call cavger_apply_nonuniform2D(cavgs_unreg)
         ! write FRCs
         call b_ptr%clsfrcs%write(frcs_fname)
         ! cleanup
@@ -568,8 +597,114 @@ contains
         call even_tmp%kill_stack
         call odd_tmp%kill_stack
         call cavgs_bak%kill_set
+        if( l_run_nonuniform2D ) call cavgs_unreg%kill_set
         deallocate(frcs)
     end subroutine cavger_restore_cavgs
+
+    subroutine cavger_apply_nonuniform2D( cavgs_unreg )
+        type(cavgs_set), intent(inout) :: cavgs_unreg
+        type(nu_filter2D_state), allocatable :: nu_states(:)
+        type(nu_filter2D_stats) :: nu_stats
+        real,    allocatable :: class_align_lps(:), class_active_lps(:)
+        integer :: icls, pop, ithr
+        real    :: align_lp, frc05, frc0143
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; whole image'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: active bank is capped by the class FSC resolution'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: histogram-constrained Potts preserves raw label fractions'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: ordered support gate removes labels below 0.25% raw support'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
+        allocate(nu_states(nthr_glob))
+        allocate(class_align_lps(ncls), source=0.)
+        allocate(class_active_lps(ncls), source=0.)
+        do ithr = 1, nthr_glob
+            call nu_states(ithr)%setup(ldim_crop, smpd_crop)
+        end do
+        do icls = 1, ncls
+            pop = sum(eo_pops(:,icls))
+            if( pop == 0 ) cycle
+            call b_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
+            if( frc0143 > TINY )then
+                class_active_lps(icls) = frc0143
+            else if( p_ptr%lp > TINY )then
+                class_active_lps(icls) = p_ptr%lp
+            endif
+        end do
+        if( any(class_active_lps > TINY) )then
+            write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                &'>>> 2D NU filter active-bank FSC cap range: ', &
+                &minval(class_active_lps, mask=class_active_lps > TINY), ' - ', &
+                &maxval(class_active_lps, mask=class_active_lps > TINY), ' A'
+        endif
+        !$omp parallel do default(shared) private(icls,pop,ithr) schedule(static) proc_bind(close)
+        do icls = 1, ncls
+            pop = sum(eo_pops(:,icls))
+            if( pop == 0 ) cycle
+            ithr = omp_get_thread_num() + 1
+            block
+                type(image) :: even_raw, odd_raw, reg_even, reg_odd, reg_avg, even_nu, odd_nu, avg_nu
+                call stack_slice_to_image(cavgs_unreg%even, icls, even_raw)
+                call stack_slice_to_image(cavgs_unreg%odd,  icls, odd_raw)
+                call stack_slice_to_image(cavgs%even,       icls, reg_even)
+                call stack_slice_to_image(cavgs%odd,        icls, reg_odd)
+                call stack_slice_to_image(cavgs%merged,     icls, reg_avg)
+                call nu_states(ithr)%apply(even_raw, odd_raw, reg_even, reg_odd, reg_avg, even_nu, odd_nu, &
+                    &avg_nu, class_align_lps(icls), active_lp_limit=class_active_lps(icls))
+                call image_to_stack_slice(even_nu, cavgs%even,   icls)
+                call image_to_stack_slice(odd_nu,  cavgs%odd,    icls)
+                call image_to_stack_slice(avg_nu,  cavgs%merged, icls)
+                call even_raw%kill
+                call odd_raw%kill
+                call reg_even%kill
+                call reg_odd%kill
+                call reg_avg%kill
+                call even_nu%kill
+                call odd_nu%kill
+                call avg_nu%kill
+            end block
+        end do
+        !$omp end parallel do
+        do ithr = 1, nthr_glob
+            call merge_nu_filter2D_stats(nu_stats, nu_states(ithr)%stats)
+        end do
+        call print_nu_filter2D_stats(nu_stats)
+        do ithr = 1, nthr_glob
+            call nu_states(ithr)%kill
+        end do
+        if( any(class_align_lps > TINY) )then
+            align_lp = minval(class_align_lps, mask=class_align_lps > TINY)
+            call b_ptr%spproj_field%set_all2single('lp', align_lp)
+            write(logfhandle,'(A,F8.3,A)') &
+                &'>>> 2D NU filter project matching low-pass limit: ', align_lp, ' A'
+        endif
+        deallocate(nu_states)
+        deallocate(class_align_lps)
+        deallocate(class_active_lps)
+        call kill_nu_filter2D_stats(nu_stats)
+    end subroutine cavger_apply_nonuniform2D
+
+    subroutine stack_slice_to_image( cavg_stack, icls, img )
+        class(stack), intent(in)    :: cavg_stack
+        integer,      intent(in)    :: icls
+        type(image),  intent(inout) :: img
+        real(kind=c_float), pointer :: rmat(:,:,:)
+        call img%new(ldim_crop, smpd_crop, wthreads=.false.)
+        call img%get_rmat_ptr(rmat)
+        rmat(:ldim_crop(1),:ldim_crop(2),1) = cavg_stack%rmat(:ldim_crop(1),:ldim_crop(2),icls)
+    end subroutine stack_slice_to_image
+
+    subroutine image_to_stack_slice( img, cavg_stack, icls )
+        type(image),  intent(inout) :: img
+        class(stack), intent(inout) :: cavg_stack
+        integer,      intent(in)    :: icls
+        real(kind=c_float), pointer :: rmat(:,:,:)
+        call img%get_rmat_ptr(rmat)
+        cavg_stack%rmat(:ldim_crop(1),:ldim_crop(2),icls) = rmat(:ldim_crop(1),:ldim_crop(2),1)
+        cavg_stack%slices(icls)%ft = .false.
+    end subroutine image_to_stack_slice
 
     ! I/O
 
