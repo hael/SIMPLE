@@ -122,7 +122,6 @@ integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimensi
 integer                          :: ldim_croppd(3) = [0,0,0]  !< logical dimension of cropped image, padded
 real                             :: smpd       = 0.           !< sampling distance
 real                             :: smpd_crop  = 0.           !< cropped sampling distance
-logical                          :: l_alloc_read_cavgs=.true. !< whether to allocate sums and read partial sums
 
 interface
 
@@ -264,10 +263,9 @@ interface
     ! Module public routines
     !
 
-    module subroutine cavger_new( params, build, alloccavgs )
+    module subroutine cavger_new( params, build )
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
-        logical, optional,         intent(in)    :: alloccavgs 
     end subroutine cavger_new
 
     ! Book-keeping & metadata
@@ -342,8 +340,7 @@ interface
 
     ! Destructors
 
-    module subroutine cavger_kill( dealloccavgs )
-        logical, optional, intent(in) :: dealloccavgs
+    module subroutine cavger_kill
     end subroutine cavger_kill
 
     ! Public utility

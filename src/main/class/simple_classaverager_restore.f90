@@ -9,15 +9,12 @@ implicit none
 contains
 
     !>  \brief  Constructor
-    module subroutine cavger_new( params, build, alloccavgs )
+    module subroutine cavger_new( params, build )
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
-        logical, optional,         intent(in)    :: alloccavgs
         p_ptr => params
         b_ptr => build
-        l_alloc_read_cavgs = .true.
-        if( present(alloccavgs) ) l_alloc_read_cavgs = alloccavgs
-        call cavger_kill(dealloccavgs=l_alloc_read_cavgs)
+        call cavger_kill
         ncls          = p_ptr%ncls
         ! smpd
         smpd          = p_ptr%smpd
@@ -28,7 +25,7 @@ contains
         ldim_croppd   = [p_ptr%box_croppd,p_ptr%box_croppd,1]
         ldim_pd       = [p_ptr%boxpd,     p_ptr%boxpd,     1]
         ! instantiate class averages
-        if( l_alloc_read_cavgs ) call cavgs%new_set(ldim_crop(1:2), ncls)
+        call cavgs%new_set(ldim_crop(1:2), ncls)
         ! populations
         allocate(eo_pops(2,ncls),source=0)
     end subroutine cavger_new
@@ -148,22 +145,12 @@ contains
         logical, intent(in) :: do_frac_update
         real, allocatable :: class_update_fracs(:)
         ! Zero sums or set to previous with weight
-        if( l_alloc_read_cavgs )then
-            call cavgs%zero_set(.true.)
-            if( do_frac_update )then
-                call cavger_readwrite_partial_sums('read')
-                ! call center_cavgs_for_frac_update ! TO BE VERIFIED
-                call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
-                call apply_weights2cavgs(class_update_fracs)
-            endif
-        else
-            if( do_frac_update )then
-                ! call center_cavgs_for_frac_update
-                call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
-                call apply_weights2cavgs(class_update_fracs)
-            else
-                call cavgs%zero_set(.true.)
-            endif
+        call cavgs%zero_set(.true.)
+        if( do_frac_update )then
+            call cavger_readwrite_partial_sums('read')
+            ! call center_cavgs_for_frac_update ! TO BE VERIFIED
+            call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
+            call apply_weights2cavgs(class_update_fracs)
         endif
         ! Interpolation variables
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
@@ -499,12 +486,6 @@ contains
         call odd_tmp%new_stack( ldim_crop, nthr_glob, alloc_ctfsq=.false.)
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
-        ! Making sure that the public images are allocated with make_cavgs & shared memory
-        if( (.not.l_distr_worker_glob).and.(.not.allocated(cavgs_merged)) )then
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_even)
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_odd)
-            call alloc_imgarr(ncls, ldim_crop, smpd_crop, cavgs_merged)
-        endif
         ! Main loop
         !$omp parallel do default(shared) private(icls,ithr,eo_pop,pop,find)&
         !$omp schedule(static) proc_bind(close)
@@ -577,13 +558,6 @@ contains
             endif
             ! store FRC
             call b_ptr%clsfrcs%set_frc(icls, frcs(:,icls), 1)
-            ! Transfer cavg from stack object to image object used in alignment
-            ! only in shared memory execution
-            if( .not.l_distr_worker_glob )then
-                call cavgs_even(icls)%set_rmat(  cavgs%even%rmat(:,:,icls:icls), .false.)
-                call cavgs_odd(icls)%set_rmat(   cavgs%odd%rmat(:,:,icls:icls), .false.)
-                call cavgs_merged(icls)%set_rmat(cavgs%merged%rmat(:,:,icls:icls), .false.)
-            endif
         end do
         !$omp end parallel do
         ! write FRCs
@@ -837,13 +811,8 @@ contains
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
-    module subroutine cavger_kill( dealloccavgs )
-        logical, optional, intent(in) :: dealloccavgs
-        if( present(dealloccavgs) )then
-            if( dealloccavgs ) call dealloc_cavgs
-        else
-            call dealloc_cavgs
-        endif
+    module subroutine cavger_kill()
+        call dealloc_cavgs
         if( allocated(eo_pops) ) deallocate(eo_pops)
     end subroutine cavger_kill
 
@@ -857,7 +826,6 @@ contains
         ldim    = 0; ldim_crop   = 0
         ldim_pd = 0; ldim_croppd = 0
         smpd    = 0.;smpd_crop   = 0.
-        l_alloc_read_cavgs = .true.
     end subroutine dealloc_cavgs
 
     ! PUBLIC UTILITIES

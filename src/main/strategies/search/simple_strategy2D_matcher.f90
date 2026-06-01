@@ -51,7 +51,6 @@ type :: cluster2D_ctrl
     logical :: l_stream
     logical :: l_greedy
     logical :: l_np_cls_defined
-    logical :: l_alloc_read_cavgs
     logical :: l_prob_align
     logical :: l_restore_cavgs
     logical :: l_assignment_only
@@ -177,18 +176,18 @@ contains
 contains
 
         subroutine init_ctrl()
-            ctrl%refine_flag     = trim(p_ptr%refine)
-            ctrl%l_snhc          = str_has_substr(ctrl%refine_flag, 'snhc')
-            ctrl%l_greedy        = str_has_substr(ctrl%refine_flag, 'greedy')
-            ctrl%l_stream        = (trim(p_ptr%stream2d) == 'yes')
-            ctrl%l_sample_updates= p_ptr%l_update_frac
-            ctrl%l_frac_restore  = ctrl%l_sample_updates
-            ctrl%l_partial_sums  = ctrl%l_frac_restore
-            ctrl%l_prob_align    = p_ptr%l_prob_align_mode
-            ctrl%l_restore_cavgs = (trim(p_ptr%restore_cavgs) == 'yes')
+            ctrl%refine_flag       = trim(p_ptr%refine)
+            ctrl%l_snhc            = str_has_substr(ctrl%refine_flag, 'snhc')
+            ctrl%l_greedy          = str_has_substr(ctrl%refine_flag, 'greedy')
+            ctrl%l_stream          = (trim(p_ptr%stream2d) == 'yes')
+            ctrl%l_sample_updates  = p_ptr%l_update_frac
+            ctrl%l_frac_restore    = ctrl%l_sample_updates
+            ctrl%l_partial_sums    = ctrl%l_frac_restore
+            ctrl%l_prob_align      = p_ptr%l_prob_align_mode
+            ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_assignment_only = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
-            ctrl%l_np_cls_defined= cline%defined('nptcls_per_cls')
-            ctrl%do_bench        = L_BENCH_GLOB
+            ctrl%l_np_cls_defined  = cline%defined('nptcls_per_cls')
+            ctrl%do_bench          = L_BENCH_GLOB
             if( p_ptr%startit == 1 )then
                 ctrl%l_frac_restore = .false.
                 ctrl%l_partial_sums = .false.
@@ -203,16 +202,16 @@ contains
                 ctrl%l_sample_updates = .false.
                 ctrl%l_frac_restore   = .false.
                 if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then
-                    p_ptr%l_update_frac = .true.
+                    p_ptr%l_update_frac   = .true.
                     ctrl%l_sample_updates = .true.
                     ctrl%l_frac_restore   = .true.
-                    ctrl%l_partial_sums = .true.
+                    ctrl%l_partial_sums   = .true.
                 else
-                    p_ptr%update_frac   = 1.0
-                    p_ptr%l_update_frac = .false.
+                    p_ptr%update_frac     = 1.0
+                    p_ptr%l_update_frac   = .false.
                     ctrl%l_sample_updates = .false.
                     ctrl%l_frac_restore   = .false.
-                    ctrl%l_partial_sums = .false.
+                    ctrl%l_partial_sums   = .false.
                 endif
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
@@ -267,14 +266,11 @@ contains
             ! For fillin: need to read cavgs even if not restoring them (needed for alignment)
             l_need_cavgs_for_alignment = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
             if( ctrl%l_assignment_only .and. (.not. l_need_cavgs_for_alignment) ) return
-            ctrl%l_alloc_read_cavgs = l_distr_worker_glob .or. (which_iter == 1)
-            call cavger_new(p_ptr, b_ptr, alloccavgs=ctrl%l_alloc_read_cavgs)
-            if( ctrl%l_alloc_read_cavgs )then
-                if( .not. cline%defined('refs') )then
-                    THROW_HARD('need refs to be part of command line for cluster2D execution')
-                endif
-                call cavger_read_all
+            call cavger_new(p_ptr, b_ptr)
+            if( .not. cline%defined('refs') )then
+                THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
+            call cavger_read_all
             if( ctrl%l_assignment_only ) return
             ctrl%l_partial_sums = ctrl%l_frac_restore
             call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
@@ -419,14 +415,12 @@ contains
                     else
                         THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                     endif
+                    call cavger_readwrite_partial_sums('write')
                     call cavger_restore_cavgs( p_ptr%frcs )
                     call cavger_gen2Dclassdoc
                     call cavger_write_merged( p_ptr%refs )
-                    if( ctrl%l_stream )then
-                        call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
-                        call cavger_readwrite_partial_sums( 'write' )
-                    endif
-                    call cavger_kill(dealloccavgs=.false.)
+                    call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
+                    call cavger_kill
                     call cline%set('refs', p_ptr%refs)
                     call b_ptr%spproj%os_cls3D%new(p_ptr%ncls, is_ptcl=.false.)
                     states = b_ptr%spproj%os_cls2D%get_all('state')
@@ -485,7 +479,6 @@ contains
         write(logfhandle,'(a,l1)') 'l_stream             : ', self%l_stream
         write(logfhandle,'(a,l1)') 'l_greedy             : ', self%l_greedy
         write(logfhandle,'(a,l1)') 'l_np_cls_defined     : ', self%l_np_cls_defined
-        write(logfhandle,'(a,l1)') 'l_alloc_read_cavgs   : ', self%l_alloc_read_cavgs
         write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
         write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
         write(logfhandle,'(a,l1)') 'l_assignment_only    : ', self%l_assignment_only

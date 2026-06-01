@@ -269,7 +269,6 @@ contains
         type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
         integer :: nptcls
-        logical :: l_alloc_read_cavgs
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
@@ -288,8 +287,7 @@ contains
         call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, nptcls)
         call alloc_imgarr(nptcls, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         ! mirror cluster2D_exec reference setup
-        l_alloc_read_cavgs = l_distr_worker_glob .or. (params%which_iter==1)
-        call cavger_new(params, build, alloccavgs=l_alloc_read_cavgs)
+        call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
         call cavger_read_all
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, nptcls, params%which_iter, .false.)
@@ -302,7 +300,7 @@ contains
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
-        if( l_distr_worker_glob ) call cavger_kill
+        call cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
         call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
