@@ -11,7 +11,7 @@ use simple_strategy2D_utils,        only: calc_cavg_offset
 implicit none
 
 ! Particle image processing for alignment
-public :: prepimg4align, prepimg4align_bench
+public :: prepimg4align
 ! Reference processing for alignment
 public :: prep2Dref, calc_2Dref_offset
 private
@@ -51,45 +51,6 @@ contains
         ! fused IFFT, mask, FFT
         call img_out%ifft_mask_pad_fft(params%msk_crop, img_out_pd)
     end subroutine prepimg4align
-
-    subroutine prepimg4align_bench( params, build, iptcl, img, img_out, img_out_pd, rt_prep1, rt_prep2, rt_prep )
-        class(parameters),    intent(in)     :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: iptcl
-        class(image),         intent(inout) :: img
-        class(image),         intent(inout) :: img_out
-        class(image),         intent(inout) :: img_out_pd
-        real(timer_int_kind), intent(inout) :: rt_prep1, rt_prep2, rt_prep
-        integer(timer_int_kind) :: t_prep1, t_prep2, t_prep
-        type(ctf)       :: tfun
-        type(ctfparams) :: ctfparms
-        real            :: shvec(2), crop_factor
-        t_prep1 = tic()
-        t_prep   = t_prep1
-        crop_factor = real(params%box_crop) / real(params%box)
-        shvec(1)    = -build%spproj_field%get(iptcl, 'x') * crop_factor
-        shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
-        ! Phase-flipping
-        ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
-        select case(ctfparms%ctfflag)
-            case(CTFFLAG_NO, CTFFLAG_FLIP)
-                ! fused noise normalization, FFT, clip & shift
-                call img%norm_noise_fft_clip_shift(build%lmsk, img_out, shvec)
-            case(CTFFLAG_YES)
-                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
-                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                ! fused noise normalization, FFT, clip, shift & CTF flip
-                call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk, img_out, shvec, tfun, ctfparms)
-            case DEFAULT
-                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
-        end select
-        rt_prep1 = rt_prep1 + toc(t_prep1)
-        t_prep2 = tic()
-        ! fused IFFT, mask, FFT
-        call img_out%ifft_mask_pad_fft(params%msk_crop, img_out_pd)
-        rt_prep2 = rt_prep2 + toc(t_prep2)
-        rt_prep   = rt_prep   + toc(t_prep)
-    end subroutine prepimg4align_bench
 
     !>  \brief  Calculates the centering offset of the input cavg
     !>          cavg & particles centering is not performed

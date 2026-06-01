@@ -14,6 +14,7 @@ contains
         class(oris), pointer                     :: ptcl_field
         real    :: smpd
         integer :: nptcls, nptcls_stk, fromp, top, box, nstks
+        logical :: l_has_nptcls_stk, l_has_range
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -54,9 +55,18 @@ contains
             write(logfhandle,*) 'nstks : ', nstks
             THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
         endif
-        ! Physical number of images in stack
+        ! Physical number of images in stack, when explicitly recorded.
         nptcls_stk = 0
-        if( self%os_stk%isthere('nptcls_stk') )then
+        fromp = 0
+        top   = -1
+        l_has_range = self%os_stk%isthere(stkind, 'fromp') .and. &
+            self%os_stk%isthere(stkind, 'top')
+        if( l_has_range )then
+            fromp = self%os_stk%get_fromp(stkind)
+            top   = self%os_stk%get_top(stkind)
+        endif
+        l_has_nptcls_stk = self%os_stk%isthere(stkind, 'nptcls_stk')
+        if( l_has_nptcls_stk )then
             nptcls_stk = self%os_stk%get_int(stkind, 'nptcls_stk')
             if( nptcls_stk < 1 )then
                 write(logfhandle,*) 'iptcl : ', iptcl
@@ -64,33 +74,23 @@ contains
                 write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
                 THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
             endif
-            fromp = self%os_stk%get_fromp(stkind)
-            top   = self%os_stk%get_top(stkind)
-        else
-            ! For backwards compatibility, only when no pruning has been performed
-            fromp = self%os_stk%get_fromp(stkind)
-            top   = self%os_stk%get_top(stkind)
-            if( self%os_stk%isthere(stkind, 'nptcls') )then
-                nptcls_stk = self%os_stk%get_int(stkind, 'nptcls')
-            else
-                nptcls_stk = top - fromp + 1
-            endif
+        else if( l_has_range )then
+            nptcls_stk = top - fromp + 1
         endif
-        if( ptcl_field%isthere(iptcl, 'indstk') )then
+        ind_in_stk = 0
+        if( l_has_nptcls_stk .and. ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
-            if( ind_in_stk > 0 )then
-                if( ind_in_stk > nptcls_stk )then
-                    call self%os_stk%print(stkind)
-                    write(logfhandle,*) 'iptcl             : ', iptcl
-                    write(logfhandle,*) 'stkind            : ', stkind
-                    write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
-                    THROW_HARD('particle indstk out of stack range; map_ptcl_ind2stk_ind')
-                endif
-            else
-                call set_indstk_from_range
-            endif
-        else
+            if( ind_in_stk > nptcls_stk ) ind_in_stk = 0
+        endif
+        if( ind_in_stk < 1 )then
             call set_indstk_from_range
+        endif
+        if( (l_has_nptcls_stk .or. l_has_range) .and. ind_in_stk > nptcls_stk )then
+            call self%os_stk%print(stkind)
+            write(logfhandle,*) 'iptcl             : ', iptcl
+            write(logfhandle,*) 'stkind            : ', stkind
+            write(logfhandle,*) 'indstk/nptcls_stk : ', ind_in_stk, nptcls_stk
+            THROW_HARD('particle indstk out of stack range; map_ptcl_ind2stk_ind')
         endif
         ! cleanup
         nullify(ptcl_field)
@@ -98,6 +98,11 @@ contains
         contains
 
             subroutine set_indstk_from_range
+                if( .not.l_has_range )then
+                    write(logfhandle,*) 'iptcl : ', iptcl
+                    write(logfhandle,*) 'stkind: ', stkind
+                    THROW_HARD('missing indstk and stack range; map_ptcl_ind2stk_ind')
+                endif
                 if( iptcl < fromp .or. iptcl > top )then
                     write(logfhandle,*) 'iptcl            : ', iptcl
                     write(logfhandle,*) 'stkind           : ', stkind
@@ -420,8 +425,8 @@ contains
         call self%os_cls3D%set_all('state',real(cls_states))
     end subroutine map_ptcls_state_to_cls
 
-    ! Removes in place mics, stacks and particles with state=0
-    ! new images are not generated & the indstk field is updated
+    ! Removes in place mics, stacks and particles with state=0.
+    ! New images are not generated, so positive physical indstk values are preserved.
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self
         type(oris)                :: os_ptcl2d, os_ptcl3d, os_stk, os_mic
@@ -481,7 +486,17 @@ contains
                 ptcl_glob = ptcl_glob + 1
                 top_glob  = top_glob+1
                 ptcl_cnt  = ptcl_cnt+1
-                indstk    = iptcl-fromp+1
+                indstk = iptcl - fromp + 1
+                if( self%os_stk%isthere(istk, 'nptcls_stk') )then
+                    nptcls_stk = self%os_stk%get_int(istk, 'nptcls_stk')
+                    if( self%os_ptcl2D%isthere(iptcl, 'indstk') )then
+                        indstk = self%os_ptcl2D%get_int(iptcl, 'indstk')
+                    endif
+                    if( indstk < 1 .and. self%os_ptcl3D%isthere(iptcl, 'indstk') )then
+                        indstk = self%os_ptcl3D%get_int(iptcl, 'indstk')
+                    endif
+                    if( indstk < 1 .or. indstk > nptcls_stk ) indstk = iptcl - fromp + 1
+                endif
                 ! update orientations
                 call os_ptcl2D%transfer_ori(ptcl_glob, self%os_ptcl2D, iptcl)
                 call os_ptcl3D%transfer_ori(ptcl_glob, self%os_ptcl3D, iptcl)
@@ -495,7 +510,7 @@ contains
             call os_stk%set(stk_cnt, 'fromp',  fromp_glob)
             call os_stk%set(stk_cnt, 'top',    top_glob)
             call os_stk%set(stk_cnt, 'nptcls', ptcl_cnt)
-            if( .not.self%os_stk%isthere(stk_cnt, 'nptcls_stk') )then
+            if( .not.os_stk%isthere(stk_cnt, 'nptcls_stk') )then
                 ! backwards compatibility
                 stkname = os_stk%get_str(stk_cnt, 'stk')
                 call find_ldim_nptcls(stkname, ldim, nptcls_stk)

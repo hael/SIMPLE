@@ -7,7 +7,7 @@ use simple_binoris_io,              only: binwrite_oritab
 use simple_builder,                 only: builder
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
-use simple_matcher_2Dprep,          only: prepimg4align, prepimg4align_bench
+use simple_matcher_2Dprep,          only: prepimg4align
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
