@@ -1,40 +1,43 @@
-A job array can be submitted simply by adding
+# SLURM Commands
 
+## SLURM Job Array
+A job array can be submitted simply by adding to the job script:
+```
 #SBATCH --array=x-y
-
-to the job script where x and y are the array bounds. SLURM's job array handling is very versatile. Instead of providing a task range a comma-separated list of task numbers can be provided, for example, to rerun a few failed jobs from a previously completed job array as in
-
+```
+where `x` and `y` are the array bounds. SLURM's job array handling is very versatile. Instead of providing a task range a comma-separated list of task numbers can be provided, for example, to rerun a few failed jobs from a previously completed job array as in
+```
 sbatch --array=4,8,15,16,23,42  job_script.sbatch
-
-You can limit the number of tasks that run at once certain number of tasks active at a time use the %N suffix where N is the number of active tasks. For example
-
+```
+You can limit the number of tasks that run at once certain number of tasks active at a time use the `%N` suffix where `N` is the number of active tasks. For example
+```
 $SBATCH --array1-200%10
+```
+## Naming output and error files
 
-Naming output and error files
-
-SLURM uses the %A and %a replacement strings for the master job ID and task ID, respectively.
-
+SLURM uses the `%A` and `%a` replacement strings for the master job ID and task ID, respectively.
+```
 #SBATCH --output=Array_test.%A_%a.out
 #SBATCH --error=Array_test.%A_%a.error
 
 ! get the SLURM array task id from Fortran
 CHARACTER(len=255) :: task_id
 CALL get_environment_variable("SLURM_ARRAY_TASK_ID", task_id)
-
-Deleting job arrays and tasks
+```
+## Deleting job arrays and tasks
 
 To delete all of the tasks of an array job, use scancel with the job ID:
-
+```
 scancel 292441
-
+```
 To delete a single task, add the task ID:
-
+```
 scancel 292441_5
-
-Job arrays will have two additional environment variable set. SLURM_ARRAY_JOB_ID will be set to the first job ID of the array. SLURM_ARRAY_TASK_ID will be set to the job array index value. SLURM_ARRAY_TASK_COUNT will be set to the number of tasks in the job array. SLURM_ARRAY_TASK_MAX will be set to the highest job array index value. SLURM_ARRAY_TASK_MIN will be set to the lowest job array index value.
+```
+Job arrays will have two additional environment variable set. `SLURM_ARRAY_JOB_ID` will be set to the first job ID of the array. `SLURM_ARRAY_TASK_ID` will be set to the job array index value. `SLURM_ARRAY_TASK_COUNT` will be set to the number of tasks in the job array. `SLURM_ARRAY_TASK_MAX` will be set to the highest job array index value. `SLURM_ARRAY_TASK_MIN` will be set to the lowest job array index value.
 
 Running multiple arrays at once
-
+```
 #!/bin/sh
 #SBATCH --job-name=mega_array       # Job name
 #SBATCH --mail-type=ALL             # Mail events (NONE, BEGIN, END, FAIL, ALL)
@@ -69,5 +72,5 @@ for (( run=$START_NUM; run<=END_NUM; run++ )); do
   echo This is SLURM task $SLURM_ARRAY_TASK_ID, run number $run
   #Do your stuff here
 done
-
+```
 date
