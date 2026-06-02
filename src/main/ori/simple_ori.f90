@@ -320,6 +320,9 @@ contains
             self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
             self_out%pparms(I_EO)        = self_in%pparms(I_EO)
+            self_out%pparms(I_E1)        = 0.0
+            self_out%pparms(I_E2)        = 0.0
+            self_out%pparms(I_E3)        = self_in%pparms(I_E3)
         else
             call self_out%htab%set('class',    self_in%htab%get('class'))
             call self_out%htab%set('corr',     self_in%htab%get('corr'))
@@ -327,8 +330,10 @@ contains
             call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
             call self_out%htab%set('eo',       self_in%htab%get('eo'))
+            call self_out%htab%set('e1',       0.0)
+            call self_out%htab%set('e2',       0.0)
+            call self_out%htab%set('e3',       self_in%htab%get('e3'))
         endif
-        call self_out%set_euler(self_in%get_euler())
         call self_out%set_shift(self_in%get_2Dshift())
     end subroutine transfer_2Dparams
 

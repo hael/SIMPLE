@@ -195,9 +195,9 @@ contains
     !---------------- copy: ptcl -> ptcl ----------------
 
     subroutine test_copy_ptcl_to_ptcl()
-        type(ori)   :: a, b
+        type(ori)   :: a, b, c, d
         type(string):: tag
-        write(*,'(A)') 'test_copy_ptcl_to_ptcl'
+        write(*,'(A)') 'test_copy_ptcl_to_ptcl 1'
         call a%new_ori(.true.)
         call a%set_state(3)
         call a%set_class(7)
@@ -212,7 +212,33 @@ contains
         call assert_int(7, b%get_class(),      'copy: class copied')
         call assert_real(0.77, b%get('corr'), 1.0e-6, 'copy: corr copied')
         call assert_true(b%ischar('tag'),      'copy: tag char present')
+        call assert_real(11.0, b%e1get(), 1.0e-3, 'copy: e1')
+        call assert_real(22.0, b%e2get(), 1.0e-3, 'copy: e2')
+        call assert_real(33.0, b%e3get(), 1.0e-3, 'copy: e3')
         tag = b%get_str('tag')
+        call assert_char('XYZ', tag%to_char(), 'copy: tag value')
+
+        write(*,'(A)') 'test_copy_ptcl_to_ptcl 2'
+        call c%new_ori(.true.)
+        call c%set_state(3)
+        call c%set_class(7)
+        call c%e1set(0.0)
+        call c%e2set(0.0)
+        call c%e3set(33.0)
+        call c%set_shift([1.0, 2.0])
+        call c%set('corr', 0.77)
+        call c%set('tag',  'XYZ')
+        call d%new_ori(.true.)
+        d = c   ! uses copy via assignment interface
+        call assert_true( d%is_particle(),     'copy: target still particle')
+        call assert_int(3, d%get_state(),      'copy: state copied')
+        call assert_int(7, d%get_class(),      'copy: class copied')
+        call assert_real(0.77, d%get('corr'), 1.0e-6, 'copy: corr copied')
+        call assert_true(d%ischar('tag'),      'copy: tag char present')
+        call assert_real( 0.0, d%e1get(), 1.0e-3, 'copy: e1')
+        call assert_real( 0.0, d%e2get(), 1.0e-3, 'copy: e2')
+        call assert_real(33.0, d%e3get(), 1.0e-3, 'copy: e3')
+        tag = d%get_str('tag')
         call assert_char('XYZ', tag%to_char(), 'copy: tag value')
     end subroutine test_copy_ptcl_to_ptcl
 
@@ -341,7 +367,9 @@ contains
         call src%set('sampled', 1)
         call src%set('updatecnt', 4)
         call src%set('eo', 1)
-        call src%set_euler([10.0, 20.0, 30.0])
+        call src%e1set(0.0)
+        call src%e2set(0.0)
+        call src%e3set(30.0)
         call src%set_shift([1.0, 2.0])
 
         call dst%transfer_2Dparams(src)
@@ -354,8 +382,8 @@ contains
         call assert_int(1, dst%get_sampled(), 'transfer_2Dparams sampled')
         call assert_int(4, dst%get_updatecnt(), 'transfer_2Dparams updatecnt')
         call assert_int(1, dst%get_eo(), 'transfer_2Dparams eo')
-        call assert_real(10.0, dst%e1get(), 1.0e-3, 'transfer_2Dparams e1')
-        call assert_real(20.0, dst%e2get(), 1.0e-3, 'transfer_2Dparams e2')
+        call assert_real(0.0, dst%e1get(), 1.0e-3, 'transfer_2Dparams e1')
+        call assert_real(0.0, dst%e2get(), 1.0e-3, 'transfer_2Dparams e2')
         call assert_real(30.0, dst%e3get(), 1.0e-3, 'transfer_2Dparams e3')
         call assert_real(1.0, sh(1), 1.0e-6, 'transfer_2Dparams x')
         call assert_real(2.0, sh(2), 1.0e-6, 'transfer_2Dparams y')
