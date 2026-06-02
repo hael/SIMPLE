@@ -204,6 +204,8 @@ particles:
   normally `1..nptcls`.
 - Set `nptcls_stk` to the physical image count in the new stack file.
 - Set `fromp/top/nptcls` to the project row ranges.
+- The number of particle rows is the same as the physical image count:
+  `nptcls = nptcls_stk`
 
 This is the only case where pruning should rewrite `indstk` based on the new
 stack-file order.
@@ -272,7 +274,7 @@ Tests for merge, prune, and stack readers should include pruned-style projects
 where:
 
 ```text
-nptcls < nptcls_stk
+nptcls <= nptcls_stk
 fromp/top describe current project rows
 indstk contains non-contiguous physical image indices
 ```
