@@ -674,7 +674,12 @@ contains
         n = size(pinds)
         use_cluster_gauge = present(class_labels) .and. present(class_angle) .and. present(class_shift_x) .and. &
             present(class_shift_y) .and. present(class_img_dist)
-        call build_orientation_knn_graph(spproj, params%k_nn, pinds, edge_mask, so3_mat)
+        if( use_cluster_gauge )then
+            call build_class_restricted_orientation_knn_graph(spproj, params%k_nn, pinds, class_labels, edge_mask, so3_mat)
+            call add_class_bridge_edges(spproj, params%k_nn, pinds, class_labels, class_img_dist, edge_mask, so3_mat)
+        else
+            call build_orientation_knn_graph(spproj, params%k_nn, pinds, edge_mask, so3_mat)
+        endif
         eps_img = 0.
         eps_so3 = 0.
         nedges  = 0
@@ -727,6 +732,193 @@ contains
                 endif
             end subroutine gauge_edge_terms
     end subroutine build_gauge_knn_graph
+
+    subroutine build_class_restricted_orientation_knn_graph( spproj, k_nn, pinds, class_labels, edge_mask, so3_mat )
+        type(sp_project), intent(inout)          :: spproj
+        integer,          intent(in)             :: k_nn, pinds(:), class_labels(:)
+        logical, allocatable, intent(out)        :: edge_mask(:,:)
+        real,    allocatable, intent(out)        :: so3_mat(:,:)
+        logical, allocatable :: class_edge_mask(:,:)
+        real, allocatable    :: class_so3_mat(:,:)
+        integer, allocatable :: class_inds(:), class_pinds(:)
+        integer :: n, nclasses, icls, cnt, i, j, ii, jj
+        n = size(pinds)
+        allocate(edge_mask(n,n), source=.false.)
+        allocate(so3_mat(n,n), source=0.)
+        if( n <= 1 ) return
+        nclasses = maxval(class_labels)
+        do icls = 1,nclasses
+            cnt = count(class_labels == icls)
+            if( cnt <= 1 ) cycle
+            allocate(class_inds(cnt), class_pinds(cnt))
+            cnt = 0
+            do i = 1,n
+                if( class_labels(i) /= icls ) cycle
+                cnt = cnt + 1
+                class_inds(cnt)  = i
+                class_pinds(cnt) = pinds(i)
+            end do
+            call build_orientation_knn_graph(spproj, k_nn, class_pinds, class_edge_mask, class_so3_mat)
+            do ii = 1,size(class_inds)-1
+                do jj = ii+1,size(class_inds)
+                    if( .not. class_edge_mask(ii,jj) ) cycle
+                    i = class_inds(ii)
+                    j = class_inds(jj)
+                    edge_mask(i,j) = .true.
+                    edge_mask(j,i) = .true.
+                    so3_mat(i,j)   = class_so3_mat(ii,jj)
+                    so3_mat(j,i)   = class_so3_mat(jj,ii)
+                end do
+            end do
+            if( allocated(class_edge_mask) ) deallocate(class_edge_mask)
+            if( allocated(class_so3_mat)   ) deallocate(class_so3_mat)
+            if( allocated(class_inds)      ) deallocate(class_inds)
+            if( allocated(class_pinds)     ) deallocate(class_pinds)
+        end do
+    end subroutine build_class_restricted_orientation_knn_graph
+
+    subroutine add_class_bridge_edges( spproj, k_nn, pinds, class_labels, class_img_dist, edge_mask, so3_mat )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: k_nn, pinds(:), class_labels(:)
+        real,             intent(in)    :: class_img_dist(:,:)
+        logical,          intent(inout) :: edge_mask(:,:)
+        real,             intent(inout) :: so3_mat(:,:)
+        logical, allocatable :: bridge_mask(:,:)
+        integer, allocatable :: inds_i(:), inds_j(:)
+        integer :: n, nclasses, icls, jcls, k_cross
+        n = size(pinds)
+        if( n <= 1 ) return
+        nclasses = maxval(class_labels)
+        if( nclasses <= 1 ) return
+        call build_class_bridge_mask(k_nn, class_img_dist, bridge_mask)
+        k_cross = max(1, min(k_nn, max(1, k_nn / 3)))
+        do icls = 1,nclasses-1
+            do jcls = icls+1,nclasses
+                if( .not. bridge_mask(icls,jcls) ) cycle
+                call inds_for_label(class_labels, icls, inds_i)
+                call inds_for_label(class_labels, jcls, inds_j)
+                call add_bipartite_orientation_edges(spproj, k_cross, pinds, inds_i, inds_j, edge_mask, so3_mat)
+                if( allocated(inds_i) ) deallocate(inds_i)
+                if( allocated(inds_j) ) deallocate(inds_j)
+            end do
+        end do
+        if( allocated(bridge_mask) ) deallocate(bridge_mask)
+    end subroutine add_class_bridge_edges
+
+    subroutine build_class_bridge_mask( k_nn, class_img_dist, bridge_mask )
+        integer, intent(in) :: k_nn
+        real,    intent(in) :: class_img_dist(:,:)
+        logical, allocatable, intent(out) :: bridge_mask(:,:)
+        logical, allocatable :: in_tree(:)
+        integer, allocatable :: nbrs(:), best_parent(:)
+        real, allocatable    :: dists(:), best_dist(:)
+        real :: dist, min_dist
+        integer :: nclasses, icls, jcls, m, k_class, next_class
+        nclasses = size(class_img_dist, 1)
+        allocate(bridge_mask(nclasses,nclasses), source=.false.)
+        if( nclasses <= 1 ) return
+        k_class = min(nclasses - 1, max(1, min(3, k_nn)))
+        allocate(nbrs(k_class), dists(k_class))
+        do icls = 1,nclasses
+            nbrs = 0
+            dists = huge(1.)
+            do jcls = 1,nclasses
+                if( jcls == icls ) cycle
+                dist = class_bridge_dist(class_img_dist(icls,jcls))
+                call insert_neighbor(jcls, dist, nbrs, dists)
+            end do
+            do m = 1,k_class
+                jcls = nbrs(m)
+                if( jcls < 1 ) cycle
+                bridge_mask(icls,jcls) = .true.
+                bridge_mask(jcls,icls) = .true.
+            end do
+        end do
+        deallocate(nbrs, dists)
+        allocate(in_tree(nclasses), best_dist(nclasses), best_parent(nclasses))
+        in_tree = .false.
+        best_dist = huge(1.)
+        best_parent = 0
+        in_tree(1) = .true.
+        do jcls = 2,nclasses
+            best_dist(jcls)   = class_bridge_dist(class_img_dist(1,jcls))
+            best_parent(jcls) = 1
+        end do
+        do while( count(in_tree) < nclasses )
+            min_dist = huge(1.)
+            next_class = 0
+            do icls = 1,nclasses
+                if( in_tree(icls) ) cycle
+                if( best_dist(icls) < min_dist )then
+                    min_dist = best_dist(icls)
+                    next_class = icls
+                endif
+            end do
+            if( next_class == 0 ) exit
+            bridge_mask(best_parent(next_class),next_class) = .true.
+            bridge_mask(next_class,best_parent(next_class)) = .true.
+            in_tree(next_class) = .true.
+            do jcls = 1,nclasses
+                if( in_tree(jcls) ) cycle
+                dist = class_bridge_dist(class_img_dist(next_class,jcls))
+                if( dist < best_dist(jcls) )then
+                    best_dist(jcls)   = dist
+                    best_parent(jcls) = next_class
+                endif
+            end do
+        end do
+        deallocate(in_tree, best_dist, best_parent)
+    end subroutine build_class_bridge_mask
+
+    subroutine add_bipartite_orientation_edges( spproj, k_cross, pinds, inds_a, inds_b, edge_mask, so3_mat )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: k_cross, pinds(:), inds_a(:), inds_b(:)
+        logical,          intent(inout) :: edge_mask(:,:)
+        real,             intent(inout) :: so3_mat(:,:)
+        if( size(inds_a) < 1 .or. size(inds_b) < 1 ) return
+        call add_directed_bipartite_orientation_edges(spproj, min(max(1, k_cross), size(inds_b)), &
+            pinds, inds_a, inds_b, edge_mask, so3_mat)
+        call add_directed_bipartite_orientation_edges(spproj, min(max(1, k_cross), size(inds_a)), &
+            pinds, inds_b, inds_a, edge_mask, so3_mat)
+    end subroutine add_bipartite_orientation_edges
+
+    subroutine add_directed_bipartite_orientation_edges( spproj, k_used, pinds, from_inds, to_inds, edge_mask, so3_mat )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: k_used, pinds(:), from_inds(:), to_inds(:)
+        logical,          intent(inout) :: edge_mask(:,:)
+        real,             intent(inout) :: so3_mat(:,:)
+        integer, allocatable :: nbrs(:)
+        real, allocatable    :: dists(:)
+        real :: dist
+        integer :: ifrom, ito, m, i, j
+        if( k_used < 1 ) return
+        allocate(nbrs(k_used), dists(k_used))
+        do ifrom = 1,size(from_inds)
+            i = from_inds(ifrom)
+            nbrs = 0
+            dists = huge(1.)
+            do ito = 1,size(to_inds)
+                j = to_inds(ito)
+                dist = projection_dir_dist(spproj, pinds(i), pinds(j))
+                call insert_neighbor(j, dist, nbrs, dists)
+            end do
+            do m = 1,k_used
+                j = nbrs(m)
+                if( j < 1 ) cycle
+                edge_mask(i,j) = .true.
+                edge_mask(j,i) = .true.
+                so3_mat(i,j)   = dists(m)
+                so3_mat(j,i)   = dists(m)
+            end do
+        end do
+        deallocate(nbrs, dists)
+    end subroutine add_directed_bipartite_orientation_edges
+
+    real function class_bridge_dist( dist_in ) result(dist)
+        real, intent(in) :: dist_in
+        dist = max(dist_in, 0.)
+        if( .not. ieee_is_finite(dist) ) dist = huge(1.)
+    end function class_bridge_dist
 
     subroutine build_orientation_knn_graph( spproj, k_nn, pinds, edge_mask, so3_mat )
         type(sp_project), intent(inout)          :: spproj

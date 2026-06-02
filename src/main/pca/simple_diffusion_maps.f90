@@ -18,6 +18,7 @@ public :: diffusion_map_embedder
 public :: steerable_diffusion_map_embedder
 public :: steerable_transport_denoise
 public :: steerable_coeffproj_denoise
+public :: graph_coeffproj_denoise
 public :: embed_affinity
 public :: embed_so2_steerable_affinity
 public :: embed_se2_steerable_affinity
@@ -468,12 +469,12 @@ contains
         real, allocatable, optional,             intent(out)   :: graph_aff(:,:), graph_theta(:,:)
         type(image), allocatable :: imgs_work(:)
         real, allocatable        :: d2(:,:), aff(:,:), kth_d2(:), deg(:), norm_aff(:,:), theta(:,:)
-        real, allocatable        :: inpl_corrs(:,:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
+        real, allocatable        :: inpl_corrs(:), cand_coords(:,:), cand_eigvals(:), out_eigvals(:)
         type(parameters)    :: params_pft
         type(polarft_calc)  :: pftc
         real                :: corr, eps, smpd
         integer             :: nptcls, ndiff_scan, k_used, ldim(3), kfromto(2), pdim_srch(3), nrots, nthr_use
-        integer             :: i, j, loc, ncand, ithr
+        integer             :: i, j, loc, ncand
         integer(int64)      :: t0, t1, trate, t_total0
         nptcls = size(imgs)
         if( nptcls < 3 )then
@@ -524,15 +525,14 @@ contains
         call pftc%memoize_refs
         call pftc%memoize_ptcls
         nrots = pftc%get_nrots()
-        allocate(inpl_corrs(nrots,nthr_use))
-        ithr = 1
-        !$omp parallel private(i,j,loc,corr,ithr) default(shared) num_threads(nthr_use) proc_bind(close)
+        !$omp parallel private(i,j,loc,corr,inpl_corrs) default(shared) num_threads(nthr_use) proc_bind(close)
+        allocate(inpl_corrs(nrots))
         !$omp do schedule(dynamic)
         do i = 1, nptcls - 1
             do j = i + 1, nptcls
-                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs(:,ithr))
-                loc  = maxloc(inpl_corrs(:,ithr), dim=1)
-                corr = inpl_corrs(loc,ithr)
+                call pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
+                loc  = maxloc(inpl_corrs, dim=1)
+                corr = inpl_corrs(loc)
                 if( .not. ieee_is_finite(corr) ) corr = 0.
                 corr = min(1., max(-1., corr))
                 d2(i,j) = max(0., 1. - corr)
@@ -542,8 +542,8 @@ contains
             end do
         end do
         !$omp end do
-        !$omp end parallel
         deallocate(inpl_corrs)
+        !$omp end parallel
         call pftc%kill
         call dealloc_imgarr(imgs_work)
         call system_clock(t1)
@@ -1091,6 +1091,192 @@ contains
         call avg_img%kill
         deallocate(deg, norm_aff, pfts, pfts_hat, pft_tmp, mode_coeff, mode_hat)
     end subroutine steerable_coeffproj_denoise
+
+    subroutine graph_coeffproj_denoise(params, imgs, avg, graph_aff, graph_theta, graph_shift_x, graph_shift_y, &
+                                       steering, coeff_ptcls)
+        type(parameters),         intent(in)  :: params
+        class(image),             intent(in)  :: imgs(:)
+        real,                     intent(in)  :: avg(:), graph_aff(:,:), graph_theta(:,:), graph_shift_x(:,:), graph_shift_y(:,:)
+        character(len=*),         intent(in)  :: steering
+        type(image), allocatable, intent(out) :: coeff_ptcls(:)
+        real, allocatable :: zero_theta(:,:)
+        integer :: nptcls
+        nptcls = size(imgs)
+        if( nptcls < 2 ) return
+        select case(lowercase(trim(steering)))
+            case('none')
+                allocate(zero_theta(nptcls,nptcls), source=0.)
+                call steerable_coeffproj_denoise(params, imgs, avg, graph_aff, zero_theta, coeff_ptcls)
+                deallocate(zero_theta)
+            case('so2')
+                call steerable_coeffproj_denoise(params, imgs, avg, graph_aff, graph_theta, coeff_ptcls)
+            case('se2')
+                call se2_sync_coeffproj_denoise(params, imgs, avg, graph_aff, graph_theta, graph_shift_x, &
+                                                graph_shift_y, coeff_ptcls)
+            case DEFAULT
+                write(logfhandle,'(A,A)') 'Graph coefficient denoising skipped: unknown steering=', trim(steering)
+                call flush(logfhandle)
+        end select
+    end subroutine graph_coeffproj_denoise
+
+    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph_aff, graph_theta, graph_shift_x, graph_shift_y, coeff_ptcls)
+        type(parameters),         intent(in)  :: params
+        class(image),             intent(in)  :: imgs(:)
+        real,                     intent(in)  :: avg(:), graph_aff(:,:), graph_theta(:,:), graph_shift_x(:,:), graph_shift_y(:,:)
+        type(image), allocatable, intent(out) :: coeff_ptcls(:)
+        type(image), allocatable :: imgs_sync(:), den_sync(:)
+        type(image) :: avg_img, tmp_img
+        real, allocatable :: phi(:), sx(:), sy(:), zero_theta(:,:), rmat_rot(:,:,:)
+        integer :: nptcls, ldim(3), i
+        real :: smpd, angle_deg
+        nptcls = size(imgs)
+        if( nptcls < 2 ) return
+        if( size(graph_aff,1) /= nptcls .or. size(graph_aff,2) /= nptcls .or. &
+            size(graph_theta,1) /= nptcls .or. size(graph_theta,2) /= nptcls .or. &
+            size(graph_shift_x,1) /= nptcls .or. size(graph_shift_x,2) /= nptcls .or. &
+            size(graph_shift_y,1) /= nptcls .or. size(graph_shift_y,2) /= nptcls )then
+            write(logfhandle,'(A)') 'SE2 graph coefficient denoising skipped: graph shape mismatch'
+            call flush(logfhandle)
+            return
+        endif
+        ldim = imgs(1)%get_ldim()
+        smpd = imgs(1)%get_smpd()
+        if( size(avg) /= product(ldim) )then
+            write(logfhandle,'(A,I8,A,I8)') 'SE2 graph coefficient denoising skipped: avg_size=', size(avg), &
+                ' expected=', product(ldim)
+            call flush(logfhandle)
+            return
+        endif
+        call synchronize_graph_potential(graph_aff, graph_theta,   phi)
+        call synchronize_graph_potential(graph_aff, graph_shift_x, sx)
+        call synchronize_graph_potential(graph_aff, graph_shift_y, sy)
+        allocate(zero_theta(nptcls,nptcls), source=0.)
+        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
+        imgs_sync = copy_imgarr(imgs)
+        call avg_img%new(ldim, smpd)
+        call tmp_img%new(ldim, smpd)
+        call avg_img%unserialize(avg)
+        do i = 1, nptcls
+            call tmp_img%copy(imgs(i))
+            call tmp_img%subtr(avg_img)
+            call tmp_img%fft()
+            call tmp_img%shift2Dserial([-sx(i), -sy(i)])
+            call tmp_img%ifft()
+            angle_deg = rad2deg(phi(i))
+            call tmp_img%rtsq_serial(angle_deg, 0., 0., rmat_rot)
+            call tmp_img%set_rmat(rmat_rot, .false.)
+            call imgs_sync(i)%copy(avg_img)
+            call imgs_sync(i)%add(tmp_img)
+        end do
+        call steerable_coeffproj_denoise(params, imgs_sync, avg, graph_aff, zero_theta, den_sync)
+        if( .not. allocated(den_sync) )then
+            write(logfhandle,'(A)') 'SE2 graph coefficient denoising fallback: synchronized scalar projection failed'
+            call flush(logfhandle)
+            call dealloc_imgarr(imgs_sync)
+            call avg_img%kill
+            call tmp_img%kill
+            deallocate(phi, sx, sy, zero_theta, rmat_rot)
+            return
+        endif
+        coeff_ptcls = copy_imgarr(imgs)
+        do i = 1, nptcls
+            call tmp_img%copy(den_sync(i))
+            call tmp_img%subtr(avg_img)
+            angle_deg = -rad2deg(phi(i))
+            call tmp_img%rtsq_serial(angle_deg, 0., 0., rmat_rot)
+            call tmp_img%set_rmat(rmat_rot, .false.)
+            call tmp_img%fft()
+            call tmp_img%shift2Dserial([sx(i), sy(i)])
+            call tmp_img%ifft()
+            call coeff_ptcls(i)%copy(avg_img)
+            call coeff_ptcls(i)%add(tmp_img)
+        end do
+        write(logfhandle,'(A,I8,A,I8,A,F8.3,A,F8.3)') &
+            'SE2 graph coefficient denoising: n=', nptcls, ' directed_edges=', count(graph_aff > DTINY), &
+            ' phi_span_deg=', rad2deg(maxval(phi) - minval(phi)), ' shift_span_px=', &
+            max(maxval(sx)-minval(sx), maxval(sy)-minval(sy))
+        call flush(logfhandle)
+        call dealloc_imgarr(imgs_sync)
+        call dealloc_imgarr(den_sync)
+        call avg_img%kill
+        call tmp_img%kill
+        deallocate(phi, sx, sy, zero_theta, rmat_rot)
+    end subroutine se2_sync_coeffproj_denoise
+
+    subroutine synchronize_graph_potential(graph_aff, edge_delta, potential)
+        real,                 intent(in)  :: graph_aff(:,:), edge_delta(:,:)
+        real, allocatable,    intent(out) :: potential(:)
+        real, allocatable :: lap(:,:), invlap(:,:), rhs(:)
+        real :: w, delta
+        integer :: n, i, j, err
+        n = size(graph_aff, 1)
+        allocate(potential(n), source=0.)
+        if( n < 2 ) return
+        allocate(lap(n,n), invlap(n,n), rhs(n), source=0.)
+        do i = 1, n - 1
+            do j = i + 1, n
+                w = max(graph_aff(i,j), graph_aff(j,i))
+                if( w <= DTINY ) cycle
+                if( .not. ieee_is_finite(w) ) cycle
+                delta = edge_delta(i,j)
+                if( .not. ieee_is_finite(delta) ) cycle
+                lap(i,i) = lap(i,i) + w
+                lap(j,j) = lap(j,j) + w
+                lap(i,j) = lap(i,j) - w
+                lap(j,i) = lap(j,i) - w
+                rhs(i)   = rhs(i) - w * delta
+                rhs(j)   = rhs(j) + w * delta
+            end do
+        end do
+        lap(1,:) = 0.
+        lap(:,1) = 0.
+        lap(1,1) = 1.
+        rhs(1)   = 0.
+        do i = 2, n
+            if( lap(i,i) > DTINY ) cycle
+            lap(i,i) = 1.
+            rhs(i)   = 0.
+        end do
+        call matinv(lap, invlap, n, err)
+        if( err == -1 )then
+            call synchronize_graph_potential_tree(graph_aff, edge_delta, potential)
+        else
+            potential = matmul(invlap, rhs)
+            potential = potential - potential(1)
+        endif
+        deallocate(lap, invlap, rhs)
+    end subroutine synchronize_graph_potential
+
+    subroutine synchronize_graph_potential_tree(graph_aff, edge_delta, potential)
+        real,              intent(in)    :: graph_aff(:,:), edge_delta(:,:)
+        real,              intent(inout) :: potential(:)
+        logical, allocatable :: known(:)
+        integer :: n, i, j, nknown, seed
+        n = size(graph_aff, 1)
+        allocate(known(n), source=.false.)
+        potential = 0.
+        seed = 1
+        do while( seed <= n )
+            if( .not. known(seed) )then
+                known(seed) = .true.
+                nknown = count(known)
+                do while( count(known) > nknown - 1 )
+                    nknown = count(known)
+                    do i = 1, n
+                        if( .not. known(i) ) cycle
+                        do j = 1, n
+                            if( known(j) .or. graph_aff(i,j) <= DTINY ) cycle
+                            potential(j) = potential(i) + edge_delta(i,j)
+                            known(j) = .true.
+                        end do
+                    end do
+                    if( count(known) == nknown ) exit
+                end do
+            endif
+            seed = seed + 1
+        end do
+        deallocate(known)
+    end subroutine synchronize_graph_potential_tree
 
     subroutine extract_pft_angular_mode(pfts, kfromto, nrots, mode, mode_coeff)
         complex(sp), intent(in)  :: pfts(:,:,:)
