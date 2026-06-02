@@ -264,10 +264,11 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, histogram_potts )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        logical, optional, intent(in) :: histogram_potts
         type(nu_highres_extension_stats) :: step_stats
         integer :: nsteps_local
         nsteps_local = 0
@@ -282,11 +283,12 @@ contains
             nsteps_local = nsteps_local + 1
             if( .not. step_stats%promote_next ) exit
         end do
-        if( nsteps_local > 0 ) call refine_nu_extension_filtmap_ordered_labels()
+        if( nsteps_local > 0 ) call refine_nu_extension_filtmap_ordered_labels(histogram_potts=histogram_potts)
         if( present(nsteps) ) nsteps = nsteps_local
     end subroutine extend_nu_filter_highres_shells
 
-    module subroutine refine_nu_extension_filtmap_ordered_labels
+    module subroutine refine_nu_extension_filtmap_ordered_labels( histogram_potts )
+        logical, optional, intent(in) :: histogram_potts
         integer :: n_base, n_candidates
         if( .not.allocated(filtmap)          ) THROW_HARD('filtmap not allocated; refine_nu_extension_filtmap_ordered_labels')
         if( .not.allocated(dmats_mask)       ) THROW_HARD('dmats_mask not allocated; refine_nu_extension_filtmap_ordered_labels')
@@ -300,7 +302,7 @@ contains
         write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
         call clamp_nu_filtmap_labels(n_base)
         call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
-        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates, histogram_potts=histogram_potts)
         call clamp_nu_filtmap_labels(n_base)
         call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
         call compact_nu_highres_dmat_bank_for_capacity()

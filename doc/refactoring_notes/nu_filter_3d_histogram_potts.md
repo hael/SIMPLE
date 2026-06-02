@@ -12,13 +12,15 @@ grow labels beyond the amount of support the robust unary objective actually
 found.
 
 The 2D NU filter now handles this by adding a histogram term during ICM. The
-same idea should be ported to 3D: keep the initial unary label fractions as a
-target, then let the Potts field smooth spatially while paying a cost for
-deviating from that target histogram.
+same idea should be ported to 3D: first apply the same ordered raw-support gate
+to prevent unsupported fine labels from becoming the target, then keep the
+post-gate unary label fractions as a target while the Potts field smooths
+spatially.
 
 The goal is not to force every voxel to keep its original label. The goal is to
-make the Potts prior redistribute labels spatially without changing the global
-amount of each retained bank member too much.
+remove tiny unsupported fine-label tails, then make the Potts prior redistribute
+the remaining labels spatially without changing the global amount of each
+retained bank member too much.
 
 ## Current 3D Behavior
 
@@ -71,6 +73,10 @@ The ICM candidate energy becomes:
 unary + beta * neighborhood + delta_hist
 ```
 
+Under the same experimental gate, one-label neighbor jumps should carry a weak
+penalty, mirroring the 2D path. The ungated 3D ordered-label Potts continues to
+tolerate one-label jumps at zero cost.
+
 A good initial scale is the 2D policy:
 
 ```fortran
@@ -81,10 +87,21 @@ hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
 If 3D proves too resistant to spatial cleanup, reduce this to `4.0`; if labels
 still collapse away from their unary-supported fractions, increase it.
 
-## Target Histogram
+## Support Gate And Target Histogram
 
-The target histogram should be captured at the start of each ordered-label
-cleanup call:
+The raw unary histogram should be counted at the start of each ordered-label
+cleanup call. Before freezing the histogram target, apply an ordered raw-support
+gate:
+
+```fortran
+real, parameter :: NU_LABEL_MIN_RAW_FRAC = 0.0025
+min_count = max(1, nint(NU_LABEL_MIN_RAW_FRAC * real(max(1, n_nu_mask))))
+```
+
+The coarsest label remains active. Starting at the second label, the first label
+whose raw count falls below `min_count` disables itself and all finer labels.
+If any labels were disabled, reselect each voxel's unary winner over the active
+labels, then capture the target histogram:
 
 ```fortran
 call count_nu_candidate_labels(candmap, n_candidates, target_counts)
@@ -110,33 +127,25 @@ it can be counted as that label.
 
 ## Deterministic ICM Update
 
-The safest first implementation should use live counts, exactly as the 2D path
-does:
+The implementation keeps the ordered-label ICM loop parallel by freezing global
+histogram counts within each 8-color pass:
 
-1. Compute `target_counts` from `candmap` at routine entry.
-2. Set `counts = target_counts`.
-3. During ICM, when a voxel changes from `cur_icand` to `best_icand`, update:
+1. Compute raw counts from `candmap` at routine entry.
+2. Apply the ordered raw-support gate and reselect labels over the active bank
+   if any fine labels were disabled.
+3. Compute `target_counts` from the post-gate `candmap`.
+4. Set `counts = target_counts`.
+5. During each color pass, evaluate candidate energies against read-only
+   `counts`.
+6. Accept same-color voxel changes in parallel.
+7. Recount `counts` after each color pass before moving to the next color.
+8. Include `nu_label_histogram_delta(...)` in each candidate energy.
 
-   ```fortran
-   counts(cur_icand)  = counts(cur_icand) - 1
-   counts(best_icand) = counts(best_icand) + 1
-   ```
-
-4. Include `nu_label_histogram_delta(...)` in each candidate energy.
-
-Because `counts` is global mutable state, the first version should not update
-voxels in parallel inside the color loop. The present OpenMP color-pass loop in
-`simple_nu_filter_potts.f90` should be changed to a deterministic serial
-`imask` loop, at least when the histogram term is enabled.
-
-That may sound expensive, but the Potts cleanup is not the FFT/filter-cache
-bottleneck, and correctness matters more than preserving a parallel loop that
-would race the histogram counts.
-
-If performance later becomes an issue, a second-stage optimization can use
-frozen counts per color pass, per-thread proposals, and a deterministic
-acceptance/reconciliation phase. That is more complex and should not be the
-first implementation.
+The 8-color parity coloring separates voxels in the local neighborhood, so the
+neighborhood term remains safe to update in parallel. Freezing the histogram
+counts within a color pass is a softer approximation than live serial count
+updates, but it avoids making the experimental gate much slower than the
+working Potts implementation.
 
 ## Refactoring Steps
 
@@ -144,12 +153,16 @@ first implementation.
 
    ```fortran
    real, parameter :: NU_LABEL_HIST_BETA_FRAC = 8.0
+   real, parameter :: NU_LABEL_MIN_RAW_FRAC = 0.0025
+   real, parameter :: NU_LABEL_SMOOTH_ADJACENT_FRAC = 0.25
    ```
 
 2. Add helpers in `simple_nu_filter_potts.f90`:
 
    ```fortran
    subroutine count_nu_candidate_labels(candmap, n_candidates, counts)
+   subroutine apply_nu_candidate_support_gate(active_labels, raw_counts, min_count, ndisabled)
+   subroutine select_nu_candidate_labels_active(candmap, n_candidates, active_labels)
    real function nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
    real function calc_nu_label_histogram_energy(counts, target_counts, hist_scale)
    ```
@@ -169,11 +182,14 @@ first implementation.
        &nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
    ```
 
-5. When accepting a move, update `counts` immediately.
+5. After each color pass, recount `counts` from the updated label map.
 
 6. Update logging to report:
 
    - `NU_LABEL_HIST_BETA_FRAC`
+   - `NU_LABEL_MIN_RAW_FRAC`, support floor, and disabled-label count
+   - `NU_LABEL_SMOOTH_ADJACENT_FRAC`
+   - raw counts before the support gate
    - target counts before smoothing
    - final counts after smoothing
    - histogram energy per voxel before/after
@@ -193,6 +209,9 @@ hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
 do iter = 1, NU_LABEL_SMOOTH_MAXITS
     nchanged = 0
     do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
+        !$omp parallel do schedule(static) default(shared) &
+        !$omp private(i,j,k,imask,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
+        !$omp reduction(+:nchanged) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
@@ -214,30 +233,17 @@ do iter = 1, NU_LABEL_SMOOTH_MAXITS
             end do
 
             if( best_icand /= cur_icand )then
-                counts(cur_icand) = counts(cur_icand) - 1
-                counts(best_icand) = counts(best_icand) + 1
                 candmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
                 nchanged = nchanged + 1
             endif
         end do
+        !$omp end parallel do
+        call count_nu_candidate_labels(candmap, n_candidates, counts)
     end do
     if( nchanged == 0 ) exit
 end do
 ```
 
-## Interaction With Soft Synthesis
-
-The histogram-constrained Potts field and soft label synthesis solve different
-problems:
-
-- histogram-constrained Potts keeps the discrete label field spatially coherent
-  without letting the global label mix drift too far from unary evidence
-- soft synthesis removes hard output discontinuities at remaining label
-  boundaries
-
-Keep them separate. The histogram term should operate on the discrete
-`filtmap`; synthesis smoothing should not feed back into matching low-pass
-promotion, extension decisions, or label statistics.
 
 ## Risks
 
@@ -258,6 +264,3 @@ promotion, extension decisions, or label statistics.
 3. Confirm neighbor continuity improves or stays comparable.
 4. Inspect high-resolution extension labels to verify they do not collapse away
    unless the unary support was negligible.
-5. Compare maps/FSC against the old Potts and against soft-synthesis output.
-   The expected improvement is fewer isolated label artifacts without a global
-   shift toward coarser filtering.

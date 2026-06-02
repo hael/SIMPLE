@@ -92,9 +92,11 @@ integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
+real,             parameter   :: NU_LABEL_HIST_BETA_FRAC     = 8.0
+real,             parameter   :: NU_LABEL_MIN_RAW_FRAC       = 0.0025
+real,             parameter   :: NU_LABEL_SMOOTH_ADJACENT_FRAC = 0.25
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
-real,             parameter   :: NU_SYNTH_LABEL_SMOOTH_RADIUS_A = 3.9
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
@@ -263,7 +265,8 @@ interface
     module integer function get_nu_filtmap_highres_shell_depth()
     end function get_nu_filtmap_highres_shell_depth
 
-    module subroutine optimize_nu_cutoff_finds()
+    module subroutine optimize_nu_cutoff_finds( histogram_potts )
+        logical, optional, intent(in) :: histogram_potts
     end subroutine optimize_nu_cutoff_finds
 
     module subroutine clamp_nu_filtmap_labels( n_base )
@@ -288,9 +291,10 @@ interface
     end function nu_effective_base_label_for_candidate
 
     ! In submodule: simple_nu_filter_potts.f90
-    module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
+    module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates, histogram_potts )
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
+        logical, optional, intent(in) :: histogram_potts
     end subroutine refine_nu_candidate_map_ordered_labels
 
     module real function estimate_nu_label_smooth_beta( n_candidates )
@@ -338,13 +342,15 @@ interface
         real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, histogram_potts )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        logical, optional, intent(in) :: histogram_potts
     end subroutine extend_nu_filter_highres_shells
 
-    module subroutine refine_nu_extension_filtmap_ordered_labels
+    module subroutine refine_nu_extension_filtmap_ordered_labels( histogram_potts )
+        logical, optional, intent(in) :: histogram_potts
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
@@ -362,15 +368,13 @@ interface
     end subroutine apply_nu_highres_extension_selection
 
     ! In submodule: simple_nu_filter_apply.f90
-    module subroutine nu_filter_vols( vol_even, vol_odd, soft_synthesis )
+    module subroutine nu_filter_vols( vol_even, vol_odd )
         class(image), intent(out) :: vol_even, vol_odd
-        logical, optional, intent(in) :: soft_synthesis
     end subroutine nu_filter_vols
 
-    module subroutine nu_filter_vol( vol_in, vol_out, soft_synthesis )
+    module subroutine nu_filter_vol( vol_in, vol_out )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_out
-        logical, optional, intent(in) :: soft_synthesis
     end subroutine nu_filter_vol
 
     ! In submodule: simple_nu_filter_stats.f90

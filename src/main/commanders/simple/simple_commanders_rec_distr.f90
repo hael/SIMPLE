@@ -405,10 +405,10 @@ contains
             call setup_nonuniform_filter()
             if( allocated(l_mask) ) deallocate(l_mask)
             call release_nonuniform_aux_inputs()
-            call optimize_nu_cutoff_finds()
+            call optimize_nu_cutoff_finds(histogram_potts=params%l_nu_hist_potts)
             call refine_nonuniform_filter_bank()
             call release_nonuniform_base_inputs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu, soft_synthesis=params%l_nu_soft_synth)
+            call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
             call record_nu_alignment_lowpass_limit()
@@ -489,7 +489,7 @@ contains
                 n_accepted_this_iteration = n_accepted_this_iteration + 1
             end do
             if( n_accepted_this_iteration > 0 )then
-                call refine_nu_extension_filtmap_ordered_labels()
+                call refine_nu_extension_filtmap_ordered_labels(histogram_potts=params%l_nu_hist_potts)
                 n_highres_steps = get_nu_filtmap_highres_shell_depth()
                 call write_nu_highres_steps_for_state(n_highres_steps)
                 write(logfhandle,'(A,I0,A,I0)') &
