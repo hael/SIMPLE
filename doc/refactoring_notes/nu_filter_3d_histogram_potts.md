@@ -11,16 +11,14 @@ that means the Potts prior can either erase small high-resolution regions or
 grow labels beyond the amount of support the robust unary objective actually
 found.
 
-The 2D NU filter now handles this by adding a histogram term during ICM. The
-same idea should be ported to 3D: first apply the same ordered raw-support gate
-to prevent unsupported fine labels from becoming the target, then keep the
-post-gate unary label fractions as a target while the Potts field smooths
-spatially.
+The 2D NU filter handles this by adding a histogram term during ICM. For 3D,
+the useful part is the histogram constraint itself: keep the raw unary label
+fractions as a target, then let the Potts field smooth spatially while paying a
+cost for deviating from that target histogram.
 
 The goal is not to force every voxel to keep its original label. The goal is to
-remove tiny unsupported fine-label tails, then make the Potts prior redistribute
-the remaining labels spatially without changing the global amount of each
-retained bank member too much.
+make the Potts prior redistribute labels spatially without changing the global
+amount of each retained bank member too much.
 
 ## Current 3D Behavior
 
@@ -73,9 +71,9 @@ The ICM candidate energy becomes:
 unary + beta * neighborhood + delta_hist
 ```
 
-Under the same experimental gate, one-label neighbor jumps should carry a weak
-penalty, mirroring the 2D path. The ungated 3D ordered-label Potts continues to
-tolerate one-label jumps at zero cost.
+For 3D, the ordered-label Potts should continue to tolerate one-label neighbor
+jumps at zero cost. Benchmarking showed that charging one-label jumps underfits
+the data and slows resolution progression.
 
 A good initial scale is the 2D policy:
 
@@ -87,21 +85,11 @@ hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
 If 3D proves too resistant to spatial cleanup, reduce this to `4.0`; if labels
 still collapse away from their unary-supported fractions, increase it.
 
-## Support Gate And Target Histogram
+## Target Histogram
 
-The raw unary histogram should be counted at the start of each ordered-label
-cleanup call. Before freezing the histogram target, apply an ordered raw-support
-gate:
-
-```fortran
-real, parameter :: NU_LABEL_MIN_RAW_FRAC = 0.0025
-min_count = max(1, nint(NU_LABEL_MIN_RAW_FRAC * real(max(1, n_nu_mask))))
-```
-
-The coarsest label remains active. Starting at the second label, the first label
-whose raw count falls below `min_count` disables itself and all finer labels.
-If any labels were disabled, reselect each voxel's unary winner over the active
-labels, then capture the target histogram:
+The target histogram should be captured at the start of each ordered-label
+cleanup call, immediately after the unconstrained unary competition between
+filter-bank members:
 
 ```fortran
 call count_nu_candidate_labels(candmap, n_candidates, target_counts)
@@ -130,16 +118,13 @@ it can be counted as that label.
 The implementation keeps the ordered-label ICM loop parallel by freezing global
 histogram counts within each 8-color pass:
 
-1. Compute raw counts from `candmap` at routine entry.
-2. Apply the ordered raw-support gate and reselect labels over the active bank
-   if any fine labels were disabled.
-3. Compute `target_counts` from the post-gate `candmap`.
-4. Set `counts = target_counts`.
-5. During each color pass, evaluate candidate energies against read-only
+1. Compute `target_counts` from `candmap` at routine entry.
+2. Set `counts = target_counts`.
+3. During each color pass, evaluate candidate energies against read-only
    `counts`.
-6. Accept same-color voxel changes in parallel.
-7. Recount `counts` after each color pass before moving to the next color.
-8. Include `nu_label_histogram_delta(...)` in each candidate energy.
+4. Accept same-color voxel changes in parallel.
+5. Recount `counts` after each color pass before moving to the next color.
+6. Include `nu_label_histogram_delta(...)` in each candidate energy.
 
 The 8-color parity coloring separates voxels in the local neighborhood, so the
 neighborhood term remains safe to update in parallel. Freezing the histogram
@@ -153,16 +138,12 @@ working Potts implementation.
 
    ```fortran
    real, parameter :: NU_LABEL_HIST_BETA_FRAC = 8.0
-   real, parameter :: NU_LABEL_MIN_RAW_FRAC = 0.0025
-   real, parameter :: NU_LABEL_SMOOTH_ADJACENT_FRAC = 0.25
    ```
 
 2. Add helpers in `simple_nu_filter_potts.f90`:
 
    ```fortran
    subroutine count_nu_candidate_labels(candmap, n_candidates, counts)
-   subroutine apply_nu_candidate_support_gate(active_labels, raw_counts, min_count, ndisabled)
-   subroutine select_nu_candidate_labels_active(candmap, n_candidates, active_labels)
    real function nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
    real function calc_nu_label_histogram_energy(counts, target_counts, hist_scale)
    ```
@@ -187,9 +168,6 @@ working Potts implementation.
 6. Update logging to report:
 
    - `NU_LABEL_HIST_BETA_FRAC`
-   - `NU_LABEL_MIN_RAW_FRAC`, support floor, and disabled-label count
-   - `NU_LABEL_SMOOTH_ADJACENT_FRAC`
-   - raw counts before the support gate
    - target counts before smoothing
    - final counts after smoothing
    - histogram energy per voxel before/after
@@ -254,6 +232,8 @@ end do
   in the first implementation.
 - High-resolution extension labels can be sparse; logging target/final counts
   is essential to catch accidental collapse or overgrowth.
+- 2D-style support gating or weak one-label jump penalties are too conservative
+  for 3D and can underfit by slowing resolution progression.
 
 ## Validation Plan
 
