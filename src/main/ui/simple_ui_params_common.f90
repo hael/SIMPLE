@@ -105,6 +105,7 @@ type(ui_param) :: outside
 type(ui_param) :: outstk
 type(ui_param) :: outvol
 type(ui_param) :: nu_refine
+type(ui_param) :: nu_soft_synth
 type(ui_param) :: particle_density
 type(ui_param) :: pcontrast
 type(ui_param) :: pdbout
@@ -559,6 +560,10 @@ subroutine set_ui_params
 
     call nu_refine%set_param(      'nu_refine',       'binary', 'NU resolution expansion refinement', &
                                    'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
+
+    call nu_soft_synth%set_param(  'nu_soft_synth',   'binary', 'NU soft output synthesis', &
+                                   'Blend 3D nonuniform-filter bank members over a smoothed label field(yes|no){no}', &
                                    '(yes|no){no}', .false., 'no')
 
     call particle_density%set_param('particle_density','multi', 'Particle density in micrographs', &

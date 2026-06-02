@@ -308,7 +308,7 @@ contains
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
                 write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
             endif
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, soft_synthesis=params%l_nu_soft_synth)
             call print_nu_filtmap_lowpass_stats()
             call analyze_filtmap_neighbor_continuity()
             out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)

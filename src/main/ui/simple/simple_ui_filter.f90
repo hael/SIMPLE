@@ -189,7 +189,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call nu_filt3D%add_input(UI_FILT, nu_soft_synth)
         ! mask controls
         call nu_filt3D%add_input(UI_MASK, mskdiam)
         call nu_filt3D%add_input(UI_MASK, automsk)

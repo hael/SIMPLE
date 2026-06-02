@@ -111,6 +111,7 @@ type :: parameters
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
+    character(len=3)          :: nu_soft_synth='no'   !< blend 3D nonuniform-filter bank members over a smoothed label field(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
@@ -582,6 +583,7 @@ type :: parameters
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
+    logical :: l_nu_soft_synth   = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.

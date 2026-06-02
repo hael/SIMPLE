@@ -408,7 +408,7 @@ contains
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
             call release_nonuniform_base_inputs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, soft_synthesis=params%l_nu_soft_synth)
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
             call record_nu_alignment_lowpass_limit()

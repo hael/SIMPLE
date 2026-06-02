@@ -37,8 +37,9 @@ real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart 
 real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for abinitio3D_cavgs/cavgs_ini
 
 ! Sampling and update defaults
-real,             parameter :: UPDATE_FRAC_MAX         = 0.9  ! ensures fractional update remains on
+real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
+integer,          parameter :: NSAMPLE_START_DEFAULT      = 500
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
@@ -119,6 +120,11 @@ contains
         integer :: nsample
         nsample = NSAMPLE_ABINITIO3D_DEFAULT
     end function abinitio_nsample_default
+
+    module function abinitio_nsample_start_default() result(nsample_start)
+        integer :: nsample_start
+        nsample_start = NSAMPLE_START_DEFAULT
+    end function abinitio_nsample_start_default
 
     integer function active_refine3D_nstages() result(nstages_active)
         nstages_active = nstages_refine3D

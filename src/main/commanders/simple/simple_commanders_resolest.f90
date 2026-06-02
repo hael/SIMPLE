@@ -228,7 +228,7 @@ contains
         call setup_nu_dmats(even, odd, l_mask, [real ::])
         if( allocated(l_mask) ) deallocate(l_mask)
         call optimize_nu_cutoff_finds()
-        call nu_filter_vols(even_nu, odd_nu)
+        call nu_filter_vols(even_nu, odd_nu, soft_synthesis=params%l_nu_soft_synth)
         call print_nu_filtmap_lowpass_stats()
         call analyze_filtmap_neighbor_continuity()
         odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)

@@ -119,6 +119,7 @@ contains
         call reg%add_char('noise_norm', self%noise_norm)
         call reg%add_char('norm', self%norm)
         call reg%add_char('nu_refine', self%nu_refine)
+        call reg%add_char('nu_soft_synth', self%nu_soft_synth)
         call reg%add_char('objfun', self%objfun)
         call reg%add_char('omit_neg', self%omit_neg)
         call reg%add_char('opt', self%opt)

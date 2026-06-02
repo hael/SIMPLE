@@ -456,6 +456,7 @@ contains
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
+        if( .not. cline%defined('nsample_start')       ) call cline%set('nsample_start', abinitio_nsample_start_default())
         ! splitting stage
         split_stage = abinitio_het_docked_stage()
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
