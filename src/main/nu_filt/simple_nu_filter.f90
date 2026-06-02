@@ -94,7 +94,7 @@ integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
-real,             parameter   :: NU_SYNTH_LABEL_SMOOTH_RADIUS_A = 10.0
+real,             parameter   :: NU_SYNTH_LABEL_SMOOTH_RADIUS_A = 3.9
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
