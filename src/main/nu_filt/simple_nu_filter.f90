@@ -92,6 +92,8 @@ integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
+real,             parameter   :: NU_LABEL_HIST_BETA_FRAC     = 0.5
+real,             parameter   :: NU_LABEL_HIST_SLACK_FRAC    = 0.05
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
@@ -262,7 +264,8 @@ interface
     module integer function get_nu_filtmap_highres_shell_depth()
     end function get_nu_filtmap_highres_shell_depth
 
-    module subroutine optimize_nu_cutoff_finds
+    module subroutine optimize_nu_cutoff_finds( histogram_potts )
+        logical, optional, intent(in) :: histogram_potts
     end subroutine optimize_nu_cutoff_finds
 
     module subroutine clamp_nu_filtmap_labels( n_base )
@@ -287,9 +290,10 @@ interface
     end function nu_effective_base_label_for_candidate
 
     ! In submodule: simple_nu_filter_potts.f90
-    module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
+    module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates, histogram_potts )
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
+        logical, optional, intent(in) :: histogram_potts
     end subroutine refine_nu_candidate_map_ordered_labels
 
     module real function estimate_nu_label_smooth_beta( n_candidates )

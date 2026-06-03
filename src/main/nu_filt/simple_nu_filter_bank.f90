@@ -145,7 +145,8 @@ contains
         get_nu_filtmap_highres_shell_depth = max(0, cutoff_finds(finest_label) - cutoff_finds(base_n))
     end function get_nu_filtmap_highres_shell_depth
 
-    module subroutine optimize_nu_cutoff_finds
+    module subroutine optimize_nu_cutoff_finds( histogram_potts )
+        logical, optional, intent(in) :: histogram_potts
         integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask
         real    :: best_dmat
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -179,7 +180,7 @@ contains
         !$omp end parallel do
         call log_nu_aux_replacement_margin_stats()
         call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
-        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates, histogram_potts=histogram_potts)
         call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
         call cache_nu_extension_frontier_dmats(filtmap, n_base)

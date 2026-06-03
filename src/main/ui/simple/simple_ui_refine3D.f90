@@ -221,6 +221,7 @@ contains
         call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
         call refine3D%add_input(UI_FILT, ml_reg, gui_submenu="filter")
+        call refine3D%add_input(UI_FILT, nu_hist_potts, gui_submenu="filter", gui_advanced=.true.)
         call refine3D%add_input(UI_FILT, nu_refine, gui_submenu="filter")
         call refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls
@@ -264,6 +265,7 @@ contains
         call refine3D_auto%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
         & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}', &
         & '(yes|no){yes}', .false., 'yes', gui_submenu="filter")
+        call refine3D_auto%add_input(UI_FILT, nu_hist_potts, gui_submenu="filter", gui_advanced=.true.)
         call refine3D_auto%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         call refine3D_auto%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
         & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
