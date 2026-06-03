@@ -405,7 +405,7 @@ contains
             call setup_nonuniform_filter()
             if( allocated(l_mask) ) deallocate(l_mask)
             call release_nonuniform_aux_inputs()
-            call optimize_nu_cutoff_finds(histogram_potts=params%l_nu_hist_potts)
+            call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
             call release_nonuniform_base_inputs()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)

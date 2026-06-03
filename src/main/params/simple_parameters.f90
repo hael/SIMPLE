@@ -110,7 +110,6 @@ type :: parameters
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
-    character(len=3)          :: nu_hist_potts='no'   !< constrain 3D NU Potts cleanup to the unary label histogram(yes|no){no}
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -582,7 +581,6 @@ type :: parameters
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
-    logical :: l_nu_hist_potts   = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_prob_inpl       = .false.

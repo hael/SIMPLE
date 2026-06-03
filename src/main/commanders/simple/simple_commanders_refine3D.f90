@@ -307,7 +307,7 @@ contains
             endif
             call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
             if( allocated(l_mask) ) deallocate(l_mask)
-            call optimize_nu_cutoff_finds(histogram_potts=params%l_nu_hist_potts)
+            call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
                 write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
