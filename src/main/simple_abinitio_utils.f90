@@ -841,7 +841,7 @@ contains
             endif
             call find_ldim_nptcls(params%vols(s), ldim, n)
             smpd = find_img_smpd(params%vols(s))
-            msk  = params%mskdiam / smpd
+            msk  = 0.5 * params%mskdiam / smpd
             call vol%new(ldim, smpd)
             call vol%read(params%vols(s))
             ! normalization of inner mask region to 1/box

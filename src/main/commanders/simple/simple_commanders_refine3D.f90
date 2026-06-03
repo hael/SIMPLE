@@ -118,7 +118,9 @@ contains
             if( .not. file_exists(init_vol) )then
                 THROW_HARD('File: '//init_vol%to_char()//' does not exist! '//WORKFLOW_LABEL)
             endif
+            call prepare_external_init_vol(init_vol)
             l_have_init_vol = .true.
+            call cline%delete('vol1') ! because now part of the project
             write(logfhandle,'(A,1X,A)') '>>> '//WORKFLOW_LABEL//' USING INPUT VOLUME:', init_vol%to_char()
         else
             call spproj%read_segment('out', params%projfile)
@@ -180,6 +182,8 @@ contains
         call cline_rec3D%delete('objfun')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
+        call cline_rec3D%delete('box_crop')           ! original image dimensions
+        call cline_rec3D%delete('smpd_crop')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call cline_rec3D%set('postprocess', 'no')
         call cline_rec3D%set('nu_refine', 'no')
@@ -396,6 +400,81 @@ contains
                     &'>>> '//WORKFLOW_LABEL//' MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
             endif
         end subroutine set_refine3D_auto_sampling
+
+        ! Prepare external input e/o volumes & FSC for refinement and import into project
+        subroutine prepare_external_init_vol( init_vol )
+            use simple_refine3D_fnames, only: refine3D_startvol_fname, refine3D_fsc_fname
+            type(string), intent(inout) :: init_vol
+            type(string)      :: init_even, init_odd, new_vol, new_even, new_odd
+            type(image)       :: vol, vol_even, vol_odd
+            real, allocatable :: fsc(:)
+            real    :: ave, stdev, maxv, minv, msk, v
+            integer :: ldim(3), n
+            init_even = add2fbody(init_vol, MRC_EXT, '_even')
+            init_odd  = add2fbody(init_vol, MRC_EXT, '_odd')
+            if( .not.(file_exists(init_even) .and. file_exists(init_odd)) )then
+                THROW_HARD('Expected even/odd half-volumes for input volume '//init_vol%to_char()//' not found;&
+                & looking for: '//init_even%to_char()//' and '//init_odd%to_char())
+            endif
+            call find_ldim_nptcls(init_vol, ldim, n)
+            init_smpd = find_img_smpd(init_vol)
+            init_box  = ldim(1)
+            if( project_init_vol_compatible() )then
+                write(logfhandle,'(A,1X,A)') '>>> '//WORKFLOW_LABEL//' USING E/O INPUT VOLUMES'
+                write(logfhandle,'(A,I0,A,F8.4)') '>>> INPUT VOLUME BOX/SMPD: ', init_box, '/', init_smpd
+            else
+                THROW_HARD('Input e/o volumes must have same dimensions as image')
+            endif
+            call vol%new(ldim, init_smpd)
+            call vol%read(init_vol)
+            call vol_even%new(ldim, init_smpd)
+            call vol_even%read(init_even)
+            if( (abs(vol_even%get_smpd() - init_smpd) > 1.e-6) .or. (vol_even%get_box() /= init_box) )then
+                THROW_HARD('Even half-volumes for input volume '//init_vol%to_char()//' have different dimensions/sampling')
+            endif
+            call vol_odd%new(ldim, init_smpd)
+            call vol_odd%read(init_odd)
+            if( (abs(vol_odd%get_smpd() - init_smpd) > 1.e-6) .or. (vol_odd%get_box() /= init_box) )then
+                THROW_HARD('Odd half-volumes for input volume '//init_vol%to_char()//' have different dimensions/sampling')
+            endif
+            ! calculate fsc and import into project
+            new_vol  = refine3D_startvol_fname(1)
+            new_even = add2fbody(new_vol, MRC_EXT, '_even')
+            new_odd  = add2fbody(new_vol, MRC_EXT, '_odd')
+            ! normalization of volumes
+            msk = 0.5 * params%mskdiam / params%smpd
+            call vol_even%stats('foreground', ave, stdev, maxv, minv, msk=msk)
+            v = stdev * real(init_box)
+            call vol_even%norm_ext(ave, v)
+            call vol_odd%stats('foreground', ave, stdev, maxv, minv, msk=msk)
+            v = stdev * real(init_box)
+            call vol_odd%norm_ext(ave, v)
+            call vol%stats('foreground', ave, stdev, maxv, minv, msk=msk)
+            v = stdev * real(init_box)
+            call vol%norm_ext(ave, v)
+            call vol_even%write(new_even)
+            call vol_odd%write(new_odd)
+            call vol%write(new_vol)
+            call vol_even%mask3D_soft(msk)
+            call vol_odd%mask3D_soft(msk)
+            call vol_even%fft
+            call vol_odd%fft
+            allocate(fsc(vol%get_lfny(1)), source=0.)
+            call vol_even%fsc(vol_odd, fsc)
+            call arr2file(fsc, refine3D_fsc_fname(1))
+            if( all(fsc < 0.9) ) THROW_HARD('Calculated FSC is too low for refinement')
+            call spproj%read_segment('out', params%projfile)
+            init_vol = new_vol  ! renaming of global filename
+            call spproj%add_vol2os_out(init_vol, init_smpd, 1, 'vol')
+            call spproj%add_fsc2os_out(refine3D_fsc_fname(1), 1, init_box)
+            call spproj%read_segment('out', params%projfile)
+            ! cleanup
+            deallocate(fsc)
+            call spproj%kill
+            call vol%kill; call vol_even%kill; call vol_odd%kill
+            call init_even%kill; call init_odd%kill
+            call new_vol%kill; call new_even%kill; call new_odd%kill
+        end subroutine prepare_external_init_vol
 
     end subroutine exec_refine3D_auto
 
