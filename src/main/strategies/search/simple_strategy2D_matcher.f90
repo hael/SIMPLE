@@ -4,7 +4,8 @@ use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
 use simple_progress,                 only: progressfile_update
-use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, s2D, set_strategy2D_stoch_bound
+use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, &
+                                           s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
 use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
@@ -86,7 +87,7 @@ contains
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, fnr, updatecnt, iptcl_map, iptcl_batch, ibatch, nptcls2update
+        integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
         p_ptr => params
         b_ptr => build
@@ -134,13 +135,12 @@ contains
             call build_batch_particles_local()
             call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end) )
             if( ctrl%do_bench ) t_align = tic()
-            !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,updatecnt,orientation,strategy2Dspec)&
+            !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,orientation,strategy2Dspec)&
             !$omp default(shared) schedule(static) proc_bind(close)
             do iptcl_batch = 1, batchsz
                 iptcl_map  = batch_start + iptcl_batch - 1
                 iptcl      = pinds(iptcl_map)
-                updatecnt  = b_ptr%spproj_field%get_updatecnt(iptcl)
-                call allocate_strategy_for_particle(iptcl, iptcl_batch, updatecnt)
+                call allocate_strategy_for_particle(iptcl, iptcl_batch)
                 strategy2Dspec%iptcl       = iptcl
                 strategy2Dspec%iptcl_batch = iptcl_batch
                 strategy2Dspec%iptcl_map   = iptcl_map
@@ -293,10 +293,12 @@ contains
             if( ctrl%do_bench ) rt_build_batch_particles2D = rt_build_batch_particles2D + toc(t_build_batch_particles2D)
         end subroutine build_batch_particles_local
 
-        subroutine allocate_strategy_for_particle(iptcl, iptcl_batch, updatecnt)
-            integer, intent(in) :: iptcl, iptcl_batch, updatecnt
-            logical :: first_or_unsearched
-            first_or_unsearched = (updatecnt == 1 .or. (.not. b_ptr%spproj_field%has_been_searched(iptcl)))
+        subroutine allocate_strategy_for_particle(iptcl, iptcl_batch)
+            integer, intent(in) :: iptcl, iptcl_batch
+            logical :: first_or_unsearched, has_been_searched, l_fresh_start
+            has_been_searched = b_ptr%spproj_field%has_been_searched(iptcl)
+            l_fresh_start     = is_fresh_2D_start(p_ptr, p_ptr%which_iter)
+            first_or_unsearched = l_fresh_start .or. (.not. has_been_searched)
             if( ctrl%l_prob_align )then
                 allocate(strategy2D_prob :: strategy2Dsrch(iptcl_batch)%ptr)
             else if( ctrl%l_stream )then
