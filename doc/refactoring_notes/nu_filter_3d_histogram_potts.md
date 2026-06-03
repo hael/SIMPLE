@@ -12,9 +12,10 @@ grow labels beyond the amount of support the robust unary objective actually
 found.
 
 The 2D NU filter handles this by adding a histogram term during ICM. For 3D,
-the useful part is the histogram constraint itself: keep the raw unary label
-fractions as a target, then let the Potts field smooth spatially while paying a
-cost for deviating from that target histogram.
+the useful part is a much softer histogram guardrail: keep the raw unary label
+fractions as a target, allow a sizeable slack region around that target, then
+let the Potts field smooth spatially while paying a weak cost for large
+deviations.
 
 The goal is not to force every voxel to keep its original label. The goal is to
 make the Potts prior redistribute labels spatially without changing the global
@@ -48,10 +49,10 @@ careful.
 
 ## Proposed Energy
 
-Add a global histogram penalty:
+Add a slack global histogram penalty:
 
 ```text
-E_hist = hist_scale * sum_l (count_l - target_l)^2
+E_hist = hist_scale * sum_l max(0, abs(count_l - target_l) - slack_l)^2
 ```
 
 At each proposed voxel move from `cur` to `cand`, only two bins change, so the
@@ -61,8 +62,8 @@ incremental cost is cheap:
 cur_before  = real(counts(cur)  - target_counts(cur))
 cand_before = real(counts(cand) - target_counts(cand))
 
-delta_hist = hist_scale * ((cur_before  - 1.)**2 - cur_before**2 + &
-                           (cand_before + 1.)**2 - cand_before**2)
+delta_hist = hist_scale * (penalty(cur_before  - 1, slack_cur) - penalty(cur_before,  slack_cur) + &
+                           penalty(cand_before + 1, slack_cand) - penalty(cand_before, slack_cand))
 ```
 
 The ICM candidate energy becomes:
@@ -75,15 +76,19 @@ For 3D, the ordered-label Potts should continue to tolerate one-label neighbor
 jumps at zero cost. Benchmarking showed that charging one-label jumps underfits
 the data and slows resolution progression.
 
-A good initial scale is the 2D policy:
+3D benchmark runs showed that the 2D scale is too conservative. Start with a
+weak scale and a generous per-label slack:
 
 ```fortran
-real, parameter :: NU_LABEL_HIST_BETA_FRAC = 8.0
+real, parameter :: NU_LABEL_HIST_BETA_FRAC = 0.5
+real, parameter :: NU_LABEL_HIST_SLACK_FRAC = 0.05
 hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
+slack_l = max(1, nint(NU_LABEL_HIST_SLACK_FRAC * real(max(1, n_nu_mask))))
 ```
 
-If 3D proves too resistant to spatial cleanup, reduce this to `4.0`; if labels
-still collapse away from their unary-supported fractions, increase it.
+If 3D still underfits, reduce `NU_LABEL_HIST_BETA_FRAC` or increase
+`NU_LABEL_HIST_SLACK_FRAC`. If the term becomes indistinguishable from ordinary
+Potts, increase the beta fraction gradually.
 
 ## Target Histogram
 
@@ -96,18 +101,16 @@ call count_nu_candidate_labels(candmap, n_candidates, target_counts)
 counts = target_counts
 ```
 
-This is important because there are two meaningful 3D cleanup sites:
+This is important because the histogram term should only be used at the base
+bank cleanup site:
 
-1. After the initial base-bank unary assignment in `optimize_nu_cutoff_finds`.
-   The target is the raw base-bank unary histogram.
-2. After high-resolution shell extension in
-   `refine_nu_extension_filtmap_ordered_labels`.
-   The target is the post-extension, post-compaction label histogram just before
-   final ordered-label cleanup.
+1. After the initial base-bank unary assignment in `optimize_nu_cutoff_finds`,
+   the target is the raw base-bank unary histogram.
+2. After high-resolution shell extension, use ordinary ordered-label Potts.
+   Do not apply the histogram term to extension labels.
 
-Do not reuse stale target counts across extension compaction. Labels can be
-thinned, remapped, or dropped, so the target must match the current
-`candidate_coords`, `cutoff_finds`, and `dmats_mask` layout.
+The extension path needs freedom to promote resolution and was too conservative
+when histogram-constrained.
 
 Auxiliary replacement labels do not need special histogram handling. In 3D, aux
 backs the finest replacement label rather than appending a sidecar candidate, so
@@ -137,15 +140,17 @@ working Potts implementation.
 1. Add constants in `simple_nu_filter.f90` near the Potts constants:
 
    ```fortran
-   real, parameter :: NU_LABEL_HIST_BETA_FRAC = 8.0
+   real, parameter :: NU_LABEL_HIST_BETA_FRAC = 0.5
+   real, parameter :: NU_LABEL_HIST_SLACK_FRAC = 0.05
    ```
 
 2. Add helpers in `simple_nu_filter_potts.f90`:
 
    ```fortran
    subroutine count_nu_candidate_labels(candmap, n_candidates, counts)
-   real function nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
-   real function calc_nu_label_histogram_energy(counts, target_counts, hist_scale)
+   real function nu_label_histogram_delta(icand, cur_icand, counts, target_counts, slack_counts, hist_scale)
+   real function calc_nu_label_histogram_energy(counts, target_counts, slack_counts, hist_scale)
+   real function nu_label_histogram_bin_penalty(drift, slack_count)
    ```
 
 3. In `refine_nu_candidate_map_ordered_labels`, allocate:
@@ -154,13 +159,14 @@ working Potts implementation.
    integer, allocatable :: counts(:), target_counts(:)
    ```
 
-   Then count labels at routine entry and compute `hist_scale`.
+   Then count labels at routine entry and compute `hist_scale` and
+   `slack_counts`.
 
 4. Add `nu_label_histogram_delta` to the candidate energy:
 
    ```fortran
    e = dmats_mask(imask,icand) + beta * neighborhood_cost + &
-       &nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
+       &nu_label_histogram_delta(icand, cur_icand, counts, target_counts, slack_counts, hist_scale)
    ```
 
 5. After each color pass, recount `counts` from the updated label map.
@@ -168,6 +174,7 @@ working Potts implementation.
 6. Update logging to report:
 
    - `NU_LABEL_HIST_BETA_FRAC`
+   - `NU_LABEL_HIST_SLACK_FRAC`
    - target counts before smoothing
    - final counts after smoothing
    - histogram energy per voxel before/after
@@ -183,6 +190,7 @@ working Potts implementation.
 call count_nu_candidate_labels(candmap, n_candidates, target_counts)
 counts = target_counts
 hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
+slack_counts = max(1, nint(NU_LABEL_HIST_SLACK_FRAC * real(max(1, n_nu_mask))))
 
 do iter = 1, NU_LABEL_SMOOTH_MAXITS
     nchanged = 0
@@ -203,7 +211,7 @@ do iter = 1, NU_LABEL_SMOOTH_MAXITS
             do icand = 1, n_candidates
                 if( icand == cur_icand ) cycle
                 e = local_energy(icand) + &
-                    &nu_label_histogram_delta(icand, cur_icand, counts, target_counts, hist_scale)
+                    &nu_label_histogram_delta(icand, cur_icand, counts, target_counts, slack_counts, hist_scale)
                 if( nu_label_smooth_is_better(e, best_e) )then
                     best_e = e
                     best_icand = icand
@@ -228,10 +236,12 @@ end do
 - Too strong a histogram term can prevent useful cleanup and preserve noisy
   unary speckles.
 - Too weak a histogram term behaves like the current 3D Potts prior.
+- Too little slack behaves like the earlier exact histogram-preservation path
+  and can cap resolution progression around coarse labels.
 - Parallel live-count updates would be nondeterministic and should be avoided
   in the first implementation.
-- High-resolution extension labels can be sparse; logging target/final counts
-  is essential to catch accidental collapse or overgrowth.
+- High-resolution extension labels can be sparse and should remain outside the
+  histogram-constrained path.
 - 2D-style support gating or weak one-label jump penalties are too conservative
   for 3D and can underfit by slowing resolution progression.
 

@@ -489,7 +489,7 @@ contains
                 n_accepted_this_iteration = n_accepted_this_iteration + 1
             end do
             if( n_accepted_this_iteration > 0 )then
-                call refine_nu_extension_filtmap_ordered_labels(histogram_potts=params%l_nu_hist_potts)
+                call refine_nu_extension_filtmap_ordered_labels
                 n_highres_steps = get_nu_filtmap_highres_shell_depth()
                 call write_nu_highres_steps_for_state(n_highres_steps)
                 write(logfhandle,'(A,I0,A,I0)') &

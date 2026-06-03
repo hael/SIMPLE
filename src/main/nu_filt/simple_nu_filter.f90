@@ -92,7 +92,8 @@ integer,          parameter   :: NU_LABEL_SMOOTH_STEP_TOL    = 1
 integer,          parameter   :: NU_LABEL_SMOOTH_NNEIGH      = 26
 integer,          parameter   :: NU_LABEL_SMOOTH_NCOLORS     = 8
 real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
-real,             parameter   :: NU_LABEL_HIST_BETA_FRAC     = 8.0
+real,             parameter   :: NU_LABEL_HIST_BETA_FRAC     = 0.5
+real,             parameter   :: NU_LABEL_HIST_SLACK_FRAC    = 0.05
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
@@ -340,15 +341,13 @@ interface
         real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, histogram_potts )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
-        logical, optional, intent(in) :: histogram_potts
     end subroutine extend_nu_filter_highres_shells
 
-    module subroutine refine_nu_extension_filtmap_ordered_labels( histogram_potts )
-        logical, optional, intent(in) :: histogram_potts
+    module subroutine refine_nu_extension_filtmap_ordered_labels
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
