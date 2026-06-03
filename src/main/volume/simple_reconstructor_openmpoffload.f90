@@ -240,7 +240,7 @@ contains
         integer, parameter :: WDIM = 3
         real,      pointer :: rho(:,:,:)
         complex,   pointer :: cmat(:,:,:)
-        complex :: comp
+        complex :: comp, w_comp
         real    :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM), w_ctfsq
         real    :: pf2, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
         integer :: win(3,2), nyqsq, iwinsz, h, i, k, l, m, isym, iy, iz, ky, mz
@@ -255,7 +255,7 @@ contains
         !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)&
         !$omp& default(shared) private(h,i,k,l,m,isym,r11,r12,r13,r21,r22,r23,ctfsq,&
         !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hp,kp,hpb,kpb,comp,&
-        !$omp& loc,w_ctfsq,h_sq,k_max_h,k_lo,k_hi,cmat,rho)
+        !$omp& loc,w_ctfsq,h_sq,k_max_h,k_lo,k_hi,cmat,rho,w_comp)
         do i = 1, sz
             do isym = 1, nsym
                 if( even(i) )then
@@ -322,9 +322,10 @@ contains
                                     ky      = win(2,1) + iy
                                     wyz     = wy(iy) * wz(iz)
                                     w_ctfsq = wyz * ctfsq
-                                    cmat(win(1,1)+1, ky, mz) = cmat(win(1,1)+1, ky, mz) + wx(1) * wyz * comp
-                                    cmat(win(1,1)+2, ky, mz) = cmat(win(1,1)+2, ky, mz) + wx(2) * wyz * comp
-                                    cmat(win(1,1)+3, ky, mz) = cmat(win(1,1)+3, ky, mz) + wx(3) * wyz * comp
+                                    w_comp  = wyz * comp
+                                    cmat(win(1,1)+1, ky, mz) = cmat(win(1,1)+1, ky, mz) + wx(1) * w_comp
+                                    cmat(win(1,1)+2, ky, mz) = cmat(win(1,1)+2, ky, mz) + wx(2) * w_comp
+                                    cmat(win(1,1)+3, ky, mz) = cmat(win(1,1)+3, ky, mz) + wx(3) * w_comp
                                     rho( win(1,1)+1, ky, mz) = rho( win(1,1)+1, ky, mz) + wx(1) * w_ctfsq
                                     rho( win(1,1)+2, ky, mz) = rho( win(1,1)+2, ky, mz) + wx(2) * w_ctfsq
                                     rho( win(1,1)+3, ky, mz) = rho( win(1,1)+3, ky, mz) + wx(3) * w_ctfsq
