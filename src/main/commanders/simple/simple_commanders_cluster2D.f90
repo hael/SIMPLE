@@ -10,6 +10,7 @@ use simple_gui_utils,          only: mrc2jpeg_tiled
 use simple_procimgstk,         only: selection_from_tseries_imgfile, random_selection_from_imgfile, copy_imgfile, noise_imgfile
 use simple_progress,           only: progressfile_init, progressfile_update
 use simple_commanders_imgops,  only: commander_scale
+use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment
 implicit none
 #include "simple_local_flags.inc"
 
@@ -78,7 +79,8 @@ contains
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)
-            if( converged .or. niters >= params%maxits ) exit
+            if( converged ) exit
+            if( niters >= params%maxits .and. .not. cluster2D_requires_full_assignment(params) ) exit
         end do
         ! Cleanup
         nice_comm%stat_root%stage = "terminating"

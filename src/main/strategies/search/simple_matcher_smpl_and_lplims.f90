@@ -6,7 +6,8 @@ use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
-public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4fillin_all, sample_ptcls4update2D
+public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4update2D
+public :: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
 private
 #include "simple_local_flags.inc"
 
@@ -261,17 +262,6 @@ contains
         call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl)
     end subroutine sample_ptcls4fillin
 
-    subroutine sample_ptcls4fillin_all( params, build, pfromto, l_incr_sampl, nptcls2update, pinds )
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: pfromto(2)
-        logical,              intent(in)    :: l_incr_sampl
-        integer,              intent(inout) :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
-        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, &
-            l_incr_sampl, all_min_updatecnt=.true.)
-    end subroutine sample_ptcls4fillin_all
-
     subroutine sample_ptcls4update2D( params, build, pfromto, l_updatefrac, nptcls, pinds )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -299,5 +289,26 @@ contains
             call build%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)
         endif
     end subroutine sample_ptcls4update2D
+
+    logical function cluster2D_requires_full_assignment( params ) result( l_required )
+        class(parameters), intent(in) :: params
+        l_required = params%l_fillin
+    end function cluster2D_requires_full_assignment
+
+    logical function all_active_ptcls_2D_assigned( os, pfromto, n_missing ) result( l_assigned )
+        class(oris),       intent(in)  :: os
+        integer,           intent(in)  :: pfromto(2)
+        integer, optional, intent(out) :: n_missing
+        integer :: iptcl, missing
+        missing = 0
+        do iptcl = pfromto(1), pfromto(2)
+            if( os%get_state(iptcl) == 0 ) cycle
+            if( os%get_updatecnt(iptcl) <= 0 .or. os%get_class(iptcl) <= 0 .or. nint(os%get(iptcl,'inpl')) <= 0 )then
+                missing = missing + 1
+            endif
+        enddo
+        if( present(n_missing) ) n_missing = missing
+        l_assigned = missing == 0
+    end function all_active_ptcls_2D_assigned
 
 end module simple_matcher_smpl_and_lplims

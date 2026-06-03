@@ -312,12 +312,18 @@ contains
         call cline_cluster2D%set('objfun',    cfg%objfun)
         call cline_cluster2D%set('trs',       cfg%trs)
         call cline_cluster2D%set('center',    cfg%center)
+        call cline_cluster2D%set('restore_cavgs', 'yes')
         call cline_cluster2D%set('box_crop',  stage_parms(istage)%box_crop)
         call cline_cluster2D%set('smpd_crop', stage_parms(istage)%smpd_crop)
         if( stage_parms(istage)%l_update_frac )then
             call cline_cluster2D%set('update_frac', stage_parms(istage)%update_frac)
         else
             call cline_cluster2D%delete('update_frac')
+        endif
+        if( cfg%iphase == size(PHASES) .or. istage == size(stage_parms) )then
+            call cline_cluster2D%set('fillin', 'yes')
+        else
+            call cline_cluster2D%delete('fillin')
         endif
         call cline_cluster2D%delete('endit')
     end subroutine emit_cluster2D_stage_cfg

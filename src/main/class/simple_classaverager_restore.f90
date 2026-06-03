@@ -151,7 +151,6 @@ contains
         call cavgs%zero_set(.true.)
         if( do_frac_update )then
             call cavger_readwrite_partial_sums('read')
-            ! call center_cavgs_for_frac_update ! TO BE VERIFIED
             call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
             call apply_weights2cavgs(class_update_fracs)
         endif
@@ -171,27 +170,6 @@ contains
         ! Memoization for cropped padded image, will be overwritten during search
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
     end subroutine cavger_init_online
-
-    subroutine center_cavgs_for_frac_update
-        real :: xyz(3)
-        integer :: icls, pop
-        logical :: has_been_searched
-        if( trim(p_ptr%center) /= 'yes' ) return
-        if( p_ptr%which_iter <= 2 ) return
-        if( .not. allocated(cavgs_merged) ) return
-        has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
-        if( .not. has_been_searched ) return
-        !$omp parallel do default(shared) private(icls,pop,xyz) schedule(static) proc_bind(close)
-        do icls = 1, ncls
-            pop = b_ptr%spproj_field%get_pop(icls, 'class')
-            if( pop <= MINCLSPOPLIM ) cycle
-            call calc_class_center_shift(icls, cavgs_merged(icls), xyz)
-            if( arg(xyz) <= CENTHRESH ) cycle
-            call shift_stack_slice2D(cavgs%even, icls, xyz(1:2))
-            call shift_stack_slice2D(cavgs%odd,  icls, xyz(1:2))
-        enddo
-        !$omp end parallel do
-    end subroutine center_cavgs_for_frac_update
 
     subroutine calc_class_center_shift( icls, cavg_img, xyz )
         integer,      intent(in)    :: icls

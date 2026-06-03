@@ -5,6 +5,7 @@ use simple_parameters,  only: parameters
 use simple_cmdline,     only: cmdline
 use simple_qsys_env,    only: qsys_env
 use simple_convergence, only: convergence
+use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 implicit none
@@ -248,6 +249,8 @@ contains
         type(commander_prob_align2D)      :: xprob_align2D
         type(cmdline)                     :: cline_calc_sigma, cline_prob_align
         real                              :: frac_srch_space
+        integer                           :: n_unassigned
+        logical                           :: l_full_assignment
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -304,6 +307,13 @@ contains
         endif
         converged = (params%which_iter >= params%minits) .and. converged
         converged = converged .or. (params%which_iter >= params%maxits)
+        if( cluster2D_requires_full_assignment(params) )then
+            l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
+            if( .not. l_full_assignment )then
+                write(logfhandle,'(A,I8)') '>>> CLUSTER2D FILL-IN COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+            endif
+            converged = converged .and. l_full_assignment
+        endif
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration( self, params, build )

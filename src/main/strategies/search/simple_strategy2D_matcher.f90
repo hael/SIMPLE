@@ -10,7 +10,8 @@ use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
-use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4fillin_all, sample_ptcls4update2D
+use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, cluster2D_requires_full_assignment, &
+                                           all_active_ptcls_2D_assigned
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
@@ -54,7 +55,7 @@ type :: cluster2D_ctrl
     logical :: l_np_cls_defined
     logical :: l_prob_align
     logical :: l_restore_cavgs
-    logical :: l_assignment_only
+    logical :: l_require_full_assignment
     logical :: do_bench
   contains
     procedure :: display
@@ -185,7 +186,7 @@ contains
             ctrl%l_partial_sums    = ctrl%l_frac_restore
             ctrl%l_prob_align      = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
-            ctrl%l_assignment_only = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
+            ctrl%l_require_full_assignment = cluster2D_requires_full_assignment(p_ptr)
             ctrl%l_np_cls_defined  = cline%defined('nptcls_per_cls')
             ctrl%do_bench          = L_BENCH_GLOB
             if( p_ptr%startit == 1 )then
@@ -220,9 +221,7 @@ contains
 
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)
-            if( p_ptr%l_fillin )then
-                call sample_ptcls4fillin_all(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls2update, pinds)
-            else if( ctrl%l_prob_align )then
+            if( ctrl%l_prob_align )then
                 ! prob_align2D owns the outer subset sampling in probabilistic mode;
                 ! cluster2D only reproduces that same subset for the downstream update.
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds)
@@ -262,16 +261,11 @@ contains
         end subroutine ensure_even_odd_partition
 
         subroutine prepare_class_averages_and_restoration()
-            logical :: l_need_cavgs_for_alignment
-            ! For fillin: need to read cavgs even if not restoring them (needed for alignment)
-            l_need_cavgs_for_alignment = p_ptr%l_fillin .and. (.not. ctrl%l_restore_cavgs)
-            if( ctrl%l_assignment_only .and. (.not. l_need_cavgs_for_alignment) ) return
             call cavger_new(p_ptr, b_ptr)
             if( .not. cline%defined('refs') )then
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             call cavger_read_all
-            if( ctrl%l_assignment_only ) return
             ctrl%l_partial_sums = ctrl%l_frac_restore
             call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
         end subroutine prepare_class_averages_and_restoration
@@ -355,7 +349,6 @@ contains
 
         subroutine restore_class_averages_for_batch()
             integer(timer_int_kind) :: t_update
-            if( ctrl%l_assignment_only ) return
             call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
             if( ctrl%do_bench ) t_update = tic()
             call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz))
@@ -377,7 +370,7 @@ contains
             call clean_batch_particles2D(b_ptr, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
             deallocate(strategy2Dsrch, pinds, batches)
             if( ctrl%l_prob_align ) call eulprob_obj_part%kill
-            if( .not. ctrl%l_assignment_only ) call cavger_dealloc_online
+            call cavger_dealloc_online
         end subroutine cleanup_search_state
 
         subroutine write_orientations()
@@ -395,10 +388,8 @@ contains
             type(convergence), intent(inout) :: conv
             integer,           intent(in)    :: which_iter
             logical,           intent(inout) :: converged
-            if( ctrl%l_assignment_only )then
-                converged = .true.
-                return
-            endif
+            integer :: n_unassigned
+            logical :: l_full_assignment
             if( l_distr_worker_glob )then
                 if( ctrl%l_restore_cavgs )then
                     call cavger_readwrite_partial_sums('write')
@@ -408,6 +399,13 @@ contains
                 converged = conv%check_conv2D(p_ptr, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), p_ptr%msk)
                 converged = converged .and. (p_ptr%which_iter >= p_ptr%minits)
                 converged = converged .or.  (p_ptr%which_iter >= p_ptr%maxits)
+                if( ctrl%l_require_full_assignment )then
+                    l_full_assignment = all_active_ptcls_2D_assigned(b_ptr%spproj_field, [p_ptr%fromp,p_ptr%top], n_unassigned)
+                    if( .not. l_full_assignment )then
+                        write(logfhandle,'(A,I8)') '>>> CLUSTER2D FILL-IN COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+                    endif
+                    converged = converged .and. l_full_assignment
+                endif
                 if(.not. ctrl%l_stream) call progressfile_update(conv%get('progress'))
                 if( ctrl%l_restore_cavgs )then
                     if( cline%defined('which_iter') )then
@@ -446,7 +444,7 @@ contains
             write(fnr,'(a,l1)') 'match2D probabilistic alignment     : ', ctrl%l_prob_align
             write(fnr,'(a,l1)') 'match2D sample updates              : ', ctrl%l_sample_updates
             write(fnr,'(a,l1)') 'match2D restore class averages      : ', ctrl%l_restore_cavgs
-            write(fnr,'(a,l1)') 'match2D assignment only             : ', ctrl%l_assignment_only
+            write(fnr,'(a,l1)') 'match2D require full assignment     : ', ctrl%l_require_full_assignment
             write(fnr,'(a,i0)') 'match2D nclasses                    : ', p_ptr%ncls
             write(fnr,'(a,i0)') 'match2D kfrom                       : ', p_ptr%kfromto(1)
             write(fnr,'(a,i0)') 'match2D kto                         : ', p_ptr%kfromto(2)
@@ -483,7 +481,7 @@ contains
         write(logfhandle,'(a,l1)') 'l_np_cls_defined     : ', self%l_np_cls_defined
         write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
         write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
-        write(logfhandle,'(a,l1)') 'l_assignment_only    : ', self%l_assignment_only
+        write(logfhandle,'(a,l1)') 'l_require_full_assignment : ', self%l_require_full_assignment
         write(logfhandle,'(a,l1)') 'do_bench             : ', self%do_bench
     end subroutine display
 
