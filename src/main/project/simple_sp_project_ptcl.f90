@@ -74,18 +74,15 @@ contains
                 write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
                 THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
             endif
-        else if( l_has_range )then
-            nptcls_stk = top - fromp + 1
         endif
         ind_in_stk = 0
-        if( l_has_nptcls_stk .and. ptcl_field%isthere(iptcl, 'indstk') )then
+        if( ptcl_field%isthere(iptcl, 'indstk') )then
             ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
-            if( ind_in_stk > nptcls_stk ) ind_in_stk = 0
         endif
         if( ind_in_stk < 1 )then
             call set_indstk_from_range
         endif
-        if( (l_has_nptcls_stk .or. l_has_range) .and. ind_in_stk > nptcls_stk )then
+        if( l_has_nptcls_stk .and. ind_in_stk > nptcls_stk )then
             call self%os_stk%print(stkind)
             write(logfhandle,*) 'iptcl             : ', iptcl
             write(logfhandle,*) 'stkind            : ', stkind
