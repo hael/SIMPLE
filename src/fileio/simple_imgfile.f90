@@ -11,6 +11,7 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
+use, intrinsic :: iso_fortran_env, only: int16, int32, real32
 use simple_core_module_api
 use simple_tifflib
 use gnufor2
@@ -394,29 +395,6 @@ contains
             THROW_HARD('I/O')
         endif
         self%was_written_to = .false.
-    contains
-
-        pure elemental function real16_to_real32( h ) result( x )
-            ! Branchless IEEE 754 half-precision to single-precision conversion.
-            ! Uses direct bit manipulation + TRANSFER so the compiler can auto-vectorize
-            ! (SIMD) the elemental call across a full image plane.
-            ! Handles: zero, normal, infinity, NaN.  Subnormal halfs map to f32 subnormals
-            ! with incorrect magnitude.
-            use iso_fortran_env, only : int16, int32, real32
-            integer(int16), intent(in) :: h  ! half-precision bits as a 16-bit integer
-            real(real32)   :: x
-            integer(int32) :: raw, sign, exp16, mant, exp32
-            raw   = int(h, int32)
-            sign  = ishft(iand(raw, 32768_int32), 16)   ! bit 15 → bit 31
-            exp16 = iand(ishft(raw, -10), 31_int32)     ! bits 14:10 → 0..31
-            mant  = iand(raw, 1023_int32)               ! bits  9: 0
-            ! Remap exponent: half bias 15 → single bias 127 (add 112)
-            exp32 = exp16 + 112_int32                           ! normal numbers
-            exp32 = merge(0_int32,   exp32, exp16 == 0_int32)   ! zero/subnormal: exp=0
-            exp32 = merge(255_int32, exp32, exp16 == 31_int32)  ! inf/NaN: exp=255
-            x     = transfer(ior(sign, ior(ishft(exp32, 23), ishft(mant, 13))), 0.0_real32)
-        end function real16_to_real32
-
     end subroutine rSlices
 
     !>  \brief  reads a set of TIFF contiguous slices of the image file from disk into memory.
@@ -815,7 +793,7 @@ contains
         call self%overall_head%setMinPixVal(minv)
         call self%overall_head%setMaxPixVal(maxv)
         self%was_written_to = .true.
-    end subroutine setMinmax
+    end subroutine setMinMax
 
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
@@ -832,5 +810,49 @@ contains
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.
     end subroutine setDims
+
+    ! Private module conversion routines
+
+    ! int16 stored as real16 to real32
+    pure elemental real(real32) function real16_to_real32( i16 )
+        ! Branchless IEEE 754 half-precision to single-precision conversion.
+        ! Handles: zero, normal, infinity, NaN.  Subnormal halfs map to f32 subnormals
+        ! with incorrect magnitude.
+        use iso_fortran_env, only : int16, int32, real32
+        integer(int16), intent(in) :: i16  ! half-precision bits as a 16-bit integer
+        integer(int32) :: raw, sign, exp16, mant, exp32
+        ! Fast field remap used for comparison with the exact module helper.
+        ! This preserves sign, signed zero, normals, Inf and NaN classes, but it
+        ! does not renormalize half subnormals and therefore gives them wrong values.
+        raw   = int(i16, int32)
+        sign  = ishft(iand(raw, 32768_int32), 16)   ! bit 15 → bit 31
+        exp16 = iand(ishft(raw, -10), 31_int32)     ! bits 14:10 → 0..31
+        mant  = iand(raw, 1023_int32)               ! bits  9: 0
+        ! Remap exponent: half bias 15 → single bias 127 (add 112)
+        exp32 = exp16 + 112_int32                           ! normal numbers
+        exp32 = merge(0_int32,   exp32, exp16 == 0_int32)   ! zero/subnormal: exp=0
+        exp32 = merge(255_int32, exp32, exp16 == 31_int32)  ! inf/NaN: exp=255
+        real16_to_real32 = transfer(ior(sign, ior(ishft(exp32, 23), ishft(mant, 13))), 0.0_real32)
+    end function real16_to_real32
+
+    ! real32 to int16 that can be writen to disk as real16
+    pure elemental integer(int16) function real32_to_real16( r32 )
+        real(real32), intent(in) :: r32
+        integer(int32) :: raw, sign16, exp32, mant32, carry, exp16, raw16, wrapped
+        ! Fast IEEE 754 single-precision to half-precision bit packing.
+        ! Assumes finite nonzero inputs that remain normal half values after rounding:
+        ! zero, subnormal, infinity and NaN handling is intentionally not included.
+        raw    = transfer(r32, 0_int32)
+        sign16 = merge(32768_int32, 0_int32, btest(raw, 31))   ! bit 31 -> bit 15
+        exp32  = iand(ishft(raw, -23), 255_int32)              ! bits 30:23 -> 0..255
+        mant32 = iand(raw, 8388607_int32) + ishft(1_int32, 12) ! mantissa + round bit
+        carry  = merge(1_int32, 0_int32, btest(mant32, 23))    ! rounding overflow into exponent
+        mant32 = iand(mant32, 8388607_int32)                   ! clear implicit/carry bit
+        ! Remap exponent: single bias 127 -> half bias 15 (subtract 112), including carry.
+        exp16  = exp32 + carry - 112_int32
+        raw16  = sign16 + ishft(exp16, 10) + ishft(mant32, -13) ! pack sign/exponent/mantissa
+        wrapped = iand(raw16, 65535_int32) ! preserve raw 16 bits before storing in signed int16
+        real32_to_real16 = int(wrapped - ishft(iand(wrapped, 32768_int32), 1), int16)
+    end function real32_to_real16
 
 end module simple_imgfile
