@@ -109,4 +109,48 @@ contains
         end do
     end subroutine qsys_watcher_2
 
+    !> Diagnostic watcher with periodic missing-file reporting and timeout hard-stop.
+    !! Orthogonal to qsys_watcher so existing behavior elsewhere is untouched.
+    subroutine qsys_watcher_diag( fnames, wtime, maxits, log_every )
+        class(string),     intent(in) :: fnames(:)
+        integer, optional, intent(in) :: wtime, maxits, log_every
+        integer :: wwtime, mmaxits, llog_every
+        integer :: nfiles, ifile, i, nmissing
+        logical :: doreturn
+        wwtime     = SHORTTIME
+        mmaxits    = 20000
+        llog_every = 20
+        if( present(wtime) )     wwtime     = max(1, wtime)
+        if( present(maxits) )    mmaxits    = max(1, maxits)
+        if( present(log_every) ) llog_every = max(1, log_every)
+        nfiles = size(fnames)
+        do i=1,mmaxits
+            doreturn = .true.
+            nmissing = 0
+            do ifile=1,nfiles
+                if( .not. file_exists(fnames(ifile)) )then
+                    doreturn = .false.
+                    nmissing = nmissing + 1
+                endif
+            enddo
+            if( doreturn ) return
+            if( mod(i, llog_every) == 0 )then
+                write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> qsys_watcher_diag waiting: ', nmissing, &
+                    ' of ', nfiles, ' files missing (elapsed ', i * wwtime, ' s)'
+                do ifile=1,nfiles
+                    if( .not. file_exists(fnames(ifile)) ) write(logfhandle,'(A,A)') &
+                        '>>>   missing: ', fnames(ifile)%to_char()
+                enddo
+                call flush(logfhandle)
+            endif
+            call sleep(wwtime)
+        enddo
+        write(logfhandle,'(A)') '>>> qsys_watcher_diag timeout; remaining missing files:'
+        do ifile=1,nfiles
+            if( .not. file_exists(fnames(ifile)) ) write(logfhandle,'(A,A)') '>>>   missing: ', fnames(ifile)%to_char()
+        enddo
+        call flush(logfhandle)
+        call simple_exception('qsys_watcher_diag timeout waiting for completion markers', 'simple_qsys_funs.f90', 0)
+    end subroutine qsys_watcher_diag
+
 end module simple_qsys_funs

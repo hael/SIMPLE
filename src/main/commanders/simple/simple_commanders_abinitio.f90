@@ -1,6 +1,7 @@
 !@descr: abinitio 3D reconstruction in single- and multi-particle mode
 module simple_commanders_abinitio
 use simple_commanders_api
+use simple_qsys_funs,            only: qsys_watcher_diag
 use simple_abinitio_utils
 use simple_procimgstk,           only: shift_imgfile
 use simple_commanders_reproject, only: commander_reproject
@@ -562,7 +563,7 @@ contains
                 write(logfhandle,'(A,I0,A,A)') '>>> SUBMITTED ABINITIO3D_CAVGS RESTART ', irestart, &
                     ' IN ', folder%to_char()
             enddo
-            call qsys_watcher(done_files)
+            call qsys_watcher_diag(done_files)
             do irestart = 1, params%nrestarts
                 if( .not.file_exists(done_files(irestart)) )then
                     write(logfhandle,'(A,A)') '>>> MISSING RESTART COMPLETION MARKER: ', done_files(irestart)%to_char()
