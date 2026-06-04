@@ -22,12 +22,18 @@ integer, parameter :: NU2D_LABEL_SMOOTH_NNEIGH           = (2 * NU2D_LABEL_SMOOT
 integer, parameter :: NU2D_LABEL_SMOOTH_NCOLORS          = (NU2D_LABEL_SMOOTH_RADIUS + 1)**2
 real,    parameter :: NU2D_LABEL_SMOOTH_BETA_FRAC        = 2.5
 real,    parameter :: NU2D_LABEL_HIST_BETA_FRAC          = 8.0
+real,    parameter :: NU2D_FOREGROUND_POTTS_BETA_SCALE   = 1.25
+real,    parameter :: NU2D_BACKGROUND_POTTS_BETA_SCALE   = 1.0
+real,    parameter :: NU2D_REGION_LOGODDS_BETA_FRAC      = 0.2
+real,    parameter :: NU2D_REGION_PRIOR_PSEUDOCOUNT      = 0.5
 real,    parameter :: NU2D_LABEL_SMOOTH_QUAD_FRAC        = 1.0
 real,    parameter :: NU2D_LABEL_SMOOTH_TIE_EPS          = 1.e-6
 real,    parameter :: NU2D_LABEL_SMOOTH_RING1_WEIGHT     = 1.0
 real,    parameter :: NU2D_LABEL_SMOOTH_RING2_WEIGHT     = 0.5
 real,    parameter :: NU2D_LABEL_SMOOTH_ADJACENT_FRAC    = 0.25
 real,    parameter :: NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A   = 10.0
+integer, parameter :: NU2D_HIST_REGION_FOREGROUND        = 1
+integer, parameter :: NU2D_HIST_REGION_BACKGROUND        = 2
 
 type :: nu_filter2D_state
     real, allocatable :: dmats(:,:), candidate_coords(:), dmat(:,:,:), tmp(:,:,:), mask_tmp(:,:,:)
@@ -688,10 +694,10 @@ contains
         integer,                       intent(out)   :: potts_iters, potts_changes
         real, optional,                intent(in)    :: region_mask(:,:,:)
         integer, allocatable :: counts(:,:), target_counts(:,:), region_sizes(:), pixel_regions(:)
-        real,    allocatable :: hist_scales(:)
+        real,    allocatable :: hist_scales(:), potts_scales(:), region_priors(:,:)
         integer :: iter, color, ipix, icand, cur_icand, best_icand, i, j, neigh(3,NU2D_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged, ncand, iregion
-        real    :: beta, e, best_e, neigh_w(NU2D_LABEL_SMOOTH_NNEIGH)
+        real    :: beta, region_beta, e, best_e, neigh_w(NU2D_LABEL_SMOOTH_NNEIGH)
         potts_iters   = 0
         potts_changes = 0
         ncand = size(dmats,2)
@@ -702,7 +708,8 @@ contains
         beta = estimate_nu2D_beta(dmats)
         if( beta <= TINY ) return
         call init_nu2D_histogram_targets(labelmap, pix, ncand, beta, target_counts, counts, &
-            &region_sizes, hist_scales, pixel_regions, region_mask)
+            &region_sizes, hist_scales, pixel_regions, region_priors, region_mask)
+        call init_nu2D_potts_scales(potts_scales, region_mask)
         do iter = 1, NU2D_LABEL_SMOOTH_MAXITS
             potts_iters = potts_iters + 1
             nchanged = 0
@@ -715,12 +722,13 @@ contains
                     cur_icand = max(1, min(ncand, int(labelmap(i,j,1))))
                     if( cur_icand /= int(labelmap(i,j,1)) ) labelmap(i,j,1) = int(cur_icand, kind=NU2D_LABEL_KIND)
                     iregion = pixel_regions(ipix)
+                    region_beta = beta * potts_scales(iregion)
                     best_icand = cur_icand
-                    best_e     = dmats(ipix,cur_icand) + beta * &
+                    best_e     = dmats(ipix,cur_icand) + region_priors(cur_icand,iregion) + region_beta * &
                         &nu2D_neighborhood_cost(cur_icand, labelmap, neigh, neigh_w, nsz, coords)
                     do icand = 1, ncand
                         if( icand == cur_icand ) cycle
-                        e = dmats(ipix,icand) + beta * &
+                        e = dmats(ipix,icand) + region_priors(icand,iregion) + region_beta * &
                             &nu2D_neighborhood_cost(icand, labelmap, neigh, neigh_w, nsz, coords) + &
                             &nu2D_histogram_delta(icand, cur_icand, counts, target_counts, &
                             &iregion, hist_scales(iregion))
@@ -740,17 +748,17 @@ contains
             potts_changes = potts_changes + nchanged
             if( nchanged == 0 ) exit
         end do
-        deallocate(counts, target_counts, region_sizes, hist_scales, pixel_regions)
+        deallocate(counts, target_counts, region_sizes, hist_scales, pixel_regions, potts_scales, region_priors)
     end subroutine refine_nu2D_labels
 
     subroutine init_nu2D_histogram_targets( labelmap, pix, ncand, beta, target_counts, counts, &
-            &region_sizes, hist_scales, pixel_regions, region_mask )
+            &region_sizes, hist_scales, pixel_regions, region_priors, region_mask )
         integer(kind=NU2D_LABEL_KIND), intent(in) :: labelmap(:,:,:)
         integer, intent(in) :: pix(:,:), ncand
         real,    intent(in) :: beta
         integer, allocatable, intent(out) :: target_counts(:,:), counts(:,:), region_sizes(:)
         integer, allocatable, intent(out) :: pixel_regions(:)
-        real,    allocatable, intent(out) :: hist_scales(:)
+        real,    allocatable, intent(out) :: hist_scales(:), region_priors(:,:)
         real, optional, intent(in) :: region_mask(:,:,:)
         integer :: nregions, ipix, i, j, ilabel, iregion
         nregions = 1
@@ -760,12 +768,13 @@ contains
         allocate(region_sizes(nregions),        source=0)
         allocate(hist_scales(nregions),         source=0.)
         allocate(pixel_regions(size(pix,2)),    source=1)
+        allocate(region_priors(ncand,nregions), source=0.)
         do ipix = 1, size(pix,2)
             i = pix(1,ipix)
             j = pix(2,ipix)
-            iregion = 1
+            iregion = NU2D_HIST_REGION_FOREGROUND
             if( present(region_mask) )then
-                if( region_mask(i,j,1) <= 0.5 ) iregion = 2
+                if( region_mask(i,j,1) <= 0.5 ) iregion = NU2D_HIST_REGION_BACKGROUND
             endif
             pixel_regions(ipix) = iregion
             ilabel = int(labelmap(i,j,1))
@@ -775,13 +784,48 @@ contains
         end do
         counts = target_counts
         if( present(region_mask) )then
-            target_counts(:,2) = 0
-            target_counts(1,2) = region_sizes(2)
+            call init_nu2D_region_log_priors(target_counts, region_sizes, beta, region_priors)
+            target_counts(:,NU2D_HIST_REGION_BACKGROUND) = 0
+            target_counts(1,NU2D_HIST_REGION_BACKGROUND) = region_sizes(NU2D_HIST_REGION_BACKGROUND)
         endif
         do iregion = 1, nregions
             hist_scales(iregion) = NU2D_LABEL_HIST_BETA_FRAC * beta / real(max(1, region_sizes(iregion)))
         end do
     end subroutine init_nu2D_histogram_targets
+
+    subroutine init_nu2D_potts_scales( potts_scales, region_mask )
+        real, allocatable, intent(out) :: potts_scales(:)
+        real, optional, intent(in) :: region_mask(:,:,:)
+        integer :: nregions
+        nregions = 1
+        if( present(region_mask) ) nregions = 2
+        allocate(potts_scales(nregions), source=1.)
+        if( present(region_mask) )then
+            potts_scales(NU2D_HIST_REGION_FOREGROUND) = NU2D_FOREGROUND_POTTS_BETA_SCALE
+            potts_scales(NU2D_HIST_REGION_BACKGROUND) = NU2D_BACKGROUND_POTTS_BETA_SCALE
+        endif
+    end subroutine init_nu2D_potts_scales
+
+    subroutine init_nu2D_region_log_priors( raw_counts, region_sizes, beta, region_priors )
+        integer, intent(in)    :: raw_counts(:,:), region_sizes(:)
+        real,    intent(in)    :: beta
+        real,    intent(inout) :: region_priors(:,:)
+        integer :: ilabel, ncand
+        real    :: alpha, fg_denom, bg_denom, p_fg, p_bg, logodds, prior_scale
+        ncand = size(raw_counts,1)
+        if( size(raw_counts,2) < 2 ) return
+        alpha = NU2D_REGION_PRIOR_PSEUDOCOUNT
+        fg_denom = real(region_sizes(NU2D_HIST_REGION_FOREGROUND)) + alpha * real(ncand)
+        bg_denom = real(region_sizes(NU2D_HIST_REGION_BACKGROUND)) + alpha * real(ncand)
+        prior_scale = NU2D_REGION_LOGODDS_BETA_FRAC * beta
+        do ilabel = 1, ncand
+            p_fg = (real(raw_counts(ilabel,NU2D_HIST_REGION_FOREGROUND)) + alpha) / fg_denom
+            p_bg = (real(raw_counts(ilabel,NU2D_HIST_REGION_BACKGROUND)) + alpha) / bg_denom
+            logodds = log(max(p_fg,TINY) / max(p_bg,TINY))
+            region_priors(ilabel,NU2D_HIST_REGION_FOREGROUND) = -prior_scale * logodds
+            region_priors(ilabel,NU2D_HIST_REGION_BACKGROUND) =  prior_scale * logodds
+        end do
+    end subroutine init_nu2D_region_log_priors
 
     real function nu2D_histogram_delta( icand, cur_icand, counts, target_counts, iregion, hist_scale )
         integer, intent(in) :: icand, cur_icand, counts(:,:), target_counts(:,:), iregion
