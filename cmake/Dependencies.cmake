@@ -110,6 +110,133 @@ if(USE_MPI)
 endif()
 
 # ------------------------------------------------------------------------------
+# BLAS / LAPACK / ARPACK (required)
+# ------------------------------------------------------------------------------
+# SIMPLE uses the standard LP64 Fortran ABI for these libraries. If you point
+# CMake at an ILP64 vendor build, integer sizes will not match the current code.
+
+find_package(BLAS)
+if(BLAS_FOUND)
+    message(STATUS "BLAS libraries: ${BLAS_LIBRARIES}")
+else()
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  BLAS REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE requires BLAS development libraries for numerical routines and\n"
+        "  LAPACK/ARPACK-backed solvers.\n"
+        "  Install OpenBLAS/BLAS via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install libopenblas-dev\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
+        "    sudo yum install openblas-devel\n"
+        "    or: sudo dnf install openblas-devel\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S openblas\n"
+        "  macOS (Homebrew):\n"
+        "    brew install openblas\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install OpenBLAS\n"
+        "  If installed in a non-standard prefix, pass it to CMake:\n"
+        "    cmake -B build -DCMAKE_PREFIX_PATH=<dependency_prefix>\n"
+        "  SIMPLE expects the LP64 ABI, where Fortran integer arguments are 32-bit.\n"
+        "  Avoid ILP64 BLAS builds unless SIMPLE is changed consistently.\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
+
+find_package(LAPACK)
+if(LAPACK_FOUND)
+    message(STATUS "LAPACK libraries: ${LAPACK_LIBRARIES}")
+else()
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  LAPACK REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE requires LAPACK to compile and link eigenvalue routines such as SSYEVR.\n"
+        "  Install LAPACK development libraries via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install liblapack-dev\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
+        "    sudo yum install lapack-devel\n"
+        "    or: sudo dnf install lapack-devel\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S lapack\n"
+        "  macOS (Homebrew):\n"
+        "    brew install lapack\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install lapack\n"
+        "  If installed in a non-standard prefix, pass it to CMake:\n"
+        "    cmake -B build -DCMAKE_PREFIX_PATH=<dependency_prefix>\n"
+        "  SIMPLE expects the LP64 ABI, where Fortran integer arguments are 32-bit.\n"
+        "  Avoid ILP64 LAPACK builds unless SIMPLE is changed consistently.\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
+
+find_library(ARPACK_LIBRARY
+    NAMES arpack arpack-ng libarpack
+    HINTS
+        ${ARPACK_ROOT}
+        $ENV{ARPACK_ROOT}
+        $ENV{ARPACK_DIR}
+        $ENV{ARPACKDIR}
+    PATH_SUFFIXES lib lib64
+    PATHS
+        /opt/homebrew/opt/arpack
+        /usr/local/opt/arpack
+        /usr/local
+        /usr
+        /opt/local
+        /opt/homebrew
+        /opt
+)
+if(ARPACK_LIBRARY)
+    message(STATUS "ARPACK library found: ${ARPACK_LIBRARY}")
+else()
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  ARPACK REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE requires ARPACK to compile and link sparse eigenvalue routines.\n"
+        "  Install ARPACK or ARPACK-NG development libraries via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install libarpack2-dev\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
+        "    sudo yum install arpack-devel\n"
+        "    or: sudo dnf install arpack-devel\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S arpack\n"
+        "  macOS (Homebrew):\n"
+        "    brew install arpack\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install arpack-ng\n"
+        "  If installed in a non-standard prefix, pass it to CMake:\n"
+        "    cmake -B build -DCMAKE_PREFIX_PATH=<dependency_prefix>\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
+
+# Link ARPACK before its numerical providers; this matters for static builds.
+list(APPEND SIMPLE_LIBRARIES
+    ${ARPACK_LIBRARY}
+    LAPACK::LAPACK
+    BLAS::BLAS
+)
+
+# ------------------------------------------------------------------------------
 # FFTW3 (required)
 #   Uses custom FindFFTW.cmake (FFTW::FFTW imported target)
 # ------------------------------------------------------------------------------
@@ -164,7 +291,7 @@ else()
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
         "    sudo apt-get install libfftw3-dev\n"
-        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
         "    sudo yum install fftw3-devel\n"
         "    or: sudo dnf install fftw3-devel\n"
         "  Linux (Arch):\n"
@@ -197,7 +324,7 @@ if(TIFF_FOUND)
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
         "    sudo apt-get install libjpeg-dev\n"
-        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
         "    sudo yum install libjpeg-devel\n"
         "    or: sudo dnf install libjpeg-devel\n"
         "  Linux (Arch):\n"
@@ -223,7 +350,7 @@ if(TIFF_FOUND)
             "  Linux (Debian/Ubuntu):\n"
             "    sudo apt-get update\n"
             "    sudo apt-get install zlib1g-dev\n"
-            "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+            "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
             "    sudo yum install zlib-devel\n"
             "    or: sudo dnf install zlib-devel\n"
             "  Linux (Arch):\n"
@@ -292,7 +419,7 @@ else()
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
         "    sudo apt-get install libtiff-dev\n"
-        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
         "    sudo yum install libtiff-devel\n"
         "    or: sudo dnf install libtiff-devel\n"
         "  Linux (Arch):\n"
@@ -339,7 +466,7 @@ if(NOT CURL_FOUND)
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
         "    sudo apt-get install libcurl4-openssl-dev\n"
-        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "  Linux (Fedora/RHEL/OL/CentOS/Rocky):\n"
         "    sudo yum install libcurl-devel\n"
         "    or: sudo dnf install libcurl-devel\n"
         "  Linux (Arch):\n"
@@ -362,8 +489,11 @@ message(STATUS "libcurl: FOUND")
 # ------------------------------------------------------------------------------
 message(STATUS "=== SIMPLE Dependency Summary ===")
 
+message(STATUS " ARPACK:              YES")
+message(STATUS " BLAS:                YES")
 message(STATUS " FFTW3:               YES")
 message(STATUS " JPEG_LIBRARY:        YES")
+message(STATUS " LAPACK:              YES")
 message(STATUS " LIBCURL:             YES")
 message(STATUS " LIBTIFF:             YES")
 if(USE_MPI)
