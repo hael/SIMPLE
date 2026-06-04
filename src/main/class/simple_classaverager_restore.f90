@@ -584,45 +584,27 @@ contains
         type(cavgs_set), intent(inout) :: cavgs_unreg
         type(nu_filter2D_state), allocatable :: nu_states(:)
         type(nu_filter2D_stats) :: nu_stats
-        real,    allocatable :: class_align_lps(:), class_active_lps(:), class_support_fracs(:)
+        real,    allocatable :: class_align_lps(:), class_support_fracs(:)
         integer :: icls, pop, ithr
-        real    :: align_lp, frc05, frc0143
+        real    :: align_lp
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: pixels outside automask support use the lowest-resolution filter'
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: automask failure uses the lowest-resolution filter for all pixels'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: active bank is capped by the class FSC resolution'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: histogram-constrained Potts preserves raw label fractions'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: ordered support gate removes labels below 0.25% raw support'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete directly inside automask support'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: support boundary is softened by tent smoothing against label 1'
         allocate(nu_states(nthr_glob))
         allocate(class_align_lps(ncls), source=0.)
-        allocate(class_active_lps(ncls), source=0.)
         allocate(class_support_fracs(ncls), source=0.)
         do ithr = 1, nthr_glob
             call nu_states(ithr)%setup(ldim_crop, smpd_crop)
         end do
-        do icls = 1, ncls
-            pop = sum(eo_pops(:,icls))
-            if( pop == 0 ) cycle
-            call b_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
-            if( frc0143 > TINY )then
-                class_active_lps(icls) = frc0143
-            else if( p_ptr%lp > TINY )then
-                class_active_lps(icls) = p_ptr%lp
-            endif
-        end do
-        if( any(class_active_lps > TINY) )then
-            write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                &'>>> 2D NU filter active-bank FSC cap range: ', &
-                &minval(class_active_lps, mask=class_active_lps > TINY), ' - ', &
-                &maxval(class_active_lps, mask=class_active_lps > TINY), ' A'
-        endif
         !$omp parallel do default(shared) private(icls,pop,ithr) schedule(static) proc_bind(close)
         do icls = 1, ncls
             pop = sum(eo_pops(:,icls))
@@ -639,7 +621,7 @@ contains
                 call automask2D_support_pix(p_ptr, reg_avg, p_ptr%ngrow, nint(p_ptr%winsz), p_ptr%edge, support_pix)
                 class_support_fracs(icls) = real(size(support_pix,2)) / real(ldim_crop(1) * ldim_crop(2))
                 call nu_states(ithr)%apply(even_raw, odd_raw, reg_even, reg_odd, reg_avg, even_nu, odd_nu, &
-                    &avg_nu, class_align_lps(icls), active_lp_limit=class_active_lps(icls), support_pix=support_pix)
+                    &avg_nu, class_align_lps(icls), support_pix=support_pix)
                 call image_to_stack_slice(even_nu, cavgs%even,   icls)
                 call image_to_stack_slice(odd_nu,  cavgs%odd,    icls)
                 call image_to_stack_slice(avg_nu,  cavgs%merged, icls)
@@ -679,7 +661,6 @@ contains
         endif
         deallocate(nu_states)
         deallocate(class_align_lps)
-        deallocate(class_active_lps)
         deallocate(class_support_fracs)
         call kill_nu_filter2D_stats(nu_stats)
     end subroutine cavger_apply_nonuniform2D

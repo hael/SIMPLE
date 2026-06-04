@@ -288,10 +288,9 @@ contains
         if( file_exists(avg_out)    ) call del_file(avg_out)
         if( file_exists(locres_out) ) call del_file(locres_out)
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; whole image'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: standalone mode uses the full active bank'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: standalone mode uses the full discrete bank'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: histogram-constrained Potts preserves raw label fractions'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: ordered support gate removes labels below 0.25% raw support'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete directly'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
@@ -313,7 +312,7 @@ contains
                 call avg_raw%add(odd)
                 call avg_raw%mul(0.5)
                 call nu_states(ithr)%apply(even, odd, avg_raw, avg_raw, avg_raw, even_nu, odd_nu, avg_nu, &
-                    &align_lp, include_aux=.false., locres_out=locres)
+                    &align_lp, locres_out=locres)
                 !$omp ordered
                 call odd_nu%write(odd_out, iptcl)
                 call even_nu%write(even_out, iptcl)
