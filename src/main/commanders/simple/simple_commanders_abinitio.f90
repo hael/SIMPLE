@@ -12,7 +12,7 @@ use simple_refine3D_fnames,      only: refine3D_startvol_fname, refine3D_startvo
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
-public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavg_sort, commander_abinitio3D, commander_multivol_assign
+public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_reject, commander_abinitio3D, commander_multivol_assign
 private
 #include "simple_local_flags.inc"
 
@@ -21,10 +21,10 @@ type, extends(commander_base) :: commander_abinitio3D_cavgs
     procedure :: execute => exec_abinitio3D_cavgs
 end type commander_abinitio3D_cavgs
 
-type, extends(commander_base) :: commander_abinitio3D_cavg_sort
+type, extends(commander_base) :: commander_abinitio3D_cavgs_reject
     contains
-    procedure :: execute => exec_abinitio3D_cavg_sort
-end type commander_abinitio3D_cavg_sort
+    procedure :: execute => exec_abinitio3D_cavgs_reject
+end type commander_abinitio3D_cavgs_reject
 
 type, extends(commander_base) :: commander_abinitio3D
     contains
@@ -430,17 +430,17 @@ contains
 
     end subroutine exec_abinitio3D_cavgs
 
-    !> sort class averages by consensus over restarted multi-state abinitio3D_cavgs runs
-    subroutine exec_abinitio3D_cavg_sort( self, cline )
+    !> reject class averages by consensus over restarted multi-state abinitio3D_cavgs runs
+    subroutine exec_abinitio3D_cavgs_reject( self, cline )
         use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_feature_table
         use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model
         use simple_cavg_quality_types,    only: cavg_quality_result
         use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
-        class(commander_abinitio3D_cavg_sort), intent(inout) :: self
+        class(commander_abinitio3D_cavgs_reject), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        character(len=*), parameter :: RESTART_DIR_FBODY = 'abinitio3D_cavg_sort_restart_'
-        character(len=*), parameter :: RESTART_DONE      = 'ABINITIO3D_CAVG_SORT_FINISHED'
-        character(len=*), parameter :: CONSENSUS_REPORT  = 'abinitio3D_cavg_sort_consensus.txt'
+        character(len=*), parameter :: RESTART_DIR_FBODY = 'abinitio3D_cavgs_reject_restart_'
+        character(len=*), parameter :: RESTART_DONE      = 'ABINITIO3D_CAVGS_REJECT_FINISHED'
+        character(len=*), parameter :: CONSENSUS_REPORT  = 'abinitio3D_cavgs_reject_consensus.txt'
         integer,          parameter :: DEFAULT_SORT_NSTATES = 2
         integer,          parameter :: MAX_SORT_NSTATES  = 3
         integer,          parameter :: SORT_NSTAGES      = 2
@@ -452,22 +452,22 @@ contains
         type(image), allocatable  :: cavg_imgs(:)
         type(string)              :: cwd, cwd_run, projbase, folder, restart_projfile, done_file
         type(string), allocatable :: restart_projfiles(:), done_files(:)
-        integer, allocatable      :: restart_labels(:,:), mapped_labels(:,:), consensus(:), final_states(:)
+        integer, allocatable      :: restart_labels(:,:), mapped_labels(:,:), consensus(:), final_states(:), selection_states(:)
         integer, allocatable      :: original_states(:), quality_auto_states(:), votes(:,:)
         real,    allocatable      :: quality_scores(:)
         integer                   :: ncls, irestart, sort_nstates
         if( cline%defined('part') )then
-            THROW_HARD('abinitio3D_cavg_sort is master-only; remove part from command line')
+            THROW_HARD('abinitio3D_cavgs_reject is master-only; remove part from command line')
         endif
         if( cline%defined('nstates') )then
             if( cline%get_iarg('nstates') < 2 .or. cline%get_iarg('nstates') > MAX_SORT_NSTATES )then
-                THROW_HARD('abinitio3D_cavg_sort supports nstates=2 or nstates=3')
+                THROW_HARD('abinitio3D_cavgs_reject supports nstates=2 or nstates=3')
             endif
         else
             call cline%set('nstates', DEFAULT_SORT_NSTATES)
         endif
         if( cline%defined('nstages') .and. cline%get_iarg('nstages') /= SORT_NSTAGES )then
-            THROW_HARD('abinitio3D_cavg_sort always runs abinitio3D_cavgs through nstages=2')
+            THROW_HARD('abinitio3D_cavgs_reject always runs abinitio3D_cavgs through nstages=2')
         endif
         call cline%set('nstages',  SORT_NSTAGES)
         call cline%set('pgrp',     'c1')
@@ -475,19 +475,21 @@ contains
         if( .not.cline%defined('nrestarts')     ) call cline%set('nrestarts', 3)
         if( .not.cline%defined('mkdir')         ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('quality_model') ) call cline%set('quality_model', CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+        if( .not.cline%defined('prune')         ) call cline%set('prune', 'no')
         call params%new(cline)
-        if( params%nrestarts < 1 ) THROW_HARD('abinitio3D_cavg_sort requires nrestarts >= 1')
+        if( params%nrestarts < 1 ) THROW_HARD('abinitio3D_cavgs_reject requires nrestarts >= 1')
         sort_nstates = params%nstates
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
-        if( ncls == 0 ) THROW_HARD('abinitio3D_cavg_sort: project has no cls2D entries')
+        if( ncls == 0 ) THROW_HARD('abinitio3D_cavgs_reject: project has no cls2D entries')
         original_states = spproj%os_cls2D%get_all_asint('state')
-        if( size(original_states) /= ncls ) THROW_HARD('abinitio3D_cavg_sort: invalid cls2D state array')
+        if( size(original_states) /= ncls ) THROW_HARD('abinitio3D_cavgs_reject: invalid cls2D state array')
         allocate(restart_labels(params%nrestarts,ncls), source=0)
         allocate(mapped_labels(params%nrestarts,ncls),  source=0)
         allocate(votes(sort_nstates,ncls),              source=0)
         allocate(consensus(ncls),                       source=0)
         allocate(final_states(ncls),                    source=0)
+        allocate(selection_states(ncls),                source=0)
         allocate(restart_projfiles(params%nrestarts))
         allocate(done_files(params%nrestarts))
         call init_quality_model
@@ -497,12 +499,15 @@ contains
         call map_state_correspondence
         call build_consensus
         call assign_good_bad_states
-        call spproj%map_cavgs_selection(final_states)
+        call build_selection_states
+        call write_selection_outputs
+        call spproj%map_cavgs_selection(selection_states)
         call annotate_project
+        if( trim(params%prune) == 'yes' ) call spproj%prune_particles
         call spproj%write(params%projfile)
         call write_consensus_report
         call cleanup
-        call simple_end('**** SIMPLE_ABINITIO3D_CAVG_SORT NORMAL STOP ****', &
+        call simple_end('**** SIMPLE_ABINITIO3D_CAVGS_REJECT NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
@@ -518,12 +523,16 @@ contains
 
         subroutine evaluate_quality
             cavg_imgs = read_cavgs_into_imgarr(spproj)
-            if( size(cavg_imgs) /= ncls ) THROW_HARD('abinitio3D_cavg_sort: # cavgs /= # cls2D entries')
+            if( size(cavg_imgs) /= ncls ) THROW_HARD('abinitio3D_cavgs_reject: # cavgs /= # cls2D entries')
             call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
             quality_scores      = quality%scores
             quality_auto_states = quality%states
-            write(logfhandle,'(A,A)') '>>> CAVG SORT QUALITY MODEL         : ', trim(model%name)
-            write(logfhandle,'(A,A)') '>>> CAVG SORT QUALITY MODEL CONTEXT : ', trim(model%context)
+            write(logfhandle,'(A,A)') '>>> CAVGS REJECT QUALITY MODEL         : ', trim(model%name)
+            write(logfhandle,'(A,A)') '>>> CAVGS REJECT QUALITY MODEL CONTEXT : ', trim(model%context)
+            write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVGS REJECT QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
+                quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
+            write(logfhandle,'(A,F8.3,A,L1)') '>>> CAVGS REJECT QUALITY SEPARATION / USED THRESHOLD : ', &
+                quality%separation, ' USED=', quality%used_threshold
         end subroutine evaluate_quality
 
         subroutine submit_restarts
@@ -563,7 +572,7 @@ contains
                 call simple_getcwd(cwd_run)
                 CWD_GLOB = cwd_run%to_char()
                 call qenv%exec_simple_prg_in_queue_async(cline_restart, &
-                    string('abinitio3D_cavg_sort_script'), string('abinitio3D_cavg_sort.log'))
+                    string('abinitio3D_cavgs_reject_script'), string('abinitio3D_cavgs_reject.log'))
                 call simple_chdir(cwd)
                 CWD_GLOB = cwd%to_char()
                 call cline_restart%kill
@@ -574,7 +583,7 @@ contains
             do irestart = 1, params%nrestarts
                 if( .not.file_exists(done_files(irestart)) )then
                     write(logfhandle,'(A,A)') '>>> MISSING RESTART COMPLETION MARKER: ', done_files(irestart)%to_char()
-                    THROW_HARD('abinitio3D_cavg_sort: one or more restarts did not finish')
+                    THROW_HARD('abinitio3D_cavgs_reject: one or more restarts did not finish')
                 endif
             enddo
         end subroutine submit_restarts
@@ -586,7 +595,7 @@ contains
                 if( restart_proj%os_cls3D%get_noris() /= ncls )then
                     write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> RESTART ', irestart, ' #CLS3D: ', &
                         restart_proj%os_cls3D%get_noris(), ' EXPECTED: ', ncls
-                    THROW_HARD('abinitio3D_cavg_sort: restart cls3D count mismatch')
+                    THROW_HARD('abinitio3D_cavgs_reject: restart cls3D count mismatch')
                 endif
                 restart_labels(irestart,:) = restart_proj%os_cls3D%get_all_asint('state')
                 call sanitize_restart_labels(irestart)
@@ -717,7 +726,7 @@ contains
                     good_consensus = label
                 endif
             enddo
-            if( good_consensus == 0 ) THROW_HARD('abinitio3D_cavg_sort: no active consensus classes')
+            if( good_consensus == 0 ) THROW_HARD('abinitio3D_cavgs_reject: no active consensus classes')
             do icls = 1, ncls
                 if( consensus(icls) == 0 )then
                     final_states(icls) = 0
@@ -727,10 +736,16 @@ contains
                     final_states(icls) = 2
                 endif
             enddo
-            write(logfhandle,'(A,I0)') '>>> CAVG SORT GOOD CONSENSUS STATE: ', good_consensus
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> CAVG SORT FINAL GOOD/BAD/INACTIVE: ', &
+            write(logfhandle,'(A,I0)') '>>> CAVGS REJECT GOOD CONSENSUS STATE: ', good_consensus
+            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> CAVGS REJECT FINAL GOOD/BAD/INACTIVE: ', &
                 count(final_states == 1), ' / ', count(final_states == 2), ' / ', count(final_states == 0)
         end subroutine assign_good_bad_states
+
+        subroutine build_selection_states
+            selection_states = merge(1, 0, final_states == 1)
+            write(logfhandle,'(A,I6,A,I6)') '>>> CAVGS REJECT SELECTED / REJECTED : ', &
+                count(selection_states > 0), ' / ', count(selection_states == 0)
+        end subroutine build_selection_states
 
         real function mean_quality_for_consensus( label, pop )
             integer, intent(in)  :: label
@@ -753,16 +768,16 @@ contains
             do icls = 1, ncls
                 max_vote = maxval(votes(1:sort_nstates,icls))
                 call spproj%os_cls2D%set(icls, 'quality',             quality_scores(icls))
-                call spproj%os_cls2D%set(icls, 'accept',              merge(1, 0, final_states(icls) == 1))
+                call spproj%os_cls2D%set(icls, 'accept',              selection_states(icls))
                 call spproj%os_cls2D%set(icls, 'quality_cluster',     quality%labels(icls))
-                call spproj%os_cls2D%set(icls, 'cavg_sort_consensus', consensus(icls))
-                call spproj%os_cls2D%set(icls, 'cavg_sort_votes',     max_vote)
+                call spproj%os_cls2D%set(icls, 'cavgs_reject_consensus', consensus(icls))
+                call spproj%os_cls2D%set(icls, 'cavgs_reject_votes',     max_vote)
                 if( ncls3d == ncls )then
                     call spproj%os_cls3D%set(icls, 'quality',             quality_scores(icls))
-                    call spproj%os_cls3D%set(icls, 'accept',              merge(1, 0, final_states(icls) == 1))
+                    call spproj%os_cls3D%set(icls, 'accept',              selection_states(icls))
                     call spproj%os_cls3D%set(icls, 'quality_cluster',     quality%labels(icls))
-                    call spproj%os_cls3D%set(icls, 'cavg_sort_consensus', consensus(icls))
-                    call spproj%os_cls3D%set(icls, 'cavg_sort_votes',     max_vote)
+                    call spproj%os_cls3D%set(icls, 'cavgs_reject_consensus', consensus(icls))
+                    call spproj%os_cls3D%set(icls, 'cavgs_reject_votes',     max_vote)
                 endif
             enddo
         end subroutine annotate_project
@@ -770,12 +785,12 @@ contains
         subroutine write_consensus_report
             integer :: funit, icls, label
             open(newunit=funit, file=CONSENSUS_REPORT, status='replace', action='write')
-            write(funit,'(A)') '# abinitio3D_cavg_sort consensus report'
+            write(funit,'(A)') '# abinitio3D_cavgs_reject consensus report'
             write(funit,'(A,I0)') '# nrestarts=', params%nrestarts
             write(funit,'(A,I0)') '# nstates=', sort_nstates
             write(funit,'(A,I0)') '# nstages=', SORT_NSTAGES
             write(funit,'(A,A)') '# quality_model=', trim(model%name)
-            write(funit,'(A)', advance='no') 'class,original_state,consensus_state,final_state'
+            write(funit,'(A)', advance='no') 'class,original_state,consensus_state,final_state,selection_state'
             do label = 1, sort_nstates
                 write(funit,'(A,I0)', advance='no') ',votes_state_', label
             enddo
@@ -788,8 +803,8 @@ contains
             enddo
             write(funit,*)
             do icls = 1, ncls
-                write(funit,'(I0,A,I0,A,I0,A,I0)', advance='no') &
-                    icls, ',', original_states(icls), ',', consensus(icls), ',', final_states(icls)
+                write(funit,'(I0,A,I0,A,I0,A,I0,A,I0)', advance='no') &
+                    icls, ',', original_states(icls), ',', consensus(icls), ',', final_states(icls), ',', selection_states(icls)
                 do label = 1, sort_nstates
                     write(funit,'(A,I0)', advance='no') ',', votes(label,icls)
                 enddo
@@ -804,9 +819,29 @@ contains
             enddo
             close(funit)
             write(logfhandle,'(A,A)') '>>> WROTE ', CONSENSUS_REPORT
-            call write_cavg_quality_feature_table(quality, model, 'abinitio3D_cavg_sort_quality_features.txt', &
-                params%projfile%to_char())
         end subroutine write_consensus_report
+
+        subroutine write_selection_outputs
+            call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
+                params%projfile%to_char(), manual_states=selection_states)
+            call write_rejection_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
+            call write_rejection_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
+        end subroutine write_selection_outputs
+
+        subroutine write_rejection_stack( fname, selected )
+            type(string), intent(in) :: fname
+            logical,      intent(in) :: selected
+            integer :: icls, istk
+            if( file_exists(fname) ) call del_file(fname)
+            istk = 0
+            do icls = 1, ncls
+                if( selected .eqv. (selection_states(icls) > 0) )then
+                    istk = istk + 1
+                    call cavg_imgs(icls)%write(fname, istk)
+                endif
+            enddo
+            write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+        end subroutine write_rejection_stack
 
         subroutine cleanup
             call spproj%kill
@@ -817,6 +852,7 @@ contains
             if( allocated(mapped_labels)       ) deallocate(mapped_labels)
             if( allocated(consensus)           ) deallocate(consensus)
             if( allocated(final_states)        ) deallocate(final_states)
+            if( allocated(selection_states)    ) deallocate(selection_states)
             if( allocated(original_states)     ) deallocate(original_states)
             if( allocated(quality_auto_states) ) deallocate(quality_auto_states)
             if( allocated(quality_scores)      ) deallocate(quality_scores)
@@ -825,7 +861,7 @@ contains
             if( allocated(done_files)          ) deallocate(done_files)
         end subroutine cleanup
 
-    end subroutine exec_abinitio3D_cavg_sort
+    end subroutine exec_abinitio3D_cavgs_reject
 
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio3D( self, cline )
