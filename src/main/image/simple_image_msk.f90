@@ -332,12 +332,13 @@ contains
         type(image_bin)    :: img_bin
         real, allocatable  :: ccsizes(:)
         integer :: loc, ldim(3)
-        real    :: smpd, xyz(3)
+        real    :: smpd, xyz(3), mskrad
         logical :: l_spherical_fallback
         l_spherical_fallback = .true.
         if( present(l_fallback_spherical) ) l_spherical_fallback = l_fallback_spherical
         ldim = img%get_ldim()
         smpd = img%get_smpd()
+        mskrad = automask2D_mskrad(params, ldim)
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
         call img_bin%copy(img)
         call bin_mask%new_bimg(ldim, smpd, wthreads=.false.)
@@ -349,7 +350,7 @@ contains
         ! filter with non-local means
         call img_bin%NLmean2D
         ! binarize with Otsu
-        call otsu_img(img_bin, mskrad=params%msk, positive=trim(params%automsk).eq.'tight')
+        call otsu_img(img_bin, mskrad=mskrad, positive=trim(params%automsk).eq.'tight')
         call img_bin%masscen(xyz)
         shift = xyz(:2)
         call img_bin%set_imat
@@ -361,17 +362,22 @@ contains
         loc     = maxloc(ccsizes,dim=1)
         ! estimate its diameter
         call bin_mask%diameter_cc(loc, diam)
-        if( diam <= TINY .or. diam > 2.*(params%msk+real(ngrow))*smpd )then
+        if( diam <= TINY )then
             shift = 0.
             if( l_spherical_fallback )then
-                ! incorrect component was chosen, fall back on spherical mask
-                diam  = 2.*max(1., params%msk-real(edge)-COSMSKHALFWIDTH)*smpd
+                diam  = 2.*max(1., mskrad-real(edge)-COSMSKHALFWIDTH)*smpd
                 call bin_mask%disc(ldim, smpd, diam/(2.*smpd))
                 call bin_mask%set_imat
             else
                 diam = 0.
                 call bin_mask%new_bimg(ldim, smpd, wthreads=.false.)
             endif
+        else if( l_spherical_fallback .and. diam > 2.*(mskrad+real(ngrow))*smpd )then
+            ! incorrect component was chosen, fall back on circular support
+            shift = 0.
+            diam  = 2.*max(1., mskrad-real(edge)-COSMSKHALFWIDTH)*smpd
+            call bin_mask%disc(ldim, smpd, diam/(2.*smpd))
+            call bin_mask%set_imat
         else
             ! turn it into a binary image for mask creation
             call bin_mask%cc2bin(loc)
@@ -388,6 +394,19 @@ contains
         call img_bin%kill_bimg
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask2D_binary_one
+
+    real function automask2D_mskrad( params, ldim )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: ldim(3)
+        real :: max_mskrad
+        max_mskrad = max(1., real(ldim(1)) / 2. - COSMSKHALFWIDTH - 1.)
+        automask2D_mskrad = params%msk
+        if( params%box_crop > 0 .and. ldim(1) == params%box_crop .and. params%msk_crop > TINY )then
+            automask2D_mskrad = params%msk_crop
+        endif
+        if( automask2D_mskrad <= TINY ) automask2D_mskrad = max_mskrad
+        automask2D_mskrad = min(automask2D_mskrad, max_mskrad)
+    end function automask2D_mskrad
 
     subroutine binary_imat_to_pix( imat, pix )
         integer, intent(in) :: imat(:,:,:)
