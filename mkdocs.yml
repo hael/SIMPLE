@@ -5,10 +5,13 @@ repo_url: https://github.com/hael/SIMPLE
 repo_name: hael/SIMPLE
 docs_dir: doc
 site_dir: site
-use_directory_urls: true
+use_directory_urls: false
+
+exclude_docs: |
+  for_developers/ideas/
 
 theme:
-  name: readthedocs
+  name: material
   highlightjs: true
 
 markdown_extensions:
