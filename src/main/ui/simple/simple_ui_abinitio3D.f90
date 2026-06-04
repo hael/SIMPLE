@@ -152,7 +152,7 @@ contains
         &'abinitio3D_cavgs_reject',&                                                                  ! name
         &'Consensus rejection of class averages by restarted multi-state ab initio 3D',&           ! descr_short
         &'runs multiple short two- or three-state abinitio3D_cavgs restarts, builds a consensus state label, &
-        &and rejects class averages outside the quality-best consensus state',&                    ! descr_long
+        &rejects class averages outside the quality-best consensus state, and writes a docked consensus volume',& ! descr_long
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,quality,compute")             ! GUI

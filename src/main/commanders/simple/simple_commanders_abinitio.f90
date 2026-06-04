@@ -440,10 +440,16 @@ contains
         class(cmdline),                         intent(inout) :: cline
         character(len=*), parameter :: RESTART_DIR_FBODY = 'abinitio3D_cavgs_reject_restart_'
         character(len=*), parameter :: RESTART_DONE      = 'ABINITIO3D_CAVGS_REJECT_FINISHED'
+        character(len=*), parameter :: DOCK_DIR_FBODY    = 'abinitio3D_cavgs_reject_dock_'
+        character(len=*), parameter :: DOCK_DONE         = 'ABINITIO3D_CAVGS_REJECT_DOCK_FINISHED'
+        character(len=*), parameter :: CONSENSUS_VOL     = 'abinitio3D_cavgs_reject_consensus_vol.mrc'
         character(len=*), parameter :: CONSENSUS_REPORT  = 'abinitio3D_cavgs_reject_consensus.txt'
+        character(len=*), parameter :: CONSENSUS_VOL_REPORT = 'abinitio3D_cavgs_reject_consensus_volume.txt'
         integer,          parameter :: DEFAULT_SORT_NSTATES = 2
         integer,          parameter :: MAX_SORT_NSTATES  = 3
         integer,          parameter :: SORT_NSTAGES      = 2
+        real,             parameter :: DEFAULT_DOCK_HP   = 100.0
+        real,             parameter :: DEFAULT_DOCK_LP   = 15.0
         type(parameters)          :: params
         type(qsys_env)            :: qenv
         type(sp_project)          :: spproj, restart_proj
@@ -451,11 +457,14 @@ contains
         type(cavg_quality_result) :: quality
         type(image), allocatable  :: cavg_imgs(:)
         type(string)              :: cwd, cwd_run, projbase, folder, restart_projfile, done_file
-        type(string), allocatable :: restart_projfiles(:), done_files(:)
-        integer, allocatable      :: restart_labels(:,:), mapped_labels(:,:), consensus(:), final_states(:), selection_states(:)
+        type(string), allocatable :: restart_projfiles(:), done_files(:), selected_vols(:), docked_vols(:), dock_reports(:)
+        integer, allocatable      :: restart_labels(:,:), mapped_labels(:,:), state_maps(:,:)
+        integer, allocatable      :: consensus(:), final_states(:), selection_states(:)
         integer, allocatable      :: original_states(:), quality_auto_states(:), votes(:,:)
-        real,    allocatable      :: quality_scores(:)
-        integer                   :: ncls, irestart, sort_nstates
+        integer, allocatable      :: restart_good_state(:), restart_good_pop(:)
+        real,    allocatable      :: quality_scores(:), restart_good_scores(:)
+        integer                   :: ncls, irestart, sort_nstates, good_consensus, ref_restart, consensus_ldim(3)
+        real                      :: consensus_smpd, dock_lp
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavgs_reject is master-only; remove part from command line')
         endif
@@ -472,13 +481,20 @@ contains
         call cline%set('nstages',  SORT_NSTAGES)
         call cline%set('pgrp',     'c1')
         call cline%delete('pgrp_start')
+        if( .not.cline%defined('lpstart')       ) call cline%set('lpstart', abinitio_lpstart_ini3D())
+        if( .not.cline%defined('lpstop')        ) call cline%set('lpstop',   abinitio_lpstop_ini3D())
         if( .not.cline%defined('nrestarts')     ) call cline%set('nrestarts', 3)
         if( .not.cline%defined('mkdir')         ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('quality_model') ) call cline%set('quality_model', CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         if( .not.cline%defined('prune')         ) call cline%set('prune', 'no')
         call params%new(cline)
         if( params%nrestarts < 1 ) THROW_HARD('abinitio3D_cavgs_reject requires nrestarts >= 1')
-        sort_nstates = params%nstates
+        sort_nstates  = params%nstates
+        good_consensus = 0
+        ref_restart    = 0
+        consensus_ldim = 0
+        consensus_smpd = 0.0
+        dock_lp = DEFAULT_DOCK_LP
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('abinitio3D_cavgs_reject: project has no cls2D entries')
@@ -486,12 +502,19 @@ contains
         if( size(original_states) /= ncls ) THROW_HARD('abinitio3D_cavgs_reject: invalid cls2D state array')
         allocate(restart_labels(params%nrestarts,ncls), source=0)
         allocate(mapped_labels(params%nrestarts,ncls),  source=0)
+        allocate(state_maps(params%nrestarts,sort_nstates), source=0)
         allocate(votes(sort_nstates,ncls),              source=0)
         allocate(consensus(ncls),                       source=0)
         allocate(final_states(ncls),                    source=0)
         allocate(selection_states(ncls),                source=0)
+        allocate(restart_good_state(params%nrestarts),  source=0)
+        allocate(restart_good_pop(params%nrestarts),    source=0)
+        allocate(restart_good_scores(params%nrestarts), source=0.0)
         allocate(restart_projfiles(params%nrestarts))
         allocate(done_files(params%nrestarts))
+        allocate(selected_vols(params%nrestarts))
+        allocate(docked_vols(params%nrestarts))
+        allocate(dock_reports(params%nrestarts))
         call init_quality_model
         call evaluate_quality
         call submit_restarts
@@ -503,9 +526,11 @@ contains
         call write_selection_outputs
         call spproj%map_cavgs_selection(selection_states)
         call annotate_project
+        call build_consensus_volume
         if( trim(params%prune) == 'yes' ) call spproj%prune_particles
         call spproj%write(params%projfile)
         call write_consensus_report
+        call write_consensus_volume_report
         call cleanup
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS_REJECT NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
@@ -618,8 +643,12 @@ contains
         subroutine map_state_correspondence
             integer :: best_map(MAX_SORT_NSTATES), best_score, icls, label
             mapped_labels(1,:) = restart_labels(1,:)
+            do label = 1, sort_nstates
+                state_maps(1,label) = label
+            enddo
             do irestart = 2, params%nrestarts
                 call best_state_mapping(irestart, best_map, best_score)
+                state_maps(irestart,:) = best_map(1:sort_nstates)
                 do icls = 1, ncls
                     label = restart_labels(irestart,icls)
                     if( label < 1 )then
@@ -711,7 +740,7 @@ contains
         end subroutine build_consensus
 
         subroutine assign_good_bad_states
-            integer :: good_consensus, icls, label, pops(MAX_SORT_NSTATES)
+            integer :: icls, label, pops(MAX_SORT_NSTATES)
             real    :: means(MAX_SORT_NSTATES), best_mean
             pops           = 0
             means          = 0.0
@@ -747,6 +776,159 @@ contains
                 count(selection_states > 0), ' / ', count(selection_states == 0)
         end subroutine build_selection_states
 
+        subroutine build_consensus_volume
+            call select_restart_consensus_volumes
+            call dock_consensus_volumes
+            call average_consensus_volume
+        end subroutine build_consensus_volume
+
+        subroutine select_restart_consensus_volumes
+            type(image)  :: vol_probe
+            type(string) :: restart_dir, vol_name
+            real    :: best_score
+            integer :: raw_state
+            call simple_getcwd(cwd)
+            CWD_GLOB = cwd%to_char()
+            best_score = -huge(0.0)
+            do irestart = 1, params%nrestarts
+                raw_state = raw_state_for_consensus(irestart, good_consensus)
+                if( raw_state == 0 )then
+                    write(logfhandle,'(A,I0,A,I0)') '>>> RESTART ', irestart, &
+                        ' HAS NO RAW STATE FOR CONSENSUS STATE ', good_consensus
+                    THROW_HARD('abinitio3D_cavgs_reject: cannot identify restart consensus volume')
+                endif
+                restart_good_state(irestart)  = raw_state
+                restart_good_scores(irestart) = mean_quality_for_restart_consensus(irestart, &
+                    good_consensus, restart_good_pop(irestart))
+                restart_dir = RESTART_DIR_FBODY//int2str_pad(irestart, 3)
+                vol_name    = filepath(cwd, restart_dir, refine3D_state_vol_fname(raw_state))
+                if( .not.file_exists(vol_name) )then
+                    write(logfhandle,'(A,A)') '>>> MISSING RESTART CONSENSUS VOLUME: ', vol_name%to_char()
+                    THROW_HARD('abinitio3D_cavgs_reject: selected restart volume missing')
+                endif
+                selected_vols(irestart) = vol_name
+                if( restart_good_pop(irestart) > 0 .and. &
+                    (ref_restart == 0 .or. restart_good_scores(irestart) > best_score) )then
+                    ref_restart = irestart
+                    best_score  = restart_good_scores(irestart)
+                endif
+                write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.3,A,I0)') '>>> RESTART CONSENSUS VOLUME: ', &
+                    irestart, ' RAW_STATE=', raw_state, ' CONSENSUS_STATE=', good_consensus, &
+                    ' QUALITY_MEAN=', restart_good_scores(irestart), ' POP=', restart_good_pop(irestart)
+            enddo
+            if( ref_restart == 0 ) THROW_HARD('abinitio3D_cavgs_reject: no restart consensus volume selected')
+            call vol_probe%read(selected_vols(ref_restart))
+            consensus_ldim = vol_probe%get_ldim()
+            consensus_smpd = vol_probe%get_smpd()
+            if( consensus_smpd <= 0.0 ) consensus_smpd = params%smpd
+            call vol_probe%kill
+            write(logfhandle,'(A,I0,A,F8.3,A,I0)') &
+                '>>> CAVGS REJECT CONSENSUS VOLUME REFERENCE RESTART: ', ref_restart, &
+                ' QUALITY_MEAN=', best_score, ' RAW_STATE=', restart_good_state(ref_restart)
+        end subroutine select_restart_consensus_volumes
+
+        subroutine dock_consensus_volumes
+            type(cmdline) :: cline_dock
+            type(string), allocatable :: dock_wait_files(:)
+            type(string) :: dock_out, dock_report, dock_done_path
+            integer :: ndock, idock
+            ndock = params%nrestarts - 1
+            if( ndock > 0 ) allocate(dock_wait_files(ndock))
+            idock = 0
+            do irestart = 1, params%nrestarts
+                if( irestart == ref_restart )then
+                    docked_vols(irestart)  = selected_vols(irestart)
+                    dock_reports(irestart) = 'reference'
+                    cycle
+                endif
+                folder      = DOCK_DIR_FBODY//int2str_pad(irestart, 3)
+                dock_out    = 'consensus_docked_restart_'//int2str_pad(irestart, 3)//MRC_EXT
+                dock_report = 'consensus_dock_restart_'//int2str_pad(irestart, 3)//TXT_EXT
+                dock_done_path = filepath(folder, string(DOCK_DONE))
+                call simple_mkdir(folder)
+                if( file_exists(dock_done_path) ) call del_file(dock_done_path)
+                docked_vols(irestart)  = filepath(cwd, folder, dock_out)
+                dock_reports(irestart) = filepath(cwd, folder, dock_report)
+                if( file_exists(docked_vols(irestart)) ) call del_file(docked_vols(irestart))
+                idock = idock + 1
+                dock_wait_files(idock) = filepath(cwd, folder, string(DOCK_DONE))
+                call cline_dock%kill
+                call cline_dock%set('prg',                'dock_volpair')
+                call cline_dock%set('vol1',               selected_vols(ref_restart))
+                call cline_dock%set('vol2',               selected_vols(irestart))
+                call cline_dock%set('outvol',             dock_out)
+                call cline_dock%set('outfile',            dock_report)
+                call cline_dock%set('smpd',               consensus_smpd)
+                call cline_dock%set('hp',                 DEFAULT_DOCK_HP)
+                call cline_dock%set('lp',                 dock_lp)
+                call cline_dock%set('mskdiam',            params%mskdiam)
+                call cline_dock%set('nthr',               params%nthr)
+                call cline_dock%set('mkdir',              'no')
+                call cline_dock%set('verbose_exit',       'yes')
+                call cline_dock%set('verbose_exit_fname', DOCK_DONE)
+                call simple_chdir(folder)
+                call simple_getcwd(cwd_run)
+                CWD_GLOB = cwd_run%to_char()
+                call qenv%exec_simple_prg_in_queue_async(cline_dock, &
+                    string('abinitio3D_cavgs_reject_dock_script'), string('abinitio3D_cavgs_reject_dock.log'))
+                call simple_chdir(cwd)
+                CWD_GLOB = cwd%to_char()
+                write(logfhandle,'(A,I0,A,A,A,F8.3,A,F8.1)') '>>> SUBMITTED CONSENSUS VOLUME DOCK ', &
+                    irestart, ' IN ', folder%to_char(), ' LP=', dock_lp, ' HP=', DEFAULT_DOCK_HP
+            enddo
+            call cline_dock%kill
+            if( ndock > 0 )then
+                call qsys_watcher_diag(dock_wait_files)
+                do idock = 1, ndock
+                    if( .not.file_exists(dock_wait_files(idock)) )then
+                        write(logfhandle,'(A,A)') '>>> MISSING DOCK COMPLETION MARKER: ', &
+                            dock_wait_files(idock)%to_char()
+                        THROW_HARD('abinitio3D_cavgs_reject: one or more volume docks did not finish')
+                    endif
+                enddo
+            endif
+            do irestart = 1, params%nrestarts
+                if( .not.file_exists(docked_vols(irestart)) )then
+                    write(logfhandle,'(A,A)') '>>> MISSING DOCKED CONSENSUS VOLUME: ', &
+                        docked_vols(irestart)%to_char()
+                    THROW_HARD('abinitio3D_cavgs_reject: docked consensus volume missing')
+                endif
+            enddo
+            if( allocated(dock_wait_files) ) deallocate(dock_wait_files)
+        end subroutine dock_consensus_volumes
+
+        subroutine average_consensus_volume
+            type(image) :: avg_vol, add_vol
+            integer :: ldim_here(3)
+            real    :: smpd_here
+            call avg_vol%read(docked_vols(ref_restart))
+            do irestart = 1, params%nrestarts
+                if( irestart == ref_restart ) cycle
+                call add_vol%kill
+                call add_vol%read(docked_vols(irestart))
+                ldim_here = add_vol%get_ldim()
+                if( any(ldim_here /= consensus_ldim) )then
+                    write(logfhandle,'(A,A)') '>>> NONCONFORMING DOCKED VOLUME: ', &
+                        docked_vols(irestart)%to_char()
+                    THROW_HARD('abinitio3D_cavgs_reject: docked volumes have inconsistent dimensions')
+                endif
+                smpd_here = add_vol%get_smpd()
+                if( smpd_here > 0.0 .and. abs(smpd_here - consensus_smpd) > 1.0e-4 )then
+                    write(logfhandle,'(A,A)') '>>> NONCONFORMING DOCKED VOLUME SAMPLING: ', &
+                        docked_vols(irestart)%to_char()
+                    THROW_HARD('abinitio3D_cavgs_reject: docked volumes have inconsistent sampling')
+                endif
+                call avg_vol%add(add_vol)
+            enddo
+            call avg_vol%div(real(params%nrestarts))
+            call avg_vol%write(string(CONSENSUS_VOL), del_if_exists=.true.)
+            call spproj%add_vol2os_out(string(CONSENSUS_VOL), consensus_smpd, 1, 'vol_cavg', &
+                box=consensus_ldim(1))
+            write(logfhandle,'(A,A)') '>>> WROTE CAVGS REJECT CONSENSUS VOLUME: ', CONSENSUS_VOL
+            call avg_vol%kill
+            call add_vol%kill
+        end subroutine average_consensus_volume
+
         real function mean_quality_for_consensus( label, pop )
             integer, intent(in)  :: label
             integer, intent(out) :: pop
@@ -761,6 +943,34 @@ contains
             enddo
             if( pop > 0 ) mean_quality_for_consensus = mean_quality_for_consensus / real(pop)
         end function mean_quality_for_consensus
+
+        real function mean_quality_for_restart_consensus( restart_ind, label, pop )
+            integer, intent(in)  :: restart_ind, label
+            integer, intent(out) :: pop
+            integer :: icls
+            mean_quality_for_restart_consensus = 0.0
+            pop = 0
+            do icls = 1, ncls
+                if( mapped_labels(restart_ind,icls) /= label ) cycle
+                if( original_states(icls) <= 0 ) cycle
+                pop = pop + 1
+                mean_quality_for_restart_consensus = mean_quality_for_restart_consensus + quality_scores(icls)
+            enddo
+            if( pop > 0 ) mean_quality_for_restart_consensus = &
+                mean_quality_for_restart_consensus / real(pop)
+        end function mean_quality_for_restart_consensus
+
+        integer function raw_state_for_consensus( restart_ind, label )
+            integer, intent(in) :: restart_ind, label
+            integer :: raw_state
+            raw_state_for_consensus = 0
+            do raw_state = 1, sort_nstates
+                if( state_maps(restart_ind,raw_state) == label )then
+                    raw_state_for_consensus = raw_state
+                    return
+                endif
+            enddo
+        end function raw_state_for_consensus
 
         subroutine annotate_project
             integer :: icls, ncls3d, max_vote
@@ -821,6 +1031,36 @@ contains
             write(logfhandle,'(A,A)') '>>> WROTE ', CONSENSUS_REPORT
         end subroutine write_consensus_report
 
+        subroutine write_consensus_volume_report
+            integer :: funit
+            open(newunit=funit, file=CONSENSUS_VOL_REPORT, status='replace', action='write')
+            write(funit,'(A)') '# abinitio3D_cavgs_reject consensus volume report'
+            write(funit,'(A,A)') '# consensus_volume=', CONSENSUS_VOL
+            write(funit,'(A,I0)') '# reference_restart=', ref_restart
+            write(funit,'(A,I0)') '# good_consensus_state=', good_consensus
+            write(funit,'(A,I0)') '# box=', consensus_ldim(1)
+            write(funit,'(A,F10.5)') '# smpd=', consensus_smpd
+            write(funit,'(A,F8.3)') '# dock_lp=', dock_lp
+            write(funit,'(A,F8.3)') '# dock_hp=', DEFAULT_DOCK_HP
+            write(funit,'(A,A)') &
+                'restart,raw_state,mapped_consensus_state,state_pop,state_quality_mean,role,', &
+                'selected_volume,docked_volume,dock_report'
+            do irestart = 1, params%nrestarts
+                write(funit,'(I0,A,I0,A,I0,A,I0,A,ES14.6,A)', advance='no') &
+                    irestart, ',', restart_good_state(irestart), ',', good_consensus, ',', &
+                    restart_good_pop(irestart), ',', restart_good_scores(irestart), ','
+                if( irestart == ref_restart )then
+                    write(funit,'(A)', advance='no') 'reference'
+                else
+                    write(funit,'(A)', advance='no') 'docked'
+                endif
+                write(funit,'(A,A,A,A,A,A)') ',', selected_vols(irestart)%to_char(), ',', &
+                    docked_vols(irestart)%to_char(), ',', dock_reports(irestart)%to_char()
+            enddo
+            close(funit)
+            write(logfhandle,'(A,A)') '>>> WROTE ', CONSENSUS_VOL_REPORT
+        end subroutine write_consensus_volume_report
+
         subroutine write_selection_outputs
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
                 params%projfile%to_char(), manual_states=selection_states)
@@ -850,6 +1090,7 @@ contains
             call dealloc_imgarr(cavg_imgs)
             if( allocated(restart_labels)      ) deallocate(restart_labels)
             if( allocated(mapped_labels)       ) deallocate(mapped_labels)
+            if( allocated(state_maps)          ) deallocate(state_maps)
             if( allocated(consensus)           ) deallocate(consensus)
             if( allocated(final_states)        ) deallocate(final_states)
             if( allocated(selection_states)    ) deallocate(selection_states)
@@ -857,8 +1098,14 @@ contains
             if( allocated(quality_auto_states) ) deallocate(quality_auto_states)
             if( allocated(quality_scores)      ) deallocate(quality_scores)
             if( allocated(votes)               ) deallocate(votes)
+            if( allocated(restart_good_state)  ) deallocate(restart_good_state)
+            if( allocated(restart_good_pop)    ) deallocate(restart_good_pop)
+            if( allocated(restart_good_scores) ) deallocate(restart_good_scores)
             if( allocated(restart_projfiles)   ) deallocate(restart_projfiles)
             if( allocated(done_files)          ) deallocate(done_files)
+            if( allocated(selected_vols)       ) deallocate(selected_vols)
+            if( allocated(docked_vols)         ) deallocate(docked_vols)
+            if( allocated(dock_reports)        ) deallocate(dock_reports)
         end subroutine cleanup
 
     end subroutine exec_abinitio3D_cavgs_reject

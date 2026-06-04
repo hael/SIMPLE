@@ -3,7 +3,9 @@
 This document records the current policy for `abinitio3D_cavgs`, the
 class-average route for generating an initial 3D model. It is separate from
 the particle-based [abinitio3D_policy.md](abinitio3D_policy.md) policy and
-from the base [refine3D_policy.md](refine3D_policy.md) policy.
+from the base [refine3D_policy.md](refine3D_policy.md) policy. The restarted
+consensus rejection wrapper is documented in
+[abinitio3D_cavgs_reject_policy.md](abinitio3D_cavgs_reject_policy.md).
 
 ## 1. Scope
 

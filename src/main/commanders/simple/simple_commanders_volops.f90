@@ -566,15 +566,37 @@ contains
         type(dock_vols)  :: dvols
         type(parameters) :: params
         type(string)     :: fn_vol_docked
+        real             :: eul(3), shift(3), cc
+        integer          :: funit
+        logical          :: l_verbose_exit
         call params%new(cline)
-        fn_vol_docked = get_fbody(params%vols(2),'mrc')//'_docked.mrc'
+        if( cline%defined('outvol') )then
+            fn_vol_docked = params%outvol
+        else
+            fn_vol_docked = get_fbody(params%vols(2),'mrc')//'_docked.mrc'
+        endif
         call dvols%new(params%vols(1), params%vols(2), params%smpd, params%hp, params%lp, params%mskdiam)
         call dvols%srch()
+        call dvols%get_dock_info(eul, shift, cc)
         call dvols%rotate_target(params%vols(2), fn_vol_docked)
+        if( cline%defined('outfile') )then
+            open(newunit=funit, file=params%outfile%to_char(), status='replace', action='write')
+            write(funit,'(A)') '# dock_volpair report'
+            write(funit,'(A,A)') '# vol1=', params%vols(1)%to_char()
+            write(funit,'(A,A)') '# vol2=', params%vols(2)%to_char()
+            write(funit,'(A,A)') '# outvol=', fn_vol_docked%to_char()
+            write(funit,'(A,ES14.6)') 'cc=', cc
+            write(funit,'(A,3(ES14.6,1X))') 'euler=', eul
+            write(funit,'(A,3(ES14.6,1X))') 'shift=', shift
+            close(funit)
+        endif
+        write(logfhandle,'(A,A)') '>>> DOCKED VOLUME WRITTEN: ', fn_vol_docked%to_char()
         ! cleanup
         call dvols%kill()
         ! end gracefully
-        call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
+        l_verbose_exit = cline%defined('verbose_exit_fname') .and. trim(params%verbose_exit).eq.'yes'
+        call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****', &
+            verbose_exit=l_verbose_exit, verbose_exit_fname=params%verbose_exit_fname)
     end subroutine exec_dock_volpair
 
     !> for identification of the principal symmetry axis
