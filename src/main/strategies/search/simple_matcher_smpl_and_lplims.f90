@@ -208,8 +208,6 @@ contains
         if( params%l_nonuniform_lpset )then
             params%l_lpset = .true.
             call cline%set('lp', params%lp)
-            write(logfhandle,'(A,F8.3,A)') &
-                &'>>> 2D NU filter promoted matching low-pass to command line: ', params%lp, ' A'
         endif
         ! update low-pas limit in project
         call build%spproj_field%set_all2single('lp',lplim)

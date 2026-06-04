@@ -4,7 +4,7 @@ use simple_imgarr_utils,     only: alloc_imgarr, dealloc_imgarr
 use simple_strategy2D_utils, only: calc_cavg_offset
 use simple_gridding,         only: prep2D_inv_instrfun4mul
 use simple_image_msk,        only: automask2D_support_pix
-use simple_nu_filter2D,      only: nu_filter2D_state
+use simple_nu_filter2D,      only: nu_filter2D_state, print_nu_filter2D_policy
 use simple_nu_filter2D_stats, only: nu_filter2D_stats, merge_nu_filter2D_stats, print_nu_filter2D_stats, &
     &kill_nu_filter2D_stats
 implicit none
@@ -587,20 +587,7 @@ contains
         real,    allocatable :: class_align_lps(:), class_support_fracs(:)
         integer :: icls, pop, ithr
         real    :: align_lp
-        write(logfhandle,'(A)') &
-            &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
-        write(logfhandle,'(A)') &
-            &'>>> 2D nonuniform filter: automask defines foreground/background histogram regions'
-        write(logfhandle,'(A)') &
-            &'>>> 2D nonuniform filter: automask failure uses the lowest-resolution filter for all pixels'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete over the whole image'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: foreground/background log-odds prior uses raw label histograms'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: background histogram is biased to the lowest-resolution label'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: foreground Potts weight is mildly boosted inside automask support'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
+        call print_nu_filter2D_policy()
         allocate(nu_states(nthr_glob))
         allocate(class_align_lps(ncls), source=0.)
         allocate(class_support_fracs(ncls), source=0.)

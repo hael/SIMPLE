@@ -7,7 +7,7 @@ use simple_nu_filter2D_stats, only: NU2D_LABEL_KIND, nu_filter2D_stats, init_nu_
     &kill_nu_filter2D_stats, count_nu_filter2D_labels, accumulate_nu_filter2D_stats
 implicit none
 
-public :: nu_filter2D_state
+public :: nu_filter2D_state, print_nu_filter2D_policy
 private
 #include "simple_local_flags.inc"
 
@@ -51,6 +51,38 @@ contains
 end type nu_filter2D_state
 
 contains
+
+    subroutine print_nu_filter2D_policy()
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: all bank members compete over the whole image'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: automask only defines foreground/background Potts regions'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: automask failure filters every pixel with the lowest-resolution bank member'
+        write(logfhandle,'(A,F4.1,A,F4.1,A)') &
+            &'>>> 2D nonuniform filter: objective smoothing radius = ', &
+            &NU2D_OBJECTIVE_SMOOTH_AWF * NU2D_OBJECTIVE_SMOOTH_RADIUS_FRAC, &
+            &' * max(LP,smpd), capped at ', NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A, ' A'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: foreground/background log-odds prior uses raw label histograms'
+        write(logfhandle,'(A,F4.2,A,F4.2)') &
+            &'>>> 2D nonuniform filter: log-odds prior scale = ', NU2D_REGION_LOGODDS_BETA_FRAC, &
+            &' * Potts beta; pseudocount = ', NU2D_REGION_PRIOR_PSEUDOCOUNT
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: background histogram target is the lowest-resolution label'
+        write(logfhandle,'(A,F4.2,A,F4.2)') &
+            &'>>> 2D nonuniform filter: Potts beta scale foreground/background = ', &
+            &NU2D_FOREGROUND_POTTS_BETA_SCALE, '/', NU2D_BACKGROUND_POTTS_BETA_SCALE
+        write(logfhandle,'(A,I0,A)') &
+            &'>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods; weak step <= ', &
+            &NU2D_LABEL_SMOOTH_ADJACENT_STEPS, ' label coordinate'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
+        write(logfhandle,'(A,F4.1,A)') &
+            &'>>> 2D nonuniform filter: output blends bank members over a ', &
+            &NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A, ' A tent-smoothed label field'
+    end subroutine print_nu_filter2D_policy
 
     subroutine setup_nu_filter2D( self, ldim_in, smpd_in )
         class(nu_filter2D_state), intent(inout) :: self

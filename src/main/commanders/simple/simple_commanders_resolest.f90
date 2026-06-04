@@ -260,7 +260,8 @@ contains
     end subroutine exec_nu_filt3D
 
     subroutine exec_nu_filt2D(self, cline)
-        use simple_nu_filter2D, only: nu_filter2D_state
+        use simple_image_msk,   only: automask2D_support_pix
+        use simple_nu_filter2D, only: nu_filter2D_state, print_nu_filter2D_policy
         use simple_nu_filter2D_stats, only: nu_filter2D_stats, merge_nu_filter2D_stats, print_nu_filter2D_stats, &
             &kill_nu_filter2D_stats
         class(commander_nu_filt2D), intent(inout) :: self
@@ -269,6 +270,7 @@ contains
         type(nu_filter2D_state), allocatable :: nu_states(:)
         type(nu_filter2D_stats) :: nu_stats
         type(string)         :: odd_out, even_out, avg_out, locres_out
+        real, allocatable    :: support_fracs(:)
         integer              :: ldim(3), ldim2(3), nimgs, nimgs2, iptcl, ithr
         real                 :: align_lp
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -287,16 +289,9 @@ contains
         if( file_exists(even_out)   ) call del_file(even_out)
         if( file_exists(avg_out)    ) call del_file(avg_out)
         if( file_exists(locres_out) ) call del_file(locres_out)
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; whole image'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: standalone mode uses the full discrete bank'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete directly'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts histogram prior preserves raw global label fractions'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: standalone mode without auxiliary competitor'
+        call print_nu_filter2D_policy()
         allocate(nu_states(nthr_glob))
+        allocate(support_fracs(nimgs), source=0.)
         do ithr = 1, nthr_glob
             call nu_states(ithr)%setup(ldim, params%smpd)
         end do
@@ -305,6 +300,7 @@ contains
             ithr = omp_get_thread_num() + 1
             block
                 type(image) :: odd, even, avg_raw, odd_nu, even_nu, avg_nu, locres
+                integer, allocatable :: support_pix(:,:)
                 call odd%new(ldim, params%smpd, .false.)
                 call even%new(ldim, params%smpd, .false.)
                 call odd%read(params%stk, iptcl)
@@ -312,8 +308,10 @@ contains
                 call avg_raw%copy(even)
                 call avg_raw%add(odd)
                 call avg_raw%mul(0.5)
+                call automask2D_support_pix(params, avg_raw, params%ngrow, nint(params%winsz), params%edge, support_pix)
+                support_fracs(iptcl) = real(size(support_pix,2)) / real(ldim(1) * ldim(2))
                 call nu_states(ithr)%apply(even, odd, avg_raw, avg_raw, avg_raw, even_nu, odd_nu, avg_nu, &
-                    &align_lp, locres_out=locres)
+                    &align_lp, locres_out=locres, support_pix=support_pix)
                 !$omp ordered
                 call odd_nu%write(odd_out, iptcl)
                 call even_nu%write(even_out, iptcl)
@@ -334,6 +332,16 @@ contains
         call update_stack_nimgs(even_out, nimgs)
         call update_stack_nimgs(avg_out, nimgs)
         call update_stack_nimgs(locres_out, nimgs)
+        if( any(support_fracs > TINY) )then
+            write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                &'>>> 2D NU filter automask support range: ', &
+                &100. * minval(support_fracs, mask=support_fracs > TINY), ' - ', &
+                &100. * maxval(support_fracs, mask=support_fracs > TINY), '% of pixels'
+        endif
+        if( any(support_fracs <= TINY) )then
+            write(logfhandle,'(A,I8)') '>>> 2D NU filter images with failed automask support: ', &
+                &count(support_fracs <= TINY)
+        endif
         do ithr = 1, nthr_glob
             call merge_nu_filter2D_stats(nu_stats, nu_states(ithr)%stats)
         end do
@@ -351,6 +359,7 @@ contains
         call even_out%kill
         call avg_out%kill
         call locres_out%kill
+        if( allocated(support_fracs) ) deallocate(support_fracs)
         call simple_end('**** SIMPLE_nu_filt2D NORMAL STOP ****')
     end subroutine exec_nu_filt2D
 
