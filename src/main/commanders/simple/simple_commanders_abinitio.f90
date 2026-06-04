@@ -438,18 +438,18 @@ contains
         use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
         class(commander_abinitio3D_cavgs_reject), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        character(len=*), parameter :: RESTART_DIR_FBODY = 'abinitio3D_cavgs_reject_restart_'
-        character(len=*), parameter :: RESTART_DONE      = 'ABINITIO3D_CAVGS_REJECT_FINISHED'
-        character(len=*), parameter :: DOCK_DIR_FBODY    = 'abinitio3D_cavgs_reject_dock_'
-        character(len=*), parameter :: DOCK_DONE         = 'ABINITIO3D_CAVGS_REJECT_DOCK_FINISHED'
-        character(len=*), parameter :: CONSENSUS_VOL     = 'abinitio3D_cavgs_reject_consensus_vol.mrc'
-        character(len=*), parameter :: CONSENSUS_REPORT  = 'abinitio3D_cavgs_reject_consensus.txt'
+        character(len=*), parameter :: RESTART_DIR_FBODY    = 'abinitio3D_cavgs_reject_restart_'
+        character(len=*), parameter :: RESTART_DONE         = 'ABINITIO3D_CAVGS_REJECT_FINISHED'
+        character(len=*), parameter :: DOCK_DIR_FBODY       = 'abinitio3D_cavgs_reject_dock_'
+        character(len=*), parameter :: DOCK_DONE            = 'ABINITIO3D_CAVGS_REJECT_DOCK_FINISHED'
+        character(len=*), parameter :: CONSENSUS_VOL        = 'abinitio3D_cavgs_reject_consensus_vol.mrc'
+        character(len=*), parameter :: CONSENSUS_REPORT     = 'abinitio3D_cavgs_reject_consensus.txt'
         character(len=*), parameter :: CONSENSUS_VOL_REPORT = 'abinitio3D_cavgs_reject_consensus_volume.txt'
         integer,          parameter :: DEFAULT_SORT_NSTATES = 2
-        integer,          parameter :: MAX_SORT_NSTATES  = 3
-        integer,          parameter :: SORT_NSTAGES      = 2
-        real,             parameter :: DEFAULT_DOCK_HP   = 100.0
-        real,             parameter :: DEFAULT_DOCK_LP   = 15.0
+        integer,          parameter :: MAX_SORT_NSTATES     = 3
+        integer,          parameter :: SORT_NSTAGES         = 3
+        real,             parameter :: DEFAULT_DOCK_HP      = 100.0
+        real,             parameter :: DEFAULT_DOCK_LP      = 10.0
         type(parameters)          :: params
         type(qsys_env)            :: qenv
         type(sp_project)          :: spproj, restart_proj
@@ -500,16 +500,16 @@ contains
         if( ncls == 0 ) THROW_HARD('abinitio3D_cavgs_reject: project has no cls2D entries')
         original_states = spproj%os_cls2D%get_all_asint('state')
         if( size(original_states) /= ncls ) THROW_HARD('abinitio3D_cavgs_reject: invalid cls2D state array')
-        allocate(restart_labels(params%nrestarts,ncls), source=0)
-        allocate(mapped_labels(params%nrestarts,ncls),  source=0)
+        allocate(restart_labels(params%nrestarts,ncls),     source=0)
+        allocate(mapped_labels(params%nrestarts,ncls),      source=0)
         allocate(state_maps(params%nrestarts,sort_nstates), source=0)
-        allocate(votes(sort_nstates,ncls),              source=0)
-        allocate(consensus(ncls),                       source=0)
-        allocate(final_states(ncls),                    source=0)
-        allocate(selection_states(ncls),                source=0)
-        allocate(restart_good_state(params%nrestarts),  source=0)
-        allocate(restart_good_pop(params%nrestarts),    source=0)
-        allocate(restart_good_scores(params%nrestarts), source=0.0)
+        allocate(votes(sort_nstates,ncls),                  source=0)
+        allocate(consensus(ncls),                           source=0)
+        allocate(final_states(ncls),                        source=0)
+        allocate(selection_states(ncls),                    source=0)
+        allocate(restart_good_state(params%nrestarts),      source=0)
+        allocate(restart_good_pop(params%nrestarts),        source=0)
+        allocate(restart_good_scores(params%nrestarts),     source=0.0)
         allocate(restart_projfiles(params%nrestarts))
         allocate(done_files(params%nrestarts))
         allocate(selected_vols(params%nrestarts))
@@ -785,6 +785,7 @@ contains
         subroutine select_restart_consensus_volumes
             type(image)  :: vol_probe
             type(string) :: restart_dir, vol_name
+            integer :: nptcls
             real    :: best_score
             integer :: raw_state
             call simple_getcwd(cwd)
@@ -817,6 +818,9 @@ contains
                     ' QUALITY_MEAN=', restart_good_scores(irestart), ' POP=', restart_good_pop(irestart)
             enddo
             if( ref_restart == 0 ) THROW_HARD('abinitio3D_cavgs_reject: no restart consensus volume selected')
+            call find_ldim_nptcls(selected_vols(ref_restart), consensus_ldim, nptcls)
+            consensus_smpd = find_img_smpd(selected_vols(ref_restart))
+            call vol_probe%new(consensus_ldim, consensus_smpd)
             call vol_probe%read(selected_vols(ref_restart))
             consensus_ldim = vol_probe%get_ldim()
             consensus_smpd = vol_probe%get_smpd()
@@ -901,10 +905,12 @@ contains
             type(image) :: avg_vol, add_vol
             integer :: ldim_here(3)
             real    :: smpd_here
+            call avg_vol%new(consensus_ldim, consensus_smpd)
             call avg_vol%read(docked_vols(ref_restart))
             do irestart = 1, params%nrestarts
                 if( irestart == ref_restart ) cycle
                 call add_vol%kill
+                call add_vol%new(consensus_ldim, consensus_smpd)
                 call add_vol%read(docked_vols(irestart))
                 ldim_here = add_vol%get_ldim()
                 if( any(ldim_here /= consensus_ldim) )then
