@@ -430,7 +430,7 @@ contains
 
     end subroutine exec_abinitio3D_cavgs
 
-    !> sort class averages by consensus over restarted two-state abinitio3D_cavgs runs
+    !> sort class averages by consensus over restarted multi-state abinitio3D_cavgs runs
     subroutine exec_abinitio3D_cavg_sort( self, cline )
         use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_feature_table
         use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model
@@ -441,7 +441,8 @@ contains
         character(len=*), parameter :: RESTART_DIR_FBODY = 'abinitio3D_cavg_sort_restart_'
         character(len=*), parameter :: RESTART_DONE      = 'ABINITIO3D_CAVG_SORT_FINISHED'
         character(len=*), parameter :: CONSENSUS_REPORT  = 'abinitio3D_cavg_sort_consensus.txt'
-        integer,          parameter :: SORT_NSTATES      = 2
+        integer,          parameter :: DEFAULT_SORT_NSTATES = 2
+        integer,          parameter :: MAX_SORT_NSTATES  = 3
         integer,          parameter :: SORT_NSTAGES      = 2
         type(parameters)          :: params
         type(qsys_env)            :: qenv
@@ -454,23 +455,29 @@ contains
         integer, allocatable      :: restart_labels(:,:), mapped_labels(:,:), consensus(:), final_states(:)
         integer, allocatable      :: original_states(:), quality_auto_states(:), votes(:,:)
         real,    allocatable      :: quality_scores(:)
-        integer                   :: ncls, irestart
+        integer                   :: ncls, irestart, sort_nstates
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavg_sort is master-only; remove part from command line')
         endif
-        if( cline%defined('nstates') .and. cline%get_iarg('nstates') /= SORT_NSTATES )then
-            THROW_HARD('abinitio3D_cavg_sort requires nstates=2')
+        if( cline%defined('nstates') )then
+            if( cline%get_iarg('nstates') < 2 .or. cline%get_iarg('nstates') > MAX_SORT_NSTATES )then
+                THROW_HARD('abinitio3D_cavg_sort supports nstates=2 or nstates=3')
+            endif
+        else
+            call cline%set('nstates', DEFAULT_SORT_NSTATES)
         endif
         if( cline%defined('nstages') .and. cline%get_iarg('nstages') /= SORT_NSTAGES )then
             THROW_HARD('abinitio3D_cavg_sort always runs abinitio3D_cavgs through nstages=2')
         endif
-        call cline%set('nstates',  SORT_NSTATES)
         call cline%set('nstages',  SORT_NSTAGES)
+        call cline%set('pgrp',     'c1')
+        call cline%delete('pgrp_start')
         if( .not.cline%defined('nrestarts')     ) call cline%set('nrestarts', 3)
         if( .not.cline%defined('mkdir')         ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('quality_model') ) call cline%set('quality_model', CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         call params%new(cline)
         if( params%nrestarts < 1 ) THROW_HARD('abinitio3D_cavg_sort requires nrestarts >= 1')
+        sort_nstates = params%nstates
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('abinitio3D_cavg_sort: project has no cls2D entries')
@@ -478,7 +485,7 @@ contains
         if( size(original_states) /= ncls ) THROW_HARD('abinitio3D_cavg_sort: invalid cls2D state array')
         allocate(restart_labels(params%nrestarts,ncls), source=0)
         allocate(mapped_labels(params%nrestarts,ncls),  source=0)
-        allocate(votes(SORT_NSTATES,ncls),              source=0)
+        allocate(votes(sort_nstates,ncls),              source=0)
         allocate(consensus(ncls),                       source=0)
         allocate(final_states(ncls),                    source=0)
         allocate(restart_projfiles(params%nrestarts))
@@ -527,18 +534,18 @@ contains
             call qenv%new(params, 1, exec_bin=string('simple_exec'))
             do irestart = 1, params%nrestarts
                 folder           = RESTART_DIR_FBODY//int2str_pad(irestart, 3)
-                restart_projfile = folder//'/'//projbase
-                done_file        = folder//'/'//RESTART_DONE
+                restart_projfile = filepath(folder, projbase)
+                done_file        = filepath(folder, string(RESTART_DONE))
                 call simple_mkdir(folder)
                 call simple_copy_file(params%projfile, restart_projfile)
                 if( file_exists(done_file) ) call del_file(done_file)
-                restart_projfiles(irestart) = simple_abspath(restart_projfile, check_exists=.false.)
-                done_files(irestart)        = simple_abspath(done_file,        check_exists=.false.)
+                restart_projfiles(irestart) = filepath(cwd, folder, projbase)
+                done_files(irestart)        = filepath(cwd, folder, string(RESTART_DONE))
                 cline_restart = cline
                 call cline_restart%set('prg',                'abinitio3D_cavgs')
-                call cline_restart%set('projfile',           basename(restart_projfile))
+                call cline_restart%set('projfile',           projbase)
                 call cline_restart%set('mkdir',              'no')
-                call cline_restart%set('nstates',            SORT_NSTATES)
+                call cline_restart%set('nstates',            sort_nstates)
                 call cline_restart%set('nstages',            SORT_NSTAGES)
                 call cline_restart%set('verbose_exit',       'yes')
                 call cline_restart%set('verbose_exit_fname', RESTART_DONE)
@@ -593,49 +600,83 @@ contains
             do icls = 1, ncls
                 if( original_states(icls) <= 0 )then
                     restart_labels(restart_ind,icls) = 0
-                else if( restart_labels(restart_ind,icls) < 1 .or. restart_labels(restart_ind,icls) > SORT_NSTATES )then
+                else if( restart_labels(restart_ind,icls) < 1 .or. restart_labels(restart_ind,icls) > sort_nstates )then
                     restart_labels(restart_ind,icls) = 0
                 endif
             enddo
         end subroutine sanitize_restart_labels
 
         subroutine map_state_correspondence
-            integer :: same, swapped, icls
-            logical :: flip
+            integer :: best_map(MAX_SORT_NSTATES), best_score, icls, label
             mapped_labels(1,:) = restart_labels(1,:)
             do irestart = 2, params%nrestarts
-                same    = 0
-                swapped = 0
+                call best_state_mapping(irestart, best_map, best_score)
                 do icls = 1, ncls
-                    if( restart_labels(1,icls) < 1 .or. restart_labels(irestart,icls) < 1 ) cycle
-                    if( restart_labels(1,icls) == restart_labels(irestart,icls) ) same = same + 1
-                    if( restart_labels(1,icls) == swapped_label(restart_labels(irestart,icls)) ) swapped = swapped + 1
-                enddo
-                flip = swapped > same
-                do icls = 1, ncls
-                    if( restart_labels(irestart,icls) < 1 )then
+                    label = restart_labels(irestart,icls)
+                    if( label < 1 )then
                         mapped_labels(irestart,icls) = 0
-                    else if( flip )then
-                        mapped_labels(irestart,icls) = swapped_label(restart_labels(irestart,icls))
                     else
-                        mapped_labels(irestart,icls) = restart_labels(irestart,icls)
+                        mapped_labels(irestart,icls) = best_map(label)
                     endif
                 enddo
-                write(logfhandle,'(A,I0,A,I0,A,I0,A,L1)') '>>> RESTART ', irestart, &
-                    ' STATE-LABEL AGREEMENT SAME/SWAPPED: ', same, ' / ', swapped, ' FLIPPED=', flip
+                write(logfhandle,'(A,I0,A,I0,A,3(I0,1X))') '>>> RESTART ', irestart, &
+                    ' BEST STATE-LABEL AGREEMENT: ', best_score, ' MAP RAW->CONSENSUS: ', best_map
             enddo
         end subroutine map_state_correspondence
 
-        integer function swapped_label( label )
-            integer, intent(in) :: label
-            if( label == 1 )then
-                swapped_label = 2
-            else if( label == 2 )then
-                swapped_label = 1
-            else
-                swapped_label = 0
-            endif
-        end function swapped_label
+        subroutine best_state_mapping( restart_ind, best_map, best_score )
+            integer, intent(in)  :: restart_ind
+            integer, intent(out) :: best_map(MAX_SORT_NSTATES), best_score
+            integer :: candidate(MAX_SORT_NSTATES), p1, p2, p3, score
+            best_map   = 0
+            best_score = -1
+            select case(sort_nstates)
+                case(2)
+                    do p1 = 1, 2
+                        do p2 = 1, 2
+                            if( p2 == p1 ) cycle
+                            candidate    = 0
+                            candidate(1) = p1
+                            candidate(2) = p2
+                            score = mapping_score(restart_ind, candidate)
+                            if( score > best_score )then
+                                best_score = score
+                                best_map   = candidate
+                            endif
+                        enddo
+                    enddo
+                case(3)
+                    do p1 = 1, 3
+                        do p2 = 1, 3
+                            if( p2 == p1 ) cycle
+                            do p3 = 1, 3
+                                if( p3 == p1 .or. p3 == p2 ) cycle
+                                candidate    = 0
+                                candidate(1) = p1
+                                candidate(2) = p2
+                                candidate(3) = p3
+                                score = mapping_score(restart_ind, candidate)
+                                if( score > best_score )then
+                                    best_score = score
+                                    best_map   = candidate
+                                endif
+                            enddo
+                        enddo
+                    enddo
+            end select
+        end subroutine best_state_mapping
+
+        integer function mapping_score( restart_ind, candidate_map )
+            integer, intent(in) :: restart_ind, candidate_map(MAX_SORT_NSTATES)
+            integer :: icls, ref_label, raw_label
+            mapping_score = 0
+            do icls = 1, ncls
+                ref_label = restart_labels(1,icls)
+                raw_label = restart_labels(restart_ind,icls)
+                if( ref_label < 1 .or. raw_label < 1 ) cycle
+                if( ref_label == candidate_map(raw_label) ) mapping_score = mapping_score + 1
+            enddo
+        end function mapping_score
 
         subroutine build_consensus
             integer :: icls, label, best_label, best_votes
@@ -644,49 +685,49 @@ contains
                 if( original_states(icls) <= 0 ) cycle
                 do irestart = 1, params%nrestarts
                     label = mapped_labels(irestart,icls)
-                    if( label >= 1 .and. label <= SORT_NSTATES ) votes(label,icls) = votes(label,icls) + 1
+                    if( label >= 1 .and. label <= sort_nstates ) votes(label,icls) = votes(label,icls) + 1
                 enddo
                 best_label = 0
                 best_votes = -1
-                do label = 1, SORT_NSTATES
+                do label = 1, sort_nstates
                     if( votes(label,icls) > best_votes )then
                         best_label = label
                         best_votes = votes(label,icls)
                     endif
                 enddo
-                if( votes(1,icls) == votes(2,icls) .and. mapped_labels(1,icls) > 0 ) best_label = mapped_labels(1,icls)
+                label = mapped_labels(1,icls)
+                if( label > 0 .and. votes(label,icls) == best_votes ) best_label = label
                 consensus(icls) = best_label
             enddo
         end subroutine build_consensus
 
         subroutine assign_good_bad_states
-            integer :: good_consensus, bad_consensus, icls, pop1, pop2
-            real    :: mean1, mean2
-            mean1 = mean_quality_for_consensus(1, pop1)
-            mean2 = mean_quality_for_consensus(2, pop2)
-            if( pop1 == 0 .and. pop2 == 0 ) THROW_HARD('abinitio3D_cavg_sort: no active consensus classes')
-            if( pop2 == 0 .or. (pop1 > 0 .and. mean1 >= mean2) )then
-                good_consensus = 1
-                bad_consensus  = 2
-            else
-                good_consensus = 2
-                bad_consensus  = 1
-            endif
-            do icls = 1, ncls
-                select case(consensus(icls))
-                    case(1,2)
-                        if( consensus(icls) == good_consensus )then
-                            final_states(icls) = 1
-                        else if( consensus(icls) == bad_consensus )then
-                            final_states(icls) = 2
-                        endif
-                    case default
-                        final_states(icls) = 0
-                end select
+            integer :: good_consensus, icls, label, pops(MAX_SORT_NSTATES)
+            real    :: means(MAX_SORT_NSTATES), best_mean
+            pops           = 0
+            means          = 0.0
+            good_consensus = 0
+            best_mean      = -huge(0.0)
+            do label = 1, sort_nstates
+                means(label) = mean_quality_for_consensus(label, pops(label))
+                write(logfhandle,'(A,I0,A,F8.3,A,I0)') '>>> CONSENSUS STATE QUALITY MEAN / POP: ', &
+                    label, ' ', means(label), ' / ', pops(label)
+                if( pops(label) > 0 .and. means(label) > best_mean )then
+                    best_mean      = means(label)
+                    good_consensus = label
+                endif
             enddo
-            write(logfhandle,'(A,I0,A,F8.3,A,I0)') '>>> CONSENSUS STATE 1 QUALITY MEAN / POP: ', 1, ' ', mean1, ' / ', pop1
-            write(logfhandle,'(A,I0,A,F8.3,A,I0)') '>>> CONSENSUS STATE 2 QUALITY MEAN / POP: ', 2, ' ', mean2, ' / ', pop2
-            write(logfhandle,'(A,I0,A,I0)') '>>> CAVG SORT GOOD/BAD CONSENSUS STATES: ', good_consensus, ' / ', bad_consensus
+            if( good_consensus == 0 ) THROW_HARD('abinitio3D_cavg_sort: no active consensus classes')
+            do icls = 1, ncls
+                if( consensus(icls) == 0 )then
+                    final_states(icls) = 0
+                else if( consensus(icls) == good_consensus )then
+                    final_states(icls) = 1
+                else
+                    final_states(icls) = 2
+                endif
+            enddo
+            write(logfhandle,'(A,I0)') '>>> CAVG SORT GOOD CONSENSUS STATE: ', good_consensus
             write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> CAVG SORT FINAL GOOD/BAD/INACTIVE: ', &
                 count(final_states == 1), ' / ', count(final_states == 2), ' / ', count(final_states == 0)
         end subroutine assign_good_bad_states
@@ -710,7 +751,7 @@ contains
             integer :: icls, ncls3d, max_vote
             ncls3d = spproj%os_cls3D%get_noris()
             do icls = 1, ncls
-                max_vote = max(votes(1,icls), votes(2,icls))
+                max_vote = maxval(votes(1:sort_nstates,icls))
                 call spproj%os_cls2D%set(icls, 'quality',             quality_scores(icls))
                 call spproj%os_cls2D%set(icls, 'accept',              merge(1, 0, final_states(icls) == 1))
                 call spproj%os_cls2D%set(icls, 'quality_cluster',     quality%labels(icls))
@@ -727,13 +768,18 @@ contains
         end subroutine annotate_project
 
         subroutine write_consensus_report
-            integer :: funit, icls
+            integer :: funit, icls, label
             open(newunit=funit, file=CONSENSUS_REPORT, status='replace', action='write')
             write(funit,'(A)') '# abinitio3D_cavg_sort consensus report'
             write(funit,'(A,I0)') '# nrestarts=', params%nrestarts
+            write(funit,'(A,I0)') '# nstates=', sort_nstates
             write(funit,'(A,I0)') '# nstages=', SORT_NSTAGES
             write(funit,'(A,A)') '# quality_model=', trim(model%name)
-            write(funit,'(A)', advance='no') 'class,original_state,consensus_state,final_state,votes_state1,votes_state2,quality_score,quality_auto_state'
+            write(funit,'(A)', advance='no') 'class,original_state,consensus_state,final_state'
+            do label = 1, sort_nstates
+                write(funit,'(A,I0)', advance='no') ',votes_state_', label
+            enddo
+            write(funit,'(A)', advance='no') ',quality_score,quality_auto_state'
             do irestart = 1, params%nrestarts
                 write(funit,'(A,I0)', advance='no') ',restart_raw_', irestart
             enddo
@@ -742,9 +788,12 @@ contains
             enddo
             write(funit,*)
             do icls = 1, ncls
-                write(funit,'(I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,ES14.6,A,I0)', advance='no') &
-                    icls, ',', original_states(icls), ',', consensus(icls), ',', final_states(icls), ',', &
-                    votes(1,icls), ',', votes(2,icls), ',', quality_scores(icls), ',', quality_auto_states(icls)
+                write(funit,'(I0,A,I0,A,I0,A,I0)', advance='no') &
+                    icls, ',', original_states(icls), ',', consensus(icls), ',', final_states(icls)
+                do label = 1, sort_nstates
+                    write(funit,'(A,I0)', advance='no') ',', votes(label,icls)
+                enddo
+                write(funit,'(A,ES14.6,A,I0)', advance='no') ',', quality_scores(icls), ',', quality_auto_states(icls)
                 do irestart = 1, params%nrestarts
                     write(funit,'(A,I0)', advance='no') ',', restart_labels(irestart,icls)
                 enddo

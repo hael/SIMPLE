@@ -150,17 +150,18 @@ contains
         ! PROGRAM SPECIFICATION
         call abinitio3D_cavg_sort%new(&
         &'abinitio3D_cavg_sort',&                                                                  ! name
-        &'Consensus sorting of class averages by restarted two-state ab initio 3D',&               ! descr_short
-        &'runs multiple short two-state abinitio3D_cavgs restarts, builds a consensus state label, &
+        &'Consensus sorting of class averages by restarted multi-state ab initio 3D',&             ! descr_short
+        &'runs multiple short two- or three-state abinitio3D_cavgs restarts, builds a consensus state label, &
         &and orients the final labels as good/bad using the class-average quality model',&         ! descr_long
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
         &gui_advanced=.false., gui_submenu_list = "model,filter,mask,quality,compute")             ! GUI
         ! search controls
-        call abinitio3D_cavg_sort%add_input(UI_SRCH, pgrp, gui_submenu="model", gui_advanced=.false.)
-        call abinitio3D_cavg_sort%add_input(UI_SRCH, pgrp_start, gui_submenu="model", gui_advanced=.true.)
+        call abinitio3D_cavg_sort%add_input(UI_SRCH, 'nstates', 'num', 'Number of ab initio states', &
+            &'Number of states used by each short abinitio3D_cavgs restart, either 2 or 3{2}', &
+            &'# states{2}', .false., 2., gui_submenu="model", gui_advanced=.false.)
         call abinitio3D_cavg_sort%add_input(UI_SRCH, 'nrestarts', 'num', 'Number of ab initio restarts', &
-            &'Number of independent two-state abinitio3D_cavgs restarts to run before consensus voting{3}', &
+            &'Number of independent abinitio3D_cavgs restarts to run before consensus voting{3}', &
             &'# restarts{3}', .false., 3., gui_submenu="model", gui_advanced=.false.)
         ! quality controls
         call abinitio3D_cavg_sort%add_input(UI_SRCH, quality_model, gui_submenu="quality", gui_advanced=.false.)
