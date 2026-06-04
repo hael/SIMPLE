@@ -243,9 +243,8 @@ contains
         do i=1,spproj%os_ptcl2d%get_noris()
             if(spproj%os_ptcl2d%get(i, 'state') .eq. 0.0 ) cycle
             call starfile_table__addObject(self%starfile)
-            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
-            stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
-            half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
+            stkind       = spproj%os_ptcl2d%get_int(i, 'stkind')
+            half_boxsize = spproj%os_stk%get_int(stkind, 'box') / 2
             ! ints
             if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(self%starfile, EMDL_IMAGE_OPTICS_GROUP, spproj%os_ptcl2d%get_int(i, 'ogid'))
             if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(self%starfile, EMDL_PARTICLE_CLASS,     spproj%os_ptcl2d%get_class(i))
@@ -296,9 +295,8 @@ contains
         do i=part%nstart, part%nend
             if(spproj%os_ptcl2d%get(i, 'state') .eq. 0.0 ) cycle
             call starfile_table__addObject(part%startable)
-            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
-            stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
-            half_boxsize = floor(spproj%os_stk%get(stkind, 'box') / 2.0)
+            stkind       = spproj%os_ptcl2d%get_int(i, 'stkind')
+            half_boxsize = spproj%os_stk%get_int(stkind, 'box') / 2
             ! ints
             if(spproj%os_ptcl2d%isthere(i, 'ogid'   )) call starfile_table__setValue_int(part%startable, EMDL_IMAGE_OPTICS_GROUP, spproj%os_ptcl2d%get_int(i, 'ogid'))
             if(spproj%os_ptcl2d%isthere(i, 'class'  )) call starfile_table__setValue_int(part%startable, EMDL_PARTICLE_CLASS,     spproj%os_ptcl2d%get_class(i))

@@ -13,8 +13,8 @@ contains
         integer,                   intent(out)   :: ind_in_stk
         class(oris), pointer                     :: ptcl_field
         real    :: smpd
-        integer :: nptcls, nptcls_stk, fromp, top, box, nstks
-        logical :: l_has_nptcls_stk, l_has_range
+        integer :: nptcls, nptcls_stk, box, nstks
+        logical :: l_has_nptcls_stk
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -56,15 +56,7 @@ contains
             THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
         endif
         ! Physical number of images in stack, when explicitly recorded.
-        nptcls_stk = 0
-        fromp = 0
-        top   = -1
-        l_has_range = self%os_stk%isthere(stkind, 'fromp') .and. &
-            self%os_stk%isthere(stkind, 'top')
-        if( l_has_range )then
-            fromp = self%os_stk%get_fromp(stkind)
-            top   = self%os_stk%get_top(stkind)
-        endif
+        nptcls_stk       = 0
         l_has_nptcls_stk = self%os_stk%isthere(stkind, 'nptcls_stk')
         if( l_has_nptcls_stk )then
             nptcls_stk = self%os_stk%get_int(stkind, 'nptcls_stk')
@@ -95,7 +87,16 @@ contains
         contains
 
             subroutine set_indstk_from_range
-                if( .not.l_has_range )then
+                integer :: fromp, top
+                logical :: l_has_range
+                fromp = 0
+                top   = -1
+                l_has_range = self%os_stk%isthere(stkind, 'fromp') .and. &
+                    self%os_stk%isthere(stkind, 'top')
+                if( l_has_range )then
+                    fromp = self%os_stk%get_fromp(stkind)
+                    top   = self%os_stk%get_top(stkind)
+                else
                     write(logfhandle,*) 'iptcl : ', iptcl
                     write(logfhandle,*) 'stkind: ', stkind
                     THROW_HARD('missing indstk and stack range; map_ptcl_ind2stk_ind')
