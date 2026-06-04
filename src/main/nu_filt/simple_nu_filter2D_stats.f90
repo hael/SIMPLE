@@ -205,6 +205,7 @@ contains
             i = pix(1,ipix)
             j = pix(2,ipix)
             ilabel = int(labelmap(i,j,1))
+            if( ilabel < 1 .or. ilabel > stats%nlabels ) cycle
             n_strong_jump_neighbors = 0
             do dj = -1, 1
                 do di = -1, 1
@@ -214,6 +215,7 @@ contains
                     if( ni < 1 .or. ni > size(labelmap,1) ) cycle
                     if( nj < 1 .or. nj > size(labelmap,2) ) cycle
                     jlabel = int(labelmap(ni,nj,1))
+                    if( jlabel < 1 .or. jlabel > stats%nlabels ) cycle
                     step_diff = abs(ilabel - jlabel)
                     if( step_diff > NU2D_WEAK_LP_STEP ) n_strong_jump_neighbors = n_strong_jump_neighbors + 1
                     if( .not.(dj > 0 .or. (dj == 0 .and. di > 0)) ) cycle

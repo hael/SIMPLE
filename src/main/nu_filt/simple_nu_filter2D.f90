@@ -31,7 +31,7 @@ real,    parameter :: NU2D_LABEL_MIN_RAW_FRAC            = 0.0025
 real,    parameter :: NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A   = 10.0
 
 type :: nu_filter2D_state
-    real, allocatable :: dmats(:,:), candidate_coords(:), dmat(:,:,:), tmp(:,:,:)
+    real, allocatable :: dmats(:,:), candidate_coords(:), dmat(:,:,:), tmp(:,:,:), mask_tmp(:,:,:)
     real, allocatable :: bwfilters(:,:), lowpass_limits(:)
     integer, allocatable :: cutoff_finds(:), pix(:,:)
     integer(kind=NU2D_LABEL_KIND), allocatable :: filtmap(:,:,:)
@@ -67,6 +67,7 @@ contains
         allocate(self%dmats(self%npix,nbase), source=huge(0.))
         allocate(self%dmat(self%ldim(1),self%ldim(2),1))
         allocate(self%tmp(self%ldim(1),self%ldim(2),1))
+        allocate(self%mask_tmp(self%ldim(1),self%ldim(2),1))
         allocate(self%filtmap(self%ldim(1),self%ldim(2),1), source=1_NU2D_LABEL_KIND)
         allocate(self%bwfilters(self%box,nbase), source=0.)
         allocate(self%lowpass_limits(nbase), source=0.)
@@ -79,7 +80,7 @@ contains
     end subroutine setup_nu_filter2D
 
     subroutine nu_filter2D_classavg( self, even_raw, odd_raw, aux_even, aux_odd, aux_avg, even_out, odd_out, &
-            &avg_out, align_lp, include_aux, locres_out, active_lp_limit )
+            &avg_out, align_lp, include_aux, locres_out, active_lp_limit, support_pix )
         class(nu_filter2D_state), intent(inout) :: self
         class(image),             intent(in)    :: even_raw, odd_raw, aux_even, aux_odd, aux_avg
         class(image),             intent(out)   :: even_out, odd_out, avg_out
@@ -87,72 +88,127 @@ contains
         logical,        optional, intent(in)    :: include_aux
         class(image),   optional, intent(inout) :: locres_out
         real,           optional, intent(in)    :: active_lp_limit
-        type(image), allocatable :: even_bank(:), odd_bank(:)
-        type(image) :: even_ft, odd_ft
-        integer, allocatable :: label_counts_raw(:), target_counts(:)
-        integer :: nbase, nout, icand, winsz, potts_iters, potts_changes
-        real    :: noise_sigma, edge_mean
-        logical, allocatable :: active_labels(:)
+        integer,        optional, intent(in)    :: support_pix(:,:)
         call validate_inputs()
-        nbase = size(self%cutoff_finds)
-        nout = nbase
-        self%dmats = huge(0.)
-        self%filtmap    = 1_NU2D_LABEL_KIND
-        allocate(even_bank(nout), odd_bank(nout))
-        allocate(active_labels(nbase), source=.false.)
-        allocate(label_counts_raw(nbase), source=0)
-        allocate(target_counts(nbase), source=0)
-        noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, self%ldim)
-        winsz = nint(COSMSKHALFWIDTH)
-        call even_ft%copy(even_raw)
-        call odd_ft%copy(odd_raw)
-        call even_ft%taper_edges_particle(winsz, edge_mean)
-        call odd_ft%taper_edges_particle(winsz, edge_mean)
-        call even_ft%fft
-        call odd_ft%fft
-        do icand = 1, nbase
-            call even_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
-            call odd_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
-            call even_bank(icand)%copy_fast(even_ft)
-            call odd_bank(icand)%copy_fast(odd_ft)
-            call even_bank(icand)%apply_filter(odd_bank(icand), self%bwfilters(:,icand))
-            call even_bank(icand)%ifft
-            call odd_bank(icand)%ifft
-            call calc_nu2D_huber_objective(even_raw, even_bank(icand), odd_raw, odd_bank(icand), noise_sigma, self%dmat)
-            call smooth_nu2D_objective(self%dmat, self%tmp, self%ldim, self%smpd, &
-                &calc_lowpass_lim(self%cutoff_finds(icand), self%box, self%smpd))
-            call pack_nu2D_dmat(self%dmat, self%pix, self%dmats(:,icand))
-        end do
-        call setup_nu2D_active_labels(self%lowpass_limits, active_labels, active_lp_limit)
-        call select_nu2D_labels(self%dmats(:,:nbase), active_labels, self%pix, self%filtmap)
-        call count_nu_filter2D_labels(self%filtmap, self%pix, nbase, label_counts_raw)
-        call apply_nu2D_support_gate(active_labels, label_counts_raw, self%npix)
-        call select_nu2D_labels(self%dmats(:,:nbase), active_labels, self%pix, self%filtmap)
-        call count_nu_filter2D_labels(self%filtmap, self%pix, nbase, label_counts_raw)
-        target_counts = label_counts_raw
-        call refine_nu2D_labels(self%filtmap, self%dmats(:,:nbase), self%pix, &
-            &self%candidate_coords(:nbase), active_labels, target_counts, self%ldim, potts_iters, potts_changes)
-        call accumulate_nu_filter2D_stats(self%stats, self%filtmap, self%pix, label_counts_raw, target_counts, &
-            &potts_iters, potts_changes)
-        if( present(align_lp) ) align_lp = nu2D_finest_selected_lp(self%filtmap, self%pix, &
-            &self%cutoff_finds, self%box, self%smpd)
-        call smooth_nu2D_label_coords(self%filtmap, self%pix, self%dmat, self%tmp, self%ldim, self%smpd, nout)
-        if( present(locres_out) ) call build_nu2D_soft_local_resolution_image(self%dmat, self%pix, &
-            &self%lowpass_limits, self%ldim, self%smpd, locres_out)
-        call synthesize_nu2D_soft(even_bank, odd_bank, self%dmat, self%pix, self%ldim, self%smpd, &
-            &even_out, odd_out, avg_out)
-        do icand = 1, nout
-            call even_bank(icand)%kill
-            call odd_bank(icand)%kill
-        end do
-        call even_ft%kill
-        call odd_ft%kill
-        deallocate(even_bank, odd_bank)
-        deallocate(label_counts_raw)
-        deallocate(target_counts)
-        deallocate(active_labels)
+        if( present(support_pix) )then
+            call validate_support_pixels(support_pix)
+            if( size(support_pix,2) > 0 )then
+                call run_with_pixels(support_pix)
+            else
+                call run_lowest_resolution_only()
+            endif
+        else
+            call run_with_pixels(self%pix)
+        endif
 
     contains
+
+        subroutine run_with_pixels( eval_pix )
+            integer, intent(in) :: eval_pix(:,:)
+            type(image), allocatable :: even_bank(:), odd_bank(:)
+            type(image) :: even_ft, odd_ft
+            integer, allocatable :: label_counts_raw(:), target_counts(:)
+            integer :: nbase, nout, icand, winsz, potts_iters, potts_changes, npix_eval
+            real    :: noise_sigma, edge_mean
+            logical, allocatable :: active_labels(:)
+            npix_eval = size(eval_pix,2)
+            if( npix_eval < 1 )then
+                call run_lowest_resolution_only()
+                return
+            endif
+            nbase = size(self%cutoff_finds)
+            nout = nbase
+            self%dmats(:npix_eval,:nbase) = huge(0.)
+            self%filtmap = 0_NU2D_LABEL_KIND
+            allocate(even_bank(nout), odd_bank(nout))
+            allocate(active_labels(nbase), source=.false.)
+            allocate(label_counts_raw(nbase), source=0)
+            allocate(target_counts(nbase), source=0)
+            noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, eval_pix)
+            winsz = nint(COSMSKHALFWIDTH)
+            call even_ft%copy(even_raw)
+            call odd_ft%copy(odd_raw)
+            call even_ft%taper_edges_particle(winsz, edge_mean)
+            call odd_ft%taper_edges_particle(winsz, edge_mean)
+            call even_ft%fft
+            call odd_ft%fft
+            do icand = 1, nbase
+                call even_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
+                call odd_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
+                call even_bank(icand)%copy_fast(even_ft)
+                call odd_bank(icand)%copy_fast(odd_ft)
+                call even_bank(icand)%apply_filter(odd_bank(icand), self%bwfilters(:,icand))
+                call even_bank(icand)%ifft
+                call odd_bank(icand)%ifft
+                call calc_nu2D_huber_objective(even_raw, even_bank(icand), odd_raw, odd_bank(icand), &
+                    &noise_sigma, self%dmat, eval_pix)
+                call smooth_nu2D_objective(self%dmat, self%tmp, self%mask_tmp, self%ldim, self%smpd, &
+                    &calc_lowpass_lim(self%cutoff_finds(icand), self%box, self%smpd), eval_pix)
+                call pack_nu2D_dmat(self%dmat, eval_pix, self%dmats(:npix_eval,icand))
+            end do
+            call setup_nu2D_active_labels(self%lowpass_limits, active_labels, active_lp_limit)
+            call select_nu2D_labels(self%dmats(:npix_eval,:nbase), active_labels, eval_pix, self%filtmap)
+            call count_nu_filter2D_labels(self%filtmap, eval_pix, nbase, label_counts_raw)
+            call apply_nu2D_support_gate(active_labels, label_counts_raw, npix_eval)
+            call select_nu2D_labels(self%dmats(:npix_eval,:nbase), active_labels, eval_pix, self%filtmap)
+            call count_nu_filter2D_labels(self%filtmap, eval_pix, nbase, label_counts_raw)
+            target_counts = label_counts_raw
+            call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
+                &self%candidate_coords(:nbase), active_labels, target_counts, self%ldim, potts_iters, potts_changes)
+            call accumulate_nu_filter2D_stats(self%stats, self%filtmap, eval_pix, label_counts_raw, target_counts, &
+                &potts_iters, potts_changes)
+            if( present(align_lp) ) align_lp = nu2D_finest_selected_lp(self%filtmap, eval_pix, &
+                &self%cutoff_finds, self%box, self%smpd)
+            call smooth_nu2D_label_coords(self%filtmap, eval_pix, self%dmat, self%tmp, self%mask_tmp, &
+                &self%ldim, self%smpd, nout)
+            if( present(locres_out) ) call build_nu2D_soft_local_resolution_image(self%dmat, self%pix, &
+                &self%lowpass_limits, self%ldim, self%smpd, locres_out)
+            call synthesize_nu2D_soft(even_bank, odd_bank, self%dmat, self%pix, self%ldim, self%smpd, &
+                &even_out, odd_out, avg_out)
+            do icand = 1, nout
+                call even_bank(icand)%kill
+                call odd_bank(icand)%kill
+            end do
+            call even_ft%kill
+            call odd_ft%kill
+            deallocate(even_bank, odd_bank)
+            deallocate(label_counts_raw)
+            deallocate(target_counts)
+            deallocate(active_labels)
+        end subroutine run_with_pixels
+
+        subroutine run_lowest_resolution_only()
+            type(image) :: even_ft, odd_ft
+            type(image), allocatable :: even_bank(:), odd_bank(:)
+            integer :: winsz
+            real    :: edge_mean
+            if( present(align_lp) ) align_lp = 0.
+            allocate(even_bank(1), odd_bank(1))
+            winsz = nint(COSMSKHALFWIDTH)
+            call even_ft%copy(even_raw)
+            call odd_ft%copy(odd_raw)
+            call even_ft%taper_edges_particle(winsz, edge_mean)
+            call odd_ft%taper_edges_particle(winsz, edge_mean)
+            call even_ft%fft
+            call odd_ft%fft
+            call even_bank(1)%new(self%ldim, self%smpd, wthreads=.false.)
+            call odd_bank(1)%new(self%ldim, self%smpd, wthreads=.false.)
+            call even_bank(1)%copy_fast(even_ft)
+            call odd_bank(1)%copy_fast(odd_ft)
+            call even_bank(1)%apply_filter(odd_bank(1), self%bwfilters(:,1))
+            call even_bank(1)%ifft
+            call odd_bank(1)%ifft
+            self%dmat(:self%ldim(1),:self%ldim(2),1) = 1.
+            if( present(locres_out) ) call build_nu2D_soft_local_resolution_image(self%dmat, self%pix, &
+                &self%lowpass_limits(:1), self%ldim, self%smpd, locres_out)
+            call synthesize_nu2D_soft(even_bank, odd_bank, self%dmat, self%pix, self%ldim, self%smpd, &
+                &even_out, odd_out, avg_out)
+            call even_bank(1)%kill
+            call odd_bank(1)%kill
+            call even_ft%kill
+            call odd_ft%kill
+            deallocate(even_bank, odd_bank)
+        end subroutine run_lowest_resolution_only
 
         subroutine validate_inputs()
             integer :: img_ldim(3)
@@ -173,6 +229,18 @@ contains
             if( abs(aux_avg%get_smpd()  - img_smpd) > TINY ) THROW_HARD('aux_avg smpd differs; nu_filter2D_classavg')
         end subroutine validate_inputs
 
+        subroutine validate_support_pixels( pix )
+            integer, intent(in) :: pix(:,:)
+            integer :: ipix
+            if( size(pix,1) /= 2 ) THROW_HARD('support pixel list must have two rows; nu_filter2D_classavg')
+            do ipix = 1, size(pix,2)
+                if( pix(1,ipix) < 1 .or. pix(1,ipix) > self%ldim(1) ) &
+                    &THROW_HARD('support pixel row out of bounds; nu_filter2D_classavg')
+                if( pix(2,ipix) < 1 .or. pix(2,ipix) > self%ldim(2) ) &
+                    &THROW_HARD('support pixel column out of bounds; nu_filter2D_classavg')
+            end do
+        end subroutine validate_support_pixels
+
     end subroutine nu_filter2D_classavg
 
     subroutine cleanup_nu_filter2D( self )
@@ -181,6 +249,7 @@ contains
         if( allocated(self%candidate_coords) ) deallocate(self%candidate_coords)
         if( allocated(self%dmat)             ) deallocate(self%dmat)
         if( allocated(self%tmp)              ) deallocate(self%tmp)
+        if( allocated(self%mask_tmp)         ) deallocate(self%mask_tmp)
         if( allocated(self%bwfilters)        ) deallocate(self%bwfilters)
         if( allocated(self%lowpass_limits)   ) deallocate(self%lowpass_limits)
         if( allocated(self%cutoff_finds)     ) deallocate(self%cutoff_finds)
@@ -243,24 +312,22 @@ contains
         end do
     end subroutine setup_candidate_coords
 
-    real function nu2D_objective_noise_scale( even_raw, odd_raw, ldim )
+    real function nu2D_objective_noise_scale( even_raw, odd_raw, pix )
         class(image), intent(in) :: even_raw, odd_raw
-        integer,      intent(in) :: ldim(3)
+        integer,      intent(in) :: pix(:,:)
         real(kind=c_float), pointer :: r_even(:,:,:), r_odd(:,:,:)
         real, allocatable :: vals(:)
         real :: med
         integer :: i, j, ipix, npix
-        npix = ldim(1) * ldim(2)
+        npix = size(pix,2)
         if( npix < 1 ) THROW_HARD('empty image; nu2D_objective_noise_scale')
         allocate(vals(npix))
         call even_raw%get_rmat_ptr(r_even)
         call odd_raw%get_rmat_ptr(r_odd)
-        ipix = 0
-        do j = 1, ldim(2)
-            do i = 1, ldim(1)
-                ipix = ipix + 1
-                vals(ipix) = real(r_even(i,j,1) - r_odd(i,j,1))
-            end do
+        do ipix = 1, npix
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            vals(ipix) = real(r_even(i,j,1) - r_odd(i,j,1))
         end do
         med = median_nocopy(vals)
         nu2D_objective_noise_scale = mad_gau(vals, med)
@@ -271,13 +338,14 @@ contains
         deallocate(vals)
     end function nu2D_objective_noise_scale
 
-    subroutine calc_nu2D_huber_objective( even_raw, even_cand, odd_raw, odd_cand, noise_sigma, dmat )
+    subroutine calc_nu2D_huber_objective( even_raw, even_cand, odd_raw, odd_cand, noise_sigma, dmat, pix )
         class(image), intent(in)  :: even_raw, even_cand, odd_raw, odd_cand
         real,         intent(in)  :: noise_sigma
+        integer,      intent(in)  :: pix(:,:)
         real,         intent(out) :: dmat(:,:,:)
         real(kind=c_float), pointer :: r_eraw(:,:,:), r_ecand(:,:,:), r_oraw(:,:,:), r_ocand(:,:,:)
         real :: sigma, r1, r2
-        integer :: i, j, nx, ny
+        integer :: i, j, nx, ny, ipix
         nx = size(dmat,1)
         ny = size(dmat,2)
         sigma = max(noise_sigma, TINY)
@@ -285,15 +353,28 @@ contains
         call even_cand%get_rmat_ptr(r_ecand)
         call odd_raw%get_rmat_ptr(r_oraw)
         call odd_cand%get_rmat_ptr(r_ocand)
-        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,r1,r2) proc_bind(close)
-        do j = 1, ny
-            do i = 1, nx
+        dmat(:nx,:ny,1) = 0.
+        if( size(pix,2) == nx * ny )then
+            !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,r1,r2) proc_bind(close)
+            do j = 1, ny
+                do i = 1, nx
+                    r1 = real(r_eraw(i,j,1) - r_ocand(i,j,1)) / sigma
+                    r2 = real(r_ecand(i,j,1) - r_oraw(i,j,1)) / sigma
+                    dmat(i,j,1) = huber_loss(r1) + huber_loss(r2)
+                end do
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do schedule(static) default(shared) private(ipix,i,j,r1,r2) proc_bind(close)
+            do ipix = 1, size(pix,2)
+                i = pix(1,ipix)
+                j = pix(2,ipix)
                 r1 = real(r_eraw(i,j,1) - r_ocand(i,j,1)) / sigma
                 r2 = real(r_ecand(i,j,1) - r_oraw(i,j,1)) / sigma
                 dmat(i,j,1) = huber_loss(r1) + huber_loss(r2)
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        endif
     contains
         elemental real function huber_loss( r ) result( loss )
             real, intent(in) :: r
@@ -308,16 +389,35 @@ contains
         end function huber_loss
     end subroutine calc_nu2D_huber_objective
 
-    subroutine smooth_nu2D_objective( dmat, tmp, ldim, smpd, lp_angstrom )
-        real,    intent(inout) :: dmat(:,:,:), tmp(:,:,:)
-        integer, intent(in)    :: ldim(3)
+    subroutine smooth_nu2D_objective( dmat, tmp, mask_tmp, ldim, smpd, lp_angstrom, pix )
+        real,    intent(inout) :: dmat(:,:,:), tmp(:,:,:), mask_tmp(:,:,:)
+        integer, intent(in)    :: ldim(3), pix(:,:)
         real,    intent(in)    :: smpd, lp_angstrom
-        integer :: radius_px
-        real :: radius_angstrom
+        integer :: radius_px, ipix, i, j
+        real :: radius_angstrom, denom
         radius_angstrom = NU2D_OBJECTIVE_SMOOTH_RADIUS_FRAC * NU2D_OBJECTIVE_SMOOTH_AWF * max(lp_angstrom, smpd)
         if( NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A > TINY ) radius_angstrom = min(radius_angstrom, NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A)
         radius_px = max(1, nint(max(smpd, radius_angstrom) / smpd))
+        if( size(pix,2) == ldim(1) * ldim(2) )then
+            call tent_smooth_2d(dmat(:,:,1), tmp(:,:,1), ldim(1), ldim(2), radius_px)
+            return
+        endif
+        mask_tmp(:ldim(1),:ldim(2),1) = 0.
+        do ipix = 1, size(pix,2)
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            mask_tmp(i,j,1) = 1.
+        end do
         call tent_smooth_2d(dmat(:,:,1), tmp(:,:,1), ldim(1), ldim(2), radius_px)
+        call tent_smooth_2d(mask_tmp(:,:,1), tmp(:,:,1), ldim(1), ldim(2), radius_px)
+        !$omp parallel do schedule(static) default(shared) private(ipix,i,j,denom) proc_bind(close)
+        do ipix = 1, size(pix,2)
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            denom = max(mask_tmp(i,j,1), TINY)
+            dmat(i,j,1) = dmat(i,j,1) / denom
+        end do
+        !$omp end parallel do
     end subroutine smooth_nu2D_objective
 
     subroutine tent_smooth_2d( img, tmp, nx, ny, radius )
@@ -402,32 +502,59 @@ contains
         !$omp end parallel do
     end subroutine pack_nu2D_dmat
 
-    subroutine smooth_nu2D_label_coords( labelmap, pix, label_coord, work, ldim, smpd, nlabels )
+    subroutine smooth_nu2D_label_coords( labelmap, pix, label_coord, work, mask_work, ldim, smpd, nlabels )
         integer(kind=NU2D_LABEL_KIND), intent(in)    :: labelmap(:,:,:)
         integer,                       intent(in)    :: pix(:,:), ldim(3), nlabels
         real,                          intent(in)    :: smpd
-        real,                          intent(inout) :: label_coord(:,:,:), work(:,:,:)
+        real,                          intent(inout) :: label_coord(:,:,:), work(:,:,:), mask_work(:,:,:)
         integer :: ipix, i, j, ilabel, radius_px
+        real :: denom
         if( nlabels < 1 ) THROW_HARD('empty label bank; smooth_nu2D_label_coords')
         if( smpd <= TINY ) THROW_HARD('invalid smpd; smooth_nu2D_label_coords')
         radius_px = max(1, nint(NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A / smpd))
-        label_coord(:ldim(1),:ldim(2),1) = 1.
+        if( size(pix,2) == ldim(1) * ldim(2) )then
+            label_coord(:ldim(1),:ldim(2),1) = 1.
+            !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel) proc_bind(close)
+            do ipix = 1, size(pix,2)
+                i = pix(1,ipix)
+                j = pix(2,ipix)
+                ilabel = max(1, min(nlabels, int(labelmap(i,j,1))))
+                label_coord(i,j,1) = real(ilabel)
+            end do
+            !$omp end parallel do
+            call tent_smooth_2d(label_coord(:,:,1), work(:,:,1), ldim(1), ldim(2), radius_px)
+            !$omp parallel do schedule(static) default(shared) private(ipix,i,j) proc_bind(close)
+            do ipix = 1, size(pix,2)
+                i = pix(1,ipix)
+                j = pix(2,ipix)
+                label_coord(i,j,1) = max(1., min(real(nlabels), label_coord(i,j,1)))
+            end do
+            !$omp end parallel do
+            return
+        endif
+        label_coord(:ldim(1),:ldim(2),1) = 0.
+        mask_work(:ldim(1),:ldim(2),1) = 0.
         !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel) proc_bind(close)
         do ipix = 1, size(pix,2)
             i = pix(1,ipix)
             j = pix(2,ipix)
             ilabel = max(1, min(nlabels, int(labelmap(i,j,1))))
             label_coord(i,j,1) = real(ilabel)
+            mask_work(i,j,1) = 1.
         end do
         !$omp end parallel do
         call tent_smooth_2d(label_coord(:,:,1), work(:,:,1), ldim(1), ldim(2), radius_px)
-        !$omp parallel do schedule(static) default(shared) private(ipix,i,j) proc_bind(close)
+        call tent_smooth_2d(mask_work(:,:,1), work(:,:,1), ldim(1), ldim(2), radius_px)
+        work(:ldim(1),:ldim(2),1) = 1.
+        !$omp parallel do schedule(static) default(shared) private(ipix,i,j,denom) proc_bind(close)
         do ipix = 1, size(pix,2)
             i = pix(1,ipix)
             j = pix(2,ipix)
-            label_coord(i,j,1) = max(1., min(real(nlabels), label_coord(i,j,1)))
+            denom = max(mask_work(i,j,1), TINY)
+            work(i,j,1) = max(1., min(real(nlabels), label_coord(i,j,1) / denom))
         end do
         !$omp end parallel do
+        label_coord(:ldim(1),:ldim(2),1) = work(:ldim(1),:ldim(2),1)
     end subroutine smooth_nu2D_label_coords
 
     subroutine synthesize_nu2D_soft( even_bank, odd_bank, label_coord, pix, ldim, smpd, even_out, odd_out, avg_out )
@@ -704,7 +831,7 @@ contains
         integer, intent(in) :: icand, neigh(3,NU2D_LABEL_SMOOTH_NNEIGH), nsz
         integer(kind=NU2D_LABEL_KIND), intent(in) :: labelmap(:,:,:)
         real,    intent(in) :: neigh_w(NU2D_LABEL_SMOOTH_NNEIGH), coords(:)
-        integer :: ineigh, ni, nj, degree
+        integer :: ineigh, ni, nj, jlabel, degree
         real    :: wsum
         nu2D_neighborhood_cost = 0.
         degree = 0
@@ -712,10 +839,12 @@ contains
         do ineigh = 1, nsz
             ni = neigh(1,ineigh)
             nj = neigh(2,ineigh)
+            jlabel = int(labelmap(ni,nj,1))
+            if( jlabel < 1 .or. jlabel > size(coords) ) cycle
             degree = degree + 1
             wsum = wsum + neigh_w(ineigh)
             nu2D_neighborhood_cost = nu2D_neighborhood_cost + &
-                &neigh_w(ineigh) * nu2D_pair_cost(coords(icand), coords(int(labelmap(ni,nj,1))))
+                &neigh_w(ineigh) * nu2D_pair_cost(coords(icand), coords(jlabel))
         end do
         if( degree > 0 .and. wsum > TINY ) nu2D_neighborhood_cost = nu2D_neighborhood_cost / wsum
     end function nu2D_neighborhood_cost

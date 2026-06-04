@@ -3,6 +3,7 @@ submodule (simple_classaverager) simple_classaverager_restore
 use simple_imgarr_utils,     only: alloc_imgarr, dealloc_imgarr
 use simple_strategy2D_utils, only: calc_cavg_offset
 use simple_gridding,         only: prep2D_inv_instrfun4mul
+use simple_image_msk,        only: automask2D_support_pix
 use simple_nu_filter2D,      only: nu_filter2D_state
 use simple_nu_filter2D_stats, only: nu_filter2D_stats, merge_nu_filter2D_stats, print_nu_filter2D_stats, &
     &kill_nu_filter2D_stats
@@ -583,11 +584,15 @@ contains
         type(cavgs_set), intent(inout) :: cavgs_unreg
         type(nu_filter2D_state), allocatable :: nu_states(:)
         type(nu_filter2D_stats) :: nu_stats
-        real,    allocatable :: class_align_lps(:), class_active_lps(:)
+        real,    allocatable :: class_align_lps(:), class_active_lps(:), class_support_fracs(:)
         integer :: icls, pop, ithr
         real    :: align_lp, frc05, frc0143
         write(logfhandle,'(A)') &
-            &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; whole image'
+            &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: pixels outside automask support use the lowest-resolution filter'
+        write(logfhandle,'(A)') &
+            &'>>> 2D nonuniform filter: automask failure uses the lowest-resolution filter for all pixels'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: active bank is capped by the class FSC resolution'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: histogram-constrained Potts preserves raw label fractions'
@@ -598,6 +603,7 @@ contains
         allocate(nu_states(nthr_glob))
         allocate(class_align_lps(ncls), source=0.)
         allocate(class_active_lps(ncls), source=0.)
+        allocate(class_support_fracs(ncls), source=0.)
         do ithr = 1, nthr_glob
             call nu_states(ithr)%setup(ldim_crop, smpd_crop)
         end do
@@ -624,13 +630,16 @@ contains
             ithr = omp_get_thread_num() + 1
             block
                 type(image) :: even_raw, odd_raw, reg_even, reg_odd, reg_avg, even_nu, odd_nu, avg_nu
+                integer, allocatable :: support_pix(:,:)
                 call stack_slice_to_image(cavgs_unreg%even, icls, even_raw)
                 call stack_slice_to_image(cavgs_unreg%odd,  icls, odd_raw)
                 call stack_slice_to_image(cavgs%even,       icls, reg_even)
                 call stack_slice_to_image(cavgs%odd,        icls, reg_odd)
                 call stack_slice_to_image(cavgs%merged,     icls, reg_avg)
+                call automask2D_support_pix(p_ptr, reg_avg, p_ptr%ngrow, nint(p_ptr%winsz), p_ptr%edge, support_pix)
+                class_support_fracs(icls) = real(size(support_pix,2)) / real(ldim_crop(1) * ldim_crop(2))
                 call nu_states(ithr)%apply(even_raw, odd_raw, reg_even, reg_odd, reg_avg, even_nu, odd_nu, &
-                    &avg_nu, class_align_lps(icls), active_lp_limit=class_active_lps(icls))
+                    &avg_nu, class_align_lps(icls), active_lp_limit=class_active_lps(icls), support_pix=support_pix)
                 call image_to_stack_slice(even_nu, cavgs%even,   icls)
                 call image_to_stack_slice(odd_nu,  cavgs%odd,    icls)
                 call image_to_stack_slice(avg_nu,  cavgs%merged, icls)
@@ -645,6 +654,16 @@ contains
             end block
         end do
         !$omp end parallel do
+        if( any(class_support_fracs > TINY) )then
+            write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                &'>>> 2D NU filter automask support range: ', &
+                &100. * minval(class_support_fracs, mask=class_support_fracs > TINY), ' - ', &
+                &100. * maxval(class_support_fracs, mask=class_support_fracs > TINY), '% of pixels'
+        endif
+        if( any(class_support_fracs <= TINY .and. eo_pops(1,:) + eo_pops(2,:) > 0) )then
+            write(logfhandle,'(A,I8)') '>>> 2D NU filter classes with failed automask support: ', &
+                &count(class_support_fracs <= TINY .and. eo_pops(1,:) + eo_pops(2,:) > 0)
+        endif
         do ithr = 1, nthr_glob
             call merge_nu_filter2D_stats(nu_stats, nu_states(ithr)%stats)
         end do
@@ -661,6 +680,7 @@ contains
         deallocate(nu_states)
         deallocate(class_align_lps)
         deallocate(class_active_lps)
+        deallocate(class_support_fracs)
         call kill_nu_filter2D_stats(nu_stats)
     end subroutine cavger_apply_nonuniform2D
 
