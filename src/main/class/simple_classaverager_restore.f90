@@ -590,15 +590,16 @@ contains
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
         write(logfhandle,'(A)') &
-            &'>>> 2D nonuniform filter: pixels outside automask support use the lowest-resolution filter'
+            &'>>> 2D nonuniform filter: automask defines foreground/background histogram regions'
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: automask failure uses the lowest-resolution filter for all pixels'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete directly inside automask support'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete over the whole image'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: foreground histogram follows raw labels'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: background histogram is biased to the lowest-resolution label'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
-        write(logfhandle,'(A)') '>>> 2D nonuniform filter: support boundary is softened by tent smoothing against label 1'
         allocate(nu_states(nthr_glob))
         allocate(class_align_lps(ncls), source=0.)
         allocate(class_support_fracs(ncls), source=0.)

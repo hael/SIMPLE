@@ -21,6 +21,7 @@ integer, parameter :: NU2D_LABEL_SMOOTH_RADIUS           = 2
 integer, parameter :: NU2D_LABEL_SMOOTH_NNEIGH           = (2 * NU2D_LABEL_SMOOTH_RADIUS + 1)**2 - 1
 integer, parameter :: NU2D_LABEL_SMOOTH_NCOLORS          = (NU2D_LABEL_SMOOTH_RADIUS + 1)**2
 real,    parameter :: NU2D_LABEL_SMOOTH_BETA_FRAC        = 2.5
+real,    parameter :: NU2D_LABEL_HIST_BETA_FRAC          = 8.0
 real,    parameter :: NU2D_LABEL_SMOOTH_QUAD_FRAC        = 1.0
 real,    parameter :: NU2D_LABEL_SMOOTH_TIE_EPS          = 1.e-6
 real,    parameter :: NU2D_LABEL_SMOOTH_RING1_WEIGHT     = 1.0
@@ -89,7 +90,7 @@ contains
         if( present(support_pix) )then
             call validate_support_pixels(support_pix)
             if( size(support_pix,2) > 0 )then
-                call run_with_pixels(support_pix)
+                call run_with_pixels(self%pix, support_pix)
             else
                 call run_lowest_resolution_only()
             endif
@@ -99,8 +100,9 @@ contains
 
     contains
 
-        subroutine run_with_pixels( eval_pix )
+        subroutine run_with_pixels( eval_pix, hist_support_pix )
             integer, intent(in) :: eval_pix(:,:)
+            integer, optional, intent(in) :: hist_support_pix(:,:)
             type(image), allocatable :: even_bank(:), odd_bank(:)
             type(image) :: even_ft, odd_ft
             integer, allocatable :: label_counts_raw(:)
@@ -117,7 +119,12 @@ contains
             self%filtmap = 0_NU2D_LABEL_KIND
             allocate(even_bank(nout), odd_bank(nout))
             allocate(label_counts_raw(nbase), source=0)
-            noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, eval_pix)
+            if( present(hist_support_pix) )then
+                call build_nu2D_support_mask(hist_support_pix, self%mask_tmp, self%ldim)
+                noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, hist_support_pix)
+            else
+                noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, eval_pix)
+            endif
             winsz = nint(COSMSKHALFWIDTH)
             call even_ft%copy(even_raw)
             call odd_ft%copy(odd_raw)
@@ -141,8 +148,13 @@ contains
             end do
             call select_nu2D_labels(self%dmats(:npix_eval,:nbase), eval_pix, self%filtmap)
             call count_nu_filter2D_labels(self%filtmap, eval_pix, nbase, label_counts_raw)
-            call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
-                &self%candidate_coords(:nbase), self%ldim, potts_iters, potts_changes)
+            if( present(hist_support_pix) )then
+                call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
+                    &self%candidate_coords(:nbase), self%ldim, potts_iters, potts_changes, region_mask=self%mask_tmp)
+            else
+                call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
+                    &self%candidate_coords(:nbase), self%ldim, potts_iters, potts_changes)
+            endif
             call accumulate_nu_filter2D_stats(self%stats, self%filtmap, eval_pix, label_counts_raw, &
                 &potts_iters, potts_changes)
             if( present(align_lp) ) align_lp = nu2D_finest_selected_lp(self%filtmap, eval_pix, &
@@ -488,6 +500,19 @@ contains
         !$omp end parallel do
     end subroutine pack_nu2D_dmat
 
+    subroutine build_nu2D_support_mask( pix, mask, ldim )
+        integer, intent(in)    :: pix(:,:), ldim(3)
+        real,    intent(inout) :: mask(:,:,:)
+        integer :: ipix, i, j
+        if( any(shape(mask) /= ldim) ) THROW_HARD('support mask shape mismatch; build_nu2D_support_mask')
+        mask(:ldim(1),:ldim(2),1) = 0.
+        do ipix = 1, size(pix,2)
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            mask(i,j,1) = 1.
+        end do
+    end subroutine build_nu2D_support_mask
+
     subroutine smooth_nu2D_label_coords( labelmap, pix, label_coord, work, mask_work, ldim, smpd, nlabels )
         integer(kind=NU2D_LABEL_KIND), intent(in)    :: labelmap(:,:,:)
         integer,                       intent(in)    :: pix(:,:), ldim(3), nlabels
@@ -497,8 +522,9 @@ contains
         if( nlabels < 1 ) THROW_HARD('empty label bank; smooth_nu2D_label_coords')
         if( smpd <= TINY ) THROW_HARD('invalid smpd; smooth_nu2D_label_coords')
         radius_px = max(1, nint(NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A / smpd))
-        label_coord(:ldim(1),:ldim(2),1) = 1.
         if( size(pix,2) == ldim(1) * ldim(2) )then
+            label_coord(:ldim(1),:ldim(2),1) = 1.
+            mask_work(:ldim(1),:ldim(2),1) = 1.
             !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel) proc_bind(close)
             do ipix = 1, size(pix,2)
                 i = pix(1,ipix)
@@ -517,6 +543,7 @@ contains
             !$omp end parallel do
             return
         endif
+        label_coord(:ldim(1),:ldim(2),1) = 0.
         mask_work(:ldim(1),:ldim(2),1) = 0.
         !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel) proc_bind(close)
         do ipix = 1, size(pix,2)
@@ -528,14 +555,18 @@ contains
         end do
         !$omp end parallel do
         call tent_smooth_2d(label_coord(:,:,1), work(:,:,1), ldim(1), ldim(2), radius_px)
-        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j) proc_bind(close)
-        do j = 1, ldim(2)
-            do i = 1, ldim(1)
-                label_coord(i,j,1) = max(1., min(real(nlabels), label_coord(i,j,1)))
-                if( mask_work(i,j,1) <= 0.5 ) label_coord(i,j,1) = 1.
-            end do
+        call tent_smooth_2d(mask_work(:,:,1), work(:,:,1), ldim(1), ldim(2), radius_px)
+        work(:ldim(1),:ldim(2),1) = 0.
+        !$omp parallel do schedule(static) default(shared) private(ipix,i,j) proc_bind(close)
+        do ipix = 1, size(pix,2)
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            label_coord(i,j,1) = max(1., min(real(nlabels), label_coord(i,j,1) / max(mask_work(i,j,1), TINY)))
+            work(i,j,1) = max(0., min(1., mask_work(i,j,1)))
         end do
         !$omp end parallel do
+        label_coord(:ldim(1),:ldim(2),1) = merge(label_coord(:ldim(1),:ldim(2),1), 1., work(:ldim(1),:ldim(2),1) > 0.)
+        mask_work(:ldim(1),:ldim(2),1) = work(:ldim(1),:ldim(2),1)
     end subroutine smooth_nu2D_label_coords
 
     subroutine synthesize_nu2D_soft( even_bank, odd_bank, label_coord, pix, ldim, smpd, even_out, odd_out, avg_out )
@@ -650,20 +681,28 @@ contains
         if( finest_label > 0 ) nu2D_finest_selected_lp = calc_lowpass_lim(cutoff_finds(finest_label), box, smpd)
     end function nu2D_finest_selected_lp
 
-    subroutine refine_nu2D_labels( labelmap, dmats, pix, coords, ldim, potts_iters, potts_changes )
+    subroutine refine_nu2D_labels( labelmap, dmats, pix, coords, ldim, potts_iters, potts_changes, region_mask )
         integer(kind=NU2D_LABEL_KIND), intent(inout) :: labelmap(:,:,:)
         real,                          intent(in)    :: dmats(:,:), coords(:)
         integer,                       intent(in)    :: pix(:,:), ldim(3)
         integer,                       intent(out)   :: potts_iters, potts_changes
+        real, optional,                intent(in)    :: region_mask(:,:,:)
+        integer, allocatable :: counts(:,:), target_counts(:,:), region_sizes(:), pixel_regions(:)
+        real,    allocatable :: hist_scales(:)
         integer :: iter, color, ipix, icand, cur_icand, best_icand, i, j, neigh(3,NU2D_LABEL_SMOOTH_NNEIGH), nsz
-        integer :: nchanged, ncand
+        integer :: nchanged, ncand, iregion
         real    :: beta, e, best_e, neigh_w(NU2D_LABEL_SMOOTH_NNEIGH)
         potts_iters   = 0
         potts_changes = 0
         ncand = size(dmats,2)
         if( ncand < 2 ) return
+        if( present(region_mask) )then
+            if( any(shape(region_mask) /= ldim) ) THROW_HARD('region mask shape mismatch; refine_nu2D_labels')
+        endif
         beta = estimate_nu2D_beta(dmats)
         if( beta <= TINY ) return
+        call init_nu2D_histogram_targets(labelmap, pix, ncand, beta, target_counts, counts, &
+            &region_sizes, hist_scales, pixel_regions, region_mask)
         do iter = 1, NU2D_LABEL_SMOOTH_MAXITS
             potts_iters = potts_iters + 1
             nchanged = 0
@@ -675,13 +714,16 @@ contains
                     call collect_nu2D_neighbors(ldim, i, j, neigh, neigh_w, nsz)
                     cur_icand = max(1, min(ncand, int(labelmap(i,j,1))))
                     if( cur_icand /= int(labelmap(i,j,1)) ) labelmap(i,j,1) = int(cur_icand, kind=NU2D_LABEL_KIND)
+                    iregion = pixel_regions(ipix)
                     best_icand = cur_icand
                     best_e     = dmats(ipix,cur_icand) + beta * &
                         &nu2D_neighborhood_cost(cur_icand, labelmap, neigh, neigh_w, nsz, coords)
                     do icand = 1, ncand
                         if( icand == cur_icand ) cycle
                         e = dmats(ipix,icand) + beta * &
-                            &nu2D_neighborhood_cost(icand, labelmap, neigh, neigh_w, nsz, coords)
+                            &nu2D_neighborhood_cost(icand, labelmap, neigh, neigh_w, nsz, coords) + &
+                            &nu2D_histogram_delta(icand, cur_icand, counts, target_counts, &
+                            &iregion, hist_scales(iregion))
                         if( nu2D_is_better(e, best_e) )then
                             best_e     = e
                             best_icand = icand
@@ -689,6 +731,8 @@ contains
                     end do
                     if( best_icand /= cur_icand )then
                         nchanged = nchanged + 1
+                        counts(cur_icand,iregion)  = counts(cur_icand,iregion) - 1
+                        counts(best_icand,iregion) = counts(best_icand,iregion) + 1
                         labelmap(i,j,1) = int(best_icand, kind=NU2D_LABEL_KIND)
                     endif
                 end do
@@ -696,7 +740,62 @@ contains
             potts_changes = potts_changes + nchanged
             if( nchanged == 0 ) exit
         end do
+        deallocate(counts, target_counts, region_sizes, hist_scales, pixel_regions)
     end subroutine refine_nu2D_labels
+
+    subroutine init_nu2D_histogram_targets( labelmap, pix, ncand, beta, target_counts, counts, &
+            &region_sizes, hist_scales, pixel_regions, region_mask )
+        integer(kind=NU2D_LABEL_KIND), intent(in) :: labelmap(:,:,:)
+        integer, intent(in) :: pix(:,:), ncand
+        real,    intent(in) :: beta
+        integer, allocatable, intent(out) :: target_counts(:,:), counts(:,:), region_sizes(:)
+        integer, allocatable, intent(out) :: pixel_regions(:)
+        real,    allocatable, intent(out) :: hist_scales(:)
+        real, optional, intent(in) :: region_mask(:,:,:)
+        integer :: nregions, ipix, i, j, ilabel, iregion
+        nregions = 1
+        if( present(region_mask) ) nregions = 2
+        allocate(target_counts(ncand,nregions), source=0)
+        allocate(counts(ncand,nregions),        source=0)
+        allocate(region_sizes(nregions),        source=0)
+        allocate(hist_scales(nregions),         source=0.)
+        allocate(pixel_regions(size(pix,2)),    source=1)
+        do ipix = 1, size(pix,2)
+            i = pix(1,ipix)
+            j = pix(2,ipix)
+            iregion = 1
+            if( present(region_mask) )then
+                if( region_mask(i,j,1) <= 0.5 ) iregion = 2
+            endif
+            pixel_regions(ipix) = iregion
+            ilabel = int(labelmap(i,j,1))
+            if( ilabel < 1 .or. ilabel > ncand ) cycle
+            target_counts(ilabel,iregion) = target_counts(ilabel,iregion) + 1
+            region_sizes(iregion) = region_sizes(iregion) + 1
+        end do
+        counts = target_counts
+        if( present(region_mask) )then
+            target_counts(:,2) = 0
+            target_counts(1,2) = region_sizes(2)
+        endif
+        do iregion = 1, nregions
+            hist_scales(iregion) = NU2D_LABEL_HIST_BETA_FRAC * beta / real(max(1, region_sizes(iregion)))
+        end do
+    end subroutine init_nu2D_histogram_targets
+
+    real function nu2D_histogram_delta( icand, cur_icand, counts, target_counts, iregion, hist_scale )
+        integer, intent(in) :: icand, cur_icand, counts(:,:), target_counts(:,:), iregion
+        real,    intent(in) :: hist_scale
+        real :: cur_before, cand_before
+        if( icand == cur_icand )then
+            nu2D_histogram_delta = 0.
+            return
+        endif
+        cur_before  = real(counts(cur_icand,iregion) - target_counts(cur_icand,iregion))
+        cand_before = real(counts(icand,iregion)     - target_counts(icand,iregion))
+        nu2D_histogram_delta = hist_scale * ((cur_before - 1.)**2 - cur_before**2 + &
+            &(cand_before + 1.)**2 - cand_before**2)
+    end function nu2D_histogram_delta
 
     real function estimate_nu2D_beta( dmats )
         real,    intent(in) :: dmats(:,:)

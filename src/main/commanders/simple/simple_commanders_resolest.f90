@@ -291,6 +291,7 @@ contains
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: standalone mode uses the full discrete bank'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: objective smoothing radius = AWF * LP, capped at 30 A'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: all bank members compete directly'
+        write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts histogram prior preserves raw global label fractions'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts ICM weights one- and two-pixel neighborhoods'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: Potts penalty includes weak 1-label jumps'
         write(logfhandle,'(A)') '>>> 2D nonuniform filter: output blends bank members over a 10 A tent-smoothed field'
