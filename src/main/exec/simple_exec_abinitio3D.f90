@@ -3,7 +3,8 @@ module simple_exec_abinitio3D
 use simple_cmdline,             only: cmdline
 use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec, exec_screen
-use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D, commander_multivol_assign
+use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D_cavg_sort, &
+    commander_abinitio3D, commander_multivol_assign
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -13,6 +14,7 @@ private
 
 type(commander_abinitio3D)        :: xabinitio3D
 type(commander_abinitio3D_cavgs)  :: xabinitio3D_cavgs
+type(commander_abinitio3D_cavg_sort) :: xabinitio3D_cavg_sort
 type(commander_estimate_lpstages) :: xestimate_lpstages
 type(commander_multivol_assign)   :: xmultivol_assign
 type(commander_noisevol)          :: xnoisevol
@@ -42,6 +44,8 @@ contains
                 else
                     call xabinitio3D_cavgs%execute(cline)
                 endif
+            case( 'abinitio3D_cavg_sort' )
+                call xabinitio3D_cavg_sort%execute(cline)
             case( 'estimate_lpstages' )
                 call xestimate_lpstages%execute(cline)
             case( 'multivol_assign' )

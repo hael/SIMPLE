@@ -5,6 +5,7 @@ implicit none
 
 type(ui_program), target :: abinitio3D
 type(ui_program), target :: abinitio3D_cavgs
+type(ui_program), target :: abinitio3D_cavg_sort
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: multivol_assign
 type(ui_program), target :: noisevol
@@ -15,6 +16,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio3D(prgtab)
         call new_abinitio3D_cavgs(prgtab)
+        call new_abinitio3D_cavg_sort(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_multivol_assign(prgtab)
         call new_noisevol(prgtab)
@@ -25,6 +27,7 @@ contains
         write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio3D%name%to_char()
         write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
+        write(logfhandle,'(A)') abinitio3D_cavg_sort%name%to_char()
         write(logfhandle,'(A)') estimate_lpstages%name%to_char()
         write(logfhandle,'(A)') multivol_assign%name%to_char()
         write(logfhandle,'(A)') noisevol%name%to_char()
@@ -141,6 +144,45 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio3D_cavgs', abinitio3D_cavgs, prgtab)
     end subroutine new_abinitio3D_cavgs
+
+    subroutine new_abinitio3D_cavg_sort( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call abinitio3D_cavg_sort%new(&
+        &'abinitio3D_cavg_sort',&                                                                  ! name
+        &'Consensus sorting of class averages by restarted two-state ab initio 3D',&               ! descr_short
+        &'runs multiple short two-state abinitio3D_cavgs restarts, builds a consensus state label, &
+        &and orients the final labels as good/bad using the class-average quality model',&         ! descr_long
+        &'simple_exec',&                                                                          ! executable
+        &.true.,&                                                                                 ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,quality,compute")             ! GUI
+        ! search controls
+        call abinitio3D_cavg_sort%add_input(UI_SRCH, pgrp, gui_submenu="model", gui_advanced=.false.)
+        call abinitio3D_cavg_sort%add_input(UI_SRCH, pgrp_start, gui_submenu="model", gui_advanced=.true.)
+        call abinitio3D_cavg_sort%add_input(UI_SRCH, 'nrestarts', 'num', 'Number of ab initio restarts', &
+            &'Number of independent two-state abinitio3D_cavgs restarts to run before consensus voting{3}', &
+            &'# restarts{3}', .false., 3., gui_submenu="model", gui_advanced=.false.)
+        ! quality controls
+        call abinitio3D_cavg_sort%add_input(UI_SRCH, quality_model, gui_submenu="quality", gui_advanced=.false.)
+        call abinitio3D_cavg_sort%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
+            &'Optional class-average quality model file overriding the built-in preset', &
+            &'quality model file', .false., '', gui_submenu="quality", gui_advanced=.true.)
+        ! filter controls
+        call abinitio3D_cavg_sort%add_input(UI_FILT, hp, gui_submenu="filter")
+        call abinitio3D_cavg_sort%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30., gui_submenu="filter")
+        call abinitio3D_cavg_sort%add_input(UI_FILT, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+            &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
+        call abinitio3D_cavg_sort%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
+        ! mask controls
+        call abinitio3D_cavg_sort%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        ! compute controls
+        call abinitio3D_cavg_sort%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('abinitio3D_cavg_sort', abinitio3D_cavg_sort, prgtab)
+    end subroutine new_abinitio3D_cavg_sort
 
     subroutine new_estimate_lpstages( prgtab )
         class(ui_hash), intent(inout) :: prgtab
