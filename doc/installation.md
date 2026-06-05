@@ -9,8 +9,6 @@ README.
 - macOS 10.10 or newer
 - CMake 3.5 or newer
 - GNU `gcc` and `gfortran` 14.2 or newer
-- BLAS and LAPACK, using the standard LP64 Fortran ABI
-- ARPACK or ARPACK-NG
 - FFTW 3.3 or newer, with double, single, and threaded builds
 - libcurl 7 or newer
 - libTIFF 4 or newer
@@ -170,14 +168,11 @@ make distclean
 
     Add brew to your path
 
-3.  Install the dependencies git, gcc, libtiff, jbigkit, OpenBLAS, LAPACK, ARPACK and cmake - make sure you have a python version higher than 3.10
+3.  Install the dependencies git, gcc, libtiff, jbigkit and cmake – make sure you have a python version higher than 3.10
 
         brew install git
         brew install cmake
         brew install gcc
-        brew install openblas
-        brew install lapack
-        brew install arpack
         brew install libtiff
         brew install jbigkit
         brew install python@3.10

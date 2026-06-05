@@ -1232,8 +1232,8 @@ contains
             subroutine savgol(np_here,ld)
                 integer, intent(in)  :: np_here, ld
                 integer, parameter   :: MMAX = 6
-                integer :: icode,imj,ipj,j,k,kk,mm
-                real    :: fac,sum,a(MMAX+1,MMAX+1),a_fit(m+1,m+1),a_inv(m+1,m+1),b(MMAX+1)
+                integer :: d,icode,imj,ipj,j,k,kk,mm,indx(MMAX+1)
+                real    :: fac,sum,a(MMAX+1,MMAX+1),b(MMAX+1)
                 if(np_here.lt.nl+nr+1.or.nl.lt.0.or.nr.lt.0.or.ld.gt.m.or.m.gt.MMAX  &
                 .or.nl+nr.lt.m) stop ' Bad args in savgol'
                 do ipj=0,2*m        !Set up the normal equations of the desired leastsquares fit.
@@ -1250,14 +1250,12 @@ contains
                         a(1+(ipj+imj)/2,1+(ipj-imj)/2)=sum
                     end do
                 end do
-                a_fit = a(1:m+1,1:m+1)
-                call matinv(a_fit, a_inv, m+1, icode)    !Solve with LAPACK LU factorization.
-                if(icode /= 0) stop ' Singular matrix in savgol'
+                call ludcmp(a,m+1,MMAX+1,indx,d,icode)    !Solve them: LU decomposition.
                 do j=1,m+1
                     b(j)=0.
                 end do
                 b(ld+1)=1.      !Right-hand side vector is unit vector, depending on which derivative we want.
-                b(1:m+1)=a_inv(1:m+1,ld+1)
+                call lubksb(a,m+1,MMAX+1,indx,b)   !Backsubstitute, giving one row of the inverse matrix.
                 do kk=1,np_here                    !Zero the output array (it may be bigger than the number
                     c(kk)=0.                         !of coefficients).
                 end do

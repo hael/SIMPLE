@@ -43,6 +43,7 @@ add_custom_target(simple_git
 file(GLOB DEFS_src               "defs/*.[Ff][90][08]")
 file(GLOB GNUFOR_src             "extlibs/gnufor/*.[Ff][90][08]")
 file(GLOB JSON_src               "extlibs/json/*.[Ff][90][08]")
+file(GLOB NETLIB_src             "extlibs/netlib/*.[Ff][90][08]")
 file(GLOB STARFILE_src           "extlibs/starfile/*.cpp")
 file(GLOB UNIX_src               "extlibs/unix/src/*.[Ff][90][08]")
 file(GLOB CURL_src               "extlibs/curl/src/*.[Ff][90][08]" "extlibs/curl/src/*.c")
@@ -79,6 +80,7 @@ set(SIMPLE_ALL_SOURCES
     ${FILEIO_src}
     ${STARFILE_src}
     ${CPLOT2D_src}
+    ${NETLIB_src}
     ${XML_src}
     ${UNIX_src}
     ${CURL_src}

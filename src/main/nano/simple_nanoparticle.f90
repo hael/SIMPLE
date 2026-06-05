@@ -8,7 +8,7 @@ use simple_image_msk,  only: image_msk
 use simple_image_bin,  only: image_bin
 use simple_atoms,      only: atoms
 use simple_parameters, only: parameters
-!use simple_linalg
+!use simple_qr_solve
 use simple_nanoparticle_utils
 implicit none
 
