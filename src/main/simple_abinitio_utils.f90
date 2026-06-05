@@ -20,8 +20,10 @@ logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
+logical          :: l_refine3D_mode_override = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
+type(string)     :: refine3D_mode_override
 real             :: update_frac  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0
 integer          :: nstages_refine3D = 0
@@ -105,6 +107,10 @@ contains
         cline_symmap        = cline
         cline_reconstruct3D = cline
         cline_reproject     = cline
+        l_refine3D_mode_override = cline%defined('refine')
+        if( l_refine3D_mode_override ) refine3D_mode_override = trim(params%refine)
+        if( l_refine3D_mode_override ) write(logfhandle,'(A,A)') &
+            &'>>> ABINITIO3D REFINE MODE OVERRIDE: ', refine3D_mode_override%to_char()
         ! refine3D
         call cline_refine3D%set('prg',                    'refine3D')
         call cline_refine3D%set('pgrp',                  params%pgrp)

@@ -18,7 +18,7 @@ integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
-integer,          parameter :: PROB_REFINE_STAGE       = 4           ! prob refinement stages 4-5
+integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
@@ -229,6 +229,10 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        if( l_refine3D_mode_override )then
+            cfg%refine = refine3D_mode_override
+            return
+        endif
         if( istage <  PROB_REFINE_STAGE )then
             cfg%refine = 'shc_smpl'
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
