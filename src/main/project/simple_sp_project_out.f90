@@ -12,7 +12,7 @@ contains
         logical,          optional, intent(in)    :: clspath
         real,             optional, intent(in)    :: mskdiam
         type(string) :: iimgkind, abspath
-        integer      :: ldim(3), nptcls, ind
+        integer      :: ldim(3), nptcls, ind, i
         if( present(imgkind) )then
             iimgkind = imgkind
         else
@@ -25,15 +25,16 @@ contains
         ! add os_out entry
         call self%add_entry2os_out(iimgkind%to_char(), ind)
         ! fill-in field
-        call self%os_out%set(ind, 'stk',     abspath%to_char())
-        call self%os_out%set(ind, 'box',     ldim(1))
-        call self%os_out%set(ind, 'nptcls',  nptcls)
-        call self%os_out%set(ind, 'fromp',   1)
-        call self%os_out%set(ind, 'top',     nptcls)
-        call self%os_out%set(ind, 'smpd',    smpd)
-        call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', iimgkind%to_char())
-        call self%os_out%set(ind, 'ctf',     'no')
+        call self%os_out%set(ind, 'stk',        abspath%to_char())
+        call self%os_out%set(ind, 'box',        ldim(1))
+        call self%os_out%set(ind, 'nptcls',     nptcls)
+        call self%os_out%set(ind, 'nptcls_stk', nptcls)
+        call self%os_out%set(ind, 'fromp',      1)
+        call self%os_out%set(ind, 'top',        nptcls)
+        call self%os_out%set(ind, 'smpd',       smpd)
+        call self%os_out%set(ind, 'stkkind',    'single')
+        call self%os_out%set(ind, 'imgkind',    iimgkind%to_char())
+        call self%os_out%set(ind, 'ctf',        'no')
         if( present(mskdiam) ) call self%os_out%set(ind, 'mskdiam', mskdiam)
         if( present(clspath) )then
             if( clspath ) call self%os_out%set(ind, 'stkpath', CWD_GLOB)
@@ -45,6 +46,9 @@ contains
             call self%os_cls2D%new(nptcls, is_ptcl=.false.)
             call self%os_cls2D%set_all2single('state',1.)
         endif
+        do i = 1,nptcls
+            call self%os_cls2D%set(i, 'indstk', i)
+        end do
         if( self%os_cls3D%get_noris() /= nptcls ) self%os_cls3D = self%os_cls2D
     end subroutine add_cavgs2os_out
 
