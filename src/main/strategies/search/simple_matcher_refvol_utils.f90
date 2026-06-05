@@ -279,8 +279,8 @@ contains
         endif
         ! noise regularization
         if( params%l_noise_reg )then
-            call build%vol%add_gauran(params%eps)
-            call build%vol_odd%add_gauran(params%eps)
+            call regularize_ref_with_noise(build%vol,     s, 'even')
+            call regularize_ref_with_noise(build%vol_odd, s, 'odd')
         endif
         ! MASK: use circular masking (volassemble handles automask if needed)
         call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
@@ -304,7 +304,7 @@ contains
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             ! noise regularization
             if( params%l_noise_reg )then
-                call build%vol%add_gauran(params%eps)
+                call regularize_ref_with_noise(build%vol, s, 'avg')
             endif
             ! mask with circular mask (volassemble handles automask if needed)
             call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
@@ -339,6 +339,27 @@ contains
                 call build%vol_odd%apply_filter(cur_fil)
             endif
         endif
+
+    contains
+
+        subroutine regularize_ref_with_noise( refvol, state, label )
+            class(image),     intent(inout) :: refvol
+            integer,          intent(in)    :: state
+            character(len=*), intent(in)    :: label
+            integer :: pop
+            real    :: var
+            var = refvol%variance()
+            if( var > TINY )then
+                call refvol%add_gauran(params%eps)
+                return
+            endif
+            pop = 0
+            if( associated(build%spproj_field) ) pop = build%spproj_field%get_pop(state, 'state')
+            write(logfhandle,'(A,I0,A,A,A,I0,A)') &
+                &'>>> SKIPPING WHITE NOISE REGULARIZATION FOR ZERO-VARIANCE STATE ', &
+                &state, ' ', trim(label), ' REFERENCE; POPULATION=', pop, &
+                &'; USING FLAT PLACEHOLDER REFERENCE'
+        end subroutine regularize_ref_with_noise
 
     end subroutine read_mask_filter_refvols
 
