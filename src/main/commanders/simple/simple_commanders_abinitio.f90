@@ -448,7 +448,6 @@ contains
         integer,          parameter :: DEFAULT_SORT_NSTATES = 2
         integer,          parameter :: MAX_SORT_NSTATES     = 3
         integer,          parameter :: SORT_NSTAGES         = 3
-        character(len=*), parameter :: SORT_REFINE_MODE     = 'shc_smpl'
         real,             parameter :: DEFAULT_DOCK_HP      = 100.0
         real,             parameter :: DEFAULT_DOCK_LP      = 10.0
         type(parameters)          :: params
@@ -582,7 +581,6 @@ contains
                 call cline_restart%set('mkdir',              'no')
                 call cline_restart%set('nstates',            sort_nstates)
                 call cline_restart%set('nstages',            SORT_NSTAGES)
-                call cline_restart%set('refine',             SORT_REFINE_MODE)
                 call cline_restart%set('verbose_exit',       'yes')
                 call cline_restart%set('verbose_exit_fname', RESTART_DONE)
                 call cline_restart%delete('nrestarts')
@@ -1007,7 +1005,6 @@ contains
             write(funit,'(A,I0)') '# nrestarts=', params%nrestarts
             write(funit,'(A,I0)') '# nstates=', sort_nstates
             write(funit,'(A,I0)') '# nstages=', SORT_NSTAGES
-            write(funit,'(A,A)') '# refine=', SORT_REFINE_MODE
             write(funit,'(A,A)') '# quality_model=', trim(model%name)
             write(funit,'(A)', advance='no') 'class,original_state,consensus_state,final_state,selection_state'
             do label = 1, sort_nstates
