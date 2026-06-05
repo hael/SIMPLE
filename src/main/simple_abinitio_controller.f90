@@ -39,7 +39,7 @@ real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop f
 ! Sampling and update defaults
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
-integer,          parameter :: NSAMPLE_START_DEFAULT      = 2000
+integer,          parameter :: NSAMPLE_START_DEFAULT      = 3000
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
