@@ -27,7 +27,8 @@ selector has been removed for `abinitio2D` and `cluster2D`.
 6. update particle class, in-plane, shift, sampled, and update-count state
 7. restore class averages through shared-memory or distributed class-average pathways
 8. run a final fill-in assignment pass for active particles that were never updated
-9. generate final class averages, FRC metadata, and ranked outputs
+9. when sampled updates were active, run a terminal greedy all-particle pass
+10. generate final class averages, FRC metadata, and ranked outputs
 
 The main policy boundary is:
 
@@ -43,6 +44,7 @@ The main policy boundary is:
 - run orchestration across stages
 - initial reference handling
 - final fill-in dispatch
+- terminal greedy all-particle dispatch after sampled staged updates
 - final class-average generation/ranking
 
 This layer should stay thin enough that stage rules are readable elsewhere.
@@ -113,6 +115,10 @@ Stage policy:
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
 - final fill-in is an assignment-only pass for active particles that still have `updatecnt == 0`
+- if any staged update used `update_frac`, `abinitio2D` runs a terminal
+  `refine=greedy` all-particle `cluster2D` pass with `update_frac` and
+  `fillin` disabled, refreshing class, in-plane, and shift parameters before
+  final class-average generation
 
 The desired restoration model is class-local: each class average should carry forward previous sums according to the realized sampled fraction for that class. The current implementation has moved toward this policy; changes in this area should preserve class-local semantics where available and avoid reintroducing a single ambiguous global owner for sampled-update state.
 
@@ -156,6 +162,8 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Does fill-in remain assignment-only unless the policy is explicitly changed?
+- When staged updates are sampled, does terminal greedy refresh all active
+  particles before final class-average generation?
 - Does the change preserve Cartesian-only `abinitio2D`?
 
 ## 8. Rules to Preserve During Refactors
@@ -165,6 +173,8 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not treat final fill-in as a normal class-average restoration stage.
+- Do not use final fill-in as a substitute for the terminal greedy all-particle
+  refresh when sampled abinitio2D updates were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the
   raw batch images are already available.

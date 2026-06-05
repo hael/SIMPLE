@@ -109,6 +109,7 @@ contains
             ! classify
             call execute_cluster2D
         enddo
+        call execute_terminal_greedy_pass
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
@@ -288,11 +289,19 @@ contains
             call set_automask2D_defaults( cline_cluster2D )
         end subroutine prep_command_lines
 
-        subroutine execute_cluster2D
+        subroutine execute_cluster2D( bench_phase, bench_stage )
+            character(len=*), optional, intent(in) :: bench_phase
+            integer,          optional, intent(in) :: bench_stage
+            character(len=:), allocatable :: phase_label
+            integer :: stage_label
             if( L_BENCH_GLOB )then
                 rt_calc_pspec = 0.
                 rt_cluster2D  = 0.
             endif
+            phase_label = 'stage'
+            stage_label = istage
+            if( present(bench_phase) ) phase_label = bench_phase
+            if( present(bench_stage) ) stage_label = bench_stage
             call del_file(CLUSTER2D_FINISHED)
             ! Initial sigma2
             if( istage == 1 )then
@@ -305,9 +314,33 @@ contains
             call xcluster2D%execute(cline_cluster2D)
             if( L_BENCH_GLOB )then
                 rt_cluster2D = toc(t_phase)
-                call write_abinitio_benchmark(cline_cluster2D%get_iarg('endit'), 'stage', istage)
+                call write_abinitio_benchmark(cline_cluster2D%get_iarg('endit'), phase_label, stage_label)
             endif
+            if( allocated(phase_label) ) deallocate(phase_label)
         end subroutine execute_cluster2D
+
+        subroutine execute_terminal_greedy_pass
+            type(string) :: terminal_refs
+            integer      :: terminal_start
+            if( .not. any(stage_parms(:)%l_update_frac) ) return
+            last_iter      = cline_cluster2D%get_iarg('endit')
+            terminal_start = last_iter + 1
+            terminal_refs  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A,I8)')'>>> TERMINAL GREEDY ALL-PARTICLE PASS FROM ITERATION ', last_iter
+            call cline_cluster2D%set('refs',        terminal_refs)
+            call cline_cluster2D%set('startit',     terminal_start)
+            call cline_cluster2D%set('minits',      1)
+            call cline_cluster2D%set('maxits',      1)
+            call cline_cluster2D%set('extr_iter',   params%extr_lim + 1)
+            call cline_cluster2D%set('refine',      'greedy')
+            call cline_cluster2D%set('restore_cavgs', 'yes')
+            call cline_cluster2D%delete('update_frac')
+            call cline_cluster2D%delete('fillin')
+            call cline_cluster2D%delete('endit')
+            call execute_cluster2D('terminal_greedy', nstages + 1)
+            call terminal_refs%kill
+        end subroutine execute_terminal_greedy_pass
 
         subroutine output_stats( prefix )
             character(len=*) :: prefix
