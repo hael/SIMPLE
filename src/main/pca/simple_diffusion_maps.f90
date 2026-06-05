@@ -5,7 +5,7 @@ use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_image,                  only: image
 use simple_imgarr_utils,           only: copy_imgarr, dealloc_imgarr
-use simple_linalg,                 only: eigh, matinv
+use simple_linalg,                 only: eigh, matinv, sparse_eigh
 use simple_parameters,             only: parameters
 use simple_polarft_calc,           only: polarft_calc
 use simple_srch_sort_loc,          only: hpsort
@@ -53,6 +53,14 @@ contains
     procedure :: embed      => steerable_embed
 end type steerable_diffusion_map_embedder
 
+type :: diffmap_sparse_graph
+    integer :: n   = 0
+    integer :: nnz = 0
+    integer, allocatable :: rowptr(:)
+    integer, allocatable :: colind(:)
+    real,    allocatable :: w(:)
+end type diffmap_sparse_graph
+
 contains
 
     subroutine set_params(self, ndiff, k_nn)
@@ -84,10 +92,11 @@ contains
         real, allocatable,             intent(out)   :: coords(:,:)
         real, allocatable, optional,   intent(out)   :: eigvals(:)
         real, optional,                 intent(in)    :: preimage_targets(:,:)
-        real, allocatable :: d2(:,:), aff(:,:), evals(:), evecs(:,:), kth_d2(:), deg(:), norm_aff(:,:)
+        real, allocatable :: d2(:,:), evals(:), evecs(:,:), kth_d2(:)
         real, allocatable :: diff_evals(:)
+        type(diffmap_sparse_graph) :: graph
         real :: eps, scale
-        integer :: nptcls, npix, i, j, k, ndiff_used, ndiff_scan, k_used, nev
+        integer :: nptcls, npix, i, j, k, ndiff_used, ndiff_scan, k_used, nev, eig_info, max_basis
         integer(int64) :: t0, t1, trate, t_total0
         npix   = size(pcavecs, 1)
         nptcls = size(pcavecs, 2)
@@ -104,9 +113,10 @@ contains
         ndiff_used = ndiff_scan
         k_used     = min(max(2, self%k_nn), nptcls - 1)
         call system_clock(t_total0, trate)
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Diffusion maps start: N=', nptcls, ' D=', npix, ' ndiff=', ndiff_scan, ' k_nn=', k_used
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Diffusion maps start: N=', nptcls, ' D=', npix, &
+            ' ndiff=', ndiff_scan, ' k_nn=', k_used
         call flush(logfhandle)
-        allocate(d2(nptcls,nptcls), aff(nptcls,nptcls), kth_d2(nptcls), deg(nptcls), source=0.)
+        allocate(d2(nptcls,nptcls), kth_d2(nptcls), source=0.)
         call system_clock(t0)
         !$omp parallel default(shared) private(i,j,k,scale)
         !$omp do schedule(dynamic)
@@ -137,43 +147,19 @@ contains
         write(logfhandle,'(A,F8.3,A,ES10.3)') 'Diffusion maps local scale selection: ', real(t1-t0)/real(trate), ' s; eps=', eps
         call flush(logfhandle)
         call system_clock(t0)
-        !$omp parallel do default(shared) private(i,j) schedule(static)
-        do i = 1, nptcls
-            do j = 1, nptcls
-                if( i == j ) cycle
-                if( d2(i,j) <= kth_d2(i) .or. d2(i,j) <= kth_d2(j) )then
-                    aff(i,j) = exp(-d2(i,j) / eps)
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        aff = 0.5 * (aff + transpose(aff))
-        deg = sum(aff, dim=2)
-        do i = 1, nptcls
-            if( deg(i) > DTINY ) cycle
-            j = nearest_neighbor_index(d2(i,:), i)
-            aff(i,j) = 1.
-            aff(j,i) = 1.
-        end do
-        deg = sum(aff, dim=2)
-        allocate(norm_aff(nptcls,nptcls), source=0.)
-        !$omp parallel do default(shared) private(i,j) schedule(static)
-        do i = 1, nptcls
-            do j = 1, nptcls
-                if( aff(i,j) <= DTINY ) cycle
-                norm_aff(i,j) = aff(i,j) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
-            end do
-        end do
-        !$omp end parallel do
+        call build_diffmap_sparse_affinity(d2, kth_d2, eps, graph)
         call system_clock(t1)
-        write(logfhandle,'(A,F8.3,A)') 'Diffusion maps graph/normalization: ', real(t1-t0)/real(trate), ' s'
+        write(logfhandle,'(A,F8.3,A,I12)') 'Diffusion maps sparse graph/normalization: ', &
+            real(t1-t0)/real(trate), ' s; nnz=', graph%nnz
         call flush(logfhandle)
         nev = ndiff_scan + 1
-        allocate(evals(nptcls), evecs(nptcls,nptcls))
+        allocate(evals(nev), evecs(nptcls,nev))
+        max_basis = min(nptcls, max(160, 8 * nev + 80))
         call system_clock(t0)
-        call eigh(nptcls, norm_aff, nev, evals, evecs)
+        call sparse_eigh(diffmap_sparse_matvec, graph, graph%n, nev, evals, evecs, tol=1.e-5, max_basis=max_basis, info=eig_info)
         call system_clock(t1)
-        write(logfhandle,'(A,F8.3,A,I8)') 'Diffusion maps eigensolve: ', real(t1-t0)/real(trate), ' s; nev=', nev
+        write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I4)') 'Diffusion maps sparse eigensolve: ', real(t1-t0)/real(trate), &
+            ' s; nev=', nev, ' basis=', max_basis, ' info=', eig_info
         call flush(logfhandle)
         call system_clock(t0)
         allocate(diff_evals(ndiff_scan), source=0.)
@@ -207,7 +193,8 @@ contains
         write(logfhandle,'(A,F8.3,A,I8,A,ES10.3,A,ES10.3)') 'Diffusion maps total: ', real(t1-t_total0)/real(trate), &
             ' s; dims=', ndiff_used, ' lambda1=', diff_evals(1), ' lambda_last=', diff_evals(ndiff_scan)
         call flush(logfhandle)
-        deallocate(d2, aff, kth_d2, deg, norm_aff, evals, evecs, diff_evals)
+        call kill_diffmap_sparse_graph(graph)
+        deallocate(d2, kth_d2, evals, evecs, diff_evals)
     end subroutine embed
 
     subroutine store_preimage_model(self, targets, coords)
@@ -451,6 +438,146 @@ contains
         call hpsort(work(1:k))
         kth = work(min(max(1, k_used), k))
     end subroutine kth_distance_for_point
+
+    subroutine build_diffmap_sparse_affinity(d2, kth_d2, eps, graph)
+        real,                       intent(in)  :: d2(:,:), kth_d2(:), eps
+        type(diffmap_sparse_graph), intent(out) :: graph
+        integer, allocatable :: edge_i(:), edge_j(:)
+        real,    allocatable :: edge_w(:), deg(:)
+        integer :: n, nnz, pos, i, j
+        n = size(d2,1)
+        if( n < 1 ) THROW_HARD('empty distance matrix; build_diffmap_sparse_affinity')
+        if( size(d2,2) /= n .or. size(kth_d2) /= n ) THROW_HARD('distance matrix shape mismatch; build_diffmap_sparse_affinity')
+        nnz = 0
+        !$omp parallel do default(shared) private(i,j) schedule(static) reduction(+:nnz)
+        do i = 1, n
+            do j = 1, n
+                if( i == j ) cycle
+                if( d2(i,j) <= kth_d2(i) .or. d2(i,j) <= kth_d2(j) ) nnz = nnz + 1
+            end do
+        end do
+        !$omp end parallel do
+        allocate(edge_i(nnz + 2*n), edge_j(nnz + 2*n), source=0)
+        allocate(edge_w(nnz + 2*n), deg(n), source=0.)
+        pos = 0
+        do i = 1, n
+            do j = 1, n
+                if( i == j ) cycle
+                if( d2(i,j) <= kth_d2(i) .or. d2(i,j) <= kth_d2(j) )then
+                    pos = pos + 1
+                    edge_i(pos) = i
+                    edge_j(pos) = j
+                    edge_w(pos) = exp(-d2(i,j) / eps)
+                    deg(i) = deg(i) + edge_w(pos)
+                endif
+            end do
+        end do
+        do i = 1, n
+            if( deg(i) > DTINY ) cycle
+            j = nearest_neighbor_index(d2(i,:), i)
+            pos = pos + 1
+            edge_i(pos) = i
+            edge_j(pos) = j
+            edge_w(pos) = 1.
+            pos = pos + 1
+            edge_i(pos) = j
+            edge_j(pos) = i
+            edge_w(pos) = 1.
+        end do
+        call diffmap_sparse_from_coo(n, edge_i(:pos), edge_j(:pos), edge_w(:pos), graph)
+        call normalize_diffmap_sparse_graph(graph)
+        deallocate(edge_i, edge_j, edge_w, deg)
+    end subroutine build_diffmap_sparse_affinity
+
+    subroutine diffmap_sparse_from_coo(n, rows, cols, weights, graph)
+        integer,                    intent(in)  :: n
+        integer,                    intent(in)  :: rows(:), cols(:)
+        real,                       intent(in)  :: weights(:)
+        type(diffmap_sparse_graph), intent(out) :: graph
+        integer, allocatable :: counts(:), cursor(:)
+        integer :: e, i, p, nnz
+        if( n < 1 ) THROW_HARD('n must be positive; diffmap_sparse_from_coo')
+        if( size(rows) /= size(cols) .or. size(rows) /= size(weights) ) THROW_HARD('COO size mismatch; diffmap_sparse_from_coo')
+        nnz = size(weights)
+        graph%n   = n
+        graph%nnz = nnz
+        allocate(graph%rowptr(n+1), graph%colind(nnz), graph%w(nnz))
+        allocate(counts(n), cursor(n), source=0)
+        do e = 1, nnz
+            if( rows(e) < 1 .or. rows(e) > n .or. cols(e) < 1 .or. cols(e) > n )then
+                THROW_HARD('COO index out of range; diffmap_sparse_from_coo')
+            endif
+            counts(rows(e)) = counts(rows(e)) + 1
+        end do
+        graph%rowptr(1) = 1
+        do i = 1, n
+            graph%rowptr(i+1) = graph%rowptr(i) + counts(i)
+        end do
+        cursor = graph%rowptr(1:n)
+        do e = 1, nnz
+            p = cursor(rows(e))
+            graph%colind(p) = cols(e)
+            graph%w(p)      = weights(e)
+            cursor(rows(e)) = cursor(rows(e)) + 1
+        end do
+        deallocate(counts, cursor)
+    end subroutine diffmap_sparse_from_coo
+
+    subroutine normalize_diffmap_sparse_graph(graph)
+        type(diffmap_sparse_graph), intent(inout) :: graph
+        real, allocatable :: deg(:)
+        integer :: i, j, p
+        if( graph%n < 1 ) THROW_HARD('empty graph; normalize_diffmap_sparse_graph')
+        allocate(deg(graph%n))
+        call diffmap_sparse_degree(graph, deg)
+        do i = 1, graph%n
+            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                j = graph%colind(p)
+                graph%w(p) = graph%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+            end do
+        end do
+        deallocate(deg)
+    end subroutine normalize_diffmap_sparse_graph
+
+    subroutine diffmap_sparse_degree(graph, deg)
+        type(diffmap_sparse_graph), intent(in)  :: graph
+        real,                       intent(out) :: deg(graph%n)
+        integer :: i, p
+        deg = 0.
+        do i = 1, graph%n
+            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                deg(i) = deg(i) + graph%w(p)
+            end do
+        end do
+    end subroutine diffmap_sparse_degree
+
+    subroutine diffmap_sparse_matvec(ctx, x, y)
+        class(*), intent(in)  :: ctx
+        real,     intent(in)  :: x(:)
+        real,     intent(out) :: y(:)
+        integer :: i, p
+        select type(graph => ctx)
+        type is (diffmap_sparse_graph)
+            if( size(x) /= graph%n .or. size(y) /= graph%n ) THROW_HARD('sparse matvec shape mismatch; diffmap_sparse_matvec')
+            y = 0.
+            do i = 1, graph%n
+                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                    y(i) = y(i) + graph%w(p) * x(graph%colind(p))
+                end do
+            end do
+        class default
+            THROW_HARD('invalid sparse context; diffmap_sparse_matvec')
+        end select
+    end subroutine diffmap_sparse_matvec
+
+    subroutine kill_diffmap_sparse_graph(graph)
+        type(diffmap_sparse_graph), intent(inout) :: graph
+        if( allocated(graph%rowptr) ) deallocate(graph%rowptr)
+        if( allocated(graph%colind) ) deallocate(graph%colind)
+        if( allocated(graph%w)      ) deallocate(graph%w)
+        graph%n   = 0
+        graph%nnz = 0
+    end subroutine kill_diffmap_sparse_graph
 
     subroutine steerable_set_params(self, ndiff, k_nn, nmodes)
         class(steerable_diffusion_map_embedder), intent(inout) :: self

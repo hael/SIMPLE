@@ -4,6 +4,14 @@ use simple_defs
 use simple_is_check_assert
 implicit none
 
+abstract interface
+    subroutine sparse_matvec_sp_proc(ctx, x, y)
+        class(*), intent(in)  :: ctx
+        real,     intent(in)  :: x(:)
+        real,     intent(out) :: y(:)
+    end subroutine sparse_matvec_sp_proc
+end interface
+
 ! linear algebra
 
 interface eigsrt
@@ -1559,6 +1567,97 @@ contains
             print *, real(end_time-start_time)/real(rate), " seconds"
         endif
     end subroutine eigh_sp
+
+    subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, info)
+        procedure(sparse_matvec_sp_proc) :: matvec
+        class(*),          intent(in)  :: ctx
+        integer,           intent(in)  :: n, neigs
+        real,              intent(out) :: eigvals(neigs)
+        real,              intent(out) :: eigvecs(n,neigs)
+        real,    optional, intent(in)  :: tol
+        integer, optional, intent(in)  :: max_basis
+        integer, optional, intent(out) :: info
+        real, allocatable :: v(:,:), q(:), qprev(:), w(:), alpha(:), beta(:)
+        real, allocatable :: tmat(:,:), ritz_vals(:), ritz_vecs(:,:)
+        real :: beta_prev, beta_new, alpha_j, nrm, tol_loc, coeff, resid_max
+        integer :: mbasis, m, j, i, k, nkeep
+        if( present(info) ) info = 0
+        if( n < 1 ) STOP 'sparse_eigh: empty matrix'
+        if( neigs < 1 .or. neigs > n ) STOP 'sparse_eigh: invalid neigs'
+        tol_loc = 1.e-5
+        if( present(tol) ) tol_loc = tol
+        mbasis = min(n, max(80, 4 * neigs + 40))
+        if( present(max_basis) ) mbasis = min(n, max(neigs, max_basis))
+        allocate(v(n,mbasis), q(n), qprev(n), w(n), alpha(mbasis), beta(mbasis), source=0.)
+        do i = 1,n
+            q(i) = sin(real(37*i,sp)) + 0.25 * cos(real(17*i,sp))
+        end do
+        nrm = sqrt(max(dot_product(q,q), real(DTINY,sp)))
+        q = q / nrm
+        qprev = 0.
+        beta_prev = 0.
+        m = mbasis
+        do j = 1,mbasis
+            v(:,j) = q
+            call matvec(ctx, q, w)
+            if( j > 1 ) w = w - beta_prev * qprev
+            alpha_j = dot_product(q,w)
+            alpha(j) = alpha_j
+            w = w - alpha_j * q
+            do i = 1,j
+                coeff = dot_product(v(:,i), w)
+                w = w - coeff * v(:,i)
+            end do
+            do i = 1,j
+                coeff = dot_product(v(:,i), w)
+                w = w - coeff * v(:,i)
+            end do
+            beta_new = sqrt(max(dot_product(w,w), 0.))
+            beta(j) = beta_new
+            if( beta_new <= tol_loc )then
+                m = j
+                exit
+            endif
+            qprev = q
+            q = w / beta_new
+            beta_prev = beta_new
+        end do
+        nkeep = min(neigs, m)
+        allocate(tmat(m,m), ritz_vals(nkeep), ritz_vecs(m,nkeep), source=0.)
+        do i = 1,m
+            tmat(i,i) = alpha(i)
+        end do
+        do i = 1,m-1
+            tmat(i,i+1) = beta(i)
+            tmat(i+1,i) = beta(i)
+        end do
+        if( m == 1 )then
+            ritz_vals(1)   = tmat(1,1)
+            ritz_vecs(1,1) = 1.
+        else
+            call eigh(m, tmat, nkeep, ritz_vals, ritz_vecs)
+        endif
+        eigvals = 0.
+        eigvecs = 0.
+        do k = 1,nkeep
+            eigvals(neigs-nkeep+k) = ritz_vals(k)
+            do j = 1,m
+                eigvecs(:,neigs-nkeep+k) = eigvecs(:,neigs-nkeep+k) + ritz_vecs(j,k) * v(:,j)
+            end do
+            nrm = sqrt(max(dot_product(eigvecs(:,neigs-nkeep+k), eigvecs(:,neigs-nkeep+k)), real(DTINY,sp)))
+            eigvecs(:,neigs-nkeep+k) = eigvecs(:,neigs-nkeep+k) / nrm
+        end do
+        resid_max = 0.
+        if( m >= mbasis )then
+            do k = 1,nkeep
+                resid_max = max(resid_max, abs(beta(m) * ritz_vecs(m,k)))
+            end do
+        endif
+        if( present(info) )then
+            if( resid_max > max(10. * tol_loc, 1.e-5) ) info = 1
+        endif
+        deallocate(v, q, qprev, w, alpha, beta, tmat, ritz_vals, ritz_vecs)
+    end subroutine sparse_eigh
 
     ! testing eigh on huge matrix
     subroutine test_eigh(n, n_eigs)
