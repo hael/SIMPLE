@@ -12,8 +12,8 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: NU2D_LOW_PASS_LIMITS(8) = [30.,20.,15.,12.,8.,6.,5.,4.]
-real,    parameter :: NU2D_TEST_AUX_LOW_PASS_LIMITS(2) = [20.,8.]
-real,    parameter :: NU2D_TEST_AUX_EQUIV_LOW_PASS_LIMIT = 8.
+real,    parameter :: NU2D_TEST_AUX_LOW_PASS_LIMITS(2) = [20.,10.]
+real,    parameter :: NU2D_TEST_AUX_EQUIV_LOW_PASS_LIMIT = 10.
 logical, parameter :: SIMPLE_NU2D_TEST_AUX_BANK = .true.
 character(len=*), parameter :: NU2D_TEST_AUX_BANK_ENVVAR = 'SIMPLE_NU2D_TEST_AUX_BANK'
 real,    parameter :: NU2D_OBJECTIVE_SMOOTH_AWF          = 3.0
@@ -60,19 +60,19 @@ contains
         if( nu2D_test_aux_bank_enabled() )then
             write(logfhandle,'(A,A,A)') &
                 &'>>> 2D nonuniform filter: TEST gate ', NU2D_TEST_AUX_BANK_ENVVAR, &
-                &' active; candidate bank 20 A, 8 A, aux'
+                &' active; candidate bank 20 A, 10 A, aux'
             write(logfhandle,'(A)') &
-                &'>>> 2D nonuniform filter: aux candidate uses the supplied auxiliary even/odd pair'
+                &'>>> 2D nonuniform filter: aux candidate uses the supplied auxiliary average'
             write(logfhandle,'(A)') &
                 &'>>> 2D nonuniform filter: all three candidates compete over the whole image'
             write(logfhandle,'(A)') &
-                &'>>> 2D nonuniform filter: Potts and histogram priors are disabled under this test gate'
+                &'>>> 2D nonuniform filter: Potts is enabled; histogram and region priors are disabled under this test gate'
             write(logfhandle,'(A,F4.1,A,F4.1,A)') &
                 &'>>> 2D nonuniform filter: objective smoothing radius = ', &
                 &NU2D_OBJECTIVE_SMOOTH_AWF * NU2D_OBJECTIVE_SMOOTH_RADIUS_FRAC, &
                 &' * max(LP,smpd), capped at ', NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A, ' A'
             write(logfhandle,'(A,F4.1,A)') &
-                &'>>> 2D nonuniform filter: hard labels are tent-smoothed; output blends candidates over a ', &
+                &'>>> 2D nonuniform filter: Potts labels are tent-smoothed; output blends candidates over a ', &
                 &NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A, ' A tent-smoothed label field'
             return
         endif
@@ -228,8 +228,8 @@ contains
                 icand = nlabels
                 call even_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
                 call odd_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
-                call even_bank(icand)%copy(aux_even)
-                call odd_bank(icand)%copy(aux_odd)
+                call even_bank(icand)%copy(aux_avg)
+                call odd_bank(icand)%copy(aux_avg)
                 call calc_nu2D_huber_objective(even_raw, even_bank(icand), odd_raw, odd_bank(icand), &
                     &noise_sigma, self%dmat, eval_pix)
                 call smooth_nu2D_objective(self%dmat, self%tmp, self%mask_tmp, self%ldim, self%smpd, &
@@ -239,8 +239,8 @@ contains
             call select_nu2D_labels(self%dmats(:npix_eval,:nlabels), eval_pix, self%filtmap)
             call count_nu_filter2D_labels(self%filtmap, eval_pix, nlabels, label_counts_raw)
             if( self%l_test_aux_bank )then
-                potts_iters = 0
-                potts_changes = 0
+                call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nlabels), eval_pix, &
+                    &self%candidate_coords(:nlabels), self%ldim, potts_iters, potts_changes, use_histogram=.false.)
             else
                 if( present(hist_support_pix) )then
                     call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nlabels), eval_pix, &
@@ -412,9 +412,9 @@ contains
         call get_environment_variable(NU2D_TEST_AUX_BANK_ENVVAR, env_value, status=status)
         if( status /= 0 ) return
         select case( trim(adjustl(env_value)) )
-        case( '1', 'y', 'Y', 'yes', 'Yes', 'YES', 'true', 'True', 'TRUE', 'on', 'On', 'ON' )
+        case( '1', 'y', 'Y', 'yes', 'Yes', 'YES', 'true', 'True', 'TRUE', '.true.', '.TRUE.', 'on', 'On', 'ON' )
             nu2D_test_aux_bank_enabled = .true.
-        case( '0', 'n', 'N', 'no', 'No', 'NO', 'false', 'False', 'FALSE', 'off', 'Off', 'OFF' )
+        case( '0', 'n', 'N', 'no', 'No', 'NO', 'false', 'False', 'FALSE', '.false.', '.FALSE.', 'off', 'Off', 'OFF' )
             nu2D_test_aux_bank_enabled = .false.
         end select
     end function nu2D_test_aux_bank_enabled
@@ -794,29 +794,39 @@ contains
         if( finest_lp < huge(finest_lp) ) nu2D_finest_selected_lp = finest_lp
     end function nu2D_finest_selected_lp
 
-    subroutine refine_nu2D_labels( labelmap, dmats, pix, coords, ldim, potts_iters, potts_changes, region_mask )
+    subroutine refine_nu2D_labels( labelmap, dmats, pix, coords, ldim, potts_iters, potts_changes, region_mask, &
+            &use_histogram )
         integer(kind=NU2D_LABEL_KIND), intent(inout) :: labelmap(:,:,:)
         real,                          intent(in)    :: dmats(:,:), coords(:)
         integer,                       intent(in)    :: pix(:,:), ldim(3)
         integer,                       intent(out)   :: potts_iters, potts_changes
         real, optional,                intent(in)    :: region_mask(:,:,:)
+        logical, optional,             intent(in)    :: use_histogram
         integer, allocatable :: counts(:,:), target_counts(:,:), region_sizes(:), pixel_regions(:)
         real,    allocatable :: hist_scales(:), potts_scales(:), region_priors(:,:)
         integer :: iter, color, ipix, icand, cur_icand, best_icand, i, j, neigh(3,NU2D_LABEL_SMOOTH_NNEIGH), nsz
         integer :: nchanged, ncand, iregion
         real    :: beta, region_beta, e, best_e, neigh_w(NU2D_LABEL_SMOOTH_NNEIGH)
+        logical :: l_use_histogram
         potts_iters   = 0
         potts_changes = 0
         ncand = size(dmats,2)
         if( ncand < 2 ) return
+        l_use_histogram = .true.
+        if( present(use_histogram) ) l_use_histogram = use_histogram
         if( present(region_mask) )then
             if( any(shape(region_mask) /= ldim) ) THROW_HARD('region mask shape mismatch; refine_nu2D_labels')
         endif
         beta = estimate_nu2D_beta(dmats)
         if( beta <= TINY ) return
-        call init_nu2D_histogram_targets(labelmap, pix, ncand, beta, target_counts, counts, &
-            &region_sizes, hist_scales, pixel_regions, region_priors, region_mask)
-        call init_nu2D_potts_scales(potts_scales, region_mask)
+        if( l_use_histogram )then
+            call init_nu2D_histogram_targets(labelmap, pix, ncand, beta, target_counts, counts, &
+                &region_sizes, hist_scales, pixel_regions, region_priors, region_mask)
+            call init_nu2D_potts_scales(potts_scales, region_mask)
+        else
+            call init_nu2D_potts_only_targets(pix, ncand, target_counts, counts, region_sizes, &
+                &hist_scales, pixel_regions, region_priors, potts_scales)
+        endif
         do iter = 1, NU2D_LABEL_SMOOTH_MAXITS
             potts_iters = potts_iters + 1
             nchanged = 0
@@ -836,9 +846,9 @@ contains
                     do icand = 1, ncand
                         if( icand == cur_icand ) cycle
                         e = dmats(ipix,icand) + region_priors(icand,iregion) + region_beta * &
-                            &nu2D_neighborhood_cost(icand, labelmap, neigh, neigh_w, nsz, coords) + &
-                            &nu2D_histogram_delta(icand, cur_icand, counts, target_counts, &
-                            &iregion, hist_scales(iregion))
+                            &nu2D_neighborhood_cost(icand, labelmap, neigh, neigh_w, nsz, coords)
+                        if( l_use_histogram ) e = e + nu2D_histogram_delta(icand, cur_icand, counts, &
+                            &target_counts, iregion, hist_scales(iregion))
                         if( nu2D_is_better(e, best_e) )then
                             best_e     = e
                             best_icand = icand
@@ -846,8 +856,10 @@ contains
                     end do
                     if( best_icand /= cur_icand )then
                         nchanged = nchanged + 1
-                        counts(cur_icand,iregion)  = counts(cur_icand,iregion) - 1
-                        counts(best_icand,iregion) = counts(best_icand,iregion) + 1
+                        if( l_use_histogram )then
+                            counts(cur_icand,iregion)  = counts(cur_icand,iregion) - 1
+                            counts(best_icand,iregion) = counts(best_icand,iregion) + 1
+                        endif
                         labelmap(i,j,1) = int(best_icand, kind=NU2D_LABEL_KIND)
                     endif
                 end do
@@ -857,6 +869,21 @@ contains
         end do
         deallocate(counts, target_counts, region_sizes, hist_scales, pixel_regions, potts_scales, region_priors)
     end subroutine refine_nu2D_labels
+
+    subroutine init_nu2D_potts_only_targets( pix, ncand, target_counts, counts, region_sizes, &
+            &hist_scales, pixel_regions, region_priors, potts_scales )
+        integer, intent(in) :: pix(:,:), ncand
+        integer, allocatable, intent(out) :: target_counts(:,:), counts(:,:), region_sizes(:)
+        integer, allocatable, intent(out) :: pixel_regions(:)
+        real,    allocatable, intent(out) :: hist_scales(:), region_priors(:,:), potts_scales(:)
+        allocate(target_counts(ncand,1), source=0)
+        allocate(counts(ncand,1),        source=0)
+        allocate(region_sizes(1),        source=size(pix,2))
+        allocate(hist_scales(1),         source=0.)
+        allocate(pixel_regions(size(pix,2)), source=1)
+        allocate(region_priors(ncand,1), source=0.)
+        allocate(potts_scales(1),        source=1.)
+    end subroutine init_nu2D_potts_only_targets
 
     subroutine init_nu2D_histogram_targets( labelmap, pix, ncand, beta, target_counts, counts, &
             &region_sizes, hist_scales, pixel_regions, region_priors, region_mask )
