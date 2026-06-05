@@ -473,8 +473,12 @@ contains
         iref_dist      = sorted_tab(1,:)
         ptcl_avail     = .true.
         do while( any(ptcl_avail) )
-            ! sampling the ref distribution to choose next iref to assign
-            assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
+            ! keep multi-state hard state labels cold; retain stochastic sampling for single-state pose assignment
+            if( self%nstates > 1 )then
+                assigned_iref = minloc(iref_dist, dim=1)
+            else
+                assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
+            endif
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)

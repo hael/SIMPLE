@@ -826,8 +826,13 @@ contains
             enddo
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                    &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
+                ! keep multi-state hard state labels cold; retain stochastic sampling for single-state pose assignment
+                if( self%nstates > 1 )then
+                    assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
+                else
+                    assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                        &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
+                endif
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
                 frontier%ptcl_avail(assigned_ptcl) = .false.
