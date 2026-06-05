@@ -12,6 +12,10 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: NU2D_LOW_PASS_LIMITS(8) = [30.,20.,15.,12.,8.,6.,5.,4.]
+real,    parameter :: NU2D_TEST_AUX_LOW_PASS_LIMITS(2) = [20.,8.]
+real,    parameter :: NU2D_TEST_AUX_EQUIV_LOW_PASS_LIMIT = 8.
+logical, parameter :: SIMPLE_NU2D_TEST_AUX_BANK = .true.
+character(len=*), parameter :: NU2D_TEST_AUX_BANK_ENVVAR = 'SIMPLE_NU2D_TEST_AUX_BANK'
 real,    parameter :: NU2D_OBJECTIVE_SMOOTH_AWF          = 3.0
 real,    parameter :: NU2D_OBJECTIVE_SMOOTH_RADIUS_FRAC  = 1.0
 real,    parameter :: NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
@@ -43,7 +47,7 @@ type :: nu_filter2D_state
     type(nu_filter2D_stats) :: stats
     integer :: ldim(3) = [0,0,0], box = 0, npix = 0
     real    :: smpd = 0.
-    logical :: l_setup = .false.
+    logical :: l_setup = .false., l_test_aux_bank = .false.
 contains
     procedure :: setup => setup_nu_filter2D
     procedure :: apply => nu_filter2D_classavg
@@ -53,6 +57,25 @@ end type nu_filter2D_state
 contains
 
     subroutine print_nu_filter2D_policy()
+        if( nu2D_test_aux_bank_enabled() )then
+            write(logfhandle,'(A,A,A)') &
+                &'>>> 2D nonuniform filter: TEST gate ', NU2D_TEST_AUX_BANK_ENVVAR, &
+                &' active; candidate bank 20 A, 8 A, aux'
+            write(logfhandle,'(A)') &
+                &'>>> 2D nonuniform filter: aux candidate uses the supplied auxiliary even/odd pair'
+            write(logfhandle,'(A)') &
+                &'>>> 2D nonuniform filter: all three candidates compete over the whole image'
+            write(logfhandle,'(A)') &
+                &'>>> 2D nonuniform filter: Potts and histogram priors are disabled under this test gate'
+            write(logfhandle,'(A,F4.1,A,F4.1,A)') &
+                &'>>> 2D nonuniform filter: objective smoothing radius = ', &
+                &NU2D_OBJECTIVE_SMOOTH_AWF * NU2D_OBJECTIVE_SMOOTH_RADIUS_FRAC, &
+                &' * max(LP,smpd), capped at ', NU2D_OBJECTIVE_SMOOTH_MAX_RADIUS_A, ' A'
+            write(logfhandle,'(A,F4.1,A)') &
+                &'>>> 2D nonuniform filter: hard labels are tent-smoothed; output blends candidates over a ', &
+                &NU2D_SYNTH_LABEL_SMOOTH_RADIUS_A, ' A tent-smoothed label field'
+            return
+        endif
         write(logfhandle,'(A)') &
             &'>>> 2D nonuniform filter: low-pass bank 30,20,15,12,8,6,5,4 A; binary automask support'
         write(logfhandle,'(A)') &
@@ -88,31 +111,45 @@ contains
         class(nu_filter2D_state), intent(inout) :: self
         integer,                   intent(in)    :: ldim_in(3)
         real,                      intent(in)    :: smpd_in
-        integer :: nbase, icand
+        logical, allocatable :: is_aux_label(:)
+        integer :: nfilters, nlabels, icand
         call self%kill
         self%ldim = ldim_in
         self%box  = self%ldim(1)
         self%smpd = smpd_in
+        self%l_test_aux_bank = nu2D_test_aux_bank_enabled()
         if( self%ldim(3) /= 1 ) THROW_HARD('2D images only; setup_nu_filter2D')
         if( self%ldim(1) /= self%ldim(2) ) THROW_HARD('square 2D images expected; setup_nu_filter2D')
         if( self%box < 2 ) THROW_HARD('invalid box; setup_nu_filter2D')
         if( self%smpd <= TINY ) THROW_HARD('invalid smpd; setup_nu_filter2D')
         call setup_pixels(self%ldim, self%pix, self%npix)
-        call setup_cutoff_finds(self%box, self%smpd, self%cutoff_finds)
-        nbase = size(self%cutoff_finds)
-        call setup_candidate_coords(nbase, self%candidate_coords)
-        allocate(self%dmats(self%npix,nbase), source=huge(0.))
+        if( self%l_test_aux_bank )then
+            call setup_cutoff_finds(self%box, self%smpd, NU2D_TEST_AUX_LOW_PASS_LIMITS, self%cutoff_finds)
+        else
+            call setup_cutoff_finds(self%box, self%smpd, NU2D_LOW_PASS_LIMITS, self%cutoff_finds)
+        endif
+        nfilters = size(self%cutoff_finds)
+        nlabels  = nfilters
+        if( self%l_test_aux_bank ) nlabels = nlabels + 1
+        call setup_candidate_coords(nlabels, self%candidate_coords)
+        allocate(self%dmats(self%npix,nlabels), source=huge(0.))
         allocate(self%dmat(self%ldim(1),self%ldim(2),1))
         allocate(self%tmp(self%ldim(1),self%ldim(2),1))
         allocate(self%mask_tmp(self%ldim(1),self%ldim(2),1))
         allocate(self%filtmap(self%ldim(1),self%ldim(2),1), source=1_NU2D_LABEL_KIND)
-        allocate(self%bwfilters(self%box,nbase), source=0.)
-        allocate(self%lowpass_limits(nbase), source=0.)
-        do icand = 1, nbase
+        allocate(self%bwfilters(self%box,nfilters), source=0.)
+        allocate(self%lowpass_limits(nlabels), source=0.)
+        allocate(is_aux_label(nlabels), source=.false.)
+        do icand = 1, nfilters
             call butterworth_filter(self%cutoff_finds(icand), self%bwfilters(:,icand))
             self%lowpass_limits(icand) = calc_lowpass_lim(self%cutoff_finds(icand), self%box, self%smpd)
         end do
-        call init_nu_filter2D_stats(self%stats, self%lowpass_limits)
+        if( self%l_test_aux_bank )then
+            self%lowpass_limits(nlabels) = NU2D_TEST_AUX_EQUIV_LOW_PASS_LIMIT
+            is_aux_label(nlabels) = .true.
+        endif
+        call init_nu_filter2D_stats(self%stats, self%lowpass_limits, is_aux_label)
+        deallocate(is_aux_label)
         self%l_setup = .true.
     end subroutine setup_nu_filter2D
 
@@ -129,6 +166,8 @@ contains
             call validate_support_pixels(support_pix)
             if( size(support_pix,2) > 0 )then
                 call run_with_pixels(self%pix, support_pix)
+            else if( self%l_test_aux_bank )then
+                call run_with_pixels(self%pix)
             else
                 call run_lowest_resolution_only()
             endif
@@ -144,19 +183,20 @@ contains
             type(image), allocatable :: even_bank(:), odd_bank(:)
             type(image) :: even_ft, odd_ft
             integer, allocatable :: label_counts_raw(:)
-            integer :: nbase, nout, icand, winsz, potts_iters, potts_changes, npix_eval
+            integer :: nfilters, nlabels, nout, icand, winsz, potts_iters, potts_changes, npix_eval
             real    :: noise_sigma, edge_mean
             npix_eval = size(eval_pix,2)
             if( npix_eval < 1 )then
                 call run_lowest_resolution_only()
                 return
             endif
-            nbase = size(self%cutoff_finds)
-            nout = nbase
-            self%dmats(:npix_eval,:nbase) = huge(0.)
+            nfilters = size(self%cutoff_finds)
+            nlabels = size(self%lowpass_limits)
+            nout = nlabels
+            self%dmats(:npix_eval,:nlabels) = huge(0.)
             self%filtmap = 0_NU2D_LABEL_KIND
             allocate(even_bank(nout), odd_bank(nout))
-            allocate(label_counts_raw(nbase), source=0)
+            allocate(label_counts_raw(nlabels), source=0)
             if( present(hist_support_pix) )then
                 call build_nu2D_support_mask(hist_support_pix, self%mask_tmp, self%ldim)
                 noise_sigma = nu2D_objective_noise_scale(even_raw, odd_raw, hist_support_pix)
@@ -170,7 +210,7 @@ contains
             call odd_ft%taper_edges_particle(winsz, edge_mean)
             call even_ft%fft
             call odd_ft%fft
-            do icand = 1, nbase
+            do icand = 1, nfilters
                 call even_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
                 call odd_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
                 call even_bank(icand)%copy_fast(even_ft)
@@ -184,19 +224,35 @@ contains
                     &calc_lowpass_lim(self%cutoff_finds(icand), self%box, self%smpd), eval_pix)
                 call pack_nu2D_dmat(self%dmat, eval_pix, self%dmats(:npix_eval,icand))
             end do
-            call select_nu2D_labels(self%dmats(:npix_eval,:nbase), eval_pix, self%filtmap)
-            call count_nu_filter2D_labels(self%filtmap, eval_pix, nbase, label_counts_raw)
-            if( present(hist_support_pix) )then
-                call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
-                    &self%candidate_coords(:nbase), self%ldim, potts_iters, potts_changes, region_mask=self%mask_tmp)
+            if( self%l_test_aux_bank )then
+                icand = nlabels
+                call even_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
+                call odd_bank(icand)%new(self%ldim, self%smpd, wthreads=.false.)
+                call even_bank(icand)%copy(aux_even)
+                call odd_bank(icand)%copy(aux_odd)
+                call calc_nu2D_huber_objective(even_raw, even_bank(icand), odd_raw, odd_bank(icand), &
+                    &noise_sigma, self%dmat, eval_pix)
+                call smooth_nu2D_objective(self%dmat, self%tmp, self%mask_tmp, self%ldim, self%smpd, &
+                    &NU2D_TEST_AUX_EQUIV_LOW_PASS_LIMIT, eval_pix)
+                call pack_nu2D_dmat(self%dmat, eval_pix, self%dmats(:npix_eval,icand))
+            endif
+            call select_nu2D_labels(self%dmats(:npix_eval,:nlabels), eval_pix, self%filtmap)
+            call count_nu_filter2D_labels(self%filtmap, eval_pix, nlabels, label_counts_raw)
+            if( self%l_test_aux_bank )then
+                potts_iters = 0
+                potts_changes = 0
             else
-                call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nbase), eval_pix, &
-                    &self%candidate_coords(:nbase), self%ldim, potts_iters, potts_changes)
+                if( present(hist_support_pix) )then
+                    call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nlabels), eval_pix, &
+                        &self%candidate_coords(:nlabels), self%ldim, potts_iters, potts_changes, region_mask=self%mask_tmp)
+                else
+                    call refine_nu2D_labels(self%filtmap, self%dmats(:npix_eval,:nlabels), eval_pix, &
+                        &self%candidate_coords(:nlabels), self%ldim, potts_iters, potts_changes)
+                endif
             endif
             call accumulate_nu_filter2D_stats(self%stats, self%filtmap, eval_pix, label_counts_raw, &
                 &potts_iters, potts_changes)
-            if( present(align_lp) ) align_lp = nu2D_finest_selected_lp(self%filtmap, eval_pix, &
-                &self%cutoff_finds, self%box, self%smpd)
+            if( present(align_lp) ) align_lp = nu2D_finest_selected_lp(self%filtmap, eval_pix, self%lowpass_limits)
             call smooth_nu2D_label_coords(self%filtmap, eval_pix, self%dmat, self%tmp, self%mask_tmp, &
                 &self%ldim, self%smpd, nout)
             if( present(locres_out) ) call build_nu2D_soft_local_resolution_image(self%dmat, self%pix, &
@@ -297,6 +353,7 @@ contains
         self%npix = 0
         self%smpd = 0.
         self%l_setup = .false.
+        self%l_test_aux_bank = .false.
     end subroutine cleanup_nu_filter2D
 
     subroutine setup_pixels( ldim, pix, npix )
@@ -317,15 +374,15 @@ contains
         if( ipix /= npix ) THROW_HARD('pixel count mismatch; setup_pixels')
     end subroutine setup_pixels
 
-    subroutine setup_cutoff_finds( box, smpd, cutoff_finds )
+    subroutine setup_cutoff_finds( box, smpd, lp_limits, cutoff_finds )
         integer, intent(in) :: box
-        real,    intent(in) :: smpd
+        real,    intent(in) :: smpd, lp_limits(:)
         integer, allocatable, intent(out) :: cutoff_finds(:)
         integer :: i, find, nvalid
-        integer :: tmp(size(NU2D_LOW_PASS_LIMITS))
+        integer :: tmp(size(lp_limits))
         nvalid = 0
-        do i = 1, size(NU2D_LOW_PASS_LIMITS)
-            find = calc_fourier_index(NU2D_LOW_PASS_LIMITS(i), box, smpd)
+        do i = 1, size(lp_limits)
+            find = calc_fourier_index(lp_limits(i), box, smpd)
             find = max(1, min(box/2, find))
             if( nvalid > 0 )then
                 if( any(tmp(:nvalid) == find) ) cycle
@@ -347,6 +404,20 @@ contains
             coords(i) = real(i)
         end do
     end subroutine setup_candidate_coords
+
+    logical function nu2D_test_aux_bank_enabled()
+        character(len=32) :: env_value
+        integer :: status
+        nu2D_test_aux_bank_enabled = SIMPLE_NU2D_TEST_AUX_BANK
+        call get_environment_variable(NU2D_TEST_AUX_BANK_ENVVAR, env_value, status=status)
+        if( status /= 0 ) return
+        select case( trim(adjustl(env_value)) )
+        case( '1', 'y', 'Y', 'yes', 'Yes', 'YES', 'true', 'True', 'TRUE', 'on', 'On', 'ON' )
+            nu2D_test_aux_bank_enabled = .true.
+        case( '0', 'n', 'N', 'no', 'No', 'NO', 'false', 'False', 'FALSE', 'off', 'Off', 'OFF' )
+            nu2D_test_aux_bank_enabled = .false.
+        end select
+    end function nu2D_test_aux_bank_enabled
 
     real function nu2D_objective_noise_scale( even_raw, odd_raw, pix )
         class(image), intent(in) :: even_raw, odd_raw
@@ -701,22 +772,26 @@ contains
         !$omp end parallel do
     end subroutine select_nu2D_labels
 
-    real function nu2D_finest_selected_lp( labelmap, pix, cutoff_finds, box, smpd )
+    real function nu2D_finest_selected_lp( labelmap, pix, lowpass_limits )
         integer(kind=NU2D_LABEL_KIND), intent(in) :: labelmap(:,:,:)
-        integer, intent(in) :: pix(:,:), cutoff_finds(:), box
-        real,    intent(in) :: smpd
-        integer :: ipix, i, j, ilabel, finest_label
-        finest_label = 0
-        !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel) reduction(max:finest_label) proc_bind(close)
+        integer, intent(in) :: pix(:,:)
+        real,    intent(in) :: lowpass_limits(:)
+        integer :: ipix, i, j, ilabel
+        real :: finest_lp, lp
+        finest_lp = huge(finest_lp)
+        !$omp parallel do schedule(static) default(shared) private(ipix,i,j,ilabel,lp) reduction(min:finest_lp) proc_bind(close)
         do ipix = 1, size(pix,2)
             i = pix(1,ipix)
             j = pix(2,ipix)
             ilabel = int(labelmap(i,j,1))
-            if( ilabel >= 1 .and. ilabel <= size(cutoff_finds) ) finest_label = max(finest_label, ilabel)
+            if( ilabel >= 1 .and. ilabel <= size(lowpass_limits) )then
+                lp = lowpass_limits(ilabel)
+                if( lp > TINY ) finest_lp = min(finest_lp, lp)
+            endif
         end do
         !$omp end parallel do
         nu2D_finest_selected_lp = 0.
-        if( finest_label > 0 ) nu2D_finest_selected_lp = calc_lowpass_lim(cutoff_finds(finest_label), box, smpd)
+        if( finest_lp < huge(finest_lp) ) nu2D_finest_selected_lp = finest_lp
     end function nu2D_finest_selected_lp
 
     subroutine refine_nu2D_labels( labelmap, dmats, pix, coords, ldim, potts_iters, potts_changes, region_mask )

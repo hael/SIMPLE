@@ -310,7 +310,7 @@ contains
                 call avg_raw%mul(0.5)
                 call automask2D_support_pix(params, avg_raw, params%ngrow, nint(params%winsz), params%edge, support_pix)
                 support_fracs(iptcl) = real(size(support_pix,2)) / real(ldim(1) * ldim(2))
-                call nu_states(ithr)%apply(even, odd, avg_raw, avg_raw, avg_raw, even_nu, odd_nu, avg_nu, &
+                call nu_states(ithr)%apply(even, odd, even, odd, avg_raw, even_nu, odd_nu, avg_nu, &
                     &align_lp, locres_out=locres, support_pix=support_pix)
                 !$omp ordered
                 call odd_nu%write(odd_out, iptcl)

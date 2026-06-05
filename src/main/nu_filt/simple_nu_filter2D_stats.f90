@@ -17,6 +17,7 @@ integer, parameter :: NU2D_WEAK_LP_STEP  = 1
 type :: nu_filter2D_stats
     real,    allocatable :: lowpass_limits(:)
     integer, allocatable :: label_counts_raw(:), label_counts_potts(:), stepdiff_counts(:)
+    logical, allocatable :: is_aux_label(:)
     integer :: nbase=0, nlabels=0
     integer :: nclasses=0, npix_total=0
     integer :: potts_iters_total=0, potts_label_changes=0
@@ -26,9 +27,10 @@ end type nu_filter2D_stats
 
 contains
 
-    subroutine init_nu_filter2D_stats( stats, lowpass_limits )
+    subroutine init_nu_filter2D_stats( stats, lowpass_limits, is_aux_label )
         type(nu_filter2D_stats), intent(inout) :: stats
         real,                    intent(in)    :: lowpass_limits(:)
+        logical, optional,       intent(in)    :: is_aux_label(:)
         integer :: max_step
         call kill_nu_filter2D_stats(stats)
         stats%nbase     = size(lowpass_limits)
@@ -37,6 +39,11 @@ contains
         allocate(stats%lowpass_limits(stats%nbase), source=lowpass_limits)
         allocate(stats%label_counts_raw(stats%nlabels),   source=0)
         allocate(stats%label_counts_potts(stats%nlabels), source=0)
+        allocate(stats%is_aux_label(stats%nlabels),        source=.false.)
+        if( present(is_aux_label) )then
+            if( size(is_aux_label) /= stats%nlabels ) THROW_HARD('aux-label size mismatch; init_nu_filter2D_stats')
+            stats%is_aux_label = is_aux_label
+        endif
         max_step = max(1, stats%nlabels - 1)
         allocate(stats%stepdiff_counts(max_step), source=0)
     end subroutine init_nu_filter2D_stats
@@ -47,6 +54,7 @@ contains
         if( allocated(stats%label_counts_raw)  ) deallocate(stats%label_counts_raw)
         if( allocated(stats%label_counts_potts)) deallocate(stats%label_counts_potts)
         if( allocated(stats%stepdiff_counts)   ) deallocate(stats%stepdiff_counts)
+        if( allocated(stats%is_aux_label)      ) deallocate(stats%is_aux_label)
         stats%nbase = 0
         stats%nlabels = 0
         stats%nclasses = 0
@@ -65,10 +73,16 @@ contains
         type(nu_filter2D_stats), intent(inout) :: dst
         type(nu_filter2D_stats), intent(in)    :: src
         if( src%nlabels == 0 ) return
-        if( dst%nlabels == 0 ) call init_nu_filter2D_stats(dst, src%lowpass_limits)
+        if( dst%nlabels == 0 ) call init_nu_filter2D_stats(dst, src%lowpass_limits, src%is_aux_label)
         if( dst%nlabels /= src%nlabels ) THROW_HARD('2D NU stats label-count mismatch; merge_nu_filter2D_stats')
         if( any(abs(dst%lowpass_limits - src%lowpass_limits) > TINY) ) &
             &THROW_HARD('2D NU stats low-pass bank mismatch; merge_nu_filter2D_stats')
+        if( allocated(dst%is_aux_label) .neqv. allocated(src%is_aux_label) ) &
+            &THROW_HARD('2D NU stats source-label mismatch; merge_nu_filter2D_stats')
+        if( allocated(dst%is_aux_label) )then
+            if( any(dst%is_aux_label .neqv. src%is_aux_label) ) &
+                &THROW_HARD('2D NU stats source-label mismatch; merge_nu_filter2D_stats')
+        endif
         dst%label_counts_raw   = dst%label_counts_raw   + src%label_counts_raw
         dst%label_counts_potts = dst%label_counts_potts + src%label_counts_potts
         dst%stepdiff_counts    = dst%stepdiff_counts    + src%stepdiff_counts
@@ -125,6 +139,7 @@ contains
         type(nu_filter2D_stats), intent(in) :: stats
         integer :: ilabel, nraw, nfinal
         real    :: raw_pct, final_pct, pct
+        character(len=10) :: source_label
         if( stats%nlabels == 0 ) return
         if( stats%npix_total == 0 )then
             write(logfhandle,'(A)') '>>> 2D NU FILTER: no pixels analyzed'
@@ -141,8 +156,12 @@ contains
             nfinal = stats%label_counts_potts(ilabel)
             raw_pct = 100. * real(nraw) / real(stats%npix_total)
             final_pct = 100. * real(nfinal) / real(stats%npix_total)
+            source_label = 'Base'
+            if( allocated(stats%is_aux_label) )then
+                if( stats%is_aux_label(ilabel) ) source_label = 'Aux'
+            endif
             write(logfhandle,'(4X,A10,2X,I5,2X,F12.3,2X,I10,2X,F7.2,2X,I10,2X,F7.2)') &
-                &'Base', ilabel, stats%lowpass_limits(ilabel), nraw, raw_pct, nfinal, final_pct
+                &source_label, ilabel, stats%lowpass_limits(ilabel), nraw, raw_pct, nfinal, final_pct
         end do
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') '>>> 2D NU POTTS PRIOR BEHAVIOR'
