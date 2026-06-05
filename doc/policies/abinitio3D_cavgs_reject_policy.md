@@ -18,7 +18,7 @@ rejects all other class averages. It does this by:
 
 1. evaluating class-average quality with the shared cavg-quality model backend;
 2. launching `nrestarts` independent short `abinitio3D_cavgs` runs;
-3. reading the restart state labels after stage 2;
+3. reading the restart state labels after stage 3;
 4. mapping randomized state labels into one common label space;
 5. voting a consensus state label for each class average;
 6. choosing the quality-best populated consensus state as good;
@@ -49,14 +49,14 @@ The route is master-only. Supplying `part` is an error.
 The route accepts `nstates=2` or `nstates=3`; values outside that range are an
 error. When unset, `nstates=2`.
 
-The route always runs the restart children through the first two
+The route always runs the restart children through the first three
 `abinitio3D_cavgs` stages. If the user supplies `nstages` with any value other
-than `2`, the command stops. The command then sets `nstages=2` before parsing
+than `3`, the command stops. The command then sets `nstages=3` before parsing
 parameters.
 
 Point-group symmetry is not a public input to this route. The command sets
-`pgrp=c1` and deletes `pgrp_start` before parameter parsing because only C1 is
-used for the first two `abinitio3D_cavgs` stages.
+`pgrp=c1` and deletes `pgrp_start` before parameter parsing because this reject
+workflow intentionally keeps the short restart runs in C1.
 
 When unset, the route supplies:
 
@@ -125,7 +125,7 @@ restart-specific settings:
 - `projfile=<project basename>`
 - `mkdir=no`
 - `nstates=<2 or 3>`
-- `nstages=2`
+- `nstages=3`
 - `verbose_exit=yes`
 - `verbose_exit_fname=ABINITIO3D_CAVGS_REJECT_FINISHED`
 
@@ -315,7 +315,7 @@ ABINITIO3D_CAVGS_REJECT_DOCK_FINISHED
 The docking child receives the selected reference volume as `vol1`, the
 selected target restart volume as `vol2`, the stage-volume sampling read from
 the reference volume header as `smpd`, the default docking band-pass range
-`hp=100` and `lp=15`, the parsed `mskdiam`, the parsed `nthr`, and `mkdir=no`.
+`hp=100` and `lp=10`, the parsed `mskdiam`, the parsed `nthr`, and `mkdir=no`.
 
 The reference volume is used as-is. Docked target volumes are written as:
 
@@ -374,7 +374,7 @@ The workflow stops when:
 
 - `part` is supplied;
 - `nstates` is not `2` or `3`;
-- `nstages` is supplied with a value other than `2`;
+- `nstages` is supplied with a value other than `3`;
 - `nrestarts < 1`;
 - the input project has no `cls2D` rows;
 - the saved original-state array does not match the `cls2D` row count;
@@ -402,5 +402,5 @@ used to choose the reference restart volume for docking.
 The workflow supports at most three restart states. The final project state is
 binary regardless of the restart state count.
 
-The route is fixed to C1 because it exits after stage 2 of
-`abinitio3D_cavgs`.
+The route is fixed to C1 because the wrapper forces `pgrp=c1` for the short
+restart runs.

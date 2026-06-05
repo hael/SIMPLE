@@ -9,6 +9,7 @@ type(ui_program), target :: reconstruct3D
 type(ui_program), target :: bootstrap_rec3D
 type(ui_program), target :: refine3D
 type(ui_program), target :: refine3D_auto
+type(ui_program), target :: refine3D_multi
 
 contains
 
@@ -20,6 +21,7 @@ contains
         call new_bootstrap_rec3D(prgtab)
         call new_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
+        call new_refine3D_multi(prgtab)
     end subroutine construct_refine3D_programs
 
     subroutine print_refine3D_programs(logfhandle)
@@ -31,6 +33,7 @@ contains
         write(logfhandle,'(A)') bootstrap_rec3D%name%to_char()
         write(logfhandle,'(A)') refine3D%name%to_char()
         write(logfhandle,'(A)') refine3D_auto%name%to_char()
+        write(logfhandle,'(A)') refine3D_multi%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_refine3D_programs
 
@@ -277,5 +280,47 @@ contains
         ! add to ui_hash
         call add_ui_program('refine3D_auto', refine3D_auto, prgtab)
     end subroutine new_refine3D_auto
+
+    subroutine new_refine3D_multi( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call refine3D_multi%new(&
+        &'refine3D_multi',&                                                                         ! name
+        &'automated multi-state 3D refinement',&                                                    ! descr_short
+        &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! descr_long
+        &'simple_exec',&                                                                            ! executable
+        &.true.,&                                                                                   ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        ! search controls
+        call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', &
+        &'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
+        &'no', gui_submenu="search")
+        ! filter controls
+        call refine3D_multi%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform_lpset}', &
+        &'(none|nonuniform|nonuniform_lpset){nonuniform_lpset}', .false., 'nonuniform_lpset', gui_submenu="filter")
+        call refine3D_multi%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
+        &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms', .false., 6., &
+        &gui_submenu="filter")
+        call refine3D_multi%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
+        &'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}', &
+        &'(yes|no){no}', .false., 'no', gui_submenu="filter")
+        call refine3D_multi%add_input(UI_FILT, ml_reg, gui_submenu="filter")
+        call refine3D_multi%add_input(UI_FILT, combine_eo, gui_submenu="filter")
+        ! mask controls
+        call refine3D_multi%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
+        &'Perform envelope masking(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no', gui_submenu="mask")
+        ! computer controls
+        call refine3D_multi%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        ! add to ui_hash
+        call add_ui_program('refine3D_multi', refine3D_multi, prgtab)
+    end subroutine new_refine3D_multi
 
 end module simple_ui_refine3D
