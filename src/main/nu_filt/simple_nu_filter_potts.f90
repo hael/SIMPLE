@@ -84,7 +84,7 @@ contains
         integer, intent(in) :: n_candidates
         real,    intent(in) :: beta
         integer, allocatable :: counts(:), target_counts(:), slack_counts(:)
-        integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand
+        integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, ilabel
         integer :: n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nchanged, label_drift
         real    :: e, best_e, site_energy, hist_scale, hist_energy
         allocate(counts(n_candidates),        source=0)
@@ -92,13 +92,19 @@ contains
         allocate(slack_counts(n_candidates),  source=0)
         call count_nu_candidate_labels(candmap, n_candidates, target_counts)
         counts = target_counts
-        slack_counts = max(1, nint(NU_LABEL_HIST_SLACK_FRAC * real(max(1, n_nu_mask))))
+        do ilabel = 1, n_candidates
+            slack_counts(ilabel) = max(NU_LABEL_HIST_MIN_SLACK, &
+                &nint(NU_LABEL_HIST_SLACK_FRAC * real(max(1, target_counts(ilabel)))))
+        end do
         hist_scale = NU_LABEL_HIST_BETA_FRAC * beta / real(max(1, n_nu_mask))
         hist_energy = calc_nu_label_histogram_energy(counts, target_counts, slack_counts, hist_scale)
-        write(logfhandle,'(A,F6.3,A,ES12.4,A,F6.3,A,I0)') &
+        write(logfhandle,'(A,F6.3,A,ES12.4)') &
             &'>>> NU slack-histogram ordered-label smoothing: beta fraction=', &
-            &NU_LABEL_HIST_BETA_FRAC, ', scale=', hist_scale, ', slack fraction=', &
-            &NU_LABEL_HIST_SLACK_FRAC, ', slack voxels/bin=', slack_counts(1)
+            &NU_LABEL_HIST_BETA_FRAC, ', scale=', hist_scale
+        write(logfhandle,'(A,F6.3,A,I0,A,I0,A,I0)') &
+            &'>>> NU slack-histogram ordered-label smoothing slack: target fraction=', &
+            &NU_LABEL_HIST_SLACK_FRAC, ', floor=', NU_LABEL_HIST_MIN_SLACK, &
+            &', min/max voxels/bin=', minval(slack_counts), '/', maxval(slack_counts)
         write(logfhandle,'(A,ES12.4)') &
             &'>>> NU slack-histogram ordered-label smoothing initial mean histogram energy: ', &
             &hist_energy / real(max(1, n_nu_mask))
