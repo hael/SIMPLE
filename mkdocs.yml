@@ -1,0 +1,26 @@
+site_name: SIMPLE
+site_description: Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.
+site_url: https://hael.github.io/SIMPLE/
+repo_url: https://github.com/hael/SIMPLE
+repo_name: hael/SIMPLE
+docs_dir: doc
+site_dir: docs 
+remote_branch: docs
+use_directory_urls: false
+
+exclude_docs: |
+  for_developers/ideas/
+
+theme:
+  name: material
+  highlightjs: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - fenced_code
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
