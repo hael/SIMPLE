@@ -53,6 +53,7 @@ contains
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_cluster2D_strategy(cline)
         call strategy%initialize(params, build, cline)
+        if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_cluster2D')
         ! Nice communicator
         call nice_comm%init(params%niceprocid, params%niceserver)
         nice_comm%stat_root%stage = "initialising"
@@ -112,6 +113,7 @@ contains
         if( .not. cline%defined('outfile') ) THROW_HARD('OUTFILE must be defined for distributed worker execution')
         ! Worker needs the alignment toolboxes
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
+        if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_cluster2D_distr_worker')
         if( cline%defined('which_iter') )then
             params%which_iter = max(1, params%which_iter)
         else

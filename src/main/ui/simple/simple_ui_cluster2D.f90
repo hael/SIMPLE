@@ -80,9 +80,6 @@ contains
         call abinitio2D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, lp, gui_submenu="filter")
-        call abinitio2D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-            &'Class-average filtering mode(none|nonuniform){none}', &
-            &'(none|nonuniform){none}', .false., 'none', gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
         call abinitio2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
@@ -243,9 +240,6 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call make_cavgs%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-        &'Class-average filtering mode(none|nonuniform){none}', &
-        &'(none|nonuniform){none}', .false., 'none')
         ! mask controls
         ! <empty>
         ! computer controls

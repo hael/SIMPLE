@@ -43,7 +43,7 @@ contains
         call icm2D%new(&
         &'icm2D',&                                                                  ! name
         &'ICM 2D filter',&                                                          ! descr_short
-        &'is a program for 2D nonuniform filtering by Iterated Conditional Modes',& ! descr_long
+        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! descr_long
         &'simple_exec',&                                                            ! executable
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

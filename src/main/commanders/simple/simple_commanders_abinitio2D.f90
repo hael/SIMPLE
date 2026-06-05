@@ -66,6 +66,7 @@ contains
         l_shmem = set_shmem_flag(cline)
         ! master parameters
         call params%new(cline)
+        if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_abinitio2D')
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = params%extr_lim

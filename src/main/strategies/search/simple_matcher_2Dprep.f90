@@ -101,7 +101,7 @@ contains
             call build%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
         endif
         ! Filtering
-        if( params%l_ml_reg .or. params%l_nonuniform )then
+        if( params%l_ml_reg )then
             ! no filtering
         else
             if( params%l_lpset.and.params%l_gauref )then

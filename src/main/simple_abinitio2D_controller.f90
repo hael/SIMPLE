@@ -7,7 +7,7 @@ implicit none
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
 public :: set_abinitio2D_sampling_policy
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE
-public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, NU_FILTER_STAGE
+public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
 #include "simple_local_flags.inc"
 
@@ -23,7 +23,6 @@ integer,          parameter :: PROBREFINE_STAGE   = 5
 integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: NU_FILTER_STAGE    = 3                ! switch on staged NU filtering
 integer,          parameter :: NSAMPLE_PER_CLS    = 200
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
@@ -38,7 +37,7 @@ type stage_params
 end type stage_params
 
 type cluster2D_stage_cfg
-    type(string) :: refine, center, objfun, refs, gauref, ml_reg, filt_mode
+    type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
     real         :: trs=0., gaufreq=0.
 end type cluster2D_stage_cfg
@@ -120,24 +119,8 @@ contains
         call set_cluster2D_stage_iteration_policy( cfg, cline_cluster2D )
         call set_cluster2D_stage_phase_policy( cfg, istage )
         call set_cluster2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
-        call set_cluster2D_stage_filtering_policy( cfg, params, stage_parms, istage )
         call set_cluster2D_stage_search_policy( cfg, params, istage )
     end subroutine build_cluster2D_stage_cfg
-
-    subroutine set_cluster2D_stage_filtering_policy( cfg, params, stage_parms, istage )
-        type(cluster2D_stage_cfg), intent(inout) :: cfg
-        class(parameters),         intent(in)    :: params
-        type(stage_params),        intent(in)    :: stage_parms(:)
-        integer,                   intent(in)    :: istage
-        logical :: l_gold_standard
-        cfg%filt_mode = 'none'
-        if( istage < NU_FILTER_STAGE ) return
-        if( .not.params%l_nonuniform ) return
-        cfg%filt_mode = trim(params%filt_mode)
-        l_gold_standard = .not.stage_parms(istage)%l_lpset
-        if( cfg%filt_mode.eq.'nonuniform' .and. .not.l_gold_standard ) cfg%filt_mode = 'nonuniform_lpset'
-        if( cfg%filt_mode.eq.'nonuniform_lpset' .and. l_gold_standard ) cfg%filt_mode = 'nonuniform'
-    end subroutine set_cluster2D_stage_filtering_policy
 
     subroutine set_cluster2D_stage_objfun_policy( cfg, params )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
@@ -298,7 +281,7 @@ contains
             call cline_cluster2D%delete('extr_iter')
         endif
         call cline_cluster2D%set('ml_reg', cfg%ml_reg)
-        call cline_cluster2D%set('filt_mode', cfg%filt_mode)
+        call cline_cluster2D%set('filt_mode', 'none')
         call cline_cluster2D%set('gauref', cfg%gauref)
         if( cfg%gauref.eq.'yes' )then
             call cline_cluster2D%set('gaufreq', cfg%gaufreq)

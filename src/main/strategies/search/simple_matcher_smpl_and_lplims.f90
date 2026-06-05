@@ -158,26 +158,14 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: which_iter
         real,              intent(in)    :: frac_srch_space
-        real    :: lplim, nu_align_lp
+        real    :: lplim
         integer :: lpstart_find
-        logical :: l_fresh_start, l_nu_align_lp
-        l_fresh_start = params%startit <= 1 .and. which_iter <= params%startit &
-            &.and. trim(params%continue).ne.'yes'
-        l_nu_align_lp = .false.
-        nu_align_lp   = 0.
         params%kfromto(1) = max(2,calc_fourier_index(params%hp, params%box, params%smpd))
         if( params%l_lpset )then
             lplim = params%lp
             params%kfromto(2) = calc_fourier_index(lplim, params%box_crop, params%smpd_crop)
         else
-            if( params%l_nonuniform_lpset .and. .not.l_fresh_start .and. &
-                &build%spproj_field%isthere(params%fromp, 'lp') )then
-                nu_align_lp = build%spproj_field%get(params%fromp, 'lp')
-                l_nu_align_lp = nu_align_lp > TINY
-            endif
-            if( l_nu_align_lp )then
-                lplim = nu_align_lp
-            else if( trim(params%stream2d).eq.'yes' )then
+            if( trim(params%stream2d).eq.'yes' )then
                 if( file_exists(params%frcs) )then
                     lplim = build%clsfrcs%estimate_lp_for_align()
                 else
@@ -203,11 +191,6 @@ contains
             if( lpstart_find > params%kfromto(2) ) params%kfromto(2) = lpstart_find
             lplim     = calc_lowpass_lim(params%kfromto(2), params%box_crop, params%smpd_crop)
             params%lp = lplim
-        endif
-        if( l_nu_align_lp ) write(logfhandle,'(A,F8.3,A)') '>>> 2D NU filter matching low-pass limit: ', params%lp, ' A'
-        if( params%l_nonuniform_lpset )then
-            params%l_lpset = .true.
-            call cline%set('lp', params%lp)
         endif
         ! update low-pas limit in project
         call build%spproj_field%set_all2single('lp',lplim)

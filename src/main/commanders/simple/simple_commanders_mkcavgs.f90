@@ -61,6 +61,7 @@ contains
         strategy = create_make_cavgs_strategy(cline, hooks, from_distr_cmd=from_distr_cmd)
         call strategy%apply_defaults(cline)
         call strategy%initialize(params, cline)
+        if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; run_make_cavgs_workflow')
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)

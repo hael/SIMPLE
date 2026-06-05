@@ -33,11 +33,6 @@ type, extends(commander_base) :: commander_nu_filt3D
         procedure :: execute      => exec_nu_filt3D
 end type commander_nu_filt3D
 
-type, extends(commander_base) :: commander_nu_filt2D
-    contains
-        procedure :: execute      => exec_nu_filt2D
-end type commander_nu_filt2D
-
 type, extends(commander_base) :: commander_icm3D
   contains
     procedure :: execute      => exec_icm3D
@@ -258,110 +253,6 @@ contains
         if( allocated(l_mask) ) deallocate(l_mask)
         call simple_end('**** SIMPLE_nu_filt3D NORMAL STOP ****')
     end subroutine exec_nu_filt3D
-
-    subroutine exec_nu_filt2D(self, cline)
-        use simple_image_msk,   only: automask2D_support_pix
-        use simple_nu_filter2D, only: nu_filter2D_state, print_nu_filter2D_policy
-        use simple_nu_filter2D_stats, only: nu_filter2D_stats, merge_nu_filter2D_stats, print_nu_filter2D_stats, &
-            &kill_nu_filter2D_stats
-        class(commander_nu_filt2D), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        type(parameters)     :: params
-        type(nu_filter2D_state), allocatable :: nu_states(:)
-        type(nu_filter2D_stats) :: nu_stats
-        type(string)         :: odd_out, even_out, avg_out, locres_out
-        real, allocatable    :: support_fracs(:)
-        integer              :: ldim(3), ldim2(3), nimgs, nimgs2, iptcl, ithr
-        real                 :: align_lp
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'stk_nufilt'//MRC_EXT)
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk,  ldim,  nimgs)
-        call find_ldim_nptcls(params%stk2, ldim2, nimgs2)
-        if( any(ldim /= ldim2) ) THROW_HARD('odd/even stacks must have identical dimensions; nu_filt2D')
-        if( nimgs /= nimgs2 ) THROW_HARD('odd/even stacks must contain the same number of images; nu_filt2D')
-        if( ldim(3) /= 1 ) THROW_HARD('nu_filt2D expects 2D image stacks')
-        odd_out    = add2fbody(params%stk,  params%ext, NUFILT_SUFFIX)
-        even_out   = add2fbody(params%stk2, params%ext, NUFILT_SUFFIX)
-        avg_out    = params%outstk
-        locres_out = add2fbody(avg_out, params%ext, NULOCRES_SUFFIX)
-        if( file_exists(odd_out)    ) call del_file(odd_out)
-        if( file_exists(even_out)   ) call del_file(even_out)
-        if( file_exists(avg_out)    ) call del_file(avg_out)
-        if( file_exists(locres_out) ) call del_file(locres_out)
-        call print_nu_filter2D_policy()
-        allocate(nu_states(nthr_glob))
-        allocate(support_fracs(nimgs), source=0.)
-        do ithr = 1, nthr_glob
-            call nu_states(ithr)%setup(ldim, params%smpd)
-        end do
-        !$omp parallel do default(shared) private(iptcl,ithr,align_lp) schedule(static) ordered proc_bind(close)
-        do iptcl = 1, nimgs
-            ithr = omp_get_thread_num() + 1
-            block
-                type(image) :: odd, even, avg_raw, odd_nu, even_nu, avg_nu, locres
-                integer, allocatable :: support_pix(:,:)
-                call odd%new(ldim, params%smpd, .false.)
-                call even%new(ldim, params%smpd, .false.)
-                call odd%read(params%stk, iptcl)
-                call even%read(params%stk2, iptcl)
-                call avg_raw%copy(even)
-                call avg_raw%add(odd)
-                call avg_raw%mul(0.5)
-                call automask2D_support_pix(params, avg_raw, params%ngrow, nint(params%winsz), params%edge, support_pix)
-                support_fracs(iptcl) = real(size(support_pix,2)) / real(ldim(1) * ldim(2))
-                call nu_states(ithr)%apply(even, odd, even, odd, avg_raw, even_nu, odd_nu, avg_nu, &
-                    &align_lp, locres_out=locres, support_pix=support_pix)
-                !$omp ordered
-                call odd_nu%write(odd_out, iptcl)
-                call even_nu%write(even_out, iptcl)
-                call avg_nu%write(avg_out, iptcl)
-                call locres%write(locres_out, iptcl)
-                !$omp end ordered
-                call odd%kill
-                call even%kill
-                call avg_raw%kill
-                call odd_nu%kill
-                call even_nu%kill
-                call avg_nu%kill
-                call locres%kill
-            end block
-        end do
-        !$omp end parallel do
-        call update_stack_nimgs(odd_out, nimgs)
-        call update_stack_nimgs(even_out, nimgs)
-        call update_stack_nimgs(avg_out, nimgs)
-        call update_stack_nimgs(locres_out, nimgs)
-        if( any(support_fracs > TINY) )then
-            write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                &'>>> 2D NU filter automask support range: ', &
-                &100. * minval(support_fracs, mask=support_fracs > TINY), ' - ', &
-                &100. * maxval(support_fracs, mask=support_fracs > TINY), '% of pixels'
-        endif
-        if( any(support_fracs <= TINY) )then
-            write(logfhandle,'(A,I8)') '>>> 2D NU filter images with failed automask support: ', &
-                &count(support_fracs <= TINY)
-        endif
-        do ithr = 1, nthr_glob
-            call merge_nu_filter2D_stats(nu_stats, nu_states(ithr)%stats)
-        end do
-        call print_nu_filter2D_stats(nu_stats)
-        write(logfhandle,'(A,1X,A)') '>>> Wrote 2D NU odd stack:',       odd_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>> Wrote 2D NU even stack:',      even_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>> Wrote 2D NU average stack:',   avg_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>> Wrote 2D NU local-res stack:', locres_out%to_char()
-        do ithr = 1, nthr_glob
-            call nu_states(ithr)%kill
-        end do
-        call kill_nu_filter2D_stats(nu_stats)
-        deallocate(nu_states)
-        call odd_out%kill
-        call even_out%kill
-        call avg_out%kill
-        call locres_out%kill
-        if( allocated(support_fracs) ) deallocate(support_fracs)
-        call simple_end('**** SIMPLE_nu_filt2D NORMAL STOP ****')
-    end subroutine exec_nu_filt2D
 
     subroutine exec_icm3D( self, cline )
         class(commander_icm3D), intent(inout) :: self
