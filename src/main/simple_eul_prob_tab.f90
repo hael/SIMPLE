@@ -77,9 +77,15 @@ contains
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
         if( l_empty )then
-            allocate(self%proj_exists(self%p_ptr%nspace,self%p_ptr%nstates), source=.true.)
+            allocate(self%proj_exists(self%p_ptr%nspace,self%p_ptr%nstates), source=.false.)
+            do istate = 1,self%p_ptr%nstates
+                if( self%state_exists(istate) ) self%proj_exists(:,istate) = .true.
+            enddo
         else
             self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates,self%p_ptr%nspace, thres=MIN_POP)
+            do istate = 1,self%p_ptr%nstates
+                if( .not. self%state_exists(istate) ) self%proj_exists(:,istate) = .false.
+            enddo
         endif
         self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
@@ -205,14 +211,15 @@ contains
                 istate     = o_prev%get_state()
                 irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
-                    iref_start = (istate-1)*self%p_ptr%nspace
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                    if( irot == 0 ) cxy(2:3) = 0.
-                else
-                    cxy(2:3) = 0.
+                cxy = 0.
+                if( istate >= 1 .and. istate <= self%p_ptr%nstates .and. iproj >= 1 .and. iproj <= self%p_ptr%nspace )then
+                    if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
+                        iref_start = (istate-1)*self%p_ptr%nspace
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        if( irot == 0 ) cxy(2:3) = 0.
+                    endif
                 endif
                 self%seed_shifts(:,i) = cxy(2:3)
                 self%seed_has_sh(i)   = .true.
@@ -324,12 +331,12 @@ contains
                         cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
                         cxy(2:3) = 0.
                     endif
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
-                    self%state_tab(istate,i)%iproj  = iproj
-                    self%state_tab(istate,i)%inpl   = irot
-                    self%state_tab(istate,i)%x      = cxy(2)
-                    self%state_tab(istate,i)%y      = cxy(3)
-                    self%state_tab(istate,i)%has_sh = .true.
+                    self%state_tab(is,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
+                    self%state_tab(is,i)%iproj  = iproj
+                    self%state_tab(is,i)%inpl   = irot
+                    self%state_tab(is,i)%x      = cxy(2)
+                    self%state_tab(is,i)%y      = cxy(3)
+                    self%state_tab(is,i)%has_sh = .true.
                 enddo
             enddo
             !$omp end parallel do
@@ -346,12 +353,13 @@ contains
                 do is = 1, self%nstates
                     istate      = self%ssinds(is)
                     iref_start  = (istate-1)*self%p_ptr%nspace
-                    self%state_tab(istate,i)%dist   = eulprob_dist_switch(real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
-                    self%state_tab(istate,i)%iproj  = iproj
-                    self%state_tab(istate,i)%inpl   = irot
-                    self%state_tab(istate,i)%x      = 0.
-                    self%state_tab(istate,i)%y      = 0.
-                    self%state_tab(istate,i)%has_sh = .true.
+                    self%state_tab(is,i)%dist   = eulprob_dist_switch(&
+                        &real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
+                    self%state_tab(is,i)%iproj  = iproj
+                    self%state_tab(is,i)%inpl   = irot
+                    self%state_tab(is,i)%x      = 0.
+                    self%state_tab(is,i)%y      = 0.
+                    self%state_tab(is,i)%has_sh = .true.
                 enddo
             enddo
             !$omp end parallel do
@@ -451,7 +459,7 @@ contains
     ! ptcl -> (proj, state) assignment using the global normalized dist value table
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate,&
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si,&
                     &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
         real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres,iref_dist(self%nrefs), dists_sorted(self%nrefs)
         logical :: ptcl_avail(self%nptcls)
@@ -465,7 +473,8 @@ contains
         enddo
         !$omp end parallel do
         projs_athres = 0.
-        do istate = 1, self%nstates
+        do si = 1, self%nstates
+            istate = self%ssinds(si)
             projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
         enddo
         ! first row is the current best reference distribution

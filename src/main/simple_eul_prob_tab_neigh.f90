@@ -249,13 +249,15 @@ contains
                 return
             endif
             irot_loc = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
-            if( self%state_exists(prev_state_loc) .and. self%proj_exists(prev_proj_loc,prev_state_loc) )then
-                iref_start_loc = (prev_state_loc-1)*self%p_ptr%nspace
-                call grad_shsrch_obj(ithr_loc)%set_indices(iref_start_loc + prev_proj_loc, iptcl_loc)
-                shift_seed_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
-                if( irot_loc == 0 ) shift_seed_loc(2:3) = 0.
-            else
-                shift_seed_loc = 0.
+            shift_seed_loc = 0.
+            if( prev_state_loc >= 1 .and. prev_state_loc <= self%p_ptr%nstates .and.&
+                &prev_proj_loc >= 1 .and. prev_proj_loc <= self%p_ptr%nspace )then
+                if( self%state_exists(prev_state_loc) .and. self%proj_exists(prev_proj_loc,prev_state_loc) )then
+                    iref_start_loc = (prev_state_loc-1)*self%p_ptr%nspace
+                    call grad_shsrch_obj(ithr_loc)%set_indices(iref_start_loc + prev_proj_loc, iptcl_loc)
+                    shift_seed_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
+                    if( irot_loc == 0 ) shift_seed_loc(2:3) = 0.
+                endif
             endif
         end subroutine estimate_shift_seed
 
@@ -720,7 +722,7 @@ contains
         type(assign_frontier_ws) :: frontier
         real,    allocatable :: dists_inpl(:), dists_inpl_sorted(:)
         integer, allocatable :: inds_sorted(:)
-        integer   :: i, iref, assigned_iref, assigned_ptcl, istate, fallback_ref
+        integer   :: i, iref, assigned_iref, assigned_ptcl, istate, si, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
         real      :: projs_athres
         real      :: huge_val
@@ -811,7 +813,8 @@ contains
 
         subroutine assign_particles_globally()
             projs_athres = 0.
-            do istate = 1, self%nstates
+            do si = 1, self%nstates
+                istate = self%ssinds(si)
                 projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
             enddo
             graph%ref_pos       = 1
