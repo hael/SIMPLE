@@ -4,7 +4,7 @@ use simple_cmdline,             only: cmdline
 use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec, exec_screen
 use simple_commanders_abinitio, only: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_reject, &
-    commander_abinitio3D, commander_multivol_assign
+    commander_abinitio3D
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -16,7 +16,6 @@ type(commander_abinitio3D)        :: xabinitio3D
 type(commander_abinitio3D_cavgs)  :: xabinitio3D_cavgs
 type(commander_abinitio3D_cavgs_reject) :: xabinitio3D_cavgs_reject
 type(commander_estimate_lpstages) :: xestimate_lpstages
-type(commander_multivol_assign)   :: xmultivol_assign
 type(commander_noisevol)          :: xnoisevol
 
 contains
@@ -48,8 +47,6 @@ contains
                 call xabinitio3D_cavgs_reject%execute(cline)
             case( 'estimate_lpstages' )
                 call xestimate_lpstages%execute(cline)
-            case( 'multivol_assign' )
-                call xmultivol_assign%execute(cline)
             case( 'noisevol' )
                 call xnoisevol%execute(cline)
             case default

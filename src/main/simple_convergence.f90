@@ -415,7 +415,11 @@ contains
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            converged = min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim
+            if( index(trim(params%multivol_mode), 'input_oris') == 1 )then
+                converged = self%mi_state > overlap_lim
+            else
+                converged = min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim
+            endif
             deallocate( state_mi_joint, statepops )
         endif
         if( converged .and. params%minits > 0 )then

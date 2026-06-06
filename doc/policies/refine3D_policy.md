@@ -10,6 +10,7 @@ Related workflow policies:
 - [abinitio3D_cavgs_policy.md](abinitio3D_cavgs_policy.md)
 - [abinitio3D_cavgs_reject_policy.md](abinitio3D_cavgs_reject_policy.md)
 - [refine3D_auto_policy.md](refine3D_auto_policy.md)
+- [refine3D_multi_policy.md](refine3D_multi_policy.md)
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)

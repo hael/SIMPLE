@@ -7,7 +7,6 @@ type(ui_program), target :: abinitio3D
 type(ui_program), target :: abinitio3D_cavgs
 type(ui_program), target :: abinitio3D_cavgs_reject
 type(ui_program), target :: estimate_lpstages
-type(ui_program), target :: multivol_assign
 type(ui_program), target :: noisevol
 
 contains
@@ -18,7 +17,6 @@ contains
         call new_abinitio3D_cavgs(prgtab)
         call new_abinitio3D_cavgs_reject(prgtab)
         call new_estimate_lpstages(prgtab)
-        call new_multivol_assign(prgtab)
         call new_noisevol(prgtab)
     end subroutine construct_abinitio3D_programs
 
@@ -29,7 +27,6 @@ contains
         write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
         write(logfhandle,'(A)') abinitio3D_cavgs_reject%name%to_char()
         write(logfhandle,'(A)') estimate_lpstages%name%to_char()
-        write(logfhandle,'(A)') multivol_assign%name%to_char()
         write(logfhandle,'(A)') noisevol%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_abinitio3D_programs
@@ -214,45 +211,6 @@ contains
         ! add to ui_hash
         call add_ui_program('estimate_lpstages', estimate_lpstages, prgtab)
     end subroutine new_estimate_lpstages
-
-    subroutine new_multivol_assign( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call multivol_assign%new(&
-        &'multivol_assign',&                                                               ! name
-        &'multi-volume assignment and 3D reconstruction from particles',&                  ! descr_short
-        &'is a distributed workflow for generating multiple structural state volumes from particles',& ! descr_long                                                         ! descr_long
-        &'simple_exec',&                                                                   ! executable
-        &.true.,&                                                                          ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )           ! GUI                                                      
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call multivol_assign%add_input(UI_SRCH, pgrp,                              gui_submenu="model",  gui_advanced=.false.)
-        call multivol_assign%add_input(UI_SRCH, nsample,                           gui_submenu="search", gui_advanced=.false.)
-        call multivol_assign%add_input(UI_SRCH, update_frac,                       gui_submenu="search", gui_advanced=.true.)
-        call multivol_assign%add_input(UI_SRCH, nstates, required_override=.true., gui_submenu="search", gui_advanced=.false.)
-        call multivol_assign%add_input(UI_SRCH, 'srch_oris', 'multi', 'Search orientations',&
-        &'Search orientations(yes|no){yes}', '(yes|no){yes}', .false., 'single', gui_submenu="search", gui_advanced=.true.)
-        ! filter controls
-        call multivol_assign%add_input(UI_FILT, hp, gui_submenu="filter")
-        call multivol_assign%add_input(UI_FILT, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
-            &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
-        call multivol_assign%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
-        ! mask controls
-        call multivol_assign%add_input(UI_MASK, mskdiam, gui_submenu="mask",    gui_advanced=.false.)
-        ! computer controls
-        call multivol_assign%add_input(UI_COMP, nparts,  required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call multivol_assign%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
-        ! add to ui_hash
-        call add_ui_program('multivol_assign', multivol_assign, prgtab)
-    end subroutine new_multivol_assign
 
     subroutine new_noisevol( prgtab )
         class(ui_hash), intent(inout) :: prgtab

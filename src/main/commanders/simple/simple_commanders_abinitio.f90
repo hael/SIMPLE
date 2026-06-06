@@ -12,7 +12,7 @@ use simple_refine3D_fnames,      only: refine3D_startvol_fname, refine3D_startvo
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
-public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_reject, commander_abinitio3D, commander_multivol_assign
+public :: commander_abinitio3D_cavgs, commander_abinitio3D_cavgs_reject, commander_abinitio3D
 private
 #include "simple_local_flags.inc"
 
@@ -30,11 +30,6 @@ type, extends(commander_base) :: commander_abinitio3D
     contains
     procedure :: execute => exec_abinitio3D
 end type commander_abinitio3D
-
-type, extends(commander_base) :: commander_multivol_assign
-    contains
-    procedure :: execute => exec_multivol_assign
-end type commander_multivol_assign
 
 contains
 
@@ -1559,29 +1554,5 @@ contains
         end subroutine validate_cavg_ini_ext_states
 
     end subroutine exec_abinitio3D
-
-    subroutine exec_multivol_assign( self, cline )
-        class(commander_multivol_assign), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(commander_abinitio3D) :: xabini3D
-        type(string) :: srch_oris
-        call cline%set('center',   'no')
-        call cline%set('cavg_ini', 'no')
-        call cline%set('prg',      'multivol_assign')
-        if( .not. cline%defined('nstates')  ) THROW_HARD('nstates required on command line')
-        srch_oris = 'yes'
-        if( cline%defined('srch_oris') )then
-            srch_oris = cline%get_carg('srch_oris')
-        endif
-        select case(srch_oris%to_char())
-            case('yes')
-                call cline%set('multivol_mode', 'input_oris_start')
-            case('no')
-                call cline%set('multivol_mode', 'input_oris_fixed')
-            case DEFAULT
-                THROW_HARD('Unsupported srch_oris flag')
-        end select
-        call xabini3D%execute(cline)
-    end subroutine exec_multivol_assign
 
 end module simple_commanders_abinitio

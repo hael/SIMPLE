@@ -189,7 +189,6 @@ contains
         call reg%add_char('sort_asc', self%sort_asc)
         call reg%add_char('speckind', self%speckind)
         call reg%add_char('split_mode', self%split_mode)
-        call reg%add_char('srch_oris', self%srch_oris)
         call reg%add_char('stats', self%stats)
         call reg%add_char('stream', self%stream)
         call reg%add_char('stream2d', self%stream2d)

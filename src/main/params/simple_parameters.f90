@@ -144,7 +144,6 @@ type :: parameters
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
-    character(len=3)          :: srch_oris='yes'      !< whether to search orientations in multivolume assignment(yes|no){yes} 
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -263,7 +262,7 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: multivol_mode='single' !< multivolume abinitio3D mode(single|independent|docked|input_oris_start|input_oris_fixed){single}
+    character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}

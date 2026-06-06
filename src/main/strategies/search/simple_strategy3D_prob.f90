@@ -1,6 +1,7 @@
 !@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
+use simple_strategy3D_alloc, only: s3D
 use simple_strategy3D_utils, only: assign_ori
 use simple_parameters,      only: parameters
 use simple_strategy3D,      only: strategy3D
@@ -52,7 +53,10 @@ contains
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             iref      = (istate-1)*self%s%p_ptr%nspace + iproj
-            if( self%s%doshift )then
+            if( trim(self%s%p_ptr%multivol_mode).eq.'input_oris_fixed' .and. &
+                &trim(self%s%p_ptr%refine).eq.'prob_state' )then
+                call assign_state_fixed(self, istate, corr)
+            else if( self%s%doshift )then
                 if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
                     call assign_ori(self%s, iref, irot, corr,&
                     &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
@@ -67,6 +71,26 @@ contains
             call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
+
+    subroutine assign_state_fixed( self, state, corr )
+        class(strategy3D_prob), intent(inout) :: self
+        integer,                intent(in)    :: state
+        real,                   intent(in)    :: corr
+        real :: mi_state
+        if( state < 1 .or. state > self%s%p_ptr%nstates )then
+            THROW_HARD('state index outside boundary; assign_state_fixed')
+        endif
+        if( .not. s3D%state_exists(state) )then
+            THROW_HARD('empty state: '//int2str(state)//'; assign_state_fixed')
+        endif
+        mi_state = 0.
+        if( self%s%prev_state == state ) mi_state = 1.
+        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'state',    real(state))
+        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_state', mi_state)
+        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'corr',     corr)
+        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_proj',  1.)
+        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac',     100.)
+    end subroutine assign_state_fixed
 
     subroutine oris_assign_prob( self )
         class(strategy3D_prob), intent(inout) :: self

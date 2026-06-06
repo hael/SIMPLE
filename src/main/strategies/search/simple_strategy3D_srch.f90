@@ -124,7 +124,9 @@ contains
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj
-        call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        if( trim(self%p_ptr%multivol_mode) /= 'input_oris_fixed' )then
+            call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        endif
         call prep_strategy3D_thread(self%ithr)
         self%nsolns     = 0
         self%nrefs_eval = 0

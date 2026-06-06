@@ -294,6 +294,10 @@ contains
         ! search controls
         call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume refinement mode', &
+        &'Multi-volume refinement mode(input_oris_start|input_oris_refine|input_oris_fixed){input_oris_start}', &
+        &'(input_oris_start|input_oris_refine|input_oris_fixed){input_oris_start}', .false., 'input_oris_start', &
+        &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
@@ -307,9 +311,6 @@ contains
         call refine3D_multi%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
         &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms', .false., 6., &
         &gui_submenu="filter")
-        call refine3D_multi%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
-        &'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}', &
-        &'(yes|no){no}', .false., 'no', gui_submenu="filter")
         call refine3D_multi%add_input(UI_FILT, ml_reg, gui_submenu="filter")
         call refine3D_multi%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls

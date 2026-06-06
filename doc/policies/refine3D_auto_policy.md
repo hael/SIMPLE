@@ -105,5 +105,6 @@ The final reconstruction writes ordinary reconstruct3D products and then
 `write_final_rec_outputs` records the final map products using the requested
 resolution target.
 
-`refine3D_auto` remains single-state. Multi-state refinement belongs to base
-`refine3D` or the ab initio workflows.
+`refine3D_auto` remains single-state. Multi-state automated refinement belongs
+to [refine3D_multi_policy.md](refine3D_multi_policy.md), base `refine3D`, or
+the ab initio workflows.
