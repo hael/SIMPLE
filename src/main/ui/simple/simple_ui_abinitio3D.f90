@@ -84,7 +84,6 @@ contains
             &NU frontier into an explicit merged-reference LP-set matching run', &
             &'(none|nonuniform|nonuniform_lpset){nonuniform}', .false., 'nonuniform', &
             &gui_submenu="filter", gui_advanced=.true.)
-        call abinitio3D%add_input(UI_FILT, nu_hist_potts, gui_submenu="filter", gui_advanced=.true.)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
