@@ -233,7 +233,7 @@ subroutine exec_test_opt_lp( self, cline )
     allocate(yest( n_bin),       source=0.)
     allocate(yhist(n_bin),       source=0)
     find_stop  = calc_fourier_index(p%lpstart,   p%ldim(1), p%smpd)
-    find_start = calc_fourier_index(p%lpstart_nonuni, p%ldim(1), p%smpd)
+    find_start = 2
     call img%memoize_mask_coords
     do iptcl = 1, 1
         write(*, *) 'Particle # ', iptcl

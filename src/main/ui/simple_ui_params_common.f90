@@ -53,7 +53,6 @@ type(ui_param) :: lp_backgr
 type(ui_param) :: lp_pick
 type(ui_param) :: lp_track
 type(ui_param) :: lplim_crit
-type(ui_param) :: lpstart_nonuni
 type(ui_param) :: lpthres
 type(ui_param) :: max_dose
 type(ui_param) :: max_rad

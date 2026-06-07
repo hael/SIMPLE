@@ -264,6 +264,9 @@ contains
         ! filter controls
         call refine3D_auto%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
+        call refine3D_auto%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}', &
+        &'(none|nonuniform|nonuniform_lpset){nonuniform}', .false., 'nonuniform', gui_submenu="filter")
         call refine3D_auto%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
         & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}', &
         & '(yes|no){yes}', .false., 'yes', gui_submenu="filter")

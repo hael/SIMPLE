@@ -449,7 +449,6 @@ contains
         call reg%add_real('lp_backgr', self%lp_backgr)
         call reg%add_real('lp_ctf_estimate', self%lp_ctf_estimate)
         call reg%add_real('lp_discrete', self%lp_discrete)
-        call reg%add_real('lpstart_nonuni', self%lpstart_nonuni)
         call reg%add_real('lp_pick', self%lp_pick)
         call reg%add_real('lplim_crit', self%lplim_crit)
         call reg%add_real('lpstart', self%lpstart)

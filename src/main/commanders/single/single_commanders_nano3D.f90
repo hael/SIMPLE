@@ -284,7 +284,6 @@ contains
         if( .not. cline%defined('keepvol')        ) call cline%set('keepvol',       'yes')
         if( .not. cline%defined('hp')             ) call cline%set('hp',              3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',              1.0)
-        if( .not. cline%defined('lpstart_nonuni') ) call cline%set('lpstart_nonuni',  2.5)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',           30)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')

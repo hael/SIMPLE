@@ -2,7 +2,7 @@
 module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_refine3D_fnames,   only: refine3D_state_vol_fname
+use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -199,6 +199,7 @@ contains
             call xrec3D%execute(cline_rec3D)
             call cline%set('vol1', refine3D_state_vol_fname(1))
         endif
+        call seed_refine3D_auto_nonuniform_lpset()
         ! 3D refinement iterations
         call cline%set('prg',                   'refine3D')
         call cline%set('ufrac_trec',    params%update_frac)
@@ -221,6 +222,47 @@ contains
         call init_vol%kill
 
     contains
+
+        subroutine seed_refine3D_auto_nonuniform_lpset()
+            type(sp_project) :: seed_proj
+            type(string) :: fsc_fname
+            real, allocatable :: fsc(:), res(:)
+            real :: fsc05, fsc0143
+            integer :: fsc_box
+            if( .not. params%l_nonuniform_lpset ) return
+            if( cline%defined('lp') ) return
+            fsc_box = 0
+            call seed_proj%read_segment('out', params%projfile)
+            if( seed_proj%isthere_in_osout('fsc', 1) )then
+                call seed_proj%get_fsc(1, fsc_fname, fsc_box)
+            else
+                fsc_fname = refine3D_fsc_fname(1)
+                fsc_box = params%box
+            endif
+            call seed_proj%kill
+            if( .not. file_exists(fsc_fname) )then
+                THROW_HARD(WORKFLOW_LABEL//' filt_mode=nonuniform_lpset requires starting-volume FSC metadata or explicit lp')
+            endif
+            fsc = file2rarr(fsc_fname)
+            if( size(fsc) < 1 ) THROW_HARD('empty starting-volume FSC; '//WORKFLOW_LABEL//' filt_mode=nonuniform_lpset')
+            if( fsc_box < 1 ) fsc_box = params%box
+            res = get_resarr(fsc_box, params%smpd)
+            if( size(res) < size(fsc) ) THROW_HARD('starting-volume FSC/box size mismatch; '//WORKFLOW_LABEL)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            if( fsc0143 <= TINY )then
+                THROW_HARD(WORKFLOW_LABEL//' filt_mode=nonuniform_lpset could not derive a positive starting resolution; set lp explicitly')
+            endif
+            params%lp         = fsc0143
+            params%kfromto(2) = calc_fourier_index(params%lp, params%box, params%smpd)
+            params%l_lpset    = .true.
+            call cline%set('lp', params%lp)
+            write(logfhandle,'(A,F8.3,A)') &
+                &'>>> '//WORKFLOW_LABEL//' nonuniform_lpset seeded matching low-pass from starting FSC 0.143: ', &
+                &params%lp, ' A'
+            if( allocated(fsc) ) deallocate(fsc)
+            if( allocated(res) ) deallocate(res)
+            call fsc_fname%kill
+        end subroutine seed_refine3D_auto_nonuniform_lpset
 
         logical function project_init_vol_compatible() result( l_compatible )
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &
@@ -472,7 +514,7 @@ contains
             init_vol = new_vol  ! renaming of global filename
             call spproj%add_vol2os_out(init_vol, init_smpd, 1, 'vol')
             call spproj%add_fsc2os_out(refine3D_fsc_fname(1), 1, init_box)
-            call spproj%read_segment('out', params%projfile)
+            call spproj%write_segment_inside('out', params%projfile)
             ! cleanup
             deallocate(fsc)
             call spproj%kill
