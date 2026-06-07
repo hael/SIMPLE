@@ -420,7 +420,7 @@ type :: parameters
     integer :: ref_ind=0           !> reference index
     integer :: reliongroups=0
     integer :: shift_stage=0
-    integer :: split_stage=7       !< splitting stage when multivol_mode==docked
+    integer :: split_stage=6       !< splitting stage when multivol_mode==docked
     integer :: startit=1           !< start iterating from here
     integer :: stage=0
     integer :: state=1             !< state to extract

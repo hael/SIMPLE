@@ -87,16 +87,26 @@ FSC resolution when an FSC exists. The planned stage LP is only a fallback.
 - initialization from `abinitio3D_cavgs` inside the workflow through
   `cavg_ini=yes`
 - externally supplied class-average initialization through `cavg_ini_ext=yes`
-- prior-orientation modes through `input_oris_start` and `input_oris_fixed`
 
 Volume input is allowed for `single`, `independent`, and `docked`
 multi-volume modes. It cannot be combined with class-average initialization or
 partitioned startup.
 
+Normal particle-based starts treat `abinitio3D` as the producer of new
+`ptcl3D` orientation and multi-state information. The workflow resets `ptcl3D`
+sampling, deletes previous 3D alignment while preserving shifts, transfers 2D
+shifts from `ptcl2D`, and initializes `ptcl3D%state` only from the 2D
+selection state: selected particles become state 1 and unselected particles
+become state 0. Fresh `independent` runs then randomize active particles into
+the requested 3D states.
+
 Class-average initialization and external class-average initialization both
-skip the random-volume start, but only the external route assumes the input
-orientations are already symmetrized and starts after the symmetry-search
-stage.
+skip the random-volume start. `cavg_ini_ext=yes` is the explicit exception to
+the fresh-start rule: it requires prior `ptcl3D` alignment, preserves the
+external orientation/state information needed by that route, assumes the input
+orientations are already symmetrized, and starts after the symmetry-search
+stage. If `nstates > 1`, every requested prior `ptcl3D` state must exist and be
+populated.
 
 ## 6. Multi-Volume Policy
 
@@ -105,22 +115,42 @@ Supported `multivol_mode` values are:
 - `single`
 - `independent`
 - `docked`
-- `input_oris_start`
-- `input_oris_fixed`
 
-`single` requires `nstates=1`. The other modes require more than one state.
+`single` requires `nstates=1`. `independent` and `docked` require more than
+one state.
 When the user gives `nstates > 1` and no `multivol_mode`, the commander
 defaults to `independent`.
 
 In `independent` mode, the workflow uses the target point group from the start
 and skips the staged symmetry-axis search.
 
-In `docked` mode, the controller starts as one state and expands to the
-requested number of states at the docked split stage.
+In `docked` mode, the controller starts as one state, runs stages 1-5 as a
+single-state ab initio model, then expands to the requested number of states at
+the docked split stage. The default split stage is 6, meaning the split occurs
+after stage 5.
 
-Input-orientation modes require a prior `ptcl3D` alignment. They seed or
-preserve states according to the selected mode before entering the staged
-refinement schedule.
+The docked split starts a new multi-state update epoch:
+
+- restore `nstates` to the requested value
+- scale the particle sample target as `nsample * nstates`, expressed as
+  `update_frac = min(UPDATE_FRAC_MAX, nsample_stage * nstates / nactive)`
+- clear `ptcl3D%sampled` and `ptcl3D%updatecnt`
+- randomize active particles into the requested state labels
+- reconstruct split state volumes from the randomized labels without trailing
+  volume averaging
+
+The first post-split stage is a stabilization stage. It uses `refine=shc_smpl`
+with fractional particle updates still active, but with fractional volume
+averaging disabled. The remaining post-split docked stages use
+`refine=prob_neigh`.
+
+For docked mode, trailing reconstruction is allowed only before the split.
+Stages at and after the split must not blend current state volumes with
+previous mixed single-state or pre-split volumes.
+
+`input_oris_start` and `input_oris_fixed` are no longer supported by
+`abinitio3D`. Prior-orientation multi-state refinement belongs in the explicit
+multi-state refinement workflows, not in particle-based ab initio startup.
 
 ## 7. Symmetry
 
@@ -160,6 +190,11 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 
 After the staged `refine3D` loop, `abinitio3D` runs a fresh
 original-sampling reconstruction from selected particles.
+
+For `docked` mode, the workflow first verifies post-split coverage: every
+active particle must have `updatecnt > 0` in the multi-state epoch before final
+reconstruction is allowed. This prevents final maps from being produced from
+state labels that were never refreshed after the split.
 
 The final reconstruction inherits only the scientific reconstruction policy it
 needs from the final stage. It must not inherit staged search or mask-generation

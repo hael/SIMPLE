@@ -145,6 +145,24 @@ Current high-level ab initio stage policy:
 - final active stages may switch to `fillin`, except where the multi-state
   policy disables it
 
+`abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
+Stages before the split run as one state. The default split stage is 6, so the
+split occurs after stage 5. At the split, the commander restores the requested
+state count, clears `ptcl3D%sampled` and `ptcl3D%updatecnt`, randomizes active
+particles into state labels, and reconstructs split state volumes. The first
+post-split stage uses `shc_smpl`; later post-split stages use `prob_neigh`.
+
+Post-split docked stages keep fractional particle updates for cost control, but
+they disable fractional volume averaging. The update target is scaled as
+`nsample * nstates` over the active particle set and capped by
+`UPDATE_FRAC_MAX`. This preserves the outer sampled-update economy while
+preventing pre-split mixed-volume memory from being blended into the new
+multi-state volumes.
+
+Because the split clears the counters, `updatecnt` after the split is
+post-split multi-state update history, not single-state history. Final docked
+reconstruction requires every active particle to have a post-split update.
+
 `sample_ptcls4update3D` applies the normal 3D subset policy:
 
 - if fractional update is off, select all active particles
@@ -219,6 +237,10 @@ are separate workflow stages and may perform their own reads.
   `update_frac`.
 - Stage 1 of `abinitio2D` may be sampled but must not fractionally carry over
   previous class-average sums.
+- The `abinitio3D` docked split starts a new multi-state `sampled/updatecnt`
+  epoch.
+- Docked post-split stages may use fractional particle updates but must not use
+  trailing volume averaging.
 - 2D fractional class-average restoration remains class-local.
 - Final `abinitio2D` fill-in remains assignment-only unless the policy is
   explicitly changed.

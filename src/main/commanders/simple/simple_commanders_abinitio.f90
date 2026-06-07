@@ -1148,6 +1148,10 @@ contains
         ! splitting stage
         split_stage = abinitio_het_docked_stage()
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
+        if( split_stage < 2 .or. split_stage > abinitio_nstages() )then
+            THROW_HARD('split_stage must be between 2 and '//int2str(abinitio_nstages())//' for abinitio3D')
+        endif
+        call cline%set('split_stage', split_stage)
         ! adjust default multivol_mode unless given on command line
         if( cline%defined('nstates') )then
             nstates_on_cline = cline%get_iarg('nstates')
@@ -1175,8 +1179,10 @@ contains
         select case(trim(params%multivol_mode))
             case('single')
                 if( nstates_glob /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
-            case('independent', 'docked', 'input_oris_start', 'input_oris_fixed')
+            case('independent', 'docked')
                 if( nstates_glob == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
+            case('input_oris_start', 'input_oris_fixed')
+                THROW_HARD('multivol_mode='//trim(params%multivol_mode)//' is no longer supported for abinitio3D')
             case DEFAULT
                 THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
         end select
@@ -1193,7 +1199,6 @@ contains
         start_stage = 1
         l_ini3D     = .false.
         if( trim(params%cavg_ini).eq.'yes' )then
-            if( str_has_substr(params%multivol_mode,'input_oris') ) THROW_HARD('Ini3D on cavgs not allowed for multivol_mode=input_oris*')
             if( last_stage < abinitio_nstages_ini3D() - 1 ) THROW_HARD('nstages must be >= first executable abinitio3D stage')
             ! nice
             nice_comm%stat_root%stage = "initialising 3D volume from class averages"
@@ -1259,7 +1264,6 @@ contains
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = params%l_nonuniform
         nstages_refine3D = last_stage
-        if( str_has_substr(params%multivol_mode,'input_oris') ) start_stage = split_stage
         if( nstages_refine3D < start_stage )then
             THROW_HARD('nstages must be >= first executable abinitio3D stage')
         endif
@@ -1277,6 +1281,7 @@ contains
         else
             update_frac = 1.0
             nptcls_eff  = spproj%count_state_gt_zero()
+            if( nptcls_eff < 1 ) THROW_HARD('No active particles selected in ptcl2D for abinitio3D')
             if( .not. cline%defined('nsample') ) params%nsample = abinitio_nsample_default()
             if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio3D sampled update')
             if( cline%defined('nsample_start') )then
@@ -1338,36 +1343,8 @@ contains
             endif
         endif
         ! starting volume logics
-        if( str_has_substr(params%multivol_mode,'input_oris') )then
-            ! check that ptcl3D field is not virgin
-            if( spproj%is_virgin_field('ptcl3D') )then
-                THROW_HARD('Prior 3D alignment is lacking for multi-volume assignment')
-            endif
-            ! create an initial sampling of all updated ptcls for 3D reconstruction
-            noris = spproj%os_ptcl3D%get_noris()
-            call spproj%os_ptcl3D%sample4update_updated([1,noris], nptcls2update, pinds, .true.)
-            call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
-            deallocate(pinds) ! these are not needed
-            ! start at the same stage as for multivol_mode==docked
-            start_stage = split_stage
-            ! create state labelling
-            nstates_in_project = spproj%os_ptcl3D%get_n('state')
-            if( nstates_in_project == params%nstates )then
-                THROW_WARN('exec_abinitio3D: prior nstates equal to given nstates. No randomization!')
-            elseif( nstates_in_project == 1 )then
-                THROW_WARN('No previous state assignment detected in project. Randomizing states!')
-                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
-            else
-                THROW_HARD('Previous state assignment inconsistent with given number of states!')
-            endif
-            ! write updated project file
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-            ! calc recs
-            call calc_rec(params, params%projfile, xrec3D, start_stage)
-        else if( .not. l_ini3D )then
-            ! the ptcl3D field should be clean of updates at this stage
-            call spproj%os_ptcl3D%clean_entry('updatecnt')
-            call spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
+        if( .not. l_ini3D )then
+            call reset_ptcl3D_from_ptcl2D_selection
             ! randomize projection directions
             select case(trim(params%oritype))
                 case('ptcl3D')
@@ -1436,6 +1413,9 @@ contains
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
                 update_frac    = min(update_frac * nstates_glob, abinitio_update_frac_max())
+                write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
+                    &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/UPDATE_FRAC: ', &
+                    &split_stage, '/', params%nstates, '/', update_frac
             endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(params, istage, l_cavgs=.false.)
@@ -1468,6 +1448,7 @@ contains
             call nice_comm%cycle()
         enddo
         if( nstages_refine3D == abinitio_nstages() )then
+            if( trim(params%multivol_mode).eq.'docked' ) call verify_docked_multistate_updates
             ! calculate 3D reconstruction at original sampling
             call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)
             ! for visualization
@@ -1488,6 +1469,65 @@ contains
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
 
     contains
+
+        subroutine clean_ptcl3D_sampling
+            call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+        end subroutine clean_ptcl3D_sampling
+
+        subroutine reset_ptcl3D_from_ptcl2D_selection
+            integer :: iptcl, nptcls2D, nptcls3D, state2D, nactive
+            nptcls2D = spproj%os_ptcl2D%get_noris()
+            nptcls3D = spproj%os_ptcl3D%get_noris()
+            if( nptcls2D /= nptcls3D )then
+                THROW_HARD('Inconsistent number of particles in PTCL2D/PTCL3D segments; abinitio3D')
+            endif
+            if( .not. spproj%os_ptcl2D%isthere('state') )then
+                THROW_HARD('state flag missing from ptcl2D; abinitio3D')
+            endif
+            call clean_ptcl3D_sampling
+            call spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            nactive = 0
+            do iptcl = 1,nptcls3D
+                state2D = spproj%os_ptcl2D%get_state(iptcl)
+                if( state2D > 0 )then
+                    call spproj%os_ptcl3D%set_state(iptcl, 1)
+                    nactive = nactive + 1
+                else
+                    call spproj%os_ptcl3D%set_state(iptcl, 0)
+                endif
+            enddo
+            if( nactive < 1 ) THROW_HARD('No active particles selected in ptcl2D for abinitio3D')
+        end subroutine reset_ptcl3D_from_ptcl2D_selection
+
+        subroutine verify_docked_multistate_updates
+            integer, allocatable :: states(:), updatecnts(:)
+            integer :: nactive, nupdated, nmissing
+            call spproj%read_segment('ptcl3D', params%projfile)
+            if( .not. spproj%os_ptcl3D%isthere('updatecnt') )then
+                THROW_HARD('docked abinitio3D requires post-split particle updates before final reconstruction')
+            endif
+            states     = spproj%os_ptcl3D%get_all_asint('state')
+            updatecnts = spproj%os_ptcl3D%get_all_asint('updatecnt')
+            nactive    = count(states > 0)
+            nupdated   = count(states > 0 .and. updatecnts > 0)
+            nmissing   = nactive - nupdated
+            write(logfhandle,'(A,I0,A,I0,A,I0)') &
+                &'>>> ABINITIO3D DOCKED POST-SPLIT UPDATE COVERAGE UPDATED/ACTIVE/MISSING: ', &
+                &nupdated, '/', nactive, '/', nmissing
+            if( nactive < 1 )then
+                if( allocated(states)     ) deallocate(states)
+                if( allocated(updatecnts) ) deallocate(updatecnts)
+                THROW_HARD('docked abinitio3D has no active particles after staged refinement')
+            endif
+            if( nmissing > 0 )then
+                if( allocated(states)     ) deallocate(states)
+                if( allocated(updatecnts) ) deallocate(updatecnts)
+                THROW_HARD('docked abinitio3D cannot finish before every active particle has a post-split update')
+            endif
+            if( allocated(states)     ) deallocate(states)
+            if( allocated(updatecnts) ) deallocate(updatecnts)
+        end subroutine verify_docked_multistate_updates
 
         subroutine ini3D_from_cavgs( cline )
             class(cmdline),    intent(inout) :: cline

@@ -546,6 +546,7 @@ contains
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(cmdline)                     :: cline_calc_group_sigmas
         call spproj%read_segment('ptcl3D', projfile)
+        call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
         call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
         call spproj%write_segment_inside(params%oritype, projfile)
         call cline_refine3D%set(     'nstates', params%nstates)

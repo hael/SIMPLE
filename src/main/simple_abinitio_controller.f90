@@ -26,7 +26,7 @@ integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neig
 integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for abinitio 3D 
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
-integer,          parameter :: HET_DOCKED_STAGE        = NSTAGES
+integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -240,6 +240,9 @@ contains
         else
             cfg%refine = 'prob_neigh'
         endif
+        if( trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage )then
+            cfg%refine = 'shc_smpl'
+        endif
         if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
             cfg%refine = 'prob_state'
         endif  
@@ -272,9 +275,7 @@ contains
             case('independent')
                 if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
             case('docked')
-                if( istage == active_refine3D_nstages() )then
-                    cfg%trail_rec = 'no'
-                else if( istage >= TRAILREC_STAGE_SINGLE )then
+                if( istage >= TRAILREC_STAGE_SINGLE .and. istage < params%split_stage )then
                     cfg%trail_rec = 'yes'
                 endif
             case('input_oris_fixed')
