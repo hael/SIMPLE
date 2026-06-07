@@ -724,11 +724,15 @@ contains
         integer, allocatable :: inds_sorted(:)
         integer   :: i, iref, assigned_iref, assigned_ptcl, istate, si, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
-        real      :: projs_athres
+        integer   :: greedy_state(self%nptcls)
+        real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val
-        logical   :: l_prob_objfun
+        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state
         huge_val = huge(1.0)
         l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        greedy_state = 0
+        final_assigned = .false.
+        l_filter_greedy_state = .false.
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots()), dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
         call seed_empty_ptcls_from_prev_assign()
         call self%ref_normalize()
@@ -813,65 +817,143 @@ contains
 
         subroutine assign_particles_globally()
             projs_athres = 0.
+            state_projs_athres = 0.
             do si = 1, self%nstates
                 istate = self%ssinds(si)
-                projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
+                state_projs_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist',&
+                    &self%p_ptr%prob_athres, state=istate)
+                projs_athres = max(projs_athres, state_projs_athres(istate))
             enddo
+            final_assigned = .false.
+            if( self%nstates > 1 )then
+                call assign_greedy_state_labels()
+                do si = 1,self%nstates
+                    call assign_particles_for_state(self%ssinds(si))
+                enddo
+            else
+                call assign_particles_single_state()
+            endif
+            frontier%ptcl_avail = .not. final_assigned
+        end subroutine assign_particles_globally
+
+        subroutine init_frontier()
             graph%ref_pos       = 1
             frontier%iref_dist  = huge_val
-            frontier%ptcl_avail = .true.
-            nleft = self%nptcls
-            nsel  = 0
+            frontier%sel_pos    = 0
+            nsel                = 0
             do idx = 1, nactive
                 iref = graph%active_refs(idx)
                 call advance_ref_head(iref)
                 call sync_frontier_ref(iref)
             enddo
+        end subroutine init_frontier
+
+        subroutine assign_greedy_state_labels()
+            greedy_state = 0
+            l_filter_greedy_state = .false.
+            graph%ref_pos       = 1
+            frontier%iref_dist  = huge_val
+            frontier%ptcl_avail = .true.
+            nleft = self%nptcls
+            call init_frontier()
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                ! keep multi-state hard state labels cold; retain stochastic sampling for single-state pose assignment
-                if( self%nstates > 1 )then
-                    assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
-                else
-                    assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                        &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
-                endif
+                assigned_idx  = minloc(frontier%sel_dists(1:nsel), dim=1)
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
+                greedy_state(assigned_ptcl) = self%sinds(assigned_iref)
                 frontier%ptcl_avail(assigned_ptcl) = .false.
                 nleft = nleft - 1
-                self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
-                call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                    &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
-                do idx = graph%ptcl_offsets(assigned_ptcl), graph%ptcl_offsets(assigned_ptcl+1)-1
-                    iref = graph%ptcl_refs(idx)
-                    m    = graph%ref_counts(iref)
-                    if( graph%ref_pos(iref) > m ) cycle
-                    start = graph%ref_offsets(iref)
-                    if( graph%ref_list(start + graph%ref_pos(iref) - 1) /= assigned_ptcl ) cycle
-                    call advance_ref_head(iref)
-                    call sync_frontier_ref(iref)
-                enddo
+                call update_frontier_after_assignment(assigned_ptcl)
             enddo
-        end subroutine assign_particles_globally
+            do i = 1,self%nptcls
+                if( greedy_state(i) == 0 )then
+                    fallback_ref = pick_best_evaluated_ref(i)
+                    if( fallback_ref > 0 ) greedy_state(i) = self%sinds(fallback_ref)
+                endif
+            enddo
+        end subroutine assign_greedy_state_labels
+
+        subroutine assign_particles_single_state()
+            l_filter_greedy_state = .false.
+            frontier%ptcl_avail = .true.
+            nleft = self%nptcls
+            call init_frontier()
+            do while( nleft > 0 )
+                if( nsel == 0 ) exit
+                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                    &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
+                call commit_selected_assignment()
+            enddo
+        end subroutine assign_particles_single_state
+
+        subroutine assign_particles_for_state( state_filter )
+            integer, intent(in) :: state_filter
+            l_filter_greedy_state = .true.
+            frontier%ptcl_avail = (greedy_state == state_filter) .and. (.not. final_assigned)
+            nleft = count(frontier%ptcl_avail)
+            call init_frontier()
+            do while( nleft > 0 )
+                if( nsel == 0 ) exit
+                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                    &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
+                call commit_selected_assignment()
+            enddo
+        end subroutine assign_particles_for_state
+
+        subroutine commit_selected_assignment()
+            assigned_iref = frontier%sel_refs(assigned_idx)
+            assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
+            frontier%ptcl_avail(assigned_ptcl) = .false.
+            final_assigned(assigned_ptcl) = .true.
+            nleft = nleft - 1
+            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
+            call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
+            call update_frontier_after_assignment(assigned_ptcl)
+        end subroutine commit_selected_assignment
+
+        subroutine update_frontier_after_assignment( iptcl_assigned )
+            integer, intent(in) :: iptcl_assigned
+            do idx = graph%ptcl_offsets(iptcl_assigned), graph%ptcl_offsets(iptcl_assigned+1)-1
+                iref = graph%ptcl_refs(idx)
+                m    = graph%ref_counts(iref)
+                if( graph%ref_pos(iref) > m ) cycle
+                start = graph%ref_offsets(iref)
+                if( graph%ref_list(start + graph%ref_pos(iref) - 1) /= iptcl_assigned ) cycle
+                call advance_ref_head(iref)
+                call sync_frontier_ref(iref)
+            enddo
+        end subroutine update_frontier_after_assignment
 
         subroutine assign_remaining_particles_from_best_touched_ref()
             do i = 1, self%nptcls
                 if( .not. frontier%ptcl_avail(i) ) cycle
-                fallback_ref = pick_best_evaluated_ref(i)
-                if( fallback_ref == 0 )then
-                    call seed_fallback_if_empty(i)
+                if( self%nstates > 1 .and. greedy_state(i) > 0 )then
+                    fallback_ref = pick_best_evaluated_ref(i, greedy_state(i))
+                else
                     fallback_ref = pick_best_evaluated_ref(i)
                 endif
+                if( fallback_ref == 0 )then
+                    call seed_fallback_if_empty(i)
+                    if( self%nstates > 1 .and. greedy_state(i) > 0 )then
+                        fallback_ref = pick_best_evaluated_ref(i, greedy_state(i))
+                    else
+                        fallback_ref = pick_best_evaluated_ref(i)
+                    endif
+                endif
+                if( fallback_ref == 0 ) fallback_ref = pick_best_evaluated_ref(i)
                 if( fallback_ref == 0 ) fallback_ref = 1
                 self%assgn_map(i) = self%loc_tab(fallback_ref,i)
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
+                final_assigned(i) = .true.
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
 
-        integer function pick_best_evaluated_ref(iptcl_loc) result(ri_best)
+        integer function pick_best_evaluated_ref(iptcl_loc, state_filter) result(ri_best)
             integer, intent(in) :: iptcl_loc
+            integer, intent(in), optional :: state_filter
             integer :: kt, ri_loc
             real    :: best_dist
             ri_best = 0
@@ -880,6 +962,9 @@ contains
                 ri_loc = self%eval_touched_refs(kt,iptcl_loc)
                 if( ri_loc < 1 .or. ri_loc > self%nrefs ) cycle
                 if( self%loc_tab(ri_loc,iptcl_loc)%inpl <= 0 ) cycle
+                if( present(state_filter) )then
+                    if( self%sinds(ri_loc) /= state_filter ) cycle
+                endif
                 if( self%loc_tab(ri_loc,iptcl_loc)%dist < best_dist )then
                     best_dist = self%loc_tab(ri_loc,iptcl_loc)%dist
                     ri_best   = ri_loc
@@ -982,8 +1067,14 @@ contains
             do while( graph%ref_pos(iref) <= mloc )
                 cand = graph%ref_list(sloc + graph%ref_pos(iref) - 1)
                 if( frontier%ptcl_avail(cand) )then
-                    frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
-                    return
+                    if( .not. l_filter_greedy_state )then
+                        frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
+                        return
+                    endif
+                    if( greedy_state(cand) == self%sinds(iref) )then
+                        frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
+                        return
+                    endif
                 endif
                 graph%ref_pos(iref) = graph%ref_pos(iref) + 1
             enddo

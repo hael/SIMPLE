@@ -459,9 +459,11 @@ contains
     ! ptcl -> (proj, state) assignment using the global normalized dist value table
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si,&
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive,&
                     &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
-        real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres,iref_dist(self%nrefs), dists_sorted(self%nrefs)
+        integer :: greedy_state(self%nptcls), active_refs(self%nrefs), active_inds(self%nrefs)
+        real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres, iref_dist(self%nrefs), dists_sorted(self%nrefs),&
+                    &state_projs_athres(self%p_ptr%nstates), active_dists(self%nrefs), active_dists_sorted(self%nrefs)
         logical :: ptcl_avail(self%nptcls)
         ! normalization
         call ref_score_tab(self, sorted_tab)
@@ -473,34 +475,109 @@ contains
         enddo
         !$omp end parallel do
         projs_athres = 0.
+        state_projs_athres = 0.
         do si = 1, self%nstates
             istate = self%ssinds(si)
-            projs_athres = max(projs_athres, calc_athres(self%b_ptr%spproj_field, 'dist', self%p_ptr%prob_athres, state=istate))
+            state_projs_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist',&
+                &self%p_ptr%prob_athres, state=istate)
+            projs_athres = max(projs_athres, state_projs_athres(istate))
         enddo
-        ! first row is the current best reference distribution
-        iref_dist_inds = 1
-        iref_dist      = sorted_tab(1,:)
-        ptcl_avail     = .true.
-        do while( any(ptcl_avail) )
-            ! keep multi-state hard state labels cold; retain stochastic sampling for single-state pose assignment
-            if( self%nstates > 1 )then
-                assigned_iref = minloc(iref_dist, dim=1)
-            else
+        greedy_state = 0
+        if( self%nstates > 1 )then
+            call assign_greedy_state_labels()
+            do si = 1,self%nstates
+                call assign_refs_for_state(self%ssinds(si))
+            enddo
+        else
+            call reset_ref_frontier()
+            do while( any(ptcl_avail) )
                 assigned_iref = angle_sampling(iref_dist, dists_sorted, inds_sorted, projs_athres, self%p_ptr%prob_athres)
-            endif
+                call assign_current_ref()
+                do iref = 1,self%nrefs
+                    call advance_ref_head(iref, 0)
+                enddo
+            enddo
+        endif
+
+    contains
+
+        subroutine reset_ref_frontier()
+            iref_dist_inds = 1
+            iref_dist      = sorted_tab(1,:)
+            ptcl_avail     = .true.
+        end subroutine reset_ref_frontier
+
+        subroutine advance_ref_head( iref_current, state_filter )
+            integer, intent(in) :: iref_current, state_filter
+            integer :: iptcl_current
+            do while( iref_dist_inds(iref_current) <= self%nptcls )
+                iptcl_current = stab_inds(iref_dist_inds(iref_current), iref_current)
+                if( ptcl_avail(iptcl_current) .and. &
+                    &(state_filter == 0 .or. greedy_state(iptcl_current) == state_filter) )then
+                    iref_dist(iref_current) = sorted_tab(iref_dist_inds(iref_current), iref_current)
+                    return
+                endif
+                iref_dist_inds(iref_current) = iref_dist_inds(iref_current) + 1
+            enddo
+            iref_dist(iref_current) = huge(iref_dist(iref_current))
+        end subroutine advance_ref_head
+
+        subroutine assign_current_ref()
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
-            ! update the iref_dist and iref_dist_inds
-            do iref = 1, self%nrefs
-                do while( iref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(iref_dist_inds(iref),iref))))
-                    iref_dist_inds(iref) = iref_dist_inds(iref) + 1
-                    iref_dist(     iref) = sorted_tab(iref_dist_inds(iref), iref)
+        end subroutine assign_current_ref
+
+        subroutine assign_greedy_state_labels()
+            call reset_ref_frontier()
+            do while( any(ptcl_avail) )
+                assigned_iref  = minloc(iref_dist, dim=1)
+                assigned_ptcl  = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
+                greedy_state(assigned_ptcl) = self%sinds(assigned_iref)
+                ptcl_avail(assigned_ptcl)  = .false.
+                do iref = 1,self%nrefs
+                    call advance_ref_head(iref, 0)
                 enddo
             enddo
-        enddo
+        end subroutine assign_greedy_state_labels
+
+        subroutine gather_active_refs( state_filter )
+            integer, intent(in) :: state_filter
+            nactive = 0
+            do iref = 1,self%nrefs
+                if( self%sinds(iref) /= state_filter ) cycle
+                if( iref_dist_inds(iref) > self%nptcls ) cycle
+                nactive = nactive + 1
+                active_refs(nactive)  = iref
+                active_dists(nactive) = iref_dist(iref)
+            enddo
+        end subroutine gather_active_refs
+
+        subroutine assign_refs_for_state( state_filter )
+            integer, intent(in) :: state_filter
+            call reset_ref_frontier()
+            ptcl_avail = greedy_state == state_filter
+            do iref = 1,self%nrefs
+                if( self%sinds(iref) == state_filter ) call advance_ref_head(iref, state_filter)
+            enddo
+            do while( any(ptcl_avail) )
+                call gather_active_refs(state_filter)
+                if( nactive == 0 ) THROW_HARD('no active refs left in multi-state probability assignment')
+                if( nactive == 1 )then
+                    active_idx = 1
+                else
+                    active_idx = angle_sampling(active_dists(1:nactive), active_dists_sorted(1:nactive),&
+                        &active_inds(1:nactive), state_projs_athres(state_filter), self%p_ptr%prob_athres)
+                endif
+                assigned_iref = active_refs(active_idx)
+                call assign_current_ref()
+                do iref = 1,self%nrefs
+                    if( self%sinds(iref) == state_filter ) call advance_ref_head(iref, state_filter)
+                enddo
+            enddo
+        end subroutine assign_refs_for_state
     end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab

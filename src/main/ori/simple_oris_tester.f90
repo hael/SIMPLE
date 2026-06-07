@@ -182,8 +182,9 @@ contains
     !---------------------------------------------------------------
     subroutine test_sampling_and_updatecnt()
         type(oris) :: os
+        type(class_sample), allocatable :: clssmp(:)
         integer, allocatable :: inds(:)
-        integer :: n, nsamp
+        integer :: i, n, nsamp
         real    :: frac, updfrac
         write(*,'(A)') 'test_sampling_and_updatecnt'
         n = 10
@@ -204,6 +205,34 @@ contains
         call os%set_all2single('updatecnt', 0.0)
         call os%sample4update_cnt([1, n], frac, nsamp, inds, .true.)
         call assert_true(nsamp <= n, 'sample4update_cnt nsamp<=n')
+        ! sample4update_class prefers never-updated particles inside each class quota
+        allocate(clssmp(2))
+        clssmp(1)%clsind = 1
+        clssmp(1)%pop    = 5
+        allocate(clssmp(1)%pinds(5), source=[1,2,3,4,5])
+        allocate(clssmp(1)%ccs(5),   source=[5.,4.,3.,2.,1.])
+        clssmp(2)%clsind = 2
+        clssmp(2)%pop    = 5
+        allocate(clssmp(2)%pinds(5), source=[6,7,8,9,10])
+        allocate(clssmp(2)%ccs(5),   source=[5.,4.,3.,2.,1.])
+        call os%set_all2single('updatecnt', 2.0)
+        call os%set(4,  'updatecnt', 0.)
+        call os%set(5,  'updatecnt', 0.)
+        call os%set(9,  'updatecnt', 0.)
+        call os%set(10, 'updatecnt', 0.)
+        frac = 0.4
+        call os%sample4update_class(clssmp, [1, n], frac, nsamp, inds, .true., .false.)
+        call assert_int(4, nsamp, 'sample4update_class nsamp')
+        if( size(inds) == 4 )then
+            call assert_true(all(inds == [4,5,9,10]), 'sample4update_class low updatecnt first')
+        else
+            call assert_true(.false., 'sample4update_class low updatecnt first')
+        endif
+        do i = 1, size(clssmp)
+            if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
+            if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
+        end do
+        deallocate(clssmp)
         ! sample4update_updated: requires some updatecnt>0
         call os%set_all2single('updatecnt', 0.0)
         call os%set_updatecnt(1, [1,2,3])

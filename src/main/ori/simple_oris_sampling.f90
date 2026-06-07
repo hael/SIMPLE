@@ -167,17 +167,59 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
-        integer, allocatable :: states(:)
+        integer, allocatable :: states(:), eligible(:), updatecnts(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
-        integer :: i, cnt, nptcls, nsamples_class, states_bal(self%n)
+        integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
+        integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max
+        type(ran_tabu) :: rt
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
-        if( present(frac_best) )then
-            call self%sample_balanced(clssmp, nsamples_class, frac_best,  states_bal)
-        else
-            call self%sample_balanced(clssmp, nsamples_class, l_greedy, states_bal)
-        endif
+        clssmp(:)%nsample = 0
+        do while( sum(clssmp(:)%nsample) < nsamples_class )
+            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
+        end do
+        states_bal = 0
+        do i = 1, size(clssmp)
+            if( clssmp(i)%nsample < 1 ) cycle
+            if( present(frac_best) )then
+                nbest = max(clssmp(i)%nsample, nint(frac_best * real(clssmp(i)%pop)))
+                nbest = min(nbest, clssmp(i)%pop)
+                eligible = clssmp(i)%pinds(:nbest)
+            else if( l_greedy )then
+                do j = 1, clssmp(i)%nsample
+                    states_bal(clssmp(i)%pinds(j)) = 1
+                end do
+                cycle
+            else
+                eligible = clssmp(i)%pinds
+            endif
+            allocate(updatecnts(size(eligible)), source=0)
+            do j = 1, size(eligible)
+                updatecnts(j) = self%o(eligible(j))%get_int('updatecnt')
+            end do
+            ucnt_min = minval(updatecnts)
+            ucnt_max = maxval(updatecnts)
+            allocate(inds_pool(0), source=0)
+            do ucnt = ucnt_min, ucnt_max
+                if( size(inds_pool) >= clssmp(i)%nsample ) exit
+                inds_fill = pack(eligible, mask=updatecnts == ucnt)
+                if( size(inds_fill) == 0 ) cycle
+                rt = ran_tabu(size(inds_fill))
+                call rt%shuffle(inds_fill)
+                call rt%kill
+                nfill = min(clssmp(i)%nsample - size(inds_pool), size(inds_fill))
+                inds_pool = [inds_pool, inds_fill(1:nfill)]
+            end do
+            if( size(inds_pool) < clssmp(i)%nsample ) THROW_HARD('insufficient class-balanced update candidates')
+            do j = 1, clssmp(i)%nsample
+                states_bal(inds_pool(j)) = 1
+            end do
+            if( allocated(eligible)  ) deallocate(eligible)
+            if( allocated(updatecnts)) deallocate(updatecnts)
+            if( allocated(inds_pool) ) deallocate(inds_pool)
+            if( allocated(inds_fill) ) deallocate(inds_fill)
+        end do
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), source=0)

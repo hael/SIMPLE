@@ -306,13 +306,12 @@ contains
         &'no', gui_submenu="search")
         ! filter controls
         call refine3D_multi%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform_lpset}', &
-        &'(none|nonuniform|nonuniform_lpset){nonuniform_lpset}', .false., 'nonuniform_lpset', gui_submenu="filter")
+        &'Filtering mode(fsc|nonuniform_lpset|none){nonuniform_lpset}', &
+        &'(fsc|nonuniform_lpset|none){nonuniform_lpset}', .false., 'nonuniform_lpset', gui_submenu="filter")
         call refine3D_multi%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
         &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms', .false., 6., &
         &gui_submenu="filter")
         call refine3D_multi%add_input(UI_FILT, ml_reg, gui_submenu="filter")
-        call refine3D_multi%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls
         call refine3D_multi%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         call refine3D_multi%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &

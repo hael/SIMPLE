@@ -93,7 +93,7 @@ compute controls:
 
 - search: `maxits`, `nstates`, `pgrp`, `autoscale`, `continue`
 - mode: `multivol_mode`
-- filter: `filt_mode`, `lpstop`, `ml_reg`, `combine_eo`
+- filter: `filt_mode`, `lpstop`, `ml_reg`
 - mask: `mskdiam`, `automsk`
 - compute: `nparts`, `nthr`
 
@@ -108,6 +108,7 @@ The commander sets these hard workflow defaults:
 - `lplim_crit=0.5`
 - `incrreslim=no`
 - `nu_refine=no`
+- `combine_eo=no`
 
 The commander also sets these defaults only when the user did not provide a
 value:
@@ -115,7 +116,6 @@ value:
 - `mkdir=yes`
 - `center=no`
 - `sigma_est=global`
-- `combine_eo=no`
 - `prob_inpl=yes`
 - `nsample=min(100000, 10000 * nstates)`
 - `autoscale=yes`
@@ -127,9 +127,19 @@ value:
 - `overlap=0.99` for the `prob_neigh` phase
 - `keepvol=no`
 
+The public `filt_mode` values are `fsc`, `nonuniform_lpset`, and `none`;
+`nonuniform_lpset` is the default. Plain `nonuniform` is not a
+`refine3D_multi` mode because the workflow is LP-set driven, and `uniform` is
+disabled for multi-state search.
+
 `nu_refine` is not a public `refine3D_multi` option. The UI does not expose it,
 and the commander forces `nu_refine=no` even if a command line attempts to pass
 another value.
+
+`combine_eo` is not a public `refine3D_multi` option. The UI does not expose it,
+and the commander forces `combine_eo=no`; `combine_eo=yes` is rejected because
+combined even/odd terminal alignment is gold-standard-style base `refine3D`
+policy, not multi-state LP-set refinement policy.
 
 The UI defaults should stay aligned with those commander defaults. If a UI
 default changes without a commander default change, batch and GUI behavior can
@@ -268,9 +278,11 @@ Fractional multi-state sampling is class-balanced by default:
 This uses the prior 2D class analysis only to define class-biased sampling
 quotas. It does not sample greedily with respect to 2D objective-function
 values, and `frac_best=1.0` leaves all particles in each selected class eligible
-for balanced random sampling. When fractional balanced updates are active, the
-wrapper writes the same class-sampling sidecar consumed by base `refine3D`. If
-the project lacks selected `cls2D` entries, the run fails early with an explicit
+for balanced coverage sampling. Within each class quota, the sampler prefers
+the lowest `updatecnt` tier first and randomizes only among particles tied at
+the same update count. When fractional balanced updates are active, the wrapper
+writes the same class-sampling sidecar consumed by base `refine3D`. If the
+project lacks selected `cls2D` entries, the run fails early with an explicit
 class-balanced sampling error.
 
 The wrapper sets `ufrac_trec` to the effective update fraction before it calls
@@ -454,7 +466,6 @@ references:
 - `ml_reg=yes`
 - `automsk=no`
 - `envfsc=no`
-- `combine_eo=no`
 - `lplim_crit=0.5`
 
 `volassemble` remains the execution site for volume-domain work. In a default
@@ -472,10 +483,9 @@ When NU filtering is active, support-mask selection and matching-bandwidth
 handoff follow [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md).
 `refine3D_multi` must not add a second source of NU handoff state.
 
-`combine_eo=yes`, when supplied by the user, is still base `refine3D` policy.
-Distributed base `refine3D` schedules one additional final combined even/odd
-iteration after stage termination. The wrapper does not implement its own
-combined even/odd terminal stage.
+The workflow is LP-set multi-state refinement, not gold-standard-style terminal
+alignment. `combine_eo` is therefore not exposed and `combine_eo=yes` is
+rejected before the wrapper calls base `refine3D`.
 
 ## 12. Final Reconstruction
 
@@ -600,8 +610,12 @@ When reviewing `refine3D_multi`, check these policy points first:
 - partial `vol1..volN` input is rejected.
 - input and project state volumes are checked against native box and sampling.
 - default `nsample` is `10000 * nstates` capped at `100000`.
+- public `filt_mode` values are `fsc`, `nonuniform_lpset`, and `none`, with
+  `nonuniform_lpset` as the default.
 - fractional updates use `balance=yes`, `greedy_sampling=no`, and
   `frac_best=1.0`.
+- class-balanced fractional updates prefer the lowest `updatecnt` tier within
+  each class quota.
 - `input_oris_fixed` disables fractional updates and trailing reconstruction.
 - `nsample`, `update_frac`, and trailing reconstruction behave consistently
   for full-update versus fractional-update runs.
@@ -623,6 +637,8 @@ When reviewing `refine3D_multi`, check these policy points first:
 - final reconstruction is at native project box and sampling.
 - final reconstruction disables NU filtering and `nu_refine`.
 - `nu_refine` remains forced to `no` and absent from the `refine3D_multi` UI.
+- `combine_eo` remains absent from the `refine3D_multi` UI and
+  `combine_eo=yes` is rejected.
 - `lplim_crit=0.5` remains the multi-state default.
 - wrapper code does not bypass base `refine3D` strategy ownership.
 - NU handoff remains project/volume-assembly owned.
@@ -645,9 +661,9 @@ When reviewing `refine3D_multi`, check these policy points first:
 - Keep `maxits` semantics documented if changing them; total-wrapper and
   per-stage budgets are easy to confuse.
 - Keep final reconstruction independent of fractional-update and crop state.
-- Keep `nu_refine` out of `refine3D_multi`; ordinary NU filtering may still be
-  selected through `filt_mode`, but NU shell expansion is not part of
-  multi-state analysis.
+- Keep `nu_refine` out of `refine3D_multi`; ordinary NU filtering is only
+  available through `filt_mode=nonuniform_lpset`, and NU shell expansion is not
+  part of multi-state analysis.
 - Preserve the active-particle update coverage guard.
 - Treat state volumes, half maps, FSCs, NU products, automasks, partial
   reconstructions, and final maps as explicit workflow contracts.

@@ -193,6 +193,8 @@ FSC, automasking, NU filtering, or ordinary half-map handoff.
 
 LP-set matching uses a merged registration reference. State count alone must
 not force merged-reference matching; topology is controlled by LP-set policy.
+`filt_mode=uniform` is disabled for multi-state search until it has a
+state-specific low-pass contract.
 
 In nonuniform mode, reference loading follows the NU policy:
 

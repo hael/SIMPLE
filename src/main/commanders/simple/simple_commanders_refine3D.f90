@@ -535,6 +535,9 @@ contains
         if( .not. cline%defined('multivol_mode') ) call cline%set('multivol_mode', 'input_oris_start')
         multivol_mode = cline%get_carg('multivol_mode')
         call validate_refine3D_multi_mode()
+        call validate_refine3D_multi_combine_eo()
+        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform_lpset')
+        call validate_refine3D_multi_filtering()
         call set_refine3D_multi_nstates()
         ! hard defaults
         call cline%set('balance',        'yes')
@@ -550,16 +553,15 @@ contains
         call cline%set('lplim_crit',       0.5)
         call cline%set('incrreslim',      'no')
         call cline%set('nu_refine',       'no')
+        call cline%set('combine_eo',      'no')
         ! overridable defaults
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                  'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',                  'no')
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',           'global')
-        if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',              'no')
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',              'yes')
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', default_refine3D_multi_nsample())
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',              'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',                 'yes')
-        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform_lpset')
         if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',  LPSTOP_REFINE3D_MULTI)
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                 'no')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_MULTI)
@@ -644,6 +646,28 @@ contains
             end select
             write(logfhandle,'(A,A)') '>>> '//WORKFLOW_LABEL//' MULTIVOL_MODE: ', trim(multivol_mode%to_char())
         end subroutine validate_refine3D_multi_mode
+
+        subroutine validate_refine3D_multi_combine_eo()
+            type(string) :: combine_eo_arg
+            if( .not. cline%defined('combine_eo') ) return
+            combine_eo_arg = cline%get_carg('combine_eo')
+            if( trim(combine_eo_arg%to_char()).ne.'no' )then
+                THROW_HARD(WORKFLOW_LABEL//' does not support combine_eo; it is an LP-set multi-state workflow')
+            endif
+            call combine_eo_arg%kill
+        end subroutine validate_refine3D_multi_combine_eo
+
+        subroutine validate_refine3D_multi_filtering()
+            type(string) :: filt_mode_arg
+            filt_mode_arg = cline%get_carg('filt_mode')
+            select case(trim(filt_mode_arg%to_char()))
+                case('fsc', 'nonuniform_lpset', 'none')
+                    ! supported
+                case default
+                    THROW_HARD(WORKFLOW_LABEL//' supports filt_mode=fsc|nonuniform_lpset|none')
+            end select
+            call filt_mode_arg%kill
+        end subroutine validate_refine3D_multi_filtering
 
         subroutine configure_refine3D_multi_stages()
             select case(trim(multivol_mode%to_char()))
@@ -1073,6 +1097,7 @@ contains
         class(refine3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
+        type(string)     :: filt_mode_arg
         logical          :: converged
         integer          :: niters
         ! sanity check: multiple input volumes require nstates > 1
@@ -1083,6 +1108,13 @@ contains
                 THROW_HARD('Multiple volumes (vol1, vol2, ...) provided on command line but NSTATES <= 1; set NSTATES to the number of states')
             endif
         endif
+        if( cline%defined('filt_mode') .and. cline%defined('nstates') )then
+            filt_mode_arg = cline%get_carg('filt_mode')
+            if( cline%get_iarg('nstates') > 1 .and. trim(filt_mode_arg%to_char()).eq.'uniform' )then
+                THROW_HARD('filt_mode=uniform is disabled for multi-state refine3D search')
+            endif
+            call filt_mode_arg%kill
+        endif
         ! local defaults (kept consistent with previous distributed master)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
@@ -1091,6 +1123,9 @@ contains
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)
         call strategy%initialize(params, build, cline)
+        if( params%nstates > 1 .and. trim(params%filt_mode).eq.'uniform' )then
+            THROW_HARD('filt_mode=uniform is disabled for multi-state refine3D search')
+        endif
         ! Main loop counter semantics:
         !   - params%maxits is the *number of iterations to run* in this invocation.
         !   - params%which_iter starts at params%startit.
