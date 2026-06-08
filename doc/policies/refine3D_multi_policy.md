@@ -504,6 +504,7 @@ The final reconstruction command line:
 - deletes `sigma_est`
 - deletes `update_frac`
 - deletes `ufrac_trec`
+- deletes the internal stage handoff key `endit`
 - deletes `box_crop`
 - deletes `smpd_crop`
 - sets `objfun=cc`

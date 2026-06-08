@@ -123,14 +123,16 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
         type(dstack_io) :: dstkio_r
-        type(string) :: stkname
-        integer :: ind_in_stk, i, ii
+        type(string), allocatable :: stknames(:)
+        integer,      allocatable :: inds_in_stk(:)
+        integer :: i, ii, nbatch, nthr_read
         logical :: l_verbose
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
             THROW_HARD('invalid batchlims; discrete_read_imgbatch')
         endif
+        nbatch = batchlims(2) - batchlims(1) + 1
         l_verbose = params%prg .eq. 'cls_split'
         if( l_verbose )then
             write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'discrete_read_imgbatch: n=', n, &
@@ -138,18 +140,27 @@ contains
                 &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
             call flush(logfhandle)
         endif
-        call dstkio_r%new(params%smpd, params%box)
+        allocate(stknames(nbatch), inds_in_stk(nbatch))
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
-            call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stkname, ind_in_stk)
+            call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stknames(ii), inds_in_stk(ii))
             if( l_verbose .and. n <= 32 )then
                 write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
-                    &' iptcl=', pinds(i), ' indstk=', ind_in_stk, ' stk=', trim(stkname%to_char())
+                    &' iptcl=', pinds(i), ' indstk=', inds_in_stk(ii), ' stk=', trim(stknames(ii)%to_char())
                 call flush(logfhandle)
             endif
-            call dstkio_r%read(stkname, ind_in_stk, build%imgbatch(ii))
         end do
+        nthr_read = min(max(1,nthr_glob), nbatch)
+        call dstkio_r%new(params%smpd, params%box, nthr_read)
+        !$omp parallel do default(shared) private(ii) schedule(static) proc_bind(close) &
+        !$omp& num_threads(nthr_read) if(nthr_read > 1)
+        do ii = 1,nbatch
+            call dstkio_r%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
+        end do
+        !$omp end parallel do
         call dstkio_r%kill
+        call stknames(:)%kill
+        deallocate(stknames, inds_in_stk)
     end subroutine discrete_read_imgbatch
 
 end module simple_matcher_ptcl_io

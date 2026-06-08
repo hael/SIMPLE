@@ -1,4 +1,4 @@
-!@descr: for single-threaded non-contiguous reading of image stacks
+!@descr: for thread-local-handle non-contiguous reading of image stacks
 module simple_discrete_stack_io
 use simple_core_module_api
 use simple_image,   only: image
@@ -14,7 +14,7 @@ type dstack_io
     type(imgfile),   allocatable :: ioimgs(:)
     type(string),    allocatable :: stknames(:)
     integer,         allocatable :: nptcls(:)
-    logical,         allocatable :: fts(:), l_open(:)
+    logical,         allocatable :: fts(:), l_open(:), l_threadsafe_reads(:)
     real                         :: smpd = 0.
     integer                      :: n    = 0, box = 0
     logical :: exists = .false.
@@ -29,20 +29,23 @@ end type dstack_io
 
 contains
 
-    subroutine new( self, smpd, box )
+    subroutine new( self, smpd, box, nthr )
         class(dstack_io),  intent(inout) :: self
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: box
+        integer, optional, intent(in)    :: nthr
         call self%kill
         self%n = 1
+        if( present(nthr) ) self%n = max(1,nthr)
         allocate(self%stknames(self%n),self%ioimgs(self%n),&
-            &self%l_open(self%n),self%fts(self%n),self%nptcls(self%n))
-        self%smpd        = smpd
-        self%nptcls      = 0
-        self%box         = box
-        self%fts         = .false.
-        self%l_open      = .false.
-        self%exists      = .true.
+            &self%l_open(self%n),self%fts(self%n),self%l_threadsafe_reads(self%n),self%nptcls(self%n))
+        self%smpd               = smpd
+        self%nptcls             = 0
+        self%box                = box
+        self%fts                = .false.
+        self%l_open             = .false.
+        self%l_threadsafe_reads = .true.
+        self%exists             = .true.
     end subroutine new
 
     subroutine read( self, stkname, ind_in_stk, img )
@@ -50,19 +53,33 @@ contains
         class(string),    intent(in)    :: stkname
         integer,          intent(in)    :: ind_in_stk
         class(image),     intent(inout) :: img
-        integer, parameter :: ithr = 1
-        ! multi-threaded
-        ! ithr = omp_get_thread_num() + 1
-        ! if( self%stknames(ithr)).ne.stkname ) call self%open(stkname, ithr)
-        ! single-threaded
-        if( self%stknames(ithr).ne.stkname ) call self%open(stkname)
+        integer :: ithr
+        ithr = 1
+        if( self%n > 1 .and. OMP_IN_PARALLEL() ) ithr = omp_get_thread_num() + 1
+        if( ithr < 1 .or. ithr > self%n )then
+            write(logfhandle,*) 'ithr/n: ', ithr, self%n
+            THROW_HARD('thread index out of range; dstack_io%read')
+        endif
+        if( self%stknames(ithr).ne.stkname )then
+            if( self%n > 1 )then
+                call self%open(stkname, ithr)
+            else
+                call self%open(stkname)
+            endif
+        endif
         if( .not. self%l_open(ithr) ) THROW_HARD('stack not opened')
         if( ind_in_stk < 1 .or. ind_in_stk > self%nptcls(ithr) )then
             write(logfhandle,*) 'stack: ', trim(stkname%to_char())
             THROW_HARD('index i out of range: '//int2str(ind_in_stk)//' / '//int2str(self%nptcls(ithr)))
         endif
         call img%set_ft(self%fts(ithr))
-        call img%read_single_mrc_image(self%ioimgs(ithr), ind_in_stk)
+        if( self%l_threadsafe_reads(ithr) )then
+            call img%read_single_mrc_image(self%ioimgs(ithr), ind_in_stk)
+        else
+            !$omp critical(dstack_io_rslice_tmp)
+            call img%read_single_mrc_image(self%ioimgs(ithr), ind_in_stk)
+            !$omp end critical(dstack_io_rslice_tmp)
+        endif
     end subroutine read
 
     ! single-threaded
@@ -77,8 +94,9 @@ contains
             ldim(3) = 1
             call self%ioimgs(1)%open(self%stknames(1), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
             mode = self%ioimgs(1)%getMode()
-            self%fts(1)    = (mode == 3) .or. (mode == 4)
-            self%l_open(1) = .true.
+            self%fts(1)                = (mode == 3) .or. (mode == 4)
+            self%l_threadsafe_reads(1) = (mode == 2) .or. (mode == 4) .or. (mode==12)
+            self%l_open(1)             = .true.
         else
             write(logfhandle,*) 'ldim ',ldim
             write(logfhandle,*) 'box ',self%box
@@ -93,18 +111,31 @@ contains
         class(string),    intent(in)    :: stkname
         integer,          intent(in)    :: ithr
         integer          :: ldim(3), mode ! FT or not in MRC file lingo
+        logical          :: l_dims_ok
+        if( ithr < 1 .or. ithr > self%n )then
+            write(logfhandle,*) 'ithr/n: ', ithr, self%n
+            THROW_HARD('thread index out of range; dstack_io%open_2')
+        endif
         self%stknames(ithr) = stkname
-        !$omp critical
+        !$omp critical(dstack_io_open)
         call self%ioimgs(ithr)%close
         call find_ldim_nptcls(self%stknames(ithr), ldim, self%nptcls(ithr))
-        ldim(3) = 1
-        call self%ioimgs(ithr)%open(self%stknames(ithr), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
-        !$omp end critical
-        if( (ldim(1)==self%box) .and. (ldim(2)==self%box) )then
+        l_dims_ok = (ldim(1)==self%box) .and. (ldim(2)==self%box)
+        if( l_dims_ok )then
+            ldim(3) = 1
+            call self%ioimgs(ithr)%open(self%stknames(ithr), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
+        endif
+        !$omp end critical(dstack_io_open)
+        if( l_dims_ok )then
             mode = self%ioimgs(ithr)%getMode()
-            self%fts(ithr)    = (mode == 3) .or. (mode == 4)
-            self%l_open(ithr) = .true.
+            self%fts(ithr)                = (mode == 3) .or. (mode == 4)
+            self%l_threadsafe_reads(ithr) = (mode == 2) .or. (mode == 4) .or. (mode==12)
+            self%l_open(ithr)             = .true.
         else
+            write(logfhandle,*) 'ldim ',ldim
+            write(logfhandle,*) 'box ',self%box
+            write(logfhandle,*) 'stkname ', stkname%to_char()
+            write(logfhandle,*) 'ithr ', ithr
             THROW_HARD('Incompatible dimensions!')
         endif
     end subroutine open_2
@@ -122,7 +153,7 @@ contains
                 call self%ioimgs(i)%close
             enddo
             call self%stknames(:)%kill
-            deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%ioimgs)
+            deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%l_threadsafe_reads,self%ioimgs)
             self%n      = 0
             self%box    = 0
             self%smpd   = 0.
