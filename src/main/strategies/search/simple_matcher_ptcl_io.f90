@@ -123,9 +123,9 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
-        type(dstack_io) :: dstkio_r
+        type(dstack_io), allocatable :: dstkios(:)
         type(string), allocatable :: stknames(:), uniq_stknames(:)
-        integer,      allocatable :: inds_in_stk(:), uniq_ldims(:,:), uniq_nptcls(:)
+        integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:)
         integer :: i, ii, istk, nbatch, nstks, nthr_read
         logical :: l_known_stack, l_verbose
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
@@ -141,7 +141,7 @@ contains
                 &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
             call flush(logfhandle)
         endif
-        allocate(stknames(nbatch), inds_in_stk(nbatch))
+        allocate(stknames(nbatch), inds_in_stk(nbatch), stk_ids(nbatch))
         allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch))
         nstks = 0
         do i=batchlims(1),batchlims(2)
@@ -151,12 +151,14 @@ contains
             do istk = 1,nstks
                 if( uniq_stknames(istk) .eq. stknames(ii) )then
                     l_known_stack = .true.
+                    stk_ids(ii) = istk
                     exit
                 endif
             enddo
             if( .not.l_known_stack )then
                 nstks = nstks + 1
                 uniq_stknames(nstks) = stknames(ii)
+                stk_ids(ii) = nstks
             endif
             if( l_verbose .and. n <= 32 )then
                 write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
@@ -173,19 +175,28 @@ contains
                 THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
             endif
         enddo
-        nthr_read = min(max(1,nthr_glob), nbatch)
-        call dstkio_r%new(params%smpd, params%box, nthr_read, uniq_stknames(1:nstks), &
-            &uniq_ldims(:,1:nstks), uniq_nptcls(1:nstks))
-        !$omp parallel do default(shared) private(ii) schedule(static) proc_bind(close) &
+        allocate(dstkios(nstks))
+        do istk = 1,nstks
+            call dstkios(istk)%new(params%smpd, params%box, &
+                &stk_cache_names=uniq_stknames(istk:istk), &
+                &stk_cache_ldims=uniq_ldims(:,istk:istk), &
+                &stk_cache_nptcls=uniq_nptcls(istk:istk))
+        enddo
+        nthr_read = min(max(1,nthr_glob), nstks)
+        !$omp parallel do default(shared) private(istk,ii) schedule(static) proc_bind(close) &
         !$omp& num_threads(nthr_read) if(nthr_read > 1)
-        do ii = 1,nbatch
-            call dstkio_r%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
-        end do
+        do istk = 1,nstks
+            do ii = 1,nbatch
+                if( stk_ids(ii) == istk ) call dstkios(istk)%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
+            enddo
+        enddo
         !$omp end parallel do
-        call dstkio_r%kill
+        do istk = 1,nstks
+            call dstkios(istk)%kill
+        enddo
         call stknames(:)%kill
         call uniq_stknames(:)%kill
-        deallocate(stknames, inds_in_stk, uniq_stknames, uniq_ldims, uniq_nptcls)
+        deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls)
     end subroutine discrete_read_imgbatch
 
 end module simple_matcher_ptcl_io
