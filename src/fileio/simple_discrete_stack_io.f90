@@ -13,14 +13,17 @@ type dstack_io
     private
     type(imgfile),   allocatable :: ioimgs(:)
     type(string),    allocatable :: stknames(:)
+    type(string),    allocatable :: cache_stknames(:)
     integer,         allocatable :: nptcls(:)
+    integer,         allocatable :: cache_ldims(:,:), cache_nptcls(:)
     logical,         allocatable :: fts(:), l_open(:), l_threadsafe_reads(:)
     real                         :: smpd = 0.
-    integer                      :: n    = 0, box = 0
+    integer                      :: n    = 0, box = 0, ncache = 0
     logical :: exists = .false.
 contains
     procedure          :: new
     procedure, private :: open_1, open_2
+    procedure, private :: get_stack_info
     procedure          :: read
     generic,   private :: open => open_1, open_2
     procedure          :: does_exist
@@ -29,11 +32,14 @@ end type dstack_io
 
 contains
 
-    subroutine new( self, smpd, box, nthr )
+    subroutine new( self, smpd, box, nthr, stk_cache_names, stk_cache_ldims, stk_cache_nptcls )
         class(dstack_io),  intent(inout) :: self
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: box
         integer, optional, intent(in)    :: nthr
+        type(string), optional, intent(in) :: stk_cache_names(:)
+        integer,      optional, intent(in) :: stk_cache_ldims(:,:), stk_cache_nptcls(:)
+        integer :: i
         call self%kill
         self%n = 1
         if( present(nthr) ) self%n = max(1,nthr)
@@ -46,6 +52,22 @@ contains
         self%l_open             = .false.
         self%l_threadsafe_reads = .true.
         self%exists             = .true.
+        if( present(stk_cache_names) .or. present(stk_cache_ldims) .or. present(stk_cache_nptcls) )then
+            if( .not.(present(stk_cache_names) .and. present(stk_cache_ldims) .and. present(stk_cache_nptcls)) )then
+                THROW_HARD('incomplete stack metadata cache; dstack_io%new')
+            endif
+            if( size(stk_cache_ldims,1) /= 3 .or. size(stk_cache_ldims,2) /= size(stk_cache_names) .or. &
+                &size(stk_cache_nptcls) /= size(stk_cache_names) )then
+                THROW_HARD('invalid stack metadata cache dimensions; dstack_io%new')
+            endif
+            self%ncache = size(stk_cache_names)
+            allocate(self%cache_stknames(self%ncache), self%cache_ldims(3,self%ncache), self%cache_nptcls(self%ncache))
+            do i = 1,self%ncache
+                self%cache_stknames(i) = stk_cache_names(i)
+            enddo
+            self%cache_ldims  = stk_cache_ldims
+            self%cache_nptcls = stk_cache_nptcls
+        endif
     end subroutine new
 
     subroutine read( self, stkname, ind_in_stk, img )
@@ -55,7 +77,7 @@ contains
         class(image),     intent(inout) :: img
         integer :: ithr
         ithr = 1
-        if( self%n > 1 .and. OMP_IN_PARALLEL() ) ithr = omp_get_thread_num() + 1
+        !$ if( self%n > 1 .and. OMP_IN_PARALLEL() ) ithr = omp_get_thread_num() + 1
         if( ithr < 1 .or. ithr > self%n )then
             write(logfhandle,*) 'ithr/n: ', ithr, self%n
             THROW_HARD('thread index out of range; dstack_io%read')
@@ -89,13 +111,13 @@ contains
         integer :: ldim(3), mode ! FT or not in MRC file lingo
         self%stknames(1) = stkname
         call self%ioimgs(1)%close
-        call find_ldim_nptcls(self%stknames(1), ldim, self%nptcls(1))
+        call self%get_stack_info(self%stknames(1), ldim, self%nptcls(1))
         if( (ldim(1)==self%box) .and. (ldim(2)==self%box) )then
             ldim(3) = 1
             call self%ioimgs(1)%open(self%stknames(1), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
             mode = self%ioimgs(1)%getMode()
             self%fts(1)                = (mode == 3) .or. (mode == 4)
-            self%l_threadsafe_reads(1) = (mode == 2) .or. (mode == 4) .or. (mode==12)
+            self%l_threadsafe_reads(1) = (mode == 2) .or. (mode == 4)
             self%l_open(1)             = .true.
         else
             write(logfhandle,*) 'ldim ',ldim
@@ -119,7 +141,7 @@ contains
         self%stknames(ithr) = stkname
         !$omp critical(dstack_io_open)
         call self%ioimgs(ithr)%close
-        call find_ldim_nptcls(self%stknames(ithr), ldim, self%nptcls(ithr))
+        call self%get_stack_info(self%stknames(ithr), ldim, self%nptcls(ithr))
         l_dims_ok = (ldim(1)==self%box) .and. (ldim(2)==self%box)
         if( l_dims_ok )then
             ldim(3) = 1
@@ -129,7 +151,7 @@ contains
         if( l_dims_ok )then
             mode = self%ioimgs(ithr)%getMode()
             self%fts(ithr)                = (mode == 3) .or. (mode == 4)
-            self%l_threadsafe_reads(ithr) = (mode == 2) .or. (mode == 4) .or. (mode==12)
+            self%l_threadsafe_reads(ithr) = (mode == 2) .or. (mode == 4)
             self%l_open(ithr)             = .true.
         else
             write(logfhandle,*) 'ldim ',ldim
@@ -139,6 +161,21 @@ contains
             THROW_HARD('Incompatible dimensions!')
         endif
     end subroutine open_2
+
+    subroutine get_stack_info( self, stkname, ldim, nptcls )
+        class(dstack_io), intent(in)  :: self
+        class(string),    intent(in)  :: stkname
+        integer,          intent(out) :: ldim(3), nptcls
+        integer :: i
+        do i = 1,self%ncache
+            if( self%cache_stknames(i) .eq. stkname )then
+                ldim   = self%cache_ldims(:,i)
+                nptcls = self%cache_nptcls(i)
+                return
+            endif
+        enddo
+        call find_ldim_nptcls(stkname, ldim, nptcls)
+    end subroutine get_stack_info
 
     pure logical function does_exist(self)
         class(dstack_io), intent(in) :: self
@@ -154,9 +191,14 @@ contains
             enddo
             call self%stknames(:)%kill
             deallocate(self%stknames,self%nptcls,self%fts,self%l_open,self%l_threadsafe_reads,self%ioimgs)
+            if( allocated(self%cache_stknames) )then
+                call self%cache_stknames(:)%kill
+                deallocate(self%cache_stknames,self%cache_ldims,self%cache_nptcls)
+            endif
             self%n      = 0
             self%box    = 0
             self%smpd   = 0.
+            self%ncache = 0
             self%exists = .false.
         endif
     end subroutine kill

@@ -3,6 +3,7 @@ module simple_matcher_ptcl_io
 use simple_pftc_srch_api
 use simple_builder,           only: builder
 use simple_discrete_stack_io, only: dstack_io
+use simple_imghead,           only: find_ldim_nptcls
 implicit none
 #include "simple_local_flags.inc"
 
@@ -123,10 +124,10 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
         type(dstack_io) :: dstkio_r
-        type(string), allocatable :: stknames(:)
-        integer,      allocatable :: inds_in_stk(:)
-        integer :: i, ii, nbatch, nthr_read
-        logical :: l_verbose
+        type(string), allocatable :: stknames(:), uniq_stknames(:)
+        integer,      allocatable :: inds_in_stk(:), uniq_ldims(:,:), uniq_nptcls(:)
+        integer :: i, ii, istk, nbatch, nstks, nthr_read
+        logical :: l_known_stack, l_verbose
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
@@ -141,17 +142,40 @@ contains
             call flush(logfhandle)
         endif
         allocate(stknames(nbatch), inds_in_stk(nbatch))
+        allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch))
+        nstks = 0
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
             call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stknames(ii), inds_in_stk(ii))
+            l_known_stack = .false.
+            do istk = 1,nstks
+                if( uniq_stknames(istk) .eq. stknames(ii) )then
+                    l_known_stack = .true.
+                    exit
+                endif
+            enddo
+            if( .not.l_known_stack )then
+                nstks = nstks + 1
+                uniq_stknames(nstks) = stknames(ii)
+            endif
             if( l_verbose .and. n <= 32 )then
                 write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
                     &' iptcl=', pinds(i), ' indstk=', inds_in_stk(ii), ' stk=', trim(stknames(ii)%to_char())
                 call flush(logfhandle)
             endif
         end do
+        do istk = 1,nstks
+            call find_ldim_nptcls(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
+            if( (uniq_ldims(1,istk) /= params%box) .or. (uniq_ldims(2,istk) /= params%box) )then
+                write(logfhandle,*) 'ldim ', uniq_ldims(:,istk)
+                write(logfhandle,*) 'box ', params%box
+                write(logfhandle,*) 'stkname ', uniq_stknames(istk)%to_char()
+                THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
+            endif
+        enddo
         nthr_read = min(max(1,nthr_glob), nbatch)
-        call dstkio_r%new(params%smpd, params%box, nthr_read)
+        call dstkio_r%new(params%smpd, params%box, nthr_read, uniq_stknames(1:nstks), &
+            &uniq_ldims(:,1:nstks), uniq_nptcls(1:nstks))
         !$omp parallel do default(shared) private(ii) schedule(static) proc_bind(close) &
         !$omp& num_threads(nthr_read) if(nthr_read > 1)
         do ii = 1,nbatch
@@ -160,7 +184,8 @@ contains
         !$omp end parallel do
         call dstkio_r%kill
         call stknames(:)%kill
-        deallocate(stknames, inds_in_stk)
+        call uniq_stknames(:)%kill
+        deallocate(stknames, inds_in_stk, uniq_stknames, uniq_ldims, uniq_nptcls)
     end subroutine discrete_read_imgbatch
 
 end module simple_matcher_ptcl_io
