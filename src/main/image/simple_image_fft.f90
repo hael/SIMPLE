@@ -957,14 +957,12 @@ contains
         real(dp) :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
         real(c_float) :: mean_sp, invstd_sp, scale_cmat, rswap
         ! ---- locals: mask2D_softavg ----
-        real     :: rad_sq, ave, r2, e, cjs2
-        integer  :: minlen, np, n1l, n2l
+        real     :: ave, e
+        integer  :: np, n1l, n2l
         real(dp) :: sv
         ! ---- locals: power_spectrum (2D only) ----
-        integer  :: counts(fdim(self%ldim(1)) - 1)
         real(dp) :: dspec (fdim(self%ldim(1)) - 1)
-        integer  :: lims(3,2), filtsz, h, k, sh, hp, kpi
-        logical  :: k_neg
+        integer  :: filtsz, sh, hp, kpi
         ! ============================================================
         ! 1) NORM_NOISE (two-pass) + fftshift + normalize (fused)
         ! ============================================================
@@ -972,6 +970,12 @@ contains
         n2 = self%ldim(2)
         h1 = n1/2
         h2 = n2/2
+        if( mem_pspec_box /= n1 .or. abs(mem_pspec_mskrad - mskrad) >= 1.e-6 .or. &
+            &.not.allocated(mem_pspec_mask) .or. .not.allocated(mem_pspec_bg) .or. &
+            &.not.allocated(mem_pspec_shell) .or. .not.allocated(mem_pspec_counts) )then
+            if( OMP_IN_PARALLEL() ) THROW_HARD('power spectrum geometry not memoized; norm_noise_mask_fft_powspec')
+            call self%memoize_powspec_coords(mskrad)
+        endif
         sum_dp    = 0.0_dp
         sum_sq_dp = 0.0_dp
         npix      = 0
@@ -1030,16 +1034,11 @@ contains
         ! ============================================================
         n1l = n1
         n2l = n2
-        minlen = minval(self%ldim(1:2))
-        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
-        rad_sq = mskrad * mskrad
         sv = 0.0_dp
         np = 0
         do j = 1, n2l
-            cjs2 =  mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cs2(i) + cjs2
-                if (r2 > rad_sq) then
+                if (mem_pspec_bg(i,j)) then
                     np = np + 1
                     sv = sv + real(self%rmat(i,j,1), dp)
                 endif
@@ -1048,10 +1047,8 @@ contains
         if (np <= 0) return
         ave = real(sv / real(np, dp))
         do j = 1, n2l
-            cjs2 = mem_msk_cs2(j)
             do i = 1, n1l
-                r2 = mem_msk_cs2(i) + cjs2 
-                e  = cosedge_r2_2d(r2, minlen, mskrad)
+                e  = mem_pspec_mask(i,j)
                 if (e < 0.0001) then
                     self%rmat(i,j,1) = ave
                 else if (e < 0.9999) then
@@ -1071,22 +1068,15 @@ contains
         ! ============================================================
         filtsz = fdim(self%ldim(1)) - 1
         dspec  = 0.0_dp
-        counts = 0
-        lims   = self%fit%loop_lims(2)
-        do k = lims(2,1), lims(2,2)
-            k_neg = (k < 0)
-            ! k physical index in [1..n2], wrapping negatives to the upper half
-            kpi   = merge(k + 1 + n2, k + 1, k_neg)
-            do h = lims(1,1), lims(1,2)
-                hp = h + 1
-                sh = nint(hyp(h,k))
-                if (sh == 0 .or. sh > filtsz) cycle
+        do kpi = 1, n2
+            do hp = 1, fdim(n1)
+                sh = mem_pspec_shell(hp,kpi)
+                if (sh == 0) cycle
                 dspec(sh)  = dspec(sh)  + real(csq_fast(self%cmat(hp, kpi, 1)), dp)
-                counts(sh) = counts(sh) + 1
             end do
         end do
-        where(counts > 0)
-            dspec = dspec / real(counts, dp)
+        where(mem_pspec_counts > 0)
+            dspec = dspec / real(mem_pspec_counts, dp)
         end where
         spec = real(dspec, kind=sp)
     end subroutine norm_noise_mask_fft_powspec

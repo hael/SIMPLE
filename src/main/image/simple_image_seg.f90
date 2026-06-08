@@ -253,6 +253,70 @@ contains
         end do
     end subroutine memoize_mask_coords
 
+    module subroutine memoize_powspec_coords( self, mskrad )
+        class(image), intent(in) :: self
+        real,         intent(in) :: mskrad
+        integer :: box_here, n1, n2, filtsz, minlen
+        integer :: i, j, h, k, hp, kpi, sh, max_r2, r2
+        integer :: lims(3,2), abs_hmax, abs_kmax
+        integer, allocatable :: shell_lut(:)
+        real :: rad_sq, r2_real, cjs2
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No power spectrum memoization inside OpenMP regions')
+        endif
+        if( .not.self%existence ) THROW_HARD('Image has not been initialized!')
+        if( self%ldim(3) > 1 )    THROW_HARD('not for 3D')
+        if( self%ldim(1) /= self%ldim(2) ) THROW_HARD('square images assumed')
+        box_here = self%ldim(1)
+        if( mem_pspec_box == box_here .and. abs(mem_pspec_mskrad - mskrad) < 1.e-6 .and. &
+            &allocated(mem_pspec_mask) .and. allocated(mem_pspec_bg) .and. &
+            &allocated(mem_pspec_shell) .and. allocated(mem_pspec_counts) ) return
+        call memoize_mask_coords(self)
+        call unmemoize_powspec_coords
+        n1     = self%ldim(1)
+        n2     = self%ldim(2)
+        filtsz = fdim(n1) - 1
+        allocate(mem_pspec_mask(n1,n2), mem_pspec_bg(n1,n2), &
+            &mem_pspec_shell(fdim(n1),n2), mem_pspec_counts(filtsz))
+        mem_pspec_shell  = 0
+        mem_pspec_counts = 0
+        rad_sq = mskrad * mskrad
+        minlen = minval(self%ldim(1:2))
+        minlen = min(nint(2.0*(mskrad + COSMSKHALFWIDTH)), minlen)
+        do j = 1,n2
+            cjs2 = mem_msk_cs2(j)
+            do i = 1,n1
+                r2_real = mem_msk_cs2(i) + cjs2
+                mem_pspec_bg(i,j)   = r2_real > rad_sq
+                mem_pspec_mask(i,j) = cosedge_r2_2d(r2_real, minlen, mskrad)
+            enddo
+        enddo
+        lims     = self%fit%loop_lims(2)
+        abs_hmax = max(abs(lims(1,1)), abs(lims(1,2)))
+        abs_kmax = max(abs(lims(2,1)), abs(lims(2,2)))
+        max_r2   = abs_hmax*abs_hmax + abs_kmax*abs_kmax
+        allocate(shell_lut(0:max_r2))
+        do r2 = 0,max_r2
+            shell_lut(r2) = nint(sqrt(real(r2)))
+        enddo
+        do k = lims(2,1),lims(2,2)
+            kpi = merge(k + 1 + n2, k + 1, k < 0)
+            if( kpi < 1 .or. kpi > n2 ) cycle
+            do h = lims(1,1),lims(1,2)
+                hp = h + 1
+                if( hp < 1 .or. hp > fdim(n1) ) cycle
+                r2 = h*h + k*k
+                sh = shell_lut(r2)
+                if( sh == 0 .or. sh > filtsz ) cycle
+                mem_pspec_shell(hp,kpi) = sh
+                mem_pspec_counts(sh)    = mem_pspec_counts(sh) + 1
+            enddo
+        enddo
+        deallocate(shell_lut)
+        mem_pspec_box    = box_here
+        mem_pspec_mskrad = mskrad
+    end subroutine memoize_powspec_coords
+
     module subroutine mask2D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad

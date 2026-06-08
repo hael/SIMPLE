@@ -120,7 +120,7 @@ contains
         class(string), optional, intent(in)    :: qsys_partition     !< override scheduler partition from params/env
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
-        type(string)          :: qsnam, tpi, hrs_str, mins_str, secs_str
+        type(string)          :: qsnam, qsnam_requested, tpi, hrs_str, mins_str, secs_str
         integer               :: nthr_workers, n_workers
         character(len=STDLEN) :: default_time_env
         integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
@@ -202,6 +202,7 @@ contains
         call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')
+        qsnam_requested = qsnam
         ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')
         ! opts into the TCP persistent-worker backend.  Strip the suffix so the
         ! underlying qsys factory still resolves the base scheduler (local, slurm, …).
@@ -221,6 +222,8 @@ contains
             ! qscripts dispatches through the TCP worker path.
             call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
                 &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, worker_priority=self%worker_priority)
+            call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
+                &nthr_workers, n_workers, nthr_workers, .true.)
             ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
             call self%base_qscripts%new(self%simple_exec_bin, self%base_qsys, self%parts,&
                 &[1, self%nparts], params%ncunits, sstream, numlen)
@@ -248,13 +251,71 @@ contains
             call self%qsys_fac_dispatch%new(qsnam, self%dispatch_qsys)
             call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
             &[1, self%nparts], params%ncunits, sstream, numlen)
+            call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
+                &str2int(self%qdescr%get('job_cpus_per_task')), 0, 0, .false.)
         end if
         ! Release temporary strings and project objects.
         call qsnam%kill
+        call qsnam_requested%kill
         if( params%projfile /= '' ) call compenv_o%kill
         call spproj%kill
         self%existence = .true.
     end subroutine new
+
+    subroutine diagnose_parallelism(params, qsys_requested, qsys_backend, nparts_run, dispatch_slots, cpus_per_task, &
+        &worker_slots, worker_threads, worker_backend)
+        class(parameters), intent(in) :: params
+        class(string),     intent(in) :: qsys_requested, qsys_backend
+        integer,           intent(in) :: nparts_run, dispatch_slots, cpus_per_task
+        integer,           intent(in) :: worker_slots, worker_threads
+        logical,           intent(in) :: worker_backend
+        integer :: host_threads, effective_slots, effective_cpus_per_task, requested_threads, recommended_slots
+        logical :: is_local_backend, is_calc_pspec, should_log
+        host_threads = 0
+        !$ host_threads = omp_get_num_procs()
+        is_local_backend = trim(qsys_backend%to_char()) == 'local'
+        is_calc_pspec    = trim(params%prg%to_char())  == 'calc_pspec'
+        if( worker_backend )then
+            effective_slots         = max(1, worker_slots)
+            effective_cpus_per_task = max(1, worker_threads)
+        else
+            effective_slots         = min(max(1, dispatch_slots), max(1, nparts_run))
+            effective_cpus_per_task = max(1, cpus_per_task)
+        endif
+        requested_threads = effective_slots * effective_cpus_per_task
+        should_log = is_calc_pspec .or. (is_local_backend .and. host_threads > 0 .and. requested_threads > host_threads)
+        if( .not.should_log ) return
+        write(logfhandle,'(A)')     '>>> QSYS PARALLELISM DIAGNOSTIC'
+        write(logfhandle,'(A,A)')   '>>> qsys requested name                 : ', qsys_requested%to_char()
+        write(logfhandle,'(A,A)')   '>>> qsys base backend                   : ', qsys_backend%to_char()
+        write(logfhandle,'(A,I0)')  '>>> job partitions (nparts)             : ', nparts_run
+        write(logfhandle,'(A,I0)')  '>>> dispatch slots (ncunits)            : ', max(1, dispatch_slots)
+        if( worker_backend )then
+            write(logfhandle,'(A,I0)')  '>>> worker processes                    : ', effective_slots
+            write(logfhandle,'(A,I0)')  '>>> threads per worker                  : ', effective_cpus_per_task
+        else
+            write(logfhandle,'(A,I0)')  '>>> max concurrent jobs                 : ', effective_slots
+            write(logfhandle,'(A,I0)')  '>>> threads per job                     : ', effective_cpus_per_task
+        endif
+        write(logfhandle,'(A,I0)')  '>>> effective thread-slot demand        : ', requested_threads
+        if( is_local_backend .and. host_threads > 0 )then
+            write(logfhandle,'(A,I0)') '>>> OpenMP detected processors          : ', host_threads
+        else if( is_local_backend )then
+            write(logfhandle,'(A)')    '>>> OpenMP detected processors          : unavailable'
+        else
+            write(logfhandle,'(A)')    '>>> scheduler note                      : non-local backend; CPU availability is scheduler controlled'
+        endif
+        if( is_local_backend .and. host_threads > 0 .and. requested_threads > host_threads )then
+            recommended_slots = max(1, host_threads / effective_cpus_per_task)
+            if( worker_backend )then
+                write(logfhandle,'(A)')    '>>> WARNING: local worker oversubscription risk; workers * worker_nthr exceeds detected processors'
+                write(logfhandle,'(A,I0)') '>>> suggested workers at current worker_nthr: ', recommended_slots
+            else
+                write(logfhandle,'(A)')    '>>> WARNING: local qsys oversubscription risk; ncunits * nthr exceeds detected processors'
+                write(logfhandle,'(A,I0)') '>>> suggested ncunits at current nthr       : ', recommended_slots
+            endif
+        endif
+    end subroutine diagnose_parallelism
 
     !> Return .true. when the environment has been initialized.
     function exists( self ) result( is )

@@ -179,6 +179,7 @@ contains
         do istk = 1,nstks
             call dstkios(istk)%new(params%smpd, params%box)
             call dstkios(istk)%cache_stack_info(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
+            call dstkios(istk)%open(uniq_stknames(istk))
         enddo
         nthr_read = min(max(1,nthr_glob), nstks)
         !$omp parallel do default(shared) private(istk,ii) schedule(static) proc_bind(close) &

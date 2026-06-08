@@ -23,7 +23,7 @@ type dstack_io
 contains
     procedure          :: new
     procedure          :: cache_stack_info
-    procedure, private :: open_1
+    procedure          :: open => open_1
     procedure, private :: get_stack_info, clear_stack_cache
     procedure          :: read
     procedure          :: does_exist
@@ -68,7 +68,13 @@ contains
         class(image),     intent(inout) :: img
         integer, parameter :: ithr = 1
         if( self%stknames(ithr).ne.stkname )then
-            call self%open_1(stkname)
+            if( OMP_IN_PARALLEL() )then
+                !$omp critical(dstack_io_open)
+                if( self%stknames(ithr).ne.stkname ) call self%open(stkname)
+                !$omp end critical(dstack_io_open)
+            else
+                call self%open(stkname)
+            endif
         endif
         if( .not. self%l_open(ithr) ) THROW_HARD('stack not opened')
         if( ind_in_stk < 1 .or. ind_in_stk > self%nptcls(ithr) )then

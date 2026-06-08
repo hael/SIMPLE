@@ -10,13 +10,20 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 implicit none
 
-public :: image, test_image, image_stack, unmemoize_mask_coords
+public :: image, test_image, image_stack, unmemoize_mask_coords, unmemoize_powspec_coords
 private
 #include "simple_local_flags.inc"
 
 ! mask memoization
 integer              :: mem_msk_box = 0
 real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
+
+! calc_pspec geometry memoization
+integer              :: mem_pspec_box = 0
+real                 :: mem_pspec_mskrad = -1.
+real,    allocatable :: mem_pspec_mask(:,:)
+logical, allocatable :: mem_pspec_bg(:,:)
+integer, allocatable :: mem_pspec_shell(:,:), mem_pspec_counts(:)
 
 ! polarization memoization
 real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
@@ -311,6 +318,7 @@ contains
     procedure          :: density_inoutside
     procedure          :: calc_bin_thres
     procedure          :: memoize_mask_coords
+    procedure          :: memoize_powspec_coords
     procedure          :: mask2D_soft
     procedure          :: mask2D_softavg
     procedure          :: mask2D_hard
@@ -1985,6 +1993,11 @@ interface
         integer, optional, intent(in) :: box
     end subroutine memoize_mask_coords
 
+    module subroutine memoize_powspec_coords( self, mskrad )
+        class(image), intent(in) :: self
+        real,         intent(in) :: mskrad
+    end subroutine memoize_powspec_coords
+
     module subroutine mask2D_soft(self, mskrad, backgr)
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
@@ -2652,6 +2665,15 @@ contains
         if( allocated(mem_msk_cs)  ) deallocate(mem_msk_cs)
         if( allocated(mem_msk_cs2) ) deallocate(mem_msk_cs2)
     end subroutine unmemoize_mask_coords
+
+    subroutine unmemoize_powspec_coords
+        mem_pspec_box    = 0
+        mem_pspec_mskrad = -1.
+        if( allocated(mem_pspec_mask)   ) deallocate(mem_pspec_mask)
+        if( allocated(mem_pspec_bg)     ) deallocate(mem_pspec_bg)
+        if( allocated(mem_pspec_shell)  ) deallocate(mem_pspec_shell)
+        if( allocated(mem_pspec_counts) ) deallocate(mem_pspec_counts)
+    end subroutine unmemoize_powspec_coords
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

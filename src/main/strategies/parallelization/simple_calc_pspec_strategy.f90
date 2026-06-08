@@ -6,7 +6,7 @@ use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs,      only: qsys_cleanup, qsys_job_finished
-use simple_image,          only: image
+use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_binfile, only: sigma2_binfile
 implicit none
 
@@ -180,8 +180,8 @@ contains
             batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
             call prepimgbatch(params, build, batchsz_max)
             allocate(sigma2_batch(nyq,batchsz_max), source=0.)
-            ! mask memoization
-            call build%imgbatch(1)%memoize_mask_coords
+            ! mask and radial-shell memoization for the calc_pspec fused kernel
+            call build%imgbatch(1)%memoize_powspec_coords(params%msk)
             do i = 1, nptcls_part_sel, batchsz_max
                 batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                 nbatch    = batchlims(2) - batchlims(1) + 1
@@ -265,6 +265,7 @@ contains
         call self%cline_calc_pspec_assemble%kill
         call build%kill_general_tbox
         call killimgbatch(build)
+        call unmemoize_powspec_coords
     end subroutine inmem_cleanup
 
     ! =====================================================================
