@@ -83,6 +83,7 @@ type :: parameters
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
+    character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)

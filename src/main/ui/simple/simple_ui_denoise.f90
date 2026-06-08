@@ -235,6 +235,7 @@ contains
         call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for steerable diffusion modes', '# modes', .false., 4.0)
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
         call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){diffusion_maps}', '(ppca|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'gen_model', 'binary', 'Generative particle model', 'Fit generative denoising model and write generated/denoised particle stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         call cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of embedding dimensions (0 => method default)', 'Number of embedding dimensions (0 => method default)', '# eigenvecs', .false., 0.0)
         call cls_split%add_input(UI_FILT, 'so3_graph', 'multi', 'SO(3) graph construction',&
         &'SO(3) graph construction for pca_mode=diff_map_so3(cluster2d|projection_registration){projection_registration}',&

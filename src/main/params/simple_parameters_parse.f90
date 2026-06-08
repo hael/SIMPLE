@@ -86,6 +86,7 @@ contains
         call reg%add_char('flipgain', self%flipgain)
         call reg%add_char('force_lp_range', self%force_lp_range)
         call reg%add_char('gauref', self%gauref)
+        call reg%add_char('gen_model', self%gen_model)
         call reg%add_char('guinier', self%guinier)
         call reg%add_char('graphene_filt', self%graphene_filt)
         call reg%add_char('greedy_sampling', self%greedy_sampling)

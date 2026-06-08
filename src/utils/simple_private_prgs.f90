@@ -314,6 +314,7 @@ contains
         call cmd_dict%push('fsc',           'binary file with FSC info{fsc_state01.bin}')
         call cmd_dict%push('ft2img',        'convert Fourier transform to real image of power(yes|no){no}')
         call cmd_dict%push('gainref',       'gain reference')
+        call cmd_dict%push('gen_model',     'fit generative model and write generated/denoised particles(yes|no){no}')
         call cmd_dict%push('grow',          '# binary layers to grow(in pixels)')
         call cmd_dict%push('guinier',       'calculate Guinier plot(yes|no){no}')
         call cmd_dict%push('hfun',          'function used for normalization(sigm|tanh|lin){sigm}')
