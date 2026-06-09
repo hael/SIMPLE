@@ -16,6 +16,7 @@ type(ui_program), target :: merge_projects
 type(ui_program), target :: new_project
 type(ui_program), target :: print_project_field
 type(ui_program), target :: print_project_info
+type(ui_program), target :: ptcl3D_state_consensus
 type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
@@ -41,6 +42,7 @@ contains
         call new_new_project(prgtab)
         call new_print_project_field(prgtab)
         call new_print_project_info(prgtab)
+        call new_ptcl3D_state_consensus(prgtab)
         call new_prune_project(prgtab)
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
@@ -66,6 +68,7 @@ contains
         write(logfhandle,'(A)') new_project%name%to_char()
         write(logfhandle,'(A)') print_project_field%name%to_char()
         write(logfhandle,'(A)') print_project_info%name%to_char()
+        write(logfhandle,'(A)') ptcl3D_state_consensus%name%to_char()
         write(logfhandle,'(A)') prune_project%name%to_char()
         write(logfhandle,'(A)') replace_project_field%name%to_char()
         write(logfhandle,'(A)') selection%name%to_char()
@@ -383,6 +386,48 @@ contains
         ! add to ui_hash
         call add_ui_program('merge_projects', merge_projects, prgtab)
     end subroutine new_merge_projects
+
+    subroutine new_ptcl3D_state_consensus( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call ptcl3D_state_consensus%new(&
+        &'ptcl3D_state_consensus', &                                    ! name
+        &'Build consensus ptcl3D states',&                              ! descr_short
+        &'is a program that builds a consensus particle state assignment from a file table of SIMPLE projects &
+        &and writes it to the target project ptcl3D field', &           ! descr_long
+        &'simple_exec',&                                                ! executable
+        &.false.)                                                       ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ptcl3D_state_consensus%add_input(UI_PARM, projtab,&
+        &descr_long_override        = 'Text file listing SIMPLE project files (*.simple) containing ptcl3D state assignments',&
+        &descr_placeholder_override = 'e.g. projtab.txt',&
+        &required_override          = .true.,&
+        &gui_submenu="data", gui_advanced=.false.)
+        ! parameter input/output
+        call ptcl3D_state_consensus%add_input(UI_PARM, projfile,&
+        &descr_long_override        = 'Target SIMPLE project file that receives the consensus ptcl3D state assignment',&
+        &required_override          = .true.,&
+        &gui_submenu="data", gui_advanced=.false.)
+        call ptcl3D_state_consensus%add_input(UI_SRCH, nstates,&
+        &descr_long_override        = 'Number of state labels to match; inferred from projtab when omitted',&
+        &required_override          = .false.,&
+        &gui_submenu="state", gui_advanced=.true.)
+        call ptcl3D_state_consensus%add_input(UI_PARM, prune,&
+        &gui_submenu="data", gui_advanced=.true.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('ptcl3D_state_consensus', ptcl3D_state_consensus, prgtab)
+    end subroutine new_ptcl3D_state_consensus
 
     subroutine new_validate_projfile( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -327,6 +327,29 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_fillin
 
+    module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)    :: incr_sampled
+        integer, allocatable :: states(:), updatecnts(:)
+        integer :: i, cnt, nptcls
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt             = cnt + 1
+            inds(cnt)       = i
+            states(cnt)     = self%o(i)%get_state()
+            updatecnts(cnt) = self%o(i)%get_updatecnt()
+        end do
+        nsamples = count(states > 0 .and. updatecnts == 0)
+        inds     = pack(inds, mask=states > 0 .and. updatecnts == 0)
+        call self%incr_sampled_updatecnt(inds, incr_sampled)
+    end subroutine sample4update_missing
+
     module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)

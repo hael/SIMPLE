@@ -1466,7 +1466,10 @@ contains
             call nice_comm%cycle()
         enddo
         if( l_run_final_rec )then
-            if( trim(params%multivol_mode).eq.'docked' ) call verify_docked_multistate_updates
+            select case(trim(params%multivol_mode))
+                case('independent','docked')
+                    call ensure_multistate_particle_assignments
+            end select
             ! calculate 3D reconstruction at original sampling
             call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)
             ! for visualization
@@ -1518,34 +1521,83 @@ contains
             if( nactive < 1 ) THROW_HARD('No active particles selected in ptcl2D for abinitio3D')
         end subroutine reset_ptcl3D_from_ptcl2D_selection
 
-        subroutine verify_docked_multistate_updates
-            integer, allocatable :: states(:), updatecnts(:)
+        subroutine ensure_multistate_particle_assignments
             integer :: nactive, nupdated, nmissing
+            call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+            if( nactive < 1 )then
+                THROW_HARD('multistate abinitio3D has no active particles after staged refinement')
+            endif
+            if( nmissing > 0 )then
+                call run_multistate_missing_update(nmissing, nactive)
+                call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+                if( nmissing > 0 )then
+                    THROW_HARD('multistate abinitio3D final missing-update pass failed to update every active particle')
+                endif
+            endif
+        end subroutine ensure_multistate_particle_assignments
+
+        subroutine read_multistate_assignment_coverage( nactive, nupdated, nmissing )
+            integer, intent(out) :: nactive, nupdated, nmissing
+            integer, allocatable :: states(:), updatecnts(:)
             call spproj%read_segment('ptcl3D', params%projfile)
             if( .not. spproj%os_ptcl3D%isthere('updatecnt') )then
-                THROW_HARD('docked abinitio3D requires post-split particle updates before final reconstruction')
+                THROW_HARD('multistate abinitio3D requires post-label particle assignments before final reconstruction')
             endif
             states     = spproj%os_ptcl3D%get_all_asint('state')
             updatecnts = spproj%os_ptcl3D%get_all_asint('updatecnt')
             nactive    = count(states > 0)
             nupdated   = count(states > 0 .and. updatecnts > 0)
             nmissing   = nactive - nupdated
-            write(logfhandle,'(A,I0,A,I0,A,I0)') &
-                &'>>> ABINITIO3D DOCKED POST-SPLIT UPDATE COVERAGE UPDATED/ACTIVE/MISSING: ', &
-                &nupdated, '/', nactive, '/', nmissing
-            if( nactive < 1 )then
-                if( allocated(states)     ) deallocate(states)
-                if( allocated(updatecnts) ) deallocate(updatecnts)
-                THROW_HARD('docked abinitio3D has no active particles after staged refinement')
-            endif
-            if( nmissing > 0 )then
-                if( allocated(states)     ) deallocate(states)
-                if( allocated(updatecnts) ) deallocate(updatecnts)
-                THROW_HARD('docked abinitio3D cannot finish before every active particle has a post-split update')
-            endif
+            write(logfhandle,'(A,A,A,I0,A,I0,A,I0)') &
+                &'>>> ABINITIO3D MULTISTATE ASSIGNMENT COVERAGE MODE=', trim(params%multivol_mode), &
+                &' UPDATED/ACTIVE/MISSING: ', nupdated, '/', nactive, '/', nmissing
             if( allocated(states)     ) deallocate(states)
             if( allocated(updatecnts) ) deallocate(updatecnts)
-        end subroutine verify_docked_multistate_updates
+        end subroutine read_multistate_assignment_coverage
+
+        subroutine run_multistate_missing_update( nmissing, nactive )
+            integer, intent(in) :: nmissing, nactive
+            type(cmdline) :: cline_missing
+            integer       :: iter_missing
+            iter_missing = next_refine3D_iteration()
+            write(logfhandle,'(A,A,A,I0,A,I0,A,I0)') &
+                &'>>> ABINITIO3D MULTISTATE FINAL MISSING-UPDATE GREEDY ASSIGNMENT MODE=', trim(params%multivol_mode), &
+                &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
+            call flush(logfhandle)
+            cline_missing = cline_refine3D
+            call cline_missing%set('prg',             'refine3D')
+            call cline_missing%set('mkdir',                 'no')
+            call cline_missing%set('refine',            'greedy')
+            call cline_missing%set('balance',               'no')
+            call cline_missing%set('greedy_sampling',      'yes')
+            call cline_missing%set('frac_best',             1.0)
+            call cline_missing%set('fillin',               'no')
+            call cline_missing%set('update_missing',       'yes')
+            call cline_missing%set('update_frac',           1.0)
+            call cline_missing%set('trail_rec',             'no')
+            call cline_missing%set('volrec',                'no')
+            call cline_missing%set('maxits',                   1)
+            call cline_missing%set('startit',       iter_missing)
+            call cline_missing%set('which_iter',    iter_missing)
+            call cline_missing%set('extr_iter',     iter_missing)
+            call cline_missing%delete('endit')
+            call xrefine3D%execute(cline_missing)
+            call del_files(DIST_FBODY,      params%nparts, ext='.dat')
+            call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
+            call del_file(DIST_FBODY//'.dat')
+            call del_file(ASSIGNMENT_FBODY//'.dat')
+            call cline_missing%kill
+        end subroutine run_multistate_missing_update
+
+        integer function next_refine3D_iteration() result(iter)
+            iter = 1
+            if( cline_refine3D%defined('endit') )then
+                iter = cline_refine3D%get_iarg('endit') + 1
+            else if( cline_refine3D%defined('which_iter') )then
+                iter = cline_refine3D%get_iarg('which_iter') + 1
+            endif
+            iter = max(1, iter)
+        end function next_refine3D_iteration
 
         subroutine ini3D_from_cavgs( cline )
             class(cmdline),    intent(inout) :: cline

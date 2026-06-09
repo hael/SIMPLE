@@ -5,7 +5,7 @@ use simple_commanders_relion,       only: commander_export_relion
 use simple_commanders_starproject,  only: commander_import_starproject, commander_export_starproject
 use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info,&
 commander_print_project_field, commander_replace_project_field, commander_selection, commander_merge_projects,&
-commander_extract_subproj, commander_validate_projfile
+commander_extract_subproj, commander_validate_projfile, commander_ptcl3D_state_consensus
 use simple_commanders_project_mov,  only: commander_import_movies, commander_write_mic_filetab
 use simple_commanders_project_ptcl, only: commander_zero_project_shifts, commander_import_boxes,&
 commander_import_particles, commander_reimport_particles, commander_prune_project_distr
@@ -28,6 +28,7 @@ type(commander_merge_projects)        :: xmerge_projects
 type(commander_new_project)           :: xnew_project
 type(commander_print_project_field)   :: xprint_project_field
 type(commander_print_project_info)    :: xprint_project_info
+type(commander_ptcl3D_state_consensus) :: xptcl3D_state_consensus
 type(commander_prune_project_distr)   :: xprune_project
 type(commander_replace_project_field) :: xreplace_project_field
 type(commander_selection)             :: xselection
@@ -75,6 +76,8 @@ contains
             case( 'print_project_info' )
                 call xprint_project_info%execute(cline)
                 l_silent = .true.
+            case( 'ptcl3D_state_consensus' )
+                call xptcl3D_state_consensus%execute(cline)
             case( 'prune_project' )
                 call xprune_project%execute(cline)
             case( 'replace_project_field' )

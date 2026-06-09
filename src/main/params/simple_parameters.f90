@@ -81,6 +81,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
+    character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
@@ -586,6 +587,7 @@ type :: parameters
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.
+    logical :: l_update_missing  = .false.
     logical :: l_remap_cls       = .false.
     logical :: sp_required       = .false.
 contains

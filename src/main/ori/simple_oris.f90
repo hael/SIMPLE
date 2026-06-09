@@ -176,6 +176,7 @@ type :: oris
     procedure          :: sample4update_reprod
     procedure          :: sample4update_updated
     procedure          :: sample4update_fillin
+    procedure          :: sample4update_missing
     procedure, private :: sample_balanced_1, sample_balanced_2
     generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
     procedure          :: sample_balanced_inv
@@ -1271,6 +1272,14 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_fillin
+
+    module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)    :: incr_sampled
+    end subroutine sample4update_missing
 
     module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states )
         class(oris),        intent(in)    :: self

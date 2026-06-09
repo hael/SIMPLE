@@ -498,6 +498,7 @@ contains
             self%l_trail_rec   = .false.
             self%l_fillin      = .false.
         endif
+        self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_frac_best   = self%frac_best  <= 0.99
         self%l_frac_worst  = self%frac_worst <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'

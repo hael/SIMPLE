@@ -233,6 +233,27 @@ contains
             if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
         end do
         deallocate(clssmp)
+        ! sample4update_missing selects only active never-updated particles
+        call os%set_all2single('state', 1.0)
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set(4,  'updatecnt', 0.)
+        call os%set(5,  'updatecnt', 0.)
+        call os%set(10, 'updatecnt', 0.)
+        call os%set(10, 'state',     0.)
+        call os%sample4update_missing([1, n], nsamp, inds, .true.)
+        call assert_int(2, nsamp, 'sample4update_missing active missing size')
+        if( size(inds) == 2 )then
+            call assert_true(all(inds == [4,5]), 'sample4update_missing active missing inds')
+        else
+            call assert_true(.false., 'sample4update_missing active missing inds')
+        endif
+        call assert_int(1, os%get_updatecnt(4),  'sample4update_missing updatecnt 4')
+        call assert_int(0, os%get_updatecnt(10), 'sample4update_missing inactive skip')
+        call os%set_all2single('state', 1.0)
+        call os%set_all2single('updatecnt', 1.0)
+        call os%sample4update_missing([1, n], nsamp, inds, .true.)
+        call assert_int(0, nsamp,     'sample4update_missing no-op size')
+        call assert_int(0, size(inds),'sample4update_missing no-op inds')
         ! sample4update_updated: requires some updatecnt>0
         call os%set_all2single('updatecnt', 0.0)
         call os%set_updatecnt(1, [1,2,3])

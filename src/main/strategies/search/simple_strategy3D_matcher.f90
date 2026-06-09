@@ -9,7 +9,7 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align
 use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
-use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
+use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
 use simple_strategy3D_eval,         only: strategy3D_eval
@@ -92,6 +92,15 @@ contains
         has_been_searched = .not. b_ptr%spproj%is_virgin_field(p_ptr%oritype)
         call adopt_reprojection_model_range(p_ptr, b_ptr)
         call sample_particles_for_update( pinds, nptcls2update )
+        if( nptcls2update < 1 )then
+            if( p_ptr%l_update_missing )then
+                write(logfhandle,'(A)') '>>> MATCH3D: no missing particles selected for update'
+                converged = .true.
+                call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
+                return
+            endif
+            THROW_HARD('No particles selected for 3D update')
+        endif
         call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
             rt_startup = toc(t_startup)
@@ -246,9 +255,14 @@ contains
             integer,              intent(out) :: nptcls
             if( allocated(pinds_local) ) deallocate(pinds_local)
             if( ctrl%do_prob_align )then
+                if( p_ptr%l_update_missing )then
+                    THROW_HARD('update_missing requires matcher-owned assignment; use a non-probabilistic refine mode')
+                endif
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local)
             else
-                if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
+                if( p_ptr%l_update_missing )then
+                    call sample_ptcls4missing3D(b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
+                else if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
                     call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
                 else
                     call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)

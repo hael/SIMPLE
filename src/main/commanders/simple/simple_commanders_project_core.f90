@@ -35,6 +35,11 @@ type, extends(commander_base) :: commander_merge_projects
     procedure :: execute      => exec_merge_projects
 end type commander_merge_projects
 
+type, extends(commander_base) :: commander_ptcl3D_state_consensus
+  contains
+    procedure :: execute      => exec_ptcl3D_state_consensus
+end type commander_ptcl3D_state_consensus
+
 type, extends(commander_base) :: commander_validate_projfile
   contains
     procedure :: execute      => exec_validate_projfile
@@ -314,6 +319,272 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_projects
+
+    subroutine exec_ptcl3D_state_consensus( self, cline )
+        class(commander_ptcl3D_state_consensus), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        character(len=*), parameter :: CONSENSUS_REPORT = 'ptcl3D_state_consensus.txt'
+        integer,          parameter :: MAX_EXACT_NSTATES = 8
+        type(parameters) :: params
+        type(sp_project) :: target_proj, source_proj
+        type(string), allocatable :: fnames(:)
+        type(string) :: projtab_dir
+        integer, allocatable :: source_labels(:,:), mapped_labels(:,:), state_maps(:,:)
+        integer, allocatable :: original_states(:), consensus_states(:), votes(:,:)
+        integer, allocatable :: best_map(:)
+        integer :: nprojs, nptcls, nstates, inferred_nstates, iproj, iptcl, label
+        integer :: best_label, best_votes, best_score
+        logical :: nstates_inputted
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
+        if( .not.cline%defined('prune') ) call cline%set('prune', 'no')
+        if( .not.cline%defined('projtab') )then
+            THROW_HARD('ptcl3D_state_consensus requires projtab with one SIMPLE project file per line')
+        endif
+        if( .not.cline%defined('projfile') )then
+            THROW_HARD('ptcl3D_state_consensus requires projfile to receive the consensus assignment')
+        endif
+        nstates_inputted = cline%defined('nstates')
+        call params%new(cline)
+        call read_filetable(params%projtab, fnames)
+        if( .not.allocated(fnames) ) THROW_HARD('ptcl3D_state_consensus projtab is empty')
+        nprojs = size(fnames)
+        if( nprojs < 1 ) THROW_HARD('ptcl3D_state_consensus requires at least one project file')
+        projtab_dir = get_fpath(params%projtab)
+        do iproj = 1,nprojs
+            if( fnames(iproj)%to_char([1,1]) == '/' )then
+                fnames(iproj) = simple_abspath(fnames(iproj))
+            else
+                fnames(iproj) = simple_abspath(projtab_dir//fnames(iproj))
+            endif
+        enddo
+        call target_proj%read(params%projfile)
+        nptcls = target_proj%os_ptcl3D%get_noris()
+        if( nptcls == 0 ) THROW_HARD('ptcl3D_state_consensus: target project has no ptcl3D entries')
+        original_states = target_proj%os_ptcl3D%get_all_asint('state')
+        if( size(original_states) /= nptcls ) THROW_HARD('ptcl3D_state_consensus: invalid target ptcl3D state array')
+        allocate(source_labels(nprojs,nptcls), source=0)
+        inferred_nstates = 0
+        do iproj = 1,nprojs
+            call source_proj%kill
+            call source_proj%read_segment('ptcl3D', fnames(iproj))
+            if( source_proj%os_ptcl3D%get_noris() /= nptcls )then
+                write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROJTAB PROJECT ', iproj, ' #PTCL3D: ', &
+                    source_proj%os_ptcl3D%get_noris(), ' EXPECTED: ', nptcls
+                THROW_HARD('ptcl3D_state_consensus: projtab ptcl3D count mismatch')
+            endif
+            source_labels(iproj,:) = source_proj%os_ptcl3D%get_all_asint('state')
+            do iptcl = 1,nptcls
+                if( source_labels(iproj,iptcl) > inferred_nstates ) inferred_nstates = source_labels(iproj,iptcl)
+            enddo
+        enddo
+        call source_proj%kill
+        if( nstates_inputted )then
+            nstates = params%nstates
+        else
+            nstates = inferred_nstates
+        endif
+        if( nstates < 1 ) THROW_HARD('ptcl3D_state_consensus: could not infer any positive ptcl3D states')
+        if( nstates > MAX_EXACT_NSTATES )then
+            THROW_HARD('ptcl3D_state_consensus exact label matching supports nstates <= '//int2str(MAX_EXACT_NSTATES))
+        endif
+        allocate(mapped_labels(nprojs,nptcls),      source=0)
+        allocate(state_maps(nprojs,nstates),        source=0)
+        allocate(votes(nstates,nptcls),             source=0)
+        allocate(consensus_states(nptcls),          source=0)
+        allocate(best_map(nstates),                 source=0)
+        call sanitize_source_labels
+        call map_state_correspondence
+        call build_consensus
+        call apply_consensus
+        call write_consensus_report
+        call cleanup
+        call simple_end('**** SIMPLE_PTCL3D_STATE_CONSENSUS NORMAL STOP ****')
+
+    contains
+
+        subroutine sanitize_source_labels
+            do iproj = 1,nprojs
+                do iptcl = 1,nptcls
+                    if( original_states(iptcl) <= 0 )then
+                        source_labels(iproj,iptcl) = 0
+                    else if( source_labels(iproj,iptcl) < 1 .or. source_labels(iproj,iptcl) > nstates )then
+                        source_labels(iproj,iptcl) = 0
+                    endif
+                enddo
+            enddo
+        end subroutine sanitize_source_labels
+
+        subroutine map_state_correspondence
+            mapped_labels(1,:) = source_labels(1,:)
+            do label = 1,nstates
+                state_maps(1,label) = label
+            enddo
+            do iproj = 2,nprojs
+                call best_state_mapping(iproj, best_map, best_score)
+                state_maps(iproj,:) = best_map
+                do iptcl = 1,nptcls
+                    label = source_labels(iproj,iptcl)
+                    if( label < 1 )then
+                        mapped_labels(iproj,iptcl) = 0
+                    else
+                        mapped_labels(iproj,iptcl) = best_map(label)
+                    endif
+                enddo
+                write(logfhandle,'(A,I0,A,I0)') '>>> PROJTAB PROJECT BEST STATE-LABEL AGREEMENT ', &
+                    iproj, ': ', best_score
+            enddo
+        end subroutine map_state_correspondence
+
+        subroutine best_state_mapping( source_ind, state_map, score_best )
+            integer, intent(in)  :: source_ind
+            integer, intent(out) :: state_map(:), score_best
+            integer :: candidate(size(state_map)), agreement(size(state_map),size(state_map))
+            logical :: used(size(state_map))
+            state_map  = 0
+            score_best = -1
+            candidate  = 0
+            agreement  = 0
+            used       = .false.
+            call build_agreement(source_ind, agreement)
+            call generate_mapping(1, candidate, used, agreement, state_map, score_best)
+        end subroutine best_state_mapping
+
+        subroutine build_agreement( source_ind, agreement )
+            integer, intent(in)    :: source_ind
+            integer, intent(inout) :: agreement(:,:)
+            integer :: ref_label, raw_label
+            agreement = 0
+            do iptcl = 1,nptcls
+                ref_label = source_labels(1,iptcl)
+                raw_label = source_labels(source_ind,iptcl)
+                if( ref_label < 1 .or. raw_label < 1 ) cycle
+                agreement(raw_label,ref_label) = agreement(raw_label,ref_label) + 1
+            enddo
+        end subroutine build_agreement
+
+        recursive subroutine generate_mapping( position, candidate, used, agreement, state_map, score_best )
+            integer, intent(in)    :: position, agreement(:,:)
+            integer, intent(inout) :: candidate(:), state_map(:), score_best
+            logical, intent(inout) :: used(:)
+            integer :: mapped_state, raw_state, score
+            if( position > nstates )then
+                score = 0
+                do raw_state = 1,nstates
+                    score = score + agreement(raw_state,candidate(raw_state))
+                enddo
+                if( score > score_best )then
+                    score_best = score
+                    state_map  = candidate
+                endif
+            else
+                raw_state = position
+                do mapped_state = 1,nstates
+                    if( used(mapped_state) ) cycle
+                    candidate(raw_state) = mapped_state
+                    used(mapped_state)   = .true.
+                    call generate_mapping(position + 1, candidate, used, agreement, state_map, score_best)
+                    used(mapped_state)   = .false.
+                enddo
+            endif
+        end subroutine generate_mapping
+
+        subroutine build_consensus
+            votes = 0
+            do iptcl = 1,nptcls
+                if( original_states(iptcl) <= 0 ) cycle
+                do iproj = 1,nprojs
+                    label = mapped_labels(iproj,iptcl)
+                    if( label >= 1 .and. label <= nstates ) votes(label,iptcl) = votes(label,iptcl) + 1
+                enddo
+                best_label = 0
+                best_votes = -1
+                do label = 1,nstates
+                    if( votes(label,iptcl) > best_votes )then
+                        best_label = label
+                        best_votes = votes(label,iptcl)
+                    endif
+                enddo
+                label = mapped_labels(1,iptcl)
+                if( label > 0 .and. votes(label,iptcl) == best_votes ) best_label = label
+                if( best_votes <= 0 ) best_label = 0
+                consensus_states(iptcl) = best_label
+            enddo
+            write(logfhandle,'(A,I0,A,I0)') '>>> PTCL3D STATE CONSENSUS ACTIVE / INACTIVE: ', &
+                count(consensus_states > 0), ' / ', count(consensus_states == 0)
+        end subroutine build_consensus
+
+        subroutine apply_consensus
+            call target_proj%os_ptcl3D%set_all('state', consensus_states)
+            if( target_proj%os_ptcl2D%get_noris() == nptcls )then
+                call target_proj%os_ptcl2D%set_all('state', consensus_states)
+            endif
+            if( trim(params%prune) == 'yes' ) call target_proj%prune_particles
+            call target_proj%write(params%projfile)
+        end subroutine apply_consensus
+
+        subroutine write_consensus_report
+            integer :: funit
+            open(newunit=funit, file=CONSENSUS_REPORT, status='replace', action='write')
+            write(funit,'(A)') '# ptcl3D_state_consensus report'
+            write(funit,'(A,A)') '# target_projfile=', params%projfile%to_char()
+            write(funit,'(A,A)') '# projtab=', params%projtab%to_char()
+            write(funit,'(A,I0)') '# nprojects=', nprojs
+            write(funit,'(A,I0)') '# nstates=', nstates
+            do iproj = 1,nprojs
+                write(funit,'(A,I0,A,A)') '# project_', iproj, '=', fnames(iproj)%to_char()
+                write(funit,'(A,I0,A)', advance='no') '# state_map_project_', iproj, '_raw_to_consensus='
+                do label = 1,nstates
+                    if( label > 1 ) write(funit,'(A)', advance='no') ','
+                    write(funit,'(I0)', advance='no') state_maps(iproj,label)
+                enddo
+                write(funit,*)
+            enddo
+            write(funit,'(A)', advance='no') 'particle,original_state,consensus_state'
+            do label = 1,nstates
+                write(funit,'(A,I0)', advance='no') ',votes_state_', label
+            enddo
+            do iproj = 1,nprojs
+                write(funit,'(A,I0)', advance='no') ',project_raw_', iproj
+            enddo
+            do iproj = 1,nprojs
+                write(funit,'(A,I0)', advance='no') ',project_mapped_', iproj
+            enddo
+            write(funit,*)
+            do iptcl = 1,nptcls
+                write(funit,'(I0,A,I0,A,I0)', advance='no') &
+                    iptcl, ',', original_states(iptcl), ',', consensus_states(iptcl)
+                do label = 1,nstates
+                    write(funit,'(A,I0)', advance='no') ',', votes(label,iptcl)
+                enddo
+                do iproj = 1,nprojs
+                    write(funit,'(A,I0)', advance='no') ',', source_labels(iproj,iptcl)
+                enddo
+                do iproj = 1,nprojs
+                    write(funit,'(A,I0)', advance='no') ',', mapped_labels(iproj,iptcl)
+                enddo
+                write(funit,*)
+            enddo
+            close(funit)
+            write(logfhandle,'(A,A)') '>>> WROTE ', CONSENSUS_REPORT
+        end subroutine write_consensus_report
+
+        subroutine cleanup
+            call target_proj%kill
+            call source_proj%kill
+            if( allocated(fnames) )then
+                call fnames%kill
+                deallocate(fnames)
+            endif
+            if( allocated(source_labels)   ) deallocate(source_labels)
+            if( allocated(mapped_labels)   ) deallocate(mapped_labels)
+            if( allocated(state_maps)      ) deallocate(state_maps)
+            if( allocated(original_states) ) deallocate(original_states)
+            if( allocated(consensus_states)) deallocate(consensus_states)
+            if( allocated(votes)           ) deallocate(votes)
+            if( allocated(best_map)        ) deallocate(best_map)
+        end subroutine cleanup
+
+    end subroutine exec_ptcl3D_state_consensus
 
     subroutine exec_validate_projfile( self, cline )
         use simple_projfile_utils, only: validate_and_repair_project_file
