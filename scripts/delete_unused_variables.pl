@@ -21,6 +21,66 @@ my @line_nums;
 my @unused_variables;
 my $line;
 
+sub split_fortran_decl_items {
+    my ($text) = @_;
+    my @items;
+    my $cur = '';
+    my $depth = 0;
+    my @chars = split //, $text;
+    for my $ch (@chars) {
+        if ($ch eq '(') {
+            $depth++;
+            $cur .= $ch;
+            next;
+        }
+        if ($ch eq ')') {
+            $depth-- if $depth > 0;
+            $cur .= $ch;
+            next;
+        }
+        if ($ch eq ',' && $depth == 0) {
+            push @items, trim($cur);
+            $cur = '';
+            next;
+        }
+        $cur .= $ch;
+    }
+    push @items, trim($cur) if trim($cur) ne '';
+    return @items;
+}
+
+sub remove_decl_var {
+    my ($line, $varname) = @_;
+    return $line unless $line =~ /::/;
+    my ($lhs, $rhs) = split /::/, $line, 2;
+    return $line unless defined $rhs;
+
+    my $comment = '';
+    if ($rhs =~ /(.*?)(\s*!.*)$/) {
+        $rhs = $1;
+        $comment = $2;
+    }
+
+    my @items = split_fortran_decl_items($rhs);
+    my @kept;
+    for my $it (@items) {
+        my $name = $it;
+        $name =~ s/=.*$//;          # strip initializer
+        $name =~ s/\(.*$//;         # strip dimensions
+        $name = trim($name);
+        push @kept, $it if lc($name) ne lc($varname);
+    }
+
+    if (!@kept) {
+        return "\n";
+    }
+
+    my $new_rhs = join(', ', @kept);
+    $new_rhs .= $comment if $comment ne '';
+    $new_rhs =~ s/\s+$//;
+    return $lhs . ':: ' . $new_rhs . "\n";
+}
+
 my $line_number = 0;
 while($line = <$build_filehandle>)
 {
@@ -76,25 +136,8 @@ for(my $i = 0; $i < scalar(@files); $i++) # loop over all the replacements to be
           $line_num++;
           if ($line_num == $line_nums[$i]) {
               print "before deletion          : ",trim($line), "\n";
-              # replace 'old' with 'new' on these lines only
-              $line =~ s/,(\S)/, $1/g; # insert space after comma 
-              # case followed by stuff in parens
-              $line =~ s/ ${unused_variables[$i]}\([^\)]*\) [^,!]*//i;
-              # case followed by stuff in parens
-              $line =~ s/ ${unused_variables[$i]}\([^\)]*\),?//i;
-              # case followed by equal and variable 
-              $line =~ s/ ${unused_variables[$i]}\s*\=.*?(?:,|$|!)//i;
-              # case followed by comma
-              $line =~ s/ ${unused_variables[$i]},//i;
-              # case end of line
-              $line =~ s/ ${unused_variables[$i]}\s*$//i;
-              # remove trailing commas
-              $line =~ s/,\s*$/\n/;
-              # collapse double commas
-              $line =~ s/,\s*,/,/;
-              # the only variable defined then remove that line
-              $line =~ s/^.*::\s*$/\n/;
-              if ($line =~ /::\s*!/) {$line="\n"}; # special case for line with a comment
+              # robust removal of variable from declaration list (handles nested parens)
+              $line = remove_decl_var($line, $unused_variables[$i]);
               print "after deletion           : ",trim($line), "\n\n";
           }
           print{$OUT} $line;
