@@ -1,12 +1,12 @@
 #!/usr/bin/perl
-# Perl script to delete unused variables in the source code flagged in debug compilation mode
+# Perl script to delete unused variables in the source code flagged in GPU debug compilation mode
 use strict;
 use warnings;
 sub trim { $_[0] =~ s/^\s+|\s+$//gr }
 
 # compile code in debug mode
 print(">>> CLONE REPO & COMPILE SIMPLE IN DEBUG MODE\n");
-system("rm -f build.log\* unused.log unused_after_remove.log \;git clone git\@github.com:hael/SIMPLE.git\; cd SIMPLE\; ./compile_debug.sh >../build.log 2>&1\; cd ..\;grep \"Unused variable\" -B 4 build.log > unused.log"); 
+system("rm -f build.log\* unused.log unused_after_remove.log \;git clone git\@github.com:hael/SIMPLE.git\; cd SIMPLE\; ./compile_gpu_debug.sh >../build.log 2>&1\; cd ..\;grep \"Unused variable\" -B 4 build.log > unused.log"); 
 system("pwd"); 
 
 print(">>> REMOVE UNUSED VARIABLES\n");
