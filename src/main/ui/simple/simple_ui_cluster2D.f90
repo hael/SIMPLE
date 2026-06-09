@@ -5,7 +5,7 @@ implicit none
 
 type(ui_program), target :: abinitio2D
 type(ui_program), target :: cluster2D
-type(ui_program), target :: cluster2D_subsets
+type(ui_program), target :: abinitio2D_chunks
 type(ui_program), target :: cluster2D_subsets_refine
 type(ui_program), target :: cluster2D_microchunked
 type(ui_program), target :: make_cavgs
@@ -18,7 +18,7 @@ contains
     subroutine construct_cluster2D_programs( prgtab ) 
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
-        call new_cluster2D_subsets(prgtab)
+        call new_abinitio2D_chunks(prgtab)
         call new_cluster2D_subsets_refine(prgtab)
         call new_cluster2D_microchunked(prgtab)
         call new_make_cavgs(prgtab)
@@ -31,7 +31,7 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') cluster2D_subsets%name%to_char()
+        write(logfhandle,'(A)') abinitio2D_chunks%name%to_char()
         write(logfhandle,'(A)') cluster2D_subsets_refine%name%to_char()
         write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
         write(logfhandle,'(A)') make_cavgs%name%to_char()
@@ -89,13 +89,13 @@ contains
         call add_ui_program('abinitio2D', abinitio2D, prgtab)
     end subroutine new_abinitio2D
 
-    subroutine new_cluster2D_subsets( prgtab )
+    subroutine new_abinitio2D_chunks( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call cluster2D_subsets%new(&
-        &'cluster2D_subsets',&                                                                    ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
-        &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
+        call abinitio2D_chunks%new(&
+        &'abinitio2D_chunks',&                                                                    ! name
+        &'Independent ab initio 2D analysis of particle subsets',&                                ! descr_short
+        &'splits a project into particle-balanced subsets and runs independent abinitio2D jobs',& ! descr_long
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
         &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
@@ -107,30 +107,29 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_subsets%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{200}', gui_submenu="cluster 2D", gui_advanced=.false.)
-        call cluster2D_subsets%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{200}', gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
-        call cluster2D_subsets%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles clustered', 'Max # of particles clustered{100000}',&
-        &'max # of particles{100000}', .false., 100000., gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_subsets%add_input(UI_SRCH, 'nmics', 'num', 'Maximum # of micrographs sampled', 'Max # of micrographs sampled{100}',&
-        &'max # of micrographs{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
         ! filter controls
-        call cluster2D_subsets%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
-        call cluster2D_subsets%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call abinitio2D_chunks%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
-        call cluster2D_subsets%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
+        call abinitio2D_chunks%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
         &gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
-        call cluster2D_subsets%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
-        call cluster2D_subsets%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_subsets%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_COMP, 'nchunks', 'num', 'Number of subsets', &
+            &'Number of particle-balanced subset projects to run with independent abinitio2D jobs{2}', '# of subsets{2}', &
+            &.false., 2., gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('cluster2D_subsets', cluster2D_subsets, prgtab)
-    end subroutine new_cluster2D_subsets
+        call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab)
+    end subroutine new_abinitio2D_chunks
 
     subroutine new_cluster2D_subsets_refine( prgtab )
         class(ui_hash), intent(inout) :: prgtab

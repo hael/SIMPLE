@@ -420,7 +420,7 @@
         - `simple_stream_chunk.f90` — abstract data type for the stream_chunk, defining a chunk of data processed in parallel
         - `simple_stream_chunk2D_utils.f90` — utilities for chunk-based 2D clustering in stream
         - `simple_stream_cluster2D_micro.f90` — high-level batch testing of 2D refinement within clusters of 2D averages from subsets
-        - `simple_stream_cluster2D_subsets.f90` — high-level batch testing of the sieving logics used in the stream
+        - `simple_stream_abinitio2D_chunks.f90` — split a project into particle-balanced chunks and run independent abinitio2D jobs
         - `simple_stream_cluster2D_subsets_refine.f90` — high-level batch testing of 2D refinement within clusters of 2D averages from subsets
         - `simple_stream_cluster2D_utils.f90` — utilities for running 2D clustering in the stream
         - `simple_stream_p01_preprocess.f90` — task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)
