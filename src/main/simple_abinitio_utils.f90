@@ -62,9 +62,17 @@ interface
         real :: lp
     end function abinitio_lpstop_ini3D
 
+    module function abinitio_independent_lpstop_default() result(lp)
+        real :: lp
+    end function abinitio_independent_lpstop_default
+
     module function abinitio_nstages() result(nstages_out)
         integer :: nstages_out
     end function abinitio_nstages
+
+    module function abinitio_independent_nstages_default() result(nstages_out)
+        integer :: nstages_out
+    end function abinitio_independent_nstages_default
 
     module function abinitio_nstages_ini3D() result(nstages_out)
         integer :: nstages_out
@@ -81,6 +89,11 @@ interface
     module function abinitio_het_docked_stage() result(istage)
         integer :: istage
     end function abinitio_het_docked_stage
+
+    module function abinitio_stoch_sampl_stage(params) result(istage)
+        class(parameters), intent(in) :: params
+        integer :: istage
+    end function abinitio_stoch_sampl_stage
 
     module function abinitio_nsample_default() result(nsample)
         integer :: nsample

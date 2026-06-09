@@ -21,8 +21,10 @@ integer,          parameter :: SYMSRCH_STAGE           = 3           ! search sy
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
+integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
+integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
 integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for abinitio 3D 
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
@@ -35,6 +37,7 @@ real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for abinitio3D_cavgs/cavgs_ini
 real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for abinitio3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative default for independent multi-state abinitio3D
 
 ! Sampling and update defaults
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
@@ -43,7 +46,7 @@ integer,          parameter :: NSAMPLE_START_DEFAULT      = 5000
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin
-    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine
+    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine, greedy_sampling
     integer :: iter, inspace, inspace_sub, imaxits, nsample_stage
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -91,10 +94,20 @@ contains
         lp = LPSTOP_INI3D
     end function abinitio_lpstop_ini3D
 
+    module function abinitio_independent_lpstop_default() result(lp)
+        real :: lp
+        lp = LPSTOP_INDEPENDENT
+    end function abinitio_independent_lpstop_default
+
     module function abinitio_nstages() result(nstages_out)
         integer :: nstages_out
         nstages_out = NSTAGES
     end function abinitio_nstages
+
+    module function abinitio_independent_nstages_default() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INDEPENDENT
+    end function abinitio_independent_nstages_default
 
     module function abinitio_nstages_ini3D() result(nstages_out)
         integer :: nstages_out
@@ -115,6 +128,13 @@ contains
         integer :: istage
         istage = HET_DOCKED_STAGE
     end function abinitio_het_docked_stage
+
+    module function abinitio_stoch_sampl_stage(params) result(istage)
+        class(parameters), intent(in) :: params
+        integer :: istage
+        istage = STOCH_SAMPL_STAGE
+        if( trim(params%multivol_mode).eq.'independent' ) istage = STOCH_SAMPL_STAGE_INDEP
+    end function abinitio_stoch_sampl_stage
 
     module function abinitio_nsample_default() result(nsample)
         integer :: nsample
@@ -174,6 +194,9 @@ contains
         real :: update_frac_stage
         cfg%nsample_stage = stage_nsample(params, istage)
         update_frac_stage = stage_update_frac(params, cfg%nsample_stage)
+        if( trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage )then
+            update_frac_stage = UPDATE_FRAC_MAX
+        endif
         if( istage == active_refine3D_nstages() )then
             cfg%fillin = 'yes'
             if( params%nstates > 1 ) cfg%fillin = 'no'
@@ -189,13 +212,14 @@ contains
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
         real    :: nsample_bounds(2)
-        integer :: ramp_it, ramp_maxit
+        integer :: ramp_it, ramp_maxit, stoch_stage
         nsample_stage = params%nsample
         if( params%nsample_start <= 0 ) return
-        ramp_maxit = max(1, STOCH_SAMPL_STAGE - 1)
+        stoch_stage = abinitio_stoch_sampl_stage(params)
+        ramp_maxit  = max(1, stoch_stage - 1)
         ramp_it    = min(max(0, istage - 1), ramp_maxit)
         nsample_bounds = real([params%nsample_start, params%nsample])
-        if( istage >= STOCH_SAMPL_STAGE )then
+        if( istage >= stoch_stage )then
             nsample_stage = params%nsample
         else
             nsample_stage = nint(inv_cos_decay(ramp_it, ramp_maxit, nsample_bounds))
@@ -275,7 +299,7 @@ contains
             case('independent')
                 if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
             case('docked')
-                if( istage >= TRAILREC_STAGE_SINGLE .and. istage < params%split_stage )then
+                if( istage >= TRAILREC_STAGE_SINGLE .and. istage /= params%split_stage )then
                     cfg%trail_rec = 'yes'
                 endif
             case('input_oris_fixed')
@@ -319,7 +343,10 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        integer :: stoch_stage
+        stoch_stage = abinitio_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
+        cfg%greedy_sampling = 'yes'
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
@@ -333,10 +360,11 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                if( istage >= STOCH_SAMPL_STAGE )then
+                cfg%frac_best     = 1.0
+                if( trim(params%multivol_mode).eq.'independent' .and. istage >= stoch_stage )then
+                    cfg%greedy_sampling = 'no'
+                else if( istage >= stoch_stage )then
                     cfg%frac_best = 0.5
-                else
-                    cfg%frac_best = 1.0
                 endif
                 if( istage > SYMSRCH_STAGE )then
                     cfg%overlap  = 0.9 ! early stopping
@@ -350,7 +378,10 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                if( params%nstates > 1 )then
+                if( trim(params%multivol_mode).eq.'independent' )then
+                    cfg%frac_best       = 1.0
+                    cfg%greedy_sampling = 'no'
+                else if( params%nstates > 1 )then
                     cfg%frac_best = 0.98
                 else
                     cfg%frac_best = 0.85
@@ -420,6 +451,7 @@ contains
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
+        call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
         call cline_refine3D%set('fracsrch',               cfg%fracsrch)

@@ -287,5 +287,7 @@ stages it emits `nu_refine=no`. Because abinitio3D is not currently a
 gold-standard workflow, staged `nonuniform` is promoted to
 `nonuniform_lpset` before the disabled `GOLD_STD_STAGE`; `envfsc` remains
 `no`, and scheduled stage `lp` remains on the refine3D command line.
+The default `multivol_mode=independent` policy stops at stage 5, before this
+NU-filtering stage boundary, unless the user explicitly requests later stages.
 
 The abinitio3D cavgs route disables NU filtering and automasking.

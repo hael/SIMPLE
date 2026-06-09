@@ -60,10 +60,12 @@ contains
             &'(yes|no){no}', .false., 'no', gui_submenu="model", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting number of particles to sample',&
-            &'Starting number of particles to sample before ramping to nsample by stage 5',&
+            &'Starting number of particles to sample before ramping to nsample by the stochastic sampling stage; &
+            &stage 4 for multivol_mode=independent and stage 5 otherwise',&
             &'starting # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, 'nstages', 'num', 'Last ab initio stage to run',&
-            &'Last ab initio3D stage to run; values below the full stage count skip the final all-particle reconstruction',&
+            &'Last abinitio3D stage to run; default is 5 for multivol_mode=independent and 8 otherwise; &
+            &independent mode writes final volumes at its last stage',&
             &'last stage', .false., 8., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
@@ -75,7 +77,8 @@ contains
         call abinitio3D%add_input(UI_FILT, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms',    .false., 8., gui_submenu="filter")
+            &'low-pass limit for the final stage in Angstroms; default is 6 for multivol_mode=independent &
+            &and 8 otherwise',    .false., 8., gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
             &'Use lpstart/lpstop directly for abinitio3D low-pass stages instead of class-FRC-derived limits(yes|no){no}', &
             &'(yes|no){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)

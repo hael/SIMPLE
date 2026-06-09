@@ -1128,7 +1128,7 @@ contains
         real    :: lprange(2)
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, split_stage, last_stage
-        logical :: l_cavg_ini_ext, l_vol_ini_ext
+        logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -1145,6 +1145,8 @@ contains
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('nsample_start')       ) call cline%set('nsample_start', abinitio_nsample_start_default())
+        l_user_nstages = cline%defined('nstages')
+        l_user_lpstop  = cline%defined('lpstop')
         ! splitting stage
         split_stage = abinitio_het_docked_stage()
         if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
@@ -1159,8 +1161,21 @@ contains
                 call cline%set('multivol_mode', 'independent')
             endif
         endif
+        if( cline%defined('multivol_mode') )then
+            if( cline%get_carg('multivol_mode').eq.'independent' )then
+                ! Stop independent multi-state starts before prob_neigh/NU by default.
+                if( .not. l_user_nstages ) call cline%set('nstages', abinitio_independent_nstages_default())
+                if( .not. l_user_lpstop  ) call cline%set('lpstop',  abinitio_independent_lpstop_default())
+            endif
+        endif
         ! make master parameters
         call params%new(cline)
+        if( trim(params%multivol_mode).eq.'independent' )then
+            if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &
+                &'>>> ABINITIO3D INDEPENDENT MULTI-STATE DEFAULT NSTAGES: ', params%nstages
+            if( .not. l_user_lpstop ) write(logfhandle,'(A,F4.1,A)') &
+                &'>>> ABINITIO3D INDEPENDENT MULTI-STATE DEFAULT LPSTOP: ', params%lpstop, ' A'
+        endif
         select case(trim(params%filt_mode))
             case('uniform','fsc')
                 THROW_HARD('abinitio3D no longer supports automatic low-pass filt_mode=uniform|fsc; &
@@ -1210,11 +1225,6 @@ contains
             start_stage = abinitio_nstages_ini3D() - 1 ! compute reduced to two overlapping stages
             l_ini3D     = .true.
             ! symmetry dealt with by ini3D
-        else
-            if( trim(params%multivol_mode).eq.'independent' )then
-                ! turn off symmetry axis search and put the symmetry in from the start
-                params%pgrp_start = params%pgrp
-            endif
         endif
         ! nice
         nice_comm%stat_root%stage = "preparing workflow"
@@ -1255,6 +1265,9 @@ contains
             end select
             if( l_ini3D ) THROW_HARD('Cannot have both class initialization and an input volume')
             if( trim(params%partition).eq.'yes' ) THROW_HARD('Volume input not currently supported with partition=yes')
+            ! input volumes are assumed aligned to the target symmetry axis
+            call cline%set('pgrp_start', params%pgrp)
+            params%pgrp_start = params%pgrp
             ! setting up random classes for particles sampling
             call spproj%os_ptcl2D%rnd_cls(100)
             call spproj%write_segment_inside('ptcl2D', params%projfile)
@@ -1267,6 +1280,7 @@ contains
         if( nstages_refine3D < start_stage )then
             THROW_HARD('nstages must be >= first executable abinitio3D stage')
         endif
+        l_run_final_rec = nstages_refine3D == abinitio_nstages() .or. trim(params%multivol_mode).eq.'independent'
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! prepare class command lines
@@ -1291,7 +1305,7 @@ contains
                 endif
                 write(logfhandle,'(A,I0,A,I0,A,I0)') &
                     &'>>> ABINITIO3D NSAMPLE RAMP: ', params%nsample_start, ' -> ', params%nsample, &
-                    &' BY STAGE ', abinitio_symsrch_stage() + 2
+                    &' BY STAGE ', abinitio_stoch_sampl_stage(params)
             endif
             update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
             update_frac = min(abinitio_update_frac_max(), update_frac) ! to ensure fractional update is always on
@@ -1387,7 +1401,11 @@ contains
         if( cline%defined('nstages') )then
             write(logfhandle,'(A,I0,A,I0)')'>>> ABINITIO3D STAGE RANGE: ', start_stage, ' -> ', nstages_refine3D
             if( nstages_refine3D < abinitio_nstages() )then
-                write(logfhandle,'(A)')'>>> ABINITIO3D EARLY STAGE STOP: SKIPPING FINAL ALL-PARTICLE RECONSTRUCTION'
+                if( l_run_final_rec )then
+                    write(logfhandle,'(A)')'>>> ABINITIO3D EARLY STAGE STOP: FINAL ALL-PARTICLE RECONSTRUCTION ENABLED'
+                else
+                    write(logfhandle,'(A)')'>>> ABINITIO3D EARLY STAGE STOP: SKIPPING FINAL ALL-PARTICLE RECONSTRUCTION'
+                endif
             endif
         endif
         ! Frequency marching
@@ -1412,7 +1430,7 @@ contains
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
-                update_frac    = min(update_frac * nstates_glob, abinitio_update_frac_max())
+                update_frac    = abinitio_update_frac_max()
                 write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
                     &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/UPDATE_FRAC: ', &
                     &split_stage, '/', params%nstates, '/', update_frac
@@ -1447,7 +1465,7 @@ contains
             call nice_comm%update_ini3D(last_stage_completed=.true.) 
             call nice_comm%cycle()
         enddo
-        if( nstages_refine3D == abinitio_nstages() )then
+        if( l_run_final_rec )then
             if( trim(params%multivol_mode).eq.'docked' ) call verify_docked_multistate_updates
             ! calculate 3D reconstruction at original sampling
             call calc_final_rec(params, spproj, params%projfile, xrec3D, l_postprocess=.true.)

@@ -38,6 +38,12 @@ When unset, it supplies:
 - `automsk=no`
 - `gauref=yes`
 
+For `multivol_mode=independent`, it also supplies conservative inspection
+defaults when the user has not overridden them:
+
+- `nstages=5`
+- `lpstop=6.0 A`
+
 The public `filt_mode` values are `none`, `nonuniform`, and
 `nonuniform_lpset`. Automatic low-pass modes `uniform` and `fsc` are rejected
 for `abinitio3D`.
@@ -45,8 +51,9 @@ for `abinitio3D`.
 ## 3. Stage Controller
 
 The stage controller in `simple_abinitio_controller.f90` emits a concrete
-`refine3D` command line for each stage. The current particle workflow has eight
-stages.
+`refine3D` command line for each stage. The full particle workflow has eight
+stages. Independent multi-state startup defaults to five stages so it stops
+before the `prob_neigh` and NU-filtering stages.
 
 Stage policy includes:
 
@@ -58,6 +65,7 @@ Stage policy includes:
 - staged translation limits
 - staged ML regularization
 - staged fractional update and optional `nsample` ramp
+- mode-specific stochastic sampling start
 - early Gaussian reference filtering
 - optional trailing reconstruction by stage and multivol mode
 - staged NU filtering from `NU_FILTER_STAGE`
@@ -90,7 +98,9 @@ FSC resolution when an FSC exists. The planned stage LP is only a fallback.
 
 Volume input is allowed for `single`, `independent`, and `docked`
 multi-volume modes. It cannot be combined with class-average initialization or
-partitioned startup.
+partitioned startup. User-supplied input volumes are assumed to be aligned to
+the target symmetry axis, so `pgrp_start` is set to `pgrp` and the particle
+workflow does not run symmetry-axis search on them.
 
 Normal particle-based starts treat `abinitio3D` as the producer of new
 `ptcl3D` orientation and multi-state information. The workflow resets `ptcl3D`
@@ -101,7 +111,10 @@ become state 0. Fresh `independent` runs then randomize active particles into
 the requested 3D states.
 
 Class-average initialization and external class-average initialization both
-skip the random-volume start. `cavg_ini_ext=yes` is the explicit exception to
+skip the random-volume start. With `cavg_ini=yes`, the nested
+`abinitio3D_cavgs` run owns any `pgrp_start` to `pgrp` symmetry-axis search.
+When control returns to the particle workflow, `pgrp_start` is set to `pgrp` so
+the axis search is not repeated. `cavg_ini_ext=yes` is the explicit exception to
 the fresh-start rule: it requires prior `ptcl3D` alignment, preserves the
 external orientation/state information needed by that route, assumes the input
 orientations are already symmetrized, and starts after the symmetry-search
@@ -121,8 +134,26 @@ one state.
 When the user gives `nstates > 1` and no `multivol_mode`, the commander
 defaults to `independent`.
 
-In `independent` mode, the workflow uses the target point group from the start
-and skips the staged symmetry-axis search.
+In `independent` mode, the workflow preserves the staged point-group policy
+between `pgrp_start` and `pgrp`. When `pgrp_start != pgrp`, the symmetry-search
+stage searches the symmetry axis independently for each state, matching the
+state-wise behavior used by direct `abinitio3D_cavgs` runs. This applies to
+fresh particle starts only; `cavg_ini=yes`, `cavg_ini_ext=yes`, and user-supplied
+input volumes are already in the target symmetry frame before the parent
+particle workflow resumes. This mode is intended for severe heterogeneity where
+early inspection is more valuable than committing to a longer refinement
+immediately. Unless the user overrides them, the commander sets `nstages=5` and
+`lpstop=6.0 A`. Stage 5 is still in the `prob` phase; it does not enter
+`prob_neigh`, static NU filtering,
+independent-mode trailing reconstruction, or staged automasking. After stage 5,
+the workflow still runs the final original-sampling reconstruction so the run
+produces inspectable `rec_final_stateNN` volumes. To improve particle coverage
+before that early exit, independent mode starts stochastic balanced sampling at
+stage 4:
+`nsample_start` reaches the full `nsample` target by stage 4, and the child
+`refine3D` stages switch to `greedy_sampling=no` with `frac_best=1.0` from
+stage 4 onward. This samples each class-balanced quota from the full class
+rather than from a top-ranked fraction of that class.
 
 In `docked` mode, the controller starts as one state, runs stages 1-5 as a
 single-state ab initio model, then expands to the requested number of states at
@@ -132,8 +163,7 @@ after stage 5.
 The docked split starts a new multi-state update epoch:
 
 - restore `nstates` to the requested value
-- scale the particle sample target as `nsample * nstates`, expressed as
-  `update_frac = min(UPDATE_FRAC_MAX, nsample_stage * nstates / nactive)`
+- force the split-stage particle update target to `UPDATE_FRAC_MAX`
 - clear `ptcl3D%sampled` and `ptcl3D%updatecnt`
 - randomize active particles into the requested state labels
 - reconstruct split state volumes from the randomized labels without trailing
@@ -142,11 +172,12 @@ The docked split starts a new multi-state update epoch:
 The first post-split stage is a stabilization stage. It uses `refine=shc_smpl`
 with fractional particle updates still active, but with fractional volume
 averaging disabled. The remaining post-split docked stages use
-`refine=prob_neigh`.
+`refine=prob_neigh` and restore trailing reconstruction within the new
+multi-state update epoch.
 
-For docked mode, trailing reconstruction is allowed only before the split.
-Stages at and after the split must not blend current state volumes with
-previous mixed single-state or pre-split volumes.
+For docked mode, trailing reconstruction is allowed before the split and after
+the split stage. The split stage itself must not blend current state volumes
+with previous mixed single-state or pre-split volumes.
 
 `input_oris_start` and `input_oris_fixed` are no longer supported by
 `abinitio3D`. Prior-orientation multi-state refinement belongs in the explicit
@@ -182,6 +213,10 @@ explicit merged-reference LP-set matching run.
 Automasking is opt-in at the public interface and defaults to `no`. Even when
 enabled, staged automasking starts only from `AUTOMSK_STAGE`.
 
+The default `multivol_mode=independent` stage limit stops at stage 5, before
+this NU-filtering policy is activated. Users who override `nstages` past that
+point re-enter the staged NU policy described here.
+
 Detailed NU behavior belongs to
 [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md); detailed
 automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
@@ -189,7 +224,9 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 ## 9. Final Reconstruction
 
 After the staged `refine3D` loop, `abinitio3D` runs a fresh
-original-sampling reconstruction from selected particles.
+original-sampling reconstruction from selected particles for full schedules
+and for `multivol_mode=independent` schedules. Other explicit early-stop
+schedules skip this final all-particle reconstruction.
 
 For `docked` mode, the workflow first verifies post-split coverage: every
 active particle must have `updatecnt > 0` in the multi-state epoch before final

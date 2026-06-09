@@ -145,6 +145,19 @@ Current high-level ab initio stage policy:
 - final active stages may switch to `fillin`, except where the multi-state
   policy disables it
 
+For `abinitio3D` `multivol_mode=independent`, the default policy is an
+inspection-first multi-state run: `nstages=5` and `lpstop=6.0 A` unless the
+user overrides them. This stops after the `prob` phase and before
+`prob_neigh`, staged NU filtering, independent-mode trailing reconstruction,
+and staged automasking. The workflow still runs the final reconstruction step
+at the configured last stage so it writes inspectable final state volumes. To
+increase the chance that all active particles receive assignments before that
+exit, independent mode starts stochastic balanced sampling at stage 4:
+`nsample_start` ramps to `nsample` by stage 4, and the child `refine3D` stages
+use `greedy_sampling=no` with `frac_best=1.0` from stage 4 onward. This keeps
+class-balanced quotas but draws from the whole class, not a top-ranked
+fraction.
+
 `abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
 Stages before the split run as one state. The default split stage is 6, so the
 split occurs after stage 5. At the split, the commander restores the requested
@@ -153,11 +166,12 @@ particles into state labels, and reconstructs split state volumes. The first
 post-split stage uses `shc_smpl`; later post-split stages use `prob_neigh`.
 
 Post-split docked stages keep fractional particle updates for cost control, but
-they disable fractional volume averaging. The update target is scaled as
-`nsample * nstates` over the active particle set and capped by
-`UPDATE_FRAC_MAX`. This preserves the outer sampled-update economy while
-preventing pre-split mixed-volume memory from being blended into the new
-multi-state volumes.
+the split stage disables fractional volume averaging. Because the split-stage
+references are not linearly combined with previous volumes, that stage forces
+the particle update target to `UPDATE_FRAC_MAX`. Later post-split stages
+restore trailing reconstruction inside the new multi-state epoch. This
+preserves the outer sampled-update economy while preventing pre-split
+mixed-volume memory from being blended into the split-stage volumes.
 
 Because the split clears the counters, `updatecnt` after the split is
 post-split multi-state update history, not single-state history. Final docked
@@ -239,8 +253,11 @@ are separate workflow stages and may perform their own reads.
   previous class-average sums.
 - The `abinitio3D` docked split starts a new multi-state `sampled/updatecnt`
   epoch.
-- Docked post-split stages may use fractional particle updates but must not use
-  trailing volume averaging.
+- Independent multi-state `abinitio3D` defaults to a five-stage,
+  `lpstop=6.0 A` inspection run, starts stochastic balanced sampling at stage
+  4, and still writes final reconstruction outputs.
+- Docked split-stage refinement must not use trailing volume averaging; later
+  post-split stages restore trailing inside the new multi-state epoch.
 - 2D fractional class-average restoration remains class-local.
 - Final `abinitio2D` fill-in remains assignment-only unless the policy is
   explicitly changed.
