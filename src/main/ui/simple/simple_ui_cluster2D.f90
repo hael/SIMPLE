@@ -103,11 +103,13 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call abinitio2D_chunks%add_input(UI_PARM, 'nchunks', 'num', 'Number of chunks', &
+            &'Number of particle-balanced subset projects to run with independent abinitio2D jobs', &
+            &'# of chunks', .true., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{200}', gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{300}', gui_submenu="cluster 2D", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         ! filter controls
@@ -121,10 +123,8 @@ contains
         ! mask controls
         call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
+        call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call abinitio2D_chunks%add_input(UI_COMP, 'nchunks', 'num', 'Number of subsets', &
-            &'Number of particle-balanced subset projects to run with independent abinitio2D jobs{2}', '# of subsets{2}', &
-            &.false., 2., gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash

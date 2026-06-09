@@ -37,7 +37,7 @@ contains
         type(string)     :: fname
         type(parameters) :: params
         type(sp_project) :: spproj_glob
-        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncomplete, ncls_chunk
+        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncls_chunk
         call cline%set('oritype',      'ptcl2D')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
@@ -51,7 +51,6 @@ contains
         if( .not. cline%defined('center_type')    ) call cline%set('center_type',   'seg')
         if( .not. cline%defined('walltime')       ) call cline%set('walltime',      29*60) ! 29 minutes
         if( .not. cline%defined('rank_cavgs')     ) call cline%set('rank_cavgs',    'no')
-        if( .not. cline%defined('nchunks')        ) call cline%set('nchunks',       2)
         if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',300)
         if( .not. cline%defined('nparts')         ) call cline%set('nparts',        1)
         ! parse
@@ -95,20 +94,10 @@ contains
             call init_one_chunk(ichunk, ncls_chunk)
         enddo
         params%nthr2D = params%nthr ! ?? cf. Joe
-        ! Submit all independent abinitio2D subset jobs.
+        ! Submit independent abinitio2D subset jobs sequentially.
         do ichunk = 1,ntot_chunks
             call submit_one_chunk(ichunk)
-        enddo
-        ! Wait until all submitted jobs have produced their solved chunk project.
-        do
-            ncomplete = 0
-            do ichunk = 1,ntot_chunks
-                if( chunks(ichunk)%is_available() ) cycle
-                call chunks(ichunk)%display_iter
-                if( chunks(ichunk)%has_converged() ) ncomplete = ncomplete + 1
-            enddo
-            if( ncomplete == ntot_chunks ) exit
-            call sleep(WAITTIME)
+            call wait_one_chunk(ichunk)
         enddo
         write(logfhandle,'(A)')'>>> INDEPENDENT ABINITIO2D SUBSET PROJECTS:'
         do ichunk = 1,ntot_chunks
@@ -149,6 +138,15 @@ contains
             call chunks(ichunk)%analyze2D(makecavgs=.false.)
             call project_list_slice%kill
         end subroutine submit_one_chunk
+
+        subroutine wait_one_chunk( ichunk )
+            integer, intent(in) :: ichunk
+            do
+                call chunks(ichunk)%display_iter
+                if( chunks(ichunk)%has_converged() ) exit
+                call sleep(WAITTIME)
+            enddo
+        end subroutine wait_one_chunk
 
         subroutine generate_chunk_projects
             type(sp_project)     :: spproj
