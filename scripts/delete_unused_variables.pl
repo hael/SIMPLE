@@ -202,7 +202,7 @@ for my $file (sort keys %lines_by_file) {
 
 # compile in debug mode to check that everything is fine
 print(">>> COMPILE NEW VERSION OF SIMPLE IN DEBUG MODE\n");
-system("cd SIMPLE\; ./compile_debug.sh > ../build.log_1 2>&1") == 0 
+system("cd SIMPLE\; ./compile_gpu_debug.sh > ../build.log_1 2>&1") == 0 
     or die ">>> FAILED DELETION OF UNUSED VARIABLES - SIMPLE COMPILATION ERROR: $?";;
 system("grep \"Unused variable\" build.log_1 > unused_after_removal.log");
 if (-z "unused_after_removal.log") {
