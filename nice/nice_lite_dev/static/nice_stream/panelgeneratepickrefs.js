@@ -66,7 +66,7 @@ const selectRefs = (element) => {
     for (const pick_template of document.getElementsByClassName("picktemplate")) {
         if (!pick_template.classList.contains("disabledbutton")) {
             path = pick_template.dataset.path;
-            selected.push([Number(pick_template.dataset.idx), Number(pick_template.dataset.idcluster)]);
+            selected.push([Number(pick_template.dataset.idx), 1]);
         }
     }
    // document.getElementById("final_selection_source").value = path;

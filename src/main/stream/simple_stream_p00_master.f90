@@ -6,6 +6,7 @@ use simple_stream_mq_defs
 use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
 use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
 use simple_stream_p03_opening2D_new,       only: stream_p03_opening2D
+use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
 use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
@@ -85,7 +86,8 @@ contains
     subroutine xopening2D( self, cline )
         class(opening2D_fork), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        type(stream_p03_opening2D)           :: commander
+       ! type(stream_p03_opening2D)           :: commander
+        type(stream_p03_initial_analysis)           :: commander
         call commander%execute(cline)
     end subroutine xopening2D
 

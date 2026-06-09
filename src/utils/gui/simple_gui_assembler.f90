@@ -319,7 +319,7 @@ contains
   ! is suppressed when its hash matches the previously sent hash.
   subroutine assemble_stream_initial_picking( self, meta_initial_picking, meta_micrographs )
     class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_picking),         intent(inout) :: meta_initial_picking
+    type(gui_metadata_stream_picking),                 intent(inout) :: meta_initial_picking
     type(gui_metadata_micrograph),        allocatable, intent(inout) :: meta_micrographs(:)
     character(kind=CK,len=:),             allocatable                :: buffer
     type(json_value),                     pointer                    :: json_ptr, json_mics_ptr

@@ -36,7 +36,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/includes/_panel_header.html' with panel_title="opening 2D classification" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="initial analysis" zoom_url="nice_lite:view_stream_generate_pickrefs_zoom" terminate_field="terminate_generate_pickrefs" restart_field="restart_generate_pickrefs" last_import=jobstats.last_micrograph_imported has_skipped=True user_input_url="nice_lite:view_stream_generate_pickrefs_zoom" user_input_title="select references" %}
 
         <!-- Waiting gauze: shown until particles arrive (below header) -->
         {% if "final_cls2D" not in jobstats and "latest_cls2D" not in jobstats %}
@@ -98,9 +98,9 @@
         {% endif %}
 
         <!-- Available templates gallery (user-input mode) -->
-        {% if status == "running" and jobstats.user_input is True and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
+        {% if status == "running" and "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
             <div class="flex flex-col px-4 pt-2 flex-1">
-                <span class="text-[10px] text-streamlabel mb-2">available templates</span>
+                <span class="text-[10px] text-streamlabel mb-2">latest 2D averages</span>
                 <div class="flex items-center gap-1">
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}

@@ -205,10 +205,11 @@ contains
         if( self%funit /= 0) then
             if( is_open(self%funit) )then
                 call fclose(self%funit)
+                self%funit = 0
             end if
         end if 
         self%recs_per_line = 0
-        self%ndatalines = 0
+        self%ndatalines    = 0
         call self%fname%kill
     end subroutine kill
 

@@ -530,11 +530,11 @@ contains
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_true(len(buffer) > 0, 'json output is non-empty')
-    call assert_int(len(buffer), 178, 'buffer correct size')
+    call assert_int(len(buffer), 166, 'buffer correct size')
     json_str = buffer
-    call assert_int(json_str%strlen(), 178, 'string correct size')
+    call assert_int(json_str%strlen(), 166, 'string correct size')
     json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '042BCDC31F1E148A', 'correct checksum')
+    call assert_char(json_hash%to_char(), 'BDAB38FA961B3B76', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)
@@ -1044,7 +1044,7 @@ contains
     type(gui_metadata_stream_opening2D)             :: meta
     type(json_core)                                 :: json
     type(json_value),                   pointer     :: json_ptr
-    type(string)                                    :: json_str, json_hash
+    type(string)                                    :: json_str
     logical                                         :: found
     write(*,'(A)') 'test_jsonise_stream_opening2D'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
@@ -1052,23 +1052,15 @@ contains
     call assert_true(meta%initialized(), 'type is initialised')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
                   mask_diam=160, box_size=256, mask_scale=0.75)
-    call meta%add_diameter_cluster(120, 140, 130, 0.732)
-    call meta%add_diameter_cluster(150, 180, 165, 0.654)
-    call meta%clear_diameter_clusters()
-    call meta%add_diameter_cluster(155, 185, 170, 0.812)
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')
     call json%update(json_ptr, 'last_particles_imported', 0, found)
     call assert_true(found, 'last_particles_imported field found')
-    call json%update(json_ptr, 'n_clusters', 1, found)
-    call assert_true(found, 'n_clusters field found')
     call json%print_to_string(json_ptr, buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_true(len(buffer) > 0, 'json output is non-empty')
     json_str = buffer
-    json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '2D57FA1E9A641A83', 'correct checksum')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)

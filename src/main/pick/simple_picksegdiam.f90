@@ -19,10 +19,11 @@ real, parameter :: FRAC_FG      = 0.17
 type picksegdiam
     private
     real              :: moldiam_max
+    real              :: moldiam_min
     type(linked_list) :: diameters, xpos, ypos
 contains
-    generic            :: pick => pick_1, pick_2 
-    procedure, private :: pick_1, pick_2
+    generic            :: pick => pick_1, pick_2, pick_3 
+    procedure, private :: pick_1, pick_2, pick_3
     procedure          :: get_nboxes
     procedure          :: get_diameters
     procedure          :: write_diameters
@@ -170,6 +171,103 @@ contains
         if( allocated(cc_imat)      ) deallocate(cc_imat)
         if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
     end subroutine pick_2
+
+    subroutine pick_3( self, micname, smpd, moldiams, pcontrast, denfname, topofname, binfname, empty )
+        class(picksegdiam),      intent(inout) :: self
+        class(string),           intent(in)    :: micname !< micrograph file name
+        real,                    intent(in)    :: smpd
+        real,                    intent(in)    :: moldiams(:)
+        character(len=*),        intent(in)    :: pcontrast
+        class(string), optional, intent(in)    :: denfname, topofname, binfname
+        logical,       optional, intent(out)   :: empty
+        integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
+        logical, allocatable :: picking_mask(:,:)
+        type(image)     :: mic_raw, mic_den
+        type(image_bin) :: mic_shrink, mic_bin, img_cc
+        real            :: rpos(2), diam, diam_adj, scale
+        integer         :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
+        logical         :: l_empty
+        call self%kill
+        if( size(moldiams) == 0 )then
+            if(present(empty)) empty = .true.
+            return
+        endif
+        self%moldiam_max = maxval(moldiams)
+        self%moldiam_min = minval(moldiams)
+        scale = smpd / SMPD_SHRINK1
+        call read_mic_subtr_backgr_shrink(micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
+        if(present(empty)) empty = l_empty
+        if( l_empty )then
+            call dealloc_objs
+            return
+        endif
+        ldim_raw = mic_raw%get_ldim()
+        ldim     = mic_shrink%get_ldim()
+        ! Prep segmentation
+        call flag_amorphous_carbon(mic_shrink, picking_mask)
+        nmasked = count(.not.picking_mask)
+        write(logfhandle,'(a,f5.1)')  '>>> % AMORPHOUS CARBON IDENTIFIED: ', 100. * (real(nmasked) / real(product(ldim)))
+        if( real(nmasked) > 0.98 * real(product(ldim)) )then
+            call dealloc_objs
+            return
+        endif
+        call cascade_filter_biomol( mic_shrink, mic_den )
+        if( present(denfname) )then
+            call mic_den%write(denfname)
+            write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//denfname%to_char()
+        endif
+        if( present(topofname) ) call mic_shrink%write(topofname)
+        call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
+        write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'
+        if( nmasked > 0 ) call mic_bin%apply_mask(picking_mask)
+        ! identify connected components
+        call mic_bin%find_ccs(img_cc)
+        call img_cc%get_nccs(nccs)
+        if( nccs > 0 )then
+            ! gather size info
+            call img_cc%get_imat(cc_imat)
+            call img_cc%get_imat(cc_imat_copy)
+            do icc = 1, nccs
+                call img_cc%diameter_cc(icc, diam)
+                diam_adj = diam + 2. * SMPD_SHRINK1
+                if( diam_adj > self%moldiam_max .or. diam_adj < self%moldiam_min) then
+                    ! remove connected component
+                    where ( cc_imat == icc ) cc_imat_copy = 0
+                else
+                    ! stash diameter & box coordinate
+                    call self%diameters%push_back(diam)
+                    call img_cc%masscen_cc(icc, rpos)
+                    pos = nint(rpos/scale) + ldim_raw(1:2)/2 ! base 0
+                    call self%xpos%push_back(pos(1))
+                    call self%ypos%push_back(pos(2))
+                endif
+            end do
+            ! binarize back
+            cc_imat = cc_imat_copy
+            where( cc_imat_copy > 0 )
+                cc_imat = 1
+            elsewhere
+                cc_imat = 0
+            endwhere
+            call mic_bin%set_imat(cc_imat)
+        endif
+        if( present(binfname) ) call mic_bin%write(binfname)
+        ! destruct
+        call dealloc_objs
+        write(logfhandle,'(a)')  ''
+        contains
+
+            subroutine dealloc_objs
+                if( allocated(cc_imat)      ) deallocate(cc_imat)
+                if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
+                call mic_shrink%kill
+                call mic_den%kill
+                call mic_bin%kill_bimg
+                call img_cc%kill_bimg
+                call mic_raw%kill
+            end subroutine dealloc_objs
+
+    end subroutine pick_3
 
     ! Getters
 
