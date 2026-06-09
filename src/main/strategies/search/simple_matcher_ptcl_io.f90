@@ -126,7 +126,7 @@ contains
         type(dstack_io), allocatable :: dstkios(:)
         type(string), allocatable :: stknames(:), uniq_stknames(:)
         integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:)
-        integer :: i, ii, istk, nbatch, nstks, nthr_read
+        integer :: i, ii, istk, nbatch, nstks, nthr_read, stk_from, stk_to, iopen, nopen
         logical :: l_known_stack, l_verbose
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
@@ -175,23 +175,30 @@ contains
                 THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
             endif
         enddo
-        allocate(dstkios(nstks))
-        do istk = 1,nstks
-            call dstkios(istk)%new(params%smpd, params%box)
-            call dstkios(istk)%cache_stack_info(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
-            call dstkios(istk)%open(uniq_stknames(istk))
-        enddo
         nthr_read = min(max(1,nthr_glob), nstks)
-        !$omp parallel do default(shared) private(istk,ii) schedule(static) proc_bind(close) &
-        !$omp& num_threads(nthr_read) if(nthr_read > 1)
-        do istk = 1,nstks
-            do ii = 1,nbatch
-                if( stk_ids(ii) == istk ) call dstkios(istk)%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
+        allocate(dstkios(nthr_read))
+        ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
+        do stk_from = 1,nstks,nthr_read
+            stk_to = min(stk_from + nthr_read - 1, nstks)
+            nopen  = stk_to - stk_from + 1
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                call dstkios(iopen)%new(params%smpd, params%box)
+                call dstkios(iopen)%cache_stack_info(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
+                call dstkios(iopen)%open(uniq_stknames(istk))
             enddo
-        enddo
-        !$omp end parallel do
-        do istk = 1,nstks
-            call dstkios(istk)%kill
+            !$omp parallel do default(shared) private(iopen,istk,ii) schedule(static) proc_bind(close) &
+            !$omp& num_threads(nopen) if(nopen > 1)
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                do ii = 1,nbatch
+                    if( stk_ids(ii) == istk ) call dstkios(iopen)%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
+                enddo
+            enddo
+            !$omp end parallel do
+            do iopen = 1,nopen
+                call dstkios(iopen)%kill
+            enddo
         enddo
         call stknames(:)%kill
         call uniq_stknames(:)%kill

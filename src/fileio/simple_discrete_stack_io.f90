@@ -70,7 +70,7 @@ contains
         if( self%stknames(ithr).ne.stkname )then
             if( OMP_IN_PARALLEL() )then
                 !$omp critical(dstack_io_open)
-                if( self%stknames(ithr).ne.stkname ) call self%open(stkname)
+                call self%open(stkname)
                 !$omp end critical(dstack_io_open)
             else
                 call self%open(stkname)
@@ -104,7 +104,8 @@ contains
             call self%ioimgs(1)%open(self%stknames(1), ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
             mode = self%ioimgs(1)%getMode()
             self%fts(1)                = (mode == 3) .or. (mode == 4)
-            self%l_threadsafe_reads(1) = (mode == 2) .or. (mode == 4)
+            self%l_threadsafe_reads(1) = (mode == 0) .or. (mode == 1) .or. (mode == 2) .or. &
+                                      & (mode == 3) .or. (mode == 4) .or. (mode == 6) .or. (mode == 12)
             self%l_open(1)             = .true.
         else
             write(logfhandle,*) 'ldim ',ldim

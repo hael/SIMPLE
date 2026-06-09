@@ -41,7 +41,6 @@ contains
     procedure          :: open
     procedure, private :: open_local
     procedure          :: close
-    procedure          :: allocate_tmp_read_array
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
     procedure          :: rSlices
@@ -61,10 +60,6 @@ contains
     procedure          :: setDims
     procedure          :: setMode
 end type imgfile
-
-! class variables (to avoid excessive allocation)
-integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
-integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
 
 contains
 
@@ -195,44 +190,6 @@ contains
         self%existence      = .false.
     end subroutine close
 
-    subroutine allocate_tmp_read_array( self, dims )
-        class(imgfile), intent(inout) :: self
-        integer,        intent(in)    :: dims(3)
-        integer :: byteperpix
-        logical :: alloc
-        alloc      = .false.
-        byteperpix = self%overall_head%bytesPerPix()
-        select case(byteperpix)
-            case(1)
-                if( allocated(tmp_byte_array) )then
-                    if( any(size(tmp_byte_array) .ne. dims) )then
-                        deallocate(tmp_byte_array)
-                        alloc = .true.
-                    endif
-                else
-                    alloc = .true.
-                endif
-                if( alloc )then
-                    allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
-                endif
-            case(2)
-                if( allocated(tmp_16bit_int_array) )then
-                    if( any(size(tmp_16bit_int_array) .ne. dims) )then
-                        deallocate(tmp_16bit_int_array)
-                        alloc = .true.
-                    endif
-                else
-                    alloc = .true.
-                endif
-                if( alloc )then
-                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
-                endif
-            case DEFAULT
-                ! no allocation required
-                return
-        end select
-    end subroutine allocate_tmp_read_array
-
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
@@ -307,6 +264,8 @@ contains
         character(len=100)          :: io_message
         integer                     :: io_stat,dims(3),tmparrdims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
+        integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
+        integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
         class(ImgHead), pointer     :: ptr=>null()
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         dims       = self%overall_head%getDims()
@@ -318,7 +277,7 @@ contains
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
         elseif( is_mrc .and. byteperpix == 2 .and. self%overall_head%getMode() == 12 )then
             ! fast mode 12: 16-bit real, read as 16-bit integer and convert manually
-            call self%allocate_tmp_read_array( dims )
+            allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                 &*int(product(dims(1:2)),kind=8)*byteperpix
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:,:)
@@ -353,8 +312,9 @@ contains
             rarr = 0. ! initialize to zero
             select case(byteperpix)
                 case(1) ! Byte data
-                    call self%allocate_tmp_read_array( dims )
-                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
+                    allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) &
+                        &tmp_byte_array(:dims(1),:dims(2),:dims(3))
                     ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
                     ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey
                     ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format
@@ -364,11 +324,13 @@ contains
                     if( self%overall_head%pixIsSigned() )then
                         rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
                     else
-                        rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
+                        rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),&
+                            &kind=4),int(255,kind=4)))
                     endif
                 case(2) ! 16-bit data, always read as 16-bit integer
-                    call self%allocate_tmp_read_array( dims )
-                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
+                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) &
+                        &tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
                     if( self%overall_head%getMode() == 12 )then
                         ! mode 12: 16-bit real, not supported by all compilers, read as 16-bit integer and convert manually
                         rarr(1:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
@@ -377,7 +339,7 @@ contains
                             rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
                         else
                             rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
-                                &int(huge(int(1,kind=2)), kind=4)))
+                                &65535_int32))
                         endif
                     endif
                 case(4)
