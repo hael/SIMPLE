@@ -805,7 +805,7 @@ contains
         real(dp),                    intent(out)   :: f, grad(2)
         real(dp),    pointer :: argtransf(:,:)
         complex(dp), pointer :: shmat_8(:,:)
-        complex(dp) :: crefctf, cdiff, cg, cptcl
+        complex(dp) :: crefctf, cg, cptcl
         real(dp)    :: fk, wk, gkx, gky, sqsumk, sqsum, denom
         integer     :: k, ithr, p, rp
         ithr      = omp_get_thread_num() + 1

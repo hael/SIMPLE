@@ -262,7 +262,7 @@ contains
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         logical,                intent(in)    :: is_mrc
         character(len=100)          :: io_message
-        integer                     :: io_stat,dims(3),tmparrdims(3)
+        integer                     :: io_stat, dims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
         integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)

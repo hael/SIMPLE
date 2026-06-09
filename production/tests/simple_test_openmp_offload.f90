@@ -19,8 +19,7 @@ type(cmdline)      :: cline
 type(parameters)   :: p
 integer(dp) :: t
 real(dp)    :: rt_cpu, rt_gpu, rt_cpus
-integer :: num_devices,nteams,nthreads, device_id,ndevices
-integer :: default_device, host_device
+integer :: nteams, nthreads, device_id
 logical :: is_host
 if( command_argument_count() < 2 )then
     write(logfhandle,'(a)') 'ERROR! Usage: simple_test_openmp_offload device=x nthr=y'
@@ -73,7 +72,7 @@ contains
     subroutine persistence_test
         integer,  parameter :: n = 1000000
         real(dp), dimension(:), allocatable :: a, b
-        integer :: i,j,k
+        integer :: i
         call banner('TEST: Memory persistence test')
         allocate(a(n), b(n))
         a = 1.0d0
@@ -108,7 +107,7 @@ contains
         integer,  parameter :: n = 256
         real(sp), dimension(:), allocatable :: b
         type(dummytype) :: dt
-        integer :: i,j,k
+        integer :: i
         call banner('TEST: Memory persistence test of type bound allocatable')
         ! dummy type init
         dt%i = 42
@@ -897,12 +896,10 @@ contains
         real(sp),           parameter :: tol_cmp = 1.0e-4_sp
         real(sp), allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
         complex(sp),          pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
-        type(c_ptr)    :: plan_fftw_r2c, plan_fftw_c2r, p_r, p_c
-        integer(c_int) :: plan_cu_r2c, plan_cu_c2r
+        type(c_ptr)    :: plan_fftw_r2c, p_r, p_c
+        integer(c_int) :: plan_cu_r2c
         integer(c_int) :: ierr
-        integer        :: i,kpi,kpo,hp,h,k,kp
-        real(sp)       :: maxerr
-        logical        :: passed
+        integer        :: i
         call banner('BENCH: FFTW VS CUFFT 2D R2C 50 FRAMES')
         allocate(buf2_cufft(n2padx,ny,nframes), buf2_fftw(n2padx,ny,nframes))
         call c_f_pointer(c_loc(buf2_cufft(1,1,1)), buf2_cufft_c, [n2cx,ny,nframes])

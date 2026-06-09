@@ -479,7 +479,7 @@ contains
         real,              allocatable :: diams(:), shifts(:,:)
         logical,           parameter   :: DEBUG = .true.
         real    :: maxdiam, mskrad_in_pix, moldiam
-        integer :: ldim(3), icls, ncls, nsel, i, nxtiles_loc, nytiles_loc, i_clust_max, i_clust, nsel_cluster, iwrite
+        integer :: ldim(3), icls, ncls, nsel, i_clust_max, i_clust, nsel_cluster, iwrite
         nsel = size(selection)
         if( nsel == 0 ) return
         write(logfhandle,'(A,I6,A)')'>>> USER SELECTED FROM POOL: ', nsel,' clusters'

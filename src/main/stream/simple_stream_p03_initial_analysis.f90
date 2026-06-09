@@ -85,7 +85,7 @@ contains
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
         type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_dir, cycle_projfile
         type(qsys_env)                             :: qsys
-        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank, cline_reextract, cline_abinitio3D, cline_cls_split
+        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_reextract, cline_abinitio3D, cline_cls_split
         type(parameters)                           :: params
         type(sp_project)                           :: spproj, spproj_part
         type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
@@ -94,15 +94,13 @@ contains
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(commander_abinitio2D)                 :: xabinitio2D
         type(commander_abinitio3D_cavgs_reject)    :: xabinitio3D_cavgs_reject
-        type(commander_reproject)                  :: xreproject
         type(commander_cls_split)                  :: xcls_split
         type(commander_make_cavgs)                 :: xmake_cavgs
         type(gui_metadata_micrograph)              :: meta_micrograph
-        type(commander_shape_rank_cavgs)           :: xshape_rank
         type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
         type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
-        integer                                    :: nprojects, i
+        integer                                    :: nprojects
         integer                                    :: box_in_pix      =0      ! box size (px) set by segdiampick_mics; 0 until known
         integer                                    :: box_for_pick    =0      ! box size used for reference picking
         integer                                    :: box_for_extract =0      ! box size used for particle extraction
@@ -483,14 +481,8 @@ contains
                 type(string), intent(in) :: cluster_projfile      ! cycle-local project file to process
                 type(string), intent(in) :: outdir                ! output directory for abinitio3D run products
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
-                integer,     allocatable :: volpops(:), states(:) ! per-volume populations and class-state labels
                 type(sp_project)         :: spproj_cluster        ! temporary project object for 3D result inspection
-                type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
-                type(string)             :: cwd, volpath          ! saved working directory and selected volume path
-                type(oris)               :: voloris               ! volume metadata container from project
-                integer                  :: ldim(3)               ! selected volume box dimensions
-                integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
-                integer :: ivol, bestvol                          ! volume loop index and best-population volume id
+                type(string)             :: cwd          ! saved working directory and selected volume path
                 call simple_getcwd(cwd)
                 call simple_mkdir(outdir)
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning

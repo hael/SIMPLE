@@ -156,7 +156,7 @@ contains
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
         character(kind=CK, len=:),     allocatable :: str_val
-        integer,                       allocatable :: i_arr(:), pickrefs_sel(:,:)
+        integer,                       allocatable :: i_arr(:)
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file

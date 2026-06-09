@@ -75,9 +75,8 @@ contains
         integer,                   allocatable     :: cavg_inds(:)           ! shape-ranked class indices into os_cls2D
         integer,                   allocatable     :: boxes_in_pix(:)        ! box sizes (px) used for picking each micrograph
         real,                      allocatable     :: mskdiams(:)            ! mask diameters (A) used for picking each micrograph
-        integer,                   allocatable     :: maxmins(:,:)           ! max/min diameters (px) of picked particles for each micrograph
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
-        type(string)                               :: cavgsstk, mapfileprefix, projfile, cwd_master
+        type(string)                               :: cavgsstk, projfile, cwd_master
         type(qsys_env)                             :: qsys
         type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank
         type(parameters)                           :: params
@@ -93,12 +92,12 @@ contains
         type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
         type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
-        integer                                    :: nprojects, i
+        integer                                    :: nprojects
         integer                                    :: box_in_pix=0           ! box size (px) set by segdiampick_mics; 0 until known
         integer                                    :: box_for_pick           ! box size used for reference picking
         integer                                    :: box_for_extract        ! box size used for particle extraction
         integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                    :: ncls_stk, iori, i_max, i_start, optics_map_id, i_cluster
+        integer                                    :: iori, i_max, i_start, i_cluster
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
         integer                                    :: ncls                   ! number of classes for abinitio2D
         integer                                    :: n_increase_cycles      ! tracks how many "more mics" requests have been applied
