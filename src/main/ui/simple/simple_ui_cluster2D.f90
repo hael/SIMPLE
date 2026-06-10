@@ -101,12 +101,13 @@ contains
         ! <empty>
         ! parameter input/output
         call abinitio2D_chunks%add_input(UI_PARM, 'nchunks', 'num', 'Number of chunks', &
-            &'Number of particle-balanced subset projects to run with independent abinitio2D jobs', &
-            &'# of chunks', .true., 0.)
+            &'Number of particle-balanced subset projects to run with independent abinitio2D jobs. &
+            &Omit or set to 0 to target about 100 classes per chunk.', &
+            &'# of chunks (0=auto)', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{300}', gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{500}', gui_submenu="cluster 2D", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob){snhc_smpl}',&

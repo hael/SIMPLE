@@ -3,7 +3,8 @@
 ! This module implements a bounded manual-selection workflow:
 !
 ! (1) The input project is split into NCHUNKS stack-bound subsets, balanced by
-!     active particle count as closely as stack boundaries allow.
+!     active particle count as closely as stack boundaries allow. If NCHUNKS is
+!     not provided, it is selected to target about 100 classes per chunk.
 ! (2) Each subset is written as a temporary project and submitted as an
 !     independent abinitio2D job.
 ! (3) No automatic class-average selection, matching, merging, or global
@@ -32,6 +33,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         character(len=*), parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
         integer,          parameter :: WAITTIME  = 5
+        integer,          parameter :: TARGET_NCLS_PER_CHUNK = 100
         integer, allocatable :: nptcls_per_chunk_vec(:), chunk_rec_fromto(:,:)
         type(rec_list)   :: project_list
         type(string)     :: fname
@@ -51,11 +53,11 @@ contains
         if( .not. cline%defined('center_type')    ) call cline%set('center_type',   'seg')
         if( .not. cline%defined('walltime')       ) call cline%set('walltime',      29*60) ! 29 minutes
         if( .not. cline%defined('rank_cavgs')     ) call cline%set('rank_cavgs',    'no')
-        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',300)
+        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',500)
         if( .not. cline%defined('nparts')         ) call cline%set('nparts',        1)
         ! parse
         call params%new(cline)
-        if( params%nchunks < 1 ) THROW_HARD('nchunks must be >= 1; exec_abinitio2D_chunks')
+        if( params%nchunks < 0 ) THROW_HARD('nchunks must be >= 0; use 0 or omit it for automatic selection; exec_abinitio2D_chunks')
         if( params%nptcls_per_cls < 1 ) THROW_HARD('nptcls_per_cls must be >= 1; exec_abinitio2D_chunks')
         ! read strictly required fields
         call spproj_glob%read_non_data_segments(params%projfile)
@@ -177,11 +179,18 @@ contains
             write(logfhandle,'(A,I8)')'>>> # OF ACTIVE STACKS     : ', active_count
             write(logfhandle,'(A,I8)')'>>> # OF ACTIVE PARTICLES  : ', nptcls_tot
             if( nptcls_tot == 0 ) THROW_HARD('No active particles found in project; exec_abinitio2D_chunks')
-            if( params%nchunks > active_count )then
-                write(logfhandle,*) 'requested nchunks / active stacks: ', params%nchunks, active_count
+            if( params%nchunks == 0 )then
+                ntot_chunks = automatic_nchunks(nptcls_tot, active_count)
+                params%nchunks = ntot_chunks
+                write(logfhandle,'(A,I8,A,I4,A)')'>>> # OF AUTO CHUNKS       : ', ntot_chunks, &
+                    &' (TARGET ~', TARGET_NCLS_PER_CHUNK, ' CLASSES/CHUNK)'
+            else
+                ntot_chunks = params%nchunks
+            endif
+            if( ntot_chunks > active_count )then
+                write(logfhandle,*) 'requested nchunks / active stacks: ', ntot_chunks, active_count
                 THROW_HARD('nchunks cannot exceed the number of active stacks for stack-bound subset splitting')
             endif
-            ntot_chunks = params%nchunks
             allocate(active_stks(active_count), active_sel(active_count))
             cnt = 0
             do istk = 1,nstks
@@ -220,7 +229,7 @@ contains
                 assigned = assigned + nptcls_per_chunk_vec(ichunk)
                 iactive  = end_active + 1
             enddo
-            write(logfhandle,'(A,I8)')'>>> # OF REQUESTED CHUNKS  : ', ntot_chunks
+            write(logfhandle,'(A,I8)')'>>> # OF CHUNKS            : ', ntot_chunks
             spproj%compenv = spproj_glob%compenv
             spproj%jobproc = spproj_glob%jobproc
             call spproj%projinfo%new(1, is_ptcl=.false.)
@@ -292,6 +301,15 @@ contains
             call spproj%kill
             deallocate(stk_all_nptcls, stk_nptcls, active_stks, active_sel, chunks_map)
         end subroutine generate_chunk_projects
+
+        integer function automatic_nchunks( nptcls_active, nactive_stks )
+            integer, intent(in) :: nptcls_active, nactive_stks
+            real :: estimated_classes
+            estimated_classes = real(nptcls_active) / real(params%nptcls_per_cls)
+            automatic_nchunks = nint(estimated_classes / real(TARGET_NCLS_PER_CHUNK))
+            automatic_nchunks = max(1, automatic_nchunks)
+            automatic_nchunks = min(nactive_stks, automatic_nchunks)
+        end function automatic_nchunks
 
     end subroutine exec_stream_abinitio2D_chunks
 
