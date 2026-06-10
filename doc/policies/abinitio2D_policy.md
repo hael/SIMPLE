@@ -113,6 +113,10 @@ Stage policy:
 
 - stage 1 uses a random sampled subset but disables fractional carry-over of previous class-average sums
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
+- `no_reg=yes` is an explicit fixed-LP inspection mode: it requires
+  `lp=<Angstroms>`, disables ML/FRC/Gaussian reference regularization,
+  disables class-average centering, and keeps that `lp` limit set for every
+  staged, terminal, and final class-average command
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
 - final fill-in is an assignment-only pass for active particles that still have `updatecnt == 0`
 - if any staged update used `update_frac`, `abinitio2D` runs a terminal

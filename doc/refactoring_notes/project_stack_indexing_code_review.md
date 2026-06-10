@@ -207,7 +207,6 @@ This function is used in important stream paths, including:
 
 - `src/main/stream/simple_microchunked2D.f90:1418`
 - `src/main/stream/simple_microchunked2D.f90:1822`
-- `src/main/stream/simple_stream_cluster2D_subsets_refine.f90:488`
 - `src/main/stream/simple_stream_p05_sieve_cavgs.f90:405`
 - `src/main/commanders/simple/simple_commanders_project_core.f90:389`
 
@@ -238,7 +237,6 @@ Primary targets:
 - `src/main/stream/simple_stream_pool2D_utils.f90:314`
 - `src/main/stream/simple_stream_cluster2D_microchunked.f90:205`
 - `src/main/stream/simple_stream_cluster2D_subsets.f90:289`
-- `src/main/stream/simple_stream_cluster2D_subsets_refine.f90:353`
 
 Typical pattern:
 
