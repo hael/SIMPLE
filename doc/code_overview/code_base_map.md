@@ -560,13 +560,12 @@
       - **math/** — home of mathematical and statistical utility routines
         - `simple_decay_funs.f90` — decay functions for annealing
         - `simple_histogram.f90` — abstract data type for histogram generation
-        - `simple_linalg.f90` — linear algebra stuff
+        - `simple_linalg.f90` — SIMPLE linear algebra helpers with BLAS/LAPACK-backed kernels
         - `simple_math.f90` — various mathematical subroutines and functions
         - `simple_math_ctf.f90` — CTF-related math routines
         - `simple_math_ft.f90` — Fourier transform-related math routines
         - `simple_neighs.f90` — pixel neighborhood definitions and generation
         - `simple_online_var.f90` — online moments estimation
-        - `simple_qr_solve.f90` — SOURCE https://people.sc.fsu.edu/~jburkardt/f_src/qr_solve/qr_solve.html
         - `simple_r8lib.f90` — cholesky decompositions and solvers
         - `simple_ran_tabu.f90` — routines for generation of directed random numbers
         - `simple_rnd.f90` — random number generation module

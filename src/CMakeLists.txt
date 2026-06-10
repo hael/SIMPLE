@@ -95,6 +95,9 @@ set(SIMPLE_ALL_SOURCES
 add_library(${SIMPLELIB} STATIC ${SIMPLE_ALL_SOURCES})
 
 add_dependencies(${SIMPLELIB} simple_args simple_git)
+if(SIMPLE_DEPENDENCY_TARGETS)
+    add_dependencies(${SIMPLELIB} ${SIMPLE_DEPENDENCY_TARGETS})
+endif()
 
 set_target_properties(${SIMPLELIB} PROPERTIES
     VERSION                 ${PROJECT_VERSION}

@@ -7,7 +7,7 @@
 module simple_nanoparticle_utils
 use simple_core_module_api
 use simple_defs_atoms
-use simple_qr_solve
+use simple_linalg, only: qr_solve
 use simple_atoms, only: atoms
 use simple_image, only: image
 implicit none
@@ -439,7 +439,7 @@ contains
 
             ! QR is a function with a simple interface which
             ! solves a linear system A*x = b in the least squares sense.
-            ! It makes uses of the modules simple_r8lib and simple_qr_solve
+            ! It uses LAPACK-backed QR least-squares helpers.
             subroutine qr( a, b, x2 )
                 real(kind=8) :: a(:,:)
                 real(kind=8) :: b(:)

@@ -64,6 +64,8 @@ https://zenodo.org/records/18789533
 -   macOS 10.10+
 -   CMake ≥ 3.5
 -   GNU gcc & gfortran ≥ 14.2
+-   BLAS and LAPACK
+-   ARPACK or ARPACK-NG
 -   FFTW ≥ 3.3 (double + single + threaded builds)
 -   libcurl ≥ 7 
 -   libTIFF ≥ 4 

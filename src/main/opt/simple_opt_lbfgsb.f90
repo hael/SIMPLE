@@ -9,6 +9,37 @@ public :: opt_lbfgsb, PRINT_NEVALS
 private
 #include "simple_local_flags.inc"
 
+interface
+    subroutine daxpy(n, da, dx, incx, dy, incy)
+        import :: dp
+        integer,  intent(in)    :: n, incx, incy
+        real(dp), intent(in)    :: da
+        real(dp), intent(in)    :: dx(*)
+        real(dp), intent(inout) :: dy(*)
+    end subroutine daxpy
+
+    subroutine dcopy(n, dx, incx, dy, incy)
+        import :: dp
+        integer,  intent(in)    :: n, incx, incy
+        real(dp), intent(in)    :: dx(*)
+        real(dp), intent(inout) :: dy(*)
+    end subroutine dcopy
+
+    function ddot(n, dx, incx, dy, incy) result(res)
+        import :: dp
+        integer,  intent(in) :: n, incx, incy
+        real(dp), intent(in) :: dx(*), dy(*)
+        real(dp)             :: res
+    end function ddot
+
+    subroutine dscal(n, da, dx, incx)
+        import :: dp
+        integer,  intent(in)    :: n, incx
+        real(dp), intent(in)    :: da
+        real(dp), intent(inout) :: dx(*)
+    end subroutine dscal
+end interface
+
 logical  :: PRINT_NEVALS = .false.
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
 real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
@@ -827,7 +858,7 @@ contains
             do i = 1, n
                 r(i) = g(i) - r(i)
             end do
-            rr = ddot_lbfgsb(n,r,1,r,1)
+            rr = ddot(n,r,1,r,1)
             if (is_equal(stp , one)) then ! stp.eq.one
                 dr = gd - gdold
                 ddum = -gdold
@@ -1370,7 +1401,7 @@ contains
             if (col .gt. 0) then
                 call bmv(m,sy,wt,col,p,v,info)
                 if (info .ne. 0) return
-                f2 = f2 - ddot_lbfgsb(col2,v,1,p,1)
+                f2 = f2 - ddot(col2,v,1,p,1)
             end if
             dtm = -f1/f2
             tsum = zero
@@ -1452,9 +1483,9 @@ contains
                 ! compute (wbp)Mc, (wbp)Mp, and (wbp)M(wbp)'.
                 call bmv(m,sy,wt,col,wbp,v,info)
                 if (info .ne. 0) return
-                wmc = ddot_lbfgsb(col2,c,1,v,1)
-                wmp = ddot_lbfgsb(col2,p,1,v,1)
-                wmw = ddot_lbfgsb(col2,wbp,1,v,1)
+                wmc = ddot(col2,c,1,v,1)
+                wmp = ddot(col2,p,1,v,1)
+                wmw = ddot(col2,wbp,1,v,1)
                 ! update p = p - dibp*wbp.
                 call daxpy(col2,-dibp,wbp,1,p,1)
                 ! complete updating f1 and f2 while col > 0.
@@ -1880,7 +1911,7 @@ contains
             ! upper triangle of (2,2) block of wn.
             do is = col+1, col2
                 do js = is, col2
-                    wn(is,js) = wn(is,js) + ddot_lbfgsb(col,wn(1,is),1,wn(1,js),1)
+                    wn(is,js) = wn(is,js) + ddot(col,wn(1,is),1,wn(1,js),1)
                 end do
             end do
             ! Cholesky factorization of (2,2) block of wn.
@@ -2159,7 +2190,7 @@ contains
             integer  :: i
             real(dp) :: a1,a2
             if (task(1:5) .eq. 'FG_LN') goto 556
-            dtd = ddot_lbfgsb(n,d,1,d,1)
+            dtd = ddot(n,d,1,d,1)
             dnorm = sqrt(dtd)
             ! Determine the maximum step length.
             stpmx = big
@@ -2201,7 +2232,7 @@ contains
             iback = 0
             csave = 'START'
 556         continue
-            gd = ddot_lbfgsb(n,g,1,d,1)
+            gd = ddot(n,g,1,d,1)
             if (ifun .eq. 0) then
                 gdold=gd
                 if (gd .ge. zero) then
@@ -2286,8 +2317,8 @@ contains
             ! and the last column of SS:
             pointr = head
             do j = 1, col - 1
-                sy(col,j) = ddot_lbfgsb(n,d,1,wy(1,pointr),1)
-                ss(j,col) = ddot_lbfgsb(n,ws(1,pointr),1,d,1)
+                sy(col,j) = ddot(n,d,1,wy(1,pointr),1)
+                ss(j,col) = ddot(n,ws(1,pointr),1,d,1)
                 pointr = mod(pointr,m) + 1
             end do
             if  (is_equal(stp , one)) then
@@ -3159,242 +3190,6 @@ contains
             stp = stpf
         end subroutine dcstep
 
-        function dnrm2(n,x,incx) result(res)
-            integer,  intent(in) :: n,incx
-            real(dp), intent(in) :: x(n)
-            real(dp)             :: res
-            !     **********
-            !
-            !     Function dnrm2
-            !
-            !     Given a vector x of length n, this function calculates the
-            !     Euclidean norm of x with stride incx.
-            !
-            !     The function statement is
-            !
-            !       double precision function dnrm2(n,x,incx)
-            !
-            !     where
-            !
-            !       n is a positive integer input variable.
-            !
-            !       x is an input array of length n.
-            !
-            !       incx is a positive integer variable that specifies the
-            !         stride of the vector.
-            !
-            !     Subprograms called
-            !
-            !       FORTRAN-supplied ... abs, max, sqrt
-            !
-            !     MINPACK-2 Project. February 1991.
-            !     Argonne National Laboratory.
-            !     Brett M. Averick.
-            !
-            !     **********
-            integer  :: i
-            real(dp) :: scale
-            res = 0.0d0
-            scale = 0.0d0
-            do i = 1, n, incx
-                scale = max(scale, abs(x(i)))
-            end do
-            if (is_zero(scale)) return
-            do i = 1, n, incx
-                res = res + (x(i)/scale)**2
-            end do
-            res = scale*sqrt(res)
-        end function dnrm2
-
-        subroutine daxpy(n,da,dx,incx,dy,incy)
-            !
-            !     constant times a vector plus a vector.
-            !     uses unrolled loops for increments equal to one.
-            !     jack dongarra, linpack, 3/11/78.
-            !
-            real(dp), intent(in)  :: dx(*),da
-            real(dp), intent(out) :: dy(*)
-            integer,  intent(in)  :: incx,incy,n
-            integer               :: i,ix,iy,m,mp1
-            !
-            if (n.le.0) return
-            if (is_zero(da) ) return
-            if (incx.eq.1.and.incy.eq.1) go to 20
-            !
-            !        code for unequal increments or equal increments
-            !          not equal to 1
-            !
-            ix = 1
-            iy = 1
-            if(incx.lt.0)ix = (-n+1)*incx + 1
-            if(incy.lt.0)iy = (-n+1)*incy + 1
-            do i = 1,n
-                dy(iy) = dy(iy) + da*dx(ix)
-                ix = ix + incx
-                iy = iy + incy
-            end do
-            return
-            !
-            !        code for both increments equal to 1
-            !        clean-up loop
-            !
-20          m = mod(n,4)
-            if( m .eq. 0 ) go to 40
-            do i = 1,m
-                dy(i) = dy(i) + da*dx(i)
-            end do
-            if( n .lt. 4 ) return
-40          mp1 = m + 1
-            do i = mp1,n,4
-                dy(i) = dy(i) + da*dx(i)
-                dy(i + 1) = dy(i + 1) + da*dx(i + 1)
-                dy(i + 2) = dy(i + 2) + da*dx(i + 2)
-                dy(i + 3) = dy(i + 3) + da*dx(i + 3)
-            end do
-        end subroutine daxpy
-
-        subroutine dcopy(n,dx,incx,dy,incy)
-            !
-            !     copies a vector, x, to a vector, y.
-            !     uses unrolled loops for increments equal to one.
-            !     jack dongarra, linpack, 3/11/78.
-            !
-            real(dp), intent(in)  :: dx(*)
-            real(dp), intent(out) :: dy(*)
-            integer,  intent(in)  :: incx,incy,n
-            integer               :: i,ix,iy,m,mp1
-            !
-            if (n.le.0) return
-            if (incx.eq.1.and.incy.eq.1) go to 20
-            !
-            !        code for unequal increments or equal increments
-            !          not equal to 1
-            !
-            ix = 1
-            iy = 1
-            if(incx.lt.0)ix = (-n+1)*incx + 1
-            if(incy.lt.0)iy = (-n+1)*incy + 1
-            do i = 1,n
-                dy(iy) = dx(ix)
-                ix = ix + incx
-                iy = iy + incy
-            end do
-            return
-            !
-            !        code for both increments equal to 1
-            !
-            !        clean-up loop
-            !
-20          m = mod(n,7)
-            if( m .eq. 0 ) go to 40
-            do i = 1,m
-                dy(i) = dx(i)
-            end do
-            if( n .lt. 7 ) return
-40          mp1 = m + 1
-            do i = mp1,n,7
-                dy(i) = dx(i)
-                dy(i + 1) = dx(i + 1)
-                dy(i + 2) = dx(i + 2)
-                dy(i + 3) = dx(i + 3)
-                dy(i + 4) = dx(i + 4)
-                dy(i + 5) = dx(i + 5)
-                dy(i + 6) = dx(i + 6)
-            end do
-        end subroutine dcopy
-
-        function ddot_lbfgsb(n,dx,incx,dy,incy) result(res)
-            !
-            !     forms the dot product of two vectors.
-            !     uses unrolled loops for increments equal to one.
-            !     jack dongarra, linpack, 3/11/78.
-            !
-            real(dp), intent(in) :: dx(*),dy(*)
-            integer,  intent(in) :: n,incx,incy
-            real(dp)             :: res
-            real(dp)             :: dtemp
-            integer              :: i,ix,iy,m,mp1
-            !
-            res = 0.0d0
-            dtemp = 0.0d0
-            if (n.le.0) return
-            if (incx.eq.1.and.incy.eq.1) go to 20
-            !
-            !        code for unequal increments or equal increments
-            !          not equal to 1
-            !
-            ix = 1
-            iy = 1
-            if(incx.lt.0)ix = (-n+1)*incx + 1
-            if(incy.lt.0)iy = (-n+1)*incy + 1
-            do i = 1,n
-                dtemp = dtemp + dx(ix)*dy(iy)
-                ix = ix + incx
-                iy = iy + incy
-            end do
-            res = dtemp
-            return
-            !
-            !        code for both increments equal to 1
-            !
-            !        clean-up loop
-            !
-20          m = mod(n,5)
-            if( m .eq. 0 ) go to 40
-            do i = 1,m
-                dtemp = dtemp + dx(i)*dy(i)
-            end do
-            if( n .lt. 5 ) go to 60
-40          mp1 = m + 1
-            do i = mp1,n,5
-                dtemp = dtemp + dx(i)*dy(i) + dx(i + 1)*dy(i + 1) + &
-                    &   dx(i + 2)*dy(i + 2) + dx(i + 3)*dy(i + 3) + dx(i + 4)*dy(i + 4)
-            end do
-60          res = dtemp
-        end function ddot_lbfgsb
-
-        subroutine  dscal(n,da,dx,incx)
-            !
-            !     scales a vector by a constant.
-            !     uses unrolled loops for increment equal to one.
-            !     jack dongarra, linpack, 3/11/78.
-            !     modified 3/93 to return if incx .le. 0.
-            !
-            real(dp), intent(in)    :: da
-            real(dp), intent(inout) :: dx(*)
-            integer,  intent(in)    :: n,incx
-            integer                 :: i,m,mp1,nincx
-            !
-            if ( n.le.0 .or. incx.le.0 ) return
-            if (incx.eq.1) go to 20
-            !
-            !        code for increment not equal to 1
-            !
-            nincx = n*incx
-            do i = 1,nincx,incx
-                dx(i) = da*dx(i)
-            end do
-            return
-            !
-            !        code for increment equal to 1
-            !
-            !        clean-up loop
-            !
-20          m = mod(n,5)
-            if( m .eq. 0 ) go to 40
-            do i = 1,m
-                dx(i) = da*dx(i)
-            end do
-            if( n .lt. 5 ) return
-40          mp1 = m + 1
-            do i = mp1,n,5
-                dx(i) = da*dx(i)
-                dx(i + 1) = da*dx(i + 1)
-                dx(i + 2) = da*dx(i + 2)
-                dx(i + 3) = da*dx(i + 3)
-                dx(i + 4) = da*dx(i + 4)
-            end do
-        end subroutine dscal
 
         subroutine dpofa(a,lda,n,info)
             integer  :: lda,n,info
@@ -3452,7 +3247,7 @@ contains
                 jm1 = j - 1
                 if (jm1 .lt. 1) go to 20
                 do k = 1, jm1
-                    t = a(k,j) - ddot_lbfgsb(k-1,a(1,k),1,a(1,j),1)
+                    t = a(k,j) - ddot(k-1,a(1,k),1,a(1,j),1)
                     t = t/a(k,k)
                     a(k,j) = t
                     s = s + t*t
@@ -3576,7 +3371,7 @@ contains
                 if (n .lt. 2)return
                 do jj = 2, n
                     j = n - jj + 1
-                    b(j) = b(j) - ddot_lbfgsb(jj-1,t(j+1,j),1,b(j+1),1)
+                    b(j) = b(j) - ddot(jj-1,t(j+1,j),1,b(j+1),1)
                     b(j) = b(j)/t(j,j)
                 end do
             !
@@ -3586,7 +3381,7 @@ contains
                 b(1) = b(1)/t(1,1)
                 if (n .lt. 2) return
                 do j = 2, n
-                    b(j) = b(j) - ddot_lbfgsb(j-1,t(1,j),1,b(1),1)
+                    b(j) = b(j) - ddot(j-1,t(1,j),1,b(1),1)
                     b(j) = b(j)/t(j,j)
                 end do
             end select
