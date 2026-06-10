@@ -14,7 +14,7 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_NFEATS  = 9
+integer, parameter :: CAVG_QUALITY_NFEATS  = 12
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 
@@ -30,7 +30,7 @@ end type cavg_quality_feature_def
 type :: cavg_quality_model_spec
     character(len=64) :: name                         = ''
     character(len=32) :: context                      = 'chunk'
-    character(len=32) :: feature_policy               = 'microchunk_plus_score_signal'
+    character(len=64) :: feature_policy               = 'microchunk_plus_score_signal'
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
     real              :: boundary_margin              = 0.0
     real              :: min_score_separation         = 0.0

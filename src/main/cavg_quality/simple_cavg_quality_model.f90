@@ -2,7 +2,7 @@
 module simple_cavg_quality_model
 use simple_defs,               only: LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
-use simple_string_utils,       only: str_is_true, csv_field, lowercase, uppercase, &
+use simple_string_utils,       only: str_is_true, lowercase, uppercase, &
     fortran_symbol_from_string, fortran_quote, fortran_logical
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
@@ -92,7 +92,7 @@ character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk_plus_score_s
 real, parameter :: CAVG_QUALITY_POOL_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.826303E-01, 2.379928E-01, 0.000000E+00, 7.328372E-02, &
     6.126274E-02, 1.257789E-01, 1.572098E-01, 2.139509E-02, &
-    1.404466E-01 ]
+    1.404466E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 1.70
 real, parameter :: POOL_V2_MIN_SCORE_SEPARATION = 0.20
 real, parameter :: POOL_V2_OTSU_MIN_OFFSET      = 0.15
@@ -106,7 +106,7 @@ character(len=*), parameter :: CHUNK_V2_FEATURE_POLICY = 'microchunk_plus_score'
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.355581E-01, 1.808395E-01, 4.942806E-02, 1.635655E-01, &
     1.726983E-01, 2.108072E-01, 0.000000E+00, 8.710331E-02, &
-    0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
@@ -118,7 +118,7 @@ character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_score
 real, parameter :: CAVG_QUALITY_CHUNK_LP4_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     5.843422E-02, 5.748914E-02, 1.955181E-02, 1.426152E-01, &
     1.800663E-01, 2.054717E-01, 3.504477E-03, 1.422437E-01, &
-    1.906234E-01 ]
+    1.906234E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      =  0.00
 real, parameter :: CHUNK_LP4_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.35
@@ -127,7 +127,7 @@ real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.50
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: feature_policy          = CHUNK_V2_FEATURE_POLICY
+    character(len=64) :: feature_policy          = CHUNK_V2_FEATURE_POLICY
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
@@ -306,7 +306,7 @@ contains
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
-        write(funit,'(A)') 'model_version=5'
+        write(funit,'(A)') 'model_version=6'
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
@@ -487,44 +487,47 @@ contains
     subroutine read_feature_weights( val, weights )
         character(len=*), intent(in)    :: val
         real,             intent(inout) :: weights(CAVG_QUALITY_NFEATS)
-        character(len=LONGSTRLEN) :: field, errmsg
-        integer :: ios, i, nvals
+        character(len=LONGSTRLEN) :: errmsg
+        integer :: nvals
         real    :: parsed(CAVG_QUALITY_NFEATS)
-        nvals = csv_weight_count(val)
-        if( nvals == CAVG_QUALITY_NFEATS )then
-            parsed = 0.0
-            do i = 1, CAVG_QUALITY_NFEATS
-                field = csv_field(val, i)
-                read(field,*,iostat=ios) parsed(i)
-                if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
-            end do
-            weights = parsed
-            return
-        endif
+        call parse_feature_weight_values(val, parsed, nvals)
         if( nvals == 0 ) THROW_HARD('read_model: feature_weights has no values')
-        if( nvals > 1 )then
-            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected ', CAVG_QUALITY_NFEATS, &
+        if( nvals > CAVG_QUALITY_NFEATS )then
+            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected at most ', CAVG_QUALITY_NFEATS, &
                 ' values, got ', nvals
             THROW_HARD(trim(errmsg))
         endif
-        parsed = weights
-        read(val,*,iostat=ios) parsed
-        if( ios == 0 )then
-            weights = parsed
-            return
-        endif
-        THROW_HARD('read_model: failed to parse feature_weights')
+        weights = parsed
     end subroutine read_feature_weights
 
-    integer function csv_weight_count( val )
-        character(len=*), intent(in) :: val
-        integer :: i
-        csv_weight_count = 0
-        do i = 1, CAVG_QUALITY_NFEATS + 1
-            if( len_trim(csv_field(val, i)) == 0 ) exit
-            csv_weight_count = i
+    subroutine parse_feature_weight_values( val, weights, nvals )
+        character(len=*), intent(in)  :: val
+        real,             intent(out) :: weights(CAVG_QUALITY_NFEATS)
+        integer,          intent(out) :: nvals
+        character(len=LONGSTRLEN) :: work, token
+        integer :: isep, ios
+        weights = 0.0
+        nvals   = 0
+        work    = adjustl(trim(val))
+        do while( len_trim(work) > 0 )
+            isep = scan(work, ', ')
+            if( isep == 1 )then
+                work = adjustl(work(2:))
+                cycle
+            else if( isep > 1 )then
+                token = work(1:isep-1)
+                work  = adjustl(work(isep+1:))
+            else
+                token = work
+                work  = ''
+            endif
+            if( len_trim(token) == 0 ) cycle
+            nvals = nvals + 1
+            if( nvals > CAVG_QUALITY_NFEATS ) cycle
+            read(token,*,iostat=ios) weights(nvals)
+            if( ios /= 0 ) THROW_HARD('read_model: failed to parse feature_weights')
         end do
-    end function csv_weight_count
+    end subroutine parse_feature_weight_values
 
     subroutine parse_model_key_value( line, key, val, ok )
         character(len=*), intent(in)  :: line

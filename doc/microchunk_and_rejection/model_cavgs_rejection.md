@@ -106,7 +106,11 @@ Feature-family policies act as a small structural model-selection layer:
 | `microchunk` | `microchunk` | Tests whether scalar analogues of the stream rejector evidence are sufficient. |
 | `microchunk_plus_score` | `microchunk`, `score` | Adds stored class correlation/FRC-like evidence. This is the current chunk default. |
 | `microchunk_plus_signal` | `microchunk`, `signal` | Adds center/edge and presence evidence without stored score evidence. |
-| `microchunk_plus_score_signal` | `microchunk`, `score`, `signal` | Uses the full current feature bank. |
+| `microchunk_plus_score_signal` | `microchunk`, `score`, `signal` | Uses the pre-texture full feature bank. |
+| `microchunk_plus_texture` | `microchunk`, `texture` | Adds edge-vs-interior texture evidence without stored score or signal evidence. |
+| `microchunk_plus_score_texture` | `microchunk`, `score`, `texture` | Adds stored score and edge-vs-interior texture evidence. |
+| `microchunk_plus_signal_texture` | `microchunk`, `signal`, `texture` | Adds signal and edge-vs-interior texture evidence. |
+| `microchunk_plus_score_signal_texture` | `microchunk`, `score`, `signal`, `texture` | Uses the full current feature bank. |
 
 Learn mode reports feature signal, feature-drop diagnostics, and leave-one-dataset-out feature-policy diagnostics so that the selected model can be interpreted as a compact scientific statement about which evidence family and weight structure generalized on the supplied training set.
 
@@ -134,7 +138,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
-Model files use `model_version=5` and explicit key-value fields:
+Model files use `model_version=6` and explicit key-value fields:
 
 - `name`
 - `context`
@@ -155,7 +159,7 @@ Unknown model-file keys are rejected.
 
 ## Feature Bank
 
-`CAVG_QUALITY_NFEATS` is 9. All feature directions are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
+`CAVG_QUALITY_NFEATS` is 12. All feature directions are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
 
 | Index | Feature | Family | Source | Meaning |
 | --- | --- | --- | --- | --- |
@@ -168,6 +172,9 @@ Unknown model-file keys are rejected.
 | 7 | `log_center_edge_snr` | `signal` | Center/edge variance statistics | Log central variance relative to edge variance. |
 | 8 | `cc_area_frac` | `microchunk` | Foreground connected-component area | Largest foreground component area divided by expected mask area. |
 | 9 | `presence` | `signal` | Center/border statistics | Central signal excess relative to border background noise. |
+| 10 | `log_int_boundary_tex` | `texture` | Medium-frequency texture band plus eroded foreground mask | Log interior texture energy relative to the foreground boundary ring. |
+| 11 | `int_tex_coverage` | `texture` | Medium-frequency texture band plus robust background threshold | Fraction of eroded foreground interior with above-background texture. |
+| 12 | `tex_effective_area` | `texture` | Medium-frequency texture band plus foreground mask | Effective foreground area occupied by above-background texture. |
 
 Feature families are used by learn mode. Every policy starts with the `microchunk` family and then appends optional evidence families:
 
@@ -175,6 +182,10 @@ Feature families are used by learn mode. Every policy starts with the `microchun
 - `microchunk_plus_score`
 - `microchunk_plus_signal`
 - `microchunk_plus_score_signal`
+- `microchunk_plus_texture`
+- `microchunk_plus_score_texture`
+- `microchunk_plus_signal_texture`
+- `microchunk_plus_score_signal_texture`
 
 Features outside the selected policy are encoded by zero weights.
 
@@ -182,10 +193,14 @@ Features outside the selected policy are encoded by zero weights.
 
 - `FOREGROUND_SEG_LP = 30.0`
 - `SIGNAL_METRIC_LP = 10.0`
+- `TEXTURE_METRIC_HP = 30.0`
+- `TEXTURE_METRIC_LP = 10.0`
+- `TEXTURE_BG_MAD_SIGMA = 3.0`
 - `CAVG_RES_HARD_REJECT_A = 40.0`
 - `POP_FRACTION_HARD_REJECT = 0.0035`
 - `LOCVAR_WINDOW = 10`
 - `MASK_HARD_OUTSIDE_PIXELS = 10`
+- `TEXTURE_RING_WIDTH = 2`
 - `LOG_EPS = 1.0e-12`
 - `CLIP_Z = 4.0`
 
@@ -222,6 +237,9 @@ corr_frc_proxy      2.108072E-01
 log_center_edge_snr 0.000000E+00
 cc_area_frac        8.710331E-02
 presence            0.000000E+00
+log_int_boundary_tex 0.000000E+00
+int_tex_coverage    0.000000E+00
+tex_effective_area  0.000000E+00
 ```
 
 ```text
@@ -249,6 +267,9 @@ corr_frc_proxy      2.054717E-01
 log_center_edge_snr 3.504477E-03
 cc_area_frac        1.422437E-01
 presence            1.906234E-01
+log_int_boundary_tex 0.000000E+00
+int_tex_coverage    0.000000E+00
+tex_effective_area  0.000000E+00
 ```
 
 ```text
@@ -276,6 +297,9 @@ corr_frc_proxy      1.257789E-01
 log_center_edge_snr 1.572098E-01
 cc_area_frac        2.139509E-02
 presence            1.404466E-01
+log_int_boundary_tex 0.000000E+00
+int_tex_coverage    0.000000E+00
+tex_effective_area  0.000000E+00
 ```
 
 ```text
@@ -322,7 +346,7 @@ Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `inv
 
 ## Analysis Output
 
-`cavgs_quality_analysis.txt` starts with `# model_cavgs_rejection_analysis_version=4`. It includes:
+`cavgs_quality_analysis.txt` starts with `# model_cavgs_rejection_analysis_version=5`. It includes:
 
 - dataset and model identity;
 - selected/rejected counts;
@@ -369,7 +393,7 @@ Good-only datasets use a recall guard in the learn score. Raw recall is still re
 
 Learn mode searches:
 
-- feature policies: `microchunk`, `microchunk_plus_score`, `microchunk_plus_signal`, `microchunk_plus_score_signal`;
+- feature policies: `microchunk`, `microchunk_plus_score`, `microchunk_plus_signal`, `microchunk_plus_score_signal`, `microchunk_plus_texture`, `microchunk_plus_score_texture`, `microchunk_plus_signal_texture`, `microchunk_plus_score_signal_texture`;
 - feature weights: one AUC-derived candidate for each feature policy;
 - `min_score_separation`: `0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50`;
 - chunk `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`;

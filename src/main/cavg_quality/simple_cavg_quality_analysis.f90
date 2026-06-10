@@ -68,7 +68,7 @@ contains
             suggested_weights = model%weights
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=4'
+        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=5'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
         write(funit,'(A,A)') '# model_context=', trim(model%context)

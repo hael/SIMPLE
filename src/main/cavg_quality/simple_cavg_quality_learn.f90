@@ -21,7 +21,7 @@ public :: evaluate_cavg_quality_result
 
 logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
-integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 4
+integer, parameter :: CAVG_QUALITY_LEARN_N_POLICIES = 8
 integer, parameter :: LEARN_ROLE_SKIP               = 0
 integer, parameter :: LEARN_ROLE_BALANCED           = 1
 integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
@@ -291,7 +291,7 @@ contains
 
     function feature_policy_name( ipolicy ) result( name )
         integer, intent(in) :: ipolicy
-        character(len=32) :: name
+        character(len=64) :: name
         select case(ipolicy)
             case(1)
                 name = 'microchunk'
@@ -301,6 +301,14 @@ contains
                 name = 'microchunk_plus_signal'
             case(4)
                 name = 'microchunk_plus_score_signal'
+            case(5)
+                name = 'microchunk_plus_texture'
+            case(6)
+                name = 'microchunk_plus_score_texture'
+            case(7)
+                name = 'microchunk_plus_signal_texture'
+            case(8)
+                name = 'microchunk_plus_score_signal_texture'
             case default
                 THROW_HARD('feature_policy_name: invalid feature policy')
         end select
@@ -321,6 +329,18 @@ contains
             case(4)
                 call append_feature_family(mask, 'score')
                 call append_feature_family(mask, 'signal')
+            case(5)
+                call append_feature_family(mask, 'texture')
+            case(6)
+                call append_feature_family(mask, 'score')
+                call append_feature_family(mask, 'texture')
+            case(7)
+                call append_feature_family(mask, 'signal')
+                call append_feature_family(mask, 'texture')
+            case(8)
+                call append_feature_family(mask, 'score')
+                call append_feature_family(mask, 'signal')
+                call append_feature_family(mask, 'texture')
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select
@@ -419,6 +439,7 @@ contains
             field = csv_field(line, manual_state_col)
             dset%manual_states(irow) = str2int(trim(field))
             do ifeat = 1, CAVG_QUALITY_NFEATS
+                if( feat_col(ifeat) == 0 ) cycle
                 field = csv_field(line, feat_col(ifeat))
                 if( len_trim(field) > 0 ) dset%features(irow, ifeat) = str2real(trim(field))
             end do
@@ -491,6 +512,7 @@ contains
             THROW_HARD('read_quality_training_dataset: missing manual_state column in '//trim(fname))
         do ifeat = 1, CAVG_QUALITY_NFEATS
             if( feat_col(ifeat) == 0 )then
+                if( trim(cavg_quality_feature_family(ifeat)) == 'texture' ) cycle
                 errmsg = 'read_quality_training_dataset: missing z_'//trim(cavg_quality_feature_name(ifeat))//&
                     ' column in '//trim(fname)
                 THROW_HARD(trim(errmsg))
