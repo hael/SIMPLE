@@ -118,15 +118,18 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=learn` reads a file table of `cavgs_quality_analysis.txt` files and searches for a model specification. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
+`quality_mode=evaluate` reads a file table of `cavgs_quality_analysis.txt` files and applies the selected fixed model without refitting. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
+
 `quality_mode=promote` reads a model file from `infile=` and writes a Fortran promotion snippet controlled by `fname=`.
 
-`apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
+`apply` and `analyze` require `projfile` and `mskdiam`. `learn` and `evaluate` require `filetab`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
 ## Model Selection
 
 `quality_model` selects a built-in preset. The default is `chunk_default_v2`. The available built-ins are:
 
 - `chunk_default_v2`: default chunk/stream-style model.
+- `chunk_lp4`: learned chunk model trained from lp4-style class-average selection references, with CLC held out for testing.
 - `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
@@ -230,6 +233,33 @@ cluster_rescue_margin   0.20
 min_accept_frac         0.00
 use_lowsep_otsu         true
 use_otsu_window         true
+use_cluster_rescue      false
+enforce_min_accept_frac false
+```
+
+`chunk_lp4` has context `chunk`, feature policy `microchunk_plus_score_signal`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the lp4-style chunk references with the CLC dataset excluded from fitting.
+
+```text
+log_pop             5.843422E-02
+neg_log_res         5.748914E-02
+centered            1.955181E-02
+log_locvar_fg       1.426152E-01
+log_locvar_bg       1.800663E-01
+corr_frc_proxy      2.054717E-01
+log_center_edge_snr 3.504477E-03
+cc_area_frac        1.422437E-01
+presence            1.906234E-01
+```
+
+```text
+boundary_margin         0.00
+min_score_separation    0.15
+otsu_min_offset         0.35
+otsu_max_offset         0.50
+cluster_rescue_margin   0.20
+min_accept_frac         0.00
+use_lowsep_otsu         true
+use_otsu_window         false
 use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
@@ -341,19 +371,21 @@ Learn mode searches:
 
 - feature policies: `microchunk`, `microchunk_plus_score`, `microchunk_plus_signal`, `microchunk_plus_score_signal`;
 - feature weights: one AUC-derived candidate for each feature policy;
-- `min_score_separation`: `0.05, 0.10, 0.15, 0.20, 0.30`;
-- chunk `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50`;
+- `min_score_separation`: `0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50`;
+- chunk `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`;
 - pool `boundary_margin`: `-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80`,
   `0.90, 1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.70, 1.80, 1.90, 2.00, 2.25, 2.50, 2.75, 3.00, 3.50, 4.00`;
 - `use_lowsep_otsu`: `false, true`;
 - `use_otsu_window`: `false, true`;
 - `otsu_min_offset`: `0.05, 0.10, 0.15, 0.25, 0.35` when the Otsu window is enabled;
-- `otsu_max_offset`: `0.40, 0.50, 0.65` when the Otsu window is enabled;
+- `otsu_max_offset`: `0.25, 0.30, 0.35, 0.40, 0.50, 0.65` when the Otsu window is enabled;
 - `min_accept_frac`: `0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90, 0.925, 0.95, 0.975, 1.00` for pool-context training.
 
 Each candidate is evaluated by running the full classifier on every scoreable training dataset and averaging the role-specific learn score. If multiple candidates tie, the selected candidate is the one closest to the starting model in the searched threshold controls.
 
 The learn report includes the search grid, `macro_learn_score`, suggested weights, selected model, dataset-role diagnostics, Otsu ablation diagnostics, feature-signal diagnostics, feature-drop diagnostics, leave-one-dataset-out feature-policy diagnostics, top candidates, best ties, and per-dataset confusion metrics.
+
+`quality_mode=evaluate` uses the same analysis table reader and trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out analysis tables. The evaluate report includes the fixed model settings, `macro_evaluate_score`, dataset-role diagnostics, Otsu ablation diagnostics, and per-dataset confusion metrics.
 
 ## Promotion
 
@@ -388,6 +420,17 @@ simple_exec prg=model_cavgs_rejection \
   quality_mode=learn \
   filetab=analysis_files.txt \
   fname=cavgs_quality_model_chunk_learned.txt \
+  mkdir=yes
+```
+
+Evaluate a fixed built-in model on held-out analysis outputs:
+
+```bash
+simple_exec prg=model_cavgs_rejection \
+  quality_mode=evaluate \
+  quality_model=chunk_lp4 \
+  filetab=holdout_analysis_files.txt \
+  fname=cavgs_quality_evaluate_report.txt \
   mkdir=yes
 ```
 

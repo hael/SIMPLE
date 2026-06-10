@@ -16,6 +16,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: learn_cavg_quality_model
+public :: evaluate_cavg_quality_model
 
 logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
@@ -26,13 +27,14 @@ integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
 integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY   = 3
 real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
 real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
-real,    parameter :: LEARN_MINSEPS(5)              = [0.05, 0.10, 0.15, 0.20, 0.30]
+real,    parameter :: LEARN_MINSEPS(7)              = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
 ! Positive margins deliberately over-select relative to the learned boundary.
 ! Chunk and pool contexts use separate grids so pool learning can test stronger
 ! recall protection without making stream-chunk models permissive by default.
-real,    parameter :: LEARN_CHUNK_MARGINS(16)        = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
+real,    parameter :: LEARN_CHUNK_MARGINS(19)        = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                                        -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, &
-                                                        0.25, 0.30, 0.40, 0.50]
+                                                        0.25, 0.30, 0.40, 0.50, 0.60, 0.70, &
+                                                        0.80]
 real,    parameter :: LEARN_POOL_MARGINS(37)         = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
                                                        -0.05, 0.0, 0.05, 0.10, 0.15, 0.20, &
                                                         0.25, 0.30, 0.40, 0.50, 0.60, 0.70, &
@@ -41,7 +43,7 @@ real,    parameter :: LEARN_POOL_MARGINS(37)         = [-0.60, -0.50, -0.40, -0.
                                                         2.00, 2.25, 2.50, 2.75, 3.00, 3.50, &
                                                         4.00]
 real,    parameter :: LEARN_OTSU_MIN_OFFSETS(5)     = [0.05, 0.10, 0.15, 0.25, 0.35]
-real,    parameter :: LEARN_OTSU_MAX_OFFSETS(3)     = [0.40, 0.50, 0.65]
+real,    parameter :: LEARN_OTSU_MAX_OFFSETS(6)     = [0.25, 0.30, 0.35, 0.40, 0.50, 0.65]
 real,    parameter :: LEARN_POOL_FRACS(11)          = [0.50, 0.60, 0.65, 0.70, 0.80, 0.85, &
                                                        0.90, 0.925, 0.95, 0.975, 1.00]
 
@@ -59,14 +61,10 @@ contains
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
         real :: best_score
-        integer :: i, ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
+        integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
         integer :: n_grid, n_top, n_best_ties
         logical :: is_pool_context
-        if( size(analysis_files) == 0 ) THROW_HARD('learn_cavg_quality_model: empty analysis file table')
-        allocate(dsets(size(analysis_files)))
-        do i = 1, size(analysis_files)
-            call read_quality_training_dataset(analysis_files(i)%to_char(), dsets(i))
-        end do
+        call load_quality_training_datasets(analysis_files, dsets)
         base_spec = learned_model%get_spec()
         is_pool_context = model_is_pool_context(learned_model)
         call calc_suggested_training_weights(dsets, suggested_weights)
@@ -137,6 +135,34 @@ contains
         deallocate(best_tie_specs)
         deallocate(dsets)
     end subroutine learn_cavg_quality_model
+
+    subroutine evaluate_cavg_quality_model( analysis_files, model, report_fname )
+        class(string),            intent(in) :: analysis_files(:)
+        type(cavg_quality_model), intent(in) :: model
+        character(len=*),         intent(in) :: report_fname
+        type(cavg_quality_training_dataset), allocatable :: dsets(:)
+        real :: eval_score
+        call load_quality_training_datasets(analysis_files, dsets)
+        eval_score = macro_balacc_for_model(dsets, model)
+        call write_cavg_quality_evaluate_report(report_fname, dsets, model, eval_score)
+        call kill_training_datasets(dsets)
+        deallocate(dsets)
+    end subroutine evaluate_cavg_quality_model
+
+    subroutine load_quality_training_datasets( analysis_files, dsets )
+        class(string), intent(in) :: analysis_files(:)
+        type(cavg_quality_training_dataset), allocatable, intent(inout) :: dsets(:)
+        integer :: i
+        if( size(analysis_files) == 0 ) THROW_HARD('load_quality_training_datasets: empty analysis file table')
+        if( allocated(dsets) )then
+            call kill_training_datasets(dsets)
+            deallocate(dsets)
+        endif
+        allocate(dsets(size(analysis_files)))
+        do i = 1, size(analysis_files)
+            call read_quality_training_dataset(analysis_files(i)%to_char(), dsets(i))
+        end do
+    end subroutine load_quality_training_datasets
 
     logical function model_is_pool_context( model )
         type(cavg_quality_model), intent(in) :: model
@@ -741,8 +767,7 @@ contains
         type(cavg_quality_model_spec),       intent(in) :: top_specs(:), best_tie_specs(:)
         real,                                intent(in) :: top_scores(:)
         type(cavg_quality_learn_diagnostics) :: diag
-        integer :: funit, ids, i, tp, fp, tn, fn, role
-        real :: precision, recall, specificity, f1, balacc, accuracy
+        integer :: funit, i
         call collect_learn_diagnostics(dsets, learned_model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection learn report'
@@ -792,24 +817,85 @@ contains
         do i = 1, n_best_ties
             call write_candidate_row(funit, 'best_tie', i, best_score, best_tie_specs(i))
         end do
+        call write_dataset_metric_table(funit, dsets, learned_model, 'learn_score')
+        close(funit)
+        write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
+    end subroutine write_cavg_quality_learn_report
+
+    subroutine write_cavg_quality_evaluate_report( fname, dsets, model, eval_score )
+        character(len=*),                    intent(in) :: fname
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        type(cavg_quality_model),            intent(in) :: model
+        real,                                intent(in) :: eval_score
+        type(cavg_quality_learn_diagnostics) :: diag
+        integer :: funit
+        call collect_learn_diagnostics(dsets, model, diag)
+        open(newunit=funit, file=trim(fname), status='replace', action='write')
+        write(funit,'(A)') '# model_cavgs_rejection evaluate report'
+        write(funit,'(A,A)') 'context=', trim(model%context)
+        write(funit,'(A,A)') 'model=', trim(model%name)
+        write(funit,'(A,F10.5)') 'macro_evaluate_score=', eval_score
+        write(funit,'(A,I0)') 'n_datasets=', size(dsets)
+        write(funit,'(A)') 'note=fixed_model_no_refit'
+        write(funit,'(A)') 'note=analysis_table_rows_reclassified_with_selected_model'
+        write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_scoring'
+        write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
+        write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
+        call write_fixed_model_summary(funit, model)
         write(funit,'(A)') ''
-        write(funit,'(A)') 'dataset,n_classes,n_trainable,trainable_manual_good,trainable_manual_bad,learn_role,'//&
-            'tp,fp,tn,fn,precision,recall,specificity,f1,learn_score,accuracy,hard_rejected_manual_good'
+        call write_evaluate_diagnostics(funit, model, diag)
+        call write_otsu_ablation_diagnostics(funit, dsets, model)
+        call write_dataset_metric_table(funit, dsets, model, 'evaluate_score')
+        close(funit)
+        write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
+    end subroutine write_cavg_quality_evaluate_report
+
+    subroutine write_fixed_model_summary( funit, model )
+        integer,                  intent(in) :: funit
+        type(cavg_quality_model), intent(in) :: model
+        integer :: i
+        write(funit,'(A,A)') 'model_feature_policy=', trim(model%feature_policy)
+        write(funit,'(A)', advance='no') 'model_feature_weights='
+        do i = 1, CAVG_QUALITY_NFEATS
+            if( i > 1 ) write(funit,'(A)', advance='no') ','
+            write(funit,'(ES14.6)', advance='no') model%weights(i)
+        end do
+        write(funit,*)
+        write(funit,'(A,ES14.6)') 'model_boundary_margin=', model%boundary_margin
+        write(funit,'(A,ES14.6)') 'model_min_score_separation=', model%min_score_separation
+        write(funit,'(A,ES14.6)') 'model_otsu_min_offset=', model%otsu_min_offset
+        write(funit,'(A,ES14.6)') 'model_otsu_max_offset=', model%otsu_max_offset
+        write(funit,'(A,ES14.6)') 'model_cluster_rescue_margin=', model%cluster_rescue_margin
+        write(funit,'(A,ES14.6)') 'model_min_accept_frac=', model%min_accept_frac
+        write(funit,'(A,L1)') 'model_use_lowsep_otsu=', model%use_lowsep_otsu
+        write(funit,'(A,L1)') 'model_use_otsu_window=', model%use_otsu_window
+        write(funit,'(A,L1)') 'model_use_cluster_rescue=', model%use_cluster_rescue
+        write(funit,'(A,L1)') 'model_enforce_min_accept_frac=', model%enforce_min_accept_frac
+    end subroutine write_fixed_model_summary
+
+    subroutine write_dataset_metric_table( funit, dsets, model, score_name )
+        integer,                             intent(in) :: funit
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        type(cavg_quality_model),            intent(in) :: model
+        character(len=*),                    intent(in) :: score_name
+        integer :: ids, tp, fp, tn, fn, role
+        real :: precision, recall, specificity, f1, role_score, accuracy
+        write(funit,'(A)') ''
+        write(funit,'(A,A,A)') 'dataset,n_classes,n_trainable,trainable_manual_good,trainable_manual_bad,learn_role,', &
+            'tp,fp,tn,fn,precision,recall,specificity,f1,', trim(score_name)//',accuracy,hard_rejected_manual_good'
         do ids = 1, size(dsets)
             role = dataset_learn_role(dsets(ids))
-            call classify_training_dataset(dsets(ids), learned_model, tp, fp, tn, fn)
-            call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
-            balacc = learn_balacc_from_confusion(tp, fp, tn, fn, role)
+            call classify_training_dataset(dsets(ids), model, tp, fp, tn, fn)
+            call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, role_score, accuracy)
+            role_score = learn_balacc_from_confusion(tp, fp, tn, fn, role)
             write(funit,'(A,A,I0,A,I0,A,I0,A,I0,A,A,A,I0,A,I0,A,I0,A,I0,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,I0)') &
                 trim(dsets(ids)%dataset_id), ',', dsets(ids)%ncls, ',', count_trainable_classes(dsets(ids)), ',', &
                 count_trainable_manual_good(dsets(ids)), ',', count_trainable_manual_bad(dsets(ids)), ',', &
                 trim(dataset_learn_role_name(role)), ',', &
                 tp, ',', fp, ',', tn, ',', fn, ',', precision, ',', recall, ',', specificity, ',', f1, ',', &
-                balacc, ',', accuracy, ',', count_hard_rejected_manual_good(dsets(ids))
+                role_score, ',', accuracy, ',', count_hard_rejected_manual_good(dsets(ids))
         end do
-        close(funit)
-        write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
-    end subroutine write_cavg_quality_learn_report
+    end subroutine write_dataset_metric_table
 
     subroutine write_otsu_ablation_diagnostics( funit, dsets, learned_model )
         integer,                             intent(in) :: funit
@@ -1342,6 +1428,43 @@ contains
         call write_policy_parameter_diagnostics(funit, learned_model, diag)
     end subroutine write_learn_search_diagnostics
 
+    subroutine write_evaluate_diagnostics( funit, model, diag )
+        integer,                              intent(in) :: funit
+        type(cavg_quality_model),             intent(in) :: model
+        type(cavg_quality_learn_diagnostics), intent(in) :: diag
+        character(len=LONGSTRLEN) :: detail
+        write(funit,'(A)') 'evaluate_diagnostic_header=level,parameter,status,detail'
+        write(detail,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'scored=', diag%n_scored_datasets, &
+            ';weight_contrast=', diag%n_weight_datasets, ';recall_only=', diag%n_recall_only, &
+            ';specificity_only=', diag%n_specificity_only, ';skipped=', diag%n_skipped
+        call write_evaluate_diagnostic(funit, 'note', 'dataset_roles', 'automatic', trim(detail))
+        write(detail,'(A,F6.3,A,F6.3)') 'floor=', LEARN_RECALL_ONLY_FLOOR, ';penalty=', &
+            LEARN_RECALL_ONLY_PENALTY
+        call write_evaluate_diagnostic(funit, 'note', 'trainable_good_only_score', 'guarded_recall', trim(detail))
+        call write_evaluate_diagnostic(funit, 'note', 'feature_policy', trim(model%feature_policy), 'fixed_model')
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_lowsep_otsu, ';active_datasets=', &
+            diag%n_lowsep, ';fp=', diag%lowsep_fp, ';fn=', diag%lowsep_fn
+        call write_evaluate_diagnostic(funit, policy_level(diag%n_lowsep, diag%lowsep_fp, diag%lowsep_fn), &
+            'use_lowsep_otsu_effect', 'fixed_model', trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_otsu_window, ';otsu_like_datasets=', &
+            diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
+        call write_evaluate_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
+            'use_otsu_window_effect', 'fixed_model', trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_cluster_rescue, ';rescue_like_datasets=', &
+            diag%n_rescue_like, ';fp=', diag%rescue_like_fp, ';fn=', diag%rescue_like_fn
+        call write_evaluate_diagnostic(funit, rescue_policy_level(model, diag), 'use_cluster_rescue', 'fixed_model', &
+            trim(detail))
+        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%enforce_min_accept_frac, ';min_accept_datasets=', &
+            diag%n_min_accept_like, ';fp=', diag%min_accept_like_fp, ';fn=', diag%min_accept_like_fn
+        call write_evaluate_diagnostic(funit, min_accept_policy_level(model, diag), 'enforce_min_accept_frac', &
+            'fixed_model', trim(detail))
+        write(detail,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'single_cluster_datasets=', diag%n_single_cluster, &
+            ';fp=', diag%single_cluster_fp, ';fn=', diag%single_cluster_fn, ';total_fp=', diag%total_fp, &
+            ';total_fn=', diag%total_fn
+        call write_evaluate_diagnostic(funit, policy_level(diag%n_single_cluster, diag%single_cluster_fp, &
+            diag%single_cluster_fn), 'accept_all_fallback', 'fixed_model', trim(detail))
+    end subroutine write_evaluate_diagnostics
+
     subroutine write_minsep_diagnostic( funit, val, best_tie_specs, n_best_ties )
         integer,                       intent(in) :: funit, n_best_ties
         real,                          intent(in) :: val
@@ -1492,6 +1615,12 @@ contains
         character(len=*), intent(in) :: level, param, status, detail
         write(funit,'(8A)') 'search_diagnostic,', trim(level), ',', trim(param), ',', trim(status), ',', trim(detail)
     end subroutine write_search_diagnostic
+
+    subroutine write_evaluate_diagnostic( funit, level, param, status, detail )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: level, param, status, detail
+        write(funit,'(8A)') 'evaluate_diagnostic,', trim(level), ',', trim(param), ',', trim(status), ',', trim(detail)
+    end subroutine write_evaluate_diagnostic
 
     subroutine write_real_list( funit, key, vals )
         integer,          intent(in) :: funit

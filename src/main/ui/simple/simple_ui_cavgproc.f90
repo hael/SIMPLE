@@ -75,7 +75,7 @@ contains
         &'Model-driven rejection of class averages',&                            ! descr_short
         &'is a program for automatic class-average rejection using normalized quality feature vectors',& ! descr_long
         &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project except quality_mode=learn|promote
+        &.true.)                                                                 ! requires sp_project except quality_mode=learn|evaluate|promote
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -85,16 +85,16 @@ contains
         call model_cavgs_rejection%add_input(UI_PARM, prune)
         ! alternative inputs
         call model_cavgs_rejection%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &
-        &'File table of cavgs_quality_analysis.txt files for quality_mode=learn', &
-        &'e.g. cavgs_quality_analyses.txt', .false., '', gui_active_flags='quality_mode=learn')
+        &'File table of cavgs_quality_analysis.txt files for quality_mode=learn|evaluate', &
+        &'e.g. cavgs_quality_analyses.txt', .false., '', gui_active_flags='quality_mode=learn|evaluate')
         call model_cavgs_rejection%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
-        &'Optional learned quality model file for apply/analyze or promotion-code generation', &
+        &'Optional learned quality model file for apply/analyze/evaluate or promotion-code generation', &
         &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', &
-        &gui_active_flags='quality_mode=apply|analyze|promote')
+        &gui_active_flags='quality_mode=apply|analyze|evaluate|promote')
         call model_cavgs_rejection%add_input(UI_ALT, 'fname', 'file', 'Quality model output', &
-        &'Output quality model file or promotion-code snippet for quality_mode=learn|promote', &
-        &'e.g. cavgs_quality_model_chunk_learned.txt or cavgs_quality_model_builtin_code.txt', .false., '', &
-        &gui_active_flags='quality_mode=learn|promote')
+        &'Output quality model file, evaluation report, or promotion-code snippet for quality_mode=learn|evaluate|promote', &
+        &'e.g. cavgs_quality_model_chunk_learned.txt, cavgs_quality_evaluate_report.txt, or cavgs_quality_model_builtin_code.txt', &
+        &.false., '', gui_active_flags='quality_mode=learn|evaluate|promote')
         ! search controls
         ! <empty>
         ! filter controls
@@ -102,7 +102,7 @@ contains
         ! mask controls
         call model_cavgs_rejection%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze')
         ! computer controls
-        call model_cavgs_rejection%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn')
+        call model_cavgs_rejection%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn|evaluate')
         ! add to ui_hash
         call add_ui_program('model_cavgs_rejection', model_cavgs_rejection, prgtab)
     end subroutine new_model_cavgs_rejection

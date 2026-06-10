@@ -630,12 +630,12 @@ subroutine set_ui_params
 
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
                                    'Whether to apply selection, analyze it, learn, or emit promotion code'//&
-                                   '(apply|analyze|learn|promote){apply}', &
-                                   'Class-average quality mode(apply|analyze|learn|promote){apply}', .false., 'apply')
+                                   '(apply|analyze|learn|evaluate|promote){apply}', &
+                                   'Class-average quality mode(apply|analyze|learn|evaluate|promote){apply}', .false., 'apply')
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
-                                   'Built-in quality model preset(chunk_default_v2|pool_default_v2){chunk_default_v2}', &
-                                   'Quality model preset(chunk_default_v2|pool_default_v2){chunk_default_v2}', &
+                                   'Built-in quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}', &
+                                   'Quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}', &
                                    .false., 'chunk_default_v2')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &

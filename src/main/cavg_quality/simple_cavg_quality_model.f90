@@ -77,8 +77,10 @@ end type cavg_quality_cached_decision
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_LP4     = 'chunk_lp4'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v2'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
+    CAVG_QUALITY_MODEL_CHUNK_LP4//'|'//&
     CAVG_QUALITY_MODEL_POOL_DEFAULT
 
 real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
@@ -109,6 +111,18 @@ real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
+
+! Chunk model learned from lp4-style class-average selection references,
+! with CLC held out for testing.
+character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_score_signal'
+real, parameter :: CAVG_QUALITY_CHUNK_LP4_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+    5.843422E-02, 5.748914E-02, 1.955181E-02, 1.426152E-01, &
+    1.800663E-01, 2.054717E-01, 3.504477E-03, 1.422437E-01, &
+    1.906234E-01 ]
+real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      =  0.00
+real, parameter :: CHUNK_LP4_MIN_SCORE_SEPARATION =  0.15
+real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.35
+real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.50
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -155,6 +169,8 @@ contains
         select case(trim(preset_name))
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 spec = chunk_default_v2_model_spec()
+            case(CAVG_QUALITY_MODEL_CHUNK_LP4)
+                spec = chunk_lp4_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
             case default
@@ -226,6 +242,24 @@ contains
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk_default_v2_model_spec
+
+    function chunk_lp4_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_CHUNK_LP4
+        spec%context                 = 'chunk'
+        spec%feature_policy          = CHUNK_LP4_FEATURE_POLICY
+        spec%weights                 = CAVG_QUALITY_CHUNK_LP4_WEIGHTS
+        spec%boundary_margin         = CHUNK_LP4_BOUNDARY_MARGIN
+        spec%min_score_separation    = CHUNK_LP4_MIN_SCORE_SEPARATION
+        spec%otsu_min_offset         = CHUNK_LP4_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = CHUNK_LP4_OTSU_MAX_OFFSET
+        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
+        spec%min_accept_frac         = 0.0
+        spec%use_lowsep_otsu         = .true.
+        spec%use_otsu_window         = .false.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function chunk_lp4_model_spec
 
     function pool_default_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec

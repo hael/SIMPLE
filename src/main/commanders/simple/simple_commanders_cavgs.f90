@@ -3,7 +3,7 @@ module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table
-use simple_cavg_quality_learn,    only: learn_cavg_quality_model
+use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
 use simple_cavg_quality_types,    only: cavg_quality_result
@@ -321,7 +321,8 @@ contains
         integer, parameter        :: QUALITY_MODE_APPLY   = 1
         integer, parameter        :: QUALITY_MODE_ANALYZE = 2
         integer, parameter        :: QUALITY_MODE_LEARN   = 3
-        integer, parameter        :: QUALITY_MODE_PROMOTE = 4
+        integer, parameter        :: QUALITY_MODE_EVALUATE = 4
+        integer, parameter        :: QUALITY_MODE_PROMOTE = 5
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
@@ -336,10 +337,12 @@ contains
                 quality_mode = QUALITY_MODE_ANALYZE
             case('learn')
                 quality_mode = QUALITY_MODE_LEARN
+            case('evaluate')
+                quality_mode = QUALITY_MODE_EVALUATE
             case('promote')
                 quality_mode = QUALITY_MODE_PROMOTE
             case default
-                THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn or promote')
+                THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
         if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
             call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
@@ -370,6 +373,18 @@ contains
             write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
             if( allocated(analysis_files) ) deallocate(analysis_files)
             call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
+                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+            return
+        endif
+        if( quality_mode == QUALITY_MODE_EVALUATE )then
+            if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=evaluate requires filetab')
+            call read_filetable(params%filetab, analysis_files)
+            report_fname = 'cavgs_quality_evaluate_report.txt'
+            if( cline%defined('fname') ) report_fname = params%fname%to_char()
+            call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
+            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
+            if( allocated(analysis_files) ) deallocate(analysis_files)
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
                 verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
             return
         endif
