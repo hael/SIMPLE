@@ -177,16 +177,11 @@ contains
                             cfg%refs = NIL
                         endif
                         cfg%ml_reg   = 'no'
-                        if( params%l_no_reg )then
-                            cfg%gauref   = 'no'
-                            cfg%gaufreq  = 0.
+                        cfg%gauref   = 'yes'
+                        if( l_gaufreq_input )then
+                            cfg%gaufreq = params%gaufreq
                         else
-                            cfg%gauref   = 'yes'
-                            if( l_gaufreq_input )then
-                                cfg%gaufreq = params%gaufreq
-                            else
-                                cfg%gaufreq = stage_parms(istage)%lp
-                            endif
+                            cfg%gaufreq = stage_parms(istage)%lp
                         endif
                     case(2,3,4)
                         call set_cluster2D_stage_regular_refs( cfg, params, stage_parms, istage )
@@ -259,11 +254,12 @@ contains
         type(cluster2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage
-        if( istage < STOCH_SAMPL_STAGE )then
+        if( trim(params%refine) == 'prob' )then
+            cfg%refine = 'prob'
+        else if( istage < STOCH_SAMPL_STAGE )then
             cfg%refine = 'snhc_smpl'
         else
-            cfg%refine = 'prob' ! 4 now
-            ! cfg%refine = 'snhc_smpl' 
+            cfg%refine = 'prob'
         endif
     end subroutine set_cluster2D_stage_search_policy
 

@@ -62,8 +62,6 @@ contains
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'snhc_smpl')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
-        if( .not. cline%defined('no_reg')        ) call cline%set('no_reg',        'no')
-        call apply_no_reg_mode
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
@@ -143,27 +141,6 @@ contains
         call simple_end('**** SIMPLE_ABINITIO2D NORMAL STOP ****')
         
       contains
-
-        subroutine apply_no_reg_mode
-            if( .not. no_reg_requested() ) return
-            if( .not. cline%defined('lp') )then
-                THROW_HARD('abinitio2D no_reg=yes requires a fixed lp=<Angstroms> value')
-            endif
-            call cline%set('center',    'no')
-            call cline%set('gauref',    'no')
-            call cline%set('filt_mode', 'none')
-            call cline%set('ml_reg',    'no')
-            call cline%delete('snr_noise_reg')
-        end subroutine apply_no_reg_mode
-
-        logical function no_reg_requested() result(l_requested)
-            type(string) :: no_reg_arg
-            l_requested = .false.
-            if( .not. cline%defined('no_reg') ) return
-            no_reg_arg  = cline%get_carg('no_reg')
-            l_requested = trim(no_reg_arg%to_char()).eq.'yes'
-            call no_reg_arg%kill
-        end function no_reg_requested
 
         ! Downscaling/cropping dimensions used throughout
         subroutine set_dims
@@ -391,12 +368,8 @@ contains
             call cline_make_cavgs%set('prg',        'make_cavgs')
             call cline_make_cavgs%set('refs',       finalcavgs)
             call cline_make_cavgs%set('which_iter', iter)
-            ! Final cavgs follow the workflow regularization mode.
-            if( params%l_no_reg )then
-                call cline_make_cavgs%set('ml_reg', 'no')
-            else
-                call cline_make_cavgs%set('ml_reg', 'yes')
-            endif
+            ! Cavgs final output is regularized
+            call cline_make_cavgs%set('ml_reg', 'yes')
             if( l_shmem )then
                 call xmake_cavgs%execute(cline_make_cavgs)
             else

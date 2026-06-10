@@ -676,11 +676,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported automsk mode: '//trim(self%automsk))
         end select
-        select case(trim(self%no_reg))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported no_reg mode: '//trim(self%no_reg))
-        end select
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
@@ -738,28 +733,8 @@ contains
             self%eps_bounds(1) = self%eps_bounds(2) / 2.
             self%eps           = self%eps_bounds(1)
         endif
-        self%l_no_reg = trim(self%no_reg).eq.'yes'
-        if( self%l_no_reg )then
-            if( .not. cline%defined('lp') ) THROW_HARD('no_reg=yes requires a fixed lp=<Angstroms> value')
-            self%center            = 'no'
-            self%gauref            = 'no'
-            self%filt_mode         = 'none'
-            self%ml_reg            = 'no'
-            self%l_gauref          = .false.
-            self%l_lpauto          = .false.
-            self%l_lpset           = .true.
-            self%l_noise_reg       = .false.
-            self%l_nonuniform      = .false.
-            self%l_nonuniform_lpset = .false.
-            call cline%set('center',    'no')
-            call cline%set('gauref',    'no')
-            call cline%set('filt_mode', 'none')
-            call cline%set('ml_reg',    'no')
-            call cline%delete('snr_noise_reg')
-        endif
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
-        if( self%l_no_reg ) self%l_ml_reg = .false.
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')

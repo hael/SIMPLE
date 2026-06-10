@@ -36,6 +36,7 @@ contains
         class(sp_project),         intent(inout) :: spproj
         character(len=STDLEN) :: chunk_nthr_env
         integer               :: ichunk, envlen
+        real                  :: lp_fixed
         if( l_stream2D_active ) THROW_HARD('init_chunk_clustering can only be called once!')
         call seed_rnd
         ! general parameters
@@ -86,7 +87,7 @@ contains
         call cline_cluster2D_chunk%set('tau',    params%tau)
         ! refinement
         select case(trim(params%refine))
-            case('snhc','snhc_smpl')
+            case('snhc','snhc_smpl','prob')
                 call cline_cluster2D_chunk%set('refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
@@ -94,15 +95,21 @@ contains
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )
         ! updates command-line with resolution limits, defaults are handled by abinitio2D
-        if( master_cline%defined('lpstart') )then
-            lpstart = max(params%lpstart, 2.0*params%smpd_crop)
-            call cline_cluster2D_chunk%set('lpstart', lpstart)
-            write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', lpstart
-        endif
-        if( master_cline%defined('lpstop') )then
-            lpstop = max(params%lpstop, 2.0*params%smpd_crop)
-            call cline_cluster2D_chunk%set('lpstop', lpstop)
-            write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT     (IN A): ', lpstop
+        if( master_cline%defined('lp') )then
+            lp_fixed = max(params%lp, 2.0*params%smpd_crop)
+            call cline_cluster2D_chunk%set('lp', lp_fixed)
+            write(logfhandle,'(A,F5.1)') '>>> FIXED RESOLUTION LIMIT    (IN A): ', lp_fixed
+        else
+            if( master_cline%defined('lpstart') )then
+                lpstart = max(params%lpstart, 2.0*params%smpd_crop)
+                call cline_cluster2D_chunk%set('lpstart', lpstart)
+                write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', lpstart
+            endif
+            if( master_cline%defined('lpstop') )then
+                lpstop = max(params%lpstop, 2.0*params%smpd_crop)
+                call cline_cluster2D_chunk%set('lpstop', lpstop)
+                write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT     (IN A): ', lpstop
+            endif
         endif
         if( master_cline%defined('cenlp') )then
             lpcen = max(params%cenlp, 2.0*params%smpd_crop)

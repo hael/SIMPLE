@@ -35,6 +35,16 @@ The main policy boundary is:
 - particle-domain work owns particle sampling, probabilistic assignment tables, search, class assignment, shift/in-plane updates, and partition-local outputs
 - class-average assembly/restoration owns class-average sums, even/odd outputs, merged class averages, FRC/class documents, and project output metadata
 
+Command-line `lp` is a fixed low-pass override for `abinitio2D`: it takes
+precedence over `lpstart`/`lpstop` and keeps the same limit set for every stage.
+`abinitio2D_chunks` must preserve that behavior when constructing child
+`abinitio2D` command lines, applying only the chunk-local Nyquist floor.
+
+Command-line `refine=prob` is a fixed search-mode override for `abinitio2D`:
+it keeps probabilistic refinement active for every stage instead of using the
+default staged `snhc_smpl`-to-`prob` transition. `abinitio2D_chunks` must
+preserve this override when constructing child `abinitio2D` command lines.
+
 ## 3. Ownership Policy
 
 `simple_commanders_abinitio2D.f90` owns:
@@ -113,10 +123,6 @@ Stage policy:
 
 - stage 1 uses a random sampled subset but disables fractional carry-over of previous class-average sums
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
-- `no_reg=yes` is an explicit fixed-LP inspection mode: it requires
-  `lp=<Angstroms>`, disables ML/FRC/Gaussian reference regularization,
-  disables class-average centering, and keeps that `lp` limit set for every
-  staged, terminal, and final class-average command
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
 - final fill-in is an assignment-only pass for active particles that still have `updatecnt == 0`
 - if any staged update used `update_frac`, `abinitio2D` runs a terminal

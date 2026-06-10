@@ -101,9 +101,7 @@ contains
             call build%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
         endif
         ! Filtering
-        if( params%l_no_reg )then
-            ! Explicit fixed-LP/no-regularization mode leaves references unfiltered.
-        else if( params%l_ml_reg )then
+        if( params%l_ml_reg )then
             ! no filtering
         else
             if( params%l_lpset.and.params%l_gauref )then

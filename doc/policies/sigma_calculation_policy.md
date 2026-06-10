@@ -188,9 +188,8 @@ unless the user overrides the objective, uses ML-regularized Euclidean 2D
 output. The first stage bootstraps sigma with `calc_pspec`; each `cluster2D`
 iteration then updates particle assignments, recalculates per-particle residual
 sigma in `cluster2D_exec`, and consolidates grouped sigma for the next
-iteration. Final class-average generation is ML-regularized unless
-`no_reg=yes`, and records the final grouped sigma STAR file in the project
-output. See
+iteration. Final class-average generation is ML-regularized and records the
+final grouped sigma STAR file in the project output. See
 [src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:347) and
 [src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:358).
 

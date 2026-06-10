@@ -118,7 +118,6 @@ contains
         call reg%add_char('neg', self%neg)
         call reg%add_char('neigs_per', self%neigs_per)
         call reg%add_char('niceserver', self%niceserver)
-        call reg%add_char('no_reg', self%no_reg)
         call reg%add_char('noise_norm', self%noise_norm)
         call reg%add_char('norm', self%norm)
         call reg%add_char('nu_refine', self%nu_refine)

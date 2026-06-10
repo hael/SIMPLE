@@ -77,10 +77,6 @@ contains
         call abinitio2D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, lp, gui_submenu="filter")
-        call abinitio2D%add_input(UI_FILT, 'no_reg', 'binary', 'Disable regularization', &
-            &'Disable ML, FRC, and Gaussian reference regularization; requires lp and keeps that limit fixed &
-            &throughout(yes|no){no}', &
-            &'(yes|no){no}', .false., 'no', gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
         call abinitio2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
@@ -113,8 +109,11 @@ contains
         call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{300}', gui_submenu="cluster 2D", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc_smpl|prob){snhc_smpl}',&
+        &'(snhc_smpl|prob){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="cluster 2D")
         ! filter controls
         call abinitio2D_chunks%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_FILT, lp, gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
