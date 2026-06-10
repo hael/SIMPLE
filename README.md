@@ -175,6 +175,10 @@ nice_local
 
 ------------------------------------------------------------------------
 
+## 📚 **[Documentation](https://hael.github.io/SIMPLE/)**
+
+------------------------------------------------------------------------
+
 ## 📜 License
 
 SIMPLE is distributed under the **GNU General Public License v3
