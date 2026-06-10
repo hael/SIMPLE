@@ -35,10 +35,12 @@ The main policy boundary is:
 - particle-domain work owns particle sampling, probabilistic assignment tables, search, class assignment, shift/in-plane updates, and partition-local outputs
 - class-average assembly/restoration owns class-average sums, even/odd outputs, merged class averages, FRC/class documents, and project output metadata
 
-Command-line `lp` is a fixed low-pass override for `abinitio2D`: it takes
-precedence over `lpstart`/`lpstop` and keeps the same limit set for every stage.
-`abinitio2D_chunks` must preserve that behavior when constructing child
-`abinitio2D` command lines, applying only the chunk-local Nyquist floor.
+Command-line `lp` is a fixed low-pass override for the ML-regularized
+`abinitio2D` stages: the pre-ML Gaussian-reference stage keeps the automatic
+starting low-pass so Gaussian regularization still acts, and the fixed `lp`
+takes effect once `ml_reg` is active. `abinitio2D_chunks` must preserve that
+behavior when constructing child `abinitio2D` command lines, applying only the
+chunk-local Nyquist floor.
 
 Command-line `refine=prob` is a fixed search-mode override for `abinitio2D`:
 it keeps probabilistic refinement active for every stage instead of using the

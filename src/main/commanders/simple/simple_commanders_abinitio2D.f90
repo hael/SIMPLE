@@ -237,10 +237,11 @@ contains
             cenlp   = max(cenlp,   2.*params%smpd_crop)
             ! Stages resolution limits
             if( cline%defined('lp') )then
-                ! Set lp throughout
+                ! Keep the Gaussian-reference stage coarse, then fix lp when ML regularization starts.
                 stage_parms(:)%lp      = params%lp
                 stage_parms(:)%l_lpset = .true.
-                params%lpstart = params%lp
+                stage_parms(1)%lp      = lpstart
+                params%lpstart = lpstart
                 params%lpstop  = params%lp
             else
                 ! Frequency marching
