@@ -327,13 +327,13 @@ contains
             terminal_start = last_iter + 1
             terminal_refs  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
             write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I8)')'>>> TERMINAL GREEDY ALL-PARTICLE PASS FROM ITERATION ', last_iter
+            write(logfhandle,'(A,I8)')'>>> TERMINAL PROB-MODE ALL-PARTICLE PASS FROM ITERATION ', last_iter
             call cline_cluster2D%set('refs',        terminal_refs)
             call cline_cluster2D%set('startit',     terminal_start)
             call cline_cluster2D%set('minits',      1)
             call cline_cluster2D%set('maxits',      1)
             call cline_cluster2D%set('extr_iter',   params%extr_lim + 1)
-            call cline_cluster2D%set('refine',      'greedy')
+            call cline_cluster2D%set('refine',      'prob')
             call cline_cluster2D%set('restore_cavgs', 'yes')
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('fillin')

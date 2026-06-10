@@ -257,8 +257,8 @@ contains
         if( istage < STOCH_SAMPL_STAGE )then
             cfg%refine = 'snhc_smpl'
         else
-            ! cfg%refine = 'prob' ! 4 now
-            cfg%refine = 'snhc_smpl' 
+            cfg%refine = 'prob' ! 4 now
+            ! cfg%refine = 'snhc_smpl' 
         endif
     end subroutine set_cluster2D_stage_search_policy
 
