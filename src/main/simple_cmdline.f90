@@ -272,8 +272,8 @@ contains
     logical function skip_mode_required_keys( prgname, line )
         character(len=*), intent(in) :: prgname, line
         skip_mode_required_keys = trim(prgname) == 'model_cavgs_rejection' .and. &
-            (str_has_substr(line, 'quality_mode=learn') .or. str_has_substr(line, 'quality_mode=evaluate') .or. &
-             str_has_substr(line, 'quality_mode=promote'))
+            (str_has_substr(line, 'quality_mode=learn') .or. str_has_substr(line, 'quality_mode=promote') .or. &
+             (str_has_substr(line, 'quality_mode=evaluate') .and. str_has_substr(line, 'filetab=')))
     end function skip_mode_required_keys
 
     !> \brief for parsing the command line arguments passed as key=val

@@ -80,8 +80,8 @@ contains
         if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('private') )then
             self%sp_required = self%ptr2prg%requires_sp_project()
             if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. &
-                (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'evaluate' .or. &
-                 trim(self%quality_mode) == 'promote') ) &
+                (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
+                 (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
                 self%sp_required = .false.
             if( .not. cline%defined('projfile') .and. self%sp_required )then
                 if( nsp_files > 1 )then

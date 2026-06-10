@@ -17,6 +17,7 @@ private
 
 public :: learn_cavg_quality_model
 public :: evaluate_cavg_quality_model
+public :: evaluate_cavg_quality_result
 
 logical, parameter :: LEARN_OTSU_FLAGS(2)           = [.false., .true.]
 integer, parameter :: CAVG_QUALITY_LEARN_TOP_K      = 10
@@ -148,6 +149,32 @@ contains
         call kill_training_datasets(dsets)
         deallocate(dsets)
     end subroutine evaluate_cavg_quality_model
+
+    subroutine evaluate_cavg_quality_result( quality, reference_states, model, dataset_id, report_fname )
+        type(cavg_quality_result), intent(in) :: quality
+        integer,                   intent(in) :: reference_states(:)
+        type(cavg_quality_model),  intent(in) :: model
+        character(len=*),          intent(in) :: dataset_id, report_fname
+        type(cavg_quality_training_dataset), allocatable :: dsets(:)
+        integer :: ncls
+        real :: eval_score
+        ncls = size(reference_states)
+        if( .not. allocated(quality%features) ) THROW_HARD('evaluate_cavg_quality_result: missing quality features')
+        if( .not. allocated(quality%hard_reject) ) THROW_HARD('evaluate_cavg_quality_result: missing hard-reject mask')
+        if( size(quality%features, dim=1) /= ncls ) THROW_HARD('evaluate_cavg_quality_result: feature size mismatch')
+        if( size(quality%hard_reject) /= ncls ) THROW_HARD('evaluate_cavg_quality_result: hard-reject size mismatch')
+        allocate(dsets(1))
+        dsets(1)%fname      = trim(dataset_id)
+        dsets(1)%dataset_id = trim(dataset_id)
+        dsets(1)%ncls       = ncls
+        dsets(1)%features      = quality%features
+        dsets(1)%manual_states = reference_states
+        dsets(1)%hard_reject   = quality%hard_reject
+        eval_score = macro_balacc_for_model(dsets, model)
+        call write_cavg_quality_evaluate_report(report_fname, dsets, model, eval_score)
+        call kill_training_datasets(dsets)
+        deallocate(dsets)
+    end subroutine evaluate_cavg_quality_result
 
     subroutine load_quality_training_datasets( analysis_files, dsets )
         class(string), intent(in) :: analysis_files(:)

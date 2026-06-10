@@ -3,7 +3,7 @@ module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table
-use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, learn_cavg_quality_model
+use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
 use simple_cavg_quality_types,    only: cavg_quality_result
@@ -377,19 +377,20 @@ contains
             return
         endif
         if( quality_mode == QUALITY_MODE_EVALUATE )then
-            if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=evaluate requires filetab')
-            call read_filetable(params%filetab, analysis_files)
-            report_fname = 'cavgs_quality_evaluate_report.txt'
-            if( cline%defined('fname') ) report_fname = params%fname%to_char()
-            call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
-            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
-            if( allocated(analysis_files) ) deallocate(analysis_files)
-            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
-                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
-            return
+            if( cline%defined('filetab') )then
+                call read_filetable(params%filetab, analysis_files)
+                report_fname = 'cavgs_quality_evaluate_report.txt'
+                if( cline%defined('fname') ) report_fname = params%fname%to_char()
+                call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
+                if( allocated(analysis_files) ) deallocate(analysis_files)
+                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
+                    verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+                return
+            endif
         endif
-        if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze requires projfile')
-        if( .not. cline%defined('mskdiam') ) THROW_HARD('model_cavgs_rejection apply/analyze requires mskdiam')
+        if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires projfile')
+        if( .not. cline%defined('mskdiam') ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires mskdiam')
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('model_cavgs_rejection: project has no cls2D entries')
@@ -407,19 +408,31 @@ contains
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
         write(logfhandle,'(A,F8.3,A,L1)') '>>> CAVG QUALITY SEPARATION / USED THRESHOLD : ', &
             quality%separation, ' USED=', quality%used_threshold
-        if( quality_mode == QUALITY_MODE_ANALYZE )then
+        if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
             write(logfhandle,'(A,I6,A,I6)') '>>> MANUAL REFERENCE SELECTED / REJECTED : ', &
                 count(reference_states > 0), ' / ', count(reference_states <= 0)
-            call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', &
-                params%projfile%to_char())
+            if( quality_mode == QUALITY_MODE_EVALUATE )then
+                report_fname = 'cavgs_quality_evaluate_report.txt'
+                if( cline%defined('fname') ) report_fname = params%fname%to_char()
+                call evaluate_cavg_quality_result(quality, reference_states, model, &
+                    params%projfile%to_char(), trim(report_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
+            else
+                call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', &
+                    params%projfile%to_char())
+            endif
         else
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
                 params%projfile%to_char())
         endif
         call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
         call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
-        if( quality_mode == QUALITY_MODE_ANALYZE )then
-            write(logfhandle,'(A)') '>>> QUALITY ANALYSIS MODE: project selection left unchanged'
+        if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
+            if( quality_mode == QUALITY_MODE_EVALUATE )then
+                write(logfhandle,'(A)') '>>> QUALITY EVALUATE MODE: project selection left unchanged'
+            else
+                write(logfhandle,'(A)') '>>> QUALITY ANALYSIS MODE: project selection left unchanged'
+            endif
         else
             call spproj%map_cavgs_selection(quality%states)
             call annotate_project()

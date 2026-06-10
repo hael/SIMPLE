@@ -118,11 +118,11 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=learn` reads a file table of `cavgs_quality_analysis.txt` files and searches for a model specification. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
-`quality_mode=evaluate` reads a file table of `cavgs_quality_analysis.txt` files and applies the selected fixed model without refitting. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
+`quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_analysis.txt` files. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
 `quality_mode=promote` reads a model file from `infile=` and writes a Fortran promotion snippet controlled by `fname=`.
 
-`apply` and `analyze` require `projfile` and `mskdiam`. `learn` and `evaluate` require `filetab`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
+`apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
 ## Model Selection
 
@@ -385,7 +385,7 @@ Each candidate is evaluated by running the full classifier on every scoreable tr
 
 The learn report includes the search grid, `macro_learn_score`, suggested weights, selected model, dataset-role diagnostics, Otsu ablation diagnostics, feature-signal diagnostics, feature-drop diagnostics, leave-one-dataset-out feature-policy diagnostics, top candidates, best ties, and per-dataset confusion metrics.
 
-`quality_mode=evaluate` uses the same analysis table reader and trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out analysis tables. The evaluate report includes the fixed model settings, `macro_evaluate_score`, dataset-role diagnostics, Otsu ablation diagnostics, and per-dataset confusion metrics.
+`quality_mode=evaluate` uses the same trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out validation. It can score saved analysis tables through `filetab`, or a single manually selected project directly through `projfile` and `mskdiam`. The evaluate report includes the fixed model settings, `macro_evaluate_score`, dataset-role diagnostics, Otsu ablation diagnostics, and per-dataset confusion metrics.
 
 ## Promotion
 
@@ -430,6 +430,18 @@ simple_exec prg=model_cavgs_rejection \
   quality_mode=evaluate \
   quality_model=chunk_lp4 \
   filetab=holdout_analysis_files.txt \
+  fname=cavgs_quality_evaluate_report.txt \
+  mkdir=yes
+```
+
+Evaluate a single manually selected project directly:
+
+```bash
+simple_exec prg=model_cavgs_rejection \
+  quality_mode=evaluate \
+  quality_model=chunk_lp4 \
+  projfile=my_project.simple \
+  mskdiam=180 \
   fname=cavgs_quality_evaluate_report.txt \
   mkdir=yes
 ```
