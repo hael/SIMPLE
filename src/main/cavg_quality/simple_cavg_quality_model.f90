@@ -112,17 +112,31 @@ real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
 real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
 
-! Chunk model learned from lp4-style class-average selection references,
-! with CLC held out for testing.
-character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_score_signal'
+! Chunk model learned from lp4-style class-average selection references in
+! /Users/elmlundho/cavgs_quality/chunk_new_train2, including CLC.
+character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_signal_texture'
 real, parameter :: CAVG_QUALITY_CHUNK_LP4_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    5.843422E-02, 5.748914E-02, 1.955181E-02, 1.426152E-01, &
-    1.800663E-01, 2.054717E-01, 3.504477E-03, 1.422437E-01, &
-    1.906234E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      =  0.00
+    8.161553E-02, 8.684479E-02, 2.780337E-02, 1.695640E-01, &
+    2.107664E-01, 0.000000E+00, 2.785953E-02, 1.582461E-01, &
+    2.162540E-01, 2.104632E-02, 0.000000E+00, 0.000000E+00 ]
+real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      = -0.15
 real, parameter :: CHUNK_LP4_MIN_SCORE_SEPARATION =  0.15
-real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.35
-real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.50
+real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.15
+real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.35
+
+! Previous chunk_lp4 model, retained for quick rollback:
+! feature_policy=microchunk_plus_score_signal
+! feature_weights= 5.843422E-02, 5.748914E-02, 1.955181E-02, 1.426152E-01, &
+!                  1.800663E-01, 2.054717E-01, 3.504477E-03, 1.422437E-01, &
+!                  1.906234E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00
+! boundary_margin=0.00
+! min_score_separation=0.15
+! otsu_min_offset=0.35
+! otsu_max_offset=0.50
+! use_lowsep_otsu=T
+! use_otsu_window=F
+! use_cluster_rescue=F
+! enforce_min_accept_frac=F
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -256,7 +270,7 @@ contains
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
         spec%min_accept_frac         = 0.0
         spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .false.
+        spec%use_otsu_window         = .true.
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk_lp4_model_spec
