@@ -9,7 +9,6 @@ use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr,  c
 use simple_commanders_abinitio2D,           only: commander_abinitio2D
 use simple_stream_abinitio2D_chunks,        only: stream_abinitio2D_chunks
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
-use simple_stream_cluster2D_subsets_refine, only: stream_cluster2D_subsets_refine
 use simple_stream_cluster2D_microchunked,   only: stream_cluster2D_microchunked
 
 implicit none
@@ -19,7 +18,6 @@ private
 
 type(commander_abinitio2D)                  :: xabinitio2D
 type(stream_abinitio2D_chunks)              :: xabinitio2D_chunks
-type(stream_cluster2D_subsets_refine)       :: xcluster2D_subsets_refine
 type(stream_cluster2D_microchunked)         :: xcluster2D_microchunked
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
@@ -45,8 +43,6 @@ contains
                 endif
             case( 'abinitio2D_chunks' )
                 call xabinitio2D_chunks%execute(cline)
-            case( 'cluster2D_subsets_refine' )
-                call xcluster2D_subsets_refine%execute(cline)    
             case( 'cluster2D_microchunked' )
                 call xcluster2D_microchunked%execute(cline)        
             case( 'make_cavgs' )

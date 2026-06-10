@@ -110,6 +110,7 @@ type :: parameters
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
+    character(len=3)          :: no_reg='no'          !< disable ML/FRC/Gaussian reference regularization(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
@@ -577,6 +578,7 @@ type :: parameters
     logical :: l_lpauto          = .false.
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
+    logical :: l_no_reg          = .false.
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.

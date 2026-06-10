@@ -177,11 +177,16 @@ contains
                             cfg%refs = NIL
                         endif
                         cfg%ml_reg   = 'no'
-                        cfg%gauref   = 'yes'
-                        if( l_gaufreq_input )then
-                            cfg%gaufreq = params%gaufreq
+                        if( params%l_no_reg )then
+                            cfg%gauref   = 'no'
+                            cfg%gaufreq  = 0.
                         else
-                            cfg%gaufreq = stage_parms(istage)%lp
+                            cfg%gauref   = 'yes'
+                            if( l_gaufreq_input )then
+                                cfg%gaufreq = params%gaufreq
+                            else
+                                cfg%gaufreq = stage_parms(istage)%lp
+                            endif
                         endif
                     case(2,3,4)
                         call set_cluster2D_stage_regular_refs( cfg, params, stage_parms, istage )
