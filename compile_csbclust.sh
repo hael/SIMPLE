@@ -7,7 +7,7 @@ module load gcc/$gccversion
 rm -r build_gcc$gccversion
 mkdir build_gcc$gccversion
 cd build_gcc$gccversion
-cmake ..
+cmake -D USE_ARCHOPT=OFF ..
 make -j install
 cd ..
 chmod -R 777 build_gcc$gccversion
