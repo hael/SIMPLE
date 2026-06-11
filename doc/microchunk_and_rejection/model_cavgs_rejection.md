@@ -133,7 +133,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 `quality_model` selects a built-in preset. The default is `chunk_default_v2`. The available built-ins are:
 
 - `chunk_default_v2`: default chunk/stream-style model.
-- `chunk_lp4`: learned chunk model trained from the `chunk_new_train2` lp4-style class-average selection references, including CLC, with texture features enabled.
+- `chunk_lp4`: learned chunk model trained from the `chunk_new_train2` lp4-style class-average selection references, including the `*_2*` additions.
 - `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
@@ -255,19 +255,19 @@ use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
 
-`chunk_lp4` has context `chunk`, feature policy `microchunk_plus_signal_texture`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the `chunk_new_train2` lp4-style chunk references, including CLC. The previous CLC-held-out `chunk_lp4` model is retained as a commented rollback block in `simple_cavg_quality_model.f90`.
+`chunk_lp4` has context `chunk`, feature policy `microchunk_plus_signal`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the `chunk_new_train2` lp4-style chunk references, including the `*_2*` additions.
 
 ```text
-log_pop             8.161553E-02
-neg_log_res         8.684479E-02
-centered            2.780337E-02
-log_locvar_fg       1.695640E-01
-log_locvar_bg       2.107664E-01
+log_pop             1.256393E-01
+neg_log_res         1.026731E-01
+centered            4.134843E-02
+log_locvar_fg       1.367731E-01
+log_locvar_bg       1.996999E-01
 corr_frc_proxy      0.000000E+00
-log_center_edge_snr 2.785953E-02
-cc_area_frac        1.582461E-01
-presence            2.162540E-01
-log_int_boundary_tex 2.104632E-02
+log_center_edge_snr 2.763570E-02
+cc_area_frac        1.404427E-01
+presence            2.257877E-01
+log_int_boundary_tex 0.000000E+00
 int_tex_coverage    0.000000E+00
 tex_effective_area  0.000000E+00
 ```
@@ -275,8 +275,8 @@ tex_effective_area  0.000000E+00
 ```text
 boundary_margin        -0.15
 min_score_separation    0.15
-otsu_min_offset         0.15
-otsu_max_offset         0.35
+otsu_min_offset         0.35
+otsu_max_offset         0.40
 cluster_rescue_margin   0.20
 min_accept_frac         0.00
 use_lowsep_otsu         true

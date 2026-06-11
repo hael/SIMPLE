@@ -43,8 +43,8 @@ real,    parameter :: LEARN_POOL_MARGINS(37)         = [-0.60, -0.50, -0.40, -0.
                                                         1.40, 1.50, 1.60, 1.70, 1.80, 1.90, &
                                                         2.00, 2.25, 2.50, 2.75, 3.00, 3.50, &
                                                         4.00]
-real,    parameter :: LEARN_OTSU_MIN_OFFSETS(5)     = [0.05, 0.10, 0.15, 0.25, 0.35]
-real,    parameter :: LEARN_OTSU_MAX_OFFSETS(6)     = [0.25, 0.30, 0.35, 0.40, 0.50, 0.65]
+real,    parameter :: LEARN_OTSU_MIN_OFFSETS(9)     = [0.05, 0.10, 0.15, 0.25, 0.35, 0.40, 0.45, 0.50, 0.60]
+real,    parameter :: LEARN_OTSU_MAX_OFFSETS(9)     = [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60, 0.75, 0.90]
 real,    parameter :: LEARN_POOL_FRACS(11)          = [0.50, 0.60, 0.65, 0.70, 0.80, 0.85, &
                                                        0.90, 0.925, 0.95, 0.975, 1.00]
 
