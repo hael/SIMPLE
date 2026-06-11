@@ -40,19 +40,21 @@ use simple_stream_mq_defs,        only: mq_stream_master_in, mq_stream_master_ou
 use simple_commanders_pick,       only: commander_extract, commander_reextract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
-use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs_reject
+use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs_reject, commander_abinitio3D_cavgs
 use simple_commanders_reproject,  only: commander_reproject
 use simple_commanders_cluster2D,  only: commander_cls_split
 use simple_commanders_mkcavgs,    only: commander_make_cavgs
+use simple_stream_cluster2D_microchunked, only: stream_cluster2D_microchunked
 use simple_mini_stream_utils,     only: segdiampick_mics_multi
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
 use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT
 use simple_cavg_quality_types,    only: cavg_quality_result
-use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr
+use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
 use simple_projfile_utils,        only: merge_chunk_projfiles, merge_selected_project_files
 use simple_procimgstk,            only: scale_and_clip_imgfile
+use simple_fileio,                only: swap_suffix
 use simple_defs,                  only: MSK_EXP_FAC, BOX_EXP_FAC, COSMSKHALFWIDTH
 use simple_gui_metadata_api
 
@@ -85,7 +87,7 @@ contains
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
         type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_dir, cycle_projfile
         type(qsys_env)                             :: qsys
-        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_reextract, cline_abinitio3D, cline_cls_split
+        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank, cline_reextract, cline_abinitio3D, cline_cls_split
         type(parameters)                           :: params
         type(sp_project)                           :: spproj, spproj_part
         type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
@@ -94,13 +96,15 @@ contains
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(commander_abinitio2D)                 :: xabinitio2D
         type(commander_abinitio3D_cavgs_reject)    :: xabinitio3D_cavgs_reject
+        type(commander_reproject)                  :: xreproject
         type(commander_cls_split)                  :: xcls_split
         type(commander_make_cavgs)                 :: xmake_cavgs
         type(gui_metadata_micrograph)              :: meta_micrograph
+        type(commander_shape_rank_cavgs)           :: xshape_rank
         type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
         type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
-        integer                                    :: nprojects
+        integer                                    :: nprojects, i
         integer                                    :: box_in_pix      =0      ! box size (px) set by segdiampick_mics; 0 until known
         integer                                    :: box_for_pick    =0      ! box size used for reference picking
         integer                                    :: box_for_extract =0      ! box size used for particle extraction
@@ -202,6 +206,7 @@ contains
             call run_extract(spproj, cycle_projfile, string('extract'), box_in_pix)
             call send_meta(string('complete'))
             call send_meta2D(string('classifying particles'), box_in_pix)
+            call run_abinitio2D_microchunked(spproj, cycle_projfile, string('abinitio2D_microchunked'), nint(mskdiam))
             call run_abinitio2D(spproj, cycle_projfile, string('abinitio2D'), nint(mskdiam))
             call send_meta2D(string('evaluating class average quality'), box_in_pix)
             i_max   = 0
@@ -209,12 +214,16 @@ contains
             call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
             call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_1'),cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
             call reestimate_box_size_from_selected_cavgs(spproj, params, mskdiam, box_in_pix)
-            call run_reextract(spproj, cycle_projfile, string('reextract'), box_in_pix)
-            call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_1'))
-            if( n_cycles >= size(NMICS_PLAN) - 1 ) then
-                call run_cls_split(spproj, cycle_projfile, string('cls_split'), nint(mskdiam))
-                call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_2'))
-                call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_2'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
+           ! call run_reextract(spproj, cycle_projfile, string('reextract'), box_in_pix)
+          !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_1'))
+            if( n_cycles >= size(NMICS_PLAN) - 1 ) then 
+                call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
+                call spproj%kill
+                call spproj%read(cycle_projfile) ! read the full project with all clusters merged in, to get the complete set of class averages for user selection
+                call balance_classes(spproj, cycle_projfile, string('balance_classes')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
+              !  call run_cls_split(spproj, cycle_projfile, string('cls_split'), nint(mskdiam))
+              !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_2'))
+             !   call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_2'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
                 call run_abinitio3D_and_reproject(spproj, cycle_projfile, string('abinitio3D'), nint(mskdiam))
             else
                 write(logfhandle, '(A,I0,A)') '>>> SKIPPING ABINITIO3D UNTIL PLAN STEP 3 (CURRENT STEP=', &
@@ -420,6 +429,36 @@ contains
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
             end subroutine run_abinitio2D
+            
+            subroutine run_abinitio2D_microchunked( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+                type(sp_project), intent(inout) :: spproj_inout
+                type(string),        intent(in) :: cluster_projfile
+                type(string),        intent(in) :: outdir
+                integer,             intent(in) :: mskdiam_in
+                type(stream_cluster2D_microchunked) :: xcluster2D_microchunked
+                type(cmdline)                   :: cline_abinitio2D_microchunked
+                type(string)                    :: cwd
+                integer :: nptcls, ncls_job, nthr2D
+                call simple_getcwd(cwd)
+                call simple_mkdir(outdir)
+                call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
+                call simple_chdir(outdir)
+                call cline_abinitio2D_microchunked%kill()
+                call cline_abinitio2D_microchunked%set('prg',               'abinitio2D_microchunked')
+                call cline_abinitio2D_microchunked%set('mkdir',                     'no')
+                call cline_abinitio2D_microchunked%set('nmics',                       50)
+                call cline_abinitio2D_microchunked%set('maxnptcls',                 5000)
+                call cline_abinitio2D_microchunked%set('mskdiam',             mskdiam_in)
+                call cline_abinitio2D_microchunked%set('nthr',                        16)
+                call cline_abinitio2D_microchunked%set('nchunks',                      2)
+                call cline_abinitio2D_microchunked%set('projfile',      cluster_projfile)
+                call cline_abinitio2D_microchunked%printline()
+                call xcluster2D_microchunked%execute(cline_abinitio2D_microchunked)
+                call simple_chdir(cwd)
+                call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy abinitio2D output back to main projfile for downstream steps
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile)
+            end subroutine run_abinitio2D_microchunked
 
             subroutine run_cls_split( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
@@ -481,28 +520,49 @@ contains
                 type(string), intent(in) :: cluster_projfile      ! cycle-local project file to process
                 type(string), intent(in) :: outdir                ! output directory for abinitio3D run products
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
+                integer,     allocatable :: volpops(:), states(:) ! per-volume populations and class-state labels
+                type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs ! commander for abinitio3D with class-average-based rejection
                 type(sp_project)         :: spproj_cluster        ! temporary project object for 3D result inspection
-                type(string)             :: cwd          ! saved working directory and selected volume path
+                type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
+                type(string)             :: cwd, volpath          ! saved working directory and selected volume path
+                type(oris)               :: voloris               ! volume metadata container from project
+                integer                  :: ldim(3)               ! selected volume box dimensions
+                integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
+                integer :: ivol, bestvol                          ! volume loop index and best-population volume id
                 call simple_getcwd(cwd)
                 call simple_mkdir(outdir)
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
                 call simple_chdir(outdir)
                 call spproj_cluster%kill()
                 call cline_abinitio3D%kill()
-                call cline_abinitio3D%set('prg',  'abinitio3D_cavgs_reject')
+            !     call cline_abinitio3D%set('prg',  'abinitio3D_cavgs_reject')
+            !     call cline_abinitio3D%set('mkdir',                     'no')
+            !     !call cline_abinitio3D%set('pgrp',                      'c1')
+            !     !call cline_abinitio3D%set('outdir',                  outdir)
+            !     call cline_abinitio3D%set('nstates',              NSTATES3D)
+            !     call cline_abinitio3D%set('lpstop',                LPSTOP2D)
+            !  !   call cline_abinitio3D%set('nstages',              NSTAGES3D)
+            !     call cline_abinitio3D%set('mskdiam',             mskdiam_in)
+            ! !    call cline_abinitio3D%set('nsample_start',              200)
+            !     call cline_abinitio3D%set('nthr',                         16)
+            !  !   call cline_abinitio3D%set('nparts',                       4)
+            !     call cline_abinitio3D%set('projfile',      cluster_projfile)
+
+                call cline_abinitio3D%set('prg',  'abinitio3D_cavgs')
                 call cline_abinitio3D%set('mkdir',                     'no')
-                !call cline_abinitio3D%set('pgrp',                      'c1')
-                !call cline_abinitio3D%set('outdir',                  outdir)
+                call cline_abinitio3D%set('pgrp',                      'c1')
                 call cline_abinitio3D%set('nstates',              NSTATES3D)
-                call cline_abinitio3D%set('lpstop',                LPSTOP2D)
-             !   call cline_abinitio3D%set('nstages',              NSTAGES3D)
+                call cline_abinitio3D%set('lpstop',                8)
+                call cline_abinitio3D%set('nstages',                      3)
                 call cline_abinitio3D%set('mskdiam',             mskdiam_in)
-            !    call cline_abinitio3D%set('nsample_start',              200)
+                call cline_abinitio3D%set('lpstart',              20)
+                call cline_abinitio3D%set('prune',              'no')
                 call cline_abinitio3D%set('nthr',                         16)
-             !   call cline_abinitio3D%set('nparts',                       4)
+                call cline_abinitio3D%set('nstages',                       4)
                 call cline_abinitio3D%set('projfile',      cluster_projfile)
+
                 call cline_abinitio3D%printline()
-                call xabinitio3D_cavgs_reject%execute(cline_abinitio3D)
+                call xabinitio3D_cavgs%execute(cline_abinitio3D)
                 ! !read volume
                 ! call spproj_cluster%read(cluster_projfile) ! read the project with abinitio3D output
                 ! call spproj_cluster%get_all_vols(voloris)
@@ -663,6 +723,186 @@ contains
                 call spproj_inout%read(cluster_projfile)
             end subroutine run_cavg_quality_selection
 
+            subroutine balance_classes( spproj_inout, cluster_projfile, outdir )
+                type(sp_project), intent(inout) :: spproj_inout
+                type(string), intent(in)         :: cluster_projfile
+                type(string), intent(in)         :: outdir
+                integer, parameter :: TARGET_NCLS = 501
+                type(string)                 :: cavgsstk, balanced_stk, odd_stk, even_stk, sigma2_stk
+                type(string)                 :: odd_balanced_stk, even_balanced_stk, sigma2_balanced_stk
+                type(image), allocatable     :: cavg_imgs(:)
+                type(oris)                   :: os_cls2D_src
+                integer, allocatable         :: src_inds(:), pops(:), reps(:), extra(:)
+                real,    allocatable         :: frac(:)
+                logical, allocatable         :: picked(:)
+                integer :: ncls_all, nsrc, total_pop, icls, j, out_ind, istk, rem, imax, iout
+                integer :: n_balanced
+                real    :: smpd_dummy
+                type(string) :: cwd
+
+                call simple_getcwd(cwd)
+                call simple_mkdir(outdir)
+                call simple_chdir(outdir)
+
+                call spproj_inout%get_cavgs_stk(cavgsstk, ncls_all, smpd_dummy, out_ind=out_ind)
+                if( ncls_all <= 0 ) then
+                    call simple_chdir(cwd)
+                    return
+                endif
+
+                allocate(src_inds(spproj_inout%os_cls2D%count_state_gt_zero()))
+                nsrc = 0
+                do icls = 1, spproj_inout%os_cls2D%get_noris()
+                    if( nint(spproj_inout%os_cls2D%get(icls, 'state')) > 0 ) then
+                        nsrc = nsrc + 1
+                        src_inds(nsrc) = icls
+                    endif
+                enddo
+                if( nsrc <= 0 ) then
+                    deallocate(src_inds)
+                    call simple_chdir(cwd)
+                    return
+                endif
+                if( nsrc >= TARGET_NCLS ) then
+                    deallocate(src_inds)
+                    call simple_chdir(cwd)
+                    return
+                endif
+
+                cavg_imgs = read_cavgs_into_imgarr(spproj_inout)
+                call os_cls2D_src%new(ncls_all, is_ptcl=.false.)
+                do icls = 1, ncls_all
+                    call os_cls2D_src%transfer_ori(icls, spproj_inout%os_cls2D, icls)
+                enddo
+
+                allocate(pops(nsrc), reps(nsrc), extra(nsrc), frac(nsrc), picked(nsrc))
+                pops = 1
+                do icls = 1, nsrc
+                    if( spproj_inout%os_cls2D%isthere(src_inds(icls), 'pop') ) then
+                        pops(icls) = max(1, nint(spproj_inout%os_cls2D%get(src_inds(icls), 'pop')))
+                    endif
+                enddo
+                total_pop = sum(pops)
+                rem = TARGET_NCLS - nsrc
+                frac = real(rem) * real(pops) / real(total_pop)
+                extra = int(frac)
+                reps = 1 + extra
+                rem = rem - sum(extra)
+                if( rem > 0 ) then
+                    frac = frac - real(extra)
+                    picked = .false.
+                    do j = 1, rem
+                        imax = maxloc(frac, dim=1, mask=.not. picked)
+                        reps(imax) = reps(imax) + 1
+                        picked(imax) = .true.
+                    enddo
+                endif
+
+                n_balanced = sum(reps)
+                balanced_stk = stemname(cavgsstk)//'_balanced'//MRC_EXT
+                if( file_exists(balanced_stk) ) call del_file(balanced_stk)
+
+                call spproj_inout%os_cls2D%new(n_balanced, is_ptcl=.false.)
+                istk = 0
+                do icls = 1, nsrc
+                    do j = 1, reps(icls)
+                        istk = istk + 1
+                        call cavg_imgs(src_inds(icls))%write(balanced_stk, istk)
+                        call spproj_inout%os_cls2D%transfer_ori(istk, os_cls2D_src, src_inds(icls))
+                        call spproj_inout%os_cls2D%set(istk, 'indstk', istk)
+                        call spproj_inout%os_cls2D%set(istk, 'state', 1.)
+                    enddo
+                enddo
+                if( spproj_inout%os_cls3D%get_noris() /= n_balanced ) then
+                    call spproj_inout%os_cls3D%new(n_balanced, is_ptcl=.false.)
+                    do icls = 1, n_balanced
+                        call spproj_inout%os_cls3D%transfer_ori(icls, spproj_inout%os_cls2D, icls)
+                    enddo
+                endif
+
+                call spproj_inout%os_out%set(out_ind, 'stk',        simple_abspath(balanced_stk))
+                call spproj_inout%os_out%set(out_ind, 'nptcls',     n_balanced)
+                call spproj_inout%os_out%set(out_ind, 'nptcls_stk', n_balanced)
+                call spproj_inout%os_out%set(out_ind, 'fromp',      1)
+                call spproj_inout%os_out%set(out_ind, 'top',        n_balanced)
+
+                ! Keep odd/even class-average stacks synchronized when present.
+                odd_stk = swap_suffix(cavgsstk, string('_odd'//MRC_EXT), string(MRC_EXT))
+                if( file_exists(odd_stk) ) then
+                    odd_balanced_stk = stemname(odd_stk)//'_balanced_odd'//MRC_EXT
+                    call duplicate_balanced_stack(odd_stk, odd_balanced_stk, ncls_all, nsrc, src_inds, reps)
+                    call update_os_out_stk(spproj_inout, odd_stk, odd_balanced_stk, n_balanced)
+                endif
+                even_stk = swap_suffix(cavgsstk, string('_even'//MRC_EXT), string(MRC_EXT))
+                if( file_exists(even_stk) ) then
+                    even_balanced_stk = stemname(even_stk)//'_balanced_even'//MRC_EXT
+                    call duplicate_balanced_stack(even_stk, even_balanced_stk, ncls_all, nsrc, src_inds, reps)
+                    call update_os_out_stk(spproj_inout, even_stk, even_balanced_stk, n_balanced)
+                endif
+
+                ! Carry sigma2 output forward to a balanced companion file.
+                do iout = 1, spproj_inout%os_out%get_noris()
+                    if( .not. spproj_inout%os_out%isthere(iout, 'imgkind') ) cycle
+                    if( spproj_inout%os_out%get_str(iout, 'imgkind') /= 'sigma2' ) cycle
+                    if( .not. spproj_inout%os_out%isthere(iout, 'sigma2') ) cycle
+                    sigma2_stk = spproj_inout%os_out%get_str(iout, 'sigma2')
+                    if( .not. file_exists(sigma2_stk) ) cycle
+                    sigma2_balanced_stk = stemname(sigma2_stk)//'_balanced'//STAR_EXT
+                    call simple_copy_file(sigma2_stk, sigma2_balanced_stk)
+                    call spproj_inout%os_out%set(iout, 'sigma2', simple_abspath(sigma2_balanced_stk))
+                enddo
+
+                call spproj_inout%write(cluster_projfile) ! write project with quality-selected classes mapped in, for downstream steps
+                call simple_chdir(cwd)
+                call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile)
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile)
+                write(logfhandle, '(A,I0,A)') '>>> BALANCED CLASS AVERAGES TO ', n_balanced, ' ENTRIES'
+                call os_cls2D_src%kill()
+                call dealloc_imgarr(cavg_imgs)
+                deallocate(src_inds, pops, reps, extra, frac, picked)
+            end subroutine balance_classes
+
+            subroutine duplicate_balanced_stack( stk_in, stk_out, ncls_all, nsrc, src_inds, reps )
+                type(string), intent(in) :: stk_in, stk_out
+                integer,      intent(in) :: ncls_all, nsrc
+                integer,      intent(in) :: src_inds(:), reps(:)
+                type(image), allocatable :: imgs_in(:)
+                integer :: ii, jj, kk
+                imgs_in = read_stk_into_imgarr(stk_in)
+                if( size(imgs_in) /= ncls_all ) then
+                    call dealloc_imgarr(imgs_in)
+                    return
+                endif
+                if( file_exists(stk_out) ) call del_file(stk_out)
+                kk = 0
+                do ii = 1, nsrc
+                    do jj = 1, reps(ii)
+                        kk = kk + 1
+                        call imgs_in(src_inds(ii))%write(stk_out, kk)
+                    enddo
+                enddo
+                call dealloc_imgarr(imgs_in)
+            end subroutine duplicate_balanced_stack
+
+            subroutine update_os_out_stk( spproj_inout, old_stk, new_stk, nstk )
+                type(sp_project), intent(inout) :: spproj_inout
+                type(string),     intent(in)    :: old_stk, new_stk
+                integer,          intent(in)    :: nstk
+                type(string) :: stk_here
+                integer      :: io
+                do io = 1, spproj_inout%os_out%get_noris()
+                    if( .not. spproj_inout%os_out%isthere(io, 'stk') ) cycle
+                    stk_here = spproj_inout%os_out%get_str(io, 'stk')
+                    if( simple_abspath(stk_here) /= simple_abspath(old_stk) ) cycle
+                    call spproj_inout%os_out%set(io, 'stk',        simple_abspath(new_stk))
+                    call spproj_inout%os_out%set(io, 'nptcls',     nstk)
+                    call spproj_inout%os_out%set(io, 'nptcls_stk', nstk)
+                    call spproj_inout%os_out%set(io, 'fromp',      1)
+                    call spproj_inout%os_out%set(io, 'top',        nstk)
+                enddo
+            end subroutine update_os_out_stk
+
             ! Re-estimate mask diameter and extraction box from quality-selected cavgs.
             subroutine reestimate_box_size_from_selected_cavgs( spproj_inout, params_in, mskdiam_inout, box_in_pix_inout )
                 type(sp_project), intent(inout) :: spproj_inout
@@ -688,6 +928,7 @@ contains
                     call masks_local(i_mask_local)%copy(cavg_imgs_local(selected_cavg_inds_local(i_mask_local)))
                 end do
                 call automask2D(params_in, masks_local, params_in%ngrow, nint(params_in%winsz), params_in%edge, diams_local, shifts_local)
+
                 call calc_stats(diams_local, diam_stats_local)
                 mad_local = mad_gau(diams_local, diam_stats_local%med)
                 if( mad_local > 0.0 ) then

@@ -285,12 +285,14 @@ contains
         type(sp_project)     :: spproj_glob
         type(microchunked2D_fast) :: chunked_2D
         integer              :: nstks, nptcls_tot, ntot_chunks
+        logical                   :: l_once
         ! --- default command-line parameters ---
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         if( .not. cline%defined('nmics')     ) call cline%set('nmics',      5)
         if( .not. cline%defined('maxnptcls') ) call cline%set('maxnptcls', 1000)
         ! --- initialise parameters and read project ---
         call params%new(cline)
+        if( params%nchunks > 1) params%workers = params%nchunks
         call spproj_glob%read_non_data_segments(params%projfile)
         call spproj_glob%read_segment('mic',    params%projfile)
         call spproj_glob%read_segment('stk',    params%projfile)
@@ -310,16 +312,24 @@ contains
         endif
         ! --- drive multi-tier classification loop until all tiers are complete ---
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
-        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), pass_1_only=.true., pre_chunked=.true.)
+        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), pre_chunked=.true.)
+        l_once = .true.
         do
             call chunked_2D%cycle(project_list)
+            if( l_once ) then
+                call chunked_2D%set_final_ingestion()
+                l_once = .false.
+            endif
             if( chunked_2D%get_finished() ) exit
             call sleep(WAITTIME)
         end do
         ! --- combine match results and finalise ---
+        write(logfhandle,'(A,I8,A,I8)') '>>> TOTAL NUMBER PARTICLES ACCEPTED : ', chunked_2D%get_n_accepted_ptcls(), ' / ', chunked_2D%get_n_total_particles()
+        write(logfhandle,'(A,I8,A,I8)') '>>> TOTAL NUMBER PARTICLES REJECTED : ', chunked_2D%get_n_rejected_ptcls(), ' / ', chunked_2D%get_n_total_particles()
+        write(logfhandle,'(A)') '>>> ALL CHUNKS PROCESSED, COMBINING RESULTS...'
         call spproj_glob%kill()
         call del_file(params%projfile)
-        call chunked_2D%combine_completed_pass_1_chunks(params%projfile)
+        call chunked_2D%combine_completed_chunks(params%projfile)
         call chunked_2D%kill()
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)

@@ -14,6 +14,7 @@ private
 
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
+public :: CAVG_QUALITY_MODEL_CHUNK_LP4
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 public :: cavg_quality_classify_cache

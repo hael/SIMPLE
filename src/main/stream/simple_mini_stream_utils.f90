@@ -506,6 +506,26 @@ contains
                 call spproj%set_boxfile(orimap(imic), boxfile, nptcls=0)
             endif
         end do
+        ! Remove rejected/invalid micrographs from os_mic:
+        ! 1) state=0 (or generally state<1)
+        ! 2) missing/invalid boxfile
+        do i = spproj%os_mic%get_noris(), 1, -1
+            if( spproj%os_mic%get(i, 'state') < 1.0 )then
+                call spproj%os_mic%delete(i)
+                cycle
+            endif
+            if( .not. spproj%os_mic%isthere(i, 'boxfile') )then
+                call spproj%os_mic%delete(i)
+                cycle
+            endif
+            boxfile = spproj%os_mic%get_str(i, 'boxfile')
+            if( boxfile%strlen() == 0 .or. .not. file_exists(boxfile) )then
+                call boxfile%kill
+                call spproj%os_mic%delete(i)
+                cycle
+            endif
+            call boxfile%kill
+        enddo
         ! Persist metadata after box generation for on-disk consistency.
         call spproj%write_segment_inside('mic')
         call spproj%write()
