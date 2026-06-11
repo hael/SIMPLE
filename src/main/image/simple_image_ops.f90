@@ -477,31 +477,71 @@ contains
     ! modifies pixels along the edges of the box, which ought to be safe as we are masking
     module subroutine zero_background( self )
         class(image), intent(inout) :: self
-        integer :: k
-        real    :: med, val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12
-        k = self%ldim(1)/2
+        integer           :: k, kx, ky, kz, i
+        real              :: med, edge_sum
+        real, allocatable :: edge_x(:), edge_y(:), edge_z(:)
+        integer           :: x_face(4), y_face(4), z_face(4), y_edge(4), z_edge(4)
+        if( self%ft ) THROW_HARD('Real space only!, zero_background')
+        if( any(self%ldim <= 0) ) THROW_HARD('Invalid image dimensions; zero_background')
+        k  = max(1, self%ldim(1)/2)
+        kx = min(k, self%ldim(1))
+        ky = min(k, self%ldim(2))
+        kz = min(k, self%ldim(3))
+        allocate(edge_x(self%ldim(1)), edge_y(self%ldim(2)), edge_z(self%ldim(3)))
+        call set_face_indices(x_face, y_face, z_face)
+        y_edge = [1, 1, self%ldim(2), self%ldim(2)]
+        z_edge = [1, self%ldim(3), 1, self%ldim(3)]
+        edge_sum = 0.
         if( self%ldim(3) == 1 )then
-            val1  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2),1))
-            val2  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2),1))
-            val3  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1,           1))
-            val4  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2),1))
-            med   = (val1+val2+val3+val4) / 4.
+            do i = 1,2
+                edge_y = self%rmat(x_face(2*i-1), :self%ldim(2), 1)
+                call add_edge(edge_y, ky, self%ldim(2), edge_sum)
+            enddo
+            do i = 1,2
+                edge_x = self%rmat(:self%ldim(1), y_face(i), 1)
+                call add_edge(edge_x, kx, self%ldim(1), edge_sum)
+            enddo
+            med = edge_sum / 4.
         else
-            val1  = selec(k,self%ldim(1),self%rmat( 1           ,  1            , :self%ldim(3)))
-            val2  = selec(k,self%ldim(1),self%rmat( 1           ,  self%ldim(2) , :self%ldim(3)))
-            val3  = selec(k,self%ldim(1),self%rmat( self%ldim(1),  1            , :self%ldim(3)))
-            val4  = selec(k,self%ldim(1),self%rmat( self%ldim(1),  self%ldim(2) , :self%ldim(3)))
-            val5  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2) ,  1           ))
-            val6  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2) ,  self%ldim(3)))
-            val7  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2) ,  1           ))
-            val8  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2) ,  self%ldim(3)))
-            val9  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1            ,  1           ))
-            val10 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1            ,  self%ldim(3)))
-            val11 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2) ,  1           ))
-            val12 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2) ,  self%ldim(3)))
-            med   = (val1+val2+val3+val4+val5+val6+val7+val8+val9+val10+val11+val12) / 12.
+            do i = 1,4
+                edge_z = self%rmat(x_face(i), y_face(i), :self%ldim(3))
+                call add_edge(edge_z, kz, self%ldim(3), edge_sum)
+            enddo
+            do i = 1,4
+                edge_y = self%rmat(x_face(i), :self%ldim(2), z_face(i))
+                call add_edge(edge_y, ky, self%ldim(2), edge_sum)
+            enddo
+            do i = 1,4
+                edge_x = self%rmat(:self%ldim(1), y_edge(i), z_edge(i))
+                call add_edge(edge_x, kx, self%ldim(1), edge_sum)
+            enddo
+            med = edge_sum / 12.
         endif
+        deallocate(edge_x, edge_y, edge_z)
         if(abs(med) > TINY) self%rmat = self%rmat - med
+
+    contains
+
+        subroutine set_face_indices( xf, yf, zf )
+            integer, intent(out) :: xf(4), yf(4), zf(4)
+            xf = [1,            1, self%ldim(1), self%ldim(1)]
+            yf = [1, self%ldim(2),            1, self%ldim(2)]
+            zf = [1, self%ldim(3),            1, self%ldim(3)]
+        end subroutine set_face_indices
+
+        subroutine add_edge( edge, ksel, nsel, accum )
+            real,    intent(inout) :: edge(:)
+            integer, intent(in)    :: ksel, nsel
+            real,    intent(inout) :: accum
+            accum = accum + edge_median(edge, ksel, nsel)
+        end subroutine add_edge
+
+        real function edge_median( edge, ksel, nsel )
+            real,    intent(inout) :: edge(:)
+            integer, intent(in)    :: ksel, nsel
+            edge_median = selec(ksel, nsel, edge)
+        end function edge_median
+
     end subroutine zero_background
 
     module subroutine zero_below( self, thres )
