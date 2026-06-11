@@ -296,7 +296,7 @@ contains
         real             :: lpfinal
         real             :: lpstart_bounds(2), lpstop_bounds(2)
         integer          :: filtsz, nstages
-        nstages = abinitio_nstages()
+        nstages = active_lp_schedule_nstages()
         if( trim(params%force_lp_range).eq.'yes' )then
             if( .not.(present(lpstart) .and. present(lpstop)) )then
                 THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
@@ -353,11 +353,17 @@ contains
         class(sp_project), intent(in)    :: spproj
         real,              intent(in)    :: lpstart, lpstop
         integer :: nstages
-        nstages = abinitio_nstages()
+        nstages = active_lp_schedule_nstages()
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
         call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
     end subroutine set_lplims_from_input
+
+    integer function active_lp_schedule_nstages() result(nstages)
+        nstages = abinitio_nstages()
+        if( nstages_refine3D > 0 ) nstages = min(nstages_refine3D, nstages)
+        nstages = max(1, nstages)
+    end function active_lp_schedule_nstages
 
     subroutine exec_refine3D( params, istage, xrefine3D )
         class(parameters),     intent(inout) :: params

@@ -269,6 +269,18 @@ contains
         logical :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
+        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages')
+        if( nstages == 1 )then
+            lpinfo(1)%lp      = lpfinal
+            lpinfo(1)%l_lpset = .true.
+            call calc_scaleinfo(1)
+            if( l_verbose )then
+                print *, '########## single stage'
+                call print_lpinfo
+                call print_scaleinfo
+            endif
+            return
+        endif
         ! (1) calculate FRC values at the inputted boundaries
         findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
@@ -298,10 +310,9 @@ contains
         else
             if( l_verbose ) print *, 'reverting to linear scheme'
             ! revert to linear scheme
-            lpinfo(1)%lp      = lpstart_default
-            lpinfo(1)%l_lpset = .true.
-            do istage = 2, nstages
-                lpinfo(istage)%lp      = lpinfo(istage-1)%lp - (lpinfo(istage-1)%lp - lpfinal) / 2.
+            do istage = 1, nstages
+                lpinfo(istage)%lp      = lpstart_default - &
+                    &real(istage - 1) * (lpstart_default - lpfinal) / real(nstages - 1)
                 lpinfo(istage)%l_lpset = .true.
             end do
             if( l_verbose )then
@@ -374,9 +385,14 @@ contains
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
         integer :: i
+        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_fast')
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
-            lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            if( nstages == 1 )then
+                lpinfo(i)%lp = lpstop
+            else
+                lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            endif
             call calc_scaleinfo(i)
             print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
         enddo
@@ -404,23 +420,30 @@ contains
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial
         real    :: rbox_stepsz, smpd_target
+        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
-            lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            if( nstages == 1 )then
+                lpinfo(i)%lp = lpstop
+            else
+                lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+            endif
             smpd_target  = max(SMPD_TARGET_MIN, (lpinfo(i)%lp * LP2SMPD_TARGET))
             call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
             lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
             lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
         enddo
-        rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
-        do i = 2, nstages - 1 ! linear box_crop scheme
-            box_trial             = nint(real(lpinfo(1)%box_crop) + real(i-1)*rbox_stepsz)
-            lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
-            lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
-            lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
-            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
-            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
-        end do
+        if( nstages > 1 )then
+            rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
+            do i = 2, nstages - 1 ! linear box_crop scheme
+                box_trial             = nint(real(lpinfo(1)%box_crop) + real(i-1)*rbox_stepsz)
+                lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
+                lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
+                lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
+                lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
+                lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+            end do
+        endif
         do i = 1, nstages
             print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
         end do
