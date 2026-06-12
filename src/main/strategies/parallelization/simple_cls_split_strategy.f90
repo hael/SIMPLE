@@ -127,6 +127,14 @@ contains
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')    ) call cline%set('neigs',    0)
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
+        if( .not. cline%defined('graph') )then
+            if( cline%get_carg('oritype') == 'ptcl3D' )then
+                call cline%set('graph', 'ori')
+            else
+                call cline%set('graph', 'euc')
+            endif
+        endif
+        if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -547,7 +555,8 @@ contains
                                       l_write_ptcls, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
                                       den_ptcls, coeff_ptcls)
-        use simple_diffusion_maps,   only: steerable_transport_denoise, steerable_coeffproj_denoise, graph_coeffproj_denoise
+        use simple_diff_map_graphs,  only: diffmap_graph
+        use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -563,13 +572,12 @@ contains
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
         type(image) :: cavg_raw, cavg_den, cavg_coeff
-        real, allocatable :: avg(:), pcavecs(:,:), den_pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:), steer_aff(:,:), steer_theta(:,:)
-        real, allocatable :: steer_shift_x(:,:), steer_shift_y(:,:)
+        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
+        type(diffmap_graph) :: split_graph
         integer, allocatable :: i_medoids(:)
         integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
-        logical :: l_so3_split
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(labels) ) deallocate(labels)
@@ -615,43 +623,21 @@ contains
                 call imgs_ppca(j)%norm
             end do
         endif
-        l_so3_split = trim(params%pca_mode) == 'diff_map_so3'
-        if( .not. l_so3_split )then
-            call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        endif
-        if( l_so3_split )then
-            call make_so3_split_embedding(params, spproj, pinds, cls_id, nptcls, imgs_ppca, coords, eigvals, &
-                                          steer_aff, steer_theta, steer_shift_x, steer_shift_y)
-        else
-            if( l_write_ptcls )then
-                call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
-                                          steer_aff, steer_theta, den_pcavecs)
-            else
-                call make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
-                                          steer_aff, steer_theta)
-            endif
-        endif
-        if( l_write_ptcls .and. trim(params%pca_mode) == 'diffusion_maps' .and. allocated(den_pcavecs) )then
-            den_ptcls = copy_imgarr(imgs_ppca)
-            do j = 1, nptcls
-                call den_ptcls(j)%unserialize(avg + den_pcavecs(:,j))
-            end do
-            write(logfhandle,'(A,I8,A,I8,A)') 'Cls split diffusion-map decoder denoising: class=', cls_id, &
-                ' n=', nptcls, ' method=joint'
-            call flush(logfhandle)
-        endif
-        if( l_write_ptcls .and. trim(params%pca_mode) == 'steerable_diff_map' )then
-            call steerable_transport_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, den_ptcls)
-            call steerable_coeffproj_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, coeff_ptcls)
-            if( .not. allocated(coeff_ptcls) )then
-                write(logfhandle,'(A,I8,A)') 'Cls split steerable coefficient denoising fallback: class=', cls_id, &
-                    ' using transported/normal particles'
+        call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
+        call make_split_embedding(params, spproj, pinds, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
+                                  split_graph)
+        if( l_write_ptcls .and. split_graph%n > 0 .and. &
+            (trim(split_graph%steering) /= 'none' .or. trim(split_graph%metric) == 'euclidean') )then
+            call graph_coeffproj_denoise(params, imgs_ppca, avg, split_graph, coeff_ptcls)
+            if( allocated(coeff_ptcls) )then
+                den_ptcls = copy_imgarr(coeff_ptcls)
+                write(logfhandle,'(A,I8,A,A,A,A,A)') 'Cls split graph generated model: class=', cls_id, &
+                    ' graph=', trim(split_graph%metric), ' steering=', trim(split_graph%steering), ' method=coeff_projection'
                 call flush(logfhandle)
-                if( allocated(den_ptcls) )then
-                    coeff_ptcls = copy_imgarr(den_ptcls)
-                else
-                    coeff_ptcls = copy_imgarr(imgs_ppca)
-                endif
+            else
+                write(logfhandle,'(A,I8,A,A,A,A,A)') 'Cls split graph generated model skipped: class=', cls_id, &
+                    ' graph=', trim(split_graph%metric), ' steering=', trim(split_graph%steering), ' no coeff projection'
+                call flush(logfhandle)
             endif
         endif
         call sanitize_embedding_coords(trim(params%pca_mode), cls_id, coords)
@@ -678,16 +664,6 @@ contains
                 ' size=', nptcls, ' count_suggest=', nsplit_count, ' min=', params%nsubcls_min, &
                 ' max=', params%nsubcls_max, ' selected=', nsplit
             call flush(logfhandle)
-        endif
-        if( l_write_ptcls .and. trim(params%pca_mode) == 'diff_map_so3' )then
-            call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-            call graph_coeffproj_denoise(params, imgs_ppca, avg, steer_aff, steer_theta, steer_shift_x, steer_shift_y, &
-                                         trim(params%so3_steering), coeff_ptcls)
-            if( .not. allocated(coeff_ptcls) )then
-                write(logfhandle,'(A,I8,A,A,A)') 'Cls split graph coefficient denoising fallback: class=', cls_id, &
-                    ' steering=', trim(params%so3_steering), ' no coeff-projected averages written'
-                call flush(logfhandle)
-            endif
         endif
         call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
         if( allocated(coeff_ptcls) ) call cavg_coeff%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
@@ -720,14 +696,10 @@ contains
         if( allocated(coords)       ) deallocate(coords)
         if( allocated(eigvals)      ) deallocate(eigvals)
         if( allocated(dmat)         ) deallocate(dmat)
-        if( allocated(steer_aff)    ) deallocate(steer_aff)
-        if( allocated(steer_theta)  ) deallocate(steer_theta)
-        if( allocated(steer_shift_x)) deallocate(steer_shift_x)
-        if( allocated(steer_shift_y)) deallocate(steer_shift_y)
+        call split_graph%kill()
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
-        if( allocated(den_pcavecs)  ) deallocate(den_pcavecs)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
         if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
@@ -800,67 +772,55 @@ contains
         call flush(logfhandle)
     end subroutine select_kmedoids_by_silhouette
 
-    subroutine make_split_embedding(params, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, steer_aff, steer_theta, den_pcavecs)
-        use simple_diffusion_maps,           only: diffusion_map_embedder, steerable_diffusion_map_embedder
-        use simple_kpca_svd,                 only: kpca_svd
-        use simple_ppca,                     only: ppca
+    subroutine make_split_embedding(params, spproj, pinds, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
+                                    graph)
+        use simple_diff_map_graphs, only: diffmap_graph, build_cls_split_graph, estimate_graph_shift_scale
+        use simple_diffusion_maps,  only: embed_graph, embed_so2_graph, embed_se2_graph
+        use simple_kpca_svd,        only: kpca_svd
         type(parameters),  intent(inout) :: params
-        integer,           intent(in)    :: cls_id, nptcls, npix
+        type(sp_project),  intent(inout) :: spproj
+        integer,           intent(in)    :: pinds(:), cls_id, nptcls, npix
         real,              intent(in)    :: pcavecs(npix,nptcls)
-        type(image),        intent(in)    :: imgs_ppca(:)
+        type(image),       intent(inout) :: imgs_ppca(:)
         real, allocatable, intent(out)   :: coords(:,:)
         real, allocatable, intent(out)   :: eigvals(:)
-        real, allocatable, optional, intent(out) :: steer_aff(:,:), steer_theta(:,:)
-        real, allocatable, optional, intent(out) :: den_pcavecs(:,:)
-        type(diffusion_map_embedder) :: diffmap
-        type(steerable_diffusion_map_embedder) :: steerable_diffmap
+        type(diffmap_graph), intent(inout) :: graph
         type(kpca_svd) :: kpca_model
-        type(ppca)     :: ppca_model
-        real, allocatable :: feat(:), tmpvec(:)
+        real, allocatable :: feat(:)
+        real :: se2_shift_scale
         integer :: neigs, neigs_scan, neigs_used, i
-        logical :: l_auto_neigs, l_decode
+        logical :: l_auto_neigs
+        call graph%kill()
         l_auto_neigs = params%neigs <= 0
-        l_decode = present(den_pcavecs) .and. trim(params%pca_mode) == 'diffusion_maps'
         if( l_auto_neigs )then
             neigs_scan = cls_split_auto_neigs_scan(trim(params%pca_mode), nptcls)
         else
             neigs_scan = params%neigs
         endif
-        if( trim(params%pca_mode) .eq. 'diffusion_maps' )then
-            neigs = min(max(neigs_scan, 0), max(nptcls-2, 1))
-        else
-            neigs = min(max(neigs_scan, 1), max(nptcls-1, 1))
-        endif
         select case(trim(params%pca_mode))
             case('diffusion_maps')
-                call diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, nptcls-1)))
-                if( l_decode )then
-                    call diffmap%set_preimage_params(.true., decoder_ridge=1.e-2, &
-                        joint_decoder=.true., &
-                        joint_decoder_iters=80, joint_decoder_weight=0.5, joint_decoder_tol=1.e-4)
-                    call diffmap%embed(pcavecs, coords, eigvals, pcavecs)
-                else
-                    call diffmap%embed(pcavecs, coords, eigvals)
-                endif
-            case('steerable_diff_map')
-                call steerable_diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, nptcls-1)), params%steerable_nmodes)
-                if( present(steer_aff) .and. present(steer_theta) )then
-                    call steerable_diffmap%embed(params, imgs_ppca, coords, eigvals, steer_aff, steer_theta)
-                else
-                    call steerable_diffmap%embed(params, imgs_ppca, coords, eigvals)
-                endif
-            case('ppca')
-                call ppca_model%new(nptcls, npix, neigs)
-                call ppca_model%set_verbose(.false.)
-                call ppca_model%master(pcavecs, 15)
-                allocate(coords(neigs,nptcls), source=0.)
-                do i = 1, nptcls
-                    feat = ppca_model%get_feat(i)
-                    coords(:,i) = feat
-                    if( allocated(feat) ) deallocate(feat)
-                end do
-                eigvals = ppca_model%get_signal_eigvals()
-                call ppca_model%kill
+                neigs = min(max(neigs_scan, 0), max(nptcls-2, 1))
+            case DEFAULT
+                neigs = min(max(neigs_scan, 1), max(nptcls-1, 1))
+        end select
+        select case(trim(params%pca_mode))
+            case('diffusion_maps')
+                call build_cls_split_graph(params, spproj, pinds, pcavecs, imgs_ppca, graph)
+                select case(trim(graph%steering))
+                    case('none')
+                        call embed_graph(graph, neigs, coords, eigvals)
+                    case('so2')
+                        call embed_so2_graph(graph, neigs, params%steerable_nmodes, coords, eigvals)
+                    case('se2')
+                        se2_shift_scale = estimate_graph_shift_scale(graph)
+                        if( params%trs > 0. ) se2_shift_scale = max(se2_shift_scale, params%trs)
+                        write(logfhandle,'(A,I8,A,F10.4)') 'Cls split SE2 steering: class=', cls_id, &
+                            ' shift_scale=', se2_shift_scale
+                        call flush(logfhandle)
+                        call embed_se2_graph(graph, neigs, params%steerable_nmodes, se2_shift_scale, coords, eigvals)
+                    case DEFAULT
+                        THROW_HARD('unsupported graph steering in class-split embedding')
+                end select
             case('kpca')
                 call kpca_model%new(nptcls, npix, neigs)
                 call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
@@ -874,118 +834,32 @@ contains
                 end do
                 eigvals = kpca_model%get_eigvals()
                 call kpca_model%kill
+            case DEFAULT
+                THROW_HARD('unsupported pca_mode for class splitting; use diffusion_maps or kpca')
         end select
         if( l_auto_neigs .and. allocated(eigvals) )then
             neigs_used = select_neigs_icm(eigvals, trim(params%pca_mode), size(coords,1), cls_id)
-            if( l_decode ) call diffmap%trim_preimage_model(neigs_used)
             call trim_split_embedding(coords, eigvals, neigs_used)
             write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto neigs: mode=', trim(params%pca_mode), &
                 ' class=', cls_id, ' size=', nptcls, ' scan=', neigs, ' selected=', size(coords,1)
             call flush(logfhandle)
         endif
-        if( l_decode )then
-            allocate(den_pcavecs(npix,nptcls), source=0.)
-            do i = 1, nptcls
-                call diffmap%joint_decode(coords(:,i), tmpvec)
-                den_pcavecs(:,i) = tmpvec
-                if( allocated(tmpvec) ) deallocate(tmpvec)
-            end do
-            call diffmap%kill_preimage_model()
+        if( graph%n > 0 )then
+            write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', &
+                trim(params%pca_mode), ' metric=', trim(graph%metric), ' steering=', trim(graph%steering), &
+                ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1), ' nnz=', graph%nnz
+        else
+            write(logfhandle,'(A,A,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', trim(params%pca_mode), &
+                ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1)
         endif
-        write(logfhandle,'(A,A,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', trim(params%pca_mode), &
-            ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1)
         call flush(logfhandle)
     end subroutine make_split_embedding
-
-    subroutine make_so3_split_embedding(params, spproj, pinds, cls_id, nptcls, imgs_ppca, coords, eigvals, &
-                                        graph_aff, graph_theta, graph_shift_x, graph_shift_y)
-        use simple_diff_map_graphs, only: build_so3_split_affinity
-        use simple_diffusion_maps,   only: embed_affinity, embed_so2_steerable_affinity, embed_se2_steerable_affinity
-        type(parameters),  intent(inout) :: params
-        type(sp_project),  intent(inout) :: spproj
-        integer,           intent(in)    :: pinds(:), cls_id, nptcls
-        type(image),       intent(inout) :: imgs_ppca(:)
-        real, allocatable, intent(out)   :: coords(:,:), eigvals(:)
-        real, allocatable, optional, intent(out) :: graph_aff(:,:), graph_theta(:,:), graph_shift_x(:,:), graph_shift_y(:,:)
-        real, allocatable :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        real :: se2_shift_scale
-        character(len=STDLEN) :: so3_graph, so3_steering
-        integer :: neigs, neigs_scan, neigs_used
-        logical :: l_auto_neigs
-
-        if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('pca_mode=diff_map_so3 requires oritype=ptcl3D')
-        so3_graph = lowercase(trim(params%so3_graph))
-        select case(trim(so3_graph))
-            case('cluster2d', 'projection_registration')
-            case DEFAULT
-                THROW_HARD('so3_graph must be cluster2d or projection_registration')
-        end select
-        so3_steering = lowercase(trim(params%so3_steering))
-        select case(trim(so3_steering))
-            case('none', 'so2', 'se2')
-            case DEFAULT
-                THROW_HARD('so3_steering must be none, so2, or se2')
-        end select
-        l_auto_neigs = params%neigs <= 0
-        if( l_auto_neigs )then
-            neigs_scan = cls_split_auto_neigs_scan(trim(params%pca_mode), nptcls)
-        else
-            neigs_scan = params%neigs
-        endif
-        neigs = min(max(neigs_scan, 1), max(nptcls - 2, 1))
-        call build_so3_split_affinity(params, spproj, pinds, imgs_ppca, aff, theta, shift_x, shift_y)
-        select case(trim(so3_steering))
-            case('none')
-                call embed_affinity(aff, neigs, coords, eigvals)
-            case('se2')
-                se2_shift_scale = estimate_se2_shift_scale(params, aff, shift_x, shift_y)
-                write(logfhandle,'(A,I8,A,F10.4)') 'SO3 SE2 steering: class=', cls_id, &
-                    ' shift_scale=', se2_shift_scale
-                call flush(logfhandle)
-                call embed_se2_steerable_affinity(aff, theta, shift_x, shift_y, neigs, params%steerable_nmodes, &
-                    se2_shift_scale, coords, eigvals)
-            case('so2')
-                call embed_so2_steerable_affinity(aff, theta, neigs, params%steerable_nmodes, coords, eigvals)
-        end select
-        if( l_auto_neigs .and. allocated(eigvals) )then
-            neigs_used = select_neigs_icm(eigvals, trim(params%pca_mode), size(coords,1), cls_id)
-            call trim_split_embedding(coords, eigvals, neigs_used)
-            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto neigs: mode=', trim(params%pca_mode), &
-                ' class=', cls_id, ' size=', nptcls, ' scan=', neigs, ' selected=', size(coords,1)
-            call flush(logfhandle)
-        endif
-        write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', trim(params%pca_mode), &
-            ' so3_graph=', trim(so3_graph), ' so3_steering=', trim(so3_steering), &
-            ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1)
-        call flush(logfhandle)
-        if( present(graph_aff)     ) allocate(graph_aff(size(aff,1),size(aff,2)), source=aff)
-        if( present(graph_theta)   ) allocate(graph_theta(size(theta,1),size(theta,2)), source=theta)
-        if( present(graph_shift_x) ) allocate(graph_shift_x(size(shift_x,1),size(shift_x,2)), source=shift_x)
-        if( present(graph_shift_y) ) allocate(graph_shift_y(size(shift_y,1),size(shift_y,2)), source=shift_y)
-        if( allocated(aff)   ) deallocate(aff)
-        if( allocated(theta) ) deallocate(theta)
-        if( allocated(shift_x) ) deallocate(shift_x)
-        if( allocated(shift_y) ) deallocate(shift_y)
-    end subroutine make_so3_split_embedding
-
-    real function estimate_se2_shift_scale(params, aff, shift_x, shift_y) result(shift_scale)
-        type(parameters), intent(in) :: params
-        real,             intent(in) :: aff(:,:), shift_x(:,:), shift_y(:,:)
-        real :: observed
-        if( any(aff > DTINY) )then
-            observed = max(maxval(abs(shift_x), mask=(aff > DTINY)), maxval(abs(shift_y), mask=(aff > DTINY)))
-        else
-            observed = 0.
-        endif
-        shift_scale = max(1., observed)
-        if( params%trs > 0. ) shift_scale = max(shift_scale, params%trs)
-    end function estimate_se2_shift_scale
 
     integer function cls_split_auto_neigs_scan(mode, nptcls) result(neigs_scan)
         character(len=*), intent(in) :: mode
         integer,          intent(in) :: nptcls
         select case(trim(mode))
-            case('diffusion_maps', 'diff_map_so3')
+            case('diffusion_maps')
                 neigs_scan = min(24, max(1, nptcls - 2))
                 if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
             case DEFAULT
@@ -1111,7 +985,7 @@ contains
         character(len=*), intent(in) :: mode
         integer,          intent(in) :: max_neigs
         nmin_rank = 1
-        if( (trim(mode) .eq. 'diffusion_maps' .or. trim(mode) .eq. 'diff_map_so3') .and. max_neigs >= 2 ) nmin_rank = 2
+        if( trim(mode) .eq. 'diffusion_maps' .and. max_neigs >= 2 ) nmin_rank = 2
     end function cls_split_min_neigs
 
     integer function cls_split_initial_neigs_from_gap(spec, nmin_rank) result(nkeep)
@@ -1435,7 +1309,7 @@ contains
         call del_file(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'))
         raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
         coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
-        have_coeff_avgs = trim(params%pca_mode) == 'steerable_diff_map' .and. file_exists(coeff_fname%to_char())
+        have_coeff_avgs = trim(params%steering) /= 'none' .and. file_exists(coeff_fname%to_char())
         call coeff_fname%kill
         if( have_coeff_avgs )then
             do ipart = 1, nparts_run

@@ -118,10 +118,6 @@ contains
         ! filter controls
         call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
         call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, diffusion maps, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map){ppca}', .false., 'ppca')
-        call ppca_denoise%add_input(UI_FILT, 'diffmap_preimage', 'multi', 'Diffusion-map preimage model', &
-            'Diffusion-map preimage model for pca_mode=diffusion_maps(decoder|joint){decoder}', &
-            '(decoder|joint){decoder}', .false., 'decoder')
-        call ppca_denoise%add_input(UI_FILT, 'steerable_denoise_mode', 'multi', 'Steerable denoise mode', 'Steerable denoise mode(coeffproj|transport){coeffproj}', '(coeffproj|transport){coeffproj}', .false., 'coeffproj')
         call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Steerable graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=steerable_diff_map', '# neighbors', .false., 10.0)
         call ppca_denoise%add_input(UI_FILT, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used for pca_mode=steerable_diff_map', '# modes', .false., 4.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
@@ -234,25 +230,9 @@ contains
         call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used only for diffusion-map modes; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 10.0)
         call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for steerable diffusion modes', '# modes', .false., 4.0)
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', 'Embedding method for class splitting', 'Embedding method for class splitting(ppca|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){diffusion_maps}', '(ppca|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'graph', 'multi', 'Class split graph', 'Class split graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
+        call cls_split%add_input(UI_FILT, 'steering', 'multi', 'Orientation graph steering', 'Orientation graph steering for graph=ori(none|so2|se2){none}', '(none|so2|se2){none}', .false., 'none')
         call cls_split%add_input(UI_FILT, 'gen_model', 'binary', 'Generative particle model', 'Fit generative denoising model and write generated/denoised particle stack(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call cls_split%add_input(UI_FILT, 'neigs', 'num', 'Number of embedding dimensions (0 => method default)', 'Number of embedding dimensions (0 => method default)', '# eigenvecs', .false., 0.0)
-        call cls_split%add_input(UI_FILT, 'so3_graph', 'multi', 'SO(3) graph construction',&
-        &'SO(3) graph construction for pca_mode=diff_map_so3(cluster2d|projection_registration){projection_registration}',&
-        &'(cluster2d|projection_registration){projection_registration}', .false., 'projection_registration')
-        call cls_split%add_input(UI_FILT, 'so3_local_cluster2d_maxits', 'num', 'SO(3) local cluster2D iterations',&
-        &'Number of local cluster2D iterations for pca_mode=diff_map_so3 so3_graph=cluster2d', '# iterations', .false., 1.0)
-        call cls_split%add_input(UI_FILT, 'so3_steering', 'multi', 'SO(3) steering representation',&
-        &'Steering representation for pca_mode=diff_map_so3(none|so2|se2){so2}', '(none|so2|se2){so2}', .false., 'so2')
-        call cls_split%add_input(UI_FILT, 'trs', 'num', 'SO(3) registration shift range',&
-        &'Maximum half-width shift in pixels for pca_mode=diff_map_so3 registration', 'shift range', .false., 0.0)
-        call cls_split%add_input(UI_FILT, 'pftsz', 'num', 'SO(3) polar Fourier sampling',&
-        &'Half the number of in-plane rotations used by pca_mode=diff_map_so3 registration; 0 uses automatic sampling', 'pftsz', .false., 0.0)
-        call cls_split%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
-        call cls_split%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
-        call cls_split%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call cls_split%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (default 512; try 256-1024)', 'Used only for pca_mode=kpca with kpca_backend=nystrom: increase for better kernel fidelity/stability, decrease for speed and lower memory use', '# landmarks', .false., 512.0)
-        call cls_split%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström local support neighbors (default 96; try 64-128)', 'Used only for pca_mode=kpca with kpca_backend=nystrom: increase for smoother/more stable local reconstruction, decrease for speed and sharper locality', '# max local nbrs', .false., 96.0)
         call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)

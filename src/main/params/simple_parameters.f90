@@ -263,6 +263,7 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
+    character(len=STDLEN)     :: graph='auto'         !< class split graph metric(auto|euc|ori){auto}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -272,10 +273,7 @@ type :: parameters
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){ppca}
-    character(len=STDLEN)     :: diffmap_preimage='decoder' !< Diffusion-map preimage model(decoder|joint){decoder}
-    character(len=STDLEN)     :: so3_graph='projection_registration' !< SO(3) split graph construction(cluster2d|projection_registration){projection_registration}
-    character(len=STDLEN)     :: so3_steering='so2' !< SO(3) steering representation(none|so2|se2){so2}
-    character(len=STDLEN)     :: steerable_denoise_mode='coeffproj' !< Steerable denoise mode(coeffproj|transport){coeffproj}
+    character(len=STDLEN)     :: steering='none' !< Orientation graph steering representation(none|so2|se2){none}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -417,7 +415,6 @@ type :: parameters
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
-    integer :: so3_local_cluster2d_maxits=1 !< Local cluster2D iterations for pca_mode=diff_map_so3 cluster2d graph{1}
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: ref_ind=0           !> reference index

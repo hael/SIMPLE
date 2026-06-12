@@ -1,519 +1,620 @@
-!@descr: graph construction helpers for diffusion-map
+!@descr: CSR graph construction helpers for diffusion-map class splitting
 module simple_diff_map_graphs
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
-use simple_builder,          only: builder
-use simple_cluster2D_strategy, only: cluster2D_inmem_strategy
-use simple_cmdline,          only: cmdline
-use simple_default_clines,   only: set_cluster2D_defaults
-use simple_image,            only: image
-use simple_imgarr_utils,     only: copy_imgarr, dealloc_imgarr, extract_imgarr, read_stk_into_imgarr, write_imgarr
-use simple_ori,              only: ori
-use simple_parameters,       only: parameters
-use simple_polarft_calc,     only: polarft_calc
-use simple_sp_project,       only: sp_project
+!$ use omp_lib
+use simple_builder,             only: builder
+use simple_cmdline,             only: cmdline
+use simple_default_clines,      only: set_cluster2D_defaults
+use simple_image,               only: image
+use simple_imgarr_utils,        only: dealloc_imgarr, write_imgarr
+use simple_ori,                 only: ori
+use simple_parameters,          only: parameters
+use simple_srch_sort_loc,       only: hpsort
+use simple_sp_project,          only: sp_project
 implicit none
 #include "simple_local_flags.inc"
 
 private
-public :: build_so3_split_affinity
+integer, parameter :: GRAPH_GAUGE_CLUSTER2D_MAXITS = 5
+
+public :: diffmap_graph
+public :: diffmap_gauge
+public :: build_cls_split_graph
+public :: build_euclidean_knn_graph
+public :: build_orientation_knn_graph
+public :: run_single_class_cluster2d_gauge
+public :: graph_matvec
+public :: estimate_graph_shift_scale
+public :: graph_directed_edges
+
+type :: diffmap_graph
+    integer :: n   = 0
+    integer :: nnz = 0
+    integer :: k_nn = 0
+    character(len=16) :: metric   = 'euclidean'
+    character(len=16) :: steering = 'none'
+    integer, allocatable :: rowptr(:)
+    integer, allocatable :: colind(:)
+    real,    allocatable :: w(:)
+    real,    allocatable :: wnorm(:)
+    real,    allocatable :: theta(:)
+    real,    allocatable :: shift_x(:)
+    real,    allocatable :: shift_y(:)
+contains
+    procedure :: kill      => kill_diffmap_graph
+    procedure :: normalize => normalize_diffmap_graph
+    procedure :: degree    => diffmap_graph_degree
+    procedure :: has_theta => diffmap_graph_has_theta
+    procedure :: has_shift => diffmap_graph_has_shift
+end type diffmap_graph
+
+type :: diffmap_gauge
+    real, allocatable :: angle(:)
+    real, allocatable :: shift_x(:)
+    real, allocatable :: shift_y(:)
+    real, allocatable :: img_dist(:)
+contains
+    procedure :: kill => kill_diffmap_gauge
+end type diffmap_gauge
 
 contains
 
-    subroutine build_so3_split_affinity( params, spproj, pinds, imgs, aff, theta, shift_x, shift_y )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        type(image),          intent(inout) :: imgs(:)
-        real, allocatable,    intent(out)   :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        character(len=STDLEN) :: graph_mode
-        graph_mode = lowercase(trim(params%so3_graph))
-        select case(trim(graph_mode))
-            case('projection_registration')
-                call build_projection_registered_affinity(params, spproj, pinds, imgs, aff, theta, shift_x, shift_y)
-            case('cluster2d')
-                call build_cluster2d_affinity(params, spproj, pinds, imgs, aff, theta, shift_x, shift_y)
+    subroutine build_cls_split_graph( params, spproj, pinds, pcavecs, imgs, graph )
+        type(parameters),           intent(in)    :: params
+        type(sp_project),           intent(inout) :: spproj
+        integer,                    intent(in)    :: pinds(:)
+        real, optional,             intent(in)    :: pcavecs(:,:)
+        type(image), optional,      intent(inout) :: imgs(:)
+        type(diffmap_graph),        intent(out)   :: graph
+        type(diffmap_gauge) :: gauge
+        character(len=16) :: metric, steering
+        logical :: need_gauge
+        metric = lowercase(trim(params%graph))
+        select case(trim(metric))
+            case('', 'auto')
+                metric = 'euclidean'
+                if( trim(params%oritype) == 'ptcl3D' ) metric = 'orientation'
+            case('euc', 'euclidean')
+                metric = 'euclidean'
+            case('ori', 'orientation')
+                metric = 'orientation'
             case DEFAULT
-                THROW_HARD('so3_graph must be cluster2d or projection_registration')
+                THROW_HARD('graph must be euc or ori in build_cls_split_graph')
         end select
-    end subroutine build_so3_split_affinity
+        steering = lowercase(trim(params%steering))
+        if( trim(steering) == '' .or. trim(steering) == 'auto' ) steering = 'none'
+        select case(trim(steering))
+            case('none', 'so2', 'se2')
+            case DEFAULT
+                THROW_HARD('unsupported graph steering in build_cls_split_graph')
+        end select
+        if( trim(metric) == 'euclidean' .and. trim(steering) /= 'none' )then
+            THROW_HARD('graph=euc supports steering=none only in class splitting')
+        endif
+        need_gauge = trim(metric) == 'orientation' .and. trim(steering) /= 'none'
+        if( need_gauge )then
+            if( .not. present(imgs) ) THROW_HARD('steered orientation graph requires images')
+            call run_single_class_cluster2d_gauge(params, pinds, imgs, gauge, steering)
+        endif
+        select case(trim(metric))
+            case('orientation')
+                if( need_gauge )then
+                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph, gauge)
+                else
+                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph)
+                endif
+            case DEFAULT
+                if( .not. present(pcavecs) ) THROW_HARD('Euclidean graph requires pcavecs')
+                call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), 'none', graph)
+        end select
+        if( need_gauge ) call gauge%kill
+    end subroutine build_cls_split_graph
 
-    subroutine build_projection_registered_affinity( params, spproj, pinds, imgs, aff, theta, shift_x, shift_y )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        type(image),          intent(inout) :: imgs(:)
-        real, allocatable,    intent(out)   :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        type(parameters), target :: params_pft
-        type(polarft_calc) :: pftc
-        real, allocatable  :: gauge_angle(:), gauge_img_dist(:), gauge_shift_x(:), gauge_shift_y(:)
-        real               :: corr, img_dist, angle, sh(2)
-        integer            :: n, i, center_loc
-        n = size(pinds)
-        allocate(gauge_angle(n), gauge_img_dist(n), gauge_shift_x(n), gauge_shift_y(n), source=0.)
-        center_loc = choose_orientation_medoid(spproj, pinds)
-        call prepare_so3_pft(params, imgs, params_pft, pftc)
-        do i = 1,n
-            call align_pair(params, pftc, center_loc, i, corr, img_dist, angle, sh)
-            gauge_img_dist(i) = img_dist
-            gauge_angle(i)    = angle
-            gauge_shift_x(i)  = sh(1)
-            gauge_shift_y(i)  = sh(2)
-        end do
-        call build_gauge_knn_graph(params, spproj, pinds, gauge_angle, gauge_shift_x, gauge_shift_y, gauge_img_dist, &
-            aff, theta, shift_x, shift_y)
-        call pftc%kill
-        if( allocated(gauge_angle)    ) deallocate(gauge_angle)
-        if( allocated(gauge_img_dist) ) deallocate(gauge_img_dist)
-        if( allocated(gauge_shift_x)  ) deallocate(gauge_shift_x)
-        if( allocated(gauge_shift_y)  ) deallocate(gauge_shift_y)
-    end subroutine build_projection_registered_affinity
-
-    subroutine build_cluster2d_affinity( params, spproj, pinds, imgs, aff, theta, shift_x, shift_y )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        type(image),          intent(inout) :: imgs(:)
-        real, allocatable,    intent(out)   :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        type(image), allocatable :: region_imgs(:), class_avgs(:), rep_imgs(:)
-        real, allocatable        :: gauge_angle(:), gauge_img_dist(:), gauge_shift_x(:), gauge_shift_y(:)
-        real, allocatable        :: all_gauge_angle(:), all_gauge_img_dist(:), all_gauge_shift_x(:), all_gauge_shift_y(:)
-        real, allocatable        :: class_angle(:,:), class_img_dist(:,:), class_shift_x(:,:), class_shift_y(:,:)
-        real, allocatable        :: local_aff(:,:), local_theta(:,:), local_shift_x(:,:), local_shift_y(:,:)
-        integer, allocatable     :: region_labels(:), region_inds(:), region_pinds(:), labels(:)
-        integer, allocatable     :: region_anchor(:)
-        integer     :: n, nregions, iregion, nr, nclasses, first_anchor_local
-        n = size(pinds)
-        if( n <= 1 )then
-            allocate(aff(n,n), theta(n,n), shift_x(n,n), shift_y(n,n), source=0.)
+    subroutine build_euclidean_knn_graph( pcavecs, k_nn, steering, graph, gauge )
+        real,                 intent(in)  :: pcavecs(:,:)
+        integer,              intent(in)  :: k_nn
+        character(len=*),     intent(in)  :: steering
+        type(diffmap_graph),  intent(out) :: graph
+        type(diffmap_gauge), optional, intent(in) :: gauge
+        integer, allocatable :: nbrs(:,:)
+        real,    allocatable :: d2s(:,:), kth_d2(:)
+        integer :: n, k_used
+        n = size(pcavecs, 2)
+        if( n < 1 ) THROW_HARD('empty Euclidean graph')
+        if( n == 1 )then
+            call make_singleton_graph('euclidean', steering, graph)
             return
         endif
-        call build_projection_region_labels(params, spproj, pinds, region_labels, nregions)
-        allocate(aff(n,n), theta(n,n), shift_x(n,n), shift_y(n,n), source=0.)
-        allocate(all_gauge_angle(n), all_gauge_img_dist(n), all_gauge_shift_x(n), all_gauge_shift_y(n), source=0.)
-        allocate(region_anchor(nregions), source=0)
-        allocate(rep_imgs(nregions))
-        do iregion = 1,nregions
-            call inds_for_label(region_labels, iregion, region_inds)
-            nr = size(region_inds)
-            if( nr == 0 ) cycle
-            allocate(region_pinds(nr))
-            region_pinds = pinds(region_inds)
-            if( nr <= 2 )then
-                allocate(labels(nr))
-                allocate(gauge_angle(nr), gauge_img_dist(nr), gauge_shift_x(nr), gauge_shift_y(nr), source=0.)
-                labels = 1
-                region_imgs = extract_imgarr(imgs, region_inds)
-                call build_class_averages(region_imgs, labels, 1, class_avgs)
-            else
-                nclasses    = local_cluster2d_nclasses(params, nr)
-                region_imgs = extract_imgarr(imgs, region_inds)
-                call run_local_cluster2d(params, region_pinds, region_imgs, nclasses, labels, class_avgs, &
-                    gauge_angle, gauge_shift_x, gauge_shift_y, gauge_img_dist)
-                nclasses = maxval(labels)
-                if( .not. allocated(class_avgs) .or. size(class_avgs) /= nclasses )then
-                    if( allocated(class_avgs) ) call dealloc_imgarr(class_avgs)
-                    call build_class_averages(region_imgs, labels, nclasses, class_avgs)
-                endif
-            endif
-            call build_class_gauge_links(params, class_avgs, class_angle, class_shift_x, class_shift_y, class_img_dist)
-            call build_gauge_knn_graph(params, spproj, region_pinds, gauge_angle, gauge_shift_x, gauge_shift_y, &
-                gauge_img_dist, local_aff, local_theta, local_shift_x, local_shift_y, &
-                labels, class_angle, class_shift_x, class_shift_y, class_img_dist)
-            first_anchor_local = choose_orientation_medoid(spproj, region_pinds)
-            call merge_local_affinity(region_inds, local_aff, local_theta, local_shift_x, local_shift_y, aff, theta, shift_x, shift_y)
-            all_gauge_angle(region_inds)    = gauge_angle
-            all_gauge_img_dist(region_inds) = gauge_img_dist
-            all_gauge_shift_x(region_inds)  = gauge_shift_x
-            all_gauge_shift_y(region_inds)  = gauge_shift_y
-            region_anchor(iregion) = region_inds(first_anchor_local)
-            call rep_imgs(iregion)%copy(class_avgs(labels(first_anchor_local)))
-            if( allocated(gauge_angle)    ) deallocate(gauge_angle)
-            if( allocated(gauge_img_dist) ) deallocate(gauge_img_dist)
-            if( allocated(gauge_shift_x)  ) deallocate(gauge_shift_x)
-            if( allocated(gauge_shift_y)  ) deallocate(gauge_shift_y)
-            if( allocated(class_angle)    ) deallocate(class_angle)
-            if( allocated(class_shift_x)  ) deallocate(class_shift_x)
-            if( allocated(class_shift_y)  ) deallocate(class_shift_y)
-            if( allocated(class_img_dist) ) deallocate(class_img_dist)
-            if( allocated(labels)         ) deallocate(labels)
-            if( allocated(class_avgs)     ) call dealloc_imgarr(class_avgs)
-            if( allocated(region_imgs)    ) call dealloc_imgarr(region_imgs)
-            if( allocated(local_aff)      ) deallocate(local_aff)
-            if( allocated(local_theta)    ) deallocate(local_theta)
-            if( allocated(local_shift_x)  ) deallocate(local_shift_x)
-            if( allocated(local_shift_y)  ) deallocate(local_shift_y)
-            if( allocated(region_pinds)   ) deallocate(region_pinds)
-            if( allocated(region_inds)    ) deallocate(region_inds)
-        end do
-        call connect_region_anchors(params, spproj, pinds, region_anchor, rep_imgs, all_gauge_angle, all_gauge_shift_x, &
-            all_gauge_shift_y, all_gauge_img_dist, aff, theta, shift_x, shift_y)
-        if( allocated(region_labels)      ) deallocate(region_labels)
-        if( allocated(all_gauge_angle)    ) deallocate(all_gauge_angle)
-        if( allocated(all_gauge_img_dist) ) deallocate(all_gauge_img_dist)
-        if( allocated(all_gauge_shift_x)  ) deallocate(all_gauge_shift_x)
-        if( allocated(all_gauge_shift_y)  ) deallocate(all_gauge_shift_y)
-        if( allocated(region_anchor)      ) deallocate(region_anchor)
-        if( allocated(rep_imgs)           ) call dealloc_imgarr(rep_imgs)
-    end subroutine build_cluster2d_affinity
+        k_used = min(max(1, k_nn), n - 1)
+        allocate(nbrs(k_used,n), source=0)
+        allocate(d2s(k_used,n), kth_d2(n), source=0.)
+        call find_euclidean_neighbors(pcavecs, k_used, nbrs, d2s)
+        kth_d2 = d2s(k_used,:)
+        call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euclidean', steering, graph, gauge)
+        deallocate(nbrs, d2s, kth_d2)
+    end subroutine build_euclidean_knn_graph
 
-    subroutine build_projection_region_labels( params, spproj, pinds, labels, nregions )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        integer, allocatable, intent(out)   :: labels(:)
-        integer,              intent(out)   :: nregions
-        integer, allocatable                :: raw_labels(:)
-        call assign_projection_coordinate_regions(spproj, pinds, raw_labels)
-        call connectedize_region_labels(params, spproj, pinds, raw_labels, labels, nregions)
-        if( allocated(raw_labels) ) deallocate(raw_labels)
-    end subroutine build_projection_region_labels
-
-    subroutine assign_projection_coordinate_regions( spproj, pinds, labels )
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        integer, allocatable, intent(out)   :: labels(:)
-        integer, allocatable :: center_refs(:)
-        type(ori) :: ptcl_ori, ref_ori
-        real      :: dist, best_dist
-        integer   :: n, nrefs, ncenters, iref, icen, i, best_center
+    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, gauge )
+        type(parameters),      intent(in)    :: params
+        type(sp_project),      intent(inout) :: spproj
+        integer,               intent(in)    :: pinds(:), k_nn
+        character(len=*),      intent(in)    :: steering
+        type(diffmap_graph),   intent(out)   :: graph
+        type(diffmap_gauge), optional, intent(in) :: gauge
+        integer, allocatable :: nbrs(:,:)
+        real,    allocatable :: d2s(:,:), kth_d2(:)
+        integer :: n, k_used
         n = size(pinds)
-        allocate(labels(n), source=1)
-        if( n <= 1 ) return
-        nrefs = spproj%os_cls3D%get_noris()
-        if( nrefs < 1 ) THROW_HARD('cls3D segment required for SO3 projection coordinates')
-        if( .not. spproj%os_cls3D%isthere('e1') .or. .not. spproj%os_cls3D%isthere('e2') )then
-            THROW_HARD('cls3D e1/e2 coordinates required for SO3 projection regions')
+        if( n < 1 ) THROW_HARD('empty orientation graph')
+        if( n == 1 )then
+            call make_singleton_graph('orientation', steering, graph)
+            return
         endif
-        allocate(center_refs(nrefs), source=0)
-        ncenters = 0
-        do iref = 1,nrefs
-            if( spproj%os_cls3D%isthere(iref, 'state') )then
-                if( spproj%os_cls3D%get_state(iref) <= 0 ) cycle
-            endif
-            ncenters = ncenters + 1
-            center_refs(ncenters) = iref
-        end do
-        if( ncenters < 1 ) THROW_HARD('no active cls3D projection coordinates for SO3 projection regions')
-        do i = 1,n
-            call spproj%os_ptcl3D%get_ori(pinds(i), ptcl_ori)
-            call ptcl_ori%e3set(0.)
-            best_center = 1
-            best_dist   = huge(1.)
-            do icen = 1,ncenters
-                call spproj%os_cls3D%get_ori(center_refs(icen), ref_ori)
-                call ref_ori%e3set(0.)
-                dist = ptcl_ori .euldist. ref_ori
-                if( dist < best_dist )then
-                    best_dist   = dist
-                    best_center = icen
-                endif
-                call ref_ori%kill
+        k_used = min(max(1, k_nn), n - 1)
+        allocate(nbrs(k_used,n), source=0)
+        allocate(d2s(k_used,n), kth_d2(n), source=0.)
+        call find_orientation_neighbors(spproj, pinds, k_used, nbrs, d2s)
+        kth_d2 = d2s(k_used,:)
+        call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'orientation', steering, graph, gauge)
+        deallocate(nbrs, d2s, kth_d2)
+    end subroutine build_orientation_knn_graph
+
+    subroutine find_euclidean_neighbors( pcavecs, k_used, nbrs, d2s )
+        real,    intent(in)  :: pcavecs(:,:)
+        integer, intent(in)  :: k_used
+        integer, intent(out) :: nbrs(:,:)
+        real,    intent(out) :: d2s(:,:)
+        integer, allocatable :: local_nbrs(:,:,:)
+        real,    allocatable :: local_d2s(:,:,:)
+        real :: d2
+        integer :: n, ndim, nthreads, tid, i, j, k, m
+        n    = size(pcavecs, 2)
+        ndim = size(pcavecs, 1)
+        nthreads = 1
+        !$ nthreads = omp_get_max_threads()
+        allocate(local_nbrs(k_used,n,nthreads), source=0)
+        allocate(local_d2s(k_used,n,nthreads))
+        local_d2s = huge(1.)
+        nbrs = 0
+        d2s  = huge(1.)
+        !$omp parallel default(shared) private(tid,i,j,k,d2)
+        tid = 1
+        !$ tid = omp_get_thread_num() + 1
+        !$omp do schedule(dynamic)
+        do i = 1,n - 1
+            do j = i + 1,n
+                d2 = 0.
+                do k = 1,ndim
+                    d2 = d2 + (pcavecs(k,i) - pcavecs(k,j))**2
+                end do
+                call insert_neighbor(j, d2, local_nbrs(:,i,tid), local_d2s(:,i,tid))
+                call insert_neighbor(i, d2, local_nbrs(:,j,tid), local_d2s(:,j,tid))
             end do
-            labels(i) = best_center
-            call ptcl_ori%kill
         end do
-        if( allocated(center_refs) ) deallocate(center_refs)
-    end subroutine assign_projection_coordinate_regions
-
-    subroutine connectedize_region_labels( params, spproj, pinds, raw_labels, labels, nregions )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:), raw_labels(:)
-        integer, allocatable, intent(out)   :: labels(:)
-        integer,              intent(out)   :: nregions
-        logical, allocatable :: edge_mask(:,:)
-        call build_projection_knn_graph(spproj, max(1, params%k_nn), pinds, edge_mask)
-        call split_labels_by_connectivity(raw_labels, edge_mask, labels, nregions)
-        if( allocated(edge_mask) ) deallocate(edge_mask)
-    end subroutine connectedize_region_labels
-
-    subroutine split_labels_by_connectivity( raw_labels, edge_mask, labels, nregions )
-        integer,              intent(in)  :: raw_labels(:)
-        logical,              intent(in)  :: edge_mask(:,:)
-        integer, allocatable, intent(out) :: labels(:)
-        integer,              intent(out) :: nregions
-        logical, allocatable :: visited(:)
-        integer, allocatable :: stack(:)
-        integer :: n, seed, v, u, top, raw_label
-        n = size(raw_labels)
-        allocate(labels(n), stack(n))
-        allocate(visited(n))
-        labels = 0
-        stack  = 0
-        visited = .false.
-        nregions = 0
-        do seed = 1,n
-            if( visited(seed) ) cycle
-            nregions  = nregions + 1
-            raw_label = raw_labels(seed)
-            top = 1
-            stack(top) = seed
-            visited(seed) = .true.
-            labels(seed)  = nregions
-            do while( top > 0 )
-                v = stack(top)
-                top = top - 1
-                do u = 1,n
-                    if( visited(u) ) cycle
-                    if( raw_labels(u) /= raw_label ) cycle
-                    if( .not. edge_mask(v,u) ) cycle
-                    visited(u) = .true.
-                    labels(u)  = nregions
-                    top = top + 1
-                    stack(top) = u
+        !$omp end do
+        !$omp end parallel
+        do tid = 1,nthreads
+            do i = 1,n
+                do m = 1,k_used
+                    if( local_nbrs(m,i,tid) < 1 ) cycle
+                    call insert_neighbor(local_nbrs(m,i,tid), local_d2s(m,i,tid), nbrs(:,i), d2s(:,i))
                 end do
             end do
         end do
-        if( allocated(visited) ) deallocate(visited)
-        if( allocated(stack)   ) deallocate(stack)
-    end subroutine split_labels_by_connectivity
+        deallocate(local_nbrs, local_d2s)
+    end subroutine find_euclidean_neighbors
 
-    subroutine inds_for_label( labels, label, inds )
-        integer,              intent(in)  :: labels(:), label
-        integer, allocatable, intent(out) :: inds(:)
-        integer :: i, cnt
-        allocate(inds(count(labels == label)))
-        cnt = 0
-        do i = 1,size(labels)
-            if( labels(i) == label )then
-                cnt = cnt + 1
-                inds(cnt) = i
-            endif
-        end do
-    end subroutine inds_for_label
-
-    integer function local_cluster2d_nclasses( params, n ) result(nclasses)
-        type(parameters), intent(in) :: params
-        integer,          intent(in) :: n
-        if( n <= 2 )then
-            nclasses = 1
-        else
-            nclasses = min(max(2, default_local_split_nclasses(params)), n - 1)
-        endif
-    end function local_cluster2d_nclasses
-
-    integer function default_local_split_nclasses( params ) result(nclasses)
-        type(parameters), intent(in) :: params
-        if( params%ncls > 1 .and. params%ncls <= max(params%nsubcls_max, params%nsubcls_min) )then
-            nclasses = params%ncls
-        else
-            nclasses = max(2, params%nsubcls_min)
-        endif
-    end function default_local_split_nclasses
-
-    subroutine merge_local_affinity( inds, local_aff, local_theta, local_shift_x, local_shift_y, aff, theta, shift_x, shift_y )
-        integer, intent(in)    :: inds(:)
-        real,    intent(in)    :: local_aff(:,:), local_theta(:,:), local_shift_x(:,:), local_shift_y(:,:)
-        real,    intent(inout) :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        integer :: i, j, gi, gj
-        do i = 1,size(inds)
-            gi = inds(i)
-            do j = 1,size(inds)
-                if( local_aff(i,j) <= 0. ) cycle
-                gj = inds(j)
-                aff(gi,gj)   = max(aff(gi,gj), local_aff(i,j))
-                theta(gi,gj) = local_theta(i,j)
-                shift_x(gi,gj) = local_shift_x(i,j)
-                shift_y(gi,gj) = local_shift_y(i,j)
-            end do
-        end do
-    end subroutine merge_local_affinity
-
-    subroutine connect_region_anchors( params, spproj, pinds, region_anchor, rep_imgs, gauge_angle, gauge_shift_x, gauge_shift_y, &
-            gauge_img_dist, aff, theta, shift_x, shift_y )
-        type(parameters), intent(in)    :: params
+    subroutine find_orientation_neighbors( spproj, pinds, k_used, nbrs, d2s )
         type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: pinds(:), region_anchor(:)
-        type(image),      intent(inout) :: rep_imgs(:)
-        real,             intent(in)    :: gauge_angle(:), gauge_shift_x(:), gauge_shift_y(:), gauge_img_dist(:)
-        real,             intent(inout) :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        type(polarft_calc) :: pftc
-        type(parameters), target :: params_pft
-        integer, allocatable :: edge_i(:), edge_j(:)
-        real, allocatable :: edge_img_dist(:), edge_angle(:), edge_shift_x(:), edge_shift_y(:)
-        real :: corr, img_dist, angle, sh(2), eps_img, w
-        integer :: nregions, nedges, e, gi, gj
-        nregions = size(region_anchor)
-        if( nregions <= 1 ) return
-        call build_region_mst(spproj, pinds, region_anchor, edge_i, edge_j, nedges)
-        if( nedges <= 0 )then
-            if( allocated(edge_i) ) deallocate(edge_i)
-            if( allocated(edge_j) ) deallocate(edge_j)
-            return
-        endif
-        allocate(edge_img_dist(nedges), edge_angle(nedges), edge_shift_x(nedges), edge_shift_y(nedges), source=0.)
-        call prepare_so3_pft(params, rep_imgs, params_pft, pftc)
-        eps_img = 0.
-        do e = 1,nedges
-            call align_pair(params, pftc, edge_i(e), edge_j(e), corr, img_dist, angle, sh)
-            gi = region_anchor(edge_i(e))
-            gj = region_anchor(edge_j(e))
-            edge_img_dist(e) = max(img_dist, 0.) + 0.5 * (max(gauge_img_dist(gi), 0.) + max(gauge_img_dist(gj), 0.))
-            edge_angle(e)    = wrap_angle_pm180(angle + gauge_angle(gj) - gauge_angle(gi))
-            edge_shift_x(e)  = sh(1) + gauge_shift_x(gj) - gauge_shift_x(gi)
-            edge_shift_y(e)  = sh(2) + gauge_shift_y(gj) - gauge_shift_y(gi)
-            eps_img = eps_img + edge_img_dist(e)
-        end do
-        eps_img = max(eps_img / real(max(nedges,1)), 1.e-6)
-        do e = 1,nedges
-            gi = region_anchor(edge_i(e))
-            gj = region_anchor(edge_j(e))
-            w = exp(-edge_img_dist(e) / eps_img)
-            aff(gi,gj)   = max(aff(gi,gj), w)
-            aff(gj,gi)   = max(aff(gj,gi), w)
-            theta(gi,gj) = deg2rad(edge_angle(e))
-            theta(gj,gi) = -theta(gi,gj)
-            shift_x(gi,gj) = edge_shift_x(e)
-            shift_x(gj,gi) = -edge_shift_x(e)
-            shift_y(gi,gj) = edge_shift_y(e)
-            shift_y(gj,gi) = -edge_shift_y(e)
-        end do
-        call pftc%kill
-        if( allocated(edge_i)        ) deallocate(edge_i)
-        if( allocated(edge_j)        ) deallocate(edge_j)
-        if( allocated(edge_img_dist) ) deallocate(edge_img_dist)
-        if( allocated(edge_angle)    ) deallocate(edge_angle)
-        if( allocated(edge_shift_x)  ) deallocate(edge_shift_x)
-        if( allocated(edge_shift_y)  ) deallocate(edge_shift_y)
-    end subroutine connect_region_anchors
-
-    subroutine build_region_mst( spproj, pinds, region_anchor, edge_i, edge_j, nedges )
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:), region_anchor(:)
-        integer, allocatable, intent(out)   :: edge_i(:), edge_j(:)
-        integer,              intent(out)   :: nedges
-        logical, allocatable :: in_tree(:)
-        real, allocatable :: best_dist(:)
-        integer, allocatable :: best_parent(:)
-        real :: dist, min_dist
-        integer :: nregions, i, j, next_region
-        nregions = size(region_anchor)
-        allocate(edge_i(max(0,nregions-1)), edge_j(max(0,nregions-1)))
-        edge_i = 0
-        edge_j = 0
-        nedges = 0
-        if( nregions <= 1 ) return
-        allocate(in_tree(nregions), best_dist(nregions), best_parent(nregions))
-        in_tree = .false.
-        best_dist = huge(best_dist)
-        best_parent = 0
-        in_tree(1) = .true.
-        do j = 2,nregions
-            best_dist(j)   = projection_dir_dist(spproj, pinds(region_anchor(1)), pinds(region_anchor(j)))
-            best_parent(j) = 1
-        end do
-        do while( count(in_tree) < nregions )
-            min_dist = huge(min_dist)
-            next_region = 0
-            do i = 1,nregions
-                if( in_tree(i) ) cycle
-                if( best_dist(i) < min_dist )then
-                    min_dist = best_dist(i)
-                    next_region = i
-                endif
-            end do
-            if( next_region == 0 ) exit
-            nedges = nedges + 1
-            edge_i(nedges) = best_parent(next_region)
-            edge_j(nedges) = next_region
-            in_tree(next_region) = .true.
-            do j = 1,nregions
-                if( in_tree(j) ) cycle
-                dist = projection_dir_dist(spproj, pinds(region_anchor(next_region)), pinds(region_anchor(j)))
-                if( dist < best_dist(j) )then
-                    best_dist(j)   = dist
-                    best_parent(j) = next_region
-                endif
-            end do
-        end do
-        if( allocated(in_tree)     ) deallocate(in_tree)
-        if( allocated(best_dist)   ) deallocate(best_dist)
-        if( allocated(best_parent) ) deallocate(best_parent)
-    end subroutine build_region_mst
-
-    subroutine build_projection_knn_graph( spproj, k_nn, pinds, edge_mask )
-        type(sp_project), intent(inout)          :: spproj
-        integer,          intent(in)             :: k_nn, pinds(:)
-        logical, allocatable, intent(out)        :: edge_mask(:,:)
-        integer, allocatable :: nbrs(:,:)
-        real, allocatable    :: dists(:,:)
+        integer,          intent(in)    :: pinds(:), k_used
+        integer,          intent(out)   :: nbrs(:,:)
+        real,             intent(out)   :: d2s(:,:)
+        type(ori) :: oi, oj
         real :: dist
-        integer :: n, i, j, m, k_used
+        integer :: n, i, j
         n = size(pinds)
-        allocate(edge_mask(n,n), source=.false.)
-        if( n <= 1 ) return
-        k_used = min(max(1, k_nn), n-1)
-        allocate(nbrs(k_used,n), source=0)
-        allocate(dists(k_used,n), source=huge(1.))
+        nbrs = 0
+        d2s  = huge(1.)
         do i = 1,n
+            call spproj%os_ptcl3D%get_ori(pinds(i), oi)
             do j = 1,n
                 if( i == j ) cycle
-                dist = projection_dir_dist(spproj, pinds(i), pinds(j))
-                call insert_neighbor(j, dist, nbrs(:,i), dists(:,i))
+                call spproj%os_ptcl3D%get_ori(pinds(j), oj)
+                dist = oi .euldist. oj
+                call insert_neighbor(j, dist**2, nbrs(:,i), d2s(:,i))
+                call oj%kill
             end do
+            call oi%kill
         end do
+    end subroutine find_orientation_neighbors
+
+    subroutine pack_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph, gauge )
+        integer,              intent(in)  :: n, k_used, nbrs(:,:)
+        real,                 intent(in)  :: d2s(:,:), kth_d2(:)
+        character(len=*),     intent(in)  :: metric, steering
+        type(diffmap_graph),  intent(out) :: graph
+        type(diffmap_gauge), optional, intent(in) :: gauge
+        integer, allocatable :: rows(:), cols(:)
+        real,    allocatable :: weights(:), theta(:), sx(:), sy(:)
+        real :: eps, w, th, dx, dy
+        integer :: max_edges, pos, i, m, j
+        logical :: use_theta, use_shift
+        use_theta = present(gauge) .and. (trim(steering) == 'so2' .or. trim(steering) == 'se2')
+        use_shift = present(gauge) .and. trim(steering) == 'se2'
+        if( .not. use_theta )then
+            call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, metric, steering, graph)
+            return
+        endif
+        max_edges = 2 * n * k_used
+        allocate(rows(max_edges), cols(max_edges), source=0)
+        allocate(weights(max_edges), source=0.)
+        if( use_theta ) allocate(theta(max_edges), source=0.)
+        if( use_shift ) allocate(sx(max_edges), sy(max_edges), source=0.)
+        eps = median_positive(kth_d2)
+        if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+        pos = 0
         do i = 1,n
             do m = 1,k_used
                 j = nbrs(m,i)
                 if( j < 1 ) cycle
-                edge_mask(i,j) = .true.
-                edge_mask(j,i) = .true.
+                w = exp(-max(d2s(m,i), 0.) / eps)
+                call add_edge(i, j, w, 1.)
+                call add_edge(j, i, w, -1.)
             end do
         end do
-        if( allocated(nbrs) ) deallocate(nbrs)
-        if( allocated(dists) ) deallocate(dists)
-    end subroutine build_projection_knn_graph
+        if( use_theta .and. use_shift )then
+            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph, &
+                                     theta(:pos), sx(:pos), sy(:pos))
+        else if( use_theta )then
+            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph, theta(:pos))
+        else
+            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph)
+        endif
+        graph%k_nn = k_used
+        call graph%normalize()
+        deallocate(rows, cols, weights)
+        if( allocated(theta) ) deallocate(theta)
+        if( allocated(sx)    ) deallocate(sx)
+        if( allocated(sy)    ) deallocate(sy)
+    contains
+        subroutine add_edge( ii, jj, ww, sign )
+            integer, intent(in) :: ii, jj
+            real,    intent(in) :: ww, sign
+            pos = pos + 1
+            rows(pos) = ii
+            cols(pos) = jj
+            weights(pos) = ww
+            if( use_theta )then
+                th = deg2rad(wrap_angle_pm180(gauge%angle(jj) - gauge%angle(ii)))
+                theta(pos) = sign * th
+            endif
+            if( use_shift )then
+                dx = gauge%shift_x(jj) - gauge%shift_x(ii)
+                dy = gauge%shift_y(jj) - gauge%shift_y(ii)
+                sx(pos) = sign * dx
+                sy(pos) = sign * dy
+            endif
+        end subroutine add_edge
+    end subroutine pack_knn_to_csr
 
-    real function projection_dir_dist( spproj, pind_i, pind_j ) result(dist)
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: pind_i, pind_j
-        type(ori) :: oi, oj
-        call spproj%os_ptcl3D%get_ori(pind_i, oi)
-        call spproj%os_ptcl3D%get_ori(pind_j, oj)
-        call oi%e3set(0.)
-        call oj%e3set(0.)
-        dist = oi .euldist. oj
-        call oi%kill
-        call oj%kill
-    end function projection_dir_dist
+    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph )
+        integer,              intent(in)  :: n, k_used, nbrs(:,:)
+        real,                 intent(in)  :: d2s(:,:), kth_d2(:)
+        character(len=*),     intent(in)  :: metric, steering
+        type(diffmap_graph),  intent(out) :: graph
+        integer, allocatable :: counts(:), cursor(:)
+        real :: eps, w
+        integer :: i, m, j, p, nnz
+        logical :: mutual
+        allocate(counts(n), cursor(n), source=0)
+        do i = 1,n
+            do m = 1,k_used
+                j = nbrs(m,i)
+                if( j < 1 ) cycle
+                counts(i) = counts(i) + 1
+                mutual = neighbor_contains(nbrs(:,j), i)
+                if( .not. mutual ) counts(j) = counts(j) + 1
+            end do
+        end do
+        nnz = sum(counts)
+        graph%n        = n
+        graph%nnz      = nnz
+        graph%metric   = metric
+        graph%steering = steering
+        graph%k_nn     = k_used
+        allocate(graph%rowptr(n+1), graph%colind(nnz), graph%w(nnz))
+        graph%rowptr(1) = 1
+        do i = 1,n
+            graph%rowptr(i+1) = graph%rowptr(i) + counts(i)
+        end do
+        cursor = graph%rowptr(1:n)
+        eps = median_positive(kth_d2)
+        if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+        do i = 1,n
+            do m = 1,k_used
+                j = nbrs(m,i)
+                if( j < 1 ) cycle
+                w = exp(-max(d2s(m,i), 0.) / eps)
+                p = cursor(i)
+                graph%colind(p) = j
+                graph%w(p)      = w
+                cursor(i)       = p + 1
+                mutual = neighbor_contains(nbrs(:,j), i)
+                if( .not. mutual )then
+                    p = cursor(j)
+                    graph%colind(p) = i
+                    graph%w(p)      = w
+                    cursor(j)       = p + 1
+                endif
+            end do
+        end do
+        call graph%normalize()
+        deallocate(counts, cursor)
+    contains
+        logical function neighbor_contains( row_nbrs, target ) result(found)
+            integer, intent(in) :: row_nbrs(:), target
+            integer :: q
+            found = .false.
+            do q = 1,size(row_nbrs)
+                if( row_nbrs(q) /= target ) cycle
+                found = .true.
+                return
+            end do
+        end function neighbor_contains
+    end subroutine pack_scalar_knn_to_csr
 
-    subroutine run_local_cluster2d( params, pinds, imgs, nclasses_req, labels, class_avgs, gauge_angle, gauge_shift_x, &
-            gauge_shift_y, gauge_img_dist )
-        type(parameters),     intent(in)    :: params
-        integer,              intent(in)    :: pinds(:), nclasses_req
-        type(image),          intent(inout) :: imgs(:)
-        integer, allocatable, intent(out)   :: labels(:)
-        type(image), allocatable, intent(out) :: class_avgs(:)
-        real, allocatable,    intent(out)   :: gauge_angle(:), gauge_shift_x(:), gauge_shift_y(:), gauge_img_dist(:)
-        type(cluster2D_inmem_strategy) :: c2d_strategy
+    subroutine coalesce_coo_to_csr( n, rows, cols, weights, metric, steering, graph, theta, sx, sy )
+        integer,              intent(in)  :: n, rows(:), cols(:)
+        real,                 intent(in)  :: weights(:)
+        character(len=*),     intent(in)  :: metric, steering
+        type(diffmap_graph),  intent(out) :: graph
+        real, optional,       intent(in)  :: theta(:), sx(:), sy(:)
+        integer, allocatable :: out_rows(:), out_cols(:), counts(:), cursor(:)
+        real,    allocatable :: out_w(:), out_theta(:), out_sx(:), out_sy(:)
+        integer :: e, f, nnz, p, i
+        logical :: found, with_theta, with_shift
+        if( size(rows) /= size(cols) .or. size(rows) /= size(weights) ) THROW_HARD('COO graph size mismatch')
+        with_theta = present(theta)
+        with_shift = present(sx) .and. present(sy)
+        allocate(out_rows(size(rows)), out_cols(size(cols)), source=0)
+        allocate(out_w(size(weights)), source=0.)
+        if( with_theta ) allocate(out_theta(size(rows)), source=0.)
+        if( with_shift ) allocate(out_sx(size(rows)), out_sy(size(rows)), source=0.)
+        nnz = 0
+        do e = 1,size(rows)
+            if( rows(e) < 1 .or. rows(e) > n .or. cols(e) < 1 .or. cols(e) > n ) THROW_HARD('COO graph index out of range')
+            if( weights(e) <= DTINY .or. .not. ieee_is_finite(weights(e)) ) cycle
+            found = .false.
+            do f = 1,nnz
+                if( out_rows(f) /= rows(e) .or. out_cols(f) /= cols(e) ) cycle
+                found = .true.
+                if( weights(e) > out_w(f) )then
+                    out_w(f) = weights(e)
+                    if( with_theta ) out_theta(f) = theta(e)
+                    if( with_shift )then
+                        out_sx(f) = sx(e)
+                        out_sy(f) = sy(e)
+                    endif
+                endif
+                exit
+            end do
+            if( .not. found )then
+                nnz = nnz + 1
+                out_rows(nnz) = rows(e)
+                out_cols(nnz) = cols(e)
+                out_w(nnz)    = weights(e)
+                if( with_theta ) out_theta(nnz) = theta(e)
+                if( with_shift )then
+                    out_sx(nnz) = sx(e)
+                    out_sy(nnz) = sy(e)
+                endif
+            endif
+        end do
+        graph%n        = n
+        graph%nnz      = nnz
+        graph%metric   = metric
+        graph%steering = steering
+        allocate(graph%rowptr(n+1), graph%colind(nnz), graph%w(nnz))
+        if( with_theta ) allocate(graph%theta(nnz), source=0.)
+        if( with_shift ) allocate(graph%shift_x(nnz), graph%shift_y(nnz), source=0.)
+        allocate(counts(n), cursor(n), source=0)
+        do e = 1,nnz
+            counts(out_rows(e)) = counts(out_rows(e)) + 1
+        end do
+        graph%rowptr(1) = 1
+        do i = 1,n
+            graph%rowptr(i+1) = graph%rowptr(i) + counts(i)
+        end do
+        cursor = graph%rowptr(1:n)
+        do e = 1,nnz
+            p = cursor(out_rows(e))
+            graph%colind(p) = out_cols(e)
+            graph%w(p)      = out_w(e)
+            if( with_theta ) graph%theta(p) = out_theta(e)
+            if( with_shift )then
+                graph%shift_x(p) = out_sx(e)
+                graph%shift_y(p) = out_sy(e)
+            endif
+            cursor(out_rows(e)) = cursor(out_rows(e)) + 1
+        end do
+        deallocate(out_rows, out_cols, out_w, counts, cursor)
+        if( allocated(out_theta) ) deallocate(out_theta)
+        if( allocated(out_sx)    ) deallocate(out_sx)
+        if( allocated(out_sy)    ) deallocate(out_sy)
+    end subroutine coalesce_coo_to_csr
+
+    subroutine make_singleton_graph( metric, steering, graph )
+        character(len=*),    intent(in)  :: metric, steering
+        type(diffmap_graph), intent(out) :: graph
+        graph%n        = 1
+        graph%nnz      = 1
+        graph%k_nn     = 0
+        graph%metric   = metric
+        graph%steering = steering
+        allocate(graph%rowptr(2), graph%colind(1), graph%w(1), graph%wnorm(1))
+        graph%rowptr = [1,2]
+        graph%colind = [1]
+        graph%w      = [1.]
+        graph%wnorm  = [1.]
+        if( trim(steering) == 'so2' .or. trim(steering) == 'se2' ) allocate(graph%theta(1), source=0.)
+        if( trim(steering) == 'se2' ) allocate(graph%shift_x(1), graph%shift_y(1), source=0.)
+    end subroutine make_singleton_graph
+
+    subroutine normalize_diffmap_graph( self )
+        class(diffmap_graph), intent(inout) :: self
+        real, allocatable :: deg(:)
+        integer :: i, j, p
+        if( self%n < 1 ) return
+        allocate(deg(self%n), source=0.)
+        call self%degree(deg, normalized=.false.)
+        if( allocated(self%wnorm) ) deallocate(self%wnorm)
+        allocate(self%wnorm(self%nnz), source=0.)
+        do i = 1,self%n
+            do p = self%rowptr(i), self%rowptr(i+1) - 1
+                j = self%colind(p)
+                self%wnorm(p) = self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+            end do
+        end do
+        deallocate(deg)
+    end subroutine normalize_diffmap_graph
+
+    subroutine diffmap_graph_degree( self, deg, normalized )
+        class(diffmap_graph), intent(in)  :: self
+        real,                 intent(out) :: deg(:)
+        logical, optional,    intent(in)  :: normalized
+        logical :: use_norm
+        integer :: i, p
+        if( size(deg) /= self%n ) THROW_HARD('graph degree shape mismatch')
+        use_norm = .false.
+        if( present(normalized) ) use_norm = normalized
+        deg = 0.
+        do i = 1,self%n
+            do p = self%rowptr(i), self%rowptr(i+1) - 1
+                if( use_norm .and. allocated(self%wnorm) )then
+                    deg(i) = deg(i) + self%wnorm(p)
+                else
+                    deg(i) = deg(i) + self%w(p)
+                endif
+            end do
+        end do
+    end subroutine diffmap_graph_degree
+
+    subroutine graph_matvec( ctx, x, y )
+        class(*), intent(in)  :: ctx
+        real,     intent(in)  :: x(:)
+        real,     intent(out) :: y(:)
+        integer :: i, p
+        select type(graph => ctx)
+        type is (diffmap_graph)
+            if( size(x) /= graph%n .or. size(y) /= graph%n ) THROW_HARD('sparse graph matvec shape mismatch')
+            y = 0.
+            do i = 1,graph%n
+                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                    if( allocated(graph%wnorm) )then
+                        y(i) = y(i) + graph%wnorm(p) * x(graph%colind(p))
+                    else
+                        y(i) = y(i) + graph%w(p) * x(graph%colind(p))
+                    endif
+                end do
+            end do
+        class default
+            THROW_HARD('invalid graph context for matvec')
+        end select
+    end subroutine graph_matvec
+
+    integer function graph_directed_edges( graph ) result(nedges)
+        type(diffmap_graph), intent(in) :: graph
+        nedges = graph%nnz
+    end function graph_directed_edges
+
+    logical function diffmap_graph_has_theta( self ) result(l_has)
+        class(diffmap_graph), intent(in) :: self
+        l_has = allocated(self%theta)
+    end function diffmap_graph_has_theta
+
+    logical function diffmap_graph_has_shift( self ) result(l_has)
+        class(diffmap_graph), intent(in) :: self
+        l_has = allocated(self%shift_x) .and. allocated(self%shift_y)
+    end function diffmap_graph_has_shift
+
+    subroutine kill_diffmap_graph( self )
+        class(diffmap_graph), intent(inout) :: self
+        if( allocated(self%rowptr)  ) deallocate(self%rowptr)
+        if( allocated(self%colind)  ) deallocate(self%colind)
+        if( allocated(self%w)       ) deallocate(self%w)
+        if( allocated(self%wnorm)   ) deallocate(self%wnorm)
+        if( allocated(self%theta)   ) deallocate(self%theta)
+        if( allocated(self%shift_x) ) deallocate(self%shift_x)
+        if( allocated(self%shift_y) ) deallocate(self%shift_y)
+        self%n = 0
+        self%nnz = 0
+        self%k_nn = 0
+        self%metric = 'euclidean'
+        self%steering = 'none'
+    end subroutine kill_diffmap_graph
+
+    subroutine kill_diffmap_gauge( self )
+        class(diffmap_gauge), intent(inout) :: self
+        if( allocated(self%angle)    ) deallocate(self%angle)
+        if( allocated(self%shift_x)  ) deallocate(self%shift_x)
+        if( allocated(self%shift_y)  ) deallocate(self%shift_y)
+        if( allocated(self%img_dist) ) deallocate(self%img_dist)
+    end subroutine kill_diffmap_gauge
+
+    subroutine run_single_class_cluster2d_gauge( params, pinds, imgs, gauge, steering )
+        use simple_strategy2D_matcher, only: cluster2D_exec
+        type(parameters),    intent(in)    :: params
+        integer,             intent(in)    :: pinds(:)
+        type(image),         intent(inout) :: imgs(:)
+        type(diffmap_gauge), intent(out)   :: gauge
+        character(len=*), optional, intent(in) :: steering
         type(parameters) :: c2d_params
         type(builder)    :: c2d_build
         type(cmdline)    :: c2d_cline
-        type(sp_project) :: local_proj, result_proj
+        type(sp_project) :: local_proj
         type(oris)       :: local_os
         type(ori)        :: o
         type(ctfparams)  :: ctfvars
-        type(string) :: cwd_before, cwd_now, workdir, stk_fname, projfile, cavg_fname, dot
-        integer :: n, i, iter, ldim(3), istat, next_dir, nclasses, nlocal_maxits
+        type(image), allocatable :: ref_imgs(:)
+        type(string) :: cwd_before, cwd_now, workdir, stk_fname, projfile, refs_fname, refs_even_fname, refs_odd_fname, dot
+        integer :: n, i, iter, ldim(3), istat, next_dir, nlocal_maxits, first_label
         logical :: converged
-        real :: smpd, mskdiam_local, corr
-        n    = size(pinds)
+        real :: smpd, mskdiam_local, local_trs
+        character(len=16) :: local_steering
+        n = size(imgs)
+        if( n /= size(pinds) ) THROW_HARD('gauge particle/image count mismatch')
+        allocate(gauge%angle(n), gauge%shift_x(n), gauge%shift_y(n), gauge%img_dist(n), source=0.)
+        if( n < 1 ) return
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         call simple_getcwd(cwd_before)
         dot      = '.'
         next_dir = find_next_int_dir_prefix(dot)
-        workdir  = int2str(next_dir)//'_so3_local_cluster2d_'//int2str(pinds(1))
+        first_label = merge(pinds(1), 1, size(pinds) > 0)
+        workdir  = int2str(next_dir)//'_diffmap_gauge_cluster2d_'//int2str(first_label)
         call simple_mkdir(workdir, verbose=.false.)
         call simple_chdir(workdir, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to enter local SO3 cluster2D directory')
+        if( istat /= 0 ) THROW_HARD('failed to enter diffusion-map gauge cluster2D directory')
         call simple_getcwd(cwd_now)
         CWD_GLOB = cwd_now%to_char()
 
         stk_fname = 'particles.mrcs'
-        projfile  = 'local_cluster2d.simple'
+        projfile  = 'gauge_cluster2d.simple'
+        refs_fname      = 'start2Drefs.mrc'
+        refs_even_fname = 'start2Drefs_even.mrc'
+        refs_odd_fname  = 'start2Drefs_odd.mrc'
         call write_imgarr(imgs, stk_fname)
+        allocate(ref_imgs(1))
+        call ref_imgs(1)%new(ldim, smpd)
+        call ref_imgs(1)%zero_and_unflag_ft
+        do i = 1,n
+            call ref_imgs(1)%add(imgs(i))
+        end do
+        call ref_imgs(1)%div(real(max(n,1)))
+        call write_imgarr(ref_imgs, refs_fname)
+        call write_imgarr(ref_imgs, refs_even_fname)
+        call write_imgarr(ref_imgs, refs_odd_fname)
         call local_proj%update_projinfo(projfile)
         call local_os%new(n, is_ptcl=.true.)
         do i = 1,n
@@ -522,6 +623,7 @@ contains
             call o%set('w',     1.)
             call o%set('x',     0.)
             call o%set('y',     0.)
+            call o%set('class', 1.)
             call o%e3set(0.)
             call local_os%set_ori(i, o)
             call o%kill
@@ -536,24 +638,39 @@ contains
 
         mskdiam_local = params%mskdiam
         if( mskdiam_local <= 0. ) mskdiam_local = real(ldim(1)) * smpd
-        nlocal_maxits = max(1, params%so3_local_cluster2d_maxits)
+        local_steering = lowercase(trim(params%steering))
+        if( present(steering) ) local_steering = lowercase(trim(steering))
+        local_trs = 0.
+        if( trim(local_steering) == 'se2' ) local_trs = max(params%trs, 3.)
+        nlocal_maxits = GRAPH_GAUGE_CLUSTER2D_MAXITS
         call c2d_cline%set('prg',           'cluster2D')
         call c2d_cline%set('projfile',      projfile%to_char())
-        call c2d_cline%set('ncls',          nclasses_req)
+        call c2d_cline%set('refs',          refs_fname%to_char())
+        call c2d_cline%set('refs_even',     refs_even_fname%to_char())
+        call c2d_cline%set('refs_odd',      refs_odd_fname%to_char())
+        call c2d_cline%set('outfile',       ALGN_FBODY//int2str(1)//METADATA_EXT)
+        call c2d_cline%set('ncls',          1)
         call c2d_cline%set('mskdiam',       mskdiam_local)
         call c2d_cline%set('smpd',          smpd)
         call c2d_cline%set('box',           ldim(1))
         call c2d_cline%set('ctf',           'no')
         call c2d_cline%set('objfun',        'cc')
+        call c2d_cline%set('refine',        'inpl')
         call c2d_cline%set('ml_reg',        'no')
         call c2d_cline%set('maxits',        nlocal_maxits)
+        call c2d_cline%set('minits',        nlocal_maxits)
+        call c2d_cline%set('converge',      'no')
         call c2d_cline%set('startit',       1)
         call c2d_cline%set('nthr',          max(1, params%nthr))
-        call c2d_cline%set('trs',           params%trs)
+        call c2d_cline%set('trs',           local_trs)
         call c2d_cline%set('mkdir',         'no')
         call c2d_cline%set('restore_cavgs', 'yes')
         call set_cluster2D_defaults(c2d_cline)
-        call c2d_strategy%initialize(c2d_params, c2d_build, c2d_cline)
+        call c2d_build%init_params_and_build_strategy2D_tbox(c2d_cline, c2d_params, wthreads=.true.)
+        if( c2d_build%spproj_field%get_nevenodd() == 0 )then
+            call c2d_build%spproj_field%partition_eo
+            call c2d_build%spproj%write_segment_inside(c2d_params%oritype, c2d_params%projfile)
+        endif
         c2d_params%which_iter = c2d_params%startit - 1
         if( c2d_cline%defined('extr_iter') )then
             c2d_params%extr_iter = c2d_params%extr_iter - 1
@@ -563,413 +680,45 @@ contains
         do iter = 1,nlocal_maxits
             c2d_params%which_iter = c2d_params%which_iter + 1
             c2d_params%extr_iter  = c2d_params%extr_iter  + 1
-            call c2d_strategy%execute_iteration(c2d_params, c2d_build, c2d_cline, converged)
-            call c2d_strategy%finalize_iteration(c2d_params, c2d_build)
-            if( converged ) exit
+            call c2d_cline%set('which_iter', c2d_params%which_iter)
+            call c2d_cline%set('extr_iter',  c2d_params%extr_iter)
+            call c2d_cline%set('outfile', ALGN_FBODY//int2str_pad(c2d_params%part,c2d_params%numlen)//METADATA_EXT)
+            c2d_params%outfile = ALGN_FBODY//int2str_pad(c2d_params%part,c2d_params%numlen)//METADATA_EXT
+            call cluster2D_exec(c2d_params, c2d_build, c2d_cline, c2d_params%which_iter, converged)
         end do
-        call c2d_strategy%finalize_run(c2d_params, c2d_build, c2d_cline)
-        call c2d_strategy%cleanup(c2d_params)
-        call result_proj%read(projfile)
-        allocate(labels(n), source=0)
-        allocate(gauge_angle(n), gauge_shift_x(n), gauge_shift_y(n), gauge_img_dist(n), source=0.)
         do i = 1,n
-            labels(i) = max(1, result_proj%os_ptcl2D%get_int(i, 'class'))
-            gauge_angle(i) = result_proj%os_ptcl2D%e3get(i)
-            if( result_proj%os_ptcl2D%isthere('x') ) gauge_shift_x(i) = result_proj%os_ptcl2D%get(i, 'x')
-            if( result_proj%os_ptcl2D%isthere('y') ) gauge_shift_y(i) = result_proj%os_ptcl2D%get(i, 'y')
-            corr = 0.
-            if( result_proj%os_ptcl2D%isthere('corr') ) corr = result_proj%os_ptcl2D%get(i, 'corr')
-            corr = min(1., max(-1., corr))
-            gauge_img_dist(i) = max(0., 1. - corr)
+            gauge%angle(i) = c2d_build%spproj%os_ptcl2D%e3get(i)
+            if( c2d_build%spproj%os_ptcl2D%isthere('x') ) gauge%shift_x(i) = c2d_build%spproj%os_ptcl2D%get(i, 'x')
+            if( c2d_build%spproj%os_ptcl2D%isthere('y') ) gauge%shift_y(i) = c2d_build%spproj%os_ptcl2D%get(i, 'y')
         end do
-        nclasses = maxval(labels)
-        cavg_fname = CAVGS_ITER_FBODY//int2str_pad(c2d_params%which_iter,3)//MRC_EXT
-        if( file_exists(cavg_fname) ) class_avgs = read_stk_into_imgarr(cavg_fname)
-        if( allocated(class_avgs) .and. size(class_avgs) /= nclasses ) call dealloc_imgarr(class_avgs)
-        call result_proj%kill
         call local_proj%kill
         call local_os%kill
+        if( allocated(ref_imgs) ) call dealloc_imgarr(ref_imgs)
         call c2d_build%kill_general_tbox()
         call c2d_build%kill_strategy2D_tbox()
         call c2d_cline%kill()
         call simple_chdir(cwd_before, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to restore cwd after local SO3 cluster2D')
+        if( istat /= 0 ) THROW_HARD('failed to restore cwd after diffusion-map gauge cluster2D')
         call simple_getcwd(cwd_now)
         CWD_GLOB = cwd_now%to_char()
-    end subroutine run_local_cluster2d
+    end subroutine run_single_class_cluster2d_gauge
 
-    subroutine build_class_averages( imgs, labels, nclasses, class_avgs )
-        type(image),          intent(inout) :: imgs(:)
-        integer,              intent(in)    :: labels(:), nclasses
-        type(image), allocatable, intent(out) :: class_avgs(:)
-        integer, allocatable :: class_pops(:)
-        integer :: ldim(3), i, icls
-        real :: smpd
-        ldim = imgs(1)%get_ldim()
-        smpd = imgs(1)%get_smpd()
-        allocate(class_avgs(nclasses))
-        allocate(class_pops(nclasses), source=0)
-        do icls = 1,nclasses
-            call class_avgs(icls)%new(ldim, smpd)
-            call class_avgs(icls)%zero_and_unflag_ft
+    real function estimate_graph_shift_scale( graph ) result(scale)
+        type(diffmap_graph), intent(in) :: graph
+        real :: acc, r
+        integer :: p, n
+        scale = 1.
+        if( .not. graph%has_shift() ) return
+        acc = 0.
+        n   = 0
+        do p = 1,graph%nnz
+            r = sqrt(graph%shift_x(p)**2 + graph%shift_y(p)**2)
+            if( r <= DTINY .or. .not. ieee_is_finite(r) ) cycle
+            acc = acc + r
+            n = n + 1
         end do
-        do i = 1,size(imgs)
-            icls = labels(i)
-            class_pops(icls) = class_pops(icls) + 1
-            call class_avgs(icls)%add(imgs(i))
-        end do
-        do icls = 1,nclasses
-            if( class_pops(icls) > 0 )then
-                call class_avgs(icls)%div(real(class_pops(icls)))
-            else
-                call class_avgs(icls)%copy(imgs(1))
-            endif
-        end do
-        if( allocated(class_pops) ) deallocate(class_pops)
-    end subroutine build_class_averages
-
-    subroutine build_class_gauge_links( params, class_avgs, class_angle, class_shift_x, class_shift_y, class_img_dist )
-        type(parameters),  intent(in)    :: params
-        type(image),       intent(inout) :: class_avgs(:)
-        real, allocatable, intent(out)   :: class_angle(:,:), class_shift_x(:,:), class_shift_y(:,:), class_img_dist(:,:)
-        type(polarft_calc) :: pftc
-        type(parameters), target :: params_pft
-        real :: corr, img_dist, angle, sh(2)
-        integer :: nclasses, icls, jcls
-        nclasses = size(class_avgs)
-        allocate(class_angle(nclasses,nclasses), class_shift_x(nclasses,nclasses), class_shift_y(nclasses,nclasses), &
-            class_img_dist(nclasses,nclasses), source=0.)
-        if( nclasses <= 1 ) return
-        call prepare_so3_pft(params, class_avgs, params_pft, pftc)
-        do icls = 1,nclasses-1
-            do jcls = icls+1,nclasses
-                call align_pair(params, pftc, icls, jcls, corr, img_dist, angle, sh)
-                class_angle(icls,jcls)    = angle
-                class_angle(jcls,icls)    = -angle
-                class_shift_x(icls,jcls)  = sh(1)
-                class_shift_x(jcls,icls)  = -sh(1)
-                class_shift_y(icls,jcls)  = sh(2)
-                class_shift_y(jcls,icls)  = -sh(2)
-                class_img_dist(icls,jcls) = img_dist
-                class_img_dist(jcls,icls) = img_dist
-            end do
-        end do
-        call pftc%kill
-    end subroutine build_class_gauge_links
-
-    subroutine build_gauge_knn_graph( params, spproj, pinds, gauge_angle, gauge_shift_x, gauge_shift_y, gauge_img_dist, &
-            aff, theta, shift_x, shift_y, class_labels, class_angle, class_shift_x, class_shift_y, class_img_dist )
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: pinds(:)
-        real,                 intent(in)    :: gauge_angle(:), gauge_shift_x(:), gauge_shift_y(:), gauge_img_dist(:)
-        real, allocatable,    intent(out)   :: aff(:,:), theta(:,:), shift_x(:,:), shift_y(:,:)
-        integer, optional,    intent(in)    :: class_labels(:)
-        real,    optional,    intent(in)    :: class_angle(:,:), class_shift_x(:,:), class_shift_y(:,:), class_img_dist(:,:)
-        logical, allocatable :: edge_mask(:,:)
-        real, allocatable :: so3_mat(:,:)
-        real :: edge_img_dist, edge_angle, edge_shift_x, edge_shift_y, eps_img, eps_so3, w
-        integer :: n, i, j, ci, cj, nedges
-        logical :: use_cluster_gauge
-        n = size(pinds)
-        use_cluster_gauge = present(class_labels) .and. present(class_angle) .and. present(class_shift_x) .and. &
-            present(class_shift_y) .and. present(class_img_dist)
-        if( use_cluster_gauge )then
-            call build_class_restricted_orientation_knn_graph(spproj, params%k_nn, pinds, class_labels, edge_mask, so3_mat)
-            call add_class_bridge_edges(spproj, params%k_nn, pinds, class_labels, class_img_dist, edge_mask, so3_mat)
-        else
-            call build_orientation_knn_graph(spproj, params%k_nn, pinds, edge_mask, so3_mat)
-        endif
-        eps_img = 0.
-        eps_so3 = 0.
-        nedges  = 0
-        do i = 1,n-1
-            do j = i+1,n
-                if( .not. edge_mask(i,j) ) cycle
-                call gauge_edge_terms(i, j, edge_img_dist, edge_angle, edge_shift_x, edge_shift_y)
-                eps_img = eps_img + edge_img_dist
-                eps_so3 = eps_so3 + so3_mat(i,j)**2
-                nedges  = nedges + 1
-            end do
-        end do
-        eps_img = max(eps_img / real(max(nedges,1)), 1.e-6)
-        eps_so3 = max(eps_so3 / real(max(nedges,1)), 1.e-6)
-        allocate(aff(n,n), theta(n,n), shift_x(n,n), shift_y(n,n), source=0.)
-        do i = 1,n-1
-            do j = i+1,n
-                if( .not. edge_mask(i,j) ) cycle
-                call gauge_edge_terms(i, j, edge_img_dist, edge_angle, edge_shift_x, edge_shift_y)
-                w = exp(-edge_img_dist / eps_img) * exp(-(so3_mat(i,j)**2) / eps_so3)
-                aff(i,j)   = w
-                aff(j,i)   = w
-                theta(i,j) = deg2rad(edge_angle)
-                theta(j,i) = -theta(i,j)
-                shift_x(i,j) = edge_shift_x
-                shift_x(j,i) = -edge_shift_x
-                shift_y(i,j) = edge_shift_y
-                shift_y(j,i) = -edge_shift_y
-            end do
-        end do
-        if( allocated(edge_mask) ) deallocate(edge_mask)
-        if( allocated(so3_mat)   ) deallocate(so3_mat)
-        contains
-            subroutine gauge_edge_terms( ii, jj, edge_img_dist_out, edge_angle_out, edge_shift_x_out, edge_shift_y_out )
-                integer, intent(in) :: ii, jj
-                real, intent(out)   :: edge_img_dist_out, edge_angle_out, edge_shift_x_out, edge_shift_y_out
-                edge_img_dist_out = 0.5 * (max(gauge_img_dist(ii), 0.) + max(gauge_img_dist(jj), 0.))
-                edge_angle_out    = wrap_angle_pm180(gauge_angle(jj) - gauge_angle(ii))
-                edge_shift_x_out  = gauge_shift_x(jj) - gauge_shift_x(ii)
-                edge_shift_y_out  = gauge_shift_y(jj) - gauge_shift_y(ii)
-                if( use_cluster_gauge )then
-                    ci = class_labels(ii)
-                    cj = class_labels(jj)
-                    if( ci /= cj )then
-                        edge_img_dist_out = edge_img_dist_out + max(class_img_dist(ci,cj), 0.)
-                        edge_angle_out    = wrap_angle_pm180(class_angle(ci,cj) + gauge_angle(jj) - gauge_angle(ii))
-                        edge_shift_x_out  = class_shift_x(ci,cj) + gauge_shift_x(jj) - gauge_shift_x(ii)
-                        edge_shift_y_out  = class_shift_y(ci,cj) + gauge_shift_y(jj) - gauge_shift_y(ii)
-                    endif
-                endif
-            end subroutine gauge_edge_terms
-    end subroutine build_gauge_knn_graph
-
-    subroutine build_class_restricted_orientation_knn_graph( spproj, k_nn, pinds, class_labels, edge_mask, so3_mat )
-        type(sp_project), intent(inout)          :: spproj
-        integer,          intent(in)             :: k_nn, pinds(:), class_labels(:)
-        logical, allocatable, intent(out)        :: edge_mask(:,:)
-        real,    allocatable, intent(out)        :: so3_mat(:,:)
-        logical, allocatable :: class_edge_mask(:,:)
-        real, allocatable    :: class_so3_mat(:,:)
-        integer, allocatable :: class_inds(:), class_pinds(:)
-        integer :: n, nclasses, icls, cnt, i, j, ii, jj
-        n = size(pinds)
-        allocate(edge_mask(n,n), source=.false.)
-        allocate(so3_mat(n,n), source=0.)
-        if( n <= 1 ) return
-        nclasses = maxval(class_labels)
-        do icls = 1,nclasses
-            cnt = count(class_labels == icls)
-            if( cnt <= 1 ) cycle
-            allocate(class_inds(cnt), class_pinds(cnt))
-            cnt = 0
-            do i = 1,n
-                if( class_labels(i) /= icls ) cycle
-                cnt = cnt + 1
-                class_inds(cnt)  = i
-                class_pinds(cnt) = pinds(i)
-            end do
-            call build_orientation_knn_graph(spproj, k_nn, class_pinds, class_edge_mask, class_so3_mat)
-            do ii = 1,size(class_inds)-1
-                do jj = ii+1,size(class_inds)
-                    if( .not. class_edge_mask(ii,jj) ) cycle
-                    i = class_inds(ii)
-                    j = class_inds(jj)
-                    edge_mask(i,j) = .true.
-                    edge_mask(j,i) = .true.
-                    so3_mat(i,j)   = class_so3_mat(ii,jj)
-                    so3_mat(j,i)   = class_so3_mat(jj,ii)
-                end do
-            end do
-            if( allocated(class_edge_mask) ) deallocate(class_edge_mask)
-            if( allocated(class_so3_mat)   ) deallocate(class_so3_mat)
-            if( allocated(class_inds)      ) deallocate(class_inds)
-            if( allocated(class_pinds)     ) deallocate(class_pinds)
-        end do
-    end subroutine build_class_restricted_orientation_knn_graph
-
-    subroutine add_class_bridge_edges( spproj, k_nn, pinds, class_labels, class_img_dist, edge_mask, so3_mat )
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: k_nn, pinds(:), class_labels(:)
-        real,             intent(in)    :: class_img_dist(:,:)
-        logical,          intent(inout) :: edge_mask(:,:)
-        real,             intent(inout) :: so3_mat(:,:)
-        logical, allocatable :: bridge_mask(:,:)
-        integer, allocatable :: inds_i(:), inds_j(:)
-        integer :: n, nclasses, icls, jcls, k_cross
-        n = size(pinds)
-        if( n <= 1 ) return
-        nclasses = maxval(class_labels)
-        if( nclasses <= 1 ) return
-        call build_class_bridge_mask(k_nn, class_img_dist, bridge_mask)
-        k_cross = max(1, min(k_nn, max(1, k_nn / 3)))
-        do icls = 1,nclasses-1
-            do jcls = icls+1,nclasses
-                if( .not. bridge_mask(icls,jcls) ) cycle
-                call inds_for_label(class_labels, icls, inds_i)
-                call inds_for_label(class_labels, jcls, inds_j)
-                call add_bipartite_orientation_edges(spproj, k_cross, pinds, inds_i, inds_j, edge_mask, so3_mat)
-                if( allocated(inds_i) ) deallocate(inds_i)
-                if( allocated(inds_j) ) deallocate(inds_j)
-            end do
-        end do
-        if( allocated(bridge_mask) ) deallocate(bridge_mask)
-    end subroutine add_class_bridge_edges
-
-    subroutine build_class_bridge_mask( k_nn, class_img_dist, bridge_mask )
-        integer, intent(in) :: k_nn
-        real,    intent(in) :: class_img_dist(:,:)
-        logical, allocatable, intent(out) :: bridge_mask(:,:)
-        logical, allocatable :: in_tree(:)
-        integer, allocatable :: nbrs(:), best_parent(:)
-        real, allocatable    :: dists(:), best_dist(:)
-        real :: dist, min_dist
-        integer :: nclasses, icls, jcls, m, k_class, next_class
-        nclasses = size(class_img_dist, 1)
-        allocate(bridge_mask(nclasses,nclasses), source=.false.)
-        if( nclasses <= 1 ) return
-        k_class = min(nclasses - 1, max(1, min(3, k_nn)))
-        allocate(nbrs(k_class), dists(k_class))
-        do icls = 1,nclasses
-            nbrs = 0
-            dists = huge(1.)
-            do jcls = 1,nclasses
-                if( jcls == icls ) cycle
-                dist = class_bridge_dist(class_img_dist(icls,jcls))
-                call insert_neighbor(jcls, dist, nbrs, dists)
-            end do
-            do m = 1,k_class
-                jcls = nbrs(m)
-                if( jcls < 1 ) cycle
-                bridge_mask(icls,jcls) = .true.
-                bridge_mask(jcls,icls) = .true.
-            end do
-        end do
-        deallocate(nbrs, dists)
-        allocate(in_tree(nclasses), best_dist(nclasses), best_parent(nclasses))
-        in_tree = .false.
-        best_dist = huge(1.)
-        best_parent = 0
-        in_tree(1) = .true.
-        do jcls = 2,nclasses
-            best_dist(jcls)   = class_bridge_dist(class_img_dist(1,jcls))
-            best_parent(jcls) = 1
-        end do
-        do while( count(in_tree) < nclasses )
-            min_dist = huge(1.)
-            next_class = 0
-            do icls = 1,nclasses
-                if( in_tree(icls) ) cycle
-                if( best_dist(icls) < min_dist )then
-                    min_dist = best_dist(icls)
-                    next_class = icls
-                endif
-            end do
-            if( next_class == 0 ) exit
-            bridge_mask(best_parent(next_class),next_class) = .true.
-            bridge_mask(next_class,best_parent(next_class)) = .true.
-            in_tree(next_class) = .true.
-            do jcls = 1,nclasses
-                if( in_tree(jcls) ) cycle
-                dist = class_bridge_dist(class_img_dist(next_class,jcls))
-                if( dist < best_dist(jcls) )then
-                    best_dist(jcls)   = dist
-                    best_parent(jcls) = next_class
-                endif
-            end do
-        end do
-        deallocate(in_tree, best_dist, best_parent)
-    end subroutine build_class_bridge_mask
-
-    subroutine add_bipartite_orientation_edges( spproj, k_cross, pinds, inds_a, inds_b, edge_mask, so3_mat )
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: k_cross, pinds(:), inds_a(:), inds_b(:)
-        logical,          intent(inout) :: edge_mask(:,:)
-        real,             intent(inout) :: so3_mat(:,:)
-        if( size(inds_a) < 1 .or. size(inds_b) < 1 ) return
-        call add_directed_bipartite_orientation_edges(spproj, min(max(1, k_cross), size(inds_b)), &
-            pinds, inds_a, inds_b, edge_mask, so3_mat)
-        call add_directed_bipartite_orientation_edges(spproj, min(max(1, k_cross), size(inds_a)), &
-            pinds, inds_b, inds_a, edge_mask, so3_mat)
-    end subroutine add_bipartite_orientation_edges
-
-    subroutine add_directed_bipartite_orientation_edges( spproj, k_used, pinds, from_inds, to_inds, edge_mask, so3_mat )
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: k_used, pinds(:), from_inds(:), to_inds(:)
-        logical,          intent(inout) :: edge_mask(:,:)
-        real,             intent(inout) :: so3_mat(:,:)
-        integer, allocatable :: nbrs(:)
-        real, allocatable    :: dists(:)
-        real :: dist
-        integer :: ifrom, ito, m, i, j
-        if( k_used < 1 ) return
-        allocate(nbrs(k_used), dists(k_used))
-        do ifrom = 1,size(from_inds)
-            i = from_inds(ifrom)
-            nbrs = 0
-            dists = huge(1.)
-            do ito = 1,size(to_inds)
-                j = to_inds(ito)
-                dist = projection_dir_dist(spproj, pinds(i), pinds(j))
-                call insert_neighbor(j, dist, nbrs, dists)
-            end do
-            do m = 1,k_used
-                j = nbrs(m)
-                if( j < 1 ) cycle
-                edge_mask(i,j) = .true.
-                edge_mask(j,i) = .true.
-                so3_mat(i,j)   = dists(m)
-                so3_mat(j,i)   = dists(m)
-            end do
-        end do
-        deallocate(nbrs, dists)
-    end subroutine add_directed_bipartite_orientation_edges
-
-    real function class_bridge_dist( dist_in ) result(dist)
-        real, intent(in) :: dist_in
-        dist = max(dist_in, 0.)
-        if( .not. ieee_is_finite(dist) ) dist = huge(1.)
-    end function class_bridge_dist
-
-    subroutine build_orientation_knn_graph( spproj, k_nn, pinds, edge_mask, so3_mat )
-        type(sp_project), intent(inout)          :: spproj
-        integer,          intent(in)             :: k_nn, pinds(:)
-        logical, allocatable, intent(out)        :: edge_mask(:,:)
-        real,    allocatable, intent(out)        :: so3_mat(:,:)
-        integer, allocatable :: nbrs(:,:)
-        real, allocatable    :: so3_dists(:,:)
-        integer :: n, i, j, m, k_used
-        n = size(pinds)
-        allocate(edge_mask(n,n), source=.false.)
-        allocate(so3_mat(n,n), source=0.)
-        k_used = min(max(1, k_nn), n-1)
-        call find_so3_neighbors(spproj, pinds, k_used, nbrs, so3_dists)
-        do i = 1,n
-            do m = 1,k_used
-                j = nbrs(m,i)
-                if( j < 1 ) cycle
-                edge_mask(i,j) = .true.
-                edge_mask(j,i) = .true.
-                so3_mat(i,j) = so3_dists(m,i)
-                so3_mat(j,i) = so3_dists(m,i)
-            end do
-        end do
-        if( allocated(nbrs) ) deallocate(nbrs)
-        if( allocated(so3_dists) ) deallocate(so3_dists)
-    end subroutine build_orientation_knn_graph
-
-    subroutine find_so3_neighbors( spproj, pinds, k_used, nbrs, so3_dists )
-        type(sp_project), intent(inout)      :: spproj
-        integer, intent(in)                  :: pinds(:), k_used
-        integer, allocatable, intent(out)    :: nbrs(:,:)
-        real,    allocatable, intent(out)    :: so3_dists(:,:)
-        type(ori) :: oi, oj
-        real :: dist
-        integer :: i, j
-        allocate(nbrs(k_used,size(pinds)), source=0)
-        allocate(so3_dists(k_used,size(pinds)), source=0.)
-        so3_dists = huge(so3_dists)
-        do i = 1,size(pinds)
-            call spproj%os_ptcl3D%get_ori(pinds(i), oi)
-            do j = 1,size(pinds)
-                if( i == j ) cycle
-                call spproj%os_ptcl3D%get_ori(pinds(j), oj)
-                dist = oi .euldist. oj
-                call insert_neighbor(j, dist, nbrs(:,i), so3_dists(:,i))
-                call oj%kill
-            end do
-            call oi%kill
-        end do
-    end subroutine find_so3_neighbors
+        if( n > 0 ) scale = max(acc / real(n), 1.e-3)
+    end function estimate_graph_shift_scale
 
     subroutine insert_neighbor( ind, dist, inds, dists )
         integer, intent(in)    :: ind
@@ -993,105 +742,29 @@ contains
         inds(pos)  = ind
     end subroutine insert_neighbor
 
-    subroutine prepare_so3_pft( params, imgs, params_pft, pftc )
-        type(parameters),  intent(in)    :: params
-        type(image),       intent(inout) :: imgs(:)
-        type(parameters), target, intent(out) :: params_pft
-        type(polarft_calc), intent(inout) :: pftc
-        type(image), allocatable :: imgs_work(:)
-        integer :: ldim(3), kfromto(2), pdim_srch(3), i
-        real    :: smpd
-        params_pft             = params
-        params_pft%objfun      = 'cc'
-        params_pft%cc_objfun   = OBJFUN_CC
-        params_pft%ctf         = 'no'
-        ldim                   = imgs(1)%get_ldim()
-        smpd                   = imgs(1)%get_smpd()
-        params_pft%ldim        = ldim
-        params_pft%box         = ldim(1)
-        params_pft%box_crop    = ldim(1)
-        params_pft%smpd        = smpd
-        params_pft%smpd_crop   = smpd
-        if( params_pft%pftsz < 1 ) params_pft%pftsz = magic_pftsz((real(ldim(1)) - COSMSKHALFWIDTH) / 2.)
-        kfromto(1) = max(2, calc_fourier_index(params_pft%hp, params_pft%box, params_pft%smpd))
-        kfromto(2) =        calc_fourier_index(params_pft%lp, params_pft%box, params_pft%smpd)
-        if( kfromto(2) < kfromto(1) ) THROW_HARD('invalid Fourier limits for SO3 graph registration')
-        call pftc%new(params_pft, size(imgs), [1,size(imgs)], kfromto)
-        pdim_srch = pftc%get_pdim_srch()
-        imgs_work = copy_imgarr(imgs)
-        call imgs_work(1)%memoize4polarize(pdim_srch)
-        do i = 1,size(imgs_work)
-            call imgs_work(i)%fft()
-            call pftc%polarize_ref_pft( imgs_work(i), i, iseven=.true., pdim=pdim_srch, oversamp=.false.)
-            call pftc%polarize_ptcl_pft(imgs_work(i), i,               pdim=pdim_srch, oversamp=.false.)
-            call imgs_work(i)%ifft()
+    real function median_positive( vals ) result(med)
+        real, intent(in) :: vals(:)
+        real, allocatable :: work(:)
+        integer :: i, n
+        allocate(work(size(vals)))
+        n = 0
+        do i = 1,size(vals)
+            if( vals(i) <= 0. .or. .not. ieee_is_finite(vals(i)) ) cycle
+            n = n + 1
+            work(n) = vals(i)
         end do
-        call pftc%memoize_refs
-        call pftc%memoize_ptcls
-        call dealloc_imgarr(imgs_work)
-    end subroutine prepare_so3_pft
-
-    subroutine align_pair( params, pftc, iref, iptcl_loc, corr, img_dist, angle, sh )
-        type(parameters),  intent(in)    :: params
-        type(polarft_calc), intent(inout) :: pftc
-        integer,           intent(in)    :: iref, iptcl_loc
-        real,              intent(out)   :: corr, img_dist, angle, sh(2)
-        real, allocatable :: vals(:)
-        real :: best_corr, trial_shift(2)
-        integer :: nrots, loc, best_loc, ix, iy, trs_i
-        nrots = pftc%get_nrots()
-        allocate(vals(nrots))
-        best_corr = -huge(best_corr)
-        best_loc  = 1
-        sh        = 0.
-        trs_i     = nint(params%trs)
-        do ix = -trs_i, trs_i
-            do iy = -trs_i, trs_i
-                trial_shift = [real(ix), real(iy)]
-                call pftc%gen_objfun_vals(iref, iptcl_loc, trial_shift, vals)
-                loc = maxloc(vals, dim=1)
-                if( vals(loc) > best_corr )then
-                    best_corr = vals(loc)
-                    best_loc  = loc
-                    sh        = trial_shift
-                endif
-            end do
-        end do
-        corr = best_corr
-        if( .not. ieee_is_finite(corr) ) corr = 0.
-        corr     = min(1., max(-1., corr))
-        img_dist = max(0., 1. - corr)
-        angle    = pftc%get_rot(best_loc)
-        deallocate(vals)
-    end subroutine align_pair
-
-    integer function choose_orientation_medoid( spproj, pinds ) result(center_ind)
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: pinds(:)
-        type(ori) :: oi, oj
-        real      :: dist, dsum, best_sum
-        integer   :: i, j, n
-        n = size(pinds)
-        center_ind = 1
-        if( n <= 1 ) return
-        best_sum = huge(best_sum)
-        do i = 1,n
-            call spproj%os_ptcl3D%get_ori(pinds(i), oi)
-            dsum = 0.
-            do j = 1,n
-                if( i == j ) cycle
-                call spproj%os_ptcl3D%get_ori(pinds(j), oj)
-                dist = oi .euldist. oj
-                dsum = dsum + dist
-                call oj%kill
-            end do
-            if( dsum < best_sum )then
-                best_sum   = dsum
-                center_ind = i
+        if( n < 1 )then
+            med = 1.e-6
+        else
+            call hpsort(work(1:n))
+            if( mod(n,2) == 0 )then
+                med = 0.5 * (work(n/2) + work(n/2 + 1))
+            else
+                med = work((n + 1) / 2)
             endif
-            call oi%kill
-        end do
-    end function choose_orientation_medoid
+        endif
+        deallocate(work)
+    end function median_positive
 
     real function wrap_angle_pm180( angle_deg ) result(wrapped)
         real, intent(in) :: angle_deg

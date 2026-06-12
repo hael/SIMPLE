@@ -373,8 +373,6 @@ contains
         if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
         if( .not. cline%defined('kpca_ker')                ) call cline%set('kpca_ker', 'rbf')
         if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode', 'ppca')
-        if( .not. cline%defined('steerable_denoise_mode')  ) call cline%set('steerable_denoise_mode', 'coeffproj')
-        if( .not. cline%defined('diffmap_preimage')        ) call cline%set('diffmap_preimage', 'decoder')
         if( .not. cline%defined('k_nn')                    ) call cline%set('k_nn', 10)
         if( .not. cline%defined('steerable_nmodes')        ) call cline%set('steerable_nmodes', 4)
         call xkpca_den%execute(cline)

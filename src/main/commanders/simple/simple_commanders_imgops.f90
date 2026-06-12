@@ -364,8 +364,9 @@ contains
         use simple_ppca,        only: ppca
         use simple_pca_svd,     only: pca_svd
         use simple_kpca_svd,    only: kpca_svd, suggest_kpca_nystrom_neigs
-        use simple_diffusion_maps, only: diffusion_map_embedder, steerable_diffusion_map_embedder, &
-            steerable_transport_denoise, steerable_coeffproj_denoise
+        use simple_diffusion_maps,  only: steerable_diffusion_map_embedder, embed_graph
+        use simple_diff_map_graphs, only: diffmap_graph, build_euclidean_knn_graph, graph_directed_edges
+        use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,   only: copy_imgarr, dealloc_imgarr
         class(commander_ppca_denoise), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -373,11 +374,11 @@ contains
         class(pca),        pointer     :: pca_ptr         => null()
         type(ppca),        pointer     :: ppca_ptr_typed  => null()
         type(kpca_svd),    pointer     :: kpca_ptr        => null()
-        type(diffusion_map_embedder)    :: diffmap
         type(steerable_diffusion_map_embedder) :: steerable_diffmap
         type(image),       allocatable :: imgs(:), imgs_steer(:), den_ptcls(:)
         real,              allocatable :: avg(:), pcavecs(:, :), tmpvec(:), zavg(:), corrvec(:)
-        real,              allocatable :: coords(:,:), eigvals(:), steer_aff(:,:), steer_theta(:,:)
+        real,              allocatable :: coords(:,:), eigvals(:)
+        type(diffmap_graph)            :: steer_graph
         type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
@@ -442,7 +443,7 @@ contains
             end do
             call system_clock(t1)
             write(logfhandle,'(A,F8.3,A,F8.2,A,A)') 'Steerable diffusion denoise preprocess: ', &
-                real(t1-t0)/real(trate), ' s; mskrad_px=', mskrad, ' mode=', trim(params%steerable_denoise_mode)
+                real(t1-t0)/real(trate), ' s; mskrad_px=', mskrad, ' method=coeff_projection'
             call flush(logfhandle)
             call system_clock(t0)
             call make_pcavecs(imgs_steer, npix, avg, pcavecs, transp=.false.)
@@ -454,29 +455,16 @@ contains
             if( neigs > 0 ) neigs = min(max(neigs, 1), max(params%nptcls-1, 1))
             call steerable_diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, params%nptcls-1)), params%steerable_nmodes)
             call system_clock(t0)
-            call steerable_diffmap%embed(params, imgs_steer, coords, eigvals, steer_aff, steer_theta)
+            call steerable_diffmap%embed(params, imgs_steer, coords, eigvals, steer_graph)
             call system_clock(t1)
-            directed_edges = 0
-            if( allocated(steer_aff) ) directed_edges = count(steer_aff > DTINY)
+            directed_edges = graph_directed_edges(steer_graph)
             write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I8)') 'Steerable diffusion denoise graph/embed: ', &
                 real(t1-t0)/real(trate), ' s; dims=', size(coords,1), ' directed_edges=', directed_edges, &
                 ' k_nn=', params%k_nn
             call flush(logfhandle)
-            select case(trim(params%steerable_denoise_mode))
-                case('coeffproj')
-                    call steerable_coeffproj_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
-                    if( .not. allocated(den_ptcls) )then
-                        write(logfhandle,'(A)') 'Steerable coefficient denoising fallback: using transported-neighbor denoising'
-                        call flush(logfhandle)
-                        call steerable_transport_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
-                    endif
-                case('transport')
-                    call steerable_transport_denoise(params, imgs_steer, avg, steer_aff, steer_theta, den_ptcls)
-                case DEFAULT
-                    THROW_HARD('steerable_denoise_mode must be coeffproj or transport')
-            end select
+            call graph_coeffproj_denoise(params, imgs_steer, avg, steer_graph, den_ptcls)
             if( .not. allocated(den_ptcls) )then
-                write(logfhandle,'(A)') 'Steerable diffusion denoising fallback: writing preprocessed particles'
+                write(logfhandle,'(A)') 'Steerable coefficient denoising fallback: writing preprocessed particles'
                 call flush(logfhandle)
                 den_ptcls = copy_imgarr(imgs_steer)
             endif
@@ -489,8 +477,7 @@ contains
             call flush(logfhandle)
             if( allocated(coords)      ) deallocate(coords)
             if( allocated(eigvals)     ) deallocate(eigvals)
-            if( allocated(steer_aff)   ) deallocate(steer_aff)
-            if( allocated(steer_theta) ) deallocate(steer_theta)
+            call steer_graph%kill()
             if( allocated(avg)         ) deallocate(avg)
             if( allocated(pcavecs)     ) deallocate(pcavecs)
             if( allocated(den_ptcls)   ) call dealloc_imgarr(den_ptcls)
@@ -517,46 +504,36 @@ contains
         endif
         neigs = params%neigs
         if( l_diffmap )then
-            select case(trim(params%diffmap_preimage))
-                case('decoder','joint')
-                case DEFAULT
-                    THROW_HARD('diffmap_preimage must be decoder or joint for pca_mode=diffusion_maps')
-            end select
             if( neigs > 0 ) neigs = min(max(neigs, 1), max(params%nptcls-2, 1))
-            call diffmap%set_params(neigs, min(max(2, params%k_nn), max(2, params%nptcls-1)))
-            call diffmap%set_preimage_params(.true., decoder_ridge=1.e-2, &
-                joint_decoder=(trim(params%diffmap_preimage) == 'joint'), &
-                joint_decoder_iters=80, joint_decoder_weight=0.5, joint_decoder_tol=1.e-4)
             call system_clock(t0)
-            call diffmap%embed(pcavecs, coords, eigvals, pcavecs)
+            call build_euclidean_knn_graph(pcavecs, min(max(2, params%k_nn), max(2, params%nptcls-1)), 'none', steer_graph)
+            call embed_graph(steer_graph, neigs, coords, eigvals)
             call system_clock(t1)
-            write(logfhandle,'(A,F8.3,A,I8,A,A)') 'Diffusion map denoise graph/embed/model: ', &
-                real(t1-t0)/real(trate), ' s; dims=', size(coords,1), ' method=', trim(params%diffmap_preimage)
+            directed_edges = graph_directed_edges(steer_graph)
+            write(logfhandle,'(A,F8.3,A,I8,A,I8,A,I8)') 'Diffusion map coefficient denoise graph/embed: ', &
+                real(t1-t0)/real(trate), ' s; dims=', size(coords,1), ' directed_edges=', directed_edges, &
+                ' k_nn=', params%k_nn
             call flush(logfhandle)
-            allocate(tmpvec(npix), source=0.)
+            call graph_coeffproj_denoise(params, imgs, avg, steer_graph, den_ptcls)
+            if( .not. allocated(den_ptcls) )then
+                write(logfhandle,'(A)') 'Diffusion map coefficient denoising fallback: writing input particles'
+                call flush(logfhandle)
+                den_ptcls = copy_imgarr(imgs)
+            endif
             call system_clock(t0)
             do iptcl = 1, params%nptcls
-                select case(trim(params%diffmap_preimage))
-                    case('decoder')
-                        call diffmap%decode(coords(:,iptcl), tmpvec)
-                    case('joint')
-                        call diffmap%joint_decode(coords(:,iptcl), tmpvec)
-                end select
-                tmpvec = avg + tmpvec
-                call imgs(iptcl)%unserialize(tmpvec)
-                call imgs(iptcl)%write(params%outstk, iptcl)
-                call imgs(iptcl)%kill
+                call den_ptcls(iptcl)%write(params%outstk, iptcl)
             end do
             call system_clock(t1)
-            write(logfhandle,'(A,F8.3,A)') 'Diffusion map denoise reconstruct/write: ', real(t1-t0)/real(trate), ' s'
+            write(logfhandle,'(A,F8.3,A)') 'Diffusion map coefficient denoise write stack: ', real(t1-t0)/real(trate), ' s'
             call flush(logfhandle)
-            call diffmap%kill_preimage_model()
+            call steer_graph%kill()
             if( allocated(coords)  ) deallocate(coords)
             if( allocated(eigvals) ) deallocate(eigvals)
             if( allocated(avg)     ) deallocate(avg)
             if( allocated(pcavecs) ) deallocate(pcavecs)
-            if( allocated(tmpvec)  ) deallocate(tmpvec)
-            deallocate(imgs)
+            if( allocated(den_ptcls) ) call dealloc_imgarr(den_ptcls)
+            if( allocated(imgs)       ) call dealloc_imgarr(imgs)
             call build%kill_general_tbox
             call nice_comm%terminate()
             call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
