@@ -20,6 +20,7 @@ logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
 logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
+logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject

@@ -319,7 +319,8 @@ contains
         cfg%filt_mode  = 'none'
         cfg%nu_refine  = 'no'
         if( l_cavgs ) return
-        if( istage >= NU_FILTER_STAGE .and. l_nonuniform )then
+        if( l_nonuniform .and. &
+            &(istage >= NU_FILTER_STAGE .or. (l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%filt_mode.eq.'nonuniform' .and. &
                 &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'

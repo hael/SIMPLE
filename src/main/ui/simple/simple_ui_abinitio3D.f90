@@ -68,6 +68,9 @@ contains
             &independent mode writes final volumes at its last stage',&
             &'last stage', .false., 8., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &
+            &'State label to select from an existing multi-state abinitio3D project and continue as a single-state stage-5 search', &
+            &'state label', .false., 1., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         ! filter controls
         call abinitio3D%add_input(UI_FILT, hp, gui_submenu="filter")

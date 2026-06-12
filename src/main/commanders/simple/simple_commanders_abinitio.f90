@@ -1,14 +1,15 @@
 !@descr: abinitio 3D reconstruction in single- and multi-particle mode
 module simple_commanders_abinitio
 use simple_commanders_api
-use simple_qsys_funs,            only: qsys_watcher_diag
 use simple_abinitio_utils
-use simple_procimgstk,           only: shift_imgfile
-use simple_commanders_reproject, only: commander_reproject
-use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D
-use simple_commanders_rec,       only: commander_rec3D, commander_rec3D
-use simple_cluster_seed,         only: gen_labelling
-use simple_refine3D_fnames,      only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
+use simple_qsys_funs,               only: qsys_watcher_diag
+use simple_procimgstk,              only: shift_imgfile
+use simple_commanders_project_core, only: commander_selection
+use simple_commanders_reproject,    only: commander_reproject
+use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D
+use simple_commanders_rec,          only: commander_rec3D, commander_rec3D
+use simple_cluster_seed,            only: gen_labelling
+use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
 implicit none
 
@@ -58,6 +59,7 @@ contains
         if( cline%defined('part') )then
             THROW_HARD('abinitio3D_cavgs distributed execution is master-only; remove part from command line')
         endif
+        l_state_continue_mode = .false.
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -1129,6 +1131,9 @@ contains
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, split_stage, last_stage
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
+        logical :: l_state_continue
+        l_state_continue = cline%defined('state')
+        l_state_continue_mode = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -1145,6 +1150,15 @@ contains
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('nsample_start')       ) call cline%set('nsample_start', abinitio_nsample_start_default())
+        if( l_state_continue )then
+            if( cline%defined('multivol_mode') )then
+                if( cline%get_carg('multivol_mode').ne.'single' )then
+                    THROW_HARD('abinitio3D state continuation requires multivol_mode=single')
+                endif
+            endif
+            call cline%set('multivol_mode', 'single')
+            call cline%set('filt_mode',     'nonuniform')
+        endif
         l_user_nstages = cline%defined('nstages')
         l_user_lpstop  = cline%defined('lpstop')
         ! splitting stage
@@ -1170,6 +1184,7 @@ contains
         endif
         ! make master parameters
         call params%new(cline)
+        l_state_continue_mode = l_state_continue
         if( trim(params%multivol_mode).eq.'independent' )then
             if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &
                 &'>>> ABINITIO3D INDEPENDENT MULTI-STATE DEFAULT NSTAGES: ', params%nstages
@@ -1213,6 +1228,21 @@ contains
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.
+        if( l_state_continue )then
+            if( trim(params%cavg_ini).eq.'yes' .or. trim(params%cavg_ini_ext).eq.'yes' )then
+                THROW_HARD('abinitio3D state continuation cannot be combined with cavg_ini/cavg_ini_ext')
+            endif
+            if( cline%defined('vol1') )then
+                THROW_HARD('abinitio3D state continuation uses the selected project state; remove vol1')
+            endif
+            call prepare_state_continue_project
+            call cline%set('pgrp_start', params%pgrp)
+            params%pgrp_start = params%pgrp
+            start_stage = abinitio_independent_nstages_default()
+            l_ini3D     = .true.
+            write(logfhandle,'(A,I0,A)') &
+                &'>>> ABINITIO3D STATE CONTINUATION STARTING FROM STAGE ', start_stage, ' WITH NONUNIFORM FILTERING'
+        endif
         if( trim(params%cavg_ini).eq.'yes' )then
             if( last_stage < abinitio_nstages_ini3D() - 1 ) THROW_HARD('nstages must be >= first executable abinitio3D stage')
             ! nice
@@ -1494,6 +1524,50 @@ contains
         subroutine clean_ptcl3D_sampling
             call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
         end subroutine clean_ptcl3D_sampling
+
+        subroutine prepare_state_continue_project
+            type(commander_selection) :: xselection
+            type(cmdline)             :: cline_selection
+            type(string)              :: src_projfile, work_projfile, work_projname
+            integer                   :: nselected
+            if( params%state < 1 ) THROW_HARD('abinitio3D state continuation requires state >= 1')
+            nselected = spproj%get_n_insegment_state('ptcl3D', params%state)
+            if( nselected < 1 )then
+                THROW_HARD('requested abinitio3D continuation state is absent from ptcl3D')
+            endif
+            if( spproj%is_virgin_field('ptcl3D') )then
+                THROW_HARD('abinitio3D state continuation requires existing ptcl3D orientations')
+            endif
+            src_projfile  = params%projfile
+            work_projfile = 'abinitio3D_state'//int2str_pad(params%state,2)//'_tmpproj.simple'
+            work_projname = get_fbody(work_projfile,'simple')
+            if( file_exists(work_projfile) ) call del_file(work_projfile)
+            call simple_copy_file(src_projfile, work_projfile)
+            cline_selection = cline
+            call cline_selection%set('prg',      'selection')
+            call cline_selection%set('projfile', work_projfile)
+            call cline_selection%set('projname', work_projname)
+            call cline_selection%set('oritype',  'ptcl3D')
+            call cline_selection%set('state',    params%state)
+            call cline_selection%set('prune',    'yes')
+            call cline_selection%set('append',   'no')
+            call cline_selection%set('mkdir',    'no')
+            call xselection%execute(cline_selection)
+            call cline%set('projfile', work_projfile)
+            call cline%set('projname', work_projname)
+            params%projfile = work_projfile
+            params%projname = work_projname
+            call spproj%read(params%projfile)
+            call spproj%update_projinfo(params%projfile)
+            call spproj%write(params%projfile)
+            write(logfhandle,'(A,I0,A,I0,A,A)') &
+                &'>>> ABINITIO3D STATE CONTINUATION STATE/PARTICLES: ', params%state, &
+                &' / ', nselected, ' TEMP PROJECT: ', params%projfile%to_char()
+            call cline_selection%kill
+            call src_projfile%kill
+            call work_projfile%kill
+            call work_projname%kill
+        end subroutine prepare_state_continue_project
 
         subroutine reset_ptcl3D_from_ptcl2D_selection
             integer :: iptcl, nptcls2D, nptcls3D, state2D, nactive
