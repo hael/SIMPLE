@@ -71,17 +71,28 @@ contains
             real    :: corr           = 0.
             character(len=16) :: role = ''
         end type bootstrap_row
+        type bootstrap_skipped_class
+            integer :: parent_cls = 0
+            integer :: pop        = 0
+            integer :: state      = -1
+            character(len=64) :: reason = ''
+        end type bootstrap_skipped_class
         type(parameters) :: params
         type(sp_project) :: src_proj, boot_proj
         type(cmdline)    :: cline_make
         type(string)     :: manifest_file, membership_file
         type(class_sample), allocatable :: clssmp(:)
-        type(bootstrap_parent_sample), allocatable :: parents(:)
+        type(bootstrap_parent_sample), allocatable :: parents(:), parents_work(:)
+        type(bootstrap_parent_sample)              :: parent_candidate
         type(bootstrap_row),           allocatable :: rows(:)
+        type(bootstrap_skipped_class), allocatable :: skipped(:)
         real,    allocatable :: pop_reals(:)
         integer, allocatable :: clsinds(:), pops(:)
         integer :: ncls_acc, nout, nrows, y_child, anchor_target, n_med
+        integer :: ncls_in, ncls_cand, nskipped
         integer :: i, j, k, ipart, row_count, child_cls
+        logical :: class_ok
+        character(len=64) :: skip_reason
         if( .not. cline%defined('osmpl_fac') ) call cline%set('osmpl_fac', 2)
         if( .not. cline%defined('frac_best') ) call cline%set('frac_best', 0.5)
         if( .not. cline%defined('refs')      ) call cline%set('refs', 'cavgs_bootstrap_001.mrc')
@@ -98,37 +109,68 @@ contains
         if( src_proj%os_ptcl2D%get_noris() == 0 ) THROW_HARD('ptcl2D segment is empty; exec_bootstrap_cavgs')
         if( src_proj%os_cls2D%get_noris()  == 0 ) THROW_HARD('cls2D segment is empty; exec_bootstrap_cavgs')
         if( src_proj%os_stk%get_noris()    == 0 ) THROW_HARD('stk segment is empty; exec_bootstrap_cavgs')
-        call collect_bootstrap_classes(src_proj, clsinds, pops)
-        ncls_acc = size(clsinds)
+        call collect_bootstrap_classes(src_proj, clsinds, pops, skipped, nskipped, ncls_in)
+        ncls_cand = size(clsinds)
         y_child  = params%osmpl_fac - 1
-        nout     = ncls_acc * params%osmpl_fac
-        allocate(pop_reals(ncls_acc), source=real(pops))
+        allocate(pop_reals(ncls_cand), source=real(pops))
         n_med         = max(1, nint(median(pop_reals)))
         anchor_target = max(2, nint(params%frac_best * real(n_med)))
         deallocate(pop_reals)
         call src_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-        allocate(parents(ncls_acc))
-        do i = 1,ncls_acc
-            parents(i)%parent_cls = clsinds(i)
-            parents(i)%out_cls    = i
-            parents(i)%pop        = clssmp(i)%pop
-            allocate(parents(i)%ranked(parents(i)%pop), source=clssmp(i)%pinds)
-            call validate_evenodd_present(src_proj%os_ptcl2D, parents(i)%ranked, parents(i)%parent_cls)
-            if( y_child > 0 )then
-                parents(i)%nanchor = min(anchor_target, max(0, parents(i)%pop - y_child))
-                if( parents(i)%nanchor < 2 )then
-                    THROW_HARD('parent class has too few particles for requested osmpl_fac; exec_bootstrap_cavgs')
-                endif
-                call select_bootstrap_anchor(src_proj%os_ptcl2D, parents(i)%ranked, parents(i)%nanchor, &
-                    parents(i)%parent_cls, parents(i)%anchor, parents(i)%rest)
-                if( size(parents(i)%rest) < y_child )then
-                    THROW_HARD('class '//int2str(parents(i)%parent_cls)//' has too few non-anchor particles; exec_bootstrap_cavgs')
-                endif
-                call shuffle_ints(parents(i)%rest)
-                parents(i)%parts = split_nobjs_even(size(parents(i)%rest), y_child)
+        allocate(parents_work(ncls_cand))
+        ncls_acc = 0
+        do i = 1,ncls_cand
+            call clear_parent_sample(parent_candidate)
+            parent_candidate%parent_cls = clsinds(i)
+            parent_candidate%pop        = clssmp(i)%pop
+            if( .not. allocated(clssmp(i)%pinds) .or. parent_candidate%pop == 0 )then
+                call append_skipped_class(skipped, nskipped, clsinds(i), 0, &
+                    class_state_for_report(src_proj, clsinds(i)), 'missing_particle_membership')
+                cycle
             endif
+            allocate(parent_candidate%ranked(parent_candidate%pop), source=clssmp(i)%pinds)
+            call validate_evenodd_present(src_proj%os_ptcl2D, parent_candidate%ranked, &
+                parent_candidate%parent_cls, class_ok, skip_reason)
+            if( .not. class_ok )then
+                call append_skipped_class(skipped, nskipped, parent_candidate%parent_cls, parent_candidate%pop, &
+                    class_state_for_report(src_proj, parent_candidate%parent_cls), skip_reason)
+                cycle
+            endif
+            if( y_child > 0 )then
+                parent_candidate%nanchor = min(anchor_target, max(0, parent_candidate%pop - y_child))
+                if( parent_candidate%nanchor < 2 )then
+                    call append_skipped_class(skipped, nskipped, parent_candidate%parent_cls, parent_candidate%pop, &
+                        class_state_for_report(src_proj, parent_candidate%parent_cls), &
+                        'too_few_particles_for_osmpl_fac')
+                    cycle
+                endif
+                call select_bootstrap_anchor(src_proj%os_ptcl2D, parent_candidate%ranked, parent_candidate%nanchor, &
+                    parent_candidate%anchor, parent_candidate%rest, class_ok, skip_reason)
+                if( .not. class_ok )then
+                    call append_skipped_class(skipped, nskipped, parent_candidate%parent_cls, parent_candidate%pop, &
+                        class_state_for_report(src_proj, parent_candidate%parent_cls), skip_reason)
+                    cycle
+                endif
+                if( size(parent_candidate%rest) < y_child )then
+                    call append_skipped_class(skipped, nskipped, parent_candidate%parent_cls, parent_candidate%pop, &
+                        class_state_for_report(src_proj, parent_candidate%parent_cls), &
+                        'too_few_non_anchor_particles')
+                    cycle
+                endif
+                call shuffle_ints(parent_candidate%rest)
+                parent_candidate%parts = split_nobjs_even(size(parent_candidate%rest), y_child)
+            endif
+            ncls_acc = ncls_acc + 1
+            parent_candidate%out_cls = ncls_acc
+            parents_work(ncls_acc) = parent_candidate
         enddo
-        nrows = sum(pops)
+        call clear_parent_sample(parent_candidate)
+        if( ncls_acc == 0 ) THROW_HARD('no usable cls2D classes found for bootstrap_cavgs')
+        allocate(parents(ncls_acc))
+        parents = parents_work(:ncls_acc)
+        deallocate(parents_work)
+        nout  = ncls_acc * params%osmpl_fac
+        nrows = sum_parent_pops(parents)
         if( y_child > 0 )then
             do i = 1,ncls_acc
                 nrows = nrows + y_child * parents(i)%nanchor + size(parents(i)%rest)
@@ -159,7 +201,9 @@ contains
         call derive_bootstrap_output_names(params%refs, manifest_file, membership_file)
         call boot_proj%update_projinfo(params%projfile)
         call boot_proj%write(params%projfile)
-        call write_bootstrap_outputs(manifest_file, membership_file, params, parents, rows, nout, y_child, anchor_target)
+        call write_bootstrap_outputs(manifest_file, membership_file, params, parents, rows, skipped, nskipped, &
+            ncls_in, nout, y_child, anchor_target)
+        call report_bootstrap_class_accounting(manifest_file, ncls_in, ncls_acc, nskipped, nout)
         cline_make = cline
         call cline_make%set('prg',      'make_cavgs')
         call cline_make%set('projfile', params%projfile%to_char())
@@ -175,22 +219,35 @@ contains
 
     contains
 
-        subroutine collect_bootstrap_classes( spproj, clsinds, pops )
-            type(sp_project),           intent(inout) :: spproj
-            integer, allocatable,       intent(inout) :: clsinds(:), pops(:)
+        subroutine collect_bootstrap_classes( spproj, clsinds, pops, skipped, nskipped, ncls_in )
+            type(sp_project),              intent(inout) :: spproj
+            integer, allocatable,          intent(inout) :: clsinds(:), pops(:)
+            type(bootstrap_skipped_class), allocatable, intent(inout) :: skipped(:)
+            integer,                       intent(inout) :: nskipped, ncls_in
             integer, allocatable :: cls_tmp(:), pop_tmp(:)
-            integer :: ncls, icls, nacc, pop
+            integer :: icls, nacc, pop, cls_state
+            logical :: have_state
             if( allocated(clsinds) ) deallocate(clsinds)
             if( allocated(pops)    ) deallocate(pops)
-            ncls = spproj%os_cls2D%get_noris()
-            allocate(cls_tmp(ncls), source=0)
-            allocate(pop_tmp(ncls), source=0)
+            if( allocated(skipped) ) deallocate(skipped)
+            ncls_in = spproj%os_cls2D%get_noris()
+            allocate(cls_tmp(ncls_in), source=0)
+            allocate(pop_tmp(ncls_in), source=0)
+            allocate(skipped(ncls_in), source=bootstrap_skipped_class())
             nacc = 0
-            do icls = 1,ncls
+            nskipped = 0
+            do icls = 1,ncls_in
                 pop = spproj%os_ptcl2D%get_pop(icls, 'class')
-                if( pop == 0 ) cycle
-                if( spproj%os_cls2D%isthere(icls, 'state') )then
-                    if( spproj%os_cls2D%get_state(icls) == 0 ) cycle
+                have_state = spproj%os_cls2D%isthere(icls, 'state')
+                cls_state  = -1
+                if( have_state ) cls_state = spproj%os_cls2D%get_state(icls)
+                if( have_state .and. cls_state == 0 )then
+                    call append_skipped_class(skipped, nskipped, icls, pop, cls_state, 'inactive_cls2D_state')
+                    cycle
+                endif
+                if( pop == 0 )then
+                    call append_skipped_class(skipped, nskipped, icls, pop, cls_state, 'zero_population')
+                    cycle
                 endif
                 nacc = nacc + 1
                 cls_tmp(nacc) = icls
@@ -203,28 +260,44 @@ contains
             deallocate(cls_tmp, pop_tmp)
         end subroutine collect_bootstrap_classes
 
-        subroutine validate_evenodd_present( os, pinds, parent_cls )
+        subroutine validate_evenodd_present( os, pinds, parent_cls, ok, reason )
             class(oris), intent(inout) :: os
             integer,     intent(in)    :: pinds(:), parent_cls
+            logical,          intent(out) :: ok
+            character(len=*), intent(out) :: reason
             integer :: i, eo
+            ok     = .true.
+            reason = ''
             do i = 1,size(pinds)
                 eo = os%get_eo(pinds(i))
                 if( eo /= 0 .and. eo /= 1 )then
-                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle without valid eo assignment in the original project')
+                    ok     = .false.
+                    reason = 'invalid_eo_assignment'
+                    write(logfhandle,'(A,I0,A,I0,A,I0)') &
+                        '>>> BOOTSTRAP_CAVGS SKIPPING CLASS ', parent_cls, &
+                        ': particle ', pinds(i), ' has invalid eo=', eo
+                    return
                 endif
             enddo
         end subroutine validate_evenodd_present
 
-        subroutine select_bootstrap_anchor( os, ranked, nanchor, parent_cls, anchor, rest )
+        subroutine select_bootstrap_anchor( os, ranked, nanchor, anchor, rest, ok, reason )
             class(oris),              intent(inout) :: os
-            integer,                  intent(in)    :: ranked(:), nanchor, parent_cls
+            integer,                  intent(in)    :: ranked(:), nanchor
             integer, allocatable,     intent(inout) :: anchor(:), rest(:)
+            logical,                  intent(out)   :: ok
+            character(len=*),         intent(out)   :: reason
             integer :: n, i, cnt, missing_eo, swap_pind
             logical :: have_even, have_odd
+            ok     = .false.
+            reason = ''
             if( allocated(anchor) ) deallocate(anchor)
             if( allocated(rest)   ) deallocate(rest)
             n = size(ranked)
-            if( nanchor >= n ) THROW_HARD('anchor leaves no child particles; select_bootstrap_anchor')
+            if( nanchor >= n )then
+                reason = 'anchor_leaves_no_child_particles'
+                return
+            endif
             allocate(anchor(nanchor), source=ranked(:nanchor))
             have_even = count_eo(os, anchor, 0) > 0
             have_odd  = count_eo(os, anchor, 1) > 0
@@ -242,12 +315,14 @@ contains
                     endif
                 enddo
                 if( swap_pind == 0 )then
-                    THROW_HARD('class '//int2str(parent_cls)//' cannot provide parity-complete anchors')
+                    reason = 'cannot_make_parity_complete_anchor'
+                    return
                 endif
                 anchor(nanchor) = swap_pind
             endif
             if( count_eo(os, anchor, 0) == 0 .or. count_eo(os, anchor, 1) == 0 )then
-                THROW_HARD('class '//int2str(parent_cls)//' cannot provide parity-complete anchors')
+                reason = 'cannot_make_parity_complete_anchor'
+                return
             endif
             allocate(rest(n - nanchor), source=0)
             cnt = 0
@@ -257,6 +332,7 @@ contains
                 rest(cnt) = ranked(i)
             enddo
             if( cnt /= n - nanchor ) THROW_HARD('anchor/rest partition mismatch; select_bootstrap_anchor')
+            ok = .true.
         end subroutine select_bootstrap_anchor
 
         integer function count_eo( os, pinds, eo )
@@ -415,20 +491,33 @@ contains
             call refs_body%kill
         end subroutine derive_bootstrap_output_names
 
-        subroutine write_bootstrap_outputs( manifest_file, membership_file, params, parents, rows, nout, y_child, anchor_target )
+        subroutine write_bootstrap_outputs( manifest_file, membership_file, params, parents, rows, skipped, nskipped, &
+                ncls_in, nout, y_child, anchor_target )
             type(string),                    intent(in) :: manifest_file, membership_file
             type(parameters),                intent(in) :: params
             type(bootstrap_parent_sample),   intent(in) :: parents(:)
             type(bootstrap_row),             intent(in) :: rows(:)
-            integer,                         intent(in) :: nout, y_child, anchor_target
+            type(bootstrap_skipped_class),   intent(in) :: skipped(:)
+            integer,                         intent(in) :: nskipped, ncls_in, nout, y_child, anchor_target
             integer :: funit, i, ipart, child_cls, child_sz
             call fopen(funit, FILE=manifest_file, STATUS='REPLACE', action='WRITE')
             write(funit,'(a)') '# SIMPLE bootstrap_cavgs manifest'
             write(funit,'(a,a)') '# refs: ', params%refs%to_char()
+            write(funit,'(a,i0)') '# ncls_input: ', ncls_in
+            write(funit,'(a,i0)') '# ncls_used: ', size(parents)
+            write(funit,'(a,i0)') '# ncls_skipped: ', nskipped
+            write(funit,'(a,i0)') '# ncls_expected_if_all_input_valid: ', ncls_in * params%osmpl_fac
             write(funit,'(a,i0)') '# ncls_out: ', nout
             write(funit,'(a,i0)') '# osmpl_fac: ', params%osmpl_fac
             write(funit,'(a,f8.4)') '# frac_best: ', params%frac_best
             write(funit,'(a,i0)') '# anchor_target: ', anchor_target
+            if( nskipped > 0 )then
+                write(funit,'(a)') '# skipped_classes: parent_cls parent_pop cls_state reason'
+                do i = 1,nskipped
+                    write(funit,'(a,1x,i0,1x,i0,1x,i0,1x,a)') '# skipped', skipped(i)%parent_cls, &
+                        skipped(i)%pop, skipped(i)%state, trim(skipped(i)%reason)
+                enddo
+            endif
             write(funit,'(a)') 'out_cls role parent_cls child_id parent_pop n_anchor n_members'
             do i = 1,size(parents)
                 write(funit,'(i0,1x,a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0)') parents(i)%out_cls, 'original', &
@@ -451,6 +540,62 @@ contains
             enddo
             call fclose(funit)
         end subroutine write_bootstrap_outputs
+
+        subroutine append_skipped_class( skipped, nskipped, parent_cls, pop, state, reason )
+            type(bootstrap_skipped_class), intent(inout) :: skipped(:)
+            integer,                       intent(inout) :: nskipped
+            integer,                       intent(in)    :: parent_cls, pop, state
+            character(len=*),              intent(in)    :: reason
+            nskipped = nskipped + 1
+            if( nskipped > size(skipped) ) THROW_HARD('skipped-class accounting overflow; append_skipped_class')
+            skipped(nskipped)%parent_cls = parent_cls
+            skipped(nskipped)%pop        = pop
+            skipped(nskipped)%state      = state
+            skipped(nskipped)%reason     = reason
+        end subroutine append_skipped_class
+
+        integer function class_state_for_report( spproj, icls )
+            type(sp_project), intent(inout) :: spproj
+            integer,          intent(in)    :: icls
+            class_state_for_report = -1
+            if( spproj%os_cls2D%isthere(icls, 'state') )then
+                class_state_for_report = spproj%os_cls2D%get_state(icls)
+            endif
+        end function class_state_for_report
+
+        integer function sum_parent_pops( parents )
+            type(bootstrap_parent_sample), intent(in) :: parents(:)
+            integer :: i
+            sum_parent_pops = 0
+            do i = 1,size(parents)
+                sum_parent_pops = sum_parent_pops + parents(i)%pop
+            enddo
+        end function sum_parent_pops
+
+        subroutine clear_parent_sample( parent )
+            type(bootstrap_parent_sample), intent(inout) :: parent
+            parent%parent_cls = 0
+            parent%out_cls    = 0
+            parent%pop        = 0
+            parent%nanchor    = 0
+            if( allocated(parent%ranked) ) deallocate(parent%ranked)
+            if( allocated(parent%anchor) ) deallocate(parent%anchor)
+            if( allocated(parent%rest)   ) deallocate(parent%rest)
+            if( allocated(parent%parts)  ) deallocate(parent%parts)
+        end subroutine clear_parent_sample
+
+        subroutine report_bootstrap_class_accounting( manifest_file, ncls_in, ncls_used, nskipped, nout )
+            type(string), intent(in) :: manifest_file
+            integer,      intent(in) :: ncls_in, ncls_used, nskipped, nout
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
+                '>>> BOOTSTRAP_CAVGS CLASSES INPUT/USED/SKIPPED/OUTPUT: ', ncls_in, '/', &
+                ncls_used, '/', nskipped, '/', nout
+            if( nskipped > 0 )then
+                write(logfhandle,'(A,A)') '>>> BOOTSTRAP_CAVGS SKIPPED CLASS DETAILS WRITTEN TO: ', &
+                    manifest_file%to_char()
+            endif
+            call flush(logfhandle)
+        end subroutine report_bootstrap_class_accounting
 
     end subroutine exec_bootstrap_cavgs
 

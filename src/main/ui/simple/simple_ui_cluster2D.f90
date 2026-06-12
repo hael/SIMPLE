@@ -224,7 +224,7 @@ contains
         ! <empty>
         ! parameter input/output
         call bootstrap_cavgs%add_input(UI_PARM, 'osmpl_fac', 'num', 'Oversampling factor',&
-        &'Integer factor for class-average oversampling; final class count is active original classes times osmpl_fac{2}',&
+        &'Integer factor for class-average oversampling; final class count is usable parent classes times osmpl_fac{2}',&
         &'oversampling factor{2}', .false., 2.)
         call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
         &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
