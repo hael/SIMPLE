@@ -339,6 +339,8 @@ contains
         ! In probabilistic mode the sampled subset is reused within the current iteration
         ! by prob_tab2D/cluster2D_exec, but it is redrawn on later iterations.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
+        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_ALIGN2D: sampled ', nptcls, ' particles over ', params%nparts, ' part(s)'
+        call flush(logfhandle)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
         ! build the global prob table (nclasses x nptcls)
@@ -353,16 +355,26 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: prob_tab2D workers completed; merging partition tables'
+        call flush(logfhandle)
         ! merge all partition tables into global
         do ipart = 1, params%nparts
             fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+            write(logfhandle,'(A,I0,A,I0,A,A)') '>>> PROB_ALIGN2D: merging part ', ipart, '/', params%nparts, ' ', fname%to_char()
+            call flush(logfhandle)
             call eulprob_obj_glob%read_tab_to_glob(fname)
         end do
         ! global probabilistic class assignment
+        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: running global probabilistic assignment'
+        call flush(logfhandle)
         call eulprob_obj_glob%ref_assign
         ! write assignment to file
         fname = string(ASSIGNMENT_FBODY)//'.dat'
+        write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: writing assignment ', fname%to_char()
+        call flush(logfhandle)
         call eulprob_obj_glob%write_assignment(fname)
+        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: assignment written'
+        call flush(logfhandle)
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill

@@ -323,15 +323,16 @@ contains
     ! ptcl -> class assignment using power_sampling (same as strategy3D_snhc_smpl projection direction step)
     subroutine ref_assign_pow_smpl( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer :: i, icls, assigned_icls, assigned_ptcl, stab_inds(self%nptcls, self%nclasses)
-        integer :: icls_dist_inds(self%nclasses), active_cls(self%nclasses), eligible_cls(self%nclasses)
-        integer :: inds_sorted(self%nclasses), order_ind
-        real    :: sorted_tab(self%nptcls, self%nclasses), cls_dists(self%nclasses), corr_proxy(self%nclasses)
-        real    :: dists_raw(self%nclasses, self%nptcls), corr_tmp
-        logical :: ptcl_avail(self%nptcls)
-        logical :: class_active(self%nclasses)
-        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc
-        real    :: best_dist, power
+        integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), eligible_cls(:), inds_sorted(:)
+        real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:), dists_raw(:,:)
+        logical, allocatable :: ptcl_avail(:), class_active(:)
+        integer :: i, icls, assigned_icls, assigned_ptcl, order_ind
+        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned, report_freq
+        real    :: best_dist, power, corr_tmp
+        write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing ', self%nptcls, ' particles x ', self%nclasses
+        call flush(logfhandle)
+        allocate(class_active(self%nclasses), active_cls(self%nclasses), eligible_cls(self%nclasses),&
+            &inds_sorted(self%nclasses), icls_dist_inds(self%nclasses), cls_dists(self%nclasses), corr_proxy(self%nclasses))
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -348,11 +349,19 @@ contains
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
         power        = EXTR_POWER
+        allocate(dists_raw(self%nclasses,self%nptcls), sorted_tab(self%nptcls,self%nclasses),&
+            &stab_inds(self%nptcls,self%nclasses), ptcl_avail(self%nptcls))
         ! keep raw distances for output (objective values), normalize only for assignment ordering
+        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: preserving raw distances'
+        call flush(logfhandle)
         dists_raw = self%loc_tab(:,:)%dist
         ! normalization
+        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: normalizing class distances'
+        call flush(logfhandle)
         call self%ref_normalize
         ! sort each column
+        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: sorting per-class particle distances'
+        call flush(logfhandle)
         sorted_tab = transpose(self%loc_tab(:,:)%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
         do icls = 1, self%nclasses
@@ -366,6 +375,10 @@ contains
         !$omp end parallel do
         icls_dist_inds = 1
         ptcl_avail     = .true.
+        nassigned      = 0
+        report_freq    = max(1, self%nptcls / 10)
+        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: assigning particles'
+        call flush(logfhandle)
         do while( any(ptcl_avail) )
             ! collect the current best distance for each class, skipping exhausted ones
             neligible = 0
@@ -395,6 +408,11 @@ contains
             self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
+            nassigned = nassigned + 1
+            if( mod(nassigned, report_freq) == 0 .or. nassigned == self%nptcls )then
+                write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: assigned ', nassigned, '/', self%nptcls
+                call flush(logfhandle)
+            endif
         end do
         if( any(ptcl_avail) )then
             do i = 1, self%nptcls
@@ -424,8 +442,17 @@ contains
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 ptcl_avail(i)     = .false.
+                nassigned = nassigned + 1
+                if( mod(nassigned, report_freq) == 0 .or. nassigned == self%nptcls )then
+                    write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: assigned ', nassigned, '/', self%nptcls
+                    call flush(logfhandle)
+                endif
             end do
         endif
+        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: done'
+        call flush(logfhandle)
+        deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, sorted_tab, cls_dists, corr_proxy,&
+            &dists_raw, ptcl_avail, class_active)
     end subroutine ref_assign_pow_smpl
 
     ! DESTRUCTOR
