@@ -74,7 +74,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: src_proj, boot_proj
         type(cmdline)    :: cline_make
-        type(string)     :: boot_projfile, manifest_file, membership_file
+        type(string)     :: manifest_file, membership_file
         type(class_sample), allocatable :: clssmp(:)
         type(bootstrap_parent_sample), allocatable :: parents(:)
         type(bootstrap_row),           allocatable :: rows(:)
@@ -85,9 +85,11 @@ contains
         if( .not. cline%defined('osmpl_fac') ) call cline%set('osmpl_fac', 2)
         if( .not. cline%defined('frac_best') ) call cline%set('frac_best', 0.5)
         if( .not. cline%defined('refs')      ) call cline%set('refs', 'cavgs_bootstrap_001.mrc')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir', 'yes')
         call cline%set('prg',     'bootstrap_cavgs')
         call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
+        call cline%set('mkdir', 'no')
         if( params%osmpl_fac < 1 ) THROW_HARD('osmpl_fac must be >= 1; exec_bootstrap_cavgs')
         if( params%frac_best <= 0. .or. params%frac_best > 1. )then
             THROW_HARD('frac_best must be > 0 and <= 1; exec_bootstrap_cavgs')
@@ -154,13 +156,13 @@ contains
         enddo
         if( row_count /= nrows ) THROW_HARD('internal row count mismatch; exec_bootstrap_cavgs')
         call build_bootstrap_project(src_proj, parents, rows, nout, y_child, boot_proj)
-        call derive_bootstrap_output_names(params%refs, boot_projfile, manifest_file, membership_file)
-        call boot_proj%update_projinfo(boot_projfile)
-        call boot_proj%write(boot_projfile)
+        call derive_bootstrap_output_names(params%refs, manifest_file, membership_file)
+        call boot_proj%update_projinfo(params%projfile)
+        call boot_proj%write(params%projfile)
         call write_bootstrap_outputs(manifest_file, membership_file, params, parents, rows, nout, y_child, anchor_target)
         cline_make = cline
         call cline_make%set('prg',      'make_cavgs')
-        call cline_make%set('projfile', boot_projfile%to_char())
+        call cline_make%set('projfile', params%projfile%to_char())
         call cline_make%set('refs',     params%refs%to_char())
         call cline_make%set('ncls',     nout)
         call cline_make%set('mkdir',    'no')
@@ -206,12 +208,9 @@ contains
             integer,     intent(in)    :: pinds(:), parent_cls
             integer :: i, eo
             do i = 1,size(pinds)
-                if( .not. os%isthere(pinds(i), 'eo') )then
-                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle without eo flag; validate_evenodd_present')
-                endif
                 eo = os%get_eo(pinds(i))
                 if( eo /= 0 .and. eo /= 1 )then
-                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle with eo not equal to 0 or 1')
+                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle without valid eo assignment in the original project')
                 endif
             enddo
         end subroutine validate_evenodd_present
@@ -400,9 +399,9 @@ contains
             call boot_proj%os_cls2D%set(out_cls, 'bootstrap_anchor', nanchor)
         end subroutine set_bootstrap_class_row
 
-        subroutine derive_bootstrap_output_names( refs, boot_projfile, manifest_file, membership_file )
+        subroutine derive_bootstrap_output_names( refs, manifest_file, membership_file )
             class(string), intent(in)    :: refs
-            type(string),  intent(inout) :: boot_projfile, manifest_file, membership_file
+            type(string),  intent(inout) :: manifest_file, membership_file
             type(string) :: refs_ext, refs_body
             refs_ext = fname2ext(refs)
             if( refs_ext%strlen_trim() > 0 )then
@@ -410,7 +409,6 @@ contains
             else
                 refs_body = refs
             endif
-            boot_projfile  = refs_body%to_char()//'.simple'
             manifest_file  = refs_body%to_char()//'_manifest.txt'
             membership_file = refs_body%to_char()//'_membership.txt'
             call refs_ext%kill
