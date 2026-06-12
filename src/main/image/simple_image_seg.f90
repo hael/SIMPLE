@@ -3,6 +3,8 @@ submodule (simple_image) simple_image_seg
 implicit none
 #include "simple_local_flags.inc"
 
+real, parameter :: DT_INF = 1.0e20 !< large finite sentinel used by distance_transform
+
 contains
 
     module function nforeground( self ) result( n )
@@ -103,6 +105,93 @@ contains
         endif
         self%rmat = sqrt(self%rmat)
     end subroutine cendist
+
+    !>  \brief  computes the exact Euclidean distance transform of a binary image.
+    !!          On output every pixel holds the distance (in Angstroms) to the
+    !!          nearest background (zero-valued) pixel. Foreground is defined as
+    !!          pixels > 0.5. Works for both 2D and 3D images via the separable
+    !!          algorithm of Felzenszwalb & Huttenlocher (2012).
+    module subroutine distance_transform( self )
+        class(image), intent(inout) :: self
+        real, allocatable :: f(:), d(:)
+        integer :: i, j, k, nx, ny, nz
+        if( self%ft ) THROW_HARD('real space only; distance_transform')
+        nx = self%ldim(1); ny = self%ldim(2); nz = self%ldim(3)
+        ! initialize: 0 at background, +inf at foreground
+        where( self%rmat(:nx,:ny,:nz) > 0.5 )
+            self%rmat(:nx,:ny,:nz) = DT_INF
+        elsewhere
+            self%rmat(:nx,:ny,:nz) = 0.
+        end where
+        ! 1D transform along x
+        allocate(f(nx), d(nx))
+        do k = 1, nz
+            do j = 1, ny
+                f = self%rmat(:nx,j,k)
+                call dt_1d(f, d, nx)
+                self%rmat(:nx,j,k) = d
+            end do
+        end do
+        deallocate(f, d)
+        ! 1D transform along y
+        allocate(f(ny), d(ny))
+        do k = 1, nz
+            do i = 1, nx
+                f = self%rmat(i,:ny,k)
+                call dt_1d(f, d, ny)
+                self%rmat(i,:ny,k) = d
+            end do
+        end do
+        deallocate(f, d)
+        ! 1D transform along z (3D only)
+        if( .not. self%is_2d() )then
+            allocate(f(nz), d(nz))
+            do j = 1, ny
+                do i = 1, nx
+                    f = self%rmat(i,j,:nz)
+                    call dt_1d(f, d, nz)
+                    self%rmat(i,j,:nz) = d
+                end do
+            end do
+            deallocate(f, d)
+        endif
+        ! squared distances (in pixels) -> physical distances in Angstroms
+        self%rmat(:nx,:ny,:nz) = sqrt(self%rmat(:nx,:ny,:nz)) * self%smpd
+
+    contains
+
+        !>  1D squared Euclidean distance transform (lower envelope of parabolas)
+        subroutine dt_1d( fin, dout, n )
+            integer, intent(in)  :: n
+            real,    intent(in)  :: fin(n)
+            real,    intent(out) :: dout(n)
+            integer :: v(n), q, kk
+            real    :: z(n+1), s
+            kk     = 1     ! index of rightmost parabola in lower envelope
+            v(1)   = 1     ! locations of parabolas in lower envelope
+            z(1)   = -DT_INF
+            z(2)   =  DT_INF
+            do q = 2, n
+                s = ( (fin(q) + real(q)**2) - (fin(v(kk)) + real(v(kk))**2) ) / (2.*real(q) - 2.*real(v(kk)))
+                do while( s <= z(kk) )
+                    kk = kk - 1
+                    s  = ( (fin(q) + real(q)**2) - (fin(v(kk)) + real(v(kk))**2) ) / (2.*real(q) - 2.*real(v(kk)))
+                end do
+                kk      = kk + 1
+                v(kk)   = q
+                z(kk)   = s
+                z(kk+1) = DT_INF
+            end do
+            kk = 1
+            do q = 1, n
+                do while( z(kk+1) < real(q) )
+                    kk = kk + 1
+                end do
+                dout(q) = (real(q) - real(v(kk)))**2 + fin(v(kk))
+            end do
+        end subroutine dt_1d
+
+    end subroutine distance_transform
 
     module subroutine bin_inv( self )
         class(image), intent(inout) :: self

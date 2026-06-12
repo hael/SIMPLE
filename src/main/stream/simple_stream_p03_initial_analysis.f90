@@ -239,7 +239,7 @@ contains
             i_max   = 0
             i_start = 1
             call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
-            call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
+          !  call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
             call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_1'),cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
             call reestimate_box_size_from_selected_cavgs(spproj, params, mskdiam, box_in_pix)
            ! call run_reextract(spproj, cycle_projfile, string('reextract'), box_in_pix)
@@ -656,6 +656,7 @@ contains
                 ldim_new(3) = 1
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> RESCALING AND CLIPPING REPROJECTIONS TO ', ldim_new(1), ' PIXEL BOX (', ldim_clip(1), ' A) FOR PICKING REFERENCES'
                 call scale_imgfile( string('reprojs.mrcs'), string('selected_references.mrcs'), vol_smpd, ldim_new, smpd_part)
+                call simple_copy_file(string('selected_references.mrcs'), string('../../')//string('selected_references.mrcs')) ! copy selected references to subdir for partitioning
                 call voloris%kill()
                 if( allocated(states) ) deallocate(states)
                 if( allocated(projs)  ) deallocate(projs)
@@ -984,10 +985,10 @@ contains
                 integer,            allocatable :: selected_cavg_inds_local(:)
                 integer,            allocatable :: cls_states_local(:)
                 real,               allocatable :: diams_inliers_local(:)
-                real,               allocatable :: diams_local(:), shifts_local(:,:)
+                real,               allocatable :: diams_local(:), min_diams_local(:),shifts_local(:,:)
                 integer                         :: i_mask_local, mskdiam_pix, ncls_local
-                real                            :: mad_local, diam_max_local
-                type(stats_struct)              :: diam_stats_local
+                real                            :: mad_local, diam_max_local, diam_min_local
+                type(stats_struct)              :: diam_stats_local, min_diam_stats_local
                 ncls_local      = spproj_inout%os_cls2D%get_noris()
                 cavg_imgs_local = read_cavgs_into_imgarr(spproj_inout)
                 cls_states_local = nint(spproj_inout%os_cls2D%get_all('state'))
@@ -997,8 +998,7 @@ contains
                 do i_mask_local = 1, size(selected_cavg_inds_local)
                     call masks_local(i_mask_local)%copy(cavg_imgs_local(selected_cavg_inds_local(i_mask_local)))
                 end do
-                call automask2D(params_in, masks_local, params_in%ngrow, nint(params_in%winsz), params_in%edge, diams_local, shifts_local)
-
+                call automask2D(params_in, masks_local, params_in%ngrow, nint(params_in%winsz), params_in%edge, diams_local, shifts_local, min_diams=min_diams_local)
                 call calc_stats(diams_local, diam_stats_local)
                 mad_local = mad_gau(diams_local, diam_stats_local%med)
                 if( mad_local > 0.0 ) then
@@ -1013,11 +1013,26 @@ contains
                     diam_max_local = maxval(diams_local)
                 endif
 
+                call calc_stats(min_diams_local, min_diam_stats_local)
+                mad_local = mad_gau(min_diams_local, min_diam_stats_local%med)
+                if( mad_local > 0.0 ) then
+                    diams_inliers_local = pack(min_diams_local, (min_diams_local - min_diam_stats_local%med) / mad_local > -3.0)
+                    if( size(diams_inliers_local) > 0 ) then
+                        diam_min_local = minval(diams_inliers_local)
+                    else
+                        diam_min_local = minval(min_diams_local)
+                    endif
+                    deallocate(diams_inliers_local)
+                else
+                    diam_min_local = minval(min_diams_local)
+                endif
+
                 mskdiam_pix      = round2even((diam_max_local / params_in%smpd + 2. * COSMSKHALFWIDTH) * MSK_EXP_FAC)
                 mskdiam_inout    = params_in%smpd * mskdiam_pix
                ! box_in_pix_inout = find_larger_magic_box(round2even((mskdiam_pix + mskdiam_pix * BOX_EXP_FAC) / params_in%smpd))
                 box_in_pix_inout = find_larger_magic_box(round2even((mskdiam_pix * 1.2)))
                 write(logfhandle, '(A,I0,A)') '>>> UPDATED MASK DIAMETER TO ', round2even(mskdiam_inout), ' A'
+                write(logfhandle, '(A,I0,A)') '>>> UPDATED MIN DIAMETER TO ', round2even(diam_min_local), ' A'
                 write(logfhandle, '(A,I0,A)') '>>> UPDATED BOX SIZE TO ', box_in_pix_inout, ' PIXELS'
                 call dealloc_imgarr(cavg_imgs_local)
                 deallocate(cls_states_local)

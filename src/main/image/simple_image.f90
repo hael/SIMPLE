@@ -289,6 +289,7 @@ contains
     procedure          :: weighted_subtr_sqsum, masked_subtr_sqsum
     procedure          :: weighted_subtr_corr, masked_subtr_corr
     procedure          :: frame_ref_phase_correlation
+
     ! cost / shift
     procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
@@ -309,6 +310,7 @@ contains
     procedure, private :: binarize_1, binarize_2, binarize_3
     generic            :: binarize => binarize_1, binarize_2, binarize_3
     procedure          :: cendist
+    procedure          :: distance_transform
     procedure          :: bin_inv
     procedure          :: remove_edge
     procedure          :: zero2one
@@ -1949,6 +1951,10 @@ interface
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: c_point(3)
     end subroutine cendist
+
+    module subroutine distance_transform( self )
+        class(image), intent(inout) :: self
+    end subroutine distance_transform
 
     module subroutine bin_inv( self )
         class(image), intent(inout) :: self

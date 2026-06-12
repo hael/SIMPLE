@@ -42,6 +42,7 @@ use simple_stream_api
 use simple_fileio,               only: read_filetable
 use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
 use simple_microchunked2D,       only: microchunked2D
+use simple_microchunked2D_fast,  only: microchunked2D_fast
 use simple_stream_pool2D_utils,  only: set_lpthres_type
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
                                        gui_metadata_stream_particle_sieving,                   &
@@ -87,7 +88,7 @@ contains
         type(sp_project)                :: spproj_glob, spproj_tmp
         type(project_rec)               :: prec
         type(rec_iterator)              :: it
-        type(microchunked2D)            :: chunked_2D
+        type(microchunked2D_fast)            :: chunked_2D
         type(stream_watcher)            :: project_buff
         type(gui_metadata_cavg2D)       :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
@@ -175,22 +176,22 @@ contains
             else
                 call send_meta(string('waiting on reference picking'))
             endif
-            if( l_refs_complete ) then
-                call meta_particle_sieving%set_user_input(.true.)
-                if( chunked_2D%get_latest_match(jpeg_inds, jpeg_pops, jpeg_res, match_jpeg, match_stk, xtiles, ytiles) ) then
-                    call send_matched_cavgs2D(match_jpeg, size(jpeg_inds))
-                end if
-            else
-                if( chunked_2D%get_references(jpeg_inds, jpeg_pops, jpeg_res, refs_jpeg, refs_stk, xtiles, ytiles) ) then
-                    if( chunked_2D%get_reference_selection(ref_selection) ) then
-                        do i=1, size(ref_selection)
-                            call meta_particle_sieving%set_initial_ref_selection(ref_selection(i))
-                        end do
-                    end if
-                    call send_reference_cavgs2D(refs_jpeg, size(jpeg_inds))
-                    l_refs_complete = .true.
-                end if
-            end if
+            ! if( l_refs_complete ) then
+            !     call meta_particle_sieving%set_user_input(.true.)
+            !     if( chunked_2D%get_latest_match(jpeg_inds, jpeg_pops, jpeg_res, match_jpeg, match_stk, xtiles, ytiles) ) then
+            !         call send_matched_cavgs2D(match_jpeg, size(jpeg_inds))
+            !     end if
+            ! else
+            !     if( chunked_2D%get_references(jpeg_inds, jpeg_pops, jpeg_res, refs_jpeg, refs_stk, xtiles, ytiles) ) then
+            !         if( chunked_2D%get_reference_selection(ref_selection) ) then
+            !             do i=1, size(ref_selection)
+            !                 call meta_particle_sieving%set_initial_ref_selection(ref_selection(i))
+            !             end do
+            !         end if
+            !         call send_reference_cavgs2D(refs_jpeg, size(jpeg_inds))
+            !         l_refs_complete = .true.
+            !     end if
+            ! end if
             call sleep(WAITTIME)
         end do
         call meta_particle_sieving%set_user_input(.false.)

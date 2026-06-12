@@ -262,21 +262,24 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine density_inoutside_mask
 
-    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk )
-        class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: imgs(:)
-        integer,           intent(in)    :: ngrow, winsz, edge
-        real, allocatable, intent(inout) :: diams(:), shifts(:,:)
-        logical, optional, intent(in)    :: write2disk
-        type(image_bin),   allocatable   :: cc_img(:)
+    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams )
+        class(parameters),              intent(in)    :: params
+        class(image),                   intent(inout) :: imgs(:)
+        integer,                        intent(in)    :: ngrow, winsz, edge
+        real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
+        logical, optional,              intent(in)    :: write2disk
+        real,    optional, allocatable, intent(inout) :: min_diams(:)
+        type(image_bin),   allocatable                :: cc_img(:)
+        type(image_bin)                               :: cc_min_dist
         integer :: i, n
+        real    :: mm(2)
         logical :: l_write
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
         l_write = l_write .and. params%part.eq.1
-        if( allocated(diams)  ) deallocate(diams)
-        if( allocated(shifts) ) deallocate(shifts)
+        if( allocated(diams)     ) deallocate(diams)
+        if( allocated(shifts)    ) deallocate(shifts)
         ! allocate
         allocate(diams(n), shifts(n,2), source=0.)
         allocate(cc_img(n))
@@ -294,6 +297,18 @@ contains
             call cc_img(i)%cos_edge(edge,imgs(i))
         end do
         !$omp end parallel do
+        if( present(min_diams) ) then
+            if( allocated(min_diams) ) deallocate(min_diams)
+            allocate(min_diams(n))
+            do i = 1,n
+                call cc_min_dist%copy(cc_img(i))
+                call cc_min_dist%distance_transform()
+                mm = cc_min_dist%minmax()
+                min_diams(i) = 2.*mm(2)*imgs(i)%get_smpd()
+                write(logfhandle,'(A,I0,A,F7.2,A)') '>>> MIN DIAMETER OF MASK FOR IMAGE ', i, ': ', min_diams(i), ' A'
+                call cc_min_dist%kill()
+            end do
+        end if
         ! destruct
         do i = 1,n
             call cc_img(i)%write(string('binarized_automask2D.mrc'), i)
