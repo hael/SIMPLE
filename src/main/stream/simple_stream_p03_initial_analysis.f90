@@ -53,9 +53,10 @@ use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
 use simple_projfile_utils,        only: merge_chunk_projfiles, merge_selected_project_files
-use simple_procimgstk,            only: scale_and_clip_imgfile
+use simple_procimgstk,            only: scale_imgfile
 use simple_fileio,                only: swap_suffix
 use simple_defs,                  only: MSK_EXP_FAC, BOX_EXP_FAC, COSMSKHALFWIDTH
+use simple_abinitio_utils,        only: abinitio_rec_fbody
 use simple_gui_metadata_api
 
 implicit none
@@ -85,7 +86,7 @@ contains
         type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
         type(string),              allocatable     :: imgfiles(:)            ! cache of cavgs stack paths for each cluster, for use in process_selected_refs
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
-        type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_dir, cycle_projfile
+        type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_dir, cycle_projfile, boxfile
         type(qsys_env)                             :: qsys
         type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank, cline_reextract, cline_abinitio3D, cline_cls_split
         type(parameters)                           :: params
@@ -204,6 +205,32 @@ contains
             call qsys%new(params, NPARTS2D)
             call qsys%kill()
             call run_extract(spproj, cycle_projfile, string('extract'), box_in_pix)
+            do i = spproj%os_mic%get_noris(), 1, -1
+                if( spproj%os_mic%get(i, 'state') < 1.0 )then
+                    call spproj%os_mic%delete(i)
+                    cycle
+                endif
+                if( .not. spproj%os_mic%isthere(i, 'nptcls') )then
+                    call spproj%os_mic%delete(i)
+                    cycle
+                endif
+                if( spproj%os_mic%get(i, 'nptcls') <= 0.0 )then
+                    call spproj%os_mic%delete(i)
+                    cycle
+                endif
+                if( .not. spproj%os_mic%isthere(i, 'boxfile') )then
+                    call spproj%os_mic%delete(i)
+                    cycle
+                endif
+                boxfile = spproj%os_mic%get_str(i, 'boxfile')
+                if( boxfile%strlen() == 0 .or. .not. file_exists(boxfile) )then
+                    call boxfile%kill
+                    call spproj%os_mic%delete(i)
+                    cycle
+                endif
+                call boxfile%kill
+            enddo
+            call spproj%write(cycle_projfile)
             call send_meta(string('complete'))
             call send_meta2D(string('classifying particles'), box_in_pix)
             call run_abinitio2D_microchunked(spproj, cycle_projfile, string('abinitio2D_microchunked'), nint(mskdiam))
@@ -212,14 +239,12 @@ contains
             i_max   = 0
             i_start = 1
             call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
+            call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
             call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_1'),cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
             call reestimate_box_size_from_selected_cavgs(spproj, params, mskdiam, box_in_pix)
            ! call run_reextract(spproj, cycle_projfile, string('reextract'), box_in_pix)
           !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_1'))
             if( n_cycles >= size(NMICS_PLAN) - 1 ) then 
-                call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
-                call spproj%kill
-                call spproj%read(cycle_projfile) ! read the full project with all clusters merged in, to get the complete set of class averages for user selection
                 call balance_classes(spproj, cycle_projfile, string('balance_classes')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
               !  call run_cls_split(spproj, cycle_projfile, string('cls_split'), nint(mskdiam))
               !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_2'))
@@ -257,6 +282,9 @@ contains
            ! end do
             ! wait for user interaction
             write(logfhandle, '(A)') ">>> WAITING FOR USER TO SELECT REFERENCES"
+
+            exit
+
             do
                 ! poll the outbound queue for a GUI update message
                 if( mq_stream_master_out%is_active() ) then
@@ -520,20 +548,23 @@ contains
                 type(string), intent(in) :: cluster_projfile      ! cycle-local project file to process
                 type(string), intent(in) :: outdir                ! output directory for abinitio3D run products
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
-                integer,     allocatable :: volpops(:), states(:) ! per-volume populations and class-state labels
+                integer,     allocatable :: states(:), projs(:), nunique_proj(:), uniqbuf(:)
                 type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs ! commander for abinitio3D with class-average-based rejection
-                type(sp_project)         :: spproj_cluster        ! temporary project object for 3D result inspection
                 type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
                 type(string)             :: cwd, volpath          ! saved working directory and selected volume path
                 type(oris)               :: voloris               ! volume metadata container from project
                 integer                  :: ldim(3)               ! selected volume box dimensions
                 integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
+                integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
+                integer                  :: nvols, nuniq, i_cls3d, proj_here
                 integer :: ivol, bestvol                          ! volume loop index and best-population volume id
+                real    :: vol_smpd
+                real    :: smpd_part                              ! particle-stack sampling distance (target)
+                real    :: smpd_new                               ! sampling distance after rescaling
                 call simple_getcwd(cwd)
                 call simple_mkdir(outdir)
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
                 call simple_chdir(outdir)
-                call spproj_cluster%kill()
                 call cline_abinitio3D%kill()
             !     call cline_abinitio3D%set('prg',  'abinitio3D_cavgs_reject')
             !     call cline_abinitio3D%set('mkdir',                     'no')
@@ -553,7 +584,6 @@ contains
                 call cline_abinitio3D%set('pgrp',                      'c1')
                 call cline_abinitio3D%set('nstates',              NSTATES3D)
                 call cline_abinitio3D%set('lpstop',                8)
-                call cline_abinitio3D%set('nstages',                      3)
                 call cline_abinitio3D%set('mskdiam',             mskdiam_in)
                 call cline_abinitio3D%set('lpstart',              20)
                 call cline_abinitio3D%set('prune',              'no')
@@ -563,32 +593,72 @@ contains
 
                 call cline_abinitio3D%printline()
                 call xabinitio3D_cavgs%execute(cline_abinitio3D)
-                ! !read volume
-                ! call spproj_cluster%read(cluster_projfile) ! read the project with abinitio3D output
-                ! call spproj_cluster%get_all_vols(voloris)
-                ! allocate(volpops(voloris%get_noris()))
-                ! states  = nint(spproj_inout%os_cls2D%get_all('state'))
-                ! do ivol = 1, voloris%get_noris()
-                !     volpops(ivol) = count(states == ivol) ! population of each volume is the count of particles in the corresponding class
-                ! end do
-                ! bestvol = maxloc(volpops, 1)
-                ! ldim = voloris%get_int(bestvol, 'box')
-                ! ldim_clip = spproj_inout%os_stk%get_int(1, 'box') ! pad to particle box size
-                ! call  voloris%getter(bestvol, 'vol', volpath)
-                ! call cline_reproject%kill()
-                ! call cline_reproject%set('prg',                   'reproject')
-                ! call cline_reproject%set('vol1',                      volpath)
-                ! call cline_reproject%set('smpd', voloris%get(bestvol, 'smpd'))
-                ! call cline_reproject%set('nspace',                         10)
-                ! call cline_reproject%set('pgrp',                         'c1')
-                ! call cline_reproject%set('nthr',                            8)
-                ! call cline_reproject%set('mskdiam',              mskdiam_in)
-                ! call cline_reproject%printline()
-                ! call xreproject%execute(cline_reproject)
-                ! call mrc2jpeg_tiled(string('reprojs.mrcs'), string('reprojs.jpeg'))
-                ! deallocate(states)
-                ! deallocate(volpops)
-                ! call voloris%kill()
+
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile) ! read the project with abinitio3D output
+                if( spproj_inout%os_cls3D%isthere('state') .and. spproj_inout%os_cls3D%isthere('proj') ) then
+                    states = spproj_inout%os_cls3D%get_all_asint('state')
+                    projs  = spproj_inout%os_cls3D%get_all_asint('proj')
+                    nvols = maxval(states)
+                    if( size(states) == size(projs) )then
+                        allocate(nunique_proj(nvols), source=0)
+                        allocate(uniqbuf(max(1, size(projs))), source=0)
+                        do ivol = 1, nvols
+                            nuniq = 0
+                            do i_cls3d = 1, size(states)
+                                if( states(i_cls3d) /= ivol ) cycle
+                                proj_here = projs(i_cls3d)
+                                if( nuniq == 0 )then
+                                    nuniq = 1
+                                    uniqbuf(1) = proj_here
+                                else if( .not. any(uniqbuf(1:nuniq) == proj_here) )then
+                                    nuniq = nuniq + 1
+                                    uniqbuf(nuniq) = proj_here
+                                endif
+                            enddo
+                            nunique_proj(ivol) = nuniq
+                        enddo
+                        bestvol = maxloc(nunique_proj, 1)
+                        write(logfhandle,'(A,I0,A,I0,A)') '>>> BEST VOLUME BY UNIQUE PROJ IN CLS3D: STATE=', bestvol, &
+                            ' (NUNIQUE_PROJ=', nunique_proj(bestvol), ')'
+                        deallocate(nunique_proj, uniqbuf)
+                    else
+                        write(logfhandle,'(A)') '>>> WARNING: cannot rank volumes by unique proj, nonconforming cls3D arrays'
+                        write(logfhandle,'(A,I0)') '>>> FALLING BACK TO VOLUME STATE=', bestvol
+                    endif
+                else
+                    write(logfhandle,'(A)') '>>> WARNING: missing cls3D state/proj or empty volume set; unique-proj ranking skipped'
+                    write(logfhandle,'(A,I0)') '>>> FALLING BACK TO VOLUME STATE=', bestvol
+                endif
+                
+                volpath = string('recvol_state'//int2str_pad(bestvol,2)//MRC_EXT)
+                if( .not. file_exists(volpath) ) THROW_HARD('Expected abinitio3D output volume not found: '//volpath%to_char())
+                call find_ldim_nptcls(volpath, ldim, nuniq)
+                vol_smpd = find_img_smpd(volpath)
+                ldim_clip(1) = spproj_inout%os_stk%get_int(1, 'box') ! particle box size
+                ldim_clip(2) = ldim_clip(1)
+                ldim_clip(3) = 1
+                call cline_reproject%kill()
+                call cline_reproject%set('prg',                   'reproject')
+                call cline_reproject%set('vol1',                      volpath)
+                call cline_reproject%set('smpd',                     vol_smpd)
+                call cline_reproject%set('nspace',                         10)
+                call cline_reproject%set('pgrp',                         'c1')
+                call cline_reproject%set('nthr',                            8)
+                call cline_reproject%set('mskdiam',              mskdiam_in)
+                call cline_reproject%printline()
+                call xreproject%execute(cline_reproject)
+                call mrc2jpeg_tiled(string('reprojs.mrcs'), string('reprojs.jpeg'))
+                ! rescale reprojections to the particle sampling/box and write as selected references
+                smpd_part   = spproj_inout%os_stk%get(1, 'smpd')
+                ldim_new(1) = round2even(real(ldim(1)) * vol_smpd / smpd_part)
+                ldim_new(2) = ldim_new(1)
+                ldim_new(3) = 1
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> RESCALING AND CLIPPING REPROJECTIONS TO ', ldim_new(1), ' PIXEL BOX (', ldim_clip(1), ' A) FOR PICKING REFERENCES'
+                call scale_imgfile( string('reprojs.mrcs'), string('selected_references.mrcs'), vol_smpd, ldim_new, smpd_part)
+                call voloris%kill()
+                if( allocated(states) ) deallocate(states)
+                if( allocated(projs)  ) deallocate(projs)
                 call simple_chdir(cwd)
                 call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy abinitio3D output back to main projfile for downstream steps
                 call spproj_inout%kill()

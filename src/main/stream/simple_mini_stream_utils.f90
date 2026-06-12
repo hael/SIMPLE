@@ -514,6 +514,14 @@ contains
                 call spproj%os_mic%delete(i)
                 cycle
             endif
+            if( .not. spproj%os_mic%isthere(i, 'nptcls') )then
+                call spproj%os_mic%delete(i)
+                cycle
+            endif
+            if( spproj%os_mic%get(i, 'nptcls') <= 0.0 )then
+                call spproj%os_mic%delete(i)
+                cycle
+            endif
             if( .not. spproj%os_mic%isthere(i, 'boxfile') )then
                 call spproj%os_mic%delete(i)
                 cycle
