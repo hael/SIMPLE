@@ -205,6 +205,14 @@ contains
         call os%set_all2single('updatecnt', 0.0)
         call os%sample4update_cnt([1, n], frac, nsamp, inds, .true.)
         call assert_true(nsamp <= n, 'sample4update_cnt nsamp<=n')
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set(2, 'updatecnt', 0.)
+        call os%set(5, 'updatecnt', 0.)
+        call os%set(9, 'updatecnt', 0.)
+        call os%sample4update_cnt([1, n], frac, nsamp, inds, .true.)
+        call assert_int(5, nsamp, 'sample4update_cnt tiered nsamp')
+        call assert_true(any(inds == 2) .and. any(inds == 5) .and. any(inds == 9), &
+            &'sample4update_cnt exhausts lowest updatecnt tier')
         ! sample4update_class prefers never-updated particles inside each class quota
         allocate(clssmp(2))
         clssmp(1)%clsind = 1
