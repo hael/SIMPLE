@@ -16,6 +16,11 @@ type, extends(commander_base) :: commander_make_cavgs
     procedure :: execute      => exec_make_cavgs
 end type commander_make_cavgs
 
+type, extends(commander_base) :: commander_bootstrap_cavgs
+  contains
+    procedure :: execute      => exec_bootstrap_cavgs
+end type commander_bootstrap_cavgs
+
 type, extends(commander_base) :: commander_cavgassemble
   contains
     procedure :: execute      => exec_cavgassemble
@@ -39,6 +44,417 @@ contains
         class(cmdline),              intent(inout) :: cline
         call run_make_cavgs_workflow(cline, from_distr_cmd=.false.)
     end subroutine exec_make_cavgs
+
+    subroutine exec_bootstrap_cavgs( self, cline )
+        class(commander_bootstrap_cavgs), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type bootstrap_parent_sample
+            integer :: parent_cls = 0
+            integer :: out_cls    = 0
+            integer :: pop        = 0
+            integer :: nanchor    = 0
+            integer, allocatable :: ranked(:)
+            integer, allocatable :: anchor(:)
+            integer, allocatable :: rest(:)
+            integer, allocatable :: parts(:,:)
+        end type bootstrap_parent_sample
+        type bootstrap_row
+            integer :: source_pind    = 0
+            integer :: synthetic_pind = 0
+            integer :: parent_cls     = 0
+            integer :: out_cls        = 0
+            integer :: child_id       = 0
+            integer :: source_rank    = 0
+            integer :: eo             = 0
+            integer :: stkind_src     = 0
+            integer :: indstk         = 0
+            real    :: corr           = 0.
+            character(len=16) :: role = ''
+        end type bootstrap_row
+        type(parameters) :: params
+        type(sp_project) :: src_proj, boot_proj
+        type(cmdline)    :: cline_make
+        type(string)     :: boot_projfile, manifest_file, membership_file
+        type(class_sample), allocatable :: clssmp(:)
+        type(bootstrap_parent_sample), allocatable :: parents(:)
+        type(bootstrap_row),           allocatable :: rows(:)
+        real,    allocatable :: pop_reals(:)
+        integer, allocatable :: clsinds(:), pops(:)
+        integer :: ncls_acc, nout, nrows, y_child, anchor_target, n_med
+        integer :: i, j, k, ipart, row_count, child_cls
+        if( .not. cline%defined('osmpl_fac') ) call cline%set('osmpl_fac', 2)
+        if( .not. cline%defined('frac_best') ) call cline%set('frac_best', 0.5)
+        if( .not. cline%defined('refs')      ) call cline%set('refs', 'cavgs_bootstrap_001.mrc')
+        call cline%set('prg',     'bootstrap_cavgs')
+        call cline%set('oritype', 'ptcl2D')
+        call params%new(cline)
+        if( params%osmpl_fac < 1 ) THROW_HARD('osmpl_fac must be >= 1; exec_bootstrap_cavgs')
+        if( params%frac_best <= 0. .or. params%frac_best > 1. )then
+            THROW_HARD('frac_best must be > 0 and <= 1; exec_bootstrap_cavgs')
+        endif
+        call src_proj%read(params%projfile)
+        if( src_proj%os_ptcl2D%get_noris() == 0 ) THROW_HARD('ptcl2D segment is empty; exec_bootstrap_cavgs')
+        if( src_proj%os_cls2D%get_noris()  == 0 ) THROW_HARD('cls2D segment is empty; exec_bootstrap_cavgs')
+        if( src_proj%os_stk%get_noris()    == 0 ) THROW_HARD('stk segment is empty; exec_bootstrap_cavgs')
+        call collect_bootstrap_classes(src_proj, clsinds, pops)
+        ncls_acc = size(clsinds)
+        y_child  = params%osmpl_fac - 1
+        nout     = ncls_acc * params%osmpl_fac
+        allocate(pop_reals(ncls_acc), source=real(pops))
+        n_med         = max(1, nint(median(pop_reals)))
+        anchor_target = max(2, nint(params%frac_best * real(n_med)))
+        deallocate(pop_reals)
+        call src_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+        allocate(parents(ncls_acc))
+        do i = 1,ncls_acc
+            parents(i)%parent_cls = clsinds(i)
+            parents(i)%out_cls    = i
+            parents(i)%pop        = clssmp(i)%pop
+            allocate(parents(i)%ranked(parents(i)%pop), source=clssmp(i)%pinds)
+            call validate_evenodd_present(src_proj%os_ptcl2D, parents(i)%ranked, parents(i)%parent_cls)
+            if( y_child > 0 )then
+                parents(i)%nanchor = min(anchor_target, max(0, parents(i)%pop - y_child))
+                if( parents(i)%nanchor < 2 )then
+                    THROW_HARD('parent class has too few particles for requested osmpl_fac; exec_bootstrap_cavgs')
+                endif
+                call select_bootstrap_anchor(src_proj%os_ptcl2D, parents(i)%ranked, parents(i)%nanchor, &
+                    parents(i)%parent_cls, parents(i)%anchor, parents(i)%rest)
+                if( size(parents(i)%rest) < y_child )then
+                    THROW_HARD('class '//int2str(parents(i)%parent_cls)//' has too few non-anchor particles; exec_bootstrap_cavgs')
+                endif
+                call shuffle_ints(parents(i)%rest)
+                parents(i)%parts = split_nobjs_even(size(parents(i)%rest), y_child)
+            endif
+        enddo
+        nrows = sum(pops)
+        if( y_child > 0 )then
+            do i = 1,ncls_acc
+                nrows = nrows + y_child * parents(i)%nanchor + size(parents(i)%rest)
+            enddo
+        endif
+        allocate(rows(nrows))
+        row_count = 0
+        do i = 1,ncls_acc
+            do j = 1,parents(i)%pop
+                call append_bootstrap_row(rows, row_count, src_proj, parents(i)%ranked(j), parents(i)%parent_cls, &
+                    parents(i)%out_cls, 0, 'original', j)
+            enddo
+            if( y_child == 0 ) cycle
+            do ipart = 1,y_child
+                child_cls = ncls_acc + (i - 1) * y_child + ipart
+                do j = 1,parents(i)%nanchor
+                    call append_bootstrap_row(rows, row_count, src_proj, parents(i)%anchor(j), parents(i)%parent_cls, &
+                        child_cls, ipart, 'anchor', rank_of(parents(i)%ranked, parents(i)%anchor(j)))
+                enddo
+                do k = parents(i)%parts(ipart,1),parents(i)%parts(ipart,2)
+                    call append_bootstrap_row(rows, row_count, src_proj, parents(i)%rest(k), parents(i)%parent_cls, &
+                        child_cls, ipart, 'member', rank_of(parents(i)%ranked, parents(i)%rest(k)))
+                enddo
+            enddo
+        enddo
+        if( row_count /= nrows ) THROW_HARD('internal row count mismatch; exec_bootstrap_cavgs')
+        call build_bootstrap_project(src_proj, parents, rows, nout, y_child, boot_proj)
+        call derive_bootstrap_output_names(params%refs, boot_projfile, manifest_file, membership_file)
+        call boot_proj%update_projinfo(boot_projfile)
+        call boot_proj%write(boot_projfile)
+        call write_bootstrap_outputs(manifest_file, membership_file, params, parents, rows, nout, y_child, anchor_target)
+        cline_make = cline
+        call cline_make%set('prg',      'make_cavgs')
+        call cline_make%set('projfile', boot_projfile%to_char())
+        call cline_make%set('refs',     params%refs%to_char())
+        call cline_make%set('ncls',     nout)
+        call cline_make%set('mkdir',    'no')
+        call cline_make%set('oritype',  'ptcl2D')
+        call run_make_cavgs_workflow(cline_make, from_distr_cmd=.true.)
+        call cline_make%kill
+        call deallocate_class_samples(clssmp)
+        call src_proj%kill
+        call boot_proj%kill
+
+    contains
+
+        subroutine collect_bootstrap_classes( spproj, clsinds, pops )
+            type(sp_project),           intent(inout) :: spproj
+            integer, allocatable,       intent(inout) :: clsinds(:), pops(:)
+            integer, allocatable :: cls_tmp(:), pop_tmp(:)
+            integer :: ncls, icls, nacc, pop
+            if( allocated(clsinds) ) deallocate(clsinds)
+            if( allocated(pops)    ) deallocate(pops)
+            ncls = spproj%os_cls2D%get_noris()
+            allocate(cls_tmp(ncls), source=0)
+            allocate(pop_tmp(ncls), source=0)
+            nacc = 0
+            do icls = 1,ncls
+                pop = spproj%os_ptcl2D%get_pop(icls, 'class')
+                if( pop == 0 ) cycle
+                if( spproj%os_cls2D%isthere(icls, 'state') )then
+                    if( spproj%os_cls2D%get_state(icls) == 0 ) cycle
+                endif
+                nacc = nacc + 1
+                cls_tmp(nacc) = icls
+                pop_tmp(nacc) = pop
+            enddo
+            if( nacc == 0 ) THROW_HARD('no active populated cls2D classes found; collect_bootstrap_classes')
+            allocate(clsinds(nacc), pops(nacc))
+            clsinds = cls_tmp(:nacc)
+            pops    = pop_tmp(:nacc)
+            deallocate(cls_tmp, pop_tmp)
+        end subroutine collect_bootstrap_classes
+
+        subroutine validate_evenodd_present( os, pinds, parent_cls )
+            class(oris), intent(inout) :: os
+            integer,     intent(in)    :: pinds(:), parent_cls
+            integer :: i, eo
+            do i = 1,size(pinds)
+                if( .not. os%isthere(pinds(i), 'eo') )then
+                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle without eo flag; validate_evenodd_present')
+                endif
+                eo = os%get_eo(pinds(i))
+                if( eo /= 0 .and. eo /= 1 )then
+                    THROW_HARD('class '//int2str(parent_cls)//' contains a particle with eo not equal to 0 or 1')
+                endif
+            enddo
+        end subroutine validate_evenodd_present
+
+        subroutine select_bootstrap_anchor( os, ranked, nanchor, parent_cls, anchor, rest )
+            class(oris),              intent(inout) :: os
+            integer,                  intent(in)    :: ranked(:), nanchor, parent_cls
+            integer, allocatable,     intent(inout) :: anchor(:), rest(:)
+            integer :: n, i, cnt, missing_eo, swap_pind
+            logical :: have_even, have_odd
+            if( allocated(anchor) ) deallocate(anchor)
+            if( allocated(rest)   ) deallocate(rest)
+            n = size(ranked)
+            if( nanchor >= n ) THROW_HARD('anchor leaves no child particles; select_bootstrap_anchor')
+            allocate(anchor(nanchor), source=ranked(:nanchor))
+            have_even = count_eo(os, anchor, 0) > 0
+            have_odd  = count_eo(os, anchor, 1) > 0
+            if( .not.(have_even .and. have_odd) )then
+                if( have_even )then
+                    missing_eo = 1
+                else
+                    missing_eo = 0
+                endif
+                swap_pind = 0
+                do i = nanchor + 1,n
+                    if( os%get_eo(ranked(i)) == missing_eo )then
+                        swap_pind = ranked(i)
+                        exit
+                    endif
+                enddo
+                if( swap_pind == 0 )then
+                    THROW_HARD('class '//int2str(parent_cls)//' cannot provide parity-complete anchors')
+                endif
+                anchor(nanchor) = swap_pind
+            endif
+            if( count_eo(os, anchor, 0) == 0 .or. count_eo(os, anchor, 1) == 0 )then
+                THROW_HARD('class '//int2str(parent_cls)//' cannot provide parity-complete anchors')
+            endif
+            allocate(rest(n - nanchor), source=0)
+            cnt = 0
+            do i = 1,n
+                if( any(anchor == ranked(i)) ) cycle
+                cnt = cnt + 1
+                rest(cnt) = ranked(i)
+            enddo
+            if( cnt /= n - nanchor ) THROW_HARD('anchor/rest partition mismatch; select_bootstrap_anchor')
+        end subroutine select_bootstrap_anchor
+
+        integer function count_eo( os, pinds, eo )
+            class(oris), intent(inout) :: os
+            integer,     intent(in)    :: pinds(:), eo
+            integer :: i
+            count_eo = 0
+            do i = 1,size(pinds)
+                if( os%get_eo(pinds(i)) == eo ) count_eo = count_eo + 1
+            enddo
+        end function count_eo
+
+        subroutine shuffle_ints( vals )
+            integer, allocatable, intent(inout) :: vals(:)
+            type(ran_tabu) :: rt
+            if( size(vals) < 2 ) return
+            rt = ran_tabu(size(vals))
+            call rt%shuffle(vals)
+            call rt%kill
+        end subroutine shuffle_ints
+
+        integer function rank_of( ranked, pind )
+            integer, intent(in) :: ranked(:), pind
+            integer :: i
+            rank_of = 0
+            do i = 1,size(ranked)
+                if( ranked(i) == pind )then
+                    rank_of = i
+                    return
+                endif
+            enddo
+            THROW_HARD('particle rank lookup failed; rank_of')
+        end function rank_of
+
+        subroutine append_bootstrap_row( rows, row_count, src_proj, source_pind, parent_cls, out_cls, child_id, role, source_rank )
+            type(bootstrap_row), intent(inout) :: rows(:)
+            integer,             intent(inout) :: row_count
+            type(sp_project),    intent(inout) :: src_proj
+            integer,             intent(in)    :: source_pind, parent_cls, out_cls, child_id, source_rank
+            character(len=*),    intent(in)    :: role
+            row_count = row_count + 1
+            if( row_count > size(rows) ) THROW_HARD('row_count exceeds rows size; append_bootstrap_row')
+            rows(row_count)%source_pind = source_pind
+            rows(row_count)%parent_cls  = parent_cls
+            rows(row_count)%out_cls     = out_cls
+            rows(row_count)%child_id    = child_id
+            rows(row_count)%role        = role
+            rows(row_count)%source_rank = source_rank
+            rows(row_count)%eo          = src_proj%os_ptcl2D%get_eo(source_pind)
+            rows(row_count)%corr        = src_proj%os_ptcl2D%get(source_pind, 'corr')
+            call src_proj%map_ptcl_ind2stk_ind('ptcl2D', source_pind, rows(row_count)%stkind_src, rows(row_count)%indstk)
+        end subroutine append_bootstrap_row
+
+        subroutine build_bootstrap_project( src_proj, parents, rows, nout, y_child, boot_proj )
+            type(sp_project),                  intent(inout) :: src_proj, boot_proj
+            type(bootstrap_parent_sample),     intent(in)    :: parents(:)
+            type(bootstrap_row),               intent(inout) :: rows(:)
+            integer,                           intent(in)    :: nout, y_child
+            integer, allocatable :: stk_counts(:), stk_newinds(:), stk_next(:), row_order(:)
+            integer :: nstks_src, nstks_used, istk, i, row_out, stkind_new, fromp, top, row_pos, src_row
+            integer :: icls, ipart, child_cls, child_sz
+            nstks_src = src_proj%os_stk%get_noris()
+            allocate(stk_counts(nstks_src), source=0)
+            allocate(stk_newinds(nstks_src), source=0)
+            do i = 1,size(rows)
+                if( rows(i)%stkind_src < 1 .or. rows(i)%stkind_src > nstks_src )then
+                    THROW_HARD('source stack index out of range; build_bootstrap_project')
+                endif
+                stk_counts(rows(i)%stkind_src) = stk_counts(rows(i)%stkind_src) + 1
+            enddo
+            nstks_used = count(stk_counts > 0)
+            allocate(stk_next(nstks_src),    source=0)
+            allocate(row_order(size(rows)),  source=0)
+            call boot_proj%copy(src_proj)
+            call boot_proj%os_mic%kill
+            call boot_proj%os_out%kill
+            call boot_proj%os_stk%new(nstks_used, is_ptcl=.false.)
+            call boot_proj%os_ptcl2D%new(size(rows), is_ptcl=.true.)
+            call boot_proj%os_cls2D%new(nout, is_ptcl=.false.)
+            stkind_new = 0
+            top        = 0
+            do istk = 1,nstks_src
+                if( stk_counts(istk) == 0 ) cycle
+                stkind_new = stkind_new + 1
+                stk_newinds(istk) = stkind_new
+                fromp = top + 1
+                top   = top + stk_counts(istk)
+                call boot_proj%os_stk%transfer_ori(stkind_new, src_proj%os_stk, istk)
+                call boot_proj%os_stk%set(stkind_new, 'fromp',  fromp)
+                call boot_proj%os_stk%set(stkind_new, 'top',    top)
+                call boot_proj%os_stk%set(stkind_new, 'nptcls', stk_counts(istk))
+                stk_next(istk) = fromp
+            enddo
+            do i = 1,size(rows)
+                istk = rows(i)%stkind_src
+                row_order(stk_next(istk)) = i
+                stk_next(istk) = stk_next(istk) + 1
+            enddo
+            row_out = 0
+            do row_pos = 1,size(row_order)
+                src_row = row_order(row_pos)
+                if( src_row == 0 ) THROW_HARD('stack row ordering failed; build_bootstrap_project')
+                istk    = rows(src_row)%stkind_src
+                row_out = row_out + 1
+                rows(src_row)%synthetic_pind = row_out
+                call boot_proj%os_ptcl2D%transfer_ori(row_out, src_proj%os_ptcl2D, rows(src_row)%source_pind)
+                call boot_proj%os_ptcl2D%set(row_out, 'stkind',    stk_newinds(istk))
+                call boot_proj%os_ptcl2D%set(row_out, 'indstk',    rows(src_row)%indstk)
+                call boot_proj%os_ptcl2D%set(row_out, 'class',     rows(src_row)%out_cls)
+                call boot_proj%os_ptcl2D%set(row_out, 'state',     1)
+                call boot_proj%os_ptcl2D%set(row_out, 'pind',      row_out)
+                call boot_proj%os_ptcl2D%set(row_out, 'pind_prev', rows(src_row)%source_pind)
+            enddo
+            if( row_out /= size(rows) ) THROW_HARD('synthetic row count mismatch; build_bootstrap_project')
+            boot_proj%os_ptcl3D = boot_proj%os_ptcl2D
+            do icls = 1,size(parents)
+                call set_bootstrap_class_row(boot_proj, src_proj, parents(icls)%out_cls, parents(icls)%parent_cls, &
+                    0, parents(icls)%pop, parents(icls)%nanchor)
+                if( y_child == 0 ) cycle
+                do ipart = 1,y_child
+                    child_cls = size(parents) + (icls - 1) * y_child + ipart
+                    child_sz  = parents(icls)%nanchor + parents(icls)%parts(ipart,2) - parents(icls)%parts(ipart,1) + 1
+                    call set_bootstrap_class_row(boot_proj, src_proj, child_cls, parents(icls)%parent_cls, &
+                        ipart, child_sz, parents(icls)%nanchor)
+                enddo
+            enddo
+            boot_proj%os_cls3D = boot_proj%os_cls2D
+            deallocate(stk_counts, stk_newinds, stk_next, row_order)
+        end subroutine build_bootstrap_project
+
+        subroutine set_bootstrap_class_row( boot_proj, src_proj, out_cls, parent_cls, child_id, pop, nanchor )
+            type(sp_project), intent(inout) :: boot_proj, src_proj
+            integer,          intent(in)    :: out_cls, parent_cls, child_id, pop, nanchor
+            call boot_proj%os_cls2D%transfer_ori(out_cls, src_proj%os_cls2D, parent_cls)
+            call boot_proj%os_cls2D%set(out_cls, 'class', out_cls)
+            call boot_proj%os_cls2D%set(out_cls, 'state', 1)
+            call boot_proj%os_cls2D%set(out_cls, 'pop', pop)
+            call boot_proj%os_cls2D%set(out_cls, 'bootstrap_parent', parent_cls)
+            call boot_proj%os_cls2D%set(out_cls, 'bootstrap_child',  child_id)
+            call boot_proj%os_cls2D%set(out_cls, 'bootstrap_anchor', nanchor)
+        end subroutine set_bootstrap_class_row
+
+        subroutine derive_bootstrap_output_names( refs, boot_projfile, manifest_file, membership_file )
+            class(string), intent(in)    :: refs
+            type(string),  intent(inout) :: boot_projfile, manifest_file, membership_file
+            type(string) :: refs_ext, refs_body
+            refs_ext = fname2ext(refs)
+            if( refs_ext%strlen_trim() > 0 )then
+                refs_body = get_fbody(refs, refs_ext)
+            else
+                refs_body = refs
+            endif
+            boot_projfile  = refs_body%to_char()//'.simple'
+            manifest_file  = refs_body%to_char()//'_manifest.txt'
+            membership_file = refs_body%to_char()//'_membership.txt'
+            call refs_ext%kill
+            call refs_body%kill
+        end subroutine derive_bootstrap_output_names
+
+        subroutine write_bootstrap_outputs( manifest_file, membership_file, params, parents, rows, nout, y_child, anchor_target )
+            type(string),                    intent(in) :: manifest_file, membership_file
+            type(parameters),                intent(in) :: params
+            type(bootstrap_parent_sample),   intent(in) :: parents(:)
+            type(bootstrap_row),             intent(in) :: rows(:)
+            integer,                         intent(in) :: nout, y_child, anchor_target
+            integer :: funit, i, ipart, child_cls, child_sz
+            call fopen(funit, FILE=manifest_file, STATUS='REPLACE', action='WRITE')
+            write(funit,'(a)') '# SIMPLE bootstrap_cavgs manifest'
+            write(funit,'(a,a)') '# refs: ', params%refs%to_char()
+            write(funit,'(a,i0)') '# ncls_out: ', nout
+            write(funit,'(a,i0)') '# osmpl_fac: ', params%osmpl_fac
+            write(funit,'(a,f8.4)') '# frac_best: ', params%frac_best
+            write(funit,'(a,i0)') '# anchor_target: ', anchor_target
+            write(funit,'(a)') 'out_cls role parent_cls child_id parent_pop n_anchor n_members'
+            do i = 1,size(parents)
+                write(funit,'(i0,1x,a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0)') parents(i)%out_cls, 'original', &
+                    parents(i)%parent_cls, 0, parents(i)%pop, parents(i)%nanchor, parents(i)%pop
+                if( y_child == 0 ) cycle
+                do ipart = 1,y_child
+                    child_cls = size(parents) + (i - 1) * y_child + ipart
+                    child_sz  = parents(i)%nanchor + parents(i)%parts(ipart,2) - parents(i)%parts(ipart,1) + 1
+                    write(funit,'(i0,1x,a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0)') child_cls, 'child', &
+                        parents(i)%parent_cls, ipart, parents(i)%pop, parents(i)%nanchor, child_sz
+                enddo
+            enddo
+            call fclose(funit)
+            call fopen(funit, FILE=membership_file, STATUS='REPLACE', action='WRITE')
+            write(funit,'(a)') 'synthetic_pind out_cls role parent_cls child_id source_pind source_rank source_corr eo stkind indstk'
+            do i = 1,size(rows)
+                write(funit,'(i0,1x,i0,1x,a,1x,i0,1x,i0,1x,i0,1x,i0,1x,f12.6,1x,i0,1x,i0,1x,i0)') &
+                    rows(i)%synthetic_pind, rows(i)%out_cls, rows(i)%role, rows(i)%parent_cls, rows(i)%child_id, &
+                    rows(i)%source_pind, rows(i)%source_rank, rows(i)%corr, rows(i)%eo, rows(i)%stkind_src, rows(i)%indstk
+            enddo
+            call fclose(funit)
+        end subroutine write_bootstrap_outputs
+
+    end subroutine exec_bootstrap_cavgs
 
     ! ------------------------------------------------------------------
     ! Unified runtime-polymorphic workflow

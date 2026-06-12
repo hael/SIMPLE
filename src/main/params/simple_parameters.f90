@@ -412,6 +412,7 @@ type :: parameters
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
     integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
+    integer :: osmpl_fac=2         !< class-average oversampling factor for bootstrap_cavgs
     integer :: part=1
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID

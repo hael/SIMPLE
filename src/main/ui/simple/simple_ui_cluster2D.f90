@@ -8,6 +8,7 @@ type(ui_program), target :: cluster2D
 type(ui_program), target :: abinitio2D_chunks
 type(ui_program), target :: cluster2D_microchunked
 type(ui_program), target :: make_cavgs
+type(ui_program), target :: bootstrap_cavgs
 type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
 type(ui_program), target :: write_classes
@@ -20,6 +21,7 @@ contains
         call new_abinitio2D_chunks(prgtab)
         call new_cluster2D_microchunked(prgtab)
         call new_make_cavgs(prgtab)
+        call new_bootstrap_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
         call new_sample_classes(prgtab)
         call new_write_classes(prgtab)
@@ -32,6 +34,7 @@ contains
         write(logfhandle,'(A)') abinitio2D_chunks%name%to_char()
         write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
         write(logfhandle,'(A)') make_cavgs%name%to_char()
+        write(logfhandle,'(A)') bootstrap_cavgs%name%to_char()
         write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
         write(logfhandle,'(A)') sample_classes%name%to_char()
         write(logfhandle,'(A)') write_classes%name%to_char()
@@ -205,6 +208,41 @@ contains
         ! add to ui_hash
         call add_ui_program('make_cavgs', make_cavgs, prgtab)
     end subroutine new_make_cavgs
+
+    subroutine new_bootstrap_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call bootstrap_cavgs%new(&
+        &'bootstrap_cavgs', &                                                   ! name
+        &'Bootstrap class-average space',&                                      ! descr_short
+        &'creates an oversampled class-average stack by stochastic expansion &
+        &of existing 2D class memberships and then runs make_cavgs',&           ! descr_long
+        &'simple_exec',&                                                        ! executable
+        &.true.)                                                               ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call bootstrap_cavgs%add_input(UI_PARM, 'osmpl_fac', 'num', 'Oversampling factor',&
+        &'Integer factor for class-average oversampling; final class count is active original classes times osmpl_fac{2}',&
+        &'oversampling factor{2}', .false., 2.)
+        call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
+        &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
+        &'fraction{0.5}', .false., 0.5)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call bootstrap_cavgs%add_input(UI_COMP, nparts, required_override=.false.)
+        call bootstrap_cavgs%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab)
+    end subroutine new_bootstrap_cavgs
 
     subroutine new_map_cavgs_selection( prgtab )
         class(ui_hash), intent(inout) :: prgtab

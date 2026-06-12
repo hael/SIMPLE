@@ -374,6 +374,7 @@ contains
         call reg%add_int('nypatch', self%nypatch)
         call reg%add_int('offset', self%offset)
         call reg%add_int('optics_offset', self%optics_offset)
+        call reg%add_int('osmpl_fac', self%osmpl_fac)
         call reg%add_int('part', self%part)
         call reg%add_int('period', self%period)
         call reg%add_int('pftsz', self%pftsz)
