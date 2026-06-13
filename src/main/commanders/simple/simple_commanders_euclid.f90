@@ -24,7 +24,7 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         class(calc_pspec_strategy), allocatable :: strategy
-	    call cline%set('stream','no')
+        call cline%set('stream','no')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
         ! Create and run strategy (shared-memory/worker vs distributed master)

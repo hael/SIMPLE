@@ -21,6 +21,11 @@ type, extends(commander_base) :: commander_bootstrap_cavgs
     procedure :: execute      => exec_bootstrap_cavgs
 end type commander_bootstrap_cavgs
 
+type, extends(commander_base) :: commander_unbootstrap_cavgs
+    contains
+        procedure :: execute      => exec_unbootstrap_cavgs
+end type commander_unbootstrap_cavgs
+
 type, extends(commander_base) :: commander_cavgassemble
   contains
     procedure :: execute      => exec_cavgassemble
@@ -598,6 +603,73 @@ contains
         end subroutine report_bootstrap_class_accounting
 
     end subroutine exec_bootstrap_cavgs
+
+    subroutine exec_unbootstrap_cavgs( self, cline )
+        class(commander_unbootstrap_cavgs), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(sp_project) :: boot_proj, src_proj
+        type(string)     :: src_projfile
+        integer, allocatable :: seen_parent(:)
+        real, allocatable    :: states(:)
+        integer :: ncls_src, ncls_boot, i, parent_cls, child_id, nmap
+        real    :: corr, proj, state
+        if( .not. cline%defined('projfile_orig') )then
+            THROW_HARD('input original project file via projfile_orig; exec_unbootstrap_cavgs')
+        endif
+        src_projfile = cline%get_carg('projfile_orig')
+        call boot_proj%read(cline%get_carg('projfile'))
+        call src_proj%read(src_projfile)
+        if( boot_proj%os_cls2D%get_noris() == 0 ) THROW_HARD('empty cls2D in bootstrap project; exec_unbootstrap_cavgs')
+        if( boot_proj%os_cls3D%get_noris() == 0 ) THROW_HARD('empty cls3D in bootstrap project; exec_unbootstrap_cavgs')
+        if( .not. boot_proj%os_cls2D%isthere('bootstrap_parent') )then
+            THROW_HARD('bootstrap_parent missing in cls2D; not a bootstrap_cavgs project')
+        endif
+        if( .not. boot_proj%os_cls2D%isthere('bootstrap_child') )then
+            THROW_HARD('bootstrap_child missing in cls2D; not a bootstrap_cavgs project')
+        endif
+        ncls_src  = src_proj%os_cls2D%get_noris()
+        ncls_boot = boot_proj%os_cls2D%get_noris()
+        if( ncls_src == 0 ) THROW_HARD('empty cls2D in source project; exec_unbootstrap_cavgs')
+        if( src_proj%os_cls3D%get_noris() /= ncls_src )then
+            call src_proj%os_cls3D%new(ncls_src, is_ptcl=.false.)
+            states = src_proj%os_cls2D%get_all('state')
+            call src_proj%os_cls3D%set_all('state', states)
+            deallocate(states)
+        endif
+        call src_proj%os_cls3D%delete_3Dalignment()
+        allocate(states(ncls_src), source=0.)
+        call src_proj%os_cls3D%set_all('state', states)
+        deallocate(states)
+        allocate(seen_parent(ncls_src), source=0)
+        nmap = 0
+        do i = 1,ncls_boot
+            child_id = nint(boot_proj%os_cls2D%get(i, 'bootstrap_child'))
+            if( child_id /= 0 ) cycle
+            parent_cls = nint(boot_proj%os_cls2D%get(i, 'bootstrap_parent'))
+            if( parent_cls < 1 .or. parent_cls > ncls_src )then
+                THROW_HARD('bootstrap_parent out of range in cls2D; exec_unbootstrap_cavgs')
+            endif
+            if( seen_parent(parent_cls) /= 0 )then
+                THROW_HARD('duplicate bootstrap_parent with bootstrap_child=0; exec_unbootstrap_cavgs')
+            endif
+            seen_parent(parent_cls) = 1
+            corr  = boot_proj%os_cls3D%get(i, 'corr')
+            proj  = boot_proj%os_cls3D%get(i, 'proj')
+            state = boot_proj%os_cls3D%get(i, 'state')
+            call src_proj%os_cls3D%set(parent_cls, 'corr', corr)
+            call src_proj%os_cls3D%set(parent_cls, 'proj', proj)
+            call src_proj%os_cls3D%set_euler(parent_cls, boot_proj%os_cls3D%get_euler(i))
+            call src_proj%os_cls3D%set_shift(parent_cls, boot_proj%os_cls3D%get_2Dshift(i))
+            call src_proj%os_cls3D%set(parent_cls, 'state', state)
+            nmap = nmap + 1
+        enddo
+        if( nmap == 0 ) THROW_HARD('no bootstrap_child=0 classes found to map; exec_unbootstrap_cavgs')
+        call src_proj%map2ptcls
+        call src_proj%write(src_projfile)
+        call boot_proj%kill
+        call src_proj%kill
+        call simple_end('**** SIMPLE_UNBOOTSTRAP_CAVGS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_unbootstrap_cavgs
 
     ! ------------------------------------------------------------------
     ! Unified runtime-polymorphic workflow

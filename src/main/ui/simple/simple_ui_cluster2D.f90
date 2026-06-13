@@ -9,6 +9,7 @@ type(ui_program), target :: abinitio2D_chunks
 type(ui_program), target :: cluster2D_microchunked
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: bootstrap_cavgs
+type(ui_program), target :: unbootstrap_cavgs
 type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
 type(ui_program), target :: write_classes
@@ -22,6 +23,7 @@ contains
         call new_cluster2D_microchunked(prgtab)
         call new_make_cavgs(prgtab)
         call new_bootstrap_cavgs(prgtab)
+        call new_unbootstrap_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
         call new_sample_classes(prgtab)
         call new_write_classes(prgtab)
@@ -35,6 +37,7 @@ contains
         write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
         write(logfhandle,'(A)') make_cavgs%name%to_char()
         write(logfhandle,'(A)') bootstrap_cavgs%name%to_char()
+        write(logfhandle,'(A)') unbootstrap_cavgs%name%to_char()
         write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
         write(logfhandle,'(A)') sample_classes%name%to_char()
         write(logfhandle,'(A)') write_classes%name%to_char()
@@ -243,6 +246,36 @@ contains
         ! add to ui_hash
         call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab)
     end subroutine new_bootstrap_cavgs
+
+    subroutine new_unbootstrap_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call unbootstrap_cavgs%new(&
+        &'unbootstrap_cavgs', &                                                ! name
+        &'Map bootstrap cls3D back to original project',&                      ! descr_short
+        &'transfers cls3D alignment from bootstrap originals (child=0) to their bootstrap_parent class indices in the original project and maps to particles',& ! descr_long
+        &'simple_exec',&                                                        ! executable
+        &.true.)                                                                ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        call unbootstrap_cavgs%add_input(UI_ALT, 'projfile_orig', 'file', 'Original project file', &
+        &'Project file that was used as input to bootstrap_cavgs and should receive the mapped cls3D/ptcl3D parameters', &
+        &'e.g. original.simple', .true., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('unbootstrap_cavgs', unbootstrap_cavgs, prgtab)
+    end subroutine new_unbootstrap_cavgs
 
     subroutine new_map_cavgs_selection( prgtab )
         class(ui_hash), intent(inout) :: prgtab
