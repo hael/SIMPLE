@@ -607,17 +607,19 @@ contains
     subroutine exec_unbootstrap_cavgs( self, cline )
         class(commander_unbootstrap_cavgs), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
+        type(parameters) :: params
         type(sp_project) :: boot_proj, src_proj
         type(string)     :: src_projfile
         integer, allocatable :: seen_parent(:)
         real, allocatable    :: states(:)
         integer :: ncls_src, ncls_boot, i, parent_cls, child_id, nmap
         real    :: corr, proj, state
+        call params%new(cline)
         if( .not. cline%defined('projfile_orig') )then
-            THROW_HARD('input original project file via projfile_orig; exec_unbootstrap_cavgs')
+            THROW_HARD('missing required key projfile_orig; usage: simple_exec prg=unbootstrap_cavgs projfile=<bootstrap.simple> projfile_orig=<original.simple>')
         endif
         src_projfile = cline%get_carg('projfile_orig')
-        call boot_proj%read(cline%get_carg('projfile'))
+        call boot_proj%read(params%projfile)
         call src_proj%read(src_projfile)
         if( boot_proj%os_cls2D%get_noris() == 0 ) THROW_HARD('empty cls2D in bootstrap project; exec_unbootstrap_cavgs')
         if( boot_proj%os_cls3D%get_noris() == 0 ) THROW_HARD('empty cls3D in bootstrap project; exec_unbootstrap_cavgs')

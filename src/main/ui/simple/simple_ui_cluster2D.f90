@@ -261,10 +261,12 @@ contains
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
-        call unbootstrap_cavgs%add_input(UI_ALT, 'projfile_orig', 'file', 'Original project file', &
+        ! image input/output
+        call unbootstrap_cavgs%add_input(UI_IMG, 'projfile_orig', 'file', 'Original project file', &
         &'Project file that was used as input to bootstrap_cavgs and should receive the mapped cls3D/ptcl3D parameters', &
         &'e.g. original.simple', .true., '')
+        ! alternative inputs
+        ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
