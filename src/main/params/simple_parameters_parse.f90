@@ -243,6 +243,7 @@ contains
         call reg%add_file('pickrefs', self%pickrefs,notAllowed='T')
         call reg%add_file('plaintexttab', self%plaintexttab,'T')
         call reg%add_file('projfile', self%projfile,'O')
+        call reg%add_file('projfile_orig', self%projfile_orig,'O')
         call reg%add_file('projfile_ref', self%projfile_ref,'O')
         call reg%add_file('projfile_target', self%projfile_target,'O')
         call reg%add_file('projtab', self%projtab,'T')

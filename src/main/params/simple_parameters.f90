@@ -215,6 +215,7 @@ type :: parameters
     type(string)              :: prg                  !< SIMPLE program being executed
     type(string)              :: test                 !< SIMPLE TEST program being executed
     type(string)              :: projfile             !< SIMPLE *.simple project file
+    type(string)              :: projfile_orig        !< original SIMPLE *.simple project file (unbootstrap source)
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments

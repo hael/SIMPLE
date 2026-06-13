@@ -610,25 +610,27 @@ contains
         type(parameters) :: params
         type(sp_project) :: boot_proj, src_proj
         type(string)     :: src_projfile
-        integer, allocatable :: seen_parent(:)
+        integer, allocatable :: seen_parent(:), votes(:,:), best_boot_for_parent(:), best_vote_for_parent(:)
         real, allocatable    :: states(:)
-        integer :: ncls_src, ncls_boot, i, parent_cls, child_id, nmap
+        integer :: ncls_src, ncls_boot, i, parent_cls, child_id, nmap, boot_cls, src_pind, max_vote
         real    :: corr, proj, state
+        logical :: have_bootstrap_map
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        if( .not. cline%defined('projfile_orig') )then
+        if( params%projfile_orig%strlen_trim() == 0 )then
             THROW_HARD('missing required key projfile_orig; usage: simple_exec prg=unbootstrap_cavgs projfile=<bootstrap.simple> projfile_orig=<original.simple>')
         endif
-        src_projfile = cline%get_carg('projfile_orig')
+        if( params%mkdir .eq. 'yes' )then
+            src_projfile = filepath(string(PATH_HERE), basename(params%projfile_orig))
+            if( .not. file_exists(src_projfile) ) call simple_copy_file(params%projfile_orig, src_projfile)
+        else
+            src_projfile = params%projfile_orig
+        endif
         call boot_proj%read(params%projfile)
         call src_proj%read(src_projfile)
         if( boot_proj%os_cls2D%get_noris() == 0 ) THROW_HARD('empty cls2D in bootstrap project; exec_unbootstrap_cavgs')
         if( boot_proj%os_cls3D%get_noris() == 0 ) THROW_HARD('empty cls3D in bootstrap project; exec_unbootstrap_cavgs')
-        if( .not. boot_proj%os_cls2D%isthere('bootstrap_parent') )then
-            THROW_HARD('bootstrap_parent missing in cls2D; not a bootstrap_cavgs project')
-        endif
-        if( .not. boot_proj%os_cls2D%isthere('bootstrap_child') )then
-            THROW_HARD('bootstrap_child missing in cls2D; not a bootstrap_cavgs project')
-        endif
+        have_bootstrap_map = boot_proj%os_cls2D%isthere('bootstrap_parent') .and. boot_proj%os_cls2D%isthere('bootstrap_child')
         ncls_src  = src_proj%os_cls2D%get_noris()
         ncls_boot = boot_proj%os_cls2D%get_noris()
         if( ncls_src == 0 ) THROW_HARD('empty cls2D in source project; exec_unbootstrap_cavgs')
@@ -644,27 +646,69 @@ contains
         deallocate(states)
         allocate(seen_parent(ncls_src), source=0)
         nmap = 0
-        do i = 1,ncls_boot
-            child_id = nint(boot_proj%os_cls2D%get(i, 'bootstrap_child'))
-            if( child_id /= 0 ) cycle
-            parent_cls = nint(boot_proj%os_cls2D%get(i, 'bootstrap_parent'))
-            if( parent_cls < 1 .or. parent_cls > ncls_src )then
-                THROW_HARD('bootstrap_parent out of range in cls2D; exec_unbootstrap_cavgs')
+        if( have_bootstrap_map )then
+            do i = 1,ncls_boot
+                child_id = nint(boot_proj%os_cls2D%get(i, 'bootstrap_child'))
+                if( child_id /= 0 ) cycle
+                parent_cls = nint(boot_proj%os_cls2D%get(i, 'bootstrap_parent'))
+                if( parent_cls < 1 .or. parent_cls > ncls_src )then
+                    THROW_HARD('bootstrap_parent out of range in cls2D; exec_unbootstrap_cavgs')
+                endif
+                if( seen_parent(parent_cls) /= 0 )then
+                    THROW_HARD('duplicate bootstrap_parent with bootstrap_child=0; exec_unbootstrap_cavgs')
+                endif
+                seen_parent(parent_cls) = 1
+                corr  = boot_proj%os_cls3D%get(i, 'corr')
+                proj  = boot_proj%os_cls3D%get(i, 'proj')
+                state = boot_proj%os_cls3D%get(i, 'state')
+                call src_proj%os_cls3D%set(parent_cls, 'corr', corr)
+                call src_proj%os_cls3D%set(parent_cls, 'proj', proj)
+                call src_proj%os_cls3D%set_euler(parent_cls, boot_proj%os_cls3D%get_euler(i))
+                call src_proj%os_cls3D%set_shift(parent_cls, boot_proj%os_cls3D%get_2Dshift(i))
+                call src_proj%os_cls3D%set(parent_cls, 'state', state)
+                nmap = nmap + 1
+            enddo
+        else
+            if( .not. boot_proj%os_ptcl2D%isthere('pind_prev') )then
+                THROW_HARD('bootstrap metadata missing in cls2D and pind_prev missing in ptcl2D; cannot unbootstrap')
             endif
-            if( seen_parent(parent_cls) /= 0 )then
-                THROW_HARD('duplicate bootstrap_parent with bootstrap_child=0; exec_unbootstrap_cavgs')
-            endif
-            seen_parent(parent_cls) = 1
-            corr  = boot_proj%os_cls3D%get(i, 'corr')
-            proj  = boot_proj%os_cls3D%get(i, 'proj')
-            state = boot_proj%os_cls3D%get(i, 'state')
-            call src_proj%os_cls3D%set(parent_cls, 'corr', corr)
-            call src_proj%os_cls3D%set(parent_cls, 'proj', proj)
-            call src_proj%os_cls3D%set_euler(parent_cls, boot_proj%os_cls3D%get_euler(i))
-            call src_proj%os_cls3D%set_shift(parent_cls, boot_proj%os_cls3D%get_2Dshift(i))
-            call src_proj%os_cls3D%set(parent_cls, 'state', state)
-            nmap = nmap + 1
-        enddo
+            THROW_WARN('bootstrap_parent/bootstrap_child missing in cls2D; recovering mapping from ptcl2D:pind_prev')
+            allocate(votes(ncls_src,ncls_boot), source=0)
+            do i = 1,boot_proj%os_ptcl2D%get_noris()
+                boot_cls = boot_proj%os_ptcl2D%get_class(i)
+                if( boot_cls < 1 .or. boot_cls > ncls_boot ) cycle
+                src_pind = nint(boot_proj%os_ptcl2D%get(i, 'pind_prev'))
+                if( src_pind < 1 .or. src_pind > src_proj%os_ptcl2D%get_noris() ) cycle
+                parent_cls = src_proj%os_ptcl2D%get_class(src_pind)
+                if( parent_cls < 1 .or. parent_cls > ncls_src ) cycle
+                votes(parent_cls, boot_cls) = votes(parent_cls, boot_cls) + 1
+            enddo
+            allocate(best_boot_for_parent(ncls_src), source=0)
+            allocate(best_vote_for_parent(ncls_src), source=0)
+            do boot_cls = 1,ncls_boot
+                max_vote = maxval(votes(:,boot_cls))
+                if( max_vote == 0 ) cycle
+                parent_cls = maxloc(votes(:,boot_cls), dim=1)
+                if( max_vote > best_vote_for_parent(parent_cls) )then
+                    best_vote_for_parent(parent_cls) = max_vote
+                    best_boot_for_parent(parent_cls) = boot_cls
+                endif
+            enddo
+            do parent_cls = 1,ncls_src
+                boot_cls = best_boot_for_parent(parent_cls)
+                if( boot_cls == 0 ) cycle
+                corr  = boot_proj%os_cls3D%get(boot_cls, 'corr')
+                proj  = boot_proj%os_cls3D%get(boot_cls, 'proj')
+                state = boot_proj%os_cls3D%get(boot_cls, 'state')
+                call src_proj%os_cls3D%set(parent_cls, 'corr', corr)
+                call src_proj%os_cls3D%set(parent_cls, 'proj', proj)
+                call src_proj%os_cls3D%set_euler(parent_cls, boot_proj%os_cls3D%get_euler(boot_cls))
+                call src_proj%os_cls3D%set_shift(parent_cls, boot_proj%os_cls3D%get_2Dshift(boot_cls))
+                call src_proj%os_cls3D%set(parent_cls, 'state', state)
+                nmap = nmap + 1
+            enddo
+            deallocate(votes, best_boot_for_parent, best_vote_for_parent)
+        endif
         if( nmap == 0 ) THROW_HARD('no bootstrap_child=0 classes found to map; exec_unbootstrap_cavgs')
         call src_proj%map2ptcls
         call src_proj%write(src_projfile)
