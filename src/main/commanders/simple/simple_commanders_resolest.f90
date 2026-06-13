@@ -135,7 +135,8 @@ contains
         endif
         call even%fft()
         call odd%fft()
-        call calc_fsc_area_score(even, odd, params%nspace, params%athres, params%lplim_crit, 1, result)
+        call result%new(even, params%nspace, params%athres, params%lplim_crit, 1)
+        call result%calc_fsc_area_score(even, odd)
         if( cline%defined('fbody') )then
             fbody = params%fbody
         else
@@ -146,6 +147,7 @@ contains
         call even%kill
         call odd%kill
         call mskvol%kill
+        call result%kill
         call simple_end('**** SIMPLE_FSC_AREA_SCORE NORMAL STOP ****')
     end subroutine exec_fsc_area_score
 

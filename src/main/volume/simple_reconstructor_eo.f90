@@ -434,13 +434,16 @@ contains
     end subroutine project_polar
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in )
-        class(reconstructor_eo), intent(inout) :: self                   !< instance
-        integer,                 intent(in)    :: state                  !< state
-        class(string),           intent(in)    :: fname_even, fname_odd  !< even/odd filenames
-        integer,                 intent(out)   :: find4eoavg             !< Fourier index for eo averaging
-        real, optional,          intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
-        type(image)           :: even, odd
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in, cones_in )
+        use simple_fsc, only: fsc_area_score_result
+        class(reconstructor_eo),                intent(inout) :: self                   !< instance
+        integer,                                intent(in)    :: state                  !< state
+        class(string),                          intent(in)    :: fname_even, fname_odd  !< even/odd filenames
+        integer,                                intent(out)   :: find4eoavg             !< Fourier index for eo averaging
+        real, optional,                         intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
+        class(fsc_area_score_result), optional, intent(inout) :: cones_in
+        type(image)                 :: even, odd
+        type(fsc_area_score_result) :: cones_fsc
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:)
         logical               :: l_have_fsc
@@ -449,6 +452,11 @@ contains
         if( present(fsc_in) )then
             allocate(self%fsc(self%filtsz),source=fsc_in)
             l_have_fsc = .true.
+            if( self%p_ptr %l_ml_reg .and. (self%p_ptr%conical_fsc == 'yes') )then
+                if( .not. present(cones_in) )then
+                    THROW_HARD('cones_in must be provided if conical regularization is enabled')
+                endif
+            endif
         else
             allocate(self%fsc(self%filtsz),source=0.)
             l_have_fsc = .false.
@@ -476,17 +484,34 @@ contains
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%mag_correction)
             call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
-            if( .not. l_have_fsc )then
+            ! Regularization
+            if( l_have_fsc )then
+                if( (self%p_ptr%conical_fsc == 'yes') )then
+                    call self%even%add_conical_invtausq2rho(cones_in)
+                    call self%odd%add_conical_invtausq2rho(cones_in)
+                else
+                    call self%even%add_invtausq2rho(self%fsc)
+                    call self%odd%add_invtausq2rho(self%fsc)
+                endif
+            else
                 ! masking: try to load state-specific mask if automsk enabled
                 call load_state_mask_or_fallback(self, state, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
                 call even%fsc(odd, self%fsc)
+                if( self%p_ptr%conical_fsc == 'yes' )then
+                    call cones_fsc%new(even, 256, 20., 0.143, 1)
+                    call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
+                        &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
+                    call self%even%add_conical_invtausq2rho(cones_fsc)
+                    call self%odd%add_conical_invtausq2rho(cones_fsc)
+                    call cones_fsc%kill
+                else
+                    call self%even%add_invtausq2rho(self%fsc)
+                    call self%odd%add_invtausq2rho(self%fsc)
+                endif
             endif
-            ! regularization
-            call self%even%add_invtausq2rho(self%fsc)
-            call self%odd%add_invtausq2rho(self%fsc)
             ! Even: uneven sampling density correction, clip, & write
             cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct
@@ -585,10 +610,11 @@ contains
         endif
     end subroutine load_state_mask_or_fallback
 
-    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc )
-        class(reconstructor_eo), intent(inout) :: self
-        class(image),            intent(in)    :: even, odd
-        real, allocatable,       intent(inout) :: fsc(:)
+    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, cones )
+        class(reconstructor_eo),                intent(inout) :: self
+        class(image),                           intent(inout) :: even, odd
+        real, allocatable,                      intent(inout) :: fsc(:)
+        class(fsc_area_score_result), optional, intent(inout) :: cones
         type(image) :: even_tmp, odd_tmp
         if( allocated(fsc)      ) deallocate(fsc)
         if( allocated(self%fsc) ) deallocate(self%fsc)
@@ -603,6 +629,9 @@ contains
         call odd_tmp%fft()
         call even_tmp%fsc(odd_tmp, fsc)
         allocate(self%fsc(self%filtsz), source=fsc)
+        ! Conical FSCs
+        if( present(cones) ) call cones%calc_fsc_area_score(even_tmp, odd_tmp)
+        ! cleanup
         call even_tmp%kill
         call odd_tmp%kill
     end subroutine calc_fsc4sampl_dens_correct

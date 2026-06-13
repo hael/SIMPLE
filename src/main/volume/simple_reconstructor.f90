@@ -54,6 +54,7 @@ type, extends(image) :: reconstructor
     ! SUMMATION
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
+    procedure          :: add_conical_invtausq2rho
     ! DESTRUCTORS
     procedure          :: dealloc_exp
     procedure          :: dealloc_rho
@@ -790,6 +791,101 @@ contains
         enddo
         !$omp end parallel do
     end subroutine add_invtausq2rho
+
+    subroutine add_conical_invtausq2rho( self, cones_obj )
+        use simple_fsc, only: fsc_area_score_result
+        class(reconstructor),        intent(inout) :: self !< this instance
+        type(fsc_area_score_result), intent(in)    :: cones_obj
+        real,     allocatable :: tau2(:,:)
+        real(dp), allocatable :: cctfsq_sums(:,:)
+        real(dp) :: ckcl, norm, dot, sig2
+        real     :: cos_half, fudge, cc, tau2_thr, invtau2, snr
+        integer  :: phys(3), logi(3), counter
+        integer  :: reslim_ind, nfreqs, ndirs, idir, freqlim, ifreq, h,i,j,k,l, sh
+        freqlim  = self%get_filtsz()
+        if( freqlim /= cones_obj%nfreqs ) then
+            THROW_HARD('invalid freqlim; reconstructor add_conical_invtausq2rho')
+        endif
+        cos_half  = cos(deg2rad(real(cones_obj%cone_half_angle_deg, kind=dp)))
+        nfreqs    = cones_obj%nfreqs
+        ndirs     = cones_obj%ndirs
+        fudge     = self%p_ptr %tau
+        ! Conical spectral CTF2 sums
+        allocate(cctfsq_sums(nfreqs,ndirs),source=0.d0)
+        !$omp parallel default(shared) private(idir,l,k,ckcl,h,norm,sh,dot,phys) proc_bind(close)
+        !$omp do schedule(guided) collapse(3) reduction(+:cctfsq_sums)
+        do idir = 1, ndirs
+            do l = self%lims(3,1), self%lims(3,2)
+                do k = self%lims(2,1), self%lims(2,2)
+                    ckcl = real(k,kind=dp) * cones_obj%dirs(2,idir) + real(l,kind=dp) * cones_obj%dirs(3,idir)
+                    do h = self%lims(1,1), self%lims(1,2)
+                        norm = sqrt(real(h*h + k*k + l*l, kind=dp))
+                        if( norm <= 0.0d0 ) cycle
+                        sh = nint(norm)
+                        if( (sh == 0) .or. (sh > freqlim) ) cycle
+                        dot = abs((real(h,kind=dp)*cones_obj%dirs(1,idir) + ckcl) / norm)
+                        if( dot < cos_half ) cycle
+                        phys = self%comp_addr_phys(h,k,l)
+                        cctfsq_sums(sh,idir) = cctfsq_sums(sh,idir) + real(self%rho(phys(1),phys(2),phys(3)),dp)
+                    end do
+                enddo
+            end do
+        end do
+        !$omp end do
+        !$omp end parallel
+        ! Conical spectral SNR & Tau2
+        allocate(tau2(nfreqs,ndirs), source=0.0)
+        do idir = 1, ndirs
+            do ifreq = 1, nfreqs
+                ! SSNR
+                cc  = min(0.999, max(0.001, cones_obj%cfsc(ifreq,idir)))
+                snr = cc / (1.-cc)
+                ! Tau2
+                sig2 = 0.0
+                if( cctfsq_sums(ifreq,idir) > 1.d-10 )then
+                    sig2 = real(real(cones_obj%counts(ifreq,idir),dp) / cctfsq_sums(ifreq,idir))
+                end if
+                tau2(ifreq,idir) = snr * sig2
+            end do
+        enddo
+        ! add Tau2 inverse to denominator
+        ! because signal assumed infinite at very low resolution there is no addition
+        reslim_ind = max(6, calc_fourier_index(self%p_ptr %hp, self%p_ptr %box_crop, self%p_ptr %smpd_crop))
+        !$omp parallel do default(shared) schedule(guided) proc_bind(close) collapse(3)&
+        !$omp& private(i,j,k,logi,norm,sh,counter,tau2_thr,idir,dot,invtau2)
+        do k = 1, self%rho_shape(3)
+            do j = 1, self%rho_shape(2)
+                do i = 1, self%rho_shape(1)
+                    logi = self%comp_addr_logi(i,j,k)
+                    norm = sqrt(real(sum(logi*logi), kind=dp))
+                    if( norm <= 0.0d0 ) cycle
+                    sh = nint(norm)
+                    if( (sh < reslim_ind) .or. (sh > freqlim) ) cycle
+                    ! Cones-averaged tau2 because a voxel can belong to more than one cone
+                    counter  = 0
+                    tau2_thr = 0.
+                    do idir = 1, ndirs
+                        dot = abs((real(logi(1),kind=dp) * cones_obj%dirs(1,idir) + &
+                            &real(logi(2),kind=dp) * cones_obj%dirs(2,idir) + &
+                            &real(logi(3),kind=dp) * cones_obj%dirs(3,idir)) / norm)
+                        if( dot < cos_half ) cycle
+                        counter  = counter + 1
+                        tau2_thr = tau2_thr + tau2(sh,idir)
+                    enddo
+                    if( counter == 0 ) cycle ! should be a bug?
+                    tau2_thr = tau2_thr / real(counter)
+                    ! CTF2 + 1/Tau2
+                    if( tau2_thr > TINY)then
+                        invtau2 = 1.0 / (fudge * tau2_thr)
+                    else
+                        invtau2 = min(1.e3, 1.e3 * self%rho(i,j,k))
+                    endif
+                    self%rho(i,j,k) = self%rho(i,j,k) + invtau2
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine add_conical_invtausq2rho
 
     ! DESTRUCTORS
 

@@ -1145,6 +1145,13 @@ contains
         phys = self%fit%comp_addr_phys(h,k)
     end function comp_addr_phys3
 
+    module pure function comp_addr_logi(self,i,j,k) result(logi)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: i,j,k   !<  Physical address
+        integer                  :: logi(3) !<  Logical address
+        logi = self%fit%comp_addr_logi(i,j,k)
+    end function comp_addr_logi
+
     !===========================
     ! Correlation / distances
     !===========================

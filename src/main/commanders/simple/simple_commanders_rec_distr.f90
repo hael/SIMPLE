@@ -94,12 +94,21 @@ contains
         end subroutine sum_eos_before_density_correction_if_needed
 
         subroutine restore_eos_and_write_fsc()
+            use simple_fsc, only: fsc_area_score_result
+            type(fsc_area_score_result) :: cones_fsc
             if( L_BENCH_GLOB ) t_restore_eos = tic()
             if( params%l_trail_rec )then
                 call read_previous_halfmaps()
                 if( allocated(fsc) ) deallocate(fsc)
-                call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
-                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc)
+                if( params%conical_fsc == 'yes' )then
+                    call cones_fsc%new(vol_prev_even, 256, 20., 0.143, 1)
+                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc, cones=cones_fsc)
+                    call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc, cones_in=cones_fsc)
+                    call cones_fsc%kill
+                else
+                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc)
+                    call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc)
+                endif
             else
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             endif

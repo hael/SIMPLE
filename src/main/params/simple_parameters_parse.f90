@@ -62,6 +62,7 @@ contains
         call reg%add_char('continue', self%continue)
         call reg%add_char('ctf', self%ctf)
         call reg%add_char('ctfpatch', self%ctfpatch)
+        call reg%add_char('conical_fsc', self%conical_fsc)
         call reg%add_char('ctfstats', self%ctfstats)
         call reg%add_char('detector', self%detector)
         call reg%add_char('dfunit', self%dfunit)

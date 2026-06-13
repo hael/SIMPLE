@@ -6,7 +6,7 @@ use CPlot2D_wrapper_module
 implicit none
 
 public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc, plot_fsc_area_score
-public :: fsc_area_score_result, calc_fsc_area_score, write_fsc_area_score_outputs
+public :: fsc_area_score_result, write_fsc_area_score_outputs
 private
 #include "simple_local_flags.inc"
 
@@ -29,6 +29,11 @@ type :: fsc_area_score_result
     real,    allocatable :: crossing_res(:)
     integer, allocatable :: counts(:,:)
     integer, allocatable :: included_bins(:)
+    logical              :: exists = .false.
+  contains
+    procedure :: new
+    procedure :: calc_fsc_area_score
+    procedure :: kill
 end type fsc_area_score_result
 
 contains
@@ -490,56 +495,6 @@ contains
         end subroutine add_segment
     end subroutine plot_fsc_area_score
 
-    subroutine calc_fsc_area_score( even, odd, ndirs, cone_half_angle_deg, threshold, min_count, result )
-        class(image),                intent(inout) :: even, odd
-        integer,                     intent(in)    :: ndirs
-        real,                        intent(in)    :: cone_half_angle_deg, threshold
-        integer,                     intent(in)    :: min_count
-        type(fsc_area_score_result), intent(out)   :: result
-        integer :: n, idir, loc(1), min_count_eff
-        if( ndirs < 1 ) THROW_HARD('number of directions must be positive; calc_fsc_area_score')
-        if( cone_half_angle_deg <= 0. .or. cone_half_angle_deg >= 90. )then
-            THROW_HARD('cone half-angle must be in (0,90) degrees; calc_fsc_area_score')
-        endif
-        if( threshold < -1. .or. threshold > 1. ) THROW_HARD('threshold outside [-1,1]; calc_fsc_area_score')
-        if( .not. even%is_ft() ) call even%fft()
-        if( .not. odd%is_ft()  ) call odd%fft()
-        n             = even%get_filtsz()
-        min_count_eff = max(1, min_count)
-        result%nfreqs              = n
-        result%ndirs               = ndirs
-        result%min_count           = min_count_eff
-        result%cone_half_angle_deg = cone_half_angle_deg
-        result%threshold           = threshold
-        allocate(result%res(n), result%dirs(3,ndirs), result%cfsc(n,ndirs), result%counts(n,ndirs))
-        allocate(result%wauc(ndirs), result%crossing_find(ndirs), result%crossing_res(ndirs), result%included_bins(ndirs))
-        result%res = even%get_res()
-        call fibonacci_sphere_dirs(ndirs, result%dirs)
-        call even%conical_fsc(odd, result%dirs, cone_half_angle_deg, min_count_eff, result%cfsc, result%counts)
-        do idir = 1, ndirs
-            call score_cfsc_curve(n, result%cfsc(:,idir), result%counts(:,idir), result%res, threshold, min_count_eff, &
-                &result%wauc(idir), result%crossing_find(idir), result%crossing_res(idir), result%included_bins(idir))
-        end do
-        loc = minloc(result%wauc)
-        result%min_dir  = loc(1)
-        result%wauc_min = result%wauc(result%min_dir)
-        loc = maxloc(result%wauc)
-        result%max_dir  = loc(1)
-        result%wauc_max = result%wauc(result%max_dir)
-        if( result%wauc_max > 0. )then
-            result%cfar = result%wauc_min / result%wauc_max
-        else
-            result%cfar = 0.
-        endif
-        write(logfhandle,'(A)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO'
-        write(logfhandle,'(A,1X,I0)')      '    Direction axes:', ndirs
-        write(logfhandle,'(A,1X,F7.3)')    '    Cone half-angle (degrees):', cone_half_angle_deg
-        write(logfhandle,'(A,1X,F7.3)')    '    FSC threshold:', threshold
-        write(logfhandle,'(A,1X,ES12.5)')  '    Minimum weighted area:', result%wauc_min
-        write(logfhandle,'(A,1X,ES12.5)')  '    Maximum weighted area:', result%wauc_max
-        write(logfhandle,'(A,1X,F8.4)')    '    cFAR:', result%cfar
-    end subroutine calc_fsc_area_score
-
     subroutine fibonacci_sphere_dirs( ndirs, dirs )
         integer, intent(in)  :: ndirs
         real,    intent(out) :: dirs(3,ndirs)
@@ -636,5 +591,80 @@ contains
         write(logfhandle,'(A,1X,A)') '>>> FSC area score curves:',  trim(curves_fname)
         write(logfhandle,'(A,1X,A)') '>>> FSC area score directions:', trim(dirs_fname)
     end subroutine write_fsc_area_score_outputs
+
+    ! TYPE fsc_area_score_result BOUND PROCEDURES
+
+    subroutine new( self, vol, ndirs, cone_half_angle_deg, threshold, min_count)
+        class(fsc_area_score_result), intent(out) :: self
+        class(image),                 intent(in)  :: vol
+        integer,                      intent(in)  :: ndirs
+        real,                         intent(in)  :: cone_half_angle_deg, threshold
+        integer,                      intent(in)  :: min_count
+        if( ndirs < 1 ) THROW_HARD('number of directions must be positive; calc_fsc_area_score')
+        if( cone_half_angle_deg <= 0. .or. cone_half_angle_deg >= 90. )then
+            THROW_HARD('cone half-angle must be in (0,90) degrees; calc_fsc_area_score')
+        endif
+        if( threshold < -1. .or. threshold > 1. ) THROW_HARD('threshold outside [-1,1]; calc_fsc_area_score')
+        call self%kill
+        self%nfreqs              = vol%get_filtsz()
+        self%ndirs               = ndirs
+        self%min_count           = max(1, min_count)
+        self%cone_half_angle_deg = cone_half_angle_deg
+        self%threshold           = threshold
+        allocate(self%res(self%nfreqs), self%dirs(3,self%ndirs), self%cfsc(self%nfreqs,self%ndirs), &
+        &self%counts(self%nfreqs,self%ndirs), self%wauc(self%ndirs), self%crossing_find(self%ndirs),&
+        &self%crossing_res(self%ndirs), self%included_bins(self%ndirs))
+        self%res = vol%get_res()
+        call fibonacci_sphere_dirs(self%ndirs, self%dirs)
+        self%exists = .true.
+    end subroutine new
+
+    subroutine calc_fsc_area_score( self, even, odd )
+        class(fsc_area_score_result), intent(inout) :: self
+        class(image),                 intent(inout) :: even, odd
+        integer :: n, idir, loc(1)
+        if( .not. even%is_ft() ) call even%fft()
+        if( .not. odd%is_ft()  ) call odd%fft()
+        call even%conical_fsc(odd, self%dirs, self%cone_half_angle_deg, self%min_count, self%cfsc, self%counts)
+        do idir = 1, self%ndirs
+            call score_cfsc_curve(self%nfreqs, self%cfsc(:,idir), self%counts(:,idir), self%res, self%threshold, self%min_count, &
+                &self%wauc(idir), self%crossing_find(idir), self%crossing_res(idir), self%included_bins(idir))
+        end do
+        loc = minloc(self%wauc)
+        self%min_dir  = loc(1)
+        self%wauc_min = self%wauc(self%min_dir)
+        loc = maxloc(self%wauc)
+        self%max_dir  = loc(1)
+        self%wauc_max = self%wauc(self%max_dir)
+        if( self%wauc_max > 0. )then
+            self%cfar = self%wauc_min / self%wauc_max
+        endif
+        write(logfhandle,'(A)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO'
+        write(logfhandle,'(A,1X,I0)')      '    Direction axes:', self%ndirs
+        write(logfhandle,'(A,1X,F7.3)')    '    Cone half-angle (degrees):', self%cone_half_angle_deg
+        write(logfhandle,'(A,1X,F7.3)')    '    FSC threshold:', self%threshold
+        write(logfhandle,'(A,1X,ES12.5)')  '    Minimum weighted area:', self%wauc_min
+        write(logfhandle,'(A,1X,ES12.5)')  '    Maximum weighted area:', self%wauc_max
+        write(logfhandle,'(A,1X,F8.4)')    '    cFAR:', self%cfar
+    end subroutine calc_fsc_area_score
+
+    subroutine kill( self )
+        class(fsc_area_score_result), intent(out) :: self
+        self%nfreqs              = 0
+        self%ndirs               = 0
+        self%min_count           = 1
+        self%min_dir             = 0
+        self%max_dir             = 0
+        self%cone_half_angle_deg = 20.
+        self%threshold           = 0.143
+        self%cfar                = 0.
+        self%wauc_min            = 0.
+        self%wauc_max            = 0.
+        if( allocated(self%res) )then
+            deallocate(self%res, self%dirs, self%cfsc, self%wauc, self%crossing_find, &
+            &self%crossing_res, self%counts, self%included_bins)
+        endif
+        self%exists = .false.
+    end subroutine kill
 
 end module simple_fsc

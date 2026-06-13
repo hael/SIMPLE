@@ -269,6 +269,7 @@ contains
     procedure          :: loop_lims
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
+    procedure          :: comp_addr_logi
     !  Correlation / distances
     procedure          :: corr
     procedure          :: corr_shifted
@@ -1701,6 +1702,12 @@ interface
         integer,      intent(in) :: h,k     !<  Logical address
         integer                  :: phys(2) !<  Physical address
     end function comp_addr_phys3
+
+    module pure function comp_addr_logi(self,i,j,k) result(logi)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: i,j,k   !<  Physical address
+        integer                  :: logi(3) !<  Logical address
+    end function comp_addr_logi
 
     !--- Correlation / distances ---!
 
