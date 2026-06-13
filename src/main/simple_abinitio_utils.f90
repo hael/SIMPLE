@@ -755,6 +755,7 @@ contains
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
+                if( final_stage_uses_ml_reg() ) call child_cline%set('conical_fsc', params%conical_fsc)
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')
                 endif

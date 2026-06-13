@@ -612,7 +612,7 @@ contains
         type(string)     :: src_projfile
         integer, allocatable :: seen_parent(:), votes(:,:), best_boot_for_parent(:), best_vote_for_parent(:)
         real, allocatable    :: states(:)
-        integer :: ncls_src, ncls_boot, i, parent_cls, child_id, nmap, boot_cls, src_pind, max_vote
+        integer :: ncls_src, ncls_boot, nptcls_src, i, parent_cls, child_id, nmap, boot_cls, src_pind, max_vote
         real    :: corr, proj, state
         logical :: have_bootstrap_map
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -620,20 +620,26 @@ contains
         if( params%projfile_orig%strlen_trim() == 0 )then
             THROW_HARD('missing required key projfile_orig; usage: simple_exec prg=unbootstrap_cavgs projfile=<bootstrap.simple> projfile_orig=<original.simple>')
         endif
+        call boot_proj%read(params%projfile)
         if( params%mkdir .eq. 'yes' )then
             src_projfile = filepath(string(PATH_HERE), basename(params%projfile_orig))
-            if( .not. file_exists(src_projfile) ) call simple_copy_file(params%projfile_orig, src_projfile)
+            call simple_copy_file(params%projfile_orig, src_projfile)
         else
             src_projfile = params%projfile_orig
         endif
-        call boot_proj%read(params%projfile)
         call src_proj%read(src_projfile)
         if( boot_proj%os_cls2D%get_noris() == 0 ) THROW_HARD('empty cls2D in bootstrap project; exec_unbootstrap_cavgs')
         if( boot_proj%os_cls3D%get_noris() == 0 ) THROW_HARD('empty cls3D in bootstrap project; exec_unbootstrap_cavgs')
         have_bootstrap_map = boot_proj%os_cls2D%isthere('bootstrap_parent') .and. boot_proj%os_cls2D%isthere('bootstrap_child')
         ncls_src  = src_proj%os_cls2D%get_noris()
         ncls_boot = boot_proj%os_cls2D%get_noris()
+        if( boot_proj%os_cls3D%get_noris() /= ncls_boot )then
+            write(logfhandle,*) 'bootstrap cls3D entries: ', boot_proj%os_cls3D%get_noris(), ' expected: ', ncls_boot
+            THROW_HARD('bootstrap cls2D/cls3D entry counts differ; exec_unbootstrap_cavgs')
+        endif
         if( ncls_src == 0 ) THROW_HARD('empty cls2D in source project; exec_unbootstrap_cavgs')
+        nptcls_src = src_proj%os_ptcl2D%get_noris()
+        if( nptcls_src == 0 ) THROW_HARD('empty ptcl2D in source project; exec_unbootstrap_cavgs')
         if( src_proj%os_cls3D%get_noris() /= ncls_src )then
             call src_proj%os_cls3D%new(ncls_src, is_ptcl=.false.)
             states = src_proj%os_cls2D%get_all('state')
@@ -711,7 +717,25 @@ contains
         endif
         if( nmap == 0 ) THROW_HARD('no bootstrap_child=0 classes found to map; exec_unbootstrap_cavgs')
         call src_proj%map2ptcls
+        if( src_proj%os_cls2D%get_noris() /= ncls_src )then
+            write(logfhandle,*) 'cls2D entries after unbootstrap: ', src_proj%os_cls2D%get_noris(), ' expected: ', ncls_src
+            THROW_HARD('unbootstrap changed source cls2D entry count; exec_unbootstrap_cavgs')
+        endif
+        if( src_proj%os_cls3D%get_noris() /= ncls_src )then
+            write(logfhandle,*) 'cls3D entries after unbootstrap: ', src_proj%os_cls3D%get_noris(), ' expected: ', ncls_src
+            THROW_HARD('unbootstrap produced inconsistent cls3D entry count; exec_unbootstrap_cavgs')
+        endif
+        if( src_proj%os_ptcl2D%get_noris() /= nptcls_src )then
+            write(logfhandle,*) 'ptcl2D entries after unbootstrap: ', src_proj%os_ptcl2D%get_noris(), ' expected: ', nptcls_src
+            THROW_HARD('unbootstrap changed source ptcl2D entry count; exec_unbootstrap_cavgs')
+        endif
+        if( src_proj%os_ptcl3D%get_noris() /= nptcls_src )then
+            write(logfhandle,*) 'ptcl3D entries after unbootstrap: ', src_proj%os_ptcl3D%get_noris(), ' expected: ', nptcls_src
+            THROW_HARD('unbootstrap produced inconsistent ptcl3D entry count; exec_unbootstrap_cavgs')
+        endif
+        call src_proj%update_projinfo(src_projfile)
         call src_proj%write(src_projfile)
+        write(logfhandle,'(A,A)') '>>> UNBOOTSTRAP_CAVGS OUTPUT PROJECT: ', src_projfile%to_char()
         call boot_proj%kill
         call src_proj%kill
         call simple_end('**** SIMPLE_UNBOOTSTRAP_CAVGS NORMAL STOP ****', print_simple=.false.)

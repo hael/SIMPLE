@@ -22,6 +22,7 @@ type(ui_param) :: cn
 type(ui_param) :: cn_max
 type(ui_param) :: cn_min
 type(ui_param) :: combine_eo
+type(ui_param) :: conical_fsc
 type(ui_param) :: cs
 type(ui_param) :: ctf
 type(ui_param) :: ctf_yes
@@ -411,6 +412,10 @@ subroutine set_ui_params
     call mirr%set_param(           'mirr',            'multi',  'Perform mirroring', &
                                    'Whether to mirror and along which axis(no|x|y){no}', &
                                    '(no|x|y){no}', .false., 'no')
+
+    call conical_fsc%set_param(    'conical_fsc',     'binary', 'Conical FSC regularization', &
+                                   'Use conical FSC curves for directional ML regularization(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
 
     call ml_reg%set_param(         'ml_reg',          'binary', 'ML regularization', &
                                    'Regularization (ML-style) based on the signal power(yes|no){yes}', &
