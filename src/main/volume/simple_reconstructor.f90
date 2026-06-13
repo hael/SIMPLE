@@ -799,8 +799,8 @@ contains
         real,     allocatable :: tau2(:,:)
         real(dp), allocatable :: cctfsq_sums(:,:)
         real(dp) :: ckcl, norm, dot, sig2
-        real     :: cos_half, fudge, cc, tau2_thr, invtau2, snr
-        integer  :: phys(3), logi(3), counter
+        real     :: cos_half, fudge, cc, tau2_thr, invtau2, snr, maxdot
+        integer  :: phys(3), logi(3), maxdir
         integer  :: reslim_ind, nfreqs, ndirs, idir, freqlim, ifreq, h,i,j,k,l, sh
         freqlim  = self%get_filtsz()
         if( freqlim /= cones_obj%nfreqs ) then
@@ -852,7 +852,7 @@ contains
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6, calc_fourier_index(self%p_ptr %hp, self%p_ptr %box_crop, self%p_ptr %smpd_crop))
         !$omp parallel do default(shared) schedule(guided) proc_bind(close) collapse(3)&
-        !$omp& private(i,j,k,logi,norm,sh,counter,tau2_thr,idir,dot,invtau2)
+        !$omp& private(i,j,k,logi,norm,sh,tau2_thr,idir,maxdir,dot,maxdot,invtau2)
         do k = 1, self%rho_shape(3)
             do j = 1, self%rho_shape(2)
                 do i = 1, self%rho_shape(1)
@@ -861,19 +861,19 @@ contains
                     if( norm <= 0.0d0 ) cycle
                     sh = nint(norm)
                     if( (sh < reslim_ind) .or. (sh > freqlim) ) cycle
-                    ! Cones-averaged tau2 because a voxel can belong to more than one cone
-                    counter  = 0
-                    tau2_thr = 0.
+                    ! Nearest cone
+                    maxdir   = 0
+                    maxdot   = -1.
                     do idir = 1, ndirs
                         dot = abs((real(logi(1),kind=dp) * cones_obj%dirs(1,idir) + &
                             &real(logi(2),kind=dp) * cones_obj%dirs(2,idir) + &
                             &real(logi(3),kind=dp) * cones_obj%dirs(3,idir)) / norm)
-                        if( dot < cos_half ) cycle
-                        counter  = counter + 1
-                        tau2_thr = tau2_thr + tau2(sh,idir)
+                        if( dot > maxdot ) then
+                            maxdot = dot
+                            maxdir = idir
+                        endif
                     enddo
-                    if( counter == 0 ) cycle ! should be a bug?
-                    tau2_thr = tau2_thr / real(counter)
+                    tau2_thr = tau2(sh,maxdir)
                     ! CTF2 + 1/Tau2
                     if( tau2_thr > TINY)then
                         invtau2 = 1.0 / (fudge * tau2_thr)

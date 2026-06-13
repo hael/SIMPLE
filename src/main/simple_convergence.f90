@@ -336,6 +336,11 @@ contains
         if( params%l_ml_reg )then
         numstr = string(params%tau)
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU: '//numstr%to_char()
+        if( trim(params%conical_fsc).eq.'yes' )then
+            write(logfhandle,609) '>>> | CONICAL REGULARIZATION        | on'
+        else
+            write(logfhandle,609) '>>> | CONICAL REGULARIZATION        | off'
+        endif
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif

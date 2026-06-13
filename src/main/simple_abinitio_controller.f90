@@ -45,7 +45,7 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 integer,          parameter :: NSAMPLE_START_DEFAULT      = 5000
 
 type :: refine3D_stage_cfg
-    type(string) :: ml_reg, fillin
+    type(string) :: ml_reg, fillin, conical_fsc
     type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine, greedy_sampling
     integer :: iter, inspace, inspace_sub, imaxits, nsample_stage
     real    :: trs, frac_best, overlap, fracsrch
@@ -353,6 +353,7 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
                 cfg%ml_reg        = 'no'
+                cfg%conical_fsc   = 'no'
                 cfg%frac_best     = 1.0
                 cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
@@ -361,6 +362,7 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
+                cfg%conical_fsc   = params%conical_fsc
                 cfg%frac_best     = 1.0
                 if( trim(params%multivol_mode).eq.'independent' .and. istage >= stoch_stage )then
                     cfg%greedy_sampling = 'no'
@@ -379,6 +381,7 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
+                cfg%conical_fsc   = params%conical_fsc
                 if( trim(params%multivol_mode).eq.'independent' )then
                     cfg%frac_best       = 1.0
                     cfg%greedy_sampling = 'no'
@@ -452,6 +455,7 @@ contains
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
+        call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
