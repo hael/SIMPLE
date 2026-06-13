@@ -86,11 +86,7 @@ endif
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-<<<<<<< HEAD
-call simple_print_git_version('5291b8c0')
-=======
-call simple_print_git_version('076d6f15')
->>>>>>> 533f3f8d (fixed UI for unbootstrap_cavgs)
+call simple_print_git_version('182071ec')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
