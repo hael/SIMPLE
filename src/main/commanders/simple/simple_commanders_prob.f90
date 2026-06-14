@@ -154,8 +154,7 @@ contains
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
-        ! more prep
-        call eulprob_obj_glob%new(params, build, pinds)
+        call cleanup_prob_align_outputs(params, .false.)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -169,6 +168,9 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        ! Build the global table only after worker tables are complete.  Keeping it
+        ! live while workers build dense partition tables roughly doubles peak RSS.
+        call eulprob_obj_glob%new(params, build, pinds)
         ! reading corrs from all parts
         if( str_has_substr(params%refine, 'prob_state') )then
             do ipart = 1, params%nparts
@@ -223,9 +225,7 @@ contains
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
         call build%spproj%write_segment_inside(params%oritype)
-        ! Global object only needs sampled-set maps before reading partition sparse tables.
-        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
-        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
+        call cleanup_prob_align_outputs(params, .true.)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
@@ -235,6 +235,9 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        ! Global object only needs sampled-set maps before reading partition sparse tables.
+        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
+        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
         ! write the iptcl->(iref,istate) assignment
@@ -385,5 +388,22 @@ contains
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align2D
+
+    subroutine cleanup_prob_align_outputs( params, neigh )
+        class(parameters), intent(in) :: params
+        logical,           intent(in) :: neigh
+        type(string) :: fname
+        integer :: ipart
+        if( neigh )then
+            do ipart = 1, params%nparts
+                fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(ipart,params%numlen)//'.dat'
+                call del_file(fname)
+            end do
+        else
+            call del_files(DIST_FBODY, params%nparts, ext='.dat', numlen=params%numlen)
+        endif
+        call del_file(string(ASSIGNMENT_FBODY)//'.dat')
+        call fname%kill
+    end subroutine cleanup_prob_align_outputs
 
 end module simple_commanders_prob

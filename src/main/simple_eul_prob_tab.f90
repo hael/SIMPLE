@@ -13,6 +13,8 @@ public :: eul_prob_tab
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: PROB_TAB_IO_CHUNK = 1024
+
 type :: eul_prob_tab
     class(builder),    pointer  :: b_ptr => null()
     class(parameters), pointer  :: p_ptr => null()
@@ -459,12 +461,25 @@ contains
     ! ptcl -> (proj, state) assignment using the global normalized dist value table
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive,&
-                    &stab_inds(self%nptcls, self%nrefs), inds_sorted(self%nrefs), iref_dist_inds(self%nrefs)
-        integer :: greedy_state(self%nptcls), active_refs(self%nrefs), active_inds(self%nrefs)
-        real    :: sorted_tab(self%nptcls, self%nrefs), projs_athres, iref_dist(self%nrefs), dists_sorted(self%nrefs),&
-                    &state_projs_athres(self%p_ptr%nstates), active_dists(self%nrefs), active_dists_sorted(self%nrefs)
-        logical :: ptcl_avail(self%nptcls)
+        integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:)
+        integer, allocatable :: greedy_state(:), active_refs(:), active_inds(:)
+        real,    allocatable :: sorted_tab(:,:), iref_dist(:), dists_sorted(:)
+        real,    allocatable :: state_projs_athres(:), active_dists(:), active_dists_sorted(:)
+        logical, allocatable :: ptcl_avail(:)
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive
+        integer :: alloc_stat
+        real    :: projs_athres
+        character(len=256) :: alloc_msg
+        allocate(stab_inds(self%nptcls, self%nrefs), sorted_tab(self%nptcls, self%nrefs),&
+            &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
+            &active_refs(self%nrefs), active_inds(self%nrefs), iref_dist(self%nrefs),&
+            &dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates), active_dists(self%nrefs),&
+            &active_dists_sorted(self%nrefs), ptcl_avail(self%nptcls), stat=alloc_stat, errmsg=alloc_msg)
+        if( alloc_stat /= 0 )then
+            write(logfhandle,*) 'eul_prob_tab%ref_assign allocation failed for nptcls/nrefs: ', self%nptcls, self%nrefs
+            write(logfhandle,*) trim(alloc_msg)
+            THROW_HARD('failed allocating probability assignment work arrays')
+        endif
         ! normalization
         call ref_score_tab(self, sorted_tab)
         ! sorting each columns
@@ -498,6 +513,8 @@ contains
                 enddo
             enddo
         endif
+        if( allocated(stab_inds) ) deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, active_refs, active_inds,&
+            &sorted_tab, iref_dist, dists_sorted, state_projs_athres, active_dists, active_dists_sorted, ptcl_avail)
 
     contains
 
@@ -668,14 +685,33 @@ contains
     subroutine write_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         class(string),       intent(in) :: binfname
-        integer :: funit, addr, io_stat, file_header(2)
+        type(ptcl_ref) :: ptcl_ref_sample
+        integer         :: funit, addr, io_stat, file_header(2)
+        integer         :: first_ptcl, last_ptcl
+        integer(kind=8) :: addr8, expected_bytes, file_bytes, elem_bytes
         file_header(1) = self%nrefs
         file_header(2) = self%nptcls
         call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1) file_header
+        call fileiochk('simple_eul_prob_tab; write_tab; file: '//binfname%to_char(), io_stat)
+        write(unit=funit,pos=1,iostat=io_stat) file_header
+        call fileiochk('simple_eul_prob_tab; write_tab header; file: '//binfname%to_char(), io_stat)
         addr = sizeof(file_header) + 1
         call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
-        write(funit,pos=addr) self%loc_tab
+        addr8 = int(addr,kind=8)
+        elem_bytes = int(sizeof(ptcl_ref_sample), kind=8)
+        do first_ptcl = 1, self%nptcls, PROB_TAB_IO_CHUNK
+            last_ptcl = min(first_ptcl + PROB_TAB_IO_CHUNK - 1, self%nptcls)
+            write(funit,pos=addr8,iostat=io_stat) self%loc_tab(:,first_ptcl:last_ptcl)
+            call fileiochk('simple_eul_prob_tab; write_tab loc_tab; file: '//binfname%to_char(), io_stat)
+            addr8 = addr8 + int(self%nrefs,kind=8) * int(last_ptcl-first_ptcl+1,kind=8) * elem_bytes
+        enddo
+        expected_bytes = addr8 - 1_8
+        inquire(unit=funit, size=file_bytes, iostat=io_stat)
+        if( io_stat == 0 .and. file_bytes < expected_bytes )then
+            write(logfhandle,*) 'prob_tab write size check failed: ', binfname%to_char()
+            write(logfhandle,*) 'actual/expected bytes: ', file_bytes, expected_bytes
+            THROW_HARD('probability table write truncated: '//binfname%to_char())
+        endif
         call fclose(funit)
     end subroutine write_tab
 
@@ -683,11 +719,14 @@ contains
     subroutine read_tab_to_glob( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
-        type(ptcl_ref),      allocatable   :: mat_loc(:,:)
+        type(ptcl_ref),      allocatable   :: mat_chunk(:,:)
+        type(ptcl_ref)                     :: ptcl_ref_sample
         real,                allocatable   :: seed_shifts_loc(:,:)
         logical,             allocatable   :: seed_has_sh_loc(:)
-        integer, allocatable :: pind2glob(:), pinds_loc(:)
+        integer, allocatable :: pind2glob(:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
+        integer :: first_loc, last_loc, nchunk, i
+        integer(kind=8) :: addr8, file_bytes, expected_bytes, tab_bytes, elem_bytes
         if( file_exists(binfname) )then
             call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -699,34 +738,56 @@ contains
         nrefs_loc  = file_header(1)
         nptcls_loc = file_header(2)
         if( nrefs_loc .ne. self%nrefs ) THROW_HARD( 'nrefs should be the same as nrefs in this partition file!' )
-        allocate(mat_loc(nrefs_loc, nptcls_loc))
         allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         ! read partition information
         addr = sizeof(file_header) + 1
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        read(unit=funit,pos=addr) mat_loc
-        call fclose(funit)
+        addr8 = int(addr,kind=8)
+        elem_bytes     = int(sizeof(ptcl_ref_sample),kind=8)
+        tab_bytes      = int(nrefs_loc,kind=8) * int(nptcls_loc,kind=8) * elem_bytes
+        expected_bytes = addr8 + tab_bytes - 1_8
+        file_bytes = -1_8
+        inquire(file=binfname%to_char(), size=file_bytes, iostat=io_stat)
+        if( io_stat /= 0 .or. file_bytes < expected_bytes )then
+            write(logfhandle,*) 'prob_tab read size check failed: ', binfname%to_char()
+            write(logfhandle,*) 'nrefs/nptcls/actual/expected bytes: ', nrefs_loc, nptcls_loc, file_bytes, expected_bytes
+            THROW_HARD('probability table is missing or truncated: '//binfname%to_char())
+        endif
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab%read_tab_to_glob')
-        pinds_loc = mat_loc(1,:)%pind
-        call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
+        max_pind = maxval(self%pinds)
         if( max_pind < 1 )then
-            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
+            call fclose(funit)
+            deallocate(seed_shifts_loc, seed_has_sh_loc)
             return
         endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
-        do i_loc = 1, nptcls_loc
-            pind = mat_loc(1,i_loc)%pind
-            if( pind < 1 .or. pind > max_pind ) cycle
-            i_glob = pind2glob(pind)
-            if( i_glob > 0 )then
-                self%loc_tab(:,i_glob)    = mat_loc(:,i_loc)
-                self%seed_shifts(:,i_glob)= seed_shifts_loc(:,i_loc)
-                self%seed_has_sh(i_glob)  = seed_has_sh_loc(i_loc)
-            endif
-        end do
-        !$omp end parallel do
-        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
+        allocate(pind2glob(max_pind), source=0)
+        do i = 1, size(self%pinds)
+            pind = self%pinds(i)
+            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i
+        enddo
+        allocate(mat_chunk(nrefs_loc, min(PROB_TAB_IO_CHUNK, nptcls_loc)))
+        do first_loc = 1, nptcls_loc, PROB_TAB_IO_CHUNK
+            last_loc = min(first_loc + PROB_TAB_IO_CHUNK - 1, nptcls_loc)
+            nchunk   = last_loc - first_loc + 1
+            read(unit=funit,pos=addr8,iostat=io_stat) mat_chunk(:,1:nchunk)
+            call fileiochk('simple_eul_prob_tab; read_tab_to_glob loc_tab; file: '//binfname%to_char(), io_stat)
+            addr8 = addr8 + int(nrefs_loc,kind=8) * int(nchunk,kind=8) * elem_bytes
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
+            do i_loc = 1, nchunk
+                pind = mat_chunk(1,i_loc)%pind
+                if( pind < 1 .or. pind > max_pind ) cycle
+                i_glob = pind2glob(pind)
+                if( i_glob > 0 )then
+                    self%loc_tab(:,i_glob)    = mat_chunk(:,i_loc)
+                    self%seed_shifts(:,i_glob)= seed_shifts_loc(:,first_loc+i_loc-1)
+                    self%seed_has_sh(i_glob)  = seed_has_sh_loc(first_loc+i_loc-1)
+                endif
+            end do
+            !$omp end parallel do
+        enddo
+        call fclose(funit)
+        deallocate(mat_chunk, seed_shifts_loc, seed_has_sh_loc, pind2glob)
     end subroutine read_tab_to_glob
 
     subroutine write_state_tab( self, binfname )
