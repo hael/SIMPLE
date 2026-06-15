@@ -208,51 +208,50 @@ contains
         ! underlying qsys factory still resolves the base scheduler (local, slurm, …).
         if( qsnam%has_substr(string('_worker')) ) then
             qsnam = qsnam%substr_remove(string('_worker'))
-            ! Resolve worker concurrency: explicit params override ncunits; qsys_nthr overrides params%nthr.
-            nthr_workers = params%nthr
-            n_workers    = max(1, params%ncunits)
-            if( params%workers > 0     ) n_workers    = params%workers
-            if( params%worker_nthr > 0 ) nthr_workers = params%worker_nthr
-            if( present(qsys_nthr)     ) nthr_workers = qsys_nthr
-            call self%qdescr%set('job_cpus_per_task', int2str(nthr_workers)) ! workers use the main thread count for their own per-task CPU allocation; nthr_workers is only for the worker server
-            ! Build two separate backends: base backend launches workers via the underlying scheduler;
-            ! dispatch backend routes tasks to the running TCP worker pool.
-            call self%qsys_fac_base%new(qsnam, self%base_qsys)
-            call self%qsys_fac_dispatch%new(string('persistent_worker'), self%dispatch_qsys)
-            ! qscripts dispatches through the TCP worker path.
-            call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
-                &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, worker_priority=self%worker_priority)
-            call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
-                &nthr_workers, n_workers, nthr_workers, .true.)
-            ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
-            call self%base_qscripts%new(self%simple_exec_bin, self%base_qsys, self%parts,&
-                &[1, self%nparts], params%ncunits, sstream, numlen)
-            ! Reuse a live server when configuration is compatible; otherwise start a fresh one.
-            if( associated(persistent_worker%server) ) then
-                if( .not. persistent_worker%server%is_running()      ) THROW_HARD('cannot reuse existing worker server that is not running;')
-                if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
-                if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
-            !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
+            if( params%script == 'yes')then
+                ! no excution => drop '_worker' and use standard path
+                call standard_exec_path
             else
-                persistent_worker%launch_backend  = qsnam
-                persistent_worker%nthr_per_worker = nthr_workers
-                persistent_worker%n_workers       = n_workers
-                allocate(persistent_worker%server)
-                if( params%worker_server%strlen() > 0 ) then
-                    call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, client_only=params%worker_server)
+                ! Resolve worker concurrency: explicit params override ncunits; qsys_nthr overrides params%nthr.
+                nthr_workers = params%nthr
+                n_workers    = max(1, params%ncunits)
+                if( params%workers > 0     ) n_workers    = params%workers
+                if( params%worker_nthr > 0 ) nthr_workers = params%worker_nthr
+                if( present(qsys_nthr)     ) nthr_workers = qsys_nthr
+                call self%qdescr%set('job_cpus_per_task', int2str(nthr_workers)) ! workers use the main thread count for their own per-task CPU allocation; nthr_workers is only for the worker server
+                ! Build two separate backends: base backend launches workers via the underlying scheduler;
+                ! dispatch backend routes tasks to the running TCP worker pool.
+                call self%qsys_fac_base%new(qsnam, self%base_qsys)
+                call self%qsys_fac_dispatch%new(string('persistent_worker'), self%dispatch_qsys)
+                ! qscripts dispatches through the TCP worker path.
+                call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
+                    &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, worker_priority=self%worker_priority)
+                call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
+                    &nthr_workers, n_workers, nthr_workers, .true.)
+                ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
+                call self%base_qscripts%new(self%simple_exec_bin, self%base_qsys, self%parts,&
+                    &[1, self%nparts], params%ncunits, sstream, numlen)
+                ! Reuse a live server when configuration is compatible; otherwise start a fresh one.
+                if( associated(persistent_worker%server) ) then
+                    if( .not. persistent_worker%server%is_running()      ) THROW_HARD('cannot reuse existing worker server that is not running;')
+                    if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
+                    if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
+                !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
                 else
-                    call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
-                    call self%start_persistent_workers()
+                    persistent_worker%launch_backend  = qsnam
+                    persistent_worker%nthr_per_worker = nthr_workers
+                    persistent_worker%n_workers       = n_workers
+                    allocate(persistent_worker%server)
+                    if( params%worker_server%strlen() > 0 ) then
+                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, client_only=params%worker_server)
+                    else
+                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
+                        call self%start_persistent_workers()
+                    end if
                 end if
             end if
         else
-            ! Standard path: a single backend handles both script generation and dispatch.
-            call self%qsys_fac_base%new(qsnam, self%base_qsys)
-            call self%qsys_fac_dispatch%new(qsnam, self%dispatch_qsys)
-            call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
-            &[1, self%nparts], params%ncunits, sstream, numlen)
-            call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
-                &str2int(self%qdescr%get('job_cpus_per_task')), 0, 0, .false.)
+            call standard_exec_path
         end if
         ! Release temporary strings and project objects.
         call qsnam%kill
@@ -260,6 +259,18 @@ contains
         if( params%projfile /= '' ) call compenv_o%kill
         call spproj%kill
         self%existence = .true.
+      contains
+
+        ! Standard path: a single backend handles both script generation and dispatch.
+        subroutine standard_exec_path
+            call self%qsys_fac_base%new(qsnam, self%base_qsys)
+            call self%qsys_fac_dispatch%new(qsnam, self%dispatch_qsys)
+            call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
+            &[1, self%nparts], params%ncunits, sstream, numlen)
+            call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
+                &str2int(self%qdescr%get('job_cpus_per_task')), 0, 0, .false.)
+        end subroutine standard_exec_path
+
     end subroutine new
 
     subroutine diagnose_parallelism(params, qsys_requested, qsys_backend, nparts_run, dispatch_slots, cpus_per_task, &

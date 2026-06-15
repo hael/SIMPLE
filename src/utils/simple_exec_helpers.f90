@@ -193,7 +193,6 @@ contains
             if( cline%get_carg('script').eq.'yes' )then
                 if( .not. cline%defined('projfile') ) THROW_HARD('script-based execution route requires a project file')
                 projfile = cline%get_carg('projfile')
-                call cline%delete('script')
                 call cline%set('prg', prg)
                 call cline%set('mkdir', 'no')
                 call params%new(cline)
@@ -206,6 +205,7 @@ contains
                 else
                     call qenv%gen_script(cline, prg//'_script', string(uppercase(prg%to_char())//'_OUTPUT'))
                 endif
+                call cline%delete('script')
                 call exit
             endif
         endif
