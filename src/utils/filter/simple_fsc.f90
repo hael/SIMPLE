@@ -619,9 +619,11 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine calc_fsc_area_score( self, even, odd )
+    subroutine calc_fsc_area_score( self, even, odd, state )
         class(fsc_area_score_result), intent(inout) :: self
         class(image),                 intent(inout) :: even, odd
+        integer,            optional, intent(in)    :: state
+        logical, parameter :: VERBOSE = .false.
         integer :: n, idir, loc(1)
         if( .not. even%is_ft() ) call even%fft()
         if( .not. odd%is_ft()  ) call odd%fft()
@@ -639,13 +641,18 @@ contains
         if( self%wauc_max > 0. )then
             self%cfar = self%wauc_min / self%wauc_max
         endif
-        write(logfhandle,'(A)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO'
-        write(logfhandle,'(A,1X,I0)')      '    Direction axes:', self%ndirs
-        write(logfhandle,'(A,1X,F7.3)')    '    Cone half-angle (degrees):', self%cone_half_angle_deg
-        write(logfhandle,'(A,1X,F7.3)')    '    FSC threshold:', self%threshold
-        write(logfhandle,'(A,1X,ES12.5)')  '    Minimum weighted area:', self%wauc_min
-        write(logfhandle,'(A,1X,ES12.5)')  '    Maximum weighted area:', self%wauc_max
-        write(logfhandle,'(A,1X,F8.4)')    '    cFAR:', self%cfar
+        if( present(state) )then
+            write(logfhandle,'(A,I2,A,1X,F8.4)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO (cFAR) STATE ', state,':',self%cfar
+        else
+            write(logfhandle,'(A,1X,F8.4)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO (cFAR):', self%cfar
+        endif
+        if( VERBOSE )then
+            write(logfhandle,'(A,1X,I0)')      '    Direction axes:', self%ndirs
+            write(logfhandle,'(A,1X,F7.3)')    '    Cone half-angle (degrees):', self%cone_half_angle_deg
+            write(logfhandle,'(A,1X,F7.3)')    '    FSC threshold:', self%threshold
+            write(logfhandle,'(A,1X,ES12.5)')  '    Minimum weighted area:', self%wauc_min
+            write(logfhandle,'(A,1X,ES12.5)')  '    Maximum weighted area:', self%wauc_max
+        endif
     end subroutine calc_fsc_area_score
 
     subroutine kill( self )

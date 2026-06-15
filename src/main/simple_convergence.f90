@@ -246,8 +246,8 @@ contains
         class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
         type(oris)           :: ostats
-        type(string) :: s_ratio
-        type(stats_struct) :: res_state
+        type(string)         :: s_ratio
+        type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         real,    allocatable :: res_state_avg(:)
         logical, allocatable :: mask(:), state_mask(:)

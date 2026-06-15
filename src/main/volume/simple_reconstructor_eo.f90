@@ -25,6 +25,7 @@ type :: reconstructor_eo
     real, allocatable   :: fsc(:)
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
+    real                :: cfar=0.
     real                :: smpd, msk, fny
     real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
     integer             :: ldim(3), box=0, boxpd=0
@@ -46,6 +47,7 @@ type :: reconstructor_eo
     procedure          :: is_initialized
     procedure          :: get_kbwin
     procedure          :: get_res
+    procedure          :: get_cfar
     ! I/O
     ! writers
     procedure          :: write_eos
@@ -194,6 +196,11 @@ contains
         res_fsc0143 = self%res_fsc0143
         res_fsc05   = self%res_fsc05
     end subroutine get_res
+
+    pure real function get_cfar( self )
+        class(reconstructor_eo), intent(in) :: self
+        get_cfar = self%cfar
+    end function get_cfar
 
     ! I/O
 
@@ -500,13 +507,16 @@ contains
                 call even%fft()
                 call odd%fft()
                 call even%fsc(odd, self%fsc)
+                ! Calculate cFAR
+                call cones_fsc%new(even, 256, 20., 0.143, 1)
+                call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
+                    &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
+                call cones_fsc%calc_fsc_area_score(even, odd, state=state)
+                self%cfar = cones_fsc%cfar
+                ! Regularization
                 if( self%p_ptr%conical_fsc == 'yes' )then
-                    call cones_fsc%new(even, 256, 20., 0.143, 1)
-                    call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
-                        &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
                     call self%even%add_conical_invtausq2rho(cones_fsc)
                     call self%odd%add_conical_invtausq2rho(cones_fsc)
-                    call cones_fsc%kill
                 else
                     call self%even%add_invtausq2rho(self%fsc)
                     call self%odd%add_invtausq2rho(self%fsc)
@@ -560,6 +570,11 @@ contains
                 call even%fft()
                 call odd%fft()
                 call even%fsc(odd, self%fsc)
+                call cones_fsc%new(even, 256, 20., 0.143, 1)
+                call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
+                    &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
+                call cones_fsc%calc_fsc_area_score(even, odd, state=state)
+                self%cfar = cones_fsc%cfar
             endif
         endif
         ! save, get & print resolution
@@ -573,6 +588,7 @@ contains
         deallocate(res)
         call even%kill
         call odd%kill
+        call cones_fsc%kill
     end subroutine sampl_dens_correct_eos
 
     !> Load state-specific automask file if it exists, or generate on-the-fly, or use circular fallback
@@ -610,11 +626,12 @@ contains
         endif
     end subroutine load_state_mask_or_fallback
 
-    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, cones )
+    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, cones, state )
         class(reconstructor_eo),                intent(inout) :: self
         class(image),                           intent(inout) :: even, odd
         real, allocatable,                      intent(inout) :: fsc(:)
         class(fsc_area_score_result), optional, intent(inout) :: cones
+        integer,                      optional, intent(in)    :: state
         type(image) :: even_tmp, odd_tmp
         if( allocated(fsc)      ) deallocate(fsc)
         if( allocated(self%fsc) ) deallocate(self%fsc)
@@ -630,7 +647,10 @@ contains
         call even_tmp%fsc(odd_tmp, fsc)
         allocate(self%fsc(self%filtsz), source=fsc)
         ! Conical FSCs
-        if( present(cones) ) call cones%calc_fsc_area_score(even_tmp, odd_tmp)
+        if( present(cones) )then
+            call cones%calc_fsc_area_score(even_tmp, odd_tmp, state=state)
+            self%cfar = cones%cfar
+        endif
         ! cleanup
         call even_tmp%kill
         call odd_tmp%kill
@@ -649,6 +669,7 @@ contains
         end do
         write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
         write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
+        write(fnr,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', self%cfar
         call fclose(fnr)
     end subroutine write_fsc2txt
 

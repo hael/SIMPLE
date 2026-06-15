@@ -102,7 +102,7 @@ contains
                 if( allocated(fsc) ) deallocate(fsc)
                 if( params%conical_fsc == 'yes' )then
                     call cones_fsc%new(vol_prev_even, 256, 20., 0.143, 1)
-                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc, cones=cones_fsc)
+                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc, cones=cones_fsc, state=1)
                     call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc, cones_in=cones_fsc)
                     call cones_fsc%kill
                 else
