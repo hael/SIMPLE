@@ -118,8 +118,8 @@ module simple_microchunked2D_fast
   real,    parameter :: DEFAULT_MICRO_P2_LP                   = 10.0
 
   ! Labels used to route rejection strategy inside reject_cavgs
-  character(len=*), parameter :: LABEL_PASS_1 = 'MICROCHUNK PASS 1'
-  character(len=*), parameter :: LABEL_PASS_2 = 'MICROCHUNK PASS 2'
+  character(len=*), parameter :: LABEL_PASS_1     = 'MICROCHUNK PASS 1'
+  character(len=*), parameter :: LABEL_PASS_2     = 'MICROCHUNK PASS 2'
   character(len=*), parameter :: REJECTION_FAILED = 'REJECTION_FAILED'
 
   type :: chunk2D
@@ -658,6 +658,46 @@ contains
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> MICROCHUNK PASS 1 # ', chunk_id, ' GENERATED WITH ', chunk_nptcls, ' PARTICLES'
     end do
+
+    ! Final ingestion: sweep any remaining sub-threshold un-included particles
+    ! into a pass-1 chunk flagged as rejection-complete so the pass-2 final
+    ! flush consumes them without running 2D classification.
+    if( self%final_ingestion ) then
+      included = project_list%get_included_flags()
+      ids      = pack(project_list%get_ids(),    .not. included)
+      nptcls   = pack(project_list%get_nptcls(), .not. included)
+      if( size(ids) > 0 ) then
+        chunk_id                  = self%get_n_microchunks_pass_1() + 1
+        chunk_folder              = string(self%outdir_microchunks_pass_1%to_char() // &
+                                           '/microchunk_pass_1_' // int2str(chunk_id))
+        call simple_mkdir(chunk_folder)
+        new_chunk%id              = chunk_id
+        new_chunk%nptcls          = sum(nptcls)
+        new_chunk%nptcls_selected = sum(nptcls)
+        new_chunk%folder          = simple_abspath(chunk_folder)
+        new_chunk%projfile        = string(new_chunk%folder%to_char() // &
+                                           '/microchunk_pass_1_' // int2str(chunk_id) // METADATA_EXT)
+        call self%generate_microchunk_pass_1_cline(new_chunk, new_chunk%nptcls_selected)
+        call project_list%slice(ids(1), ids(size(ids)), chunk_project_list)
+        call chunk_project%projrecords2proj(chunk_project_list)
+        call chunk_project_list%kill()
+        call chunk_project%update_projinfo(new_chunk%cline)
+        call chunk_project%update_compenv(new_chunk%cline)
+        call chunk_project%write(new_chunk%projfile)
+        call chunk_project%kill()
+        new_chunk%abinitio2D_complete = .true.
+        new_chunk%rejection_complete  = .true.
+        call self%append_microchunk_pass_1(new_chunk)
+        call project_list%set_included_flags([ids(1), ids(size(ids))])
+        included  = project_list%get_included_flags()
+        projfiles = project_list%get_projnames()
+        projfiles = pack(projfiles, included)
+        projfiles = remove_duplicates(projfiles)
+        call write_filetable(string('imported_projects.txt'), projfiles)
+        write(logfhandle,'(A,I8,A)') &
+          '>>> FINAL INGESTION: STAGED ', new_chunk%nptcls, ' REMAINING PARTICLES FOR PASS 2'
+      end if
+    end if
     call timer_stop(t0, string('generate_microchunks_pass_1'))
   end subroutine generate_microchunks_pass_1
 
@@ -761,6 +801,9 @@ contains
                                            '/microchunk_pass_2_' // int2str(chunk_id) // METADATA_EXT)
         call self%generate_microchunk_pass_2_cline(new_chunk, new_chunk%nptcls_selected)
         call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
+        ! flag this as the final sieve chunk
+        if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
+        call chunk_project%os_out%set(1, 'sieve_final', 'yes')
         call chunk_project%write(new_chunk%projfile)
         call chunk_project%kill()
         do i = 1, size(consumed)
@@ -768,7 +811,7 @@ contains
           call simple_touch(self%microchunks_pass_1(consumed(i))%folder%to_char() // '/COMPLETE')
         end do
         call self%append_microchunk_pass_2(new_chunk)
-        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK PASS 2 # ', chunk_id, &
+        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> FINAL MICROCHUNK PASS 2 # ', chunk_id, &
           ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
       end if
       deallocate(projfiles, consumed)
@@ -1136,6 +1179,7 @@ contains
       out_jpg = swap_suffix(fname, JPG_EXT, MRC_EXT)
       call mrc2jpeg_tiled(fname, out_jpg)
       write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+      write(logfhandle,'(A,A)') '>>> JPEG ', out_jpg%to_char()
     end subroutine write_quality_stack
 
   end subroutine reject_cavgs

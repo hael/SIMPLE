@@ -82,10 +82,11 @@ contains
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
         integer                                   :: state_1_particle_rate, optics_id_offset
-        logical                                   :: l_pause, l_terminate, l_once, l_changed
+        logical                                   :: l_pause, l_terminate, l_once, l_changed, l_sieve_final
         real                                      :: final_mskdiam
         l_once               = .true.
         l_terminate          = .false.
+        l_sieve_final        = .false. ! set when a sieved set flagged sieve_final=yes is imported
         nptcls_glob          = 0
         nptcls_glob_state_1  = 0
         nmics                = 0
@@ -197,9 +198,13 @@ contains
             endif
             l_imported            = setslist%get_included_flags()
             ! Adaptive pause policy:
-            ! - iterations 11..20: pause only if no imports for >5 iterations
+            ! - iterations 11..20: pause only if no imports for >1 iterations
             ! - iterations 21+:    pause after 1 iteration without imports
-            if( pool_iter > 1 .and. pool_iter <= 20 ) then
+            ! When the final sieve set has been imported, run uninterrupted to
+            ! iteration 25 (no pausing).
+            if( l_sieve_final .and. pool_iter < 25 ) then
+                call unpause_pool()
+            else if( pool_iter > 1 .and. pool_iter <= 20 ) then
                 if( pool_iter > iter_last_import + 1 ) then
                     if( .not.l_pause ) then
                         l_pause = is_pool_available()
@@ -240,7 +245,7 @@ contains
             else if( nptcls_glob == 0 .or. nptcls_threshold == 0) then
                 ! skip iteration but update metadata
                 call send_meta(string('waiting for sieved particles'))
-            else if( nptcls_glob_state_1 < nptcls_threshold ) then
+            else if( nptcls_glob_state_1 < nptcls_threshold .and. .not. l_sieve_final ) then
                 ! skip iteration but update metadata
                 call send_meta(string('waiting for minimum number sieved particles ... '// int2str(ceiling(100.0 * float(nptcls_glob_state_1) / float(nptcls_threshold) )) // '%'))
             else
@@ -364,6 +369,16 @@ contains
                     call spprojs(iset)%read_segment('mic',    crec%projfile)
                     call spprojs(iset)%read_segment('stk',    crec%projfile)
                     call spprojs(iset)%read_segment('ptcl2D', crec%projfile)
+                    call spprojs(iset)%read_segment('out',    crec%projfile)
+                    ! detect the final sieve set
+                    if( spprojs(iset)%os_out%get_noris() >= 1 )then
+                        if( spprojs(iset)%os_out%isthere(1, 'sieve_final') )then
+                            if( spprojs(iset)%os_out%get_str(1, 'sieve_final') == 'yes' )then
+                                l_sieve_final = .true.
+                                write(logfhandle,'(A)')'>>> FINAL SIEVE SET DETECTED - RUNNING UNINTERRUPTED TO ITERATION 25'
+                            endif
+                        endif
+                    endif
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
                     call it%next()

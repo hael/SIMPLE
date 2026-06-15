@@ -75,7 +75,8 @@ contains
         class(cmdline),                intent(inout) :: cline
         
         ! Hard-coded classification and import parameters
-        integer,            parameter   :: MAX_MOVIE_IMPORT = 20   ! max movies imported per cycle
+        integer,            parameter   :: MAX_MOVIE_IMPORT          = 20   ! max movies imported per cycle
+        integer,            parameter   :: FINAL_INGESTION_IDLE_TIME = 5 * 60 ! idle time (s) since last import before signalling final ingestion
         type(string),       allocatable :: projects(:)
         character(len=:),   allocatable :: meta_buffer
         integer,            allocatable :: jpeg_inds(:), jpeg_pops(:), ref_selection(:)
@@ -93,6 +94,7 @@ contains
         type(gui_metadata_cavg2D)       :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
         integer :: nprojects, n_mics_imported, n_ptcls_imported, i, xtiles, ytiles
+        integer :: last_import_time   ! wall-clock timestamp (s) of the most recent successful import
         logical :: l_refs_complete, l_terminate, l_once
         l_once      = .true.
         l_terminate = .false.
@@ -106,6 +108,7 @@ contains
         n_ptcls_imported = 0
         n_mics_imported  = 0
         l_refs_complete  = .false.
+        last_import_time = simple_gettime()
         ! initialise metadata
         call meta_particle_sieving%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
         call send_meta(string('initialising'))
@@ -151,9 +154,14 @@ contains
             if( nprojects > 0 ) then
                 call import_new_projects(project_list, projects, n_mics_imported, n_ptcls_imported)
                 call project_buff%add2history(projects)
+
                 write(logfhandle,'(A,I6,I9)') &
                 '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_mics_imported, n_ptcls_imported
+                last_import_time = simple_gettime()
+                write(logfhandle,'(A,A)') '>>> LAST IMPORT AT                     : ', cast_time_char(last_import_time)
             end if
+            ! Signal final ingestion once the idle timeout has elapsed since the last import
+            if( simple_gettime() - last_import_time >= FINAL_INGESTION_IDLE_TIME ) call chunked_2D%set_final_ingestion()
             if( l_once ) then
                 if( project_list%size() > 0 ) then
                     it = project_list%begin()
@@ -176,6 +184,7 @@ contains
             else
                 call send_meta(string('waiting on reference picking'))
             endif
+
             ! if( l_refs_complete ) then
             !     call meta_particle_sieving%set_user_input(.true.)
             !     if( chunked_2D%get_latest_match(jpeg_inds, jpeg_pops, jpeg_res, match_jpeg, match_stk, xtiles, ytiles) ) then

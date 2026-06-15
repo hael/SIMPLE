@@ -181,7 +181,7 @@ contains
         ! start persistent worker server if requested by params
         params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
         params%ncunits   = 8  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
-        call qsys%new(params, 1, qsys_nthr=24)
+        call qsys%new(params, 1, qsys_nthr=16)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         ! init metadata 
@@ -829,9 +829,9 @@ contains
             call cline_particle_sieving%set('outdir',                   SIEVING_JOB_NAME)
             call cline_particle_sieving%set('dir_target',               REFPICK_JOB_NAME)
             call cline_particle_sieving%set('optics_dir',  cwd // '/' // OPTICS_JOB_NAME)
-            call cline_particle_sieving%set('nthr',                                    4)
+            call cline_particle_sieving%set('nthr',                                   16)
             call cline_particle_sieving%set('mkdir',                               'yes')
-            call cline_particle_sieving%set('nparts',                                  8)
+          !  call cline_particle_sieving%set('nparts',                                  8)
             call cline_particle_sieving%set('nchunks',                                 4)
             call cline_particle_sieving%set('worker_priority',                    'high')
             if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)

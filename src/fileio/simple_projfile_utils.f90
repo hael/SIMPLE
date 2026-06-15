@@ -34,9 +34,11 @@ contains
         integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
         integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
         logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs, l_merge_sigma2
+        logical          :: frcs_initialised
         l_write_proj     = .true.
         l_cavgs_replace  = .false.
         l_update_classno = .true.
+        frcs_initialised = .false.
         if( present( write_proj )    ) l_write_proj     = write_proj
         if( present( cavgs_replace  )) l_cavgs_replace  = cavgs_replace
         if( present( update_classno )) l_update_classno = update_classno
@@ -88,6 +90,12 @@ contains
             nallptcls = nallptcls + nptcls
             call chunks(ic)%read_segment('out',  projname)
             call chunks(ic)%read_segment('cls2D',  projname)
+            if( chunks(ic)%os_out%get_noris() == 0 .or. chunks(ic)%os_cls2D%get_noris() == 0 ) then
+                l_merge_evenodd = .false.
+                l_merge_frcs    = .false.
+                l_merge_sigma2  = .false.
+                cycle
+            end if
             call chunks(ic)%get_cavgs_stk(stkname, ncls, smpd, imgkind='cavg')
             call find_ldim_nptcls(stkname, ldim, ncls)
             ldim(3) = 1
@@ -154,9 +162,10 @@ contains
             if( l_merge_frcs )then
                 call chunks(ic)%get_frcs(frc_fname, 'frc2D')
                 call frcs_chunk%read(frc_fname)
-                if( ic == 1 )then
+                if( .not. frcs_initialised )then
                     box4frc = frcs_chunk%get_box()
                     call frcs%new(ncls_tot, box4frc, smpd)
+                    frcs_initialised = .true.
                 endif
             endif
             allocate(clsmap(ncls),source=0)
