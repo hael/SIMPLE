@@ -231,12 +231,18 @@ unpostprocessed, and non-NU. The first real refinement stage is where
 `ml_reg=yes`, `filt_mode=nonuniform_lpset`, `nu_refine=no`, and any selected
 LP-set handoff owned by volume assembly.
 
-State 0/1 initialization is stricter. When the project has no multi-state
-labels, or when `input_oris_start` is explicitly asked to create a fresh split
-through command-line `nstates`, the wrapper requires complete `vol1..volN`
-inputs or compatible project state volumes. It does not invent state volumes
-by reconstruction, because there is no authoritative existing multi-state
-model to reconstruct from.
+When no compatible volume source is available for state 0/1 initialization and
+distributed execution is requested with `nparts`, the wrapper leaves
+`vol1..volN` absent and delegates startup reference preparation to base
+`refine3D`. The first `prob_state` stage seeds fresh state labels in the base
+strategy and reconstructs state-specific `startvol_stateNN.mrc` references
+from those random state groups before particle-domain probability-table work
+begins. This path requires previous objective-function values when no complete
+state-volume source is supplied, following the base `refine3D` startup guard.
+
+Shared-memory base `refine3D` still requires explicit starting volumes. Until
+that path gains the same internal startup reconstruction parity, state 0/1
+initialization without `vol1..volN` must run distributed by setting `nparts`.
 
 ## 6. Sampling and Update Fraction
 
@@ -603,8 +609,12 @@ When reviewing `refine3D_multi`, check these policy points first:
   already exist.
 - `input_oris_fixed` rejects existing project multi-state labels.
 - state 0/1 initialization modes require command-line `nstates > 1`.
-- state 0/1 initialization modes require complete `vol1..volN` inputs or
-  compatible project state volumes.
+- state 0/1 initialization modes use complete `vol1..volN` inputs, compatible
+  project state volumes, or distributed base-`refine3D` startup reconstruction
+  from freshly seeded state labels.
+- volume-free state 0/1 initialization requires distributed execution
+  (`nparts`) because shared-memory base `refine3D` still requires starting
+  volume input.
 - fixed-orientation assignment updates state/correlation/accounting fields
   without changing Euler angles, projection direction, in-plane angle, or
   shifts.

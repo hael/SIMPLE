@@ -929,8 +929,21 @@ contains
                 return
             endif
             if( l_init_state_assignment )then
-                THROW_HARD(WORKFLOW_LABEL//' state=0/1 input requires complete vol1..volN or project state volumes')
+                if( cline%defined('nparts') .and. (.not. cline%defined('part')) )then
+                    write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' STARTUP STATE VOLUMES DELEGATED TO BASE REFINE3D'
+                    return
+                endif
+                THROW_HARD(WORKFLOW_LABEL//' state=0/1 input without vol1..volN requires distributed startup; set nparts')
             endif
+            call prepare_startup_reconstruct3D_cline()
+            call xrec3D%execute(cline_rec3D)
+            do state = 1,nstates_project
+                call cline%set('vol'//int2str(state), refine3D_state_vol_fname(state))
+            enddo
+            write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' INITIALIZED STATE VOLUMES BY RECONSTRUCTION'
+        end subroutine initialize_state_volumes
+
+        subroutine prepare_startup_reconstruct3D_cline()
             cline_rec3D = cline
             call cline_rec3D%set('prg', 'reconstruct3D')
             call cline_rec3D%delete('trail_rec')
@@ -944,12 +957,7 @@ contains
             call cline_rec3D%set('objfun', 'cc')
             call cline_rec3D%set('postprocess', 'no')
             call cline_rec3D%set('nu_refine', 'no')
-            call xrec3D%execute(cline_rec3D)
-            do state = 1,nstates_project
-                call cline%set('vol'//int2str(state), refine3D_state_vol_fname(state))
-            enddo
-            write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' INITIALIZED STATE VOLUMES BY RECONSTRUCTION'
-        end subroutine initialize_state_volumes
+        end subroutine prepare_startup_reconstruct3D_cline
 
         logical function any_input_volumes_defined() result(l_any)
             integer :: state
