@@ -288,8 +288,7 @@ contains
                     nptcls = boxfile%get_ndatalines()
                 endif
                 if( nptcls == 0 )then
-                    call spproj%os_mic%set(imic, 'nptcls',     0)
-                    call spproj%os_mic%set(imic, 'nptcls_stk', 0)
+                    call spproj%os_mic%set(imic, 'nptcls', 0)
                     cycle
                 endif
                 allocate( boxdata(boxfile%get_nrecs_per_line(),nptcls) )
@@ -309,9 +308,8 @@ contains
             prog = 0.0
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )then
-                    call spproj%os_mic%set(imic, 'nptcls_stk', 0)
-                    call spproj%os_mic%set(imic, 'nptcls',     0)
-                    call spproj%os_mic%set_state(imic,         0)
+                    call spproj%os_mic%set(imic, 'nptcls', 0)
+                    call spproj%os_mic%set_state(imic,     0)
                     cycle
                 endif
                 call spproj%os_mic%get_ori(imic, o_mic)
@@ -341,8 +339,7 @@ contains
                     oris_mask(iptcl) = (trim(params%outside).eq.'yes') .or. box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box)
                 end do
                 nptcls2extract = count(oris_mask)
-                call spproj%os_mic%set(imic, 'nptcls',     nptcls2extract)
-                call spproj%os_mic%set(imic, 'nptcls_stk', nptcls2extract)
+                call spproj%os_mic%set(imic, 'nptcls', nptcls2extract)
                 if( nptcls2extract == 0 )then
                     mics_mask(imic) = .false.
                     cycle
