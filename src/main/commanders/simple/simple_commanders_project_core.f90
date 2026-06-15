@@ -927,6 +927,21 @@ contains
             ! from GUI so write cavgs and star
             l_writecls2d = .true.
             l_writestar  = .true.
+        else if( cline%defined('res_threshold') )then
+            ! To select classes based on resolution, cls2D only
+            if( iseg /= CLS2D_SEG ) THROW_HARD('Incorrect oritype for resolution threshold selection')
+            states = pos%get_all_asint("state")
+            do i = 1,noris
+                if( states(i) > 0 )then
+                    if( pos%isthere(i, 'res') )then
+                        if( pos%get(i,'res') <= params%res_threshold )then
+                            states(i) = 1
+                        else
+                            states(i) = 0
+                        endif
+                    endif
+                endif
+            enddo
         endif
         ! updates relevant segments
         select case(iseg)

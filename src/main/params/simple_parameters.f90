@@ -444,7 +444,6 @@ type :: parameters
     real    :: amsklp=8.           !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking
-    real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
@@ -528,6 +527,7 @@ type :: parameters
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
+    real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}

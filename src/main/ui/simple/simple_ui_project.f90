@@ -652,6 +652,7 @@ contains
         call selection%add_input(UI_ALT, nran)
         call selection%add_input(UI_ALT, ctfresthreshold)
         call selection%add_input(UI_ALT, icefracthreshold)
+        call selection%add_input(UI_PARM, 'res_threshold',   'num',    'Class resolution threshold', 'Select classes based on resolution threshold(oritype=cls2D only)', '{-1}', .false., -1.0)
         ! <empty>
         ! search controls
         ! <empty>

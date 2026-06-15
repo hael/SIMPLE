@@ -829,7 +829,6 @@ contains
         call build%init_params_and_build_spproj(cline,params)
         ! find number of selected cavgs
         call find_ldim_nptcls(params%stk2, lfoo, nsel)
-        if( cline%defined('ares') ) nsel = int(params%ares)
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
             call build%spproj%get_cavgs_stk(cavgstk, nall, smpd, imgkind=params%imgkind)
