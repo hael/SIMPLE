@@ -194,11 +194,8 @@ contains
         class(sigma2_binfile), intent(in)  :: self
         integer,               intent(out) :: funit
         integer  :: io_stat
-        real(sp) :: sigmas_empty(self%kfromto(1):self%kfromto(2), self%fromp:self%top)
-        sigmas_empty = 0.
         call fopen(funit,self%fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
-        write(unit=funit,pos=self%headsz + 1) sigmas_empty
     end subroutine create_empty
 
     ! getters / setters
