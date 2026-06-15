@@ -139,6 +139,7 @@ contains
             &'low-pass limit for the initial stage in Angstroms', .false., 20., gui_submenu="filter")
         call abinitio3D_cavgs%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the final stage in Angstroms', .false., 8., gui_submenu="filter")
+        call abinitio3D_cavgs%add_input(UI_FILT, conical_fsc, gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
         call abinitio3D_cavgs%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
         ! computer controls
