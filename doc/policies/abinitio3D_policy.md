@@ -64,7 +64,7 @@ Stage policy includes:
 - staged point-group policy between `pgrp_start` and `pgrp`
 - staged translation limits
 - staged ML regularization
-- optional conical FSC regularization while ML regularization is active
+- conical FSC regularization by default only while ML regularization is active
 - staged fractional update and optional `nsample` ramp
 - mode-specific stochastic sampling start
 - early Gaussian reference filtering
@@ -242,8 +242,8 @@ controls such as `refine`, `lp`, `automsk`, `envfsc`, `gauref`, or NU
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses compatible grouped sigma estimates when they are local to the workflow.
 If needed, it bootstraps sigmas locally before producing the regularized map.
-When `conical_fsc=yes` was requested for the final ML-regularized stage, the
-final reconstruction preserves that directional regularization policy.
+For the final ML-regularized stage, final reconstruction preserves the
+`conical_fsc` policy selected by the parent workflow.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged

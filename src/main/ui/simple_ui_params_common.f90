@@ -414,8 +414,8 @@ subroutine set_ui_params
                                    '(no|x|y){no}', .false., 'no')
 
     call conical_fsc%set_param(    'conical_fsc',     'binary', 'Conical FSC regularization', &
-                                   'Use conical FSC curves for directional ML regularization(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Use conical FSC curves when ML regularization is active(yes|no){yes}', &
+                                   '(yes|no){yes}', .false., 'yes')
 
     call ml_reg%set_param(         'ml_reg',          'binary', 'ML regularization', &
                                    'Regularization (ML-style) based on the signal power(yes|no){yes}', &
