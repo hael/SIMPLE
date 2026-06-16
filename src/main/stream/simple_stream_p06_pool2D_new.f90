@@ -209,7 +209,7 @@ contains
                     if( .not.l_pause ) then
                         l_pause = is_pool_available()
                         extra_pause_iters        = 0
-                        nptcls_dynamic_threshold = nptcls_glob_state_1 + max(params%ncls * 20, state_1_particle_rate * 200)
+                        nptcls_dynamic_threshold = nptcls_glob_state_1 + max(params%ncls * 20, state_1_particle_rate * 50)
                         if( l_pause ) write(logfhandle,'(A,I8)')'>>> PAUSING 2D ANALYSIS UNTIL #PTCLS IS ', nptcls_dynamic_threshold
                     endif
                 end if

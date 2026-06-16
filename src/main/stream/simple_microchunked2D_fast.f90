@@ -753,19 +753,29 @@ contains
       call self%generate_microchunk_pass_2_cline(new_chunk, new_chunk%nptcls_selected)
 
       call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
-      call chunk_project%write(new_chunk%projfile)
-      call chunk_project%kill()
 
       do i = 1, size(consumed)
         self%microchunks_pass_1(consumed(i))%complete = .true.
         call simple_touch(self%microchunks_pass_1(consumed(i))%folder%to_char() // '/COMPLETE')
       end do
 
+      ! flag this as the final sieve chunk once final ingestion is signaled and all pass-1 chunks are done
+      if( self%final_ingestion .and. all(self%microchunks_pass_1(:)%complete .or. self%microchunks_pass_1(:)%failed) )then
+        if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
+        call chunk_project%os_out%set(1, 'sieve_final', 'yes')
+        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> FINAL MICROCHUNK PASS 2 # ', chunk_id, &
+        ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
+      else
+        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK PASS 2 # ', chunk_id, &
+        ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
+      end if
+
+      call chunk_project%write(new_chunk%projfile)
+      call chunk_project%kill()
+
       call self%append_microchunk_pass_2(new_chunk)
       deallocate(projfiles, consumed)
-
-      write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> MICROCHUNK PASS 2 # ', chunk_id, &
-        ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
+      
     end do
 
     ! Flush a final small pass-2 chunk when final ingestion is signaled.
@@ -801,7 +811,7 @@ contains
                                            '/microchunk_pass_2_' // int2str(chunk_id) // METADATA_EXT)
         call self%generate_microchunk_pass_2_cline(new_chunk, new_chunk%nptcls_selected)
         call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
-        ! flag this as the final sieve chunk
+        ! flag this as the final sieve chunk once final ingestion is signaled and all pass-1 chunks are done
         if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
         call chunk_project%os_out%set(1, 'sieve_final', 'yes')
         call chunk_project%write(new_chunk%projfile)
