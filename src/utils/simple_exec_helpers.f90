@@ -198,6 +198,7 @@ contains
                 call params%new(cline)
                 call cline%delete('mkdir')
                 call cline%delete('projfile')
+                call cline%delete('script')
                 call cline%set('projfile', projfile)
                 call qenv%new(params, 1, exec_bin=executable)
                 if( cline%defined('tag') )then
@@ -205,7 +206,6 @@ contains
                 else
                     call qenv%gen_script(cline, prg//'_script', string(uppercase(prg%to_char())//'_OUTPUT'))
                 endif
-                call cline%delete('script')
                 call exit
             endif
         endif
