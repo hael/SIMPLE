@@ -155,8 +155,11 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
+        logical :: l_cmdline_lp_override
+        ! Capture parent command-line intent before child refine3D stages set lp internally.
+        l_cmdline_lp_override = params%l_lpset
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
     end procedure set_cline_refine3D
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
@@ -406,11 +409,12 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
+        logical,                  intent(in) :: l_cmdline_lp_override
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
             call cline_refine3D%set('envfsc',              'no')
@@ -444,7 +448,7 @@ contains
             ! bandwidth; the controller no longer injects schedule LP.
             call cline_refine3D%delete('lp')
         else
-            call cline_refine3D%set('lp',                 lpinfo(istage)%lp)
+            call cline_refine3D%set('lp',                 stage_matching_lp(cfg, params, istage, l_cmdline_lp_override))
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
@@ -474,5 +478,14 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
     end subroutine emit_refine3D_stage_cfg
+
+    real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
+        type(refine3D_stage_cfg), intent(in) :: cfg
+        class(parameters),        intent(in) :: params
+        integer,                  intent(in) :: istage
+        logical,                  intent(in) :: l_cmdline_lp_override
+        lp = lpinfo(istage)%lp
+        if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
+    end function stage_matching_lp
 
 end submodule simple_abinitio_controller
