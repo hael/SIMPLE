@@ -77,12 +77,12 @@ contains
         class(stream_p03_initial_analysis), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 8, NTHUMB_MAX = 10
-    !    integer,                   parameter       :: NMICS_PLAN(3) = [10, 20, 50]  ! number of micrographs to import for each cycle of the opening2D plan; must have at least 2 steps and no more than 9 (for IPC routing via single-digit cluster counts)
-        integer,                   parameter       :: NMICS_PLAN(1) = [100]
+        integer,                   parameter       :: NMICS_PLAN(3) = [100, 200, 500]  ! number of micrographs to import for each cycle of the opening2D plan; must have at least 2 steps and no more than 9 (for IPC routing via single-digit cluster counts)]
         real,                      parameter       :: LPSTOP2D = 8.          ! low-pass stop resolution (A) for abinitio2D/3D setup
         integer,                   parameter       :: NSTATES3D = 3                 ! number of classes for abinitio3D
         integer,                   parameter       :: NSTAGES3D = 4                 ! number of stages for abinitio3D
         character(len=:),          allocatable     :: meta_buffer            ! serialised GUI metadata message
+        integer,                   allocatable     :: cycle_plan(:)          ! tracks which steps of the opening2D plan have been completed
         type(string),              allocatable     :: projects(:)            ! batch of new project paths from the watcher
         type(string),              allocatable     :: imgfiles(:)            ! cache of cavgs stack paths for each cluster, for use in process_selected_refs
         type(oris)                                 :: nmics_ori              ! single-ori container for writing STREAM_NMICS
@@ -95,6 +95,7 @@ contains
         type(commander_extract)                    :: xextract
         type(commander_reextract)                  :: xreextract
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
+        type(gui_metadata_cavg2D)                  :: meta_pickrefs
         type(commander_abinitio2D)                 :: xabinitio2D
         type(commander_abinitio3D_cavgs_reject)    :: xabinitio3D_cavgs_reject
         type(commander_reproject)                  :: xreproject
@@ -105,16 +106,23 @@ contains
         type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
         type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
+        type(rec_list)                             :: project_list           ! growing list of imported partial projects
+        type(project_rec)                          :: prec
         integer                                    :: nprojects, i
+        integer                                    :: n_mics_imported, n_ptcls_imported ! counts returned by import_new_projects
+        integer                                    :: last_import_time       ! timestamp of the most recent import
         integer                                    :: box_in_pix      =0      ! box size (px) set by segdiampick_mics; 0 until known
         integer                                    :: box_for_pick    =0      ! box size used for reference picking
         integer                                    :: box_for_extract =0      ! box size used for particle extraction
         integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                    :: iori, i_max, i_start
+        integer                                    :: iori, iproj, i_max, i_start
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
         integer                                    :: n_selected_cavgs       ! number of quality-selected cavgs in current cycle
+        integer                                    :: n_imported              ! number of micrographs imported in the current cycle
         integer                                    :: n_cycles      ! tracks how many "more mics" requests have been applied
+        integer                                    :: vis_cycle
         integer                                    :: ncavgs                 ! number of reference classes selected by user
+        integer                                    :: mindim                 ! minimum dimension of selected cavgs
         logical                                    :: restart_requested
         real                                       :: mskdiam                ! mask diameter (A) for reference-based picking, set by segdiampick_mics; 0 until known
         real                                       :: mskdiam_estimate=0     ! mask diameter (A) estimated by segdiampick_mics
@@ -144,179 +152,168 @@ contains
         projfile           = params%projfile
         params%workers     = NPARTS2D
         params%worker_nthr = max(1,floor(real(params%nthr)/4.))
-        params%nmics       = NMICS_PLAN(1)
-        call cline%set('nmics', params%nmics)
-        n_cycles  = 0
+        n_cycles           = 1
+        n_mics_imported    = 0
+        n_ptcls_imported   = 0
+        vis_cycle          = 0
+        allocate(cycle_plan(size(NMICS_PLAN)), source=0)
         ! initialise metadata
         call meta_update%new(                        GUI_METADATA_STREAM_UPDATE_TYPE)
         call meta_initial_picking%new(      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
         call meta_opening2D%new(                  GUI_METADATA_STREAM_OPENING2D_TYPE)
         call meta_micrograph%new(GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE)
         call meta_cavg2D%new(               GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+        call meta_pickrefs%new(       GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
         ! stash cwd for constructing absolute paths to send to the GUI
         call simple_getcwd(cwd_master)
-
+        ! wait if dir_target doesn't exist yet
+        call wait_for_folder2(params%dir_target)
+        call wait_for_folder2(params%dir_target//'/spprojs')
+        call wait_for_folder2(params%dir_target//'/spprojs_completed')
+        ! movie watcher init
+        project_buff = stream_watcher(LONGTIME, simple_abspath(params%dir_target//'/'//DIR_STREAM_COMPLETED), spproj=.true., nretries=10)
         ! ---------- Main pipeline loop: import → pick → extract → classify → user selection ----------
         ! cycles if the user requests more micrographs; exits on reference selection.
         do
-            restart_requested = .false.
-            call simple_chdir(cwd_master) ! ensure we start each cycle in a known location
-            if( file_exists(STREAM_NMICS) ) call del_file(STREAM_NMICS)
-            call nmics_ori%new(1, .false.)
-            call nmics_ori%set(1, 'nmics', params%nmics)
-            call nmics_ori%write(1, string(STREAM_NMICS))
-            call nmics_ori%kill
-            ! read project fresh at the start of each restart iteration
-            call spproj%read( params%projfile )
-            if( spproj%os_mic%get_noris() /= 0    ) call spproj%os_mic%new(1, .false.) ! reset mic oris before fresh import
-            ! wait if dir_target doesn't exist yet
-            call wait_for_folder2(params%dir_target)
-            call wait_for_folder2(params%dir_target//'/spprojs')
-            call wait_for_folder2(params%dir_target//'/spprojs_completed')
-            ! movie watcher init
-            project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
-            ! import at least params%nmics micrographs
-            write(logfhandle, '(A,I6,A)') '>>> IMPORTING AT LEAST', params%nmics, ' MICROGRAPHS'
-            call send_meta(string('waiting for micrographs'))
-            call send_meta2D(string('waiting for particles'), box_in_pix)
-            call micimporter( params%nmics )
-            cycle_dir      = string('cycle_'//int2str(n_cycles + 1))
-            cycle_projfile = string(cycle_dir%to_char()//METADATA_EXT)
-            call simple_mkdir(cycle_dir)
-            call simple_chdir(cycle_dir)
-            call spproj%update_projinfo(cycle_projfile)
-            call spproj%write()
-            call send_meta(string('picking particles'))
-            ! segmentation-based picking
-            nmics = params%nmics ! local copy: segdiampick_mics must not modify params%nmics
-            call segdiampick_mics_multi(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam)
-            call send_meta(string('extracting particles'))
-            ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
-            if( spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
-            .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile') ) then
-                ithumb = spproj%os_mic%get_noris()   ! cache; repurposed as offset below
-                i_max  = min(ithumb, NTHUMB_MAX)
-                ithumb = ithumb - i_max              ! index just before the first thumbnail
-                do iori = 1, i_max
-                    call send_micrograph_meta(iori, i_max, ithumb + iori)
-                end do
-            endif
-            !
-            call qsys%new(params, NPARTS2D)
-            call qsys%kill()
-            call run_extract(spproj, cycle_projfile, string('extract'), box_in_pix)
-            do i = spproj%os_mic%get_noris(), 1, -1
-                if( spproj%os_mic%get(i, 'state') < 1.0 )then
-                    call spproj%os_mic%delete(i)
-                    cycle
-                endif
-                if( .not. spproj%os_mic%isthere(i, 'nptcls') )then
-                    call spproj%os_mic%delete(i)
-                    cycle
-                endif
-                if( spproj%os_mic%get(i, 'nptcls') <= 0.0 )then
-                    call spproj%os_mic%delete(i)
-                    cycle
-                endif
-                if( .not. spproj%os_mic%isthere(i, 'boxfile') )then
-                    call spproj%os_mic%delete(i)
-                    cycle
-                endif
-                boxfile = spproj%os_mic%get_str(i, 'boxfile')
-                if( boxfile%strlen() == 0 .or. .not. file_exists(boxfile) )then
-                    call boxfile%kill
-                    call spproj%os_mic%delete(i)
-                    cycle
-                endif
-                call boxfile%kill
-            enddo
-            call spproj%write(cycle_projfile)
-            call send_meta(string('complete'))
-            call send_meta2D(string('classifying particles'), box_in_pix)
-            call run_abinitio2D_microchunked(spproj, cycle_projfile, string('abinitio2D_microchunked'), nint(mskdiam))
-            call run_abinitio2D(spproj, cycle_projfile, string('abinitio2D'), nint(mskdiam))
-            call send_meta2D(string('evaluating class average quality'), box_in_pix)
-            i_max   = 0
-            i_start = 1
-            call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
-          !  call simple_copy_file(string('abinitio2D/')//cycle_projfile, cycle_projfile)
-            call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_1'),cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
-            call reestimate_box_size_from_selected_cavgs(spproj, params, mskdiam, box_in_pix)
-           ! call run_reextract(spproj, cycle_projfile, string('reextract'), box_in_pix)
-          !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_1'))
-            if( n_cycles >= size(NMICS_PLAN) - 1 ) then 
-                call balance_classes(spproj, cycle_projfile, string('balance_classes')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
-              !  call run_cls_split(spproj, cycle_projfile, string('cls_split'), nint(mskdiam))
-              !  call run_make_cavgs(spproj, cycle_projfile, string('make_cavgs_2'))
-             !   call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection_2'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
-                call run_abinitio3D_and_reproject(spproj, cycle_projfile, string('abinitio3D'), nint(mskdiam))
-            else
-                write(logfhandle, '(A,I0,A)') '>>> SKIPPING ABINITIO3D UNTIL PLAN STEP 3 (CURRENT STEP=', &
-                    n_cycles + 1, ')'
+            ! emergency exit
+            if( n_cycles > size(NMICS_PLAN) ) THROW_HARD('>>> ERROR: exceeded maximum number of opening2D cycles'//' ('//int2str(size(NMICS_PLAN))//')')
+            ! import new projects from the watcher; add to project_list and history
+            call project_buff%watch(nprojects, projects, max_nmovies=50)
+            if( nprojects > 0 ) then
+                call import_new_projects(project_list, projects, n_mics_imported, n_ptcls_imported, ignore_ptcls=.true., check_state=.true.)
+                call project_buff%add2history(projects)
+                write(logfhandle,'(A,I6)') &
+                    '>>> # MICROGRAPHS IMPORTED : ', n_mics_imported
+                last_import_time = simple_gettime()
+                write(logfhandle,'(A,A)') '>>> LAST IMPORT AT         : ', cast_time_char(last_import_time)
             end if
-            i_max = i_max + n_selected_cavgs   ! accumulate count of selected classes for IPC routing
-            if( n_cycles < size(NMICS_PLAN) - 1 ) then
-                n_cycles = n_cycles + 1
-                params%nmics      = NMICS_PLAN(n_cycles + 1)
-                call cline%set('nmics', params%nmics)
-                write(logfhandle, '(A,I0,A,I0)') '>>> ADVANCING TO PLAN STEP ', n_cycles + 1, ' WITH NMICS=', params%nmics
-             !   call cleanup_previous()
-                call restart_cleanup_allocatables()
-                call meta_opening2D%set_user_input(.false.)
-                call spproj%kill()
-                cycle
+            ! cycle stage 0: import micrographs until params%nmics is reached
+            if( cycle_plan(n_cycles) == 0 ) then
+                ! first time we enter this plan step: mark it active, set the import target, and
+                ! prepare a fresh cycle directory + project for importing this step's micrographs
+                params%nmics = NMICS_PLAN(n_cycles)
+                call simple_chdir(cwd_master)       ! ensure we start each cycle in a known location
+                call spproj%read( params%projfile ) ! read project fresh at the start of each restart iteration
+                ! import at least params%nmics micrographs
+                cycle_dir      = string('cycle_'//int2str(n_cycles))
+                cycle_projfile = string(cycle_dir%to_char()//METADATA_EXT)
+                call simple_mkdir(cycle_dir)
+                call simple_chdir(cycle_dir)
+                write(logfhandle, '(A,I6,A,I6,A)') '>>> INITIATED INITIAL ANALYSIS CYCLE ', n_cycles, ' WITH AT LEAST ', params%nmics, ' MICROGRAPHS'
+                call spproj%update_projinfo(cycle_projfile)
+                call spproj%write()
+                call send_meta(string('waiting for micrographs'))
+                call send_meta2D(string('waiting for particles'), box_in_pix, vis_cycle)
+                cycle_plan(n_cycles) = 1
             end if
-            call meta_opening2D%set_user_input(.true.)
-            call send_meta2D(string('waiting for user selection'), box_in_pix)
-            i_start = 1
-            call spproj%kill()
-            call spproj%read(cycle_projfile) ! read the full project with all clusters merged in, to get the complete set of class averages for user selection
-       !     call spproj%cavgs2jpg(cavg_inds, string("diameter_cluster_")//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT, xtiles, ytiles, ignore_states=.false.)
-       !     if( allocated(cavg_inds) ) then
-       !         cavg_inds = pack(cavg_inds, cavg_inds > 0) ! filter out zero indices (unselected classes)
-       !         if( size(cavg_inds) > 0 ) then
-       !             call send_available_cavgs2D(cwd_cycle//'/diameter_cluster_'//int2str(i_cluster)//"_"//int2str(params%nmics)//JPG_EXT, size(cavg_inds), i_cluster, my_i_max=i_max, my_i_start=i_start)
-       !             i_start = i_start + size(cavg_inds)
-       !         end if
-       !     end if
-           ! end do
-            ! wait for user interaction
-            write(logfhandle, '(A)') ">>> WAITING FOR USER TO SELECT REFERENCES"
-
-            exit
-
-            do
-                ! poll the outbound queue for a GUI update message
-                if( mq_stream_master_out%is_active() ) then
-                    if( mq_stream_master_out%receive(meta_buffer) ) then
-                        if( allocated(meta_buffer) ) then
-                            ! add message back to queue for other processes
-                            call mq_stream_master_out%send(meta_buffer)
-                            ! deserialise buffer into meta_update
-                            meta_update = transfer(meta_buffer, meta_update)
-                            ncavgs = meta_update%get_pickrefs_selection_length()
-                            if( ncavgs > 0 ) then
-                                call meta_opening2D%set_user_input(.false.)
-                                call process_selected_refs_2(params, imgfiles, smpd_stk,            &
-                                    &meta_update%get_pickrefs_selection(),                        &
-                                    &meta_update%get_pickrefs_clusters(),                         &
-                                    &mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
-                                call meta_cavg2D%kill()
-                                call meta_cavg2D%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
-                                call send_meta2D(string('applying user selection'), box_for_extract)
-                                !call send_available_cavgs2D(&
-                                !    &cwd_cycle//'/'//STREAM_SELECTED_REFS//JPG_EXT, ncavgs)
-                                exit  ! exit inner wait-loop; restart_requested already .false.
-                            end if
-                        end if
-                    end if
+            ! cycle stage 1: segmentation-based picking and particle extraction
+            if( cycle_plan(n_cycles) == 1 ) then
+                if( n_mics_imported > params%nmics ) then
+                    write(logfhandle,'(A,I6,A,I6)') '>>> IMPORTED SUFFICIENT MICROGRAPHS: ', n_mics_imported, ' >= ', params%nmics
+                    call spproj%os_mic%kill()
+                    call spproj%os_mic%new(project_list%size(), .false.)
+                    n_imported  = 0
+                    do iproj=1, project_list%size()
+                        call project_list%at(iproj, prec)
+                        call spproj_part%read(prec%projname)
+                        n_imported = n_imported + 1
+                        call spproj%os_mic%transfer_ori(n_imported, spproj_part%os_mic, prec%micind)
+                        call spproj_part%kill()
+                    enddo
+                    call send_meta(string('picking particles'))
+                    ! segmentation-based picking
+                    nmics = params%nmics ! local copy: segdiampick_mics must not modify params%nmics
+                    call segdiampick_mics_multi(spproj, params%pcontrast, nmics, params%moldiam_max, box_in_pix, mskdiam)
+                    call send_meta(string('extracting particles'))
+                    cycle_plan(n_cycles) = 2
                 end if
-                call sleep(WAITTIME)
-            enddo
-            if( restart_requested ) cycle  ! repeat the restartable block
-            exit                           ! normal completion of restart loop
-        end do ! end restart loop
-        call send_meta2D(string('terminating'), box_for_extract)
+            end if
+            ! cycle stage 2: send picking thumbnails to GUI and extract particles
+            if( cycle_plan(n_cycles) == 2 ) then
+                ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
+                if( spproj%os_mic%isthere('thumb_den') .and. spproj%os_mic%isthere('xdim') .and. spproj%os_mic%isthere('ydim') &
+                .and. spproj%os_mic%isthere('smpd') .and. spproj%os_mic%isthere('boxfile') ) then
+                    ithumb = spproj%os_mic%get_noris()   ! cache; repurposed as offset below
+                    i_max  = min(ithumb, NTHUMB_MAX)
+                    ithumb = ithumb - i_max              ! index just before the first thumbnail
+                    do iori = 1, i_max
+                        call send_micrograph_meta(iori, i_max, ithumb + iori)
+                    end do
+                end if
+                ! are these qsys lines needed?
+                call qsys%new(params, NPARTS2D)
+                call qsys%kill()
+                call run_extract(spproj, cycle_projfile, string('extract'), box_in_pix)
+                call send_meta(string('complete'))
+                cycle_plan(n_cycles) = 3
+            end if
+            ! cycle stage 3: run microchunked 2D to sieve bad particles
+            if( cycle_plan(n_cycles) == 3 ) then
+                call send_meta2D(string('sieving particles'), box_in_pix, vis_cycle)
+                call run_abinitio2D_microchunked(spproj, cycle_projfile, string('abinitio2D_microchunked'), nint(mskdiam))
+                cycle_plan(n_cycles) = 4
+            end if
+            ! cycle stage 4: run abinitio 2D to obtain best classes
+            if( cycle_plan(n_cycles) == 4 ) then
+                call send_meta2D(string('classifying particles'), box_in_pix, vis_cycle)
+                call run_abinitio2D(spproj, cycle_projfile, string('abinitio2D'), nint(mskdiam))
+                cycle_plan(n_cycles) = 5
+            end if
+            ! cycle stage 5: evaluate class average quality and reestimate mask and box sizes
+            if( cycle_plan(n_cycles) == 5 ) then
+                call send_meta2D(string('evaluating class average quality'), box_in_pix, vis_cycle)
+                call simple_getcwd(cwd_cycle) ! cache master CWD for constructing absolute paths to send to the GUI
+                call run_cavg_quality_selection(spproj, cycle_projfile, string('quality_selection'), cwd_cycle, mskdiam, imgfiles, smpd_stk, n_selected_cavgs)
+                call reestimate_box_size_from_selected_cavgs(spproj, params, mskdiam, box_in_pix, mindim)
+                call run_cavg_size_selection(spproj, params, cycle_projfile, string('size_selection'), cwd_cycle, mindim, imgfiles, smpd_stk)
+                vis_cycle = vis_cycle + 1
+                if( n_cycles < size(NMICS_PLAN) ) then
+                    n_cycles = n_cycles + 1
+                else
+                    cycle_plan(n_cycles) = 6
+                end if
+            end if
+            ! cycle stage 6: rebalance classes
+            if( cycle_plan(n_cycles) == 6 ) then
+                call send_meta2D(string('balancing classes'), box_in_pix, vis_cycle)
+                call balance_classes(spproj, cycle_projfile, string('balance_classes')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
+                cycle_plan(n_cycles) = 7
+            end if
+            ! cycle stage 7: abinitio3D and reproject
+            if( cycle_plan(n_cycles) == 7 ) then
+                call send_meta2D(string('abinitio3D and reproject'), box_in_pix, vis_cycle)
+                call run_abinitio3D_and_reproject(spproj, cycle_projfile, string('abinitio3D'), nint(mskdiam))
+                exit
+            end if
+            ! poll the outbound queue for a GUI update message
+            ! if( mq_stream_master_out%is_active() ) then
+            !     if( mq_stream_master_out%receive(meta_buffer) ) then
+            !         if( allocated(meta_buffer) ) then
+            !             ! add message back to queue for other processes
+            !             call mq_stream_master_out%send(meta_buffer)
+            !             ! deserialise buffer into meta_update
+            !             meta_update = transfer(meta_buffer, meta_update)
+            !             ncavgs = meta_update%get_pickrefs_selection_length()
+            !             if( ncavgs > 0 ) then
+            !                 call meta_opening2D%set_user_input(.false.)
+            !                 call process_selected_refs_2(params, imgfiles, smpd_stk,            &
+            !                     &meta_update%get_pickrefs_selection(),                        &
+            !                     &meta_update%get_pickrefs_clusters(),                         &
+            !                     &mskdiam_estimate, box_for_pick, box_for_extract, xtiles, ytiles)
+            !                 call meta_cavg2D%kill()
+            !                 call meta_cavg2D%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
+            !                 call send_meta2D(string('applying user selection'), box_for_extract)
+            !                 !call send_available_cavgs2D(&
+            !                 !    &cwd_cycle//'/'//STREAM_SELECTED_REFS//JPG_EXT, ncavgs)
+            !                 exit  ! exit inner wait-loop; restart_requested already .false.
+            !             end if
+            !         end if
+            !     end if
+            ! end if
+            call sleep(WAITTIME)
+        end do
+
+        call send_meta2D(string('terminating'), box_for_extract, vis_cycle)
         if( allocated(projects)  ) deallocate(projects)
         if( allocated(imgfiles)  ) deallocate(imgfiles)
         ! add optics
@@ -386,6 +383,36 @@ contains
                 call cline_extract%set('projfile',  cluster_projfile)
                 call cline_extract%printline()
                 call xextract%execute(cline_extract)
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile)
+                ! prune micrographs that yielded no usable particles: drop any mic that is
+                ! deselected (state < 1), has no/zero nptcls, or lacks a valid boxfile on disk
+                do i = spproj_inout%os_mic%get_noris(), 1, -1
+                    if( spproj_inout%os_mic%get(i, 'state') < 1.0 )then
+                        call spproj_inout%os_mic%delete(i)
+                        cycle
+                    endif
+                    if( .not. spproj_inout%os_mic%isthere(i, 'nptcls') )then
+                        call spproj_inout%os_mic%delete(i)
+                        cycle
+                    endif
+                    if( spproj_inout%os_mic%get(i, 'nptcls') <= 0.0 )then
+                        call spproj_inout%os_mic%delete(i)
+                        cycle
+                    endif
+                    if( .not. spproj_inout%os_mic%isthere(i, 'boxfile') )then
+                        call spproj_inout%os_mic%delete(i)
+                        cycle
+                    endif
+                    boxfile = spproj_inout%os_mic%get_str(i, 'boxfile')
+                    if( boxfile%strlen() == 0 .or. .not. file_exists(boxfile) )then
+                        call boxfile%kill
+                        call spproj_inout%os_mic%delete(i)
+                        cycle
+                    endif
+                    call boxfile%kill
+                enddo
+                call spproj_inout%write(cluster_projfile)
                 call simple_chdir(cwd)
                 call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy extracted particles back to main projfile for downstream steps
                 call spproj_inout%kill()
@@ -549,15 +576,17 @@ contains
                 type(string), intent(in) :: outdir                ! output directory for abinitio3D run products
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
                 integer,     allocatable :: states(:), projs(:), nunique_proj(:), uniqbuf(:)
+                integer,     allocatable :: cavg_inds_local(:)    ! class-average indices for picking-reference metadata
                 type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs ! commander for abinitio3D with class-average-based rejection
                 type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
                 type(string)             :: cwd, volpath          ! saved working directory and selected volume path
-                type(oris)               :: voloris               ! volume metadata container from project
+                type(string)             :: cavgsstk_local        ! cavgs stack path sent to the GUI
                 integer                  :: ldim(3)               ! selected volume box dimensions
                 integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
                 integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
                 integer                  :: nvols, nuniq, i_cls3d, proj_here
-                integer :: ivol, bestvol                          ! volume loop index and best-population volume id
+                integer                  :: xtiles_local, ytiles_local ! sprite-sheet grid dims for picking refs
+                integer :: ivol, bestvol, i                          ! volume loop index and best-population volume id
                 real    :: vol_smpd
                 real    :: smpd_part                              ! particle-stack sampling distance (target)
                 real    :: smpd_new                               ! sampling distance after rescaling
@@ -648,7 +677,7 @@ contains
                 call cline_reproject%set('mskdiam',              mskdiam_in)
                 call cline_reproject%printline()
                 call xreproject%execute(cline_reproject)
-                call mrc2jpeg_tiled(string('reprojs.mrcs'), string('reprojs.jpeg'))
+                call mrc2jpeg_tiled(string('reprojs.mrcs'), string('reprojs'//JPG_EXT), n_xtiles=xtiles_local, n_ytiles=ytiles_local)
                 ! rescale reprojections to the particle sampling/box and write as selected references
                 smpd_part   = spproj_inout%os_stk%get(1, 'smpd')
                 ldim_new(1) = round2even(real(ldim(1)) * vol_smpd / smpd_part)
@@ -657,9 +686,15 @@ contains
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> RESCALING AND CLIPPING REPROJECTIONS TO ', ldim_new(1), ' PIXEL BOX (', ldim_clip(1), ' A) FOR PICKING REFERENCES'
                 call scale_imgfile( string('reprojs.mrcs'), string('selected_references.mrcs'), vol_smpd, ldim_new, smpd_part)
                 call simple_copy_file(string('selected_references.mrcs'), string('../../')//string('selected_references.mrcs')) ! copy selected references to subdir for partitioning
-                call voloris%kill()
-                if( allocated(states) ) deallocate(states)
-                if( allocated(projs)  ) deallocate(projs)
+                allocate(cavg_inds_local(10))
+                do i=1, size(cavg_inds_local)
+                    cavg_inds_local(i) = i
+                enddo
+                call send_selected_pickrefs(cwd//'/'//outdir//'/reprojs'//JPG_EXT, size(cavg_inds_local), &
+                            cavg_inds_local, cwd//'/'//outdir//'/reprojs.mrcs', xtiles_local, ytiles_local)
+                if( allocated(states)          ) deallocate(states)
+                if( allocated(projs)           ) deallocate(projs)
+                if( allocated(cavg_inds_local) ) deallocate(cavg_inds_local)
                 call simple_chdir(cwd)
                 call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy abinitio3D output back to main projfile for downstream steps
                 call spproj_inout%kill()
@@ -781,7 +816,7 @@ contains
                 if( allocated(cavg_inds_local) ) then
                     cavg_inds_local = pack(cavg_inds_local, cavg_inds_local > 0) ! filter out zero indices (unselected classes)
                     if( size(cavg_inds_local) > 0 ) then
-                        call send_available_cavgs2D(cwd_cycle_in//'/quality_cavgs'//JPG_EXT, size(cavg_inds_local), &
+                        call send_available_cavgs2D(cwd_cycle_in//'/'//outdir//'/quality_cavgs'//JPG_EXT, size(cavg_inds_local), &
                             cavg_inds_local, cavgsstk_local, xtiles_local, ytiles_local, spproj_inout)
                     endif
                     deallocate(cavg_inds_local)
@@ -793,6 +828,78 @@ contains
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
             end subroutine run_cavg_quality_selection
+
+            subroutine run_cavg_size_selection(spproj_inout, params_in, cluster_projfile, outdir, cwd_cycle_in, mindim, imgfiles_inout, smpd_stk_out )
+                type(sp_project),            intent(inout) :: spproj_inout
+                type(parameters),            intent(in)    :: params_in
+                type(string),                intent(in)    :: cluster_projfile
+                type(string),                intent(in)    :: outdir
+                type(string),                intent(in)    :: cwd_cycle_in
+                integer,                     intent(inout) :: mindim
+                type(string), allocatable,   intent(inout) :: imgfiles_inout(:)
+                real,                        intent(out)   :: smpd_stk_out
+                type(string)                :: cavgsstk_local
+                type(string)                :: cwd
+                type(image), allocatable    :: cavg_imgs_local(:)
+                type(image), allocatable    :: masks_local(:)
+                integer, allocatable        :: cavg_inds_local(:)
+                real,               allocatable :: diams_local(:), min_diams_local(:),shifts_local(:,:)
+                integer,            allocatable :: selected_cavg_inds_local(:)
+                integer,            allocatable :: cls_states_local(:)
+                integer                     :: ncls_local, i_mic_local, xtiles_local, ytiles_local, i_mask_local
+                call simple_getcwd(cwd)
+                call simple_mkdir(outdir)
+                call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to quality selection dir for processing
+                call simple_chdir(outdir)
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile)
+                call spproj_inout%get_cavgs_stk(cavgsstk_local, ncls_local, smpd_stk_out)
+                if( allocated(imgfiles_inout) ) deallocate(imgfiles_inout)
+                allocate(imgfiles_inout(1))
+                imgfiles_inout(1) = cavgsstk_local
+                cavg_imgs_local = read_cavgs_into_imgarr(spproj_inout)
+                smpd_stk_out    = spproj_inout%get_smpd()
+                ncls_local      = spproj_inout%os_cls2D%get_noris()
+                cls_states_local = nint(spproj_inout%os_cls2D%get_all('state'))
+                selected_cavg_inds_local = pack((/(i_mask_local, i_mask_local = 1, ncls_local)/), cls_states_local > 0)
+                if( size(selected_cavg_inds_local) == 0 ) THROW_HARD('No quality-selected class averages for box-size re-estimation')
+                allocate(masks_local(size(selected_cavg_inds_local)))
+                do i_mask_local = 1, size(selected_cavg_inds_local)
+                    call masks_local(i_mask_local)%copy(cavg_imgs_local(selected_cavg_inds_local(i_mask_local)))
+                end do
+                call automask2D(params_in, masks_local, params_in%ngrow, nint(params_in%winsz), params_in%edge, diams_local, shifts_local)
+                do i_mask_local = 1, size(selected_cavg_inds_local)
+                    if(diams_local(i_mask_local) < real(mindim)) then
+                        write(logfhandle,'(A,I0,A,F6.2,A)') '>>> REJECTING CLASS AVERAGE ', selected_cavg_inds_local(i_mask_local), &
+                            ' WITH DIAMETER ', diams_local(i_mask_local), ' < MINIMUM DIMENSION ', mindim
+                        call spproj_inout%os_cls2D%set(selected_cavg_inds_local(i_mask_local), 'state', 0.0)
+                    end if
+                end do
+                cls_states_local = nint(spproj_inout%os_cls2D%get_all('state'))
+                call write_quality_stack(string('size_selected_cavgs'//MRC_EXT), cavg_imgs_local, cls_states_local, ncls_local, selected=.true.)
+                call write_quality_stack(string('size_rejected_cavgs'//MRC_EXT), cavg_imgs_local, cls_states_local, ncls_local, selected=.false.)
+                call spproj_inout%map_cavgs_selection(cls_states_local)
+                do i_mic_local = spproj_inout%os_mic%get_noris(), 1, -1
+                    if( spproj_inout%os_mic%get(i_mic_local, 'state') == 0.0 .or. spproj_inout%os_mic%get(i_mic_local, 'nptcls') == 0.0 ) then
+                        call spproj_inout%os_mic%delete(i_mic_local)
+                    endif
+                end do
+                call spproj_inout%cavgs2jpg(cavg_inds_local, string('size_cavgs')//JPG_EXT, xtiles_local, ytiles_local, ignore_states=.false.)
+                if( allocated(cavg_inds_local) ) then
+                    cavg_inds_local = pack(cavg_inds_local, cavg_inds_local > 0) ! filter out zero indices (unselected classes)
+                    if( size(cavg_inds_local) > 0 ) then
+                        call send_available_cavgs2D(cwd_cycle_in//'/'//outdir//'/size_cavgs'//JPG_EXT, size(cavg_inds_local), &
+                            cavg_inds_local, cavgsstk_local, xtiles_local, ytiles_local, spproj_inout)
+                    endif
+                    deallocate(cavg_inds_local)
+                end if
+                call dealloc_imgarr(cavg_imgs_local)
+                call spproj_inout%write(cluster_projfile) ! write project with quality-selected classes mapped in, for downstream steps
+                call simple_chdir(cwd)
+                call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile)
+                call spproj_inout%kill()
+                call spproj_inout%read(cluster_projfile)
+            end subroutine run_cavg_size_selection
 
             subroutine balance_classes( spproj_inout, cluster_projfile, outdir )
                 type(sp_project), intent(inout) :: spproj_inout
@@ -975,10 +1082,11 @@ contains
             end subroutine update_os_out_stk
 
             ! Re-estimate mask diameter and extraction box from quality-selected cavgs.
-            subroutine reestimate_box_size_from_selected_cavgs( spproj_inout, params_in, mskdiam_inout, box_in_pix_inout )
+            subroutine reestimate_box_size_from_selected_cavgs( spproj_inout, params_in, mskdiam_inout, box_in_pix_inout, mindim_inout )
                 type(sp_project), intent(inout) :: spproj_inout
                 real,             intent(inout) :: mskdiam_inout
                 integer,          intent(inout) :: box_in_pix_inout
+                integer,          intent(inout) :: mindim_inout
                 type(parameters),    intent(in) :: params_in
                 type(image),        allocatable :: masks_local(:)
                 type(image),        allocatable :: cavg_imgs_local(:)
@@ -1029,6 +1137,7 @@ contains
 
                 mskdiam_pix      = round2even((diam_max_local / params_in%smpd + 2. * COSMSKHALFWIDTH) * MSK_EXP_FAC)
                 mskdiam_inout    = params_in%smpd * mskdiam_pix
+                mindim_inout     = round2even(diam_min_local)
                ! box_in_pix_inout = find_larger_magic_box(round2even((mskdiam_pix + mskdiam_pix * BOX_EXP_FAC) / params_in%smpd))
                 box_in_pix_inout = find_larger_magic_box(round2even((mskdiam_pix * 1.2)))
                 write(logfhandle, '(A,I0,A)') '>>> UPDATED MASK DIAMETER TO ', round2even(mskdiam_inout), ' A'
@@ -1079,9 +1188,9 @@ contains
             ! Broadcast 2D-classification stage progress to the GUI.
             ! Always sends — stage-only updates (e.g. 'waiting for particles') must
             ! reach the GUI even before any particles exist; smpd is 0 in that case.
-            subroutine send_meta2D( my_stage, box_size )
+            subroutine send_meta2D( my_stage, box_size, cycle )
                 type(string), intent(in) :: my_stage
-                integer,      intent(in) :: box_size
+                integer,      intent(in) :: box_size, cycle
                 real                     :: smpd
                 integer                  :: nptcls
                 nptcls = spproj%os_ptcl2D%get_noris()
@@ -1093,7 +1202,8 @@ contains
                     particles_accepted = spproj%os_ptcl2D%count_state_gt_zero(),     &
                     mask_diam          = nint(mskdiam_estimate),                     &
                     mask_scale         = box_size * smpd,                            &
-                    box_size           = box_size)
+                    box_size           = box_size,                                   &
+                    cycle              = cycle)
                 if( meta_opening2D%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_opening2D%serialise(meta_buffer)
                     call mq_stream_master_in%send(meta_buffer)
@@ -1205,6 +1315,65 @@ contains
                     endif
                 end do
             end subroutine send_available_cavgs2D
+
+            subroutine send_pickref_meta( my_path, my_i, my_i_delta, my_i_max, my_xtile, my_ytile, cavg_inds_in, cavgsstk_in, xtiles_in, ytiles_in )
+                type(string), intent(in) :: my_path
+                integer,      intent(in) :: my_i, my_i_delta, my_i_max, my_xtile, my_ytile
+                integer,      intent(in) :: cavg_inds_in(:)
+                type(string), intent(in) :: cavgsstk_in
+                integer,      intent(in) :: xtiles_in, ytiles_in
+                integer                  :: my_idx
+                my_idx = cavg_inds_in(my_i)
+                call meta_pickrefs%set(                                       &
+                    path       = my_path,                                   &
+                    mrcpath    = cavgsstk_in,                               &
+                    i          = my_i + my_i_delta,                         &
+                    i_max      = my_i_max,                                  &
+                    idx        = my_idx,                                    &
+                    sprite     = sprite_sheet_pos(                          &
+                                  x = merge(0.0, my_xtile * (100.0 / (xtiles_in - 1)), xtiles_in == 1), &
+                                  y = merge(0.0, my_ytile * (100.0 / (ytiles_in - 1)), ytiles_in == 1), &
+                                  h = 100 * ytiles_in,                                                  &
+                                  w = 100 * xtiles_in))
+                if( meta_pickrefs%assigned() .and. mq_stream_master_in%is_active() ) then
+                    call meta_pickrefs%serialise(meta_buffer)
+                    call mq_stream_master_in%send(meta_buffer)
+                endif
+            end subroutine send_pickref_meta
+
+            ! Send a batch of cavg2D metadata to the GUI, resetting tile counters.
+            subroutine send_selected_pickrefs( my_path, n, cavg_inds_in, cavgsstk_in, xtiles_in, ytiles_in, my_i_max, my_i_start )
+                type(string),      intent(in) :: my_path
+                integer,           intent(in) :: n
+                integer,           intent(in) :: cavg_inds_in(:)
+                type(string),      intent(in) :: cavgsstk_in
+                integer,           intent(in) :: xtiles_in, ytiles_in
+                integer, optional, intent(in) :: my_i_max, my_i_start
+                integer                       :: my_xtile, my_ytile, my_i, my_i_delta
+                my_xtile   = 0
+                my_ytile   = 0
+                my_i_delta = 0
+                if( present(my_i_start) ) my_i_delta = my_i_start - 1
+                if( present(my_i_max) ) then
+                    write(logfhandle,*) '>>> SENDING', n, ' CLASS AVERAGES TO GUI', my_i_max
+                else
+                    write(logfhandle,*) '>>> SENDING', n, ' CLASS AVERAGES TO GUI'
+                endif
+                do my_i = 1, n
+                    if (present(my_i_max)) then
+                        call send_pickref_meta(my_path, my_i, my_i_delta, my_i_max, my_xtile, my_ytile, &
+                            cavg_inds_in, cavgsstk_in, xtiles_in, ytiles_in)
+                    else
+                        call send_pickref_meta(my_path, my_i, my_i_delta, n, my_xtile, my_ytile, &
+                            cavg_inds_in, cavgsstk_in, xtiles_in, ytiles_in)
+                    endif
+                    my_xtile = my_xtile + 1
+                    if( my_xtile == xtiles_in ) then
+                        my_xtile = 0
+                        my_ytile = my_ytile + 1
+                    endif
+                end do
+            end subroutine send_selected_pickrefs
 
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()

@@ -404,12 +404,12 @@ contains
   ! Write the opening2D (2D classification) section, including any cavgs2D.
   ! The whole section (header + cavgs2D) is suppressed when its hash matches
   ! the previously sent hash.
-  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_final_cavgs2D )
+  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_selected_pickrefs )
     class(gui_assembler),                   intent(inout) :: self
-    type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_final_cavgs2D(:)
+    type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_selected_pickrefs(:)
     type(gui_metadata_stream_opening2D),    intent(inout) :: meta_opening2D
     character(kind=CK,len=:),               allocatable   :: buffer
-    type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr
+    type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr, json_pickrefs_ptr
     type(string)                                          :: str, hash
     logical                                               :: l_add
     integer                                               :: i_cls2D
@@ -417,16 +417,18 @@ contains
     json_ptr => meta_opening2D%jsonise()
     if( .not. associated(json_ptr) ) return
     call self%json%rename(json_ptr, 'opening2D')
-    l_add = .false.
-    if( allocated(meta_final_cavgs2D) ) then
-      call self%json%create_array(json_cavgs2D_ptr, 'final_cls2D')
-      do i_cls2D=1, size(meta_final_cavgs2D)
-        if( meta_final_cavgs2D(i_cls2D)%assigned() ) then
+    if( allocated(meta_selected_pickrefs) ) then
+      call self%json%create_array(json_pickrefs_ptr, 'selected_pickrefs')
+      l_add = .false.
+      do i_cls2D=1, size(meta_selected_pickrefs)
+        if( meta_selected_pickrefs(i_cls2D)%assigned() ) then
           l_add = .true.
-          call self%json%add(json_cavgs2D_ptr, meta_final_cavgs2D(i_cls2D)%jsonise())
+          call self%json%add(json_pickrefs_ptr, meta_selected_pickrefs(i_cls2D)%jsonise())
         endif
       enddo
-    else if( allocated(meta_latest_cavgs2D) ) then
+      if( l_add ) call self%json%add(json_ptr, json_pickrefs_ptr)
+    endif
+    if( allocated(meta_latest_cavgs2D) ) then
       call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
       do i_cls2D=1, size(meta_latest_cavgs2D)
         if( meta_latest_cavgs2D(i_cls2D)%assigned() ) then
@@ -434,8 +436,8 @@ contains
           call self%json%add(json_cavgs2D_ptr, meta_latest_cavgs2D(i_cls2D)%jsonise())
         endif
       enddo
+      if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
     endif
-    if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
     call self%json%print_to_string(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()

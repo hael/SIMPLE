@@ -266,7 +266,7 @@ contains
                 do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
                     nptcls_chunk = nptcls_chunk + stk_nptcls(istk)
                 end do
-                write(logfhandle,'(A,I6,A,I8,A,I8)') &
+                write(logfhandle,'(A,I6,A,I8,A,I8,A)') &
                     '>>> CHUNK ', ichunk, ' : ', nptcls_chunk, ' / ', nptcls_tot, ' SELECTED PARTICLES'
             enddo
             call spproj%kill

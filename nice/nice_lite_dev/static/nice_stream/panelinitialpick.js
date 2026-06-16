@@ -150,7 +150,7 @@ const updateScale = (element)  => {
 window.addEventListener("load", () => {
   var cssroot = document.querySelector(':root');
   cssroot.style.setProperty('--inipick-contrast',   1.0);
-  cssroot.style.setProperty('--inipick-brightness', 0.5);
+  cssroot.style.setProperty('--inipick-brightness', 1.0);
 })
 
 /* draw boxes on load */

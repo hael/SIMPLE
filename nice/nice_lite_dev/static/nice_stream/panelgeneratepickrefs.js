@@ -61,6 +61,8 @@ const toggleTemplate = (templ) => {
 };
 
 const selectRefs = (element) => {
+    alert("This feature is not currently implemented");
+    return;
     const selected = [];
     let path = "";
     for (const pick_template of document.getElementsByClassName("picktemplate")) {

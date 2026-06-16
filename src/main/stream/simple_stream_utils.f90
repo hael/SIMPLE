@@ -53,14 +53,20 @@ contains
         end if
     end subroutine init_stream_qenv 
 
-    subroutine import_new_projects( project_list, projects, n_mics_imported, n_ptcls_imported )
+    subroutine import_new_projects( project_list, projects, n_mics_imported, n_ptcls_imported, ignore_ptcls, check_state )
         type(rec_list),              intent(inout) :: project_list
         type(string),   allocatable, intent(inout) :: projects(:)
         integer,                     intent(inout) :: n_mics_imported, n_ptcls_imported
+        logical,        optional,       intent(in) :: ignore_ptcls, check_state
         type(project_rec)                          :: prec
         type(sp_project)                           :: spproj
         type(string)                               :: projabspath
         integer :: iproj, imic
+        logical :: l_check_state, l_ignore_ptcls
+        l_check_state  = .false.
+        l_ignore_ptcls = .false.
+        if( present(check_state)  ) l_check_state  = check_state
+        if( present(ignore_ptcls) ) l_ignore_ptcls = ignore_ptcls
         if( .not.allocated(projects) ) return
         if( size(projects) == 0      ) return
         do iproj=1, size(projects)
@@ -72,13 +78,14 @@ contains
                 call spproj%kill()
                 cycle
             end if
-            if( spproj%os_stk%get_noris() == 0) then
+            if( .not. l_ignore_ptcls .and. spproj%os_stk%get_noris() == 0) then
                 write(logfhandle, *) "ERROR: stk noris 0", projects(iproj)%to_char()
                 call spproj%kill()
                 cycle
             end if
             projabspath = simple_abspath(projects(iproj))
             do imic = 1, spproj%os_mic%get_noris()
+                if( l_check_state .and. spproj%os_mic%get_int(imic, 'state') <= 0 ) cycle
                 prec%id          = project_list%size() + 1
                 prec%projname    = projabspath
                 prec%micind      = imic

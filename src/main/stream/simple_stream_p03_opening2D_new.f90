@@ -493,7 +493,8 @@ contains
                     particles_accepted = spproj%os_ptcl2D%count_state_gt_zero(),     &
                     mask_diam          = nint(mskdiam_estimate),                     &
                     mask_scale         = box_size * smpd,                            &
-                    box_size           = box_size)
+                    box_size           = box_size,                                   &
+                    cycle              = n_increase_cycles)
                 if( meta_opening2D%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_opening2D%serialise(meta_buffer)
                     call mq_stream_master_in%send(meta_buffer)

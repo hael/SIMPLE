@@ -1004,7 +1004,7 @@ contains
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_OPENING2D_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
-                  mask_diam=160, box_size=256, mask_scale=0.75)
+                  mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     call meta%set_user_input(.true.)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, particles_imported=particles_imported,           &
@@ -1027,7 +1027,7 @@ contains
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_OPENING2D_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
-                  mask_diam=160, box_size=256, mask_scale=0.75)
+                  mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
@@ -1051,7 +1051,7 @@ contains
     call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
-                  mask_diam=160, box_size=256, mask_scale=0.75)
+                  mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')

@@ -330,7 +330,7 @@ contains
     write(*,'(A)') 'test_opening2D'
     call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
     call meta_opening2D%set(stage=string('test stage'), particles_imported=50000, &
-                            particles_accepted=42000, mask_diam=160, box_size=256, mask_scale=0.75)
+                            particles_accepted=42000, mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     allocate(meta_cavgs2D(3))
     do i=1, size(meta_cavgs2D)
       call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)

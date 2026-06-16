@@ -45,6 +45,7 @@ module simple_gui_metadata_stream_opening2D
     integer               :: particles_rejected           = 0       ! particles_imported - particles_accepted
     integer               :: mask_diam                    = 0       ! circular mask diameter (pixels)
     integer               :: box_size                     = 0       ! particle box size (pixels)
+    integer               :: cycle                        = 0       ! opening-2D plan cycle index
     integer               :: last_particles_imported      = 0       ! Unix timestamp of most recent import event
     real                  :: mask_scale                   = 0.0     ! fractional mask scale factor
     logical               :: user_input                   = .false. ! .true. once the user has supplied input
@@ -60,12 +61,13 @@ contains
   ! Assign particle counts and masking fields. Derives particles_rejected
   ! automatically. Updates last_particles_imported only when the import
   ! count changes.
-  subroutine set( self, stage, particles_imported, particles_accepted, mask_diam, box_size, mask_scale )
+  subroutine set( self, stage, particles_imported, particles_accepted, mask_diam, box_size, mask_scale, cycle )
     class(gui_metadata_stream_opening2D), intent(inout) :: self
     type(string),                         intent(in)    :: stage
     integer,                              intent(in)    :: particles_imported, particles_accepted
     integer,                              intent(in)    :: mask_diam, box_size
     real,                                 intent(in)    :: mask_scale
+    integer,                              intent(in)    :: cycle
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned          = .true.
     self%stage               = stage%to_char()
@@ -77,6 +79,7 @@ contains
     self%mask_diam           = mask_diam
     self%box_size            = box_size
     self%mask_scale          = mask_scale
+    self%cycle               = cycle
   end subroutine set
 
   ! Set the user-input flag. May be called independently of set().
@@ -120,6 +123,7 @@ contains
       call json%add(json_ptr, 'last_particles_imported',  self%last_particles_imported   )
       call json%add(json_ptr, 'mask_diam',                self%mask_diam                 )
       call json%add(json_ptr, 'box_size',                 self%box_size                  )
+      call json%add(json_ptr, 'cycle',                    self%cycle                     )
       call json%add(json_ptr, 'mskscale',                 dble(self%mask_scale)          )
       call json%add(json_ptr, 'user_input',               self%user_input                )
     else
