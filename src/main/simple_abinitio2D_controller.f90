@@ -23,7 +23,7 @@ integer,          parameter :: PROBREFINE_STAGE   = 5
 integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1               ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: NSAMPLE_PER_CLS    = 200
+integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
 
@@ -84,7 +84,7 @@ contains
         if( params%nsample > 0 )then
             nsample_target_2D = params%nsample
         else
-            nsample_target_2D = params%ncls * NSAMPLE_PER_CLS
+            nsample_target_2D = NSAMPLE_DEFAULT_2D
         endif
         if( nsample_target_2D < 1 ) THROW_HARD('nsample must be >= 1 for abinitio2D sampled update')
         stage_parms(:)%max_cls_pop = 0
