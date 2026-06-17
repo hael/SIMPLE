@@ -5,21 +5,27 @@ from . import views_classic
 from . import views_stream
 from . import api
 
-app_name = 'nice_lite' # Define an app namespace
-urlpatterns = [
-    ## Global URLs
-    path("",                                   views.index,            name="index"),
-    path("login",                              views.user_login,       name="login"),
-    path("logout",                             views.user_logout,      name="logout"),
-    path("newproject/<str:caller>",            views.new_project,      name="new_project"),
-    path("createproject",                      views.create_project,   name="create_project"),
-    path("filebrowser/<str:type>",             views.file_browser,     name="file_browser"),
-    path("filebrowser/<str:type>/<path:path>", views.file_browser,     name="file_browser"),
-    path("image <path:src>",                   api.image,              name="image"),
-    path("api",                                api.index,              name="api"),
-    path("api_classic",                        api.index_classic,      name="api_classic"),
+app_name = 'nice_lite'
 
-    ## Classic specific URLs
+urlpatterns = [
+
+    # ------------------------------------------------------------------
+    # Global
+    # ------------------------------------------------------------------
+    path("",                                   views.index,          name="index"),
+    path("login",                              views.user_login,     name="login"),
+    path("logout",                             views.user_logout,    name="logout"),
+    path("newproject/<str:mode>",              views.new_project,    name="new_project"),
+    path("createproject",                      views.create_project, name="create_project"),
+    path("filebrowser/<str:type>",             views.file_browser,   name="file_browser"),
+    path("filebrowser/<str:type>/<path:path>", views.file_browser,   name="file_browser"),
+    path("image <path:src>",                   api.image,            name="image"),
+    path("api",                                api.index,            name="api"),
+    path("api_classic",                        api.index_classic,    name="api_classic"),
+
+    # ------------------------------------------------------------------
+    # Classic mode — workspace and job management
+    # ------------------------------------------------------------------
     path("classic",                                              views_classic.classic,                        name="classic"),
     path("workspace",                                            views_classic.workspace,                      name="workspace"),
     path("createworkspace/<int:projectid>",                      views_classic.create_workspace,               name="create_workspace"),
@@ -44,63 +50,55 @@ urlpatterns = [
     path("selectjobcls2d/<int:jobid>",                           views_classic.select_job_cls2D,               name="select_job_cls2D"),
     path("deletejob/<int:jobid>",                                views_classic.delete_job,                     name="delete_job"),
 
-    ## Stream specific URLs
-    path("stream",                                                                      views_stream.stream,                                name="stream"),
-    path("createdataset",                                                               views_stream.create_dataset,                        name="create_dataset"),
-    path("deletedataset/<int:datasetid>",                                               views_stream.delete_dataset,                        name="delete_dataset"),
-    path("dataset",                                                                     views_stream.dataset,                               name="dataset"),
-    path("newstream",                                                                   views_stream.new_stream,                            name="new_stream"),
-    path("termstream/<int:jobid>",                                                      views_stream.terminate_stream,                      name="terminate_stream"),
-    path("deletestream/<int:jobid>",                                                    views_stream.delete_stream,                         name="delete_stream"),
-    path("updatedatasetname",                                                           views_stream.update_dataset_name,                   name="update_dataset_name"),
-    path("updatedatasetdescription",                                                    views_stream.update_dataset_description,            name="update_dataset_description"),
-    path("createstream",                                                                views_stream.create_stream,                         name="create_stream"),
-    path("rerunstream/<int:parentid>",                                                  views_stream.rerun_stream,                          name="rerun_stream"),
-    path("updatestreamdescription/<int:jobid>",                                         views_stream.update_stream_description,             name="update_stream_description"),
-    path("viewstream/<int:jobid>",                                                      views_stream.view_stream,                           name="view_stream"),
-    path("viewlogs/<int:jobid>/<path:log>/<path:error>",                                views_stream.view_logs,                             name="view_logs"),
-    path("viewstreammovies/<int:jobid>",                                                views_stream.view_stream_movies,                    name="view_stream_movies"),
-    path("viewstreampreprocess/<int:jobid>",                                            views_stream.view_stream_preprocess,                name="view_stream_preprocess"),
-    path("viewstreamoptics/<int:jobid>",                                                views_stream.view_stream_optics,                    name="view_stream_optics"),
-    path("viewstreaminitialpick/<int:jobid>",                                           views_stream.view_stream_initial_pick,              name="view_stream_initial_pick"),
-    path("viewstreamgeneratepickrefs/<int:jobid>",                                      views_stream.view_stream_generate_pickrefs,         name="view_stream_generate_pickrefs"),
-    path("viewstreamreferencepicking/<int:jobid>",                                      views_stream.view_stream_reference_picking,         name="view_stream_reference_picking"),
-    path("viewstreamsieveparticles/<int:jobid>",                                        views_stream.view_stream_sieve_particles,           name="view_stream_sieve_particles"),
-    path("viewstreamclassification2D/<int:jobid>",                                      views_stream.view_stream_classification_2D,         name="view_stream_classification_2D"),
-    path("viewstreamparticlesets/<int:jobid>",                                          views_stream.view_stream_particle_sets,             name="view_stream_particle_sets"),
-    path("viewstreampreprocesszoom/<int:jobidzoom>",                                    views_stream.view_stream_preprocess,                name="view_stream_preprocess_zoom"),
-    path("viewstreamopticszoom/<int:jobidzoom>",                                        views_stream.view_stream_optics,                    name="view_stream_optics_zoom"),
-    path("viewstreaminitialpickzoom/<int:jobidzoom>",                                   views_stream.view_stream_initial_pick,              name="view_stream_initial_pick_zoom"),
-    path("viewstreamgeneratepickrefszoom/<int:jobidzoom>",                              views_stream.view_stream_generate_pickrefs,         name="view_stream_generate_pickrefs_zoom"),
-    path("viewstreamreferencepickingzoom/<int:jobidzoom>",                              views_stream.view_stream_reference_picking,         name="view_stream_reference_picking_zoom"),
-    path("viewstreamsieveparticleszoom/<int:jobidzoom>",                                views_stream.view_stream_sieve_particles,           name="view_stream_sieve_particles_zoom"),
-    path("viewstreamclassification2Dzoom/<int:jobidzoom>",                              views_stream.view_stream_classification_2D,         name="view_stream_classification_2D_zoom"),
-    path("termstreampreprocess/<int:jobid>",                                            views_stream.term_stream_preprocess,                name="term_stream_preprocess"),
-    path("termstreamoptics/<int:jobid>",                                                views_stream.term_stream_optics,                    name="term_stream_optics"),
-    path("termstreaminitialpick/<int:jobid>",                                           views_stream.term_stream_initial_pick,              name="term_stream_initial_pick"),
-    path("termstreamgeneratepickrefs/<int:jobid>",                                      views_stream.term_stream_generate_pickrefs,         name="term_stream_generate_pickrefs"),
-    path("termstreamreferencepicking/<int:jobid>",                                      views_stream.term_stream_reference_picking,         name="term_stream_reference_picking"),
-    path("termstreamsieveparticles/<int:jobid>",                                        views_stream.term_stream_sieve_particles,           name="term_stream_sieve_particles"),
-    path("termstreamclassification2D/<int:jobid>",                                      views_stream.term_stream_classification_2D,         name="term_stream_classification_2D"),
-    path("restartstreamoptics/<int:jobid>",                                             views_stream.restart_stream_optics,                 name="restart_stream_optics"),
-    path("restartstreampreprocess/<int:jobid>",                                         views_stream.restart_stream_preprocess,             name="restart_stream_preprocess"),
-    path("restartstreaminitialpick/<int:jobid>",                                        views_stream.restart_stream_initial_pick,           name="restart_stream_initial_pick"),
-    path("restartstreamgeneratepickrefs/<int:jobid>",                                   views_stream.restart_stream_generate_pickrefs,      name="restart_stream_generate_pickrefs"),
-    path("restartstreamreferencepicking/<int:jobid>",                                   views_stream.restart_stream_reference_picking,      name="restart_stream_reference_picking"),
-    path("restartstreamsieveparticles/<int:jobid>",                                     views_stream.restart_stream_sieve_particles,        name="restart_stream_sieve_particles"),
-    path("restartstreamclassification2D/<int:jobid>",                                   views_stream.restart_stream_classification_2D,      name="restart_stream_classification_2D"),
-    path("updatestreampreprocessctfres/<int:jobid>",                                    views_stream.update_preprocess_ctfres,              name="update_preprocess_ctfres"),
-    path("updatestreampreprocessastig/<int:jobid>",                                     views_stream.update_preprocess_astig,               name="update_preprocess_astig"),
-    path("updatestreampreprocessicescore/<int:jobid>",                                  views_stream.update_preprocess_icescore,            name="update_preprocess_icescore"),
-    path("updatestreamclassification2Dmskdiam/<int:jobid>",                             views_stream.update_classification_2D_mskdiam,      name="update_classification_2D_mskdiam"),
-    path("selectmoldiamstreaminitialpick/<int:jobid>",                                  views_stream.select_moldiam_stream_initial_pick,    name="select_moldiam_stream_initial_pick"),
-    path("refinemoldiamstreaminitialpick/<int:jobid>",                                  views_stream.refine_moldiam_stream_initial_pick,    name="refine_moldiam_stream_initial_pick"),
-    path("increasemoldiamstreaminitialpick/<int:jobid>",                                views_stream.increase_moldiam_stream_initial_pick,  name="increase_moldiam_stream_initial_pick"),
-    path("decreasemoldiamstreaminitialpick/<int:jobid>",                                views_stream.decrease_moldiam_stream_initial_pick,  name="decrease_moldiam_stream_initial_pick"),
-    path("selectrefsstreamgeneratepickrefs/<int:jobid>",                                views_stream.select_refs_stream_generate_pickrefs,  name="select_refs_stream_generate_pickrefs"),
-    path("updatestreamregeneratepickrefs/<int:jobid>",                                  views_stream.stream_regenerate_pickrefs,            name="stream_regenerate_pickrefs"),
-    path("snapshotstreamclassification2D/<int:jobid>",                                  views_stream.snapshot_stream_classification_2D,     name="snapshot_stream_classification_2D"),
-    path("selectstreamclassification2D/<int:jobid>",                                    views_stream.select_stream_classification_2D,       name="select_stream_classification_2D"),
-    path("selectstreamsieveparticles/<int:jobid>",                                      views_stream.select_stream_sieve_particles,         name="select_stream_sieve_particles"),
-    path("linkstreamparticleset/<int:jobid>/<int:setid>/<path:filename>/<path:type>",   views_stream.link_stream_particle_set,              name="link_stream_particle_set"),
+    # ------------------------------------------------------------------
+    # Stream mode — dataset lifecycle
+    # ------------------------------------------------------------------
+    path("stream",                    views_stream.stream_index,              name="stream"),
+    path("dataset",                   views_stream.dataset,                   name="dataset"),
+    path("deletedataset",             views_stream.delete_dataset,            name="delete_dataset"),
+    path("updatedatasetname",         views_stream.update_dataset_name,       name="update_dataset_name"),
+    path("updatedatasetdescription",  views_stream.update_dataset_description, name="update_dataset_description"),
+
+    # Stream job lifecycle
+    path("newstream",                 views_stream.new_stream,                name="new_stream"),
+    path("createstream",              views_stream.create_stream,             name="create_stream"),
+    path("termstream",                views_stream.terminate_stream,          name="terminate_stream"),
+    path("deletestream",              views_stream.delete_stream,             name="delete_stream"),
+    path("updatestreamdescription",   views_stream.update_stream_description, name="update_stream_description"),
+    path("updatestream",              views_stream.update_stream_parameters,  name="update_stream_parameters"),
+
+    # Stream sub-process control (terminate / restart)
+    path("termstreamprocess",                               views_stream.terminate_stream_process,          name="term_stream_process"),
+    path("restartstreamprocess",                            views_stream.restart_stream_process,            name="restart_stream_process"),
+
+    # Stream stage views (panel + zoom)
+    path("viewstream/<int:jobid>",          views_stream.view_stream,                        name="view_stream"),
+    path("viewlogs/<int:jobid>/<path:log>/<path:error>", views_stream.view_logs,             name="view_logs"),
+    path("viewstreammovies",                views_stream.view_stream_movies,                 name="view_stream_movies"),
+    path("viewstreampreprocess",            views_stream.view_stream_preprocess,             name="view_stream_preprocess"),
+    path("viewstreampreprocesszoom",        views_stream.view_stream_preprocess_zoom,        name="view_stream_preprocess_zoom"),
+    path("viewstreamoptics",                views_stream.view_stream_optics,                 name="view_stream_optics"),
+    path("viewstreamopticszoom",            views_stream.view_stream_optics_zoom,            name="view_stream_optics_zoom"),
+    path("viewstreaminitialpick",           views_stream.view_stream_initial_pick,           name="view_stream_initial_pick"),
+    path("viewstreaminitialpickzoom",       views_stream.view_stream_initial_pick_zoom,      name="view_stream_initial_pick_zoom"),
+    path("viewstreamgeneratepickrefs",      views_stream.view_stream_generate_pickrefs,      name="view_stream_generate_pickrefs"),
+    path("viewstreamgeneratepickrefszoom",  views_stream.view_stream_generate_pickrefs_zoom, name="view_stream_generate_pickrefs_zoom"),
+    path("viewstreamreferencepicking",      views_stream.view_stream_reference_picking,      name="view_stream_reference_picking"),
+    path("viewstreamreferencepickingzoom",  views_stream.view_stream_reference_picking_zoom, name="view_stream_reference_picking_zoom"),
+    path("viewstreamsieveparticles",        views_stream.view_stream_sieve_particles,        name="view_stream_sieve_particles"),
+    path("viewstreamsieveparticleszoom",    views_stream.view_stream_sieve_particles_zoom,   name="view_stream_sieve_particles_zoom"),
+    path("viewstreamclassification2D",      views_stream.view_stream_classification_2D,      name="view_stream_classification_2D"),
+    path("viewstreamclassification2Dzoom",  views_stream.view_stream_classification_2D_zoom, name="view_stream_classification_2D_zoom"),
+    path("viewstreamparticlesets",          views_stream.view_stream_particle_sets,          name="view_stream_particle_sets"),
+
+    # Stream user interactions (parameter updates, selections)
+    path("updatestreamclassification2Dmskdiam", views_stream.update_classification_2D_mskdiam,     name="update_classification_2D_mskdiam"),
+    path("snapshotstreamclassification2D",      views_stream.snapshot_stream_classification_2D,    name="snapshot_stream_classification_2D"),
+    path("selectstreamclassification2D",        views_stream.select_stream_classification_2D,      name="select_stream_classification_2D"),
+    path("regeneratepickrefs",                  views_stream.regenerate_pickrefs,                  name="regenerate_pickrefs"),
+    path("selectpickrefs",                      views_stream.select_pickrefs,                      name="select_pickrefs"),
+    path("selectstreamsieveparticles",          views_stream.select_stream_sieve_particles,        name="select_stream_sieve_particles"),
+    
+    path("linkstreamparticleset/<int:jobid>/<int:setid>/<path:filename>/<path:type>",  views_stream.link_stream_particle_set,             name="link_stream_particle_set"),
+
 ]

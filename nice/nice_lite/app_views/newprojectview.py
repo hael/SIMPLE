@@ -1,22 +1,23 @@
+# django imports
 from django.shortcuts import render
 
-from ..data_structures.project import Project
+# local imports
+from ..helpers                 import clear_checksum_cookies
 
 class NewProjectView:
 
     template = "newproject.html"
-
-    def __init__(self, request, caller):
+    request  = None
+    mode     = ""
+    
+    def __init__(self, request, mode):
         self.request = request
-        self.caller  = caller
-        self.project = Project(request=request)
+        self.mode    = mode
         
     def render(self):
         context = {
-            "caller" : self.caller
+            "mode" : self.mode
         }
         response = render(self.request, self.template, context)
-        for cookie in  self.request.COOKIES:
-            if "checksum" in cookie:
-                response.delete_cookie(key=cookie)
+        clear_checksum_cookies(self.request,response)
         return response

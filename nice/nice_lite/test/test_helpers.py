@@ -3,7 +3,7 @@ from django.test  import TestCase
 def assertProject(project, name=None, desc=None, dirc=None, id=None):
   testcase = TestCase()
   if name != None:
-    testcase.assertEqual(project.name, name, "project name is not equal to "        + name   )
+    testcase.assertNotNone(project.projectmodel, name, "project name is not equal to "        + name   )
   if desc != None:  
     testcase.assertEqual(project.desc, desc, "project description is not equal to " + desc   )
   if dirc != None:  

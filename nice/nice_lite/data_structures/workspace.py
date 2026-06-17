@@ -13,6 +13,7 @@ from .simple     import SIMPLEProject
 class Workspace:
 
     id       = 0
+    
     disp     = 0
     name     = ""
     desc     = ""

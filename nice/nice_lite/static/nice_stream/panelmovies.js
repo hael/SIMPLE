@@ -1,233 +1,158 @@
 let lastinteraction = Date.now();
+let autoscroll = null;
 
-window.addEventListener("load", () =>{
-    for(const astig_histogram of document.getElementsByClassName("astig_histogram")){
-        const ctx = astig_histogram.getContext("2d");
-        const labels = JSON.parse(astig_histogram.dataset.labels.replaceAll("'", '"'))
-        while(labels.length < 24){
-          labels.push("")
-        }
-        const data   = JSON.parse(astig_histogram.dataset.values.replaceAll("'", '"'))
-        const data2  = JSON.parse(astig_histogram.dataset.values2.replaceAll("'", '"'))
-        new Chart(ctx, {
-            type: 'bar',
-            options:{
-                maintainAspectRatio : false,
-                maxBarThickness : 4,
-                scales: {
-                  x: {
-                      display: false,
-                      stacked: true
-                  },
-                  y: {
-                      display: true,
-                      stacked: true,
-                      ticks: {
-                        font: {
-                            size: 8,
-                        },
-                        maxTicksLimit: 3
-                      }
-                  }
-                },
-                plugins:{
-                    legend:{
-                        display: false,
-                    },
-                }
-            },
-            data: {
-              labels: labels,
-              datasets: [{
-                  data: data,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                },{
-                  data: data2,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                }
-              ]
-            }
-        })
+const updateLabel = (slider) => {
+    const label = document.getElementById('histogram_label');
+    if (!label) return;
+    const idx = Math.round(slider.scrollLeft / slider.clientWidth);
+    const slide = slider.children[idx];
+    if (!slide) return;
+    const newText = slide.dataset.label ?? '';
+    if (label.textContent === newText) return;
+    label.style.opacity = '0';
+    setTimeout(() => {
+        label.textContent = newText;
+        label.style.opacity = '1';
+    }, 150);
+};
+
+const stopAutoscroll = () => {
+    if (autoscroll !== null) {
+        clearInterval(autoscroll);
+        autoscroll = null;
     }
-},false);
+};
 
-window.addEventListener("load", () =>{
-    for(const ctfres_histogram of document.getElementsByClassName("ctfres_histogram")){
-        const ctx = ctfres_histogram.getContext("2d");
-        const labels = JSON.parse(ctfres_histogram.dataset.labels.replaceAll("'", '"'))
-        while(labels.length < 24){
-          labels.push("")
-        }
-        const data   = JSON.parse(ctfres_histogram.dataset.values.replaceAll("'", '"'))
-        const data2  = JSON.parse(ctfres_histogram.dataset.values2.replaceAll("'", '"'))
-        new Chart(ctx, {
-            type: 'bar',
-            options:{
-                maintainAspectRatio : false,
-                maxBarThickness : 4,
-                scales: {
-                  x: {
-                      display: false,
-                      stacked: true
-                  },
-                  y: {
-                      display: true,
-                      stacked: true,
-                      ticks: {
-                        font: {
-                            size: 8,
-                        },
-                        maxTicksLimit: 3
-                      }
-                  }
-                },
-                plugins:{
-                    legend:{
-                        display: false,
-                    },
-                }
-            },
-            data: {
-              labels: labels,
-              datasets: [{
-                  data: data,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                },{
-                  data: data2,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                }
-              ]
-            }
-        })
-    }
-},false);
-
-window.addEventListener("load", () =>{
-    for(const df_histogram of document.getElementsByClassName("df_histogram")){
-        const ctx = df_histogram.getContext("2d");
-        const labels = JSON.parse(df_histogram.dataset.labels.replaceAll("'", '"'))
-        while(labels.length < 24){
-          labels.push("")
-        }
-        const data   = JSON.parse(df_histogram.dataset.values.replaceAll("'", '"'))
-        const data2  = JSON.parse(df_histogram.dataset.values2.replaceAll("'", '"'))
-        new Chart(ctx, {
-            type: 'bar',
-            options:{
-                maintainAspectRatio : false,
-                maxBarThickness : 4,
-                scales: {
-                  x: {
-                      display: false,
-                      stacked: true
-                  },
-                  y: {
-                      display: true,
-                      stacked: true,
-                      ticks: {
-                        font: {
-                            size: 8,
-                        },
-                        maxTicksLimit: 3
-                      }
-                  }
-                },
-                plugins:{
-                    legend:{
-                        display: false,
-                    },
-                }
-            },
-            data: {
-              labels: labels,
-              datasets: [{
-                  data: data,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                },{
-                  data: data2,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4bg'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-                }
-              ]
-            }
-        })
-    }
-},false);
-
-window.addEventListener("load", () =>{
-    for(const rate_histogram of document.getElementsByClassName("rate_histogram")){
-        const ctx = rate_histogram.getContext("2d");
-        const labels = JSON.parse(rate_histogram.dataset.labels.replaceAll("'", '"'))
-        while(labels.length < 24){
-          labels.push("")
-        }
-        const data   = JSON.parse(rate_histogram.dataset.values.replaceAll("'", '"'))
-  
-        new Chart(ctx, {
-            type: 'bar',
-            options:{
-                maintainAspectRatio : false,
-                maxBarThickness : 4,
-                scales: {
-                  x: {
-                      display: false,
-                  },
-                  y: {
-                      display: true,
-                      ticks: {
-                        font: {
-                            size: 8,
-                        },
-                        maxTicksLimit: 3
-                      }
-                  },
-                },
-                plugins:{
-                    legend:{
-                        display: false,
-                    },
-                }
-            },
-            data: {
-              labels: labels,
-              datasets: [{
-                  data: data,
-                  hoverOffset: 4,
-                  backgroundColor: window.getComputedStyle(document.body).getPropertyValue('--color-nice4header'),
-                  borderColor:     window.getComputedStyle(document.body).getPropertyValue('--color-nice4bubble'),
-              }]
-            }
-        })
-    }
-},false);
-
-window.addEventListener("load", () =>{
-  document.getElementById("loadinggauze").style.opacity = "0";
-  setTimeout(function () {
-   document.getElementById("loadinggauze").style.display = "none";
-  }, 600);
-})
-
-window.addEventListener("visibilitychange", (event) => {
-  if(document.visibilityState !== "hidden"){
-    location.reload();
-  }
-})
-
-setInterval(function () {
-  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+const scrlRight = (element, event) => {
+    event.preventDefault();
+    const slider = element.previousElementSibling;
+    const count = slider.children.length;
+    if (!count) return;
+    const w = slider.scrollWidth / count;
+    const idx = Math.round(slider.scrollLeft / w);
+    slider.scrollLeft = ((idx + 1) % count) * w;
     lastinteraction = Date.now();
-    location.reload();
-  }
+    stopAutoscroll();
+};
+
+const scrlLeft = (element, event) => {
+    event.preventDefault();
+    const slider = element.nextElementSibling;
+    const count = slider.children.length;
+    if (!count) return;
+    const w = slider.scrollWidth / count;
+    const idx = Math.round(slider.scrollLeft / w);
+    slider.scrollLeft = ((idx - 1 + count) % count) * w;
+    lastinteraction = Date.now();
+    stopAutoscroll();
+};
+
+const startAutoscroll = (slider) => {
+    autoscroll = setInterval(() => {
+        const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+        slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + slider.clientWidth;
+        updateLabel(slider);
+    }, 5000);
+};
+
+// Build a stacked bar chart using stream* CSS colour variables.
+// datasets is an array of { data, stacked } objects; the second dataset
+// (if present) uses streamicon as its fill colour.
+const buildBar = (canvas, labels, datasets) => {
+    const style = getComputedStyle(document.body);
+    const colorPrimary   = style.getPropertyValue('--color-streamring').trim() + '33';
+    const colorSecondary = style.getPropertyValue('--color-streamicon').trim();
+    const colorBorder    = style.getPropertyValue('--color-streambg').trim();
+
+    // Pad labels to 24 buckets so all charts share the same x-axis width.
+    const paddedLabels = [...labels];
+    while (paddedLabels.length < 24) paddedLabels.push('');
+
+    const stacked = datasets.length > 1;
+
+    new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        options: {
+            responsive: false,
+            maxBarThickness: 4,
+            scales: {
+                x: { display: false, stacked },
+                y: {
+                    display: true,
+                    stacked,
+                    ticks: { font: { size: 8 }, maxTicksLimit: 3 }
+                }
+            },
+            plugins: { legend: { display: false } }
+        },
+        data: {
+            labels: paddedLabels,
+            datasets: datasets.map((ds, i) => ({
+                data: ds.data,
+                hoverOffset: 4,
+                backgroundColor: i === 0 ? colorPrimary : colorSecondary,
+                borderColor: colorBorder
+            }))
+        }
+    });
+};
+
+// Parse a JSON array stored in a data-* attribute (single-quoted in template).
+const parseAttr = (str) => JSON.parse(str.replaceAll("'", '"'));
+
+window.addEventListener('load', () => {
+
+    for (const canvas of document.getElementsByClassName('astig_histogram')) {
+        buildBar(canvas, parseAttr(canvas.dataset.labels), [
+            { data: parseAttr(canvas.dataset.values)  },
+            { data: parseAttr(canvas.dataset.values2) }
+        ]);
+    }
+
+    for (const canvas of document.getElementsByClassName('ctfres_histogram')) {
+        buildBar(canvas, parseAttr(canvas.dataset.labels), [
+            { data: parseAttr(canvas.dataset.values)  },
+            { data: parseAttr(canvas.dataset.values2) }
+        ]);
+    }
+
+    for (const canvas of document.getElementsByClassName('df_histogram')) {
+        buildBar(canvas, parseAttr(canvas.dataset.labels), [
+            { data: parseAttr(canvas.dataset.values)  },
+            { data: parseAttr(canvas.dataset.values2) }
+        ]);
+    }
+
+    for (const canvas of document.getElementsByClassName('rate_histogram')) {
+        buildBar(canvas, parseAttr(canvas.dataset.labels), [
+            { data: parseAttr(canvas.dataset.values) }
+        ]);
+    }
+
+    // Fade out the loading gauze once all charts are built.
+    const gauze = document.getElementById('loadinggauze');
+    gauze.style.opacity = '0';
+    setTimeout(() => { gauze.style.display = 'none'; }, 600);
+
+    // Initialise label and auto-advance the timeplots slider every 5 s.
+    const timeplotSlider = document.getElementById('timeplots_slider');
+    if (timeplotSlider) {
+        updateLabel(timeplotSlider);
+        timeplotSlider.addEventListener('scroll', () => updateLabel(timeplotSlider), { passive: true });
+        if (timeplotSlider.scrollWidth > timeplotSlider.clientWidth) startAutoscroll(timeplotSlider);
+    }
+
+}, false);
+
+// Reload when the tab becomes visible again (data may have changed while hidden).
+window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') location.reload();
+});
+
+// Also poll every 10 s while the user is idle.
+setInterval(() => {
+    if ((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== 'hidden') {
+        lastinteraction = Date.now();
+        location.reload();
+    }
 }, 1000);

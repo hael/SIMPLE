@@ -3,118 +3,87 @@ import os
 from django.utils import timezone
 
 # local imports
-from ..models import ProjectModel, DatasetModel, WorkspaceModel
+from ..helpers import *
+from ..models  import ProjectModel
+
 
 class Project:
+    """
+    Represents a top-level project directory that groups one or more datasets.
 
-    id       = 0
-    name     = ""
-    desc     = ""
-    dirc     = ""
-    datasets_list   = []
-    workspaces_list = []
-    trashfolder = ""
+    A project maps to a single directory on disk whose path is stored in the DB.
+    A TRASH/ subdirectory is used for soft-deletes of child datasets and workspaces.
 
-    def __init__(self, project_id=None, request=None):
-        # unit tests: test_project_init, test_project_init_by_request, test_project_init_by_id
-        if project_id is not None:
-            self.id = project_id
-        elif request is not None:
-            self.setIDFromRequest(request)
-        if self.id > 0:
+    Lifecycle:
+      - Create : Project().new(name, dirc)
+      - Load   : Project(id)
+      - Delete : called implicitly by Dataset.delete() / Workspace.delete()
+                 when the project becomes empty
+    """
+
+    def __init__(self, id=None):
+        # unit tests:
+        self.id           = 0
+        self.projectmodel = None
+        self.absdir       = None  # absolute path to the project directory
+        self.trashdir     = None  # absolute path to the TRASH subdirectory
+        if id is not None:
+            self.id = id
             self.load()
 
-    def setIDFromRequest(self, request): 
-        # unit tests: test_project_init_by_request
-        if "selected_project_id" in request.POST: 
-            test_id_str = request.POST["selected_project_id"]
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
+
+    def load(self):
+        """Populate fields from the database. Resets to empty state if not found."""
+        self.projectmodel = ProjectModel.objects.filter(id=self.id).first()
+        if self.projectmodel is None:
+            self.id       = 0
+            self.absdir   = None
+            self.trashdir = None
         else:
-            test_id_str = request.COOKIES.get('selected_project_id', 'none')
-        if test_id_str.isnumeric():
-            self.id = int(test_id_str)
+            self.absdir   = self.projectmodel.dirc
+            self.trashdir = os.path.join(self.projectmodel.dirc, "TRASH")
 
-    def load(self): 
-        # unit tests: test_project_init_by_request, test_project_init_by_id
-        projectmodel = ProjectModel.objects.filter(id=self.id).first()
-        if projectmodel is not None:
-            self.name = projectmodel.name
-            self.desc = projectmodel.desc
-            self.dirc = projectmodel.dirc
-            datasetmodels = DatasetModel.objects.filter(proj=self.id)
-            self.datasets_list = []
-            for datasetmodel in datasetmodels:
-                self.datasets_list.append({"id":datasetmodel.id, "name":datasetmodel.name})
-            workspacemodels = WorkspaceModel.objects.filter(proj=self.id)
-            self.workspaces_list = []
-            for workspacemodel in workspacemodels:
-                self.workspaces_list.append({"id":workspacemodel.id, "name":workspacemodel.name})
-        else:
-            self.id = 0
+    # ------------------------------------------------------------------
+    # Mutators
+    # ------------------------------------------------------------------
 
-    def new(self, request): 
-        # unit tests: test_project_new
+    def new(self, name, dirc):
+        """
+        Create a new project directory inside dirc and save the DB record.
+        The directory name is derived from name with spaces replaced by underscores.
+        Returns True on success, False on any failure.
 
-        if "new_project_name" in request.POST:
-            new_project_name = request.POST["new_project_name"]
-        else:
+        unit tests:
+        """
+        if not directory_exists(dirc):
             return False
-
-        if "new_project_dirc" in request.POST:
-            new_project_dirc = request.POST["new_project_dirc"]
-        else:
+        new_project_path = os.path.join(dirc, name.replace(" ", "_"))
+        if not ensure_directory(new_project_path):
             return False
-
-        if not os.path.exists(new_project_dirc):
-            return False
-        
-        if not os.path.isdir(new_project_dirc):
-            return False
-        
-        new_project_path = os.path.join(new_project_dirc, new_project_name.replace(" ", "_"))
-
-        try:
-            os.makedirs(new_project_path, exist_ok=True)
-        except OSError as error:
-            print("Directory '%s' can not be created")
-            return False
-        
-        projectmodel = ProjectModel(name=new_project_name, dirc=new_project_path, date=timezone.now())
+        projectmodel = ProjectModel(name=name, dirc=new_project_path, date=timezone.now())
         projectmodel.save()
         self.id = projectmodel.id
-        if(self.id == 0):
+        if self.id == 0:
             return False
         self.load()
         return True
 
-    def containsDataset(self, dataset_id): 
-        # unit tests: test_project_contains_dataset, test_project_doesnt_contain_dataset
-        for dataset in self.datasets_list:
-            if dataset["id"] == dataset_id:
-                return True
-        return False
-    
-    def containsWorkspace(self, workspace_id): 
-        # unit tests: test_project_contains_workspace, test_project_doesnt_contain_workspace
-        for workspace in self.workspaces_list:
-            if workspace["id"] == workspace_id:
-                return True
-        return False
-    
-    def ensureTrashfolder(self): 
-        # unit tests: test_project_trash
-        if not os.path.exists(self.dirc):
-            return False
-        if not os.path.isdir(self.dirc):
-            return False
-        trashfolder = os.path.join(self.dirc, "TRASH")
-        if os.path.isdir(trashfolder):
-            self.trashfolder = trashfolder
-            return True
-        try:
-            os.makedirs(trashfolder, exist_ok=True)
-        except OSError as error:
-            print("Directory '%s' can not be created")
-            return False
-        self.trashfolder = trashfolder
-        return True
-        
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    # UNUSED
+    # def get_id(self):
+    #     return self.id
+
+    def get_projectmodel(self):
+        return self.projectmodel
+
+    def get_absdir(self):
+        return self.absdir
+
+    def get_trashdir(self):
+        return self.trashdir

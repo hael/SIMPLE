@@ -1,6 +1,6 @@
 let lastinteraction = Date.now();
 
-linkParticleSet = (element) => {
+const linkParticleSet = (element)  => {
   const loadinggauze = document.getElementById("loadinggauze")
   loadinggauze.innerHTML = "creating snapshot ..."
   loadinggauze.style.display = "flex";
@@ -26,7 +26,7 @@ window.addEventListener("visibilitychange", (event) => {
 })
 
 setInterval(function () {
-  if((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden"){
+  if((Date.now() - lastinteraction) > 10_000 && document.visibilityState !== "hidden"){
     lastinteraction = Date.now();
     location.reload();
   }

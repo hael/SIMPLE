@@ -4,25 +4,30 @@ import hashlib
 from django.shortcuts import render
 from django.http import HttpResponse
 
-from ..data_structures.job import Job
-from ..data_structures.project import Project
-from ..data_structures.simple  import SIMPLEStream
+from ..models                    import WorkspaceModel
+from ..helpers                   import *
+from ..data_structures.streamjob import StreamJob
+from ..data_structures.project   import Project
+from ..data_structures.simple    import SIMPLEStream
 
 class StreamView:
 
     template = "nice_stream/streamview.html"
+    jobmodel = None
 
     def __init__(self, request, jobid):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         
     def render(self):
         context = {
-            "jobid" : self.job.id,
-            "disp"  : self.job.disp,
-            "proj"  : self.job.dset.proj.name,
-            "dset"  : self.job.dset.name,
-            "args"  : self.job.args
+            "jobid" : self.jobmodel.id,
+            "disp"  : self.jobmodel.disp,
+            "proj"  : self.jobmodel.dset.proj.name,
+            "dset"  : self.jobmodel.dset.name,
+            "args"  : self.jobmodel.args
         }
         response = render(self.request, self.template, context)
         for cookie in  self.request.COOKIES:
@@ -34,19 +39,20 @@ class StreamViewMovies:
 
     template        = "nice_stream/panelmovies.html"
     checksum_cookie = "panel_movies_checksum"
+    jobmodel        = None
 
-    def __init__(self, request, jobid, jobidzoom):
+    def __init__(self, request, jobid):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-        elif jobidzoom is not None:
-            self.job = Job(id=jobidzoom)
-            self.template = self.templatezoom
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         
     def render(self):
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
         context = {
-            "jobstats" : self.job.preprocessing_stats,
-            "args"     : self.job.args,
+            "jobstats" : self.jobmodel.preprocessing_stats,
+            "args"     : self.jobmodel.args,
         }
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
@@ -56,7 +62,7 @@ class StreamViewMovies:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewPreprocess:
 
@@ -66,35 +72,39 @@ class StreamViewPreprocess:
     logfile         = "preprocessing.log"
     errfile         = "preprocessing.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
 
     def render(self):
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
         context = {
-            "jobid"     : self.job.id,
-            "displayid" : self.job.disp,
-            "jobstats"  : self.job.preprocessing_stats,
-            "status"    : self.job.preprocessing_status,
+            "jobid"     : self.jobmodel.id,
+            "displayid" : self.jobmodel.disp,
+            "jobstats"  : self.jobmodel.preprocessing_stats,
+            "status"    : self.jobmodel.preprocessing_status,
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -107,7 +117,7 @@ class StreamViewPreprocess:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewOptics:
 
@@ -117,35 +127,39 @@ class StreamViewOptics:
     logfile         = "optics_assignment.log"
     errfile         = "optics_assignment.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
         
     def render(self):
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
         context = {
-            "jobid"     : self.job.id,
-            "displayid" : self.job.disp,
-            "jobstats"  : self.job.optics_assignment_stats,
-            "status"    : self.job.optics_assignment_status,     
+            "jobid"     : self.jobmodel.id,
+            "displayid" : self.jobmodel.disp,
+            "jobstats"  : self.jobmodel.optics_assignment_stats,
+            "status"    : self.jobmodel.optics_assignment_status,     
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -158,7 +172,7 @@ class StreamViewOptics:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
 
 class StreamViewInitialPick:
 
@@ -168,47 +182,39 @@ class StreamViewInitialPick:
     logfile         = "opening_2D.log"
     errfile         = "opening_2D.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
-        
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
+
     def render(self):
-        start_pc = 0
-        end_pc   = 0
-        if "picking_diameters" in self.job.initial_picking_stats:
-            self.job.initial_picking_stats["picking_diameters"] = sorted(list(set(self.job.initial_picking_stats["picking_diameters"])))
-        if "refinement_diameters" in self.job.initial_picking_stats:
-            self.job.initial_picking_stats["refinement_diameters"] = sorted(list(set(self.job.initial_picking_stats["refinement_diameters"])))   
-        if "picking_diameters" in self.job.initial_picking_stats and "refinement_diameters" in self.job.initial_picking_stats:
-            if len(self.job.initial_picking_stats["picking_diameters"]) > 1 and len(self.job.initial_picking_stats["refinement_diameters"]) > 1:
-                start_pc = self.job.initial_picking_stats["picking_diameters"].index(self.job.initial_picking_stats["refinement_diameters"][0])  * (100 / (len(self.job.initial_picking_stats["picking_diameters"]) - 1))
-                end_pc   = self.job.initial_picking_stats["picking_diameters"].index(self.job.initial_picking_stats["refinement_diameters"][-1]) * (100 / (len(self.job.initial_picking_stats["picking_diameters"]) - 1))
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
         context = {
-            "jobid"        : self.job.id,
-            "displayid"    : self.job.disp,
-            "jobstats"     : self.job.initial_picking_stats,
-            "status"       : self.job.initial_picking_status,
-            "refine_start" : start_pc,
-            "refine_width" : end_pc - start_pc,  
+            "jobid"        : self.jobmodel.id,
+            "displayid"    : self.jobmodel.disp,
+            "jobstats"     : self.jobmodel.initial_picking_stats,
+            "status"       : self.jobmodel.initial_picking_status
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -221,7 +227,7 @@ class StreamViewInitialPick:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
 
 class StreamViewGeneratePickrefs:
 
@@ -231,25 +237,32 @@ class StreamViewGeneratePickrefs:
     logfile         = "opening_2D.log"
     errfile         = "opening_2D.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
         
     def render(self):
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
+        stats = self.jobmodel.generate_pickrefs_stats
+        if "latest_cls2D" in stats:
+            stats["latest_cls2D"].sort(key=lambda d: d['res'])
         context = {
-            "jobid"     : self.job.id,
-            "displayid" : self.job.disp,
-            "jobstats"  : self.job.generate_pickrefs_stats,
-            "status"    : self.job.generate_pickrefs_status,    
+            "jobid"     : self.jobmodel.id,
+            "displayid" : self.jobmodel.disp,
+            "jobstats"  : stats,
+            "status"    : self.jobmodel.generate_pickrefs_status,    
         }
         if self.zoom:
             context["log"]       = []
@@ -283,7 +296,7 @@ class StreamViewGeneratePickrefs:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
 
 class StreamViewReferencePicking:
 
@@ -293,34 +306,38 @@ class StreamViewReferencePicking:
     logfile         = "reference_based_picking.log"
     errfile         = "reference_based_picking.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
         
     def render(self):
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.reference_picking_stats,
-            "status"   : self.job.reference_picking_status,         
+            "jobid"    : self.jobmodel.id,
+            "jobstats" : self.jobmodel.reference_picking_stats,
+            "status"   : self.jobmodel.reference_picking_status,         
         }
         if self.zoom:
-            context["log"]   = ""
+            context["log"]   = []
             context["error"] = ""
             logfile = os.path.join(self.jobdir, self.logfile)
             errfile = os.path.join(self.jobdir, self.errfile)
             if os.path.exists(logfile) and os.path.isfile(logfile):
                 with open(logfile, 'rb') as f:
                     logtext = f.read()
-                    context["log"] = str(logtext, errors='replace')
+                    context["log"].append({"text":str(logtext, errors='replace')})
             if os.path.exists(errfile) and os.path.isfile(errfile):
                 with open(errfile, 'rb') as f:
                     errortext = f.read()
@@ -333,7 +350,7 @@ class StreamViewReferencePicking:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
 
 class StreamViewSieveParticles:
 
@@ -343,33 +360,41 @@ class StreamViewSieveParticles:
     logfile         = "particle_sieving.log"
     errfile         = "particle_sieving.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
         
     def render(self):
-        # sort cls2D on pop
-        if "accepted_cls2D" in self.job.particle_sieving_stats:
-            self.job.particle_sieving_stats["accepted_cls2D"] = sorted(self.job.particle_sieving_stats["accepted_cls2D"], key=lambda d: d['pop'], reverse=True)
-        if "rejected_cls2D" in self.job.particle_sieving_stats:
-            self.job.particle_sieving_stats["rejected_cls2D"] = sorted(self.job.particle_sieving_stats["rejected_cls2D"], key=lambda d: d['pop'], reverse=True)
-        if "latest_accepted_cls2D" in self.job.particle_sieving_stats:
-            self.job.particle_sieving_stats["latest_accepted_cls2D"] = sorted(self.job.particle_sieving_stats["latest_accepted_cls2D"], key=lambda d: d['pop'], reverse=True)
-        if "latest_rejected_cls2D" in self.job.particle_sieving_stats:
-            self.job.particle_sieving_stats["latest_rejected_cls2D"] = sorted(self.job.particle_sieving_stats["latest_rejected_cls2D"], key=lambda d: d['pop'], reverse=True)   
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
+        # sort cls2D on res, and annotate ref entries with matching latest entry
+        stats = self.jobmodel.particle_sieving_stats
+        if "ref_cls2D" in stats:
+            stats["ref_cls2D"].sort(key=lambda d: d['res'])
+            if "latest_cls2D" in stats:
+                latest_by_idx = {d["idx"]: d for d in stats["latest_cls2D"]}
+                for ref in stats["ref_cls2D"]:
+                    if ref["idx"] in latest_by_idx:
+                        ref["latest"] = latest_by_idx[ref["idx"]]
+            if "ref_selection" in self.jobmodel.master_update:
+                ref_selection = set(self.jobmodel.master_update["ref_selection"])
+                for ref in stats["ref_cls2D"]:
+                    ref["selected"] = ref["idx"] in ref_selection
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.particle_sieving_stats,
-            "status"   : self.job.particle_sieving_status, 
+            "jobid"    : self.jobmodel.id,
+            "jobstats" : self.jobmodel.particle_sieving_stats,
+            "status"   : self.jobmodel.particle_sieving_status, 
         }
         if self.zoom:
             context["log"]   = []
@@ -403,7 +428,7 @@ class StreamViewSieveParticles:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewClassification2D:
 
@@ -413,27 +438,40 @@ class StreamViewClassification2D:
     logfile         = "classification_2D.log"
     errfile         = "classification_2D.error"
     zoom            = False
-    jobdir          = ""
+    jobdir          = None
+    jobmodel        = None
 
     def __init__(self, request, jobid, jobidzoom):
         self.request = request
         if jobid is not None:
-            self.job = Job(id=jobid)
-            
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         elif jobidzoom is not None:
-            self.job             = Job(id=jobidzoom)
-            self.template        = self.templatezoom
-            self.jobdir          = self.job.getAbsDir()
-            self.zoom            = True
+            streamjob     = StreamJob(id=jobidzoom)
+            self.jobmodel = streamjob.get_jobmodel()
+            self.template = self.templatezoom
+            self.jobdir   = streamjob.get_absdir()
+            self.zoom     = True
         
     def render(self):
-        # sort cls2D on pop
-        if "latest_cls2D" in self.job.classification_2D_stats:
-            self.job.classification_2D_stats["latest_cls2D"] = sorted(self.job.classification_2D_stats["latest_cls2D"], key=lambda d: d['pop'], reverse=True)
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
+        # Remove empty classes (pop == 0), then sort by resolution.
+        if "latest_cls2D" in self.jobmodel.classification_2D_stats:
+            latest_cls2d = []
+            for cls2d in self.jobmodel.classification_2D_stats["latest_cls2D"]:
+                try:
+                    if float(cls2d.get("pop", 0)) == 0.0:
+                        continue
+                except (TypeError, ValueError, AttributeError):
+                    pass
+                latest_cls2d.append(cls2d)
+            self.jobmodel.classification_2D_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d['res'], reverse=False)
+            
         context = {
-            "jobid"    : self.job.id,
-            "jobstats" : self.job.classification_2D_stats,
-            "status"   : self.job.classification_2D_status,  
+            "jobid"    : self.jobmodel.id,
+            "jobstats" : self.jobmodel.classification_2D_stats,
+            "status"   : self.jobmodel.classification_2D_status,  
         }
         if self.zoom:
             context["log"]   = []
@@ -467,23 +505,35 @@ class StreamViewClassification2D:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()
     
 class StreamViewParticleSets:
 
     template        = "nice_stream/panelparticlesets.html"
     checksum_cookie = "panel_particlesets_checksum" 
+    jobmodel        = None
 
     def __init__(self, request, jobid):
         self.request = request
-        self.job     = Job(id=jobid)
+        if jobid is not None:
+            streamjob     = StreamJob(id=jobid)
+            self.jobmodel = streamjob.get_jobmodel()
         
     def render(self):
-        project = Project(project_id=self.job.dset.proj.id)
+        if self.jobmodel is None:
+            return HttpResponseNoContent()
+        projectid       = self.jobmodel.dset.proj.id
+        workspacemodels = WorkspaceModel.objects.filter(proj=projectid)
+        workspaces = []
+        for workspacemodel in workspacemodels:
+            workspaces.append({
+                "id"   : workspacemodel.id, 
+                "name" : workspacemodel.name
+            })
         context = {
-            "jobid"      : self.job.id,
-            "jobstats"   : self.job.particle_sets_stats,
-            "workspaces" : project.workspaces_list
+            "jobid"      : self.jobmodel.id,
+            "jobstats"   : self.jobmodel.particle_sets_stats,
+            "workspaces" : workspaces
         }
         hash = hashlib.md5(json.dumps(context, sort_keys=True).encode())
         checksum = hash.hexdigest()
@@ -493,4 +543,4 @@ class StreamViewParticleSets:
             response.set_cookie(key=self.checksum_cookie, value=checksum)
             return response 
         else:
-            return HttpResponse(status=204)
+            return HttpResponseNoContent()

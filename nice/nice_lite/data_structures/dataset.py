@@ -4,200 +4,252 @@ import re
 from django.utils import timezone
 
 # local imports
-from ..models import ProjectModel, DatasetModel, WorkspaceModel
+from ..helpers import *
+from ..models  import DatasetModel, WorkspaceModel
+
 
 class Dataset:
+    """
+    Represents a cryo-EM dataset within a project.
 
-    id       = 0
-    disp     = 0
-    name     = ""
-    desc     = ""
-    dirc     = ""
-    link     = ""
-    cdat     = ""
-    mdat     = ""
-    user     = ""
-    proj     = 0
-    trashfolder = ""
+    A dataset maps to:
+      - a hidden directory  (.dataset_<id>/)  inside the project directory
+      - a human-readable symlink (ds_<name>/) pointing to that directory
+      - a TRASH/ subdirectory inside the dataset directory used for soft-deletes
 
-    def __init__(self, dataset_id=None, request=None):
-        # unit tests: test_dataset_init, test_dataset_init_by_request, test_dataset_init_by_id 
-        if dataset_id is not None:
-            self.id = dataset_id
-        elif request is not None:
-            self.setIDFromRequest(request)
-        if self.id > 0:
+    Lifecycle:
+      - Create : Dataset().new(project, user)
+      - Load   : Dataset(id)
+      - Delete : dataset.delete()     — moves files to project TRASH, removes DB record
+      - Rename : dataset.rename(name) — renames the symlink and updates the DB
+    """
+
+    def __init__(self, id=None):
+        # unit tests: test_dataset_init, test_dataset_init_by_id
+        self.id           = 0
+        self.datasetmodel = None
+        self.absdir       = None  # absolute path to the hidden dataset directory
+        self.linkpath     = None  # absolute path to the human-readable symlink
+        self.trashdir     = None  # absolute path to the TRASH subdirectory
+        if id is not None:
+            self.id = id
             self.load()
 
-    def setIDFromRequest(self, request):
-        # unit tests: test_dataset_init_by_id 
-        if "selected_dataset_id" in request.POST:
-            test_id_str = request.POST["selected_dataset_id"]
-        else:
-            test_id_str = request.COOKIES.get('selected_dataset_id', 'none')
-        if test_id_str.isnumeric():
-            self.id = int(test_id_str)
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
 
     def load(self):
-        # unit tests: test_dataset_init_by_request, test_dataset_init_by_id 
-        datasetmodel = DatasetModel.objects.filter(id=self.id).first()
-        if datasetmodel is not None:
-            self.name = datasetmodel.name
-            self.dirc = datasetmodel.dirc
-            self.link = datasetmodel.link
-            self.cdat = datasetmodel.cdat
-            self.mdat = datasetmodel.mdat
-            self.proj = datasetmodel.proj
-            self.desc = datasetmodel.desc
-            self.disp = datasetmodel.disp
-            self.user = datasetmodel.user
+        """Populate fields from the database. Resets to empty state if not found."""
+        self.datasetmodel = DatasetModel.objects.filter(id=self.id).first()
+        if self.datasetmodel is None:
+            self.id       = 0
+            self.absdir   = None
+            self.linkpath = None
+            self.trashdir = None
+        else:
+            self.absdir   = os.path.join(self.datasetmodel.proj.dirc, self.datasetmodel.dirc)
+            self.linkpath = os.path.join(self.datasetmodel.proj.dirc, self.datasetmodel.link)
+            self.trashdir = os.path.join(self.absdir, "TRASH")
+
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    def in_project(self, projectid):
+        """Return True if this dataset belongs to the given project id."""
+        return self.datasetmodel is not None and self.datasetmodel.proj.id == projectid
+
+    def get_id(self):
+        return self.id
+
+    def get_datasetmodel(self):
+        return self.datasetmodel
+
+    def get_absdir(self):
+        return self.absdir
+
+    def get_linkpath(self):
+        return self.linkpath
+
+    def get_trashdir(self):
+        return self.trashdir
+
+    # ------------------------------------------------------------------
+    # Mutators
+    # ------------------------------------------------------------------
 
     def new(self, project, user):
-        # unit tests: test_dataset_new
-        projectmodel = ProjectModel.objects.filter(id=project.id).first()
+        """
+        Create a new dataset inside the given project.
+
+        Creates the hidden directory and symlink on disk, then writes the DB record.
+        The DB record is rolled back if filesystem operations fail.
+        Returns True on success, False on any failure.
+
+        unit tests: test_dataset_new
+        """
+        projectmodel = project.get_projectmodel()
+        projectdir   = project.get_absdir()
         if projectmodel is None:
+            print_error("projectmodel is none")
             return False
-      
-        if not os.path.exists(project.dirc):
+        if not directory_exists(projectdir):
+            print_error("project directory " + projectdir + " doesn't exist")
             return False
-        
-        if not os.path.isdir(project.dirc):
-            return False
-        
-        datasetmodels = DatasetModel.objects.filter(proj=projectmodel)
-        self.disp = datasetmodels.count() + 1
-        new_dataset_name = "new dataset " + str(self.disp)
-        datasetmodel = DatasetModel(proj=projectmodel, name=new_dataset_name, disp=self.disp, cdat=timezone.now(), mdat=timezone.now(), user=user)
+
+        # derive a display index and default name from existing dataset count
+        display_id       = DatasetModel.objects.filter(proj=projectmodel).count() + 1
+        new_dataset_name = "new dataset " + str(display_id)
+
+        # save the record early to obtain the auto-assigned id, which is used for the directory name
+        datasetmodel = DatasetModel(
+            proj=projectmodel, name=new_dataset_name, disp=display_id,
+            cdat=timezone.now(), mdat=timezone.now(), user=user
+        )
         datasetmodel.save()
         self.id = datasetmodel.id
         if self.id == 0:
             return False
-        
+
         new_dataset_dirc = ".dataset_" + str(self.id)
         new_dataset_link = "ds_" + new_dataset_name.replace(" ", "_")
-        new_dataset_path = os.path.join(project.dirc, new_dataset_dirc)
+        new_dataset_path = os.path.join(projectdir, new_dataset_dirc)
 
-        try:
-            os.makedirs(new_dataset_path)
-        except OSError as error:
-            print("Directory '%s' can not be created")
+        if not ensure_directory(new_dataset_path):
+            datasetmodel.delete()
             return False
-        
-        try:
-            os.symlink(new_dataset_path, os.path.join(project.dirc, new_dataset_link))
-        except FileExistsError:
-            print("Symlink already exists.")
-        except PermissionError:
-            print("Permission denied: You might need admin rights.")
-        except OSError as e:
-            print("OS error occurred:", e)
-                
+        if not create_symlink(new_dataset_path, os.path.join(projectdir, new_dataset_link)):
+            datasetmodel.delete()
+            return False
+
         datasetmodel.dirc = new_dataset_dirc
         datasetmodel.link = new_dataset_link
         datasetmodel.save()
         self.load()
-        project.load()
-        return True#
-
-    def delete(self, project):
-        # unit tests: test_dataset_delete
-        datasetmodel = DatasetModel.objects.filter(id=self.id).first()
-        if project.ensureTrashfolder() and datasetmodel is not None:
-            dataset_path = os.path.join(project.dirc, self.dirc)
-            dataset_link = os.path.join(project.dirc, self.link)
-            trash_path   = os.path.join(project.trashfolder, self.dirc)
-            trash_link   = os.path.join(project.trashfolder, self.link)
-            if not os.path.exists(dataset_path):
-                return 
-            if not os.path.isdir(dataset_path):
-                return 
-            if not os.path.exists(dataset_link):
-                return 
-            if not os.path.islink(dataset_link):
-                return 
-            if os.path.exists(trash_path):
-                return 
-            if os.path.isdir(trash_path):
-                return
-            if os.path.exists(trash_link):
-                return 
-            if os.path.islink(trash_link):
-                return
-            try:
-                os.rename(dataset_path, trash_path)
-            except OSError as error:
-                print("Directory '%s' can not be renamed")
-                return
-            try:
-                os.remove(dataset_link)
-                os.symlink(trash_path, trash_link)
-            except OSError as error:
-                print("Link '%s' can not be renamed")
-                return
-            datasetmodel.delete()
-        workspacemodels = WorkspaceModel.objects.filter(proj=project.id)
-        datasetmodels   = DatasetModel.objects.filter(proj=project.id)
-        if workspacemodels.count() + datasetmodels.count() == 0:
-            projectmodel = ProjectModel.objects.filter(id=project.id).first()
-            projectmodel.delete()
-
-    def rename(self, request, project):
-        # unit tests: test_dataset_rename
-        if "new_dataset_name" in request.POST:
-            new_dataset_name = request.POST["new_dataset_name"]
-            datasetmodel = DatasetModel.objects.filter(id=self.id).first()
-            datasetmodel.name = new_dataset_name
-            # strip any non-alphanumeric characters(except _)
-            new_dataset_name = new_dataset_name.replace(" ", "_")
-            new_dataset_name = "ds_" + re.sub(r'\W+', '', new_dataset_name)
-            current_dataset_link = os.path.join(project.dirc, self.link)
-            new_dataset_link     = os.path.join(project.dirc, new_dataset_name)
-            try :
-                os.rename(current_dataset_link, new_dataset_link)
-             #   print("Source path renamed to destination path successfully.")
-            except IsADirectoryError:
-                print("Source is a file but destination is a directory.")
-                return False
-            except NotADirectoryError:
-                print("Source is a directory but destination is a file.")
-            except PermissionError:
-                print("Operation not permitted")
-                return False
-            except OSError as error:
-                print(error)
-                return False
-            self.link = new_dataset_name
-            datasetmodel.link = new_dataset_name
-            datasetmodel.save()
-            return True
-        return False
-
-    def updateDescription(self, request):
-        # unit tests: test_dataset_update_description
-        if "new_dataset_description" in request.POST:
-            new_dataset_description = request.POST["new_dataset_description"]
-            datasetmodel = DatasetModel.objects.filter(id=self.id).first()
-            datasetmodel.desc = new_dataset_description
-            datasetmodel.save()
-            return True
-        return False
-    
-    def test_dataset_trash(self, project):
-        # unit tests: test_dataset_trash
-        if not os.path.exists(os.path.join(project.dirc, self.dirc)):
-            return False
-        if not os.path.isdir(os.path.join(project.dirc, self.dirc)):
-            return False
-        trashfolder = os.path.join(project.dirc, self.dirc, "TRASH")
-        if os.path.isdir(trashfolder):
-            self.trashfolder = trashfolder
-            return True
-        try:
-            os.makedirs(trashfolder, exist_ok=True)
-        except OSError as error:
-            print("Directory '%s' can not be created")
-            return False
-        self.trashfolder = trashfolder
         return True
 
+    def delete(self):
+        """
+        Soft-delete this dataset by moving its directory and symlink into the project TRASH.
 
+        Also removes the DB record. If the project has no remaining datasets or
+        workspaces after deletion, the project itself is also deleted.
+        Returns True on success, False on any failure.
+
+        unit tests: test_dataset_delete
+        """
+        if self.datasetmodel is None:
+            print_error("datasetmodel is none")
+            return False
+
+        projecttrash = os.path.join(self.datasetmodel.proj.dirc, "TRASH")
+        if not ensure_directory(projecttrash):
+            print_error("project trash folder doesn't exist")
+            return False
+
+        trash_path = os.path.join(projecttrash, self.datasetmodel.dirc)
+        trash_link = os.path.join(projecttrash, self.datasetmodel.link)
+
+        # verify source filesystem state
+        if not os.path.exists(self.absdir):
+            print_error("dataset directory doesn't exist")
+            return False
+        if not os.path.isdir(self.absdir):
+            print_error("dataset directory isn't a directory")
+            return False
+        if not os.path.exists(self.linkpath):
+            print_error("dataset link doesn't exist")
+            return False
+        if not os.path.islink(self.linkpath):
+            print_error("dataset link isn't a link")
+            return False
+
+        # verify trash destinations are free
+        if os.path.exists(trash_path):
+            print_error("dataset trash directory already exists")
+            return False
+        if os.path.exists(trash_link):
+            print_error("trash link already exists")
+            return False
+
+        try:
+            os.rename(self.absdir, trash_path)
+        except OSError:
+            print_error("Directory '%s' cannot be renamed")
+            return False
+
+        try:
+            os.remove(self.linkpath)
+            os.symlink(trash_path, trash_link)
+        except OSError:
+            print_error("Link '%s' cannot be renamed")
+            return False
+
+        # remove DB record; delete the parent project if it is now empty
+        projectmodel = self.datasetmodel.proj
+        self.datasetmodel.delete()
+        remaining_workspaces = WorkspaceModel.objects.filter(proj=projectmodel).count()
+        remaining_datasets   = DatasetModel.objects.filter(proj=projectmodel).count()
+        if remaining_workspaces + remaining_datasets == 0:
+            projectmodel.delete()
+
+        return True
+
+    def rename(self, newdatasetname):
+        """
+        Rename this dataset: renames the symlink on disk and updates the DB record.
+        The directory itself is not moved — only the symlink is renamed.
+        Returns True on success, False on any failure.
+
+        unit tests: test_dataset_rename
+        """
+        if self.datasetmodel is None:
+            print_error("datasetmodel is none")
+            return False
+        if newdatasetname is None:
+            print_error("new dataset name is none")
+            return False
+
+        # build a filesystem-safe link name: spaces become _, non-alphanumeric stripped
+        new_link_name    = "ds_" + re.sub(r'\W+', '', newdatasetname.replace(" ", "_"))
+        new_dataset_link = os.path.join(self.datasetmodel.proj.dirc, new_link_name)
+
+        try:
+            os.rename(self.linkpath, new_dataset_link)
+        except IsADirectoryError:
+            print_error("Source is a file but destination is a directory.")
+            return False
+        except NotADirectoryError:
+            print_error("Source is a directory but destination is a file.")
+            return False
+        except PermissionError:
+            print_error("Operation not permitted")
+            return False
+        except OSError as error:
+            print_error(error)
+            return False
+
+        # update in-memory state and DB only after the filesystem rename succeeds
+        self.linkpath          = new_dataset_link
+        self.datasetmodel.name = newdatasetname
+        self.datasetmodel.link = new_link_name
+        self.datasetmodel.save()
+        return True
+
+    def updateDescription(self, newdescription):
+        """
+        Update the human-readable description of this dataset in the DB.
+        Returns True on success, False on any failure.
+
+        unit tests: test_dataset_update_description
+        """
+        if self.datasetmodel is None:
+            print_error("datasetmodel is none")
+            return False
+        if newdescription is None:
+            print_error("new description is none")
+            return False
+        self.datasetmodel.desc = newdescription
+        self.datasetmodel.save()
+        return True
