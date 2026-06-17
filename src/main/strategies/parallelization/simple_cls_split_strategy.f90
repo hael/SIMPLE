@@ -24,6 +24,8 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: CLS_SPLIT_ICM_RANK_MAXITS = 16 
+integer, parameter :: CLS_SPLIT_REFINE2D_MAXITS = 3
+character(len=*), parameter :: CLS_SPLIT_REFINE2D_ALN_FBODY = 'cls_split_refine2D_alignments_part'
 real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35       ! neighbor penalty: larger values discourage fragmented spectra such as keep/drop/keep.
 real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10 ! Late-rank complexity penalty: larger values make high-index eigenfeatures harder to retain.
 real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50 ! Lower-seed fraction of the eigengap upper bound; smaller values probe more compact latent spaces.
@@ -394,13 +396,15 @@ contains
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: part
         logical,          intent(in)    :: l_write_project
-        type(string) :: label, map_fname, assign_fname, raw_fname, den_fname, coeff_fname
+        type(string) :: label, map_fname, assign_fname, raw_fname, den_fname, coeff_fname, refine2D_align_fname
         type(string) :: den_ptcl_fname, ptcl_map_fname
         type(image), allocatable :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
         type(image), allocatable :: den_ptcls(:), coeff_ptcls(:)
         integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
         integer :: i, j, k, iglob, iptcl_glob, nsplit, subcls_offset, funit_map, funit_assign, funit_ptcl_map
-        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls
+        integer :: funit_refine2D_align, refine2D_nptcls
+        real    :: refine2D_sum_corr_before, refine2D_sum_corr_after
+        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls, l_refine2D, l_write_refine2D_align
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         call determine_split_label(params, build, label)
         l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
@@ -413,6 +417,12 @@ contains
             case DEFAULT
                 THROW_HARD('gen_model must be yes or no; cls_split')
         end select
+        l_refine2D = (trim(params%oritype) == 'ptcl2D') .and. (trim(params%objfun) == 'cc')
+        l_write_refine2D_align = l_refine2D .and. (.not. l_write_project)
+        funit_refine2D_align = -1
+        refine2D_nptcls = 0
+        refine2D_sum_corr_before = 0.
+        refine2D_sum_corr_after  = 0.
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
             map_fname = string('cls_split_class_map.txt')
@@ -455,6 +465,10 @@ contains
                 den_ptcl_fname    = string('cls_split_particles_denoised_part')//int2str_pad(part, params%numlen)//'.mrcs'
                 ptcl_map_fname    = string('cls_split_particles_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
             endif
+            if( l_write_refine2D_align )then
+                refine2D_align_fname = string(CLS_SPLIT_REFINE2D_ALN_FBODY)//int2str_pad(part, params%numlen)//TXT_EXT
+                call del_file(refine2D_align_fname)
+            endif
             call del_file(raw_fname)
             call del_file(den_fname)
             call del_file(coeff_fname)
@@ -468,6 +482,10 @@ contains
             open(newunit=funit_assign, file=assign_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)')    '# local_stack_index parent_class local_subclass pop'
             write(funit_assign,'(A)') '# particle_index parent_class local_subclass'
+            if( l_write_refine2D_align )then
+                open(newunit=funit_refine2D_align, file=refine2D_align_fname%to_char(), status='replace', action='write')
+                write(funit_refine2D_align,'(A)') '# particle_index e3 x y corr'
+            endif
             if( l_write_ptcls )then
                 open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
                 write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
@@ -479,9 +497,10 @@ contains
             write(logfhandle,'(A,I8,A,I8)') 'Cls split starting: class=', cls_inds(i), ' nptcls=', cls_pops(i)
             call flush(logfhandle)
             call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_pre_norm, l_fixed_nsubcls, &
-                                        l_write_ptcls, &
+                                        l_write_ptcls, l_refine2D, &
                                         nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                        den_ptcls, coeff_ptcls)
+                                        den_ptcls, coeff_ptcls, refine2D_nptcls, &
+                                        refine2D_sum_corr_before, refine2D_sum_corr_after)
             if( nsplit < 1 ) cycle
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls split summary: class=', cls_inds(i), ' nptcls=', size(labels), ' nsubcls=', nsplit
             call flush(logfhandle)
@@ -522,6 +541,7 @@ contains
                     if( labels(k) <= 0 ) cycle
                     write(funit_assign,'(I10,1X,I10,1X,I10)') pinds(k), cls_inds(i), labels(k)
                 end do
+                if( l_write_refine2D_align ) call write_refine2D_alignment_rows(spproj, funit_refine2D_align, pinds, labels)
             endif
             if( allocated(raw_subavgs) ) call dealloc_imgarr(raw_subavgs)
             if( allocated(den_subavgs) ) call dealloc_imgarr(den_subavgs)
@@ -534,6 +554,13 @@ contains
         close(funit_map)
         if( l_write_ptcls ) close(funit_ptcl_map)
         if( .not. l_write_project ) close(funit_assign)
+        if( l_write_refine2D_align )then
+            write(funit_refine2D_align,'(A,1X,I12,1X,2(ES18.8,1X))') '# summary', refine2D_nptcls, &
+                refine2D_sum_corr_before, refine2D_sum_corr_after
+            close(funit_refine2D_align)
+        endif
+        if( l_refine2D .and. l_write_project ) &
+            call log_refine2D_summary(part, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
         if( l_write_project .and. l_write_ptcls ) call sort_cls_split_particle_outputs_by_pind(params%smpd_crop)
         if( l_write_project )then
             call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls(1:iglob), pop_of_subcls(1:iglob))
@@ -547,14 +574,16 @@ contains
         if( raw_fname%is_allocated() ) call raw_fname%kill
         if( den_fname%is_allocated() ) call den_fname%kill
         if( coeff_fname%is_allocated() ) call coeff_fname%kill
+        if( refine2D_align_fname%is_allocated() ) call refine2D_align_fname%kill
         if( den_ptcl_fname%is_allocated()    ) call den_ptcl_fname%kill
         if( ptcl_map_fname%is_allocated()    ) call ptcl_map_fname%kill
     end subroutine run_local_split
 
     subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, &
-                                      l_write_ptcls, &
+                                      l_write_ptcls, l_refine2D, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                      den_ptcls, coeff_ptcls)
+                                      den_ptcls, coeff_ptcls, refine2D_nptcls, refine2D_sum_corr_before, &
+                                      refine2D_sum_corr_after)
         use simple_diff_map_graphs,  only: diffmap_graph
         use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
@@ -564,13 +593,16 @@ contains
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
         integer,                  intent(in)    :: cls_id
-        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls
+        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls, l_refine2D
         integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
         type(image), allocatable, intent(out)   :: den_ptcls(:), coeff_ptcls(:)
+        integer,                  intent(inout) :: refine2D_nptcls
+        real,                     intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
+        type(image), allocatable :: refined_subavgs(:)
         type(image) :: cavg_raw, cavg_den, cavg_coeff
         real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
@@ -578,6 +610,7 @@ contains
         integer, allocatable :: i_medoids(:)
         integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
+        logical :: l_refine_collapse
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(labels) ) deallocate(labels)
@@ -690,6 +723,22 @@ contains
             call den_subavgs(j)%copy(cavg_den)
             if( allocated(coeff_ptcls) ) call coeff_subavgs(j)%copy(cavg_coeff)
         end do
+        if( l_refine2D .and. nsplit > 0 )then
+            call refine_split_subclasses2D(params, spproj, cls_id, pinds, labels, nsplit, raw_subavgs, &
+                                          l_refine_collapse, refined_subavgs, refine2D_nptcls, &
+                                          refine2D_sum_corr_before, refine2D_sum_corr_after)
+            if( l_refine_collapse )then
+                labels = 1
+                nsplit = 1
+                call rebuild_collapsed_subavg(imgs, imgs_ppca, den_ptcls, coeff_ptcls, raw_subavgs, den_subavgs, coeff_subavgs)
+            else if( allocated(refined_subavgs) )then
+                do j = 1, min(nsplit, size(refined_subavgs))
+                    call raw_subavgs(j)%copy(refined_subavgs(j))
+                    call den_subavgs(j)%copy(refined_subavgs(j))
+                end do
+            endif
+            if( allocated(refined_subavgs) ) call dealloc_imgarr(refined_subavgs)
+        endif
         call cavg_raw%kill
         call cavg_den%kill
         if( cavg_coeff%exists() ) call cavg_coeff%kill
@@ -706,6 +755,310 @@ contains
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
+
+    subroutine rebuild_collapsed_subavg(imgs, imgs_ppca, den_ptcls, coeff_ptcls, raw_subavgs, den_subavgs, coeff_subavgs)
+        use simple_imgarr_utils, only: dealloc_imgarr
+        type(image), allocatable, intent(inout) :: imgs(:), imgs_ppca(:), den_ptcls(:), coeff_ptcls(:)
+        type(image), allocatable, intent(inout) :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
+        type(image) :: cavg_raw, cavg_den, cavg_coeff
+        integer :: k, nptcls
+        if( .not. allocated(imgs) ) return
+        nptcls = size(imgs)
+        call cavg_raw%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
+        call cavg_den%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
+        if( allocated(coeff_ptcls) ) call cavg_coeff%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
+        do k = 1, nptcls
+            call cavg_raw%add(imgs(k))
+            if( allocated(den_ptcls) )then
+                call cavg_den%add(den_ptcls(k))
+            else if( allocated(imgs_ppca) )then
+                call cavg_den%add(imgs_ppca(k))
+            else
+                call cavg_den%add(imgs(k))
+            endif
+            if( allocated(coeff_ptcls) ) call cavg_coeff%add(coeff_ptcls(k))
+        end do
+        call cavg_raw%div(real(max(nptcls, 1)))
+        call cavg_den%div(real(max(nptcls, 1)))
+        if( allocated(coeff_ptcls) ) call cavg_coeff%div(real(max(nptcls, 1)))
+        if( allocated(raw_subavgs) ) call dealloc_imgarr(raw_subavgs)
+        if( allocated(den_subavgs) ) call dealloc_imgarr(den_subavgs)
+        allocate(raw_subavgs(1), den_subavgs(1))
+        call raw_subavgs(1)%copy(cavg_raw)
+        call den_subavgs(1)%copy(cavg_den)
+        if( allocated(coeff_subavgs) ) call dealloc_imgarr(coeff_subavgs)
+        if( allocated(coeff_ptcls) )then
+            allocate(coeff_subavgs(1))
+            call coeff_subavgs(1)%copy(cavg_coeff)
+            call cavg_coeff%kill
+        endif
+        call cavg_raw%kill
+        call cavg_den%kill
+    end subroutine rebuild_collapsed_subavg
+
+    subroutine refine_split_subclasses2D(params, spproj, cls_id, pinds, labels, nsplit, seed_subavgs, collapse, &
+                                         refined_subavgs, refine2D_nptcls, refine2D_sum_corr_before, &
+                                         refine2D_sum_corr_after)
+        use simple_imgarr_utils, only: dealloc_imgarr
+        type(parameters),         intent(inout) :: params
+        type(sp_project),         intent(inout) :: spproj
+        integer,                  intent(in)    :: cls_id, pinds(:), nsplit
+        integer,                  intent(inout) :: labels(:)
+        type(image),              intent(inout) :: seed_subavgs(:)
+        logical,                  intent(out)   :: collapse
+        type(image), allocatable, intent(out)   :: refined_subavgs(:)
+        integer,                  intent(inout) :: refine2D_nptcls
+        real,                     intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
+        integer, allocatable :: sub_pinds(:)
+        real, allocatable    :: old_e3(:), old_x(:), old_y(:), old_corr(:), sub_corrs(:)
+        real :: parent_corr, corr_after
+        integer :: i, j, nptcls
+        logical :: any_refined
+        collapse = .false.
+        nptcls = size(pinds)
+        if( nptcls < 1 .or. nsplit < 1 ) return
+        allocate(old_e3(nptcls), old_x(nptcls), old_y(nptcls), old_corr(nptcls), source=0.)
+        do i = 1, nptcls
+            old_e3(i) = spproj%os_ptcl2D%e3get(pinds(i))
+            if( spproj%os_ptcl2D%isthere(pinds(i), 'x') ) old_x(i) = spproj%os_ptcl2D%get(pinds(i), 'x')
+            if( spproj%os_ptcl2D%isthere(pinds(i), 'y') ) old_y(i) = spproj%os_ptcl2D%get(pinds(i), 'y')
+            if( spproj%os_ptcl2D%isthere(pinds(i), 'corr') ) old_corr(i) = spproj%os_ptcl2D%get(pinds(i), 'corr')
+        end do
+        parent_corr = sum(old_corr) / real(max(nptcls, 1))
+        if( spproj%os_cls2D%get_noris() >= cls_id )then
+            if( spproj%os_cls2D%isthere(cls_id, 'corr') ) parent_corr = spproj%os_cls2D%get(cls_id, 'corr')
+        endif
+        allocate(sub_corrs(nsplit), source=-huge(1.))
+        allocate(refined_subavgs(nsplit))
+        any_refined = .false.
+        do j = 1, nsplit
+            sub_pinds = pack(pinds, mask=(labels == j))
+            if( size(sub_pinds) < 2 )then
+                if( size(sub_pinds) == 1 )then
+                    sub_corrs(j) = old_corr(minloc(abs(pinds - sub_pinds(1)), dim=1))
+                else
+                    sub_corrs(j) = parent_corr
+                endif
+                call refined_subavgs(j)%copy(seed_subavgs(j))
+            else
+                call run_refine2D_subclass(params, spproj, cls_id, j, sub_pinds, seed_subavgs(j), &
+                                           corr_after, refined_subavgs(j), refine2D_nptcls)
+                sub_corrs(j) = corr_after
+                any_refined = .true.
+                refine2D_sum_corr_before = refine2D_sum_corr_before + parent_corr * real(size(sub_pinds))
+                refine2D_sum_corr_after  = refine2D_sum_corr_after  + corr_after  * real(size(sub_pinds))
+            endif
+            if( allocated(sub_pinds) ) deallocate(sub_pinds)
+        end do
+        collapse = any_refined .and. all(sub_corrs <= parent_corr)
+        if( collapse ) call restore_ptcl2D_alignment_subset(spproj, pinds, old_e3, old_x, old_y, old_corr)
+        deallocate(old_e3, old_x, old_y, old_corr, sub_corrs)
+        if( collapse .and. allocated(refined_subavgs) ) call dealloc_imgarr(refined_subavgs)
+    end subroutine refine_split_subclasses2D
+
+    subroutine restore_ptcl2D_alignment_subset(spproj, pinds, old_e3, old_x, old_y, old_corr)
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: pinds(:)
+        real,             intent(in)    :: old_e3(:), old_x(:), old_y(:), old_corr(:)
+        integer :: i
+        do i = 1, size(pinds)
+            call spproj%os_ptcl2D%e3set(pinds(i), old_e3(i))
+            call spproj%os_ptcl2D%set(pinds(i), 'x',    old_x(i))
+            call spproj%os_ptcl2D%set(pinds(i), 'y',    old_y(i))
+            call spproj%os_ptcl2D%set(pinds(i), 'corr', old_corr(i))
+        end do
+    end subroutine restore_ptcl2D_alignment_subset
+
+    subroutine write_refine2D_alignment_rows(spproj, funit, pinds, labels)
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: funit, pinds(:), labels(:)
+        real :: e3, x, y, corr
+        integer :: i, pind
+        do i = 1, size(pinds)
+            if( labels(i) <= 0 ) cycle
+            pind = pinds(i)
+            e3 = spproj%os_ptcl2D%e3get(pind)
+            x = 0.; y = 0.; corr = 0.
+            if( spproj%os_ptcl2D%isthere(pind, 'x')    ) x    = spproj%os_ptcl2D%get(pind, 'x')
+            if( spproj%os_ptcl2D%isthere(pind, 'y')    ) y    = spproj%os_ptcl2D%get(pind, 'y')
+            if( spproj%os_ptcl2D%isthere(pind, 'corr') ) corr = spproj%os_ptcl2D%get(pind, 'corr')
+            write(funit,'(I10,1X,F12.5,1X,F12.5,1X,F12.5,1X,F12.5)') pind, e3, x, y, corr
+        end do
+    end subroutine write_refine2D_alignment_rows
+
+    subroutine run_refine2D_subclass(params, spproj, cls_id, subcls_id, sub_pinds, seed_cavg, corr_after, &
+                                     refined_cavg, refine2D_nptcls)
+        use simple_commanders_cluster2D, only: commander_cluster2D
+        type(parameters), intent(inout) :: params
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: cls_id, subcls_id, sub_pinds(:)
+        type(image),      intent(inout) :: seed_cavg
+        real,             intent(out)   :: corr_after
+        type(image),      intent(inout) :: refined_cavg
+        integer,          intent(inout) :: refine2D_nptcls
+        type(commander_cluster2D) :: xcluster2D
+        type(sp_project) :: refined_proj
+        type(cmdline)    :: c2d_cline
+        type(string) :: cwd_before, cwd_now, workdir, projfile, stk_fname, refs_fname, refs_even_fname, refs_odd_fname, final_refs
+        integer, allocatable :: local_to_global(:)
+        integer :: istat, next_dir
+        real :: smpd, mskdiam_local
+        corr_after = 0.
+        call simple_getcwd(cwd_before)
+        next_dir = find_next_int_dir_prefix(string('.'))
+        workdir  = int2str(next_dir)//'_cls_split_refine2D_'//int2str(cls_id)//'_'//int2str(subcls_id)
+        call simple_mkdir(workdir, verbose=.false.)
+        call simple_chdir(workdir, status=istat)
+        if( istat /= 0 ) THROW_HARD('failed to enter cls_split refine2D directory')
+        call simple_getcwd(cwd_now)
+        CWD_GLOB = cwd_now%to_char()
+        projfile       = 'refine2D_subclass.simple'
+        stk_fname      = 'particles.mrcs'
+        refs_fname     = 'start2Drefs.mrc'
+        refs_even_fname = 'start2Drefs_even.mrc'
+        refs_odd_fname  = 'start2Drefs_odd.mrc'
+        call write_refine2D_subset_project(spproj, sub_pinds, projfile, stk_fname, local_to_global)
+        call seed_cavg%write(refs_fname,      1, del_if_exists=.true.)
+        call seed_cavg%write(refs_even_fname, 1, del_if_exists=.true.)
+        call seed_cavg%write(refs_odd_fname,  1, del_if_exists=.true.)
+        smpd = seed_cavg%get_smpd()
+        mskdiam_local = params%mskdiam
+        if( mskdiam_local <= 0. ) mskdiam_local = real(seed_cavg%get_box()) * smpd
+        call c2d_cline%set('projfile',      projfile%to_char())
+        call c2d_cline%set('refs',          refs_fname%to_char())
+        call c2d_cline%set('ncls',          1)
+        call c2d_cline%set('mskdiam',       mskdiam_local)
+        call c2d_cline%set('objfun',        'cc')
+        call c2d_cline%set('refine',        'inpl')
+        call c2d_cline%set('maxits',        CLS_SPLIT_REFINE2D_MAXITS)
+        call c2d_cline%set('startit',       2)
+        call c2d_cline%set('nthr',          max(1, params%nthr))
+        call c2d_cline%set('trs',           params%trs)
+        call c2d_cline%set('mkdir',         'no')
+        call xcluster2D%execute(c2d_cline)
+        call refined_proj%read(projfile)
+        call merge_refined_subset2D(spproj, refined_proj, local_to_global, corr_after, refine2D_nptcls)
+        final_refs = c2d_cline%get_carg('refs')
+        if( file_exists(final_refs%to_char()) )then
+            if( .not. refined_cavg%exists() ) call refined_cavg%new(seed_cavg%get_ldim(), seed_cavg%get_smpd())
+            call refined_cavg%read(final_refs, 1)
+        else
+            call refined_cavg%copy(seed_cavg)
+        endif
+        call refined_proj%kill
+        call c2d_cline%kill()
+        if( allocated(local_to_global) ) deallocate(local_to_global)
+        call simple_chdir(cwd_before, status=istat)
+        if( istat /= 0 ) THROW_HARD('failed to restore cwd after cls_split refine2D')
+        call simple_getcwd(cwd_now)
+        CWD_GLOB = cwd_now%to_char()
+        call cwd_before%kill
+        call cwd_now%kill
+        call workdir%kill
+        call projfile%kill
+        call stk_fname%kill
+        call refs_fname%kill
+        call refs_even_fname%kill
+        call refs_odd_fname%kill
+        if( final_refs%is_allocated() ) call final_refs%kill
+    end subroutine run_refine2D_subclass
+
+    subroutine write_refine2D_subset_project(spproj, sub_pinds, projfile, stk_fname, local_to_global)
+        type(sp_project),         intent(inout) :: spproj
+        integer,                  intent(in)    :: sub_pinds(:)
+        type(string),             intent(in)    :: projfile, stk_fname
+        integer, allocatable,     intent(out)   :: local_to_global(:)
+        type(sp_project) :: subproj
+        type(oris)       :: local_os
+        type(image)      :: img
+        type(ctfparams)  :: ctfvars
+        type(string)     :: stkname
+        integer :: i, stkind, ind_in_stk, n, ldim(3), nstk
+        real    :: smpd
+        n = size(sub_pinds)
+        if( n < 1 ) THROW_HARD('empty particle subset in write_refine2D_subset_project')
+        allocate(local_to_global(n), source=sub_pinds)
+        ctfvars = spproj%get_ctfparams('ptcl2D', sub_pinds(1))
+        call spproj%map_ptcl_ind2stk_ind('ptcl2D', sub_pinds(1), stkind, ind_in_stk)
+        call spproj%os_stk%getter(stkind, 'stk', stkname)
+        call find_ldim_nptcls(stkname, ldim, nstk)
+        smpd = find_img_smpd(stkname)
+        call img%new([ldim(1), ldim(2), 1], smpd)
+        call local_os%new(n, is_ptcl=.true.)
+        do i = 1, n
+            call spproj%map_ptcl_ind2stk_ind('ptcl2D', sub_pinds(i), stkind, ind_in_stk)
+            call spproj%os_stk%getter(stkind, 'stk', stkname)
+            call img%read(stkname, ind_in_stk)
+            call img%write(stk_fname, i, del_if_exists=(i == 1))
+            call local_os%transfer_ori(i, spproj%os_ptcl2D, sub_pinds(i))
+            call local_os%set(i, 'class', 1)
+            call local_os%set(i, 'state', 1)
+            call local_os%set(i, 'pind',  i)
+            call local_os%set(i, 'indstk', i)
+        end do
+        call subproj%update_projinfo(projfile)
+        call subproj%add_single_stk(stk_fname, ctfvars, local_os)
+        call subproj%os_cls2D%new(1, is_ptcl=.false.)
+        call subproj%os_cls2D%set(1, 'pop',    n)
+        call subproj%os_cls2D%set(1, 'state',  1)
+        call subproj%os_cls2D%set(1, 'accept', 1)
+        call subproj%os_cls3D%new(1, is_ptcl=.false.)
+        call subproj%os_cls3D%set(1, 'state',  1)
+        call subproj%os_cls3D%set(1, 'accept', 1)
+        call subproj%write(projfile)
+        call img%kill
+        call local_os%kill
+        call subproj%kill
+        call stkname%kill
+    end subroutine write_refine2D_subset_project
+
+    subroutine merge_refined_subset2D(spproj, refined_proj, local_to_global, corr_after, refine2D_nptcls)
+        type(sp_project), intent(inout) :: spproj, refined_proj
+        integer,          intent(in)    :: local_to_global(:)
+        real,             intent(out)   :: corr_after
+        integer,          intent(inout) :: refine2D_nptcls
+        real :: e3_after, x_after, y_after, sum_corr
+        integer :: i, gp, n
+        n = size(local_to_global)
+        sum_corr = 0.
+        do i = 1, n
+            gp = local_to_global(i)
+            e3_after = refined_proj%os_ptcl2D%e3get(i)
+            x_after = 0.; y_after = 0.
+            if( refined_proj%os_ptcl2D%isthere(i, 'x') ) x_after = refined_proj%os_ptcl2D%get(i, 'x')
+            if( refined_proj%os_ptcl2D%isthere(i, 'y') ) y_after = refined_proj%os_ptcl2D%get(i, 'y')
+            call spproj%os_ptcl2D%e3set(gp, e3_after)
+            call spproj%os_ptcl2D%set(gp, 'x', x_after)
+            call spproj%os_ptcl2D%set(gp, 'y', y_after)
+            if( refined_proj%os_ptcl2D%isthere(i, 'corr') )then
+                call spproj%os_ptcl2D%set(gp, 'corr', refined_proj%os_ptcl2D%get(i, 'corr'))
+                sum_corr = sum_corr + refined_proj%os_ptcl2D%get(i, 'corr')
+            endif
+        end do
+        corr_after = sum_corr / real(max(n, 1))
+        if( refined_proj%os_cls2D%get_noris() >= 1 )then
+            if( refined_proj%os_cls2D%isthere(1, 'corr') ) corr_after = refined_proj%os_cls2D%get(1, 'corr')
+        endif
+        refine2D_nptcls = refine2D_nptcls + n
+    end subroutine merge_refined_subset2D
+
+    subroutine log_refine2D_summary(part, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
+        integer, intent(in) :: part
+        integer, intent(in) :: refine2D_nptcls
+        real,    intent(in) :: refine2D_sum_corr_before, refine2D_sum_corr_after
+        real :: mean_corr_before, mean_corr_after, mean_corr_delta
+        mean_corr_before = 0.; mean_corr_after = 0.; mean_corr_delta = 0.
+        if( refine2D_nptcls > 0 )then
+            mean_corr_before = refine2D_sum_corr_before / real(refine2D_nptcls)
+            mean_corr_after  = refine2D_sum_corr_after  / real(refine2D_nptcls)
+            mean_corr_delta  = mean_corr_after - mean_corr_before
+        endif
+        write(logfhandle,'(A,I8,A,I8,A,F10.5)') &
+            'Cls split refine2D run summary: part=', part, &
+            ' particles_refined=', refine2D_nptcls, &
+            ' mean_corr_delta=',  mean_corr_delta
+        call flush(logfhandle)
+    end subroutine log_refine2D_summary
 
     subroutine select_kmedoids_by_silhouette(dmat, cls_id, k_min_in, k_max_in, nsplit, i_medoids, labels)
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -736,7 +1089,7 @@ contains
                 endif
             end do
             if( l_all_populated )then
-                score = silhouette_score(trial_labels, dmat) / real(k_trial)
+                score = silhouette_score(trial_labels, dmat)
             else
                 score = -huge(score)
             endif
@@ -1252,9 +1605,13 @@ contains
         type(string) :: map_fname, assign_fname, raw_fname, den_fname, coeff_fname
         integer, parameter :: MERGE_STACK_BUFSZ = 64
         integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls, ldim(3), nstk
-        real    :: smpd
+        integer :: refine2D_nptcls
+        real    :: smpd, refine2D_sum_corr_before, refine2D_sum_corr_after
         logical :: have_coeff_avgs
         character(len=XLONGSTRLEN) :: line
+        refine2D_nptcls = 0
+        refine2D_sum_corr_before = 0.
+        refine2D_sum_corr_after  = 0.
         call spproj%read(params%projfile)
         write(logfhandle,'(A,I8)') 'Cls split merge: start nparts=', nparts_run
         call flush(logfhandle)
@@ -1442,6 +1799,11 @@ contains
             close(funit)
             call assign_fname%kill
         end do
+        if( trim(params%oritype) == 'ptcl2D' .and. trim(params%objfun) == 'cc' )then
+            call merge_refine2D_alignment_sidecars(spproj, params, nparts_run, refine2D_nptcls, &
+                                                   refine2D_sum_corr_before, refine2D_sum_corr_after)
+            call log_refine2D_summary(0, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
+        endif
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop)
         if( trim(params%gen_model) == 'yes' )then
             call merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
@@ -1452,6 +1814,60 @@ contains
                    comb_part, comb_row, comb_parent, comb_local, comb_pop)
         call map_fname%kill
     end subroutine merge_worker_outputs
+
+    subroutine merge_refine2D_alignment_sidecars(spproj, params, nparts_run, refine2D_nptcls, &
+                                                 refine2D_sum_corr_before, refine2D_sum_corr_after)
+        type(sp_project), intent(inout) :: spproj
+        type(parameters), intent(in)    :: params
+        integer,          intent(in)    :: nparts_run
+        integer,          intent(inout) :: refine2D_nptcls
+        real,             intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
+        type(string) :: fname
+        logical, allocatable :: seen(:)
+        logical :: got_summary
+        integer :: ipart, funit, ios, pind, noris
+        integer :: nptcls
+        real :: e3, x, y, corr, sum_corr_before, sum_corr_after
+        character(len=XLONGSTRLEN) :: line
+        noris = spproj%os_ptcl2D%get_noris()
+        allocate(seen(noris), source=.false.)
+        do ipart = 1, nparts_run
+            got_summary = .false.
+            fname = string(CLS_SPLIT_REFINE2D_ALN_FBODY)//int2str_pad(ipart, params%numlen)//TXT_EXT
+            if( .not. file_exists(fname%to_char()) ) THROW_HARD('missing cls_split refine2D alignment sidecar')
+            open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+            call fileiochk('merge_refine2D_alignment_sidecars opening '//fname%to_char(), ios)
+            do
+                read(funit,'(A)',iostat=ios) line
+                if( ios /= 0 ) exit
+                if( len_trim(line) == 0 ) cycle
+                if( line(1:1) == '#' )then
+                    if( index(adjustl(line), '# summary') == 1 )then
+                        read(line(10:),*,iostat=ios) nptcls, sum_corr_before, sum_corr_after
+                        if( ios /= 0 ) THROW_HARD('malformed cls_split refine2D alignment summary row')
+                        refine2D_nptcls          = refine2D_nptcls + nptcls
+                        refine2D_sum_corr_before = refine2D_sum_corr_before + sum_corr_before
+                        refine2D_sum_corr_after  = refine2D_sum_corr_after  + sum_corr_after
+                        got_summary = .true.
+                    endif
+                    cycle
+                endif
+                read(line,*,iostat=ios) pind, e3, x, y, corr
+                if( ios /= 0 ) THROW_HARD('malformed cls_split refine2D alignment sidecar row')
+                if( pind < 1 .or. pind > noris ) THROW_HARD('particle index out of range in cls_split refine2D alignment sidecar')
+                if( seen(pind) ) THROW_HARD('duplicate particle index in cls_split refine2D alignment sidecars')
+                seen(pind) = .true.
+                call spproj%os_ptcl2D%e3set(pind, e3)
+                call spproj%os_ptcl2D%set(pind, 'x',    x)
+                call spproj%os_ptcl2D%set(pind, 'y',    y)
+                call spproj%os_ptcl2D%set(pind, 'corr', corr)
+            end do
+            close(funit)
+            if( .not. got_summary ) THROW_HARD('missing cls_split refine2D alignment summary row')
+            call fname%kill
+        end do
+        deallocate(seen)
+    end subroutine merge_refine2D_alignment_sidecars
 
     subroutine merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
         type(parameters), intent(inout) :: params

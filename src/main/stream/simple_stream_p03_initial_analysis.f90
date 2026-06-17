@@ -42,7 +42,7 @@ use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs_reject, commander_abinitio3D_cavgs
 use simple_commanders_reproject,  only: commander_reproject
-use simple_commanders_cluster2D,  only: commander_cls_split
+use simple_commanders_cls_split, only: commander_cls_split
 use simple_commanders_mkcavgs,    only: commander_make_cavgs
 use simple_stream_cluster2D_microchunked, only: stream_cluster2D_microchunked
 use simple_mini_stream_utils,     only: segdiampick_mics_multi
