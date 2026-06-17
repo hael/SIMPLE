@@ -14,6 +14,8 @@ private
 
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
+public :: CAVG_QUALITY_MODEL_MICROCHUNK_P1
+public :: CAVG_QUALITY_MODEL_MICROCHUNK_P2
 public :: CAVG_QUALITY_MODEL_CHUNK_LP4
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
@@ -80,9 +82,13 @@ end type cavg_quality_cached_decision
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_LP4     = 'chunk_lp4'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v2'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P1 = 'microchunk_p1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P2 = 'microchunk_p2'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
     CAVG_QUALITY_MODEL_CHUNK_LP4//'|'//&
-    CAVG_QUALITY_MODEL_POOL_DEFAULT
+    CAVG_QUALITY_MODEL_POOL_DEFAULT//'|'//&
+    CAVG_QUALITY_MODEL_MICROCHUNK_P1//'|'//&
+    CAVG_QUALITY_MODEL_MICROCHUNK_P2
 
 real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
 real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
@@ -174,6 +180,10 @@ contains
                 spec = chunk_lp4_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_default_model_spec()
+            case(CAVG_QUALITY_MODEL_MICROCHUNK_P1)
+                spec = microchunk_p1_model_spec()
+            case(CAVG_QUALITY_MODEL_MICROCHUNK_P2)
+                spec = microchunk_p2_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -279,6 +289,48 @@ contains
         spec%use_cluster_rescue      = .true.
         spec%enforce_min_accept_frac = .true.
     end function pool_default_model_spec
+
+    function microchunk_p1_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P1
+        spec%context                 = 'chunk'
+        spec%feature_policy          = 'microchunk_plus_signal'
+        spec%weights                 = [ &
+              0.000000E+00,   1.384602E-01,   9.839886E-02,   2.000844E-01, &
+              1.387044E-01,   0.000000E+00,   2.924874E-01,   0.000000E+00, &
+              1.318647E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
+        spec%boundary_margin         =   6.000000E-01
+        spec%min_score_separation    =   1.500000E-01
+        spec%otsu_min_offset         =   5.000000E-02
+        spec%otsu_max_offset         =   3.000000E-01
+        spec%cluster_rescue_margin   =   2.000000E-01
+        spec%min_accept_frac         =   0.000000E+00
+        spec%use_lowsep_otsu         = .false.
+        spec%use_otsu_window         = .true.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function microchunk_p1_model_spec
+
+    function microchunk_p2_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P2
+        spec%context                 = 'chunk'
+        spec%feature_policy          = 'microchunk_plus_signal'
+        spec%weights                 = [ &
+            1.569628E-01,   2.420765E-01,   2.467391E-01,   5.512793E-02, &
+            0.000000E+00,   0.000000E+00,   2.990936E-01,   0.000000E+00, &
+            0.000000E+00,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
+        spec%boundary_margin         =  -5.000000E-02
+        spec%min_score_separation    =   1.500000E-01
+        spec%otsu_min_offset         =   3.500000E-01
+        spec%otsu_max_offset         =   5.000000E-01
+        spec%cluster_rescue_margin   =   2.000000E-01
+        spec%min_accept_frac         =   0.000000E+00
+        spec%use_lowsep_otsu         = .true.
+        spec%use_otsu_window         = .true.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function microchunk_p2_model_spec
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self

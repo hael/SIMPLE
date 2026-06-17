@@ -42,15 +42,15 @@ contains
         class(cmdline),                       intent(inout) :: cline
         character(len=*), parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
         integer,          parameter :: WAITTIME  = 5
-        type(rec_list)       :: project_list
-        type(parameters)     :: params
-        type(sp_project)     :: spproj_glob
-        type(microchunked2D) :: chunked_2D
-        integer              :: nstks, nptcls_tot, ntot_chunks
+        type(rec_list)            :: project_list
+        type(parameters)          :: params
+        type(sp_project)          :: spproj_glob
+        type(microchunked2D)      :: chunked_2D
+        integer                   :: nstks, nptcls_tot, ntot_chunks
         ! --- default command-line parameters ---
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
-        if( .not. cline%defined('nmics')     ) call cline%set('nmics',      5)
-        if( .not. cline%defined('maxnptcls') ) call cline%set('maxnptcls', 1000)
+        if( .not. cline%defined('nmics')     ) call cline%set('nmics',       50)
+        if( .not. cline%defined('maxnptcls') ) call cline%set('maxnptcls', 5000)
         ! --- initialise parameters and read project ---
         call params%new(cline)
         call spproj_glob%read_non_data_segments(params%projfile)
@@ -278,18 +278,18 @@ contains
     subroutine exec_stream_cluster2D_microchunked_fast( self, cline )
         class(stream_cluster2D_microchunked), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=*), parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
-        integer,          parameter :: WAITTIME  = 5
-        type(rec_list)       :: project_list
-        type(parameters)     :: params
-        type(sp_project)     :: spproj_glob
+        character(len=*),                         parameter :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
+        integer,                                  parameter :: WAITTIME  = 5
+        type(rec_list)            :: project_list
+        type(parameters)          :: params
+        type(sp_project)          :: spproj_glob
         type(microchunked2D_fast) :: chunked_2D
-        integer              :: nstks, nptcls_tot, ntot_chunks
+        integer                   :: nstks, nptcls_tot, ntot_chunks
         logical                   :: l_once
         ! --- default command-line parameters ---
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
-        if( .not. cline%defined('nmics')     ) call cline%set('nmics',      5)
-        if( .not. cline%defined('maxnptcls') ) call cline%set('maxnptcls', 1000)
+        if( .not. cline%defined('nmics')     ) call cline%set('nmics',       50)
+        if( .not. cline%defined('maxnptcls') ) call cline%set('maxnptcls', 5000)
         ! --- initialise parameters and read project ---
         call params%new(cline)
         if( params%nchunks > 1) params%workers = params%nchunks
@@ -457,7 +457,7 @@ contains
                     if( spproj_glob%os_stk%get_int(istk,'nptcls') == 0 ) cycle
                     nstks_chunk = nstks_chunk + 1
                 end do
-                nptcls      = sum(stk_all_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
+                nptcls = sum(stk_all_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
                 call spproj%os_stk%new(nstks_chunk, is_ptcl=.false.)
                 call spproj%os_mic%new(nstks_chunk, is_ptcl=.false.)
                 call spproj%os_ptcl2D%new(nptcls,   is_ptcl=.true.)

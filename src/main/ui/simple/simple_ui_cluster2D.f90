@@ -159,10 +159,10 @@ contains
         ! <empty>
         ! search controls
         call cluster2D_microchunked%add_input(UI_SRCH, 'nmics', 'num', 'Max # of micrographs per chunk', &
-        &'Maximum number of micrographs accumulated into one chunk{100}', &
-        &'max # of micrographs per chunk{5}', .false., 5., gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_microchunked%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles per chunk', 'Max # of particles per chunk{100000}',&
-        &'max # of particles per chunk{1000}', .false., 1000., gui_submenu="search", gui_advanced=.true.)
+        &'Maximum number of micrographs accumulated into one chunk{50}', &
+        &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_advanced=.true.)
+        call cluster2D_microchunked%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles per chunk', 'Max # of particles per chunk{5000}',&
+        &'max # of particles per chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
         call cluster2D_microchunked%add_input(UI_SRCH, 'maxnchunks', 'num', 'Max # of chunks to process', &
         &'Cap on the total number of chunks processed, 0 = no limit{0}', &
         &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_advanced=.true.)

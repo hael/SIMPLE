@@ -194,6 +194,7 @@ type :: parameters
     type(string)              :: import_dir           !< dir to import .star files from for import_starproject
     type(string)              :: infile               !< file with inputs(.txt)
     type(string)              :: infile2              !< file with inputs(.txt)
+    type(string)              :: keys
     type(string)              :: last_prev_dir        !< last previous execution directory
     type(string)              :: msklist              !< table (text file) of mask volume files(.txt)
     type(string)              :: mskvols(MAXS)

@@ -56,7 +56,7 @@
 !
 ! CONSTANTS:
 !   MICROCHUNK_P1_THRESHOLD — maximum particles per pass-1 microchunk       (5000)
-!   MICROCHUNK_P2_THRESHOLD — maximum selected particles per pass-2 chunk   (8000)
+!   MICROCHUNK_P2_THRESHOLD — maximum selected particles per pass-2 chunk  (10000)
 !   DEFAULT_NCLS                          — default number of 2D classes         (100)
 !   DEFAULT_LPSTART                       — shared low-pass start cutoff, Å    (15.0)
 !   DEFAULT_MICRO_P1_LP                   — pass-1 low-pass stop cutoff, Å    (15.0)
@@ -75,29 +75,29 @@
 !   simple_cluster2D_rejector
 !==============================================================================
 module simple_microchunked2D_fast
-  use unix,                only: c_time, c_long
-  use simple_defs,         only: logfhandle, STDLEN, CWD_GLOB
-  use simple_error,        only: simple_exception
-  use simple_image,        only: image
-  use simple_timer,        only: timer_int_kind, tic, toc
-  use simple_string,       only: string
-  use simple_fileio,       only: swap_suffix, simple_copy_file, write_filetable, simple_touch, basename
-  use simple_syslib,       only: simple_mkdir, simple_abspath, simple_chdir, &
-                                 simple_getcwd, file_exists, del_file, dir_exists
-  use simple_cmdline,      only: cmdline
-  use simple_qsys_env,     only: qsys_env
-  use simple_rec_list,     only: rec_list
-  use simple_gui_utils,    only: mrc2jpeg_tiled
-  use simple_parameters,   only: parameters
-  use simple_sp_project,   only: sp_project
-  use simple_cavg_quality_analysis, only: evaluate_cavg_quality
-  use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+  use unix,                         only: c_time, c_long
+  use simple_defs,                  only: logfhandle, STDLEN, CWD_GLOB
+  use simple_error,                 only: simple_exception
+  use simple_image,                 only: image
+  use simple_timer,                 only: timer_int_kind, tic, toc
+  use simple_fileio,                only: swap_suffix, simple_copy_file, write_filetable, simple_touch, basename
+  use simple_string,                only: string
+  use simple_syslib,                only: simple_mkdir, simple_abspath, simple_chdir, &
+                                          simple_getcwd, file_exists, del_file, dir_exists
+  use simple_cmdline,               only: cmdline
+  use simple_qsys_env,              only: qsys_env
+  use simple_rec_list,              only: rec_list
+  use simple_gui_utils,             only: mrc2jpeg_tiled
+  use simple_defs_fname,            only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
+  use simple_parameters,            only: parameters
+  use simple_sp_project,            only: sp_project
+  use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
+  use simple_string_utils,          only: int2str
+  use simple_projfile_utils,        only: merge_chunk_projfiles
+  use simple_cluster2D_rejector,    only: cluster2D_rejector
+  use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_MICROCHUNK_P1, CAVG_QUALITY_MODEL_MICROCHUNK_P2
   use simple_cavg_quality_types,    only: cavg_quality_result
-  use simple_defs_fname,   only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
-  use simple_string_utils, only: int2str
-  use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr
-  use simple_projfile_utils,          only: merge_chunk_projfiles
-  use simple_cluster2D_rejector,      only: cluster2D_rejector
+  use simple_cavg_quality_analysis, only: evaluate_cavg_quality
 
   implicit none
   public  :: microchunked2D_fast
@@ -106,13 +106,13 @@ module simple_microchunked2D_fast
 
   logical, parameter :: DEBUG                                 = .false.
   integer, parameter :: MICROCHUNK_P1_THRESHOLD               = 5000
-  integer, parameter :: MICROCHUNK_P2_THRESHOLD               = 5000
+  integer, parameter :: MICROCHUNK_P2_THRESHOLD               = 10000
   integer, parameter :: DEFAULT_NCLS                          = 100
   integer, parameter :: DEFAULT_WALLTIME                      = 29 * 60  ! 29 minutes in seconds
   integer, parameter :: DEFAULT_MICRO_P1_BOX                  = 128
   integer, parameter :: DEFAULT_MICRO_P2_BOX                  = 128
-  integer, parameter :: DEFAULT_MICRO_P1_NSAMPLE              = 1000
-  integer, parameter :: DEFAULT_MICRO_P2_NSAMPLE              = 1000
+  integer, parameter :: DEFAULT_MICRO_P1_NSAMPLE              = 2000
+  integer, parameter :: DEFAULT_MICRO_P2_NSAMPLE              = 2000
   real,    parameter :: DEFAULT_LPSTART                       = 15.0
   real,    parameter :: DEFAULT_MICRO_P1_LP                   = 15.0
   real,    parameter :: DEFAULT_MICRO_P2_LP                   = 10.0
@@ -467,8 +467,10 @@ contains
   end function get_n_total_particles
 
   ! Returns true when all required tiers are complete.
-  ! In pass_1_only mode, only pass-1 chunks are required; otherwise pass-1
-  ! and pass-2 chunks must be complete.
+  ! In pass_1_only mode, only pass-1 chunks are required.
+  ! In two-tier mode, pass-1 must be complete and pass-2 must be complete
+  ! when present; if no pass-2 chunks were generated, pass-1 completion is
+  ! treated as terminal.
   logical function get_finished( self )
     class(microchunked2D_fast), intent(in) :: self
     ! pass-1: must have at least one chunk and all must be complete
@@ -478,9 +480,11 @@ contains
     if( .not. get_finished ) return
     ! pass-1-only runs terminate once all pass-1 chunks are done
     if( self%pass_1_only ) return
-    ! pass-2: must have at least one chunk and all must be complete
-    get_finished = self%get_n_microchunks_pass_2() > 0
-    if( .not. get_finished ) return
+    ! pass-2: when absent, pass-1 completion is terminal
+    if( self%get_n_microchunks_pass_2() == 0 )then
+      get_finished = .true.
+      return
+    endif
     get_finished = all(self%microchunks_pass_2(:)%complete .or. self%microchunks_pass_2(:)%failed)
   end function get_finished
 
@@ -530,7 +534,7 @@ contains
     class(microchunked2D_fast), intent(inout) :: self
     type(rec_list),        intent(inout) :: project_list
 
-    type(string),     allocatable   :: projfiles(:)
+    type(string),     allocatable   :: projfiles(:), projfiles_all(:)
     type(string),     allocatable   :: unique_projfiles(:)
     logical,          allocatable   :: included(:)
     integer,          allocatable   :: ids(:), nptcls(:)
@@ -552,9 +556,10 @@ contains
         return
       end if
 
-      included  = project_list%get_included_flags()
-      ids       = pack(project_list%get_ids(),       .not. included)
-      projfiles = project_list%get_projnames()
+      included      = project_list%get_included_flags()
+      ids           = pack(project_list%get_ids(),       .not. included)
+      projfiles_all = project_list%get_projnames()
+      projfiles     = pack(projfiles_all, .not. included)
       if( size(ids) == 0 ) then
         call timer_stop(t0, string('generate_microchunks_pass_1'))
         return
@@ -602,13 +607,15 @@ contains
       return
     end if
 
+    ! NOTE: pass-1 uses a soft cap. The trigger micrograph that crosses the
+    ! threshold is included in the current chunk to preserve contiguous slices.
     do while( project_list%get_nptcls_tot(l_not_included=.true.) > MICROCHUNK_P1_THRESHOLD )
       included = project_list%get_included_flags()
       ids      = pack(project_list%get_ids(),    .not. included)
       nptcls   = pack(project_list%get_nptcls(), .not. included)
       if( size(ids) == 0 ) exit
 
-      ! Accumulate micrographs until the particle threshold is exceeded
+      ! Accumulate micrographs until the soft cap is exceeded.
       chunk_nptcls = 0
       do imic = 1, size(nptcls)
         chunk_nptcls = chunk_nptcls + nptcls(imic)
@@ -880,9 +887,8 @@ contains
       call cline%set('box_crop',                  DEFAULT_MICRO_P2_BOX)
       call cline%set('nsample',  min(DEFAULT_MICRO_P2_NSAMPLE, nptcls))
       call cline%set('ncls',                              DEFAULT_NCLS)
-    !  call cline%set('lpstart',                        DEFAULT_LPSTART)
-     ! call cline%set('lpstop',                     DEFAULT_MICRO_P2_LP)
-   !   call cline%set('lp',                     4)
+      call cline%set('lpstart',                        DEFAULT_LPSTART)
+      call cline%set('lpstop',                     DEFAULT_MICRO_P2_LP)
       call cline%set('walltime',                      DEFAULT_WALLTIME)
       if( self%nparts > 1             ) call cline%set('nparts',           self%nparts)
       if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
@@ -1043,7 +1049,7 @@ contains
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK PASS 1 # ', chunk%id
           end if
         end if
-        call self%reject_cavgs(chunk, string(LABEL_PASS_1), CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+        call self%reject_cavgs(chunk, string(LABEL_PASS_1), CAVG_QUALITY_MODEL_MICROCHUNK_P1)
         if( self%pass_1_only .and. chunk%rejection_complete .and. .not. chunk%complete ) then
           call spproj%read_segment('mic',    chunk%projfile)
           call spproj%read_segment('ptcl2D', chunk%projfile)
@@ -1056,6 +1062,13 @@ contains
           call simple_touch(chunk%folder%to_char() // '/COMPLETE')
           chunk%complete            = .true.
           write(logfhandle,'(A,I6)') '>>> FINALISED MICROCHUNK PASS 1 # ', chunk%id
+        end if
+        if( (.not. self%pass_1_only) .and. chunk%rejection_complete .and. .not. chunk%complete ) then
+          if( chunk%nptcls_selected == 0 ) then
+            call simple_touch(chunk%folder%to_char() // '/COMPLETE')
+            chunk%complete = .true.
+            write(logfhandle,'(A,I6,A)') '>>> FINALISED EMPTY MICROCHUNK PASS 1 # ', chunk%id, ' (NO SELECTED PARTICLES)'
+          end if
         end if
       end associate
     end do
@@ -1070,7 +1083,7 @@ contains
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK PASS 2 # ', chunk%id
           end if
         end if
-        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_POOL_DEFAULT)
+        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_MICROCHUNK_P2)
         if( chunk%rejection_complete .and. .not. chunk%complete ) then
           call spproj%read_segment('mic',    chunk%projfile)
           call spproj%read_segment('ptcl2D', chunk%projfile)

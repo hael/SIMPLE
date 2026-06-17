@@ -101,6 +101,7 @@ contains
         call reg%add_char('iterstats', self%iterstats)
         call reg%add_char('json', self%json)
         call reg%add_char('keepvol', self%keepvol)
+        call reg%add_char('keys', self%keys)
         call reg%add_char('lam_anneal', self%lam_anneal)
         call reg%add_char('linethres', self%linethres)
         call reg%add_char('loc_sdev', self%loc_sdev)
