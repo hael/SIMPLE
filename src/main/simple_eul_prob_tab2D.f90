@@ -327,7 +327,7 @@ contains
         real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:), dists_raw(:,:)
         logical, allocatable :: ptcl_avail(:), class_active(:)
         integer :: i, icls, assigned_icls, assigned_ptcl, order_ind
-        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned, report_freq
+        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
         real    :: best_dist, power, corr_tmp
         write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing ', self%nptcls, ' particles x ', self%nclasses
         call flush(logfhandle)
@@ -376,7 +376,6 @@ contains
         icls_dist_inds = 1
         ptcl_avail     = .true.
         nassigned      = 0
-        report_freq    = max(1, self%nptcls / 10)
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: assigning particles'
         call flush(logfhandle)
         do while( any(ptcl_avail) )
@@ -409,10 +408,6 @@ contains
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             nassigned = nassigned + 1
-            if( mod(nassigned, report_freq) == 0 .or. nassigned == self%nptcls )then
-                write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: assigned ', nassigned, '/', self%nptcls
-                call flush(logfhandle)
-            endif
         end do
         if( any(ptcl_avail) )then
             do i = 1, self%nptcls
@@ -443,10 +438,6 @@ contains
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 ptcl_avail(i)     = .false.
                 nassigned = nassigned + 1
-                if( mod(nassigned, report_freq) == 0 .or. nassigned == self%nptcls )then
-                    write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: assigned ', nassigned, '/', self%nptcls
-                    call flush(logfhandle)
-                endif
             end do
         endif
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: done'

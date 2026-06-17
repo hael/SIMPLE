@@ -269,9 +269,10 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab2D)     :: eulprob_obj_part
+        type(eul_prob_tab2D)     :: eulprob_obj_part, eulprob_obj_batch
         real    :: frac_srch_space
-        integer :: nptcls
+        integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
+        integer, allocatable :: batches(:,:)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
@@ -286,22 +287,44 @@ contains
         else
             THROW_HARD('exec_prob_tab2D requires prior particle sampling (in exec_prob_align2D)')
         endif
+        batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+        nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+        batches     = split_nobjs_even(nptcls, nbatches)
+        batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
         call set_b_p_ptrs2D(params, build)
-        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, nptcls)
-        call alloc_imgarr(nptcls, [params%box, params%box, 1], params%smpd, ptcl_imgs)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
         ! mirror cluster2D_exec reference setup
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
         call cavger_read_all
-        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, nptcls, params%which_iter, .false.)
-        ! build polar particle images
-        call build_batch_particles2D(params, build, nptcls, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
-        ! fill and write the 2D probability table
+        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false.)
+        ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
         call eulprob_obj_part%new(params, build, pinds)
-        call eulprob_obj_part%fill_tab
+        do ibatch = 1, nbatches
+            batch_start = batches(ibatch,1)
+            batch_end   = batches(ibatch,2)
+            batchsz     = batch_end - batch_start + 1
+            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB2D: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
+            call flush(logfhandle)
+            call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end),&
+                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
+            call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end))
+            call eulprob_obj_batch%fill_tab
+            eulprob_obj_part%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch%loc_tab(:,1:batchsz)
+            eulprob_obj_part%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch%seed_shifts(:,1:batchsz)
+            eulprob_obj_part%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch%seed_has_sh(1:batchsz)
+            if( eulprob_obj_part%seed_nrots == 0 ) eulprob_obj_part%seed_nrots = eulprob_obj_batch%seed_nrots
+            if( eulprob_obj_part%seed_nrots /= eulprob_obj_batch%seed_nrots )then
+                THROW_HARD('seed_nrots mismatch in exec_prob_tab2D batching')
+            endif
+            call eulprob_obj_batch%kill
+        end do
+        ! write the 2D probability table
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
+        if( allocated(batches) ) deallocate(batches)
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call cavger_kill
         call build%pftc%kill

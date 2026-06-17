@@ -20,11 +20,10 @@ contains
         type(image)                      :: avg_img
         type(builder)                    :: build
         type(sigma2_binfile)             :: binfile
-        type(sigma_array), allocatable   :: sigma2_arrays(:)
         type(string)                     :: part_fname,starfile_fname,outbin_fname
         integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
         real(dp),          allocatable   :: group_pspecs(:,:,:)
-        real,              allocatable   :: pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
+        real,              allocatable   :: pspec_ave(:),sigma2_part(:,:),sigma2_output(:,:)
         integer,           allocatable   :: group_weights(:,:)
         logical,           allocatable   :: pspec_covered(:)
         call cline%set('mkdir', 'no')
@@ -61,25 +60,6 @@ contains
                 call del_file(part_fname)
             enddo
         endif
-        ! read power spectra of particles
-        allocate(pspecs(nyq,params%nptcls), source=0.)
-        allocate(sigma2_arrays(params%nparts), pspec_covered(params%nptcls))
-        pspec_covered = .false.
-        do ipart = 1,params%nparts
-            sigma2_arrays(ipart)%fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
-            call binfile%new_from_file(sigma2_arrays(ipart)%fname)
-            call binfile%read(sigma2_arrays(ipart)%sigma2)
-            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
-            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
-            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
-                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname%to_char()// ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
-            end if
-            if( any(pspec_covered(pspec_l:pspec_u)) )then
-                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; overlapping particle spectra ranges')
-            endif
-            pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
-            pspec_covered(pspec_l:pspec_u) = .true.
-        end do
         ! generate group averages & write
         if( params%l_sigma_glob )then
             ngroups = 1
@@ -98,24 +78,47 @@ contains
         endif
         allocate(group_pspecs(2,ngroups,nyq),source=0.d0)
         allocate(group_weights(2,ngroups),source=0)
+        allocate(pspec_covered(params%nptcls), source=.false.)
+        do ipart = 1,params%nparts
+            part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            call binfile%new_from_file(part_fname)
+            call binfile%read(sigma2_part)
+            pspec_l = lbound(sigma2_part,2)
+            pspec_u = ubound(sigma2_part,2)
+            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
+                write(logfhandle,*) 'file/ptcl range/nptcls: ', part_fname%to_char(), pspec_l, pspec_u, params%nptcls
+                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; invalid particle spectra range')
+            end if
+            if( any(pspec_covered(pspec_l:pspec_u)) )then
+                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; overlapping particle spectra ranges')
+            endif
+            pspec_covered(pspec_l:pspec_u) = .true.
+            do iptcl = pspec_l,pspec_u
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                eo = build%spproj_field%get_eo(iptcl) ! 0/1
+                if( params%l_sigma_glob )then
+                    igroup = 1
+                else
+                    igroup = build%spproj_field%get_int(iptcl, 'stkind')
+                endif
+                if( (.not.all(ieee_is_finite(sigma2_part(:,iptcl)))) .or. &
+                    ((.not.params%l_sigma_glob) .and. (.not.any(sigma2_part(:,iptcl) > real(DTINY)))) )then
+                    write(logfhandle,*) 'iptcl/eo/igroup: ', iptcl, eo, igroup
+                    write(logfhandle,*) 'finite/positive: ', &
+                        all(ieee_is_finite(sigma2_part(:,iptcl))), any(sigma2_part(:,iptcl) > real(DTINY))
+                    THROW_HARD('active particle sigma spectrum was not computed; exec_calc_pspec_assemble')
+                endif
+                group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(sigma2_part(:, iptcl),dp)
+                group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
+            end do
+            deallocate(sigma2_part)
+        end do
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-            eo = build%spproj_field%get_eo(iptcl) ! 0/1
-            if( params%l_sigma_glob )then
-                igroup = 1
-            else
-                igroup = build%spproj_field%get_int(iptcl, 'stkind')
+            if( .not.pspec_covered(iptcl) )then
+                write(logfhandle,*) 'iptcl: ', iptcl
+                THROW_HARD('active particle sigma spectrum was not covered; exec_calc_pspec_assemble')
             endif
-            if( (.not.pspec_covered(iptcl)) .or. &
-                (.not.all(ieee_is_finite(pspecs(:,iptcl)))) .or. &
-                ((.not.params%l_sigma_glob) .and. (.not.any(pspecs(:,iptcl) > real(DTINY)))) )then
-                write(logfhandle,*) 'iptcl/eo/igroup: ', iptcl, eo, igroup
-                write(logfhandle,*) 'covered/finite/positive: ', pspec_covered(iptcl), &
-                    all(ieee_is_finite(pspecs(:,iptcl))), any(pspecs(:,iptcl) > real(DTINY))
-                THROW_HARD('active particle sigma spectrum was not computed; exec_calc_pspec_assemble')
-            endif
-            group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + real(pspecs(:, iptcl),dp)
-            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
         enddo
         do eo = 1,2
             do igroup = 1,ngroups
@@ -132,36 +135,35 @@ contains
             starfile_fname = SIGMA2_GROUP_FBODY//'1'//STAR_EXT
         endif
         call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
-        ! update sigmas in binfiles to match averages
-        do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-            eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-            if( params%l_sigma_glob )then
-                igroup = 1
-            else
-                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-            endif
-            pspecs(:,iptcl) = real(group_pspecs(eo+1,igroup,:))
-        enddo
-        ! write updated sigmas to disc
+        ! write updated sigmas to disc, one partition at a time
         do ipart = 1,params%nparts
-            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
-            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
+            part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            call binfile%new_from_file(part_fname)
+            call binfile%read(sigma2_part)
+            pspec_l = lbound(sigma2_part,2)
+            pspec_u = ubound(sigma2_part,2)
             if( allocated(sigma2_output) ) deallocate(sigma2_output)
             allocate(sigma2_output(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u))
+            sigma2_output = sigma2_part(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u)
             do iptcl = pspec_l, pspec_u
-                sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) = pspecs(params%kfromto(1):params%kfromto(2),iptcl)
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                eo = build%spproj_field%get_eo(iptcl) ! 0/1
+                if( params%l_sigma_glob )then
+                    igroup = 1
+                else
+                    igroup = build%spproj_field%get_int(iptcl, 'stkind')
+                endif
+                sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) =&
+                    &real(group_pspecs(eo+1,igroup,params%kfromto(1):params%kfromto(2)))
             end do
             outbin_fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
             call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, kfromto=[params%kfromto(1), params%kfromto(2)])
             call binfile%write(sigma2_output)
+            deallocate(sigma2_part)
         end do
         ! end gracefully
-        do ipart = 1,params%nparts
-            call sigma2_arrays(ipart)%fname%kill
-            deallocate(sigma2_arrays(ipart)%sigma2)
-        end do
-        deallocate(sigma2_arrays,group_pspecs,pspecs,group_weights,pspec_covered)
+        deallocate(group_pspecs,group_weights,pspec_covered)
+        if( allocated(sigma2_output) ) deallocate(sigma2_output)
         if( allocated(pspec_ave) ) deallocate(pspec_ave)
         call binfile%kill
         call build%kill_general_tbox

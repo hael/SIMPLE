@@ -141,6 +141,7 @@ contains
                 &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
             call flush(logfhandle)
         endif
+        if( read_sorted_stack_runs() ) return
         allocate(stknames(nbatch), inds_in_stk(nbatch), stk_ids(nbatch))
         allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch))
         nstks = 0
@@ -203,6 +204,84 @@ contains
         call stknames(:)%kill
         call uniq_stknames(:)%kill
         deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls)
+
+    contains
+
+        logical function read_sorted_stack_runs() result(handled)
+            type(dstack_io), allocatable :: dstkios_run(:)
+            type(string),    allocatable :: run_stknames(:)
+            integer,         allocatable :: run_stkinds(:), run_from(:), run_to(:), run_ldims(:,:), run_nptcls(:)
+            integer,         allocatable :: inds_in_stk_run(:)
+            integer :: i, ii, irun, stkind, prev_stkind, ind_in_stk, nthr_run, run_from_i, run_to_i, iopen, nopen
+            handled = .false.
+            if( trim(params%oritype) == 'cls3D' ) return
+            do i = batchlims(1)+1, batchlims(2)
+                if( pinds(i) < pinds(i-1) ) return
+            end do
+            allocate(inds_in_stk_run(nbatch), run_stkinds(nbatch), run_from(nbatch), run_to(nbatch))
+            nstks = 0
+            prev_stkind = -1
+            do i = batchlims(1), batchlims(2)
+                ii = i - batchlims(1) + 1
+                call build%spproj%map_ptcl_ind2stk_ind(params%oritype, pinds(i), stkind, ind_in_stk)
+                if( stkind < prev_stkind )then
+                    deallocate(inds_in_stk_run, run_stkinds, run_from, run_to)
+                    return
+                endif
+                inds_in_stk_run(ii) = ind_in_stk
+                if( stkind /= prev_stkind )then
+                    nstks = nstks + 1
+                    run_stkinds(nstks) = stkind
+                    run_from(nstks)    = ii
+                    if( nstks > 1 ) run_to(nstks-1) = ii - 1
+                    prev_stkind = stkind
+                endif
+            end do
+            if( nstks < 1 )then
+                deallocate(inds_in_stk_run, run_stkinds, run_from, run_to)
+                handled = .true.
+                return
+            endif
+            run_to(nstks) = nbatch
+            allocate(run_stknames(nstks), run_ldims(3,nstks), run_nptcls(nstks))
+            do irun = 1, nstks
+                run_stknames(irun) = build%spproj%os_stk%get_str(run_stkinds(irun), 'stk')
+                call find_ldim_nptcls(run_stknames(irun), run_ldims(:,irun), run_nptcls(irun))
+                if( (run_ldims(1,irun) /= params%box) .or. (run_ldims(2,irun) /= params%box) )then
+                    write(logfhandle,*) 'ldim ', run_ldims(:,irun)
+                    write(logfhandle,*) 'box ', params%box
+                    write(logfhandle,*) 'stkname ', run_stknames(irun)%to_char()
+                    THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
+                endif
+            end do
+            nthr_run = min(max(1,nthr_glob), nstks)
+            allocate(dstkios_run(nthr_run))
+            do run_from_i = 1,nstks,nthr_run
+                run_to_i = min(run_from_i + nthr_run - 1, nstks)
+                nopen    = run_to_i - run_from_i + 1
+                do iopen = 1,nopen
+                    irun = run_from_i + iopen - 1
+                    call dstkios_run(iopen)%new(params%smpd, params%box)
+                    call dstkios_run(iopen)%cache_stack_info(run_stknames(irun), run_ldims(:,irun), run_nptcls(irun))
+                    call dstkios_run(iopen)%open(run_stknames(irun))
+                end do
+                !$omp parallel do default(shared) private(iopen,irun,ii) schedule(static) proc_bind(close) &
+                !$omp& num_threads(nopen) if(nopen > 1)
+                do iopen = 1,nopen
+                    irun = run_from_i + iopen - 1
+                    do ii = run_from(irun), run_to(irun)
+                        call dstkios_run(iopen)%read(run_stknames(irun), inds_in_stk_run(ii), build%imgbatch(ii))
+                    end do
+                end do
+                !$omp end parallel do
+                do iopen = 1,nopen
+                    call dstkios_run(iopen)%kill
+                end do
+            end do
+            call run_stknames(:)%kill
+            deallocate(dstkios_run, run_stknames, run_stkinds, run_from, run_to, run_ldims, run_nptcls, inds_in_stk_run)
+            handled = .true.
+        end function read_sorted_stack_runs
     end subroutine discrete_read_imgbatch
 
 end module simple_matcher_ptcl_io

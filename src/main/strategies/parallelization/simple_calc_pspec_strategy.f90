@@ -137,12 +137,12 @@ contains
         type(image)                         :: sum_img
         type(sigma2_binfile)                :: binfile
         type(string)                        :: binfname
-        complex(dp), allocatable :: cmat_thr_sum(:,:,:)
+        complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
         complex,     allocatable :: cmat_sum(:,:,:)
         integer,     allocatable :: pinds(:)
         real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
         integer :: batchlims(2), kfromto(2)
-        integer :: i, iptcl, imatch, nyq, nptcls_part_sel, nptcls_active_tot, batchsz_max, nbatch
+        integer :: i, iptcl, imatch, ithr, nyq, nptcls_part_sel, nptcls_active_tot, batchsz_max, nbatch
         integer :: ninvalid_sigma2
         logical :: l_scale_update_frac
         logical :: l_add_to_sum
@@ -174,7 +174,7 @@ contains
         call sum_img%new([params%box,params%box,1], params%smpd)
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
-        allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1))
+        allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1, nthr_glob))
         ninvalid_sigma2 = 0
         if( nptcls_part_sel > 0 )then
             batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
@@ -188,20 +188,23 @@ contains
                 call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
                 ! allocate contigous local sigma2 array for optimal caching in parallell loop
                 cmat_thr_sum = dcmplx(0.d0, 0.d0)
-                !$omp parallel do default(shared) private(iptcl,imatch,l_add_to_sum)&
-                !$omp schedule(static) proc_bind(close) reduction(+:cmat_thr_sum,ninvalid_sigma2)
+                !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&
+                !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
                  do imatch = 1, nbatch
+                    ithr  = omp_get_thread_num() + 1
                     iptcl = pinds(batchlims(1) + imatch - 1)
                     call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
                     sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
                     l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
                     if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
                     ! thread average
-                    if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:))
+                    if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr))
                 end do
                 !$omp end parallel do
                 ! global average
-                cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:), kind=sp)
+                do ithr = 1, nthr_glob
+                    cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:,ithr), kind=sp)
+                end do
                 ! update non-contiguous sigma2 array to provide the correct geometry on disk
                 do imatch = 1, nbatch
                     iptcl = pinds(batchlims(1) + imatch - 1)
