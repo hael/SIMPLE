@@ -166,6 +166,7 @@ contains
         else
             ! re-index & reallocate
             self%nptcls = nptcls
+            call self%kill_memo_ptcls
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
             if( allocated(self%ksqsums_ptcls)) deallocate(self%ksqsums_ptcls)
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)

@@ -241,9 +241,41 @@ contains
 
     module subroutine alloc_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
+        real(dp) :: array_gb, total_gb
+        integer  :: alloc_stat
+        integer(kind=longer) :: nelems
+        character(len=STDLEN) :: alloc_msg
         call self%kill_memo_ptcls
+        nelems   = int(self%pftsz+1,kind=longer) * int(self%nk,kind=longer) * int(self%nptcls,kind=longer)
+        array_gb = real(nelems,dp) * 8.d0 / (1024.d0**3)
+        total_gb = 2.d0 * array_gb
+        alloc_msg = ''
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
-                &self%ft_ctf2(    self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls))
+                &stat=alloc_stat, errmsg=alloc_msg)
+        if( alloc_stat /= 0 )then
+            call memo_ptcls_alloc_error('ft_ptcl_ctf', array_gb, total_gb, trim(alloc_msg))
+        endif
+        alloc_msg = ''
+        allocate(self%ft_ctf2(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
+                &stat=alloc_stat, errmsg=alloc_msg)
+        if( alloc_stat /= 0 )then
+            if( allocated(self%ft_ptcl_ctf) ) deallocate(self%ft_ptcl_ctf)
+            call memo_ptcls_alloc_error('ft_ctf2', array_gb, total_gb, trim(alloc_msg))
+        endif
+
+    contains
+
+        subroutine memo_ptcls_alloc_error(arrname, array_gb, total_gb, alloc_msg)
+            character(len=*), intent(in) :: arrname, alloc_msg
+            real(dp),         intent(in) :: array_gb, total_gb
+            character(len=XLONGSTRLEN) :: err_msg
+            err_msg = 'alloc_memo_ptcls failed allocating '//trim(arrname)//&
+                ' ('//trim(real2str(array_gb))//' GB; particle memo total '//trim(real2str(total_gb))//' GB); '//&
+                'dims='//int2str(self%pftsz+1)//' x '//int2str(self%nk)//' x '//int2str(self%nptcls)//&
+                '. Increase nparts/reduce batch size or reduce pftsz/k range. '//trim(alloc_msg)
+            THROW_HARD(trim(err_msg))
+        end subroutine memo_ptcls_alloc_error
+        
     end subroutine alloc_memo_ptcls
 
     module subroutine alloc_memo_refs(self)
