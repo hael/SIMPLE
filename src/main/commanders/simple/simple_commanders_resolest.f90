@@ -3,7 +3,6 @@ module simple_commanders_resolest
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_fsc
-use simple_support2D_filter, only: support2D_filter_eo
 use simple_commanders_euclid, only: commander_calc_pspec
 use simple_refine3D_fnames,  only: refine3D_fsc_fbody, refine3D_fsc_fname
 implicit none
@@ -43,11 +42,6 @@ type, extends(commander_base) :: commander_icm2D
   contains
     procedure :: execute      => exec_icm2D
 end type commander_icm2D
-
-type, extends(commander_base) :: commander_support_filter2D
-  contains
-    procedure :: execute      => exec_support_filter2D
-end type commander_support_filter2D
 
 type, extends(commander_base) :: commander_estimate_lpstages
   contains
@@ -390,96 +384,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
     end subroutine exec_icm2D
-
-    subroutine exec_support_filter2D( self, cline )
-        class(commander_support_filter2D), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        type(parameters) :: params
-        type(image)      :: odd, even, avg, support, labels
-        type(string)     :: avg_out, even_out, odd_out, support_out, labels_out, out_ext
-        integer          :: iptcl, ldim2(3), nptcls2, n_support, n_changed
-        integer          :: n_empty, n_processed, support_sum, changed_sum
-        real             :: mm_even(2), mm_odd(2)
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('lambda') ) call cline%set('lambda', 1.0)
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'support2D_filter'//STK_EXT)
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
-        params%ldim(3) = 1
-        call find_ldim_nptcls(params%stk2, ldim2, nptcls2)
-        ldim2(3) = 1
-        if( any(params%ldim /= ldim2) ) THROW_HARD('stk and stk2 dimensions differ; exec_support_filter2D')
-        if( params%nptcls /= nptcls2 ) THROW_HARD('stk and stk2 image counts differ; exec_support_filter2D')
-        out_ext = fname2ext(params%outstk)
-        if( out_ext == '' )then
-            avg_out = params%outstk//params%ext
-            out_ext = params%ext
-        else
-            avg_out = params%outstk
-            out_ext = string('.')//out_ext
-        endif
-        if( avg_out == params%stk .or. avg_out == params%stk2 )then
-            THROW_HARD('outstk must not overwrite an input stack; exec_support_filter2D')
-        endif
-        even_out    = add2fbody(avg_out, out_ext, '_even')
-        odd_out     = add2fbody(avg_out, out_ext, '_odd')
-        support_out = add2fbody(avg_out, out_ext, '_support')
-        labels_out  = add2fbody(avg_out, out_ext, '_labels')
-        if( file_exists(avg_out)     ) call del_file(avg_out)
-        if( file_exists(even_out)    ) call del_file(even_out)
-        if( file_exists(odd_out)     ) call del_file(odd_out)
-        if( file_exists(support_out) ) call del_file(support_out)
-        if( file_exists(labels_out)  ) call del_file(labels_out)
-        write(logfhandle,'(A)') '>>> support_filter2D outputs:'
-        write(logfhandle,'(A,1X,A)') '>>>   average:', avg_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>>   even:   ', even_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>>   odd:    ', odd_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>>   support:', support_out%to_char()
-        write(logfhandle,'(A,1X,A)') '>>>   labels: ', labels_out%to_char()
-        n_empty     = 0
-        n_processed = 0
-        support_sum = 0
-        changed_sum = 0
-        do iptcl = 1, params%nptcls
-            call odd%new(params%ldim, params%smpd, .false.)
-            call odd%read(params%stk, iptcl)
-            call even%new(params%ldim, params%smpd, .false.)
-            call even%read(params%stk2, iptcl)
-            if( even%contains_nans() .or. odd%contains_nans() )then
-                THROW_HARD('NaNs detected in input stack; exec_support_filter2D')
-            endif
-            mm_even = even%minmax()
-            mm_odd  = odd%minmax()
-            if( is_equal(mm_even(2)-mm_even(1),0.) .and. is_equal(mm_odd(2)-mm_odd(1),0.) )then
-                n_empty = n_empty + 1
-                call avg%copy(even)
-                call support%new(params%ldim, params%smpd, .false.)
-                call labels%new(params%ldim, params%smpd, .false.)
-                n_support = 0
-                n_changed = 0
-            else
-                call support2D_filter_eo(even, odd, params%mskdiam, params%lambda, support, labels, avg, &
-                    &n_support, n_changed)
-                n_processed = n_processed + 1
-            endif
-            support_sum = support_sum + n_support
-            changed_sum = changed_sum + n_changed
-            call avg%write(avg_out, iptcl)
-            call even%write(even_out, iptcl)
-            call odd%write(odd_out, iptcl)
-            call support%write(support_out, iptcl)
-            call labels%write(labels_out, iptcl)
-            call odd%kill
-            call even%kill
-            call avg%kill
-            call support%kill
-            call labels%kill
-        end do
-        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> support_filter2D classes processed: ', &
-            &n_processed, ', empty: ', n_empty, ', total support pixels: ', support_sum
-        write(logfhandle,'(A,I0)') '>>> support_filter2D cumulative ICM label changes: ', changed_sum
-        call simple_end('**** SIMPLE_SUPPORT_FILTER2D NORMAL STOP ****')
-    end subroutine exec_support_filter2D
 
     subroutine exec_estimate_lpstages( self, cline )
         class(commander_estimate_lpstages), intent(inout) :: self

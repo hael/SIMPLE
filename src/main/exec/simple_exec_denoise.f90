@@ -1,7 +1,7 @@
 !@descr: execution of denoising commanders
 module simple_exec_denoise
 use simple_cmdline,              only: cmdline
-use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D, commander_support_filter2D
+use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D
 use simple_commanders_volops,    only: commander_ppca_volvar
 use simple_commanders_cluster2D, only: commander_ppca_denoise_classes, commander_cls_split
 use simple_commanders_imgops,    only: commander_ppca_denoise, commander_ppca_denoise_polarft_lines
@@ -12,7 +12,6 @@ private
 
 type(commander_icm2D)                     :: xicm2D
 type(commander_icm3D)                     :: xicm3D
-type(commander_support_filter2D)          :: xsupport_filter2D
 type(commander_ppca_denoise)              :: xppca_denoise
 type(commander_ppca_denoise_polarft_lines):: xppca_denoise_polarft_lines
 type(commander_ppca_denoise_classes)      :: xppca_denoise_classes
@@ -34,8 +33,6 @@ contains
                 call xicm2D%execute(cline)
             case( 'icm3D' )
                 call xicm3D%execute(cline)
-            case( 'support_filter2D' )
-                call xsupport_filter2D%execute(cline)
             case( 'ppca_denoise' )
                 call xppca_denoise%execute(cline)
             case( 'ppca_denoise_polarft_lines' )

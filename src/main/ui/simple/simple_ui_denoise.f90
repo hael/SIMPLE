@@ -5,7 +5,6 @@ implicit none
 
 type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
-type(ui_program), target :: support_filter2D
 type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_polarft_lines
 type(ui_program), target :: ppca_denoise_classes
@@ -18,7 +17,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_icm2D(prgtab)
         call new_icm3D(prgtab)
-        call new_support_filter2D(prgtab)
         call new_ppca_denoise(prgtab)
         call new_ppca_denoise_polarft_lines(prgtab)
         call new_ppca_denoise_classes(prgtab)
@@ -31,7 +29,6 @@ contains
         write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
         write(logfhandle,'(A)') icm2D%name%to_char()
         write(logfhandle,'(A)') icm3D%name%to_char()
-        write(logfhandle,'(A)') support_filter2D%name%to_char()
         write(logfhandle,'(A)') ppca_denoise%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_polarft_lines%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
@@ -98,37 +95,6 @@ contains
         ! add to ui_hash
         call add_ui_program('icm3D', icm3D, prgtab)
     end subroutine new_icm3D
-
-    subroutine new_support_filter2D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call support_filter2D%new(&
-        &'support_filter2D',&                                                       ! name
-        &'Support-regularized 2D filter',&                                          ! descr_short
-        &'is a program for connected-support regularization of even/odd 2D class-average stacks',& ! descr_long
-        &'simple_exec',&                                                            ! executable
-        &.false.)                                                                   ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call support_filter2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'cavgs_odd.mrc file',  .true., '')
-        call support_filter2D%add_input(UI_IMG, 'stk2', 'file', 'Even stack', 'Even stack', 'cavgs_even.mrc file', .true., '')
-        call support_filter2D%add_input(UI_IMG, outstk, required_override=.false.)
-        ! parameter input/output
-        call support_filter2D%add_input(UI_PARM, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call support_filter2D%add_input(UI_FILT, 'lambda', 'num', 'Support smoothness multiplier', &
-            &'Support smoothness multiplier; 0 disables ICM label smoothing, default 1.0', '(0.0-3.0){1.0}', .false., 1.0)
-        ! mask controls
-        call support_filter2D%add_input(UI_MASK, mskdiam)
-        ! computer controls
-        call support_filter2D%add_input(UI_COMP, nthr)
-        ! add to ui_hash
-        call add_ui_program('support_filter2D', support_filter2D, prgtab)
-    end subroutine new_support_filter2D
 
     subroutine new_ppca_denoise( prgtab )
         class(ui_hash), intent(inout) :: prgtab
