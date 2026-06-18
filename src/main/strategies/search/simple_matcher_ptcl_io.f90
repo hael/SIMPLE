@@ -7,7 +7,7 @@ use simple_imghead,           only: find_ldim_nptcls
 implicit none
 #include "simple_local_flags.inc"
 
-public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
+public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
 private
 
 interface read_imgbatch
@@ -118,6 +118,106 @@ contains
         call stkio_r%read(ind_in_stk, img)
         call stkio_r%close
     end subroutine read_imgbatch_3
+
+    subroutine discrete_read_imgbatch_source( params, build, source, n, pinds, batchlims, imgs )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        character(len=*),  intent(in)    :: source
+        integer,           intent(in)    :: n, pinds(n), batchlims(2)
+        class(image),      intent(inout) :: imgs(:)
+        type(dstack_io), allocatable :: dstkios(:)
+        type(string), allocatable :: stknames(:), uniq_stknames(:)
+        integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:)
+        integer :: i, ii, istk, nbatch, nstks, nthr_read, stk_from, stk_to, iopen, nopen
+        logical :: l_known_stack, l_verbose
+        if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
+            write(logfhandle,*) 'batchlims: ', batchlims
+            write(logfhandle,*) 'n        : ', n
+            THROW_HARD('invalid batchlims; discrete_read_imgbatch_source')
+        endif
+        nbatch = batchlims(2) - batchlims(1) + 1
+        if( size(imgs) < nbatch )then
+            write(logfhandle,*) 'size(imgs): ', size(imgs)
+            write(logfhandle,*) 'nbatch    : ', nbatch
+            THROW_HARD('image buffer too small; discrete_read_imgbatch_source')
+        endif
+        l_verbose = params%prg .eq. 'cls_split'
+        if( l_verbose )then
+            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'discrete_read_imgbatch_source(', trim(source), '): n=', n, &
+                &' pinds[min,max]=', minval(pinds(batchlims(1):batchlims(2))), &
+                &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
+            call flush(logfhandle)
+        endif
+        allocate(stknames(nbatch), inds_in_stk(nbatch), stk_ids(nbatch))
+        allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch))
+        nstks = 0
+        do i=batchlims(1),batchlims(2)
+            ii = i - batchlims(1) + 1
+            call build%spproj%get_ptcl_source_stkname_and_ind(params%oritype, pinds(i), source, stknames(ii), inds_in_stk(ii))
+            l_known_stack = .false.
+            do istk = 1,nstks
+                if( uniq_stknames(istk) .eq. stknames(ii) )then
+                    l_known_stack = .true.
+                    stk_ids(ii) = istk
+                    exit
+                endif
+            enddo
+            if( .not.l_known_stack )then
+                nstks = nstks + 1
+                uniq_stknames(nstks) = stknames(ii)
+                stk_ids(ii) = nstks
+            endif
+            if( l_verbose .and. n <= 32 )then
+                write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch_source item: batch_i=', i, &
+                    &' iptcl=', pinds(i), ' indstk=', inds_in_stk(ii), ' stk=', trim(stknames(ii)%to_char())
+                call flush(logfhandle)
+            endif
+        end do
+        do istk = 1,nstks
+            call find_ldim_nptcls(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
+            if( (uniq_ldims(1,istk) /= params%box) .or. (uniq_ldims(2,istk) /= params%box) )then
+                write(logfhandle,*) 'ldim ', uniq_ldims(:,istk)
+                write(logfhandle,*) 'box ', params%box
+                write(logfhandle,*) 'stkname ', uniq_stknames(istk)%to_char()
+                THROW_HARD('Incompatible dimensions! discrete_read_imgbatch_source')
+            endif
+        enddo
+        do ii = 1,nbatch
+            if( inds_in_stk(ii) > uniq_nptcls(stk_ids(ii)) )then
+                write(logfhandle,*) 'iptcl/n/image index: ', pinds(batchlims(1)+ii-1), uniq_nptcls(stk_ids(ii)), inds_in_stk(ii)
+                write(logfhandle,*) 'stkname           : ', stknames(ii)%to_char()
+                THROW_HARD('particle indstk out of source stack range; discrete_read_imgbatch_source')
+            endif
+        enddo
+        nthr_read = min(max(1,nthr_glob), nstks)
+        allocate(dstkios(nthr_read))
+        ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
+        do stk_from = 1,nstks,nthr_read
+            stk_to = min(stk_from + nthr_read - 1, nstks)
+            nopen  = stk_to - stk_from + 1
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                call dstkios(iopen)%new(params%smpd, params%box)
+                call dstkios(iopen)%cache_stack_info(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
+                call dstkios(iopen)%open(uniq_stknames(istk))
+            enddo
+            !$omp parallel do default(shared) private(iopen,istk,ii) schedule(static) proc_bind(close) &
+            !$omp& num_threads(nopen) if(nopen > 1)
+            do iopen = 1,nopen
+                istk = stk_from + iopen - 1
+                do ii = 1,nbatch
+                    if( stk_ids(ii) == istk ) call dstkios(iopen)%read(stknames(ii), inds_in_stk(ii), imgs(ii))
+                enddo
+            enddo
+            !$omp end parallel do
+            do iopen = 1,nopen
+                call dstkios(iopen)%kill
+            enddo
+        enddo
+        call stknames(:)%kill
+        call uniq_stknames(:)%kill
+        deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls)
+    end subroutine discrete_read_imgbatch_source
 
     subroutine discrete_read_imgbatch( params, build, n, pinds, batchlims )
         class(parameters), intent(in)    :: params

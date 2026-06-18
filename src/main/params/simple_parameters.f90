@@ -233,10 +233,12 @@ type :: parameters
     type(string)              :: star_ptcl            !< STAR-formatted EM file (data.star)
     type(string)              :: starfile             !< STAR-formatted EM file (proj.star)
     type(string)              :: stk                  !< particle stack with all images(ptcls.ext)
+    type(string)              :: stk_den              !< denoised particle stack paired with stk
     type(string)              :: stk2                 !< 2nd stack(in selection map: selected(cavgs).ext)
     type(string)              :: stk3                 !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     type(string)              :: stk_backgr           !< stack with image for background subtraction
     type(string)              :: stktab               !< list of per-micrograph stacks
+    type(string)              :: stktab_den           !< list of denoised per-micrograph stacks paired with stktab
     type(string)              :: subprojname          !< SIMPLE  subproject name
     type(string)              :: verbose_exit_fname   !< File name of indicator file when task completes(TASK_FINISHED)
     type(string)              :: vol
@@ -270,6 +272,7 @@ type :: parameters
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
+    character(len=STDLEN)     :: matchimg_source='raw' !< particle image source for alignment/state assignment(raw|denoised){raw}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -294,6 +297,7 @@ type :: parameters
     ! class-average quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}
     character(len=STDLEN)     :: quality_model='chunk_default_v2'
     character(len=STDLEN)     :: real_filter=''
+    character(len=STDLEN)     :: recimg_source='raw'  !< particle image source for volume reconstruction(raw|denoised){raw}
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}

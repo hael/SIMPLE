@@ -58,6 +58,7 @@ type(ui_param) :: lpthres
 type(ui_param) :: max_dose
 type(ui_param) :: max_rad
 type(ui_param) :: maxits
+type(ui_param) :: matchimg_source
 type(ui_param) :: maxnchunks
 type(ui_param) :: mcconvention
 type(ui_param) :: mcpatch
@@ -128,6 +129,7 @@ type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
+type(ui_param) :: recimg_source
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -146,10 +148,12 @@ type(ui_param) :: startit
 type(ui_param) :: startype
 type(ui_param) :: stepsz
 type(ui_param) :: stk
+type(ui_param) :: stk_den
 type(ui_param) :: stk_backgr
 type(ui_param) :: stk_traj
 type(ui_param) :: stk2
 type(ui_param) :: stktab
+type(ui_param) :: stktab_den
 type(ui_param) :: time_per_image
 type(ui_param) :: total_dose
 type(ui_param) :: trs
@@ -388,6 +392,10 @@ subroutine set_ui_params
     call maxits%set_param(         'maxits',          'num',    'Max iterations', &
                                    'Maximum number of iterations', &
                                    'Max # iterations', .false., 100.)
+
+    call matchimg_source%set_param('matchimg_source','multi',  'Particle source for matching', &
+                                   'Particle image representation used for alignment and state assignment(raw|denoised){raw}', &
+                                   '(raw|denoised){raw}', .false., 'raw')
 
     call maxnchunks%set_param(     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', &
                                    'After this number of subsets has been classified all processing will stop(0=no end){0}', &
@@ -659,6 +667,10 @@ subroutine set_ui_params
                                     'Name of reserved target partition of distributed computer system (SLURM/PBS/LSF)', &
                                     'give your part', .false., '')
 
+    call recimg_source%set_param(  'recimg_source',   'multi',  'Particle source for reconstruction', &
+                                   'Particle image representation used for volume reconstruction(raw|denoised){raw}', &
+                                   '(raw|denoised){raw}', .false., 'raw')
+
     call remap_cls%set_param(      'remap_cls',       'binary', 'Whether to remap 2D clusters', &
                                    'Whether to remap the number of 2D clusters(yes|no){no}', &
                                    '(yes|no){no}', .false., 'no')
@@ -727,6 +739,10 @@ subroutine set_ui_params
                                    'Particle image stack', &
                                    'xxx.mrc file with particles', .false., '')
 
+    call stk_den%set_param(        'stk_den',         'file',   'Denoised particle image stack', &
+                                   'Denoised particle stack paired with stk by particle order', &
+                                   'xxx.mrc file with denoised particles', .false., '')
+
 
     call stk_backgr%set_param(      'stk_backgr',      'file',   'background power spectra stack, eg NP_X_background_pspec.mrc', &
                                    'background power spectra stack', &
@@ -744,6 +760,10 @@ subroutine set_ui_params
     call stktab%set_param(         'stktab',          'file',   'List of per-micrograph particle stacks', &
                                    'List of per-micrograph particle stacks', &
                                    'stktab.txt file containing file names', .false., 'stktab.txt')
+
+    call stktab_den%set_param(     'stktab_den',      'file',   'List of denoised particle stacks', &
+                                   'List of denoised particle stacks paired with stktab entries', &
+                                   'stktab_den.txt file containing file names', .false., '')
 
     call time_per_image%set_param( 'time_per_image',  'num',    'Time per image', &
                                    'Estimated time per image in seconds for forecasting total execution time{100}', &

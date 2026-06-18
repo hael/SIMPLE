@@ -73,10 +73,12 @@ contains
         self%star_model=''        !< STAR-formatted EM file (model.star)
         self%star_ptcl=''         !< STAR-formatted EM file (data.star)
         self%starfile=''          !< STAR-formatted EM file (proj.star)
+        self%stk_den=''           !< denoised particle stack paired with stk
         self%stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
         self%stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
         self%stk=''               !< particle stack with all images(ptcls.ext)
         self%stk_backgr=''        !< stack with image for background subtraction
+        self%stktab_den=''        !< list of denoised per-micrograph stacks paired with stktab
         self%stktab=''            !< list of per-micrograph stacks
         self%subprojname=''       !< SIMPLE  subproject name
         self%vol=''

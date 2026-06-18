@@ -104,6 +104,7 @@ contains
     procedure          :: get_box
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
+    procedure          :: get_ptcl_source_stkname_and_ind
     procedure          :: get_nstks
 
     ! CLS2D/3D
@@ -482,6 +483,15 @@ interface
         class(string),             intent(out)   :: stkname
         integer,                   intent(out)   :: ind_in_stk
     end subroutine get_stkname_and_ind
+
+    module subroutine get_ptcl_source_stkname_and_ind( self, oritype, iptcl, source, stkname, ind_in_stk )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        character(len=*),          intent(in)    :: source
+        class(string),             intent(out)   :: stkname
+        integer,                   intent(out)   :: ind_in_stk
+    end subroutine get_ptcl_source_stkname_and_ind
 
     module function get_nstks( self ) result(nstks)
         class(sp_project), target, intent(in) :: self

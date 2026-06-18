@@ -3,7 +3,7 @@ module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_euclid_sigma2,   only: sigma2_star_from_iter
-use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
 
@@ -61,10 +61,20 @@ contains
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        logical :: l_backup_imgs
+        logical :: l_backup_imgs, l_copy_rec_from_match
         l_backup_imgs = present(imgs4rec)
+        l_copy_rec_from_match = l_backup_imgs .and. trim(params%recimg_source) == trim(params%matchimg_source)
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        if( trim(params%matchimg_source) == 'raw' )then
+            call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        else
+            call discrete_read_imgbatch_source(params, build, trim(params%matchimg_source), &
+                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
+        endif
+        if( l_backup_imgs .and. .not. l_copy_rec_from_match )then
+            call discrete_read_imgbatch_source(params, build, trim(params%recimg_source), &
+                nptcls_here, pinds_here, [1,nptcls_here], imgs4rec)
+        endif
         call tmp_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         pdim_interp = build%pftc%get_pdim_interp()
@@ -73,7 +83,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
-            if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
+            if( l_copy_rec_from_match ) call imgs4rec(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )

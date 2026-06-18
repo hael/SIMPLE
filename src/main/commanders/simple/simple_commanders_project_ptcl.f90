@@ -51,7 +51,7 @@ contains
         use simple_starproject, only: starproject
         class(commander_import_particles), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(string), allocatable :: stkfnames(:)
+        type(string), allocatable :: stkfnames(:), stkfnames_den(:)
         real,         allocatable :: line(:)
         type(simple_nice_comm)    :: nice_comm
         type(string)              :: phaseplate, ctfstr
@@ -61,8 +61,9 @@ contains
         type(nrtxtfile)           :: paramfile
         type(ctfparams)           :: ctfvars
         type(starproject)         :: starproj
-        integer                   :: ldim1(3), i, ndatlines, nrecs, n_ori_inputs, nstks
+        integer                   :: ldim1(3), i, ndatlines, nrecs, n_ori_inputs, nstks, n_os_stk_before
         logical                   :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
+        logical                   :: inputted_stktab_den
         logical                   :: l_stktab_per_stk_parms, is_ptcl, inputted_star
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
@@ -73,7 +74,8 @@ contains
         inputted_oritab       = cline%defined('oritab')
         inputted_deftab       = cline%defined('deftab')
         inputted_plaintexttab = cline%defined('plaintexttab')
-        inputted_stk_den      = cline%defined('stk2')
+        inputted_stk_den      = cline%defined('stk_den')
+        inputted_stktab_den   = cline%defined('stktab_den')
         inputted_star         = cline%defined('starfile')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
@@ -82,6 +84,21 @@ contains
         endif
         if( cline%defined('stk') .and. cline%defined('stktab') )then
             THROW_HARD('stk and stktab are both defined on command line, use either or; exec_import_particles')
+        endif
+        if( inputted_stk_den .and. inputted_stktab_den )then
+            THROW_HARD('stk_den and stktab_den are both defined on command line, use either or; exec_import_particles')
+        endif
+        if( inputted_stk_den .and. .not. cline%defined('stk') )then
+            THROW_HARD('stk_den requires stk so raw/denoised stack order is explicit; exec_import_particles')
+        endif
+        if( inputted_stktab_den .and. .not. cline%defined('stktab') )then
+            THROW_HARD('stktab_den requires stktab so raw/denoised stack order is explicit; exec_import_particles')
+        endif
+        if( (inputted_stk_den .or. inputted_stktab_den) .and. inputted_star )then
+            THROW_HARD('stk_den/stktab_den are not supported with starfile import; exec_import_particles')
+        endif
+        if( (inputted_stk_den .or. inputted_stktab_den) .and. trim(params%ctf) /= 'flip' )then
+            THROW_HARD('dual raw/denoised particle representatives require ctf=flip; exec_import_particles')
         endif
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             if( trim(params%ctf) .ne. 'no' )then
@@ -186,6 +203,29 @@ contains
                         if( .not. file_exists(stkfnames(i)) ) THROW_HARD('modified filetable entry '//stkfnames(i)%to_char()//' does not exist')
                     enddo
                 endif
+                if( inputted_stktab_den )then
+                    call read_filetable(params%stktab_den, stkfnames_den)
+                    if( .not. allocated(stkfnames_den) )then
+                        THROW_HARD('stktab_den has no valid stack entries; exec_import_particles')
+                    endif
+                    if( size(stkfnames_den) /= nstks )then
+                        write(logfhandle,*) '# raw stacks in stktab        : ', nstks
+                        write(logfhandle,*) '# denoised stacks in stktab_den: ', size(stkfnames_den)
+                        THROW_HARD('stktab and stktab_den must contain the same number of entries; exec_import_particles')
+                    endif
+                    if( params%mkdir.eq.'yes' )then
+                        do i=1,nstks
+                            if(stkfnames_den(i)%to_char([1,1]).ne.'/') stkfnames_den(i) = PATH_PARENT//stkfnames_den(i)%to_char()
+                            if( .not. file_exists(stkfnames_den(i)) )then
+                                THROW_HARD('modified stktab_den entry '//stkfnames_den(i)%to_char()//' does not exist')
+                            endif
+                        enddo
+                    endif
+                    do i=1,nstks
+                        call validate_denoised_stack_pair(stkfnames(i), stkfnames_den(i), 'stktab_den entry '//int2str(i))
+                        stkfnames_den(i) = simple_abspath(stkfnames_den(i))
+                    enddo
+                endif
                 l_stktab_per_stk_parms = (os%get_noris() == nstks)
                 if( (n_ori_inputs == 1) .and. l_stktab_per_stk_parms )then
                     ! sampling distance
@@ -285,6 +325,9 @@ contains
                     ctfvars%l_phaseplate = phaseplate .eq. 'yes'
                 endif
             endif
+            if( inputted_stk_den )then
+                call validate_denoised_stack_pair(params%stk, params%stk_den, 'stk_den')
+            endif
 
             ! PROJECT FILE MANAGEMENT
             call spproj%read(params%projfile)
@@ -300,11 +343,15 @@ contains
                 ! state = 1 by default
                 call os%set_all2single('state', 1.0)
                 call spproj%add_single_stk(params%stk, ctfvars, os)
+                if( inputted_stk_den )then
+                    call spproj%os_stk%set(1, 'stk_den', simple_abspath(params%stk_den))
+                endif
             endif
             ! add list of stacks (stktab) if present
             if( cline%defined('stktab') )then
                 ! state = 1 by default
                 call os%set_all2single('state', 1.0)
+                n_os_stk_before = spproj%os_stk%get_noris()
                 if( l_stktab_per_stk_parms )then
                     ! per stack parameters
                     call spproj%add_stktab(stkfnames, os)
@@ -312,12 +359,43 @@ contains
                     ! per particle parameters
                     call spproj%add_stktab(stkfnames, ctfvars, os)
                 endif
+                if( inputted_stktab_den )then
+                    do i=1,nstks
+                        call spproj%os_stk%set(n_os_stk_before+i, 'stk_den', stkfnames_den(i))
+                    enddo
+                endif
             endif
         endif
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
         call nice_comm%terminate()
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
+    contains
+
+        subroutine validate_denoised_stack_pair( raw_stk, den_stk, context )
+            class(string),    intent(in) :: raw_stk, den_stk
+            character(len=*), intent(in) :: context
+            integer :: ldim_raw(3), ldim_den(3), n_raw, n_den
+            call find_ldim_nptcls(raw_stk, ldim_raw, n_raw)
+            call find_ldim_nptcls(den_stk, ldim_den, n_den)
+            ldim_raw(3) = 1
+            ldim_den(3) = 1
+            if( .not. all(ldim_raw == ldim_den) )then
+                write(logfhandle,*) trim(context)//' raw stk    : ', raw_stk%to_char()
+                write(logfhandle,*) trim(context)//' denoised stk: ', den_stk%to_char()
+                write(logfhandle,*) 'raw ldim          : ', ldim_raw
+                write(logfhandle,*) 'denoised ldim     : ', ldim_den
+                THROW_HARD('raw/denoised stack dimensions differ; exec_import_particles')
+            endif
+            if( n_raw /= n_den )then
+                write(logfhandle,*) trim(context)//' raw stk    : ', raw_stk%to_char()
+                write(logfhandle,*) trim(context)//' denoised stk: ', den_stk%to_char()
+                write(logfhandle,*) 'raw nptcls        : ', n_raw
+                write(logfhandle,*) 'denoised nptcls   : ', n_den
+                THROW_HARD('raw/denoised stack image counts differ; exec_import_particles')
+            endif
+        end subroutine validate_denoised_stack_pair
+
     end subroutine exec_import_particles
 
     subroutine exec_reimport_particles( self, cline )

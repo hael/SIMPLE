@@ -740,6 +740,48 @@ contains
         endif
     end subroutine get_stkname_and_ind
 
+    module subroutine get_ptcl_source_stkname_and_ind( self, oritype, iptcl, source, stkname, ind_in_stk )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        integer,                   intent(in)    :: iptcl
+        character(len=*),          intent(in)    :: source
+        class(string),             intent(out)   :: stkname
+        integer,                   intent(out)   :: ind_in_stk
+        type(string) :: ctfstr
+        integer :: stkind
+        select case(trim(source))
+            case('raw')
+                call self%get_stkname_and_ind(oritype, iptcl, stkname, ind_in_stk)
+                return
+            case('denoised')
+                if( trim(oritype) /= 'ptcl3D' )then
+                    THROW_HARD('denoised particle sources are supported only for ptcl3D; get_ptcl_source_stkname_and_ind')
+                endif
+            case DEFAULT
+                THROW_HARD('unsupported particle source: '//trim(source)//'; get_ptcl_source_stkname_and_ind')
+        end select
+        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
+        if( .not. self%os_stk%isthere(stkind, 'ctf') )then
+            call self%os_stk%print(stkind)
+            THROW_HARD('ctf missing from os_stk; get_ptcl_source_stkname_and_ind')
+        endif
+        call self%os_stk%getter(stkind, 'ctf', ctfstr)
+        if( trim(ctfstr%to_char()) /= 'flip' )then
+            call self%os_stk%print(stkind)
+            THROW_HARD('denoised particle sources require ctf=flip in os_stk; get_ptcl_source_stkname_and_ind')
+        endif
+        if( .not. self%os_stk%isthere(stkind, 'stk_den') )then
+            call self%os_stk%print(stkind)
+            THROW_HARD('stk_den missing from os_stk; get_ptcl_source_stkname_and_ind')
+        endif
+        stkname = self%os_stk%get_str(stkind, 'stk_den')
+        if( len_trim(stkname%to_char()) == 0 )then
+            call self%os_stk%print(stkind)
+            THROW_HARD('stk_den is empty in os_stk; get_ptcl_source_stkname_and_ind')
+        endif
+        call ctfstr%kill
+    end subroutine get_ptcl_source_stkname_and_ind
+
     module integer function get_nstks( self )
         class(sp_project), target, intent(in) :: self
         get_nstks = self%os_stk%get_noris()

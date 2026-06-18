@@ -786,6 +786,23 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
+        select case(trim(self%matchimg_source))
+            case('raw','denoised')
+            case DEFAULT
+                THROW_HARD('Unsupported matchimg_source='//trim(self%matchimg_source)//'; expected raw|denoised')
+        end select
+        select case(trim(self%recimg_source))
+            case('raw','denoised')
+            case DEFAULT
+                THROW_HARD('Unsupported recimg_source='//trim(self%recimg_source)//'; expected raw|denoised')
+        end select
+        if( (trim(self%matchimg_source) == 'denoised' .or. trim(self%recimg_source) == 'denoised') .and. &
+            trim(self%oritype) /= 'ptcl3D' )then
+            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
+        endif
+        if( trim(self%matchimg_source) == 'denoised' .and. self%l_ml_reg )then
+            THROW_HARD('matchimg_source=denoised is disabled when ML regularization is active; use raw sigma estimates')
+        endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')
             case DEFAULT
