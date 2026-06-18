@@ -48,8 +48,10 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab)       :: eulprob_obj_part
-        integer :: nptcls
+        type(eul_prob_tab)       :: eulprob_obj_part, eulprob_obj_batch
+        integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
+        integer, allocatable :: batches(:,:)
+        logical :: l_state_only
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
@@ -60,24 +62,50 @@ contains
         else
             THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
         endif
+        if( nptcls < 1 ) THROW_HARD('exec_prob_tab selected no particles')
+        batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+        nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+        batches     = split_nobjs_even(nptcls, nbatches)
+        batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call read_reprojection_model(params, build, nptcls)
+        call read_reprojection_model(params, build, batchsz_max)
         call prep_sigmas_objfun(params, build, .false.)
-        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
+        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
-        ! Build polar particle images
-        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
-        ! Filling prob table in eul_prob_tab
-        call eulprob_obj_part%new(params, build, pinds)
+        ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
+        l_state_only = str_has_substr(params%refine, 'prob_state')
+        call eulprob_obj_part%new(params, build, pinds, state_only=l_state_only)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        if( str_has_substr(params%refine, 'prob_state') )then
-            call eulprob_obj_part%fill_tab_state_only
+        do ibatch = 1, nbatches
+            batch_start = batches(ibatch,1)
+            batch_end   = batches(ibatch,2)
+            batchsz     = batch_end - batch_start + 1
+            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB3D: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
+            call flush(logfhandle)
+            call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
+            call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end), state_only=l_state_only)
+            if( l_state_only )then
+                call eulprob_obj_batch%fill_tab_state_only
+                eulprob_obj_part%state_tab(:,batch_start:batch_end) = eulprob_obj_batch%state_tab(:,1:batchsz)
+            else
+                call eulprob_obj_batch%fill_tab
+                eulprob_obj_part%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch%loc_tab(:,1:batchsz)
+                eulprob_obj_part%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch%seed_shifts(:,1:batchsz)
+                eulprob_obj_part%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch%seed_has_sh(1:batchsz)
+                if( eulprob_obj_part%seed_nrots == 0 ) eulprob_obj_part%seed_nrots = eulprob_obj_batch%seed_nrots
+                if( eulprob_obj_part%seed_nrots /= eulprob_obj_batch%seed_nrots )then
+                    THROW_HARD('seed_nrots mismatch in exec_prob_tab batching')
+                endif
+            endif
+            call eulprob_obj_batch%kill
+        end do
+        if( l_state_only )then
             call eulprob_obj_part%write_state_tab(fname)
         else
-            call eulprob_obj_part%fill_tab
             call eulprob_obj_part%write_tab(fname)
         endif
         call eulprob_obj_part%kill
+        if( allocated(batches) ) deallocate(batches)
         call build%pftc%kill
         call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%kill_general_tbox
@@ -97,8 +125,9 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
-        integer :: nptcls
+        type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh, eulprob_obj_batch_neigh
+        integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
+        integer, allocatable :: batches(:,:)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
@@ -107,18 +136,43 @@ contains
         else
             THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
         endif
+        if( nptcls < 1 ) THROW_HARD('exec_prob_tab_neigh selected no particles')
+        batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+        nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+        batches     = split_nobjs_even(nptcls, nbatches)
+        batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call read_reprojection_model(params, build, nptcls)
+        call read_reprojection_model(params, build, batchsz_max)
         call prep_sigmas_objfun(params, build, .false.)
-        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, nptcls )
+        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
-        ! Build polar particle images
-        call build_batch_particles3D(params, build, nptcls, pinds, tmp_imgs, tmp_imgs_pad)
         call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
-        call eulprob_obj_part_neigh%fill_tab
+        do ibatch = 1, nbatches
+            batch_start = batches(ibatch,1)
+            batch_end   = batches(ibatch,2)
+            batchsz     = batch_end - batch_start + 1
+            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB3D_NEIGH: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
+            call flush(logfhandle)
+            call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
+            call eulprob_obj_batch_neigh%new_neigh(params, build, pinds(batch_start:batch_end))
+            call eulprob_obj_batch_neigh%fill_tab
+            eulprob_obj_part_neigh%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch_neigh%loc_tab(:,1:batchsz)
+            eulprob_obj_part_neigh%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch_neigh%seed_shifts(:,1:batchsz)
+            eulprob_obj_part_neigh%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch_neigh%seed_has_sh(1:batchsz)
+            eulprob_obj_part_neigh%eval_touched_counts(batch_start:batch_end) =&
+                &eulprob_obj_batch_neigh%eval_touched_counts(1:batchsz)
+            eulprob_obj_part_neigh%eval_touched_refs(:,batch_start:batch_end) =&
+                &eulprob_obj_batch_neigh%eval_touched_refs(:,1:batchsz)
+            if( eulprob_obj_part_neigh%seed_nrots == 0 ) eulprob_obj_part_neigh%seed_nrots = eulprob_obj_batch_neigh%seed_nrots
+            if( eulprob_obj_part_neigh%seed_nrots /= eulprob_obj_batch_neigh%seed_nrots )then
+                THROW_HARD('seed_nrots mismatch in exec_prob_tab_neigh batching')
+            endif
+            call eulprob_obj_batch_neigh%kill
+        end do
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
         call eulprob_obj_part_neigh%kill
+        if( allocated(batches) ) deallocate(batches)
         call build%pftc%kill
         call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%kill_general_tbox
@@ -142,6 +196,7 @@ contains
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
         integer :: nptcls, ipart
+        logical :: l_state_only
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -170,9 +225,10 @@ contains
         endif
         ! Build the global table only after worker tables are complete.  Keeping it
         ! live while workers build dense partition tables roughly doubles peak RSS.
-        call eulprob_obj_glob%new(params, build, pinds)
+        l_state_only = str_has_substr(params%refine, 'prob_state')
+        call eulprob_obj_glob%new(params, build, pinds, state_only=l_state_only)
         ! reading corrs from all parts
-        if( str_has_substr(params%refine, 'prob_state') )then
+        if( l_state_only )then
             do ipart = 1, params%nparts
                 fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
                 call eulprob_obj_glob%read_state_tab(fname)

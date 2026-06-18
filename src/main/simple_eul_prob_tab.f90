@@ -60,19 +60,22 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, params, build, pinds, empty_okay )
+    subroutine new( self, params, build, pinds, empty_okay, state_only )
         class(eul_prob_tab),       intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
         logical, optional,         intent(in)    :: empty_okay
+        logical, optional,         intent(in)    :: state_only
         integer, parameter :: MIN_POP = 5   ! ignoring cavgs with less than 5 particles
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
-        logical :: l_empty
+        logical :: l_empty, l_state_only
         call self%kill
         l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
         if( present(empty_okay) ) l_empty = empty_okay
+        l_state_only = .false.
+        if( present(state_only) ) l_state_only = state_only
         self%p_ptr => params
         self%b_ptr  => build
         self%nptcls       = size(pinds)
@@ -105,7 +108,8 @@ contains
             enddo
         enddo
         allocate(self%pinds(self%nptcls), source=pinds)
-        allocate(self%loc_tab(self%nrefs,self%nptcls), self%assgn_map(self%nptcls),self%state_tab(self%nstates,self%nptcls))
+        allocate(self%assgn_map(self%nptcls), self%state_tab(self%nstates,self%nptcls))
+        if( .not. l_state_only ) allocate(self%loc_tab(self%nrefs,self%nptcls))
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
         !$omp parallel do default(shared) private(i,iptcl,si,ri) proc_bind(close) schedule(static)
@@ -129,16 +133,18 @@ contains
                 self%state_tab(si,i)%y      = 0.
                 self%state_tab(si,i)%has_sh = .false.
             enddo
-            do ri = 1, self%nrefs
-                self%loc_tab(ri,i)%pind   = iptcl
-                self%loc_tab(ri,i)%istate = self%sinds(ri)
-                self%loc_tab(ri,i)%iproj  = self%jinds(ri)
-                self%loc_tab(ri,i)%inpl   = 0
-                self%loc_tab(ri,i)%dist   = huge(x)
-                self%loc_tab(ri,i)%x      = 0.
-                self%loc_tab(ri,i)%y      = 0.
-                self%loc_tab(ri,i)%has_sh = .false.
-            end do
+            if( allocated(self%loc_tab) )then
+                do ri = 1, self%nrefs
+                    self%loc_tab(ri,i)%pind   = iptcl
+                    self%loc_tab(ri,i)%istate = self%sinds(ri)
+                    self%loc_tab(ri,i)%iproj  = self%jinds(ri)
+                    self%loc_tab(ri,i)%inpl   = 0
+                    self%loc_tab(ri,i)%dist   = huge(x)
+                    self%loc_tab(ri,i)%x      = 0.
+                    self%loc_tab(ri,i)%y      = 0.
+                    self%loc_tab(ri,i)%has_sh = .false.
+                end do
+            endif
         end do
         !$omp end parallel do
     end subroutine new
@@ -372,60 +378,9 @@ contains
         call o_prev%kill
     end subroutine fill_tab_state_only
 
-    ! reference normalization for assignment scoring.
-    ! The raw loc_tab distances must not be overwritten: they are written to
-    ! ASSIGNMENT.dat and later converted back to the reported/objective score.
-    subroutine ref_score_tab( self, score_tab )
-        class(eul_prob_tab), intent(in) :: self
-        real,              intent(out) :: score_tab(self%nptcls,self%nrefs)
-        real    :: min_dist, max_dist, dist_val, spread, invalid_dist
-        integer :: i, iref, nvalid, nflat, nbad
-        invalid_dist = 0.1 * huge(invalid_dist)
-        nflat = 0
-        nbad  = 0
-        score_tab = 1.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,iref,min_dist,max_dist,dist_val,spread,nvalid) reduction(+:nflat,nbad)
-        do i = 1, self%nptcls
-            min_dist = huge(min_dist)
-            max_dist = -huge(max_dist)
-            nvalid   = 0
-            do iref = 1,self%nrefs
-                dist_val = self%loc_tab(iref,i)%dist
-                if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
-                    min_dist = min(min_dist, dist_val)
-                    max_dist = max(max_dist, dist_val)
-                    nvalid   = nvalid + 1
-                endif
-            enddo
-            if( nvalid == 0 )then
-                nbad = nbad + 1
-                cycle
-            endif
-            spread = max_dist - min_dist
-            if( spread <= 0. )then
-                nflat = nflat + 1
-                do iref = 1,self%nrefs
-                    dist_val = self%loc_tab(iref,i)%dist
-                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist ) score_tab(i,iref) = 0.5
-                enddo
-            else
-                do iref = 1,self%nrefs
-                    dist_val = self%loc_tab(iref,i)%dist
-                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist ) score_tab(i,iref) = (dist_val - min_dist) / spread
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
-        if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
-        if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
-        if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
-        if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
-    end subroutine ref_score_tab
-
     ! Legacy in-place normalization retained for subclasses that override this
-    ! binding. Plain prob assignment uses ref_score_tab instead, preserving raw
-    ! distances for ASSIGNMENT.dat and downstream score reporting.
+    ! binding. Plain prob assignment uses compact score vectors instead,
+    ! preserving raw distances for ASSIGNMENT.dat and downstream score reporting.
     subroutine ref_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
@@ -462,15 +417,17 @@ contains
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:)
-        integer, allocatable :: greedy_state(:), active_refs(:), active_inds(:)
-        real,    allocatable :: sorted_tab(:,:), iref_dist(:), dists_sorted(:)
+        integer, allocatable :: greedy_state(:), active_refs(:), active_inds(:), score_mode(:)
+        real,    allocatable :: score_work(:,:), score_min(:), score_spread(:)
+        real,    allocatable :: iref_dist(:), dists_sorted(:)
         real,    allocatable :: state_projs_athres(:), active_dists(:), active_dists_sorted(:)
         logical, allocatable :: ptcl_avail(:)
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive, ithr
         integer :: alloc_stat
         real    :: projs_athres
         character(len=256) :: alloc_msg
-        allocate(stab_inds(self%nptcls, self%nrefs), sorted_tab(self%nptcls, self%nrefs),&
+        allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_glob),&
+            &score_min(self%nptcls), score_spread(self%nptcls), score_mode(self%nptcls),&
             &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
             &active_refs(self%nrefs), active_inds(self%nrefs), iref_dist(self%nrefs),&
             &dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates), active_dists(self%nrefs),&
@@ -480,13 +437,16 @@ contains
             write(logfhandle,*) trim(alloc_msg)
             THROW_HARD('failed allocating probability assignment work arrays')
         endif
-        ! normalization
-        call ref_score_tab(self, sorted_tab)
-        ! sorting each columns
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
+        call prepare_ref_score_vectors
+        ! Sort each reference using one scratch score column per worker thread.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i,ithr)
         do iref = 1, self%nrefs
-            stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)
-            call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
+            ithr = omp_get_thread_num() + 1
+            do i = 1,self%nptcls
+                stab_inds(i,iref) = i
+                score_work(i,ithr) = ref_score(iref, i)
+            enddo
+            call hpsort(score_work(:,ithr), stab_inds(:,iref))
         enddo
         !$omp end parallel do
         projs_athres = 0.
@@ -514,13 +474,75 @@ contains
             enddo
         endif
         if( allocated(stab_inds) ) deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, active_refs, active_inds,&
-            &sorted_tab, iref_dist, dists_sorted, state_projs_athres, active_dists, active_dists_sorted, ptcl_avail)
+            &score_work, score_min, score_spread, score_mode, iref_dist, dists_sorted, state_projs_athres, active_dists,&
+            &active_dists_sorted, ptcl_avail)
 
     contains
 
+        subroutine prepare_ref_score_vectors()
+            real    :: min_dist, max_dist, dist_val, spread, invalid_dist
+            integer :: i_loc, iref_loc, nvalid, nflat, nbad
+            invalid_dist = 0.1 * huge(invalid_dist)
+            nflat = 0
+            nbad  = 0
+            score_min    = 0.
+            score_spread = 0.
+            score_mode   = 0
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(i_loc,iref_loc,min_dist,max_dist,dist_val,spread,nvalid) reduction(+:nflat,nbad)
+            do i_loc = 1, self%nptcls
+                min_dist = huge(min_dist)
+                max_dist = -huge(max_dist)
+                nvalid   = 0
+                do iref_loc = 1,self%nrefs
+                    dist_val = self%loc_tab(iref_loc,i_loc)%dist
+                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
+                        min_dist = min(min_dist, dist_val)
+                        max_dist = max(max_dist, dist_val)
+                        nvalid   = nvalid + 1
+                    endif
+                enddo
+                if( nvalid == 0 )then
+                    nbad = nbad + 1
+                    cycle
+                endif
+                spread = max_dist - min_dist
+                score_min(i_loc)    = min_dist
+                score_spread(i_loc) = spread
+                if( spread <= 0. )then
+                    score_mode(i_loc) = 1
+                    nflat = nflat + 1
+                else
+                    score_mode(i_loc) = 2
+                endif
+            enddo
+            !$omp end parallel do
+            if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
+            if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
+            if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
+            if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
+        end subroutine prepare_ref_score_vectors
+
+        real function ref_score( iref_loc, iptcl_loc ) result(score)
+            integer, intent(in) :: iref_loc, iptcl_loc
+            real :: dist_val, invalid_dist
+            invalid_dist = 0.1 * huge(invalid_dist)
+            dist_val = self%loc_tab(iref_loc,iptcl_loc)%dist
+            score = 1.
+            if( .not.(ieee_is_finite(dist_val) .and. dist_val < invalid_dist) ) return
+            select case(score_mode(iptcl_loc))
+                case(1)
+                    score = 0.5
+                case(2)
+                    score = (dist_val - score_min(iptcl_loc)) / score_spread(iptcl_loc)
+            end select
+        end function ref_score
+
         subroutine reset_ref_frontier()
+            do iref = 1,self%nrefs
+                iref_dist(iref) = ref_score(iref, stab_inds(1,iref))
+            enddo
             iref_dist_inds = 1
-            iref_dist      = sorted_tab(1,:)
             ptcl_avail     = .true.
         end subroutine reset_ref_frontier
 
@@ -531,7 +553,7 @@ contains
                 iptcl_current = stab_inds(iref_dist_inds(iref_current), iref_current)
                 if( ptcl_avail(iptcl_current) .and. &
                     &(state_filter == 0 .or. greedy_state(iptcl_current) == state_filter) )then
-                    iref_dist(iref_current) = sorted_tab(iref_dist_inds(iref_current), iref_current)
+                    iref_dist(iref_current) = ref_score(iref_current, iptcl_current)
                     return
                 endif
                 iref_dist_inds(iref_current) = iref_dist_inds(iref_current) + 1
