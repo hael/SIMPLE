@@ -399,7 +399,7 @@ contains
         type(string) :: label, map_fname, assign_fname, raw_fname, den_fname, coeff_fname, refine2D_align_fname
         type(string) :: den_ptcl_fname, ptcl_map_fname
         type(image), allocatable :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
-        type(image), allocatable :: den_ptcls(:), coeff_ptcls(:)
+        type(image), allocatable :: den_ptcls(:), coeff_ptcls(:), den_ptcls_write(:)
         integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
         integer :: i, j, k, iglob, iptcl_glob, nsplit, subcls_offset, funit_map, funit_assign, funit_ptcl_map
         integer :: funit_refine2D_align, refine2D_nptcls
@@ -499,7 +499,7 @@ contains
             call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_pre_norm, l_fixed_nsubcls, &
                                         l_write_ptcls, l_refine2D, &
                                         nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                        den_ptcls, coeff_ptcls, refine2D_nptcls, &
+                                        den_ptcls, coeff_ptcls, den_ptcls_write, refine2D_nptcls, &
                                         refine2D_sum_corr_before, refine2D_sum_corr_after)
             if( nsplit < 1 ) cycle
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls split summary: class=', cls_inds(i), ' nptcls=', size(labels), ' nsubcls=', nsplit
@@ -521,11 +521,11 @@ contains
                 endif
             end do
             subcls_offset = iglob - nsplit
-            if( l_write_ptcls .and. allocated(den_ptcls) )then
+            if( l_write_ptcls .and. allocated(den_ptcls_write) )then
                 do k = 1, size(labels)
                     if( labels(k) <= 0 ) cycle
                     iptcl_glob = iptcl_glob + 1
-                    call den_ptcls(k)%write(den_ptcl_fname, iptcl_glob)
+                    call den_ptcls_write(k)%write(den_ptcl_fname, iptcl_glob)
                     write(funit_ptcl_map,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
                         iptcl_glob, pinds(k), cls_inds(i), labels(k), subcls_offset + labels(k)
                 end do
@@ -547,6 +547,7 @@ contains
             if( allocated(den_subavgs) ) call dealloc_imgarr(den_subavgs)
             if( allocated(coeff_subavgs) ) call dealloc_imgarr(coeff_subavgs)
             if( allocated(den_ptcls)    ) call dealloc_imgarr(den_ptcls)
+            if( allocated(den_ptcls_write) ) call dealloc_imgarr(den_ptcls_write)
             if( allocated(coeff_ptcls)  ) call dealloc_imgarr(coeff_ptcls)
             if( allocated(pinds) ) deallocate(pinds)
             if( allocated(labels) ) deallocate(labels)
@@ -582,8 +583,8 @@ contains
     subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, &
                                       l_write_ptcls, l_refine2D, &
                                       nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                      den_ptcls, coeff_ptcls, refine2D_nptcls, refine2D_sum_corr_before, &
-                                      refine2D_sum_corr_after)
+                                      den_ptcls, coeff_ptcls, den_ptcls_write, refine2D_nptcls, &
+                                      refine2D_sum_corr_before, refine2D_sum_corr_after)
         use simple_diff_map_graphs,  only: diffmap_graph
         use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
@@ -597,14 +598,14 @@ contains
         integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
-        type(image), allocatable, intent(out)   :: den_ptcls(:), coeff_ptcls(:)
+        type(image), allocatable, intent(out)   :: den_ptcls(:), coeff_ptcls(:), den_ptcls_write(:)
         integer,                  intent(inout) :: refine2D_nptcls
         real,                     intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
         type(image), allocatable :: refined_subavgs(:)
         type(image) :: cavg_raw, cavg_den, cavg_coeff
-        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
+        real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         type(diffmap_graph) :: split_graph
         integer, allocatable :: i_medoids(:)
@@ -664,6 +665,15 @@ contains
             call graph_coeffproj_denoise(params, imgs_ppca, avg, split_graph, coeff_ptcls)
             if( allocated(coeff_ptcls) )then
                 den_ptcls = copy_imgarr(coeff_ptcls)
+                if( l_write_ptcls )then
+                    avg_ptcls = cavg_raw%serialize()
+                    call graph_coeffproj_denoise(params, imgs, avg_ptcls, split_graph, den_ptcls_write)
+                    if( allocated(den_ptcls_write) )then
+                        do k = 1, size(den_ptcls_write)
+                            call inverse_register_split_particle(spproj, params%oritype, pinds(k), den_ptcls_write(k))
+                        end do
+                    endif
+                endif
                 write(logfhandle,'(A,I8,A,A,A,A,A)') 'Cls split graph generated model: class=', cls_id, &
                     ' graph=', trim(split_graph%metric), ' steering=', trim(split_graph%steering), ' method=coeff_projection'
                 call flush(logfhandle)
@@ -748,6 +758,7 @@ contains
         call split_graph%kill()
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
+        if( allocated(avg_ptcls)    ) deallocate(avg_ptcls)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
@@ -755,6 +766,34 @@ contains
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
+
+    subroutine inverse_register_split_particle(spproj, oritype, pind, ptcl)
+        type(sp_project), intent(inout) :: spproj
+        character(len=*), intent(in)    :: oritype
+        integer,          intent(in)    :: pind
+        type(image),      intent(inout) :: ptcl
+        real, allocatable :: rmat_rot(:,:,:)
+        real :: e3, shift(2)
+        integer :: ldim(3)
+        select case(trim(oritype))
+            case('ptcl2D')
+                e3    = spproj%os_ptcl2D%e3get(pind)
+                shift = spproj%os_ptcl2D%get_2Dshift(pind)
+            case('ptcl3D')
+                e3    = spproj%os_ptcl3D%e3get(pind)
+                shift = spproj%os_ptcl3D%get_2Dshift(pind)
+            case DEFAULT
+                THROW_HARD('Unsupported oritype for cls_split particle inverse registration')
+        end select
+        ldim = ptcl%get_ldim()
+        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
+        call ptcl%rtsq_serial(-e3, 0., 0., rmat_rot)
+        call ptcl%set_rmat(rmat_rot, .false.)
+        call ptcl%fft()
+        call ptcl%shift2Dserial(shift)
+        call ptcl%ifft()
+        deallocate(rmat_rot)
+    end subroutine inverse_register_split_particle
 
     subroutine rebuild_collapsed_subavg(imgs, imgs_ppca, den_ptcls, coeff_ptcls, raw_subavgs, den_subavgs, coeff_subavgs)
         use simple_imgarr_utils, only: dealloc_imgarr
