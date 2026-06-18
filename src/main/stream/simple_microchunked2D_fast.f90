@@ -1083,7 +1083,7 @@ contains
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK PASS 2 # ', chunk%id
           end if
         end if
-        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_MICROCHUNK_P2)
+        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_MICROCHUNK_P1)
         if( chunk%rejection_complete .and. .not. chunk%complete ) then
           call spproj%read_segment('mic',    chunk%projfile)
           call spproj%read_segment('ptcl2D', chunk%projfile)
