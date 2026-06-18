@@ -601,6 +601,7 @@ contains
         if( .not. cline%defined('center')      ) call cline%set('center',                  'no')
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',           'global')
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',              'yes')
+        if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode',     'sum')
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', default_refine3D_multi_nsample())
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',              'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',                 'yes')

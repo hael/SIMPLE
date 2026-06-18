@@ -55,8 +55,8 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         ! Per particle:
         ! 1) get previous-state context and estimate one shift seed
-        ! 2) coarse-score one representative per subspace for every active state
-        ! 3) pick top subspaces per state and pool neighborhoods per state
+        ! 2) choose subspace neighborhoods from geometry, per-state scoring, or state-summed scoring
+        ! 3) pool selected subspaces per state
         ! 4) evaluate all refs whose projection falls in each state's pooled neighborhood
         ! 5) optionally refine the best evaluated refs with shift search
 
@@ -87,9 +87,12 @@ contains
         integer :: i, ri, istate, ithr, max_refs_to_refine
         integer :: iptcl, nsubs, npeak_target, si, iref_full, isub
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_prob_objfun
+        logical :: l_prob_objfun, l_geom_neigh, l_sum_neigh, l_sh_first
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
+        l_sum_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'sum')
+        l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         call seed_rnd
         nsubs = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -166,7 +169,7 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 call process_particle(i, iptcl, ithr, .true., shift_seed)
                 self%seed_shifts(:,i) = shift_seed(2:3)
-                self%seed_has_sh(i)   = .true.
+                self%seed_has_sh(i)   = l_sh_first
             enddo
             !$omp end parallel do
         else
@@ -221,9 +224,17 @@ contains
             integer :: prev_state_loc, prev_proj_loc
             integer :: neval_loc
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state_loc, prev_proj_loc)
-            call estimate_shift_seed(ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev_loc, l_with_shift, shift_seed_loc)
-            call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
-            call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            call estimate_shift_seed(ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev_loc, l_sh_first, shift_seed_loc)
+            if( l_geom_neigh )then
+                call build_geometric_neighborhood(ithr_loc, prev_proj_loc)
+            else
+                if( l_sum_neigh )then
+                    call find_sum_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+                else
+                    call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+                endif
+                call build_pooled_neighborhood(ithr_loc, prev_proj_loc)
+            endif
             call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval_loc)
             call refine_best_neighbors(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval_loc, l_with_shift)
             call o_prev_loc%kill
@@ -277,26 +288,8 @@ contains
                     coarse_proj_loc = self%b_ptr%subspace_inds(isub_loc)
                     if( .not. self%proj_exists(coarse_proj_loc, istate_loc) ) cycle
                     full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
-                    if( l_prob_objfun )then
-                        if( l_with_shift )then
-                            call self%b_ptr%pftc%gen_best_objfun_val(full_ref_subspace_loc, iptcl_loc,&
-                                &shift_seed_loc(2:3), dist_loc, irot_loc)
-                        else
-                            call self%b_ptr%pftc%gen_best_objfun_val(full_ref_subspace_loc, iptcl_loc,&
-                                &[0.,0.], dist_loc, irot_loc)
-                        endif
-                    else
-                        if( l_with_shift )then
-                            call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc,&
-                                &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
-                        else
-                            call self%b_ptr%pftc%gen_objfun_vals(full_ref_subspace_loc, iptcl_loc,&
-                                &[0.,0.], dists_inpl(:,ithr_loc))
-                        endif
-                        dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                        irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
-                        dist_loc = dists_inpl(irot_loc,ithr_loc)
-                    endif
+                    call score_subspace_ref(full_ref_subspace_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
+                        &l_with_shift, dist_loc, irot_loc)
                     call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist_loc)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
                     if( ri_loc > 0 )then
@@ -305,6 +298,113 @@ contains
                 enddo
             enddo
         end subroutine find_peak_subspaces
+
+        subroutine find_sum_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc
+            real,    intent(in) :: shift_seed_loc(3)
+            logical, intent(in) :: l_with_shift
+            integer :: si_loc, istate_loc, isub_loc, full_ref_subspace_loc, irot_loc, ri_loc, coarse_proj_loc
+            integer :: nvalid_loc, anchor_state_loc, expected_states_loc
+            real    :: dist_loc, sum_dist_loc
+            coarse_ws%peak_subspace_dists(:,:,ithr_loc) = huge(1.0)
+            coarse_ws%peak_subspace_inds(:,:,ithr_loc)  = 0
+            coarse_ws%peak_subspace_count(:,ithr_loc)  = 0
+            anchor_state_loc    = 0
+            expected_states_loc = 0
+            do si_loc = 1, self%nstates
+                istate_loc = self%ssinds(si_loc)
+                if( .not. self%state_exists(istate_loc) ) cycle
+                expected_states_loc = expected_states_loc + 1
+                if( anchor_state_loc == 0 ) anchor_state_loc = istate_loc
+            enddo
+            if( expected_states_loc < 1 ) return
+            do isub_loc = 1, nsubs
+                coarse_proj_loc = self%b_ptr%subspace_inds(isub_loc)
+                sum_dist_loc = 0.
+                nvalid_loc   = 0
+                do si_loc = 1, self%nstates
+                    istate_loc = self%ssinds(si_loc)
+                    if( .not. self%state_exists(istate_loc) ) cycle
+                    if( .not. self%proj_exists(coarse_proj_loc, istate_loc) )then
+                        nvalid_loc = -1
+                        exit
+                    endif
+                    full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
+                    call score_subspace_ref(full_ref_subspace_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
+                        &l_with_shift, dist_loc, irot_loc)
+                    sum_dist_loc = sum_dist_loc + dist_loc
+                    nvalid_loc = nvalid_loc + 1
+                    ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace_loc)
+                    if( ri_loc > 0 )then
+                        call record_sparse_eval(i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
+                    endif
+                enddo
+                if( nvalid_loc == expected_states_loc )then
+                    call consider_peak_subspace(isub_loc, anchor_state_loc, ithr_loc, sum_dist_loc)
+                endif
+            enddo
+            call copy_anchor_peak_subspaces(anchor_state_loc, ithr_loc)
+        end subroutine find_sum_peak_subspaces
+
+        subroutine copy_anchor_peak_subspaces(anchor_state_loc, ithr_loc)
+            integer, intent(in) :: anchor_state_loc, ithr_loc
+            integer :: si_loc, istate_loc, npeak_found_loc
+            npeak_found_loc = coarse_ws%peak_subspace_count(anchor_state_loc,ithr_loc)
+            do si_loc = 1,self%nstates
+                istate_loc = self%ssinds(si_loc)
+                if( istate_loc == anchor_state_loc ) cycle
+                coarse_ws%peak_subspace_count(istate_loc,ithr_loc) = npeak_found_loc
+                if( npeak_found_loc > 0 )then
+                    coarse_ws%peak_subspace_dists(1:npeak_found_loc,istate_loc,ithr_loc) =&
+                        &coarse_ws%peak_subspace_dists(1:npeak_found_loc,anchor_state_loc,ithr_loc)
+                    coarse_ws%peak_subspace_inds(1:npeak_found_loc,istate_loc,ithr_loc) =&
+                        &coarse_ws%peak_subspace_inds(1:npeak_found_loc,anchor_state_loc,ithr_loc)
+                endif
+            enddo
+        end subroutine copy_anchor_peak_subspaces
+
+        subroutine build_geometric_neighborhood(ithr_loc, prev_proj_loc)
+            integer, intent(in) :: ithr_loc, prev_proj_loc
+            integer :: si_loc, istate_loc, coarse_proj_loc, isub_loc
+            coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
+            isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
+            if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
+            coarse_ws%pooled_sub_count(:,ithr_loc) = 0
+            do si_loc = 1,self%nstates
+                istate_loc = self%ssinds(si_loc)
+                coarse_ws%pooled_sub_inds(1,istate_loc,ithr_loc) = isub_loc
+                coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = 1
+            enddo
+        end subroutine build_geometric_neighborhood
+
+        subroutine score_subspace_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
+            &l_with_shift, dist_loc, irot_loc)
+            integer, intent(in)  :: full_ref_loc, ithr_loc, iptcl_loc
+            real,    intent(in)  :: shift_seed_loc(3)
+            logical, intent(in)  :: l_with_shift
+            real,    intent(out) :: dist_loc
+            integer, intent(out) :: irot_loc
+            if( l_prob_objfun )then
+                if( l_with_shift )then
+                    call self%b_ptr%pftc%gen_best_objfun_val(full_ref_loc, iptcl_loc,&
+                        &shift_seed_loc(2:3), dist_loc, irot_loc)
+                else
+                    call self%b_ptr%pftc%gen_best_objfun_val(full_ref_loc, iptcl_loc,&
+                        &[0.,0.], dist_loc, irot_loc)
+                endif
+            else
+                if( l_with_shift )then
+                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc,&
+                        &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
+                else
+                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc,&
+                        &[0.,0.], dists_inpl(:,ithr_loc))
+                endif
+                dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
+                irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
+                dist_loc = dists_inpl(irot_loc,ithr_loc)
+            endif
+        end subroutine score_subspace_ref
 
         subroutine consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist_loc)
             integer, intent(in) :: isub_loc, istate_loc, ithr_loc
@@ -452,7 +552,11 @@ contains
                     iproj_loc  = self%jinds(ri_loc)
                     call grad_shsrch_obj(ithr_loc)%set_indices((istate_loc-1)*self%p_ptr%nspace + iproj_loc, iptcl_loc)
                     irot_loc = self%loc_tab(ri_loc,i_loc)%inpl
-                    refined_shift_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=shift_seed_loc(2:3))
+                    if( l_sh_first )then
+                        refined_shift_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=shift_seed_loc(2:3))
+                    else
+                        refined_shift_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
+                    endif
                     if( irot_loc > 0 )then
                         call record_sparse_eval(i_loc, ri_loc, &
                             &eulprob_dist_switch(refined_shift_loc(1), self%p_ptr%cc_objfun), &
@@ -727,9 +831,10 @@ contains
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val
-        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state
+        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_sh_first
         huge_val = huge(1.0)
         l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         greedy_state = 0
         final_assigned = .false.
         l_filter_greedy_state = .false.
@@ -1018,7 +1123,7 @@ contains
                 fallback_proj  = self%jinds(fallback_ref_loc)
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
-                if( self%p_ptr%l_doshift ) sh_seed = o_prev_loc%get_2Dshift()
+                if( l_sh_first ) sh_seed = o_prev_loc%get_2Dshift()
                 if( l_prob_objfun )then
                     if( self%p_ptr%l_prob_inpl )then
                         inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&

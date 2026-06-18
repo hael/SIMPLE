@@ -117,6 +117,7 @@ value:
 - `center=no`
 - `sigma_est=global`
 - `prob_inpl=yes`
+- `prob_neigh_mode=sum`
 - `nsample=min(100000, 10000 * nstates)`
 - `autoscale=yes`
 - `multivol_mode=input_oris_start`
@@ -370,6 +371,7 @@ The possible stages are:
    - `refine=prob_neigh`
    - `nspace=5000`
    - `nspace_sub=500`
+   - `prob_neigh_mode=sum`
    - minimum iterations: `5`
    - maximum iterations: the planned or user-supplied stage cap
 
@@ -393,6 +395,7 @@ For every stage-level base-`refine3D` call, the wrapper sets:
 - `refine` to the stage mode
 - `nspace` to the stage projection count
 - `nspace_sub=500` for `prob_neigh`, and no `nspace_sub` for other stages
+- `prob_neigh_mode=sum` by default, unless explicitly overridden
 - `overlap` to the stage state-overlap target
 
 The wrapper deletes stale `endit` before each staged call and reads the new
@@ -457,6 +460,11 @@ Base `refine3D` owns:
 - `volassemble`
 - per-state FSC and resolution metadata
 - state volume registration in `os_out`
+
+All multi-state base calls run with shift-first candidate scoring disabled.
+Shifts may still be refined after the candidate/state choice, but a shift seed
+estimated from a particle's previous state must not be used to rank another
+state.
 
 The wrapper must preserve the base `refine3D` particle-domain versus
 volume-domain boundary. It should not call matcher internals or volume
@@ -637,7 +645,8 @@ When reviewing `refine3D_multi`, check these policy points first:
   counters.
 - stale `endit` is deleted before each stage-level base call, and the returned
   `endit` is used to advance the wrapper counter.
-- `prob_neigh` sets `nspace_sub=500`.
+- `prob_neigh` sets `nspace_sub=500` and uses `prob_neigh_mode=sum`
+  unless the caller overrides it.
 - stage stop logic uses `mi_state` over the latest sampled subset when
   available.
 - `prob_state` and `shc_smpl` use state-overlap target `0.95`.

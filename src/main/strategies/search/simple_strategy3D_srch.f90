@@ -54,6 +54,7 @@ type strategy3D_srch
     real                       :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
     logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
     logical                    :: l_greedy        = .false.   !< greedy        refinement flag
+    logical                    :: l_sh_first      = .false.   !< use previous-ref shift seed before orientation/state scoring
     logical                    :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
     logical                    :: exists          = .false.   !< 2 indicate existence
   contains
@@ -94,6 +95,7 @@ contains
         self%ntrs_eval     = 0
         self%nsym          = self%b_ptr%pgrpsyms%get_nsym()
         self%doshift       = self%p_ptr%l_doshift
+        self%l_sh_first    = self%doshift .and. self%nstates <= 1
         self%l_neigh       = self%p_ptr%l_neigh
         self%refine        = trim(self%p_ptr%refine)
         self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
@@ -194,7 +196,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         real    :: cxy(3), rotmat(2,2)
         integer :: irot
-        if( .not. self%doshift ) return
+        if( .not. self%l_sh_first ) return
         ! BFGS over shifts with in-plane rot exhaustive callback
         irot = self%prev_roind
         call self%grad_shsrch_first_obj%set_indices(self%prev_ref, self%iptcl)
@@ -226,7 +228,7 @@ contains
         if( present(irot_in) ) irot = irot_in
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
-        if( self%p_ptr%l_doshift )then
+        if( self%l_sh_first )then
             cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
         else
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
@@ -245,7 +247,7 @@ contains
         refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), npeaks_inpl)
         do ipeak = 1, npeaks_inpl
             call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
-            if( self%p_ptr%l_doshift )then
+            if( self%l_sh_first )then
                 cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
             else
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)

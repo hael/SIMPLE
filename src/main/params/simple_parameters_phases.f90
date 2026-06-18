@@ -757,6 +757,11 @@ contains
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
+        select case(trim(self%prob_neigh_mode))
+            case('state','geom','sum')
+            case DEFAULT
+                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|sum')
+        end select
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500

@@ -185,9 +185,10 @@ contains
                   &istate, iref_start
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
-        logical :: l_prob_objfun
+        logical :: l_prob_objfun, l_sh_first
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
@@ -220,7 +221,8 @@ contains
                 irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 cxy = 0.
-                if( istate >= 1 .and. istate <= self%p_ptr%nstates .and. iproj >= 1 .and. iproj <= self%p_ptr%nspace )then
+                if( l_sh_first .and. istate >= 1 .and. istate <= self%p_ptr%nstates .and.&
+                    &iproj >= 1 .and. iproj <= self%p_ptr%nspace )then
                     if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
                         iref_start = (istate-1)*self%p_ptr%nspace
                         ! BFGS over shifts
@@ -230,7 +232,7 @@ contains
                     endif
                 endif
                 self%seed_shifts(:,i) = cxy(2:3)
-                self%seed_has_sh(i)   = .true.
+                self%seed_has_sh(i)   = l_sh_first
                 ! (2) search projection directions using those shifts for all references
                 do ri = 1, self%nrefs
                     istate = self%sinds(ri)
@@ -259,7 +261,11 @@ contains
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
                     irot     = self%loc_tab(ri,i)%inpl
-                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    if( l_sh_first )then
+                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    else
+                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                    endif
                     if( irot > 0 )then
                         self%loc_tab(ri,i)%inpl   = irot
                         self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)

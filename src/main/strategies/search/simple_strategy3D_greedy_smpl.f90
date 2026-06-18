@@ -57,7 +57,7 @@ contains
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
                     if( l_prob_objfun )then
-                        if( self%s%p_ptr%l_doshift )then
+                        if( self%s%l_sh_first )then
                             call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
                                 &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres,&
                                 &dist, loc(1), sorted_corrs, inds)
@@ -68,7 +68,7 @@ contains
                         endif
                         corr = exp(-dist)
                     else
-                        if( self%s%p_ptr%l_doshift )then
+                        if( self%s%l_sh_first )then
                             call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)
                         else
                             call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         inpl_corrs)

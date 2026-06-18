@@ -269,10 +269,7 @@ contains
         endif
         if( trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage )then
             cfg%refine = 'shc_smpl'
-        endif
-        if( trim(params%multivol_mode).eq.'input_oris_fixed' )then
-            cfg%refine = 'prob_state'
-        endif  
+        endif 
     end subroutine set_refine3D_mode_policy
 
     subroutine set_refine3D_balance_policy( cfg )

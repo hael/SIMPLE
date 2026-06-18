@@ -224,6 +224,20 @@ update" unless the ownership, artifacts, and update model actually change.
 `prob_neigh` dispatches to the neighborhood probability command. The matcher
 then consumes the generated assignment artifact.
 
+`prob_neigh_mode` controls how `prob_neigh` chooses sparse subspace
+neighborhoods before evaluating candidates:
+
+- `state`: score coarse subspace representatives independently per state.
+- `geom`: use the geometrically nearest subspace point to the current particle
+  projection, with no coarse scoring or pooled peaks.
+- `sum`: score each coarse subspace point by summing objective values across
+  active states, for docked multi-state references.
+
+For multi-state alignment (`nstates > 1`), shift-first candidate scoring is
+disabled. The matcher and probability-table paths may still refine shifts after
+candidate/state selection, but they must not use a shift seed estimated from a
+particle's previous state to score candidates in other states.
+
 The matcher must preserve a single particle-stack read per batch. When
 Cartesian partial reconstruction is active, batch construction retains the
 already-read raw particle images and reconstruction consumes those in-memory
