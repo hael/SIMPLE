@@ -80,8 +80,6 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB3D: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
-            call flush(logfhandle)
             call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
             call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end), state_only=l_state_only)
             if( l_state_only )then
@@ -151,8 +149,6 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB3D_NEIGH: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
-            call flush(logfhandle)
             call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
             call eulprob_obj_batch_neigh%new_neigh(params, build, pinds(batch_start:batch_end))
             call eulprob_obj_batch_neigh%fill_tab
@@ -361,8 +357,6 @@ contains
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_TAB2D: filling batch ', ibatch, '/', nbatches, ' nptcls=', batchsz
-            call flush(logfhandle)
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end),&
                 &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
             call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end))
