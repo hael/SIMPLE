@@ -802,8 +802,8 @@ contains
                 THROW_HARD('Unsupported recimg_source='//trim(self%recimg_source)//'; expected raw|denoised')
         end select
         if( (trim(self%matchimg_source) == 'denoised' .or. trim(self%recimg_source) == 'denoised') .and. &
-            trim(self%oritype) /= 'ptcl3D' )then
-            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
+            trim(self%oritype) /= 'ptcl2D' .and. trim(self%oritype) /= 'ptcl3D' )then
+            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl2D|ptcl3D')
         endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')

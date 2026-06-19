@@ -197,6 +197,7 @@ contains
         call make_cavgs%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%add_input(UI_PARM, remap_cls)
+        call make_cavgs%add_input(UI_PARM, recimg_source)
         call make_cavgs%add_input(UI_PARM, nspace, required_override=.false.)
         ! alternative inputs
         ! <empty>

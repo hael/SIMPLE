@@ -436,8 +436,6 @@ contains
         ! merge all partition tables into global
         do ipart = 1, params%nparts
             fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            write(logfhandle,'(A,I0,A,I0,A,A)') '>>> PROB_ALIGN2D: merging part ', ipart, '/', params%nparts, ' ', fname%to_char()
-            call flush(logfhandle)
             call eulprob_obj_glob%read_tab_to_glob(fname)
         end do
         ! global probabilistic class assignment

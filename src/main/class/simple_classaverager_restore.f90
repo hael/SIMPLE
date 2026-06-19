@@ -394,10 +394,10 @@ contains
 
     !>  \brief  is for generating class averages offline
     module subroutine cavger_assemble_sums( do_frac_update )
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
         logical,  intent(in) :: do_frac_update
         class(oris), pointer :: spproj_field
-        type(string)         :: stk_fname
+        type(string)         :: source_stk
         integer :: pinds(READBUFFSZ)
         integer :: iptcl, i, ind_in_stk, nptcls_eff, batchind, ibatch_start, ibatch_end
         integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches
@@ -410,11 +410,16 @@ contains
         ! Stack & batch loops
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%fromp, first_stkind, ind_in_stk)
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%top,   last_stkind,  ind_in_stk)
+        call b_ptr%spproj%get_ptcl_source_stkname_and_ind(p_ptr%oritype, p_ptr%fromp, p_ptr%recimg_source, &
+            source_stk, ind_in_stk)
+        write(logfhandle,'(A,A,A,A,A,I0,A,I0,A,A,A,I0)') '>>> MAKE_CAVGS RECIMG_SOURCE: ', &
+            trim(p_ptr%recimg_source), ' oritype=', trim(p_ptr%oritype), ' particles=', p_ptr%fromp, '-', &
+            p_ptr%top, ' stack=', trim(source_stk%to_char()), ' indstk(first)=', ind_in_stk
+        call flush(logfhandle)
         do istk = first_stkind,last_stkind
             ! Particles range in stack
             fromp         = b_ptr%spproj%os_stk%get_fromp(istk)
             nptcls_in_stk = b_ptr%spproj%os_stk%get_top(istk) - fromp + 1   ! # of particles in stack
-            call b_ptr%spproj%get_stkname_and_ind(p_ptr%oritype, max(p_ptr%fromp,fromp), stk_fname, ind_in_stk)
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ))
             do ibatch = 1,nbatches
@@ -435,13 +440,18 @@ contains
                 ! Transfer orientation parameters
                 call cavger_transf_oridat( nptcls_eff, pinds(1:nptcls_eff) )
                 ! Read images
-                call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
+                if( trim(p_ptr%recimg_source) == 'raw' )then
+                    call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
+                else
+                    call discrete_read_imgbatch_source(p_ptr, b_ptr, p_ptr%recimg_source, nptcls_eff, &
+                        pinds(1:nptcls_eff), [1,nptcls_eff], b_ptr%imgbatch)
+                endif
                 ! Interpolate images and update class sums
                 call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff))
             enddo   ! batch loop
         enddo       ! stack loop
         ! cleanup
-        call stk_fname%kill
+        call source_stk%kill
         nullify(spproj_field)
         call cavger_dealloc_online
         call killimgbatch(b_ptr)

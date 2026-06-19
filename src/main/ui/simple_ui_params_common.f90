@@ -668,7 +668,7 @@ subroutine set_ui_params
                                     'give your part', .false., '')
 
     call recimg_source%set_param(  'recimg_source',   'multi',  'Particle source for reconstruction', &
-                                   'Particle image representation used for volume reconstruction(raw|denoised){raw}', &
+                                   'Particle image representation used for reconstruction(raw|denoised){raw}', &
                                    '(raw|denoised){raw}', .false., 'raw')
 
     call remap_cls%set_param(      'remap_cls',       'binary', 'Whether to remap 2D clusters', &

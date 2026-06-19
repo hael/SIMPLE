@@ -3,15 +3,19 @@ use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_cmdline,            only: cmdline
+use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_image,              only: image
 use simple_image_msk,          only: automask2D
 use simple_classaverager,      only: transform_ptcls
 use simple_imgfile,            only: imgfile
+use simple_srch_sort_loc,      only: hpsort
 implicit none
 
 public :: diffmap_denoise_project_strategy
 public :: diffmap_denoise_project_shmem_strategy
+public :: diffmap_denoise_project_worker_strategy
+public :: diffmap_denoise_project_master_strategy
 public :: create_diffmap_denoise_project_strategy
 
 private
@@ -32,6 +36,27 @@ contains
     procedure :: finalize_run => shmem_finalize_run
     procedure :: cleanup      => shmem_cleanup
 end type diffmap_denoise_project_shmem_strategy
+
+type, extends(diffmap_denoise_project_strategy) :: diffmap_denoise_project_worker_strategy
+contains
+    procedure :: initialize   => worker_initialize
+    procedure :: execute      => worker_execute
+    procedure :: finalize_run => worker_finalize_run
+    procedure :: cleanup      => worker_cleanup
+end type diffmap_denoise_project_worker_strategy
+
+type, extends(diffmap_denoise_project_strategy) :: diffmap_denoise_project_master_strategy
+    type(qsys_env)           :: qenv
+    type(chash)              :: job_descr
+    type(chash), allocatable :: part_params(:)
+    integer                  :: nparts_run = 1
+    integer                  :: nthr_master = 1
+contains
+    procedure :: initialize   => master_initialize
+    procedure :: execute      => master_execute
+    procedure :: finalize_run => master_finalize_run
+    procedure :: cleanup      => master_cleanup
+end type diffmap_denoise_project_master_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
@@ -71,13 +96,21 @@ contains
         class(cmdline), intent(in) :: cline
         class(diffmap_denoise_project_strategy), allocatable :: strategy
         integer :: nparts
+        logical :: is_worker, is_master
         nparts = 1
         if( cline%defined('nparts') ) nparts = max(1, cline%get_iarg('nparts'))
-        if( nparts > 1 .or. cline%defined('part') )then
-            THROW_HARD('diffmap_denoise_project currently supports shared-memory execution only')
+        is_worker = cline%defined('part')
+        is_master = (nparts > 1) .and. (.not. is_worker)
+        if( is_master )then
+            allocate(diffmap_denoise_project_master_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED DIFFMAP_DENOISE_PROJECT (MASTER)'
+        else if( is_worker )then
+            allocate(diffmap_denoise_project_worker_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DIFFMAP_DENOISE_PROJECT (WORKER)'
+        else
+            allocate(diffmap_denoise_project_shmem_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DIFFMAP_DENOISE_PROJECT (SHARED-MEMORY)'
         endif
-        allocate(diffmap_denoise_project_shmem_strategy :: strategy)
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DIFFMAP_DENOISE_PROJECT (SHARED-MEMORY)'
     end function create_diffmap_denoise_project_strategy
 
     subroutine apply_defaults(cline)
@@ -91,13 +124,20 @@ contains
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
+    subroutine init_common(params, build, cline)
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        class(cmdline),   intent(inout) :: cline
+        call apply_defaults(cline)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+    end subroutine init_common
+
     subroutine shmem_initialize(self, params, build, cline)
         class(diffmap_denoise_project_shmem_strategy), intent(inout) :: self
         type(parameters),                              intent(inout) :: params
         type(builder),                                 intent(inout) :: build
         class(cmdline),                                intent(inout) :: cline
-        call apply_defaults(cline)
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call init_common(params, build, cline)
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
@@ -107,7 +147,7 @@ contains
         class(cmdline),                                intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
-        call run_diffmap_denoise_project(params, build, spproj)
+        call run_diffmap_denoise_project(params, build, cline, spproj, 0, .true.)
         call spproj%kill
     end subroutine shmem_execute
 
@@ -123,34 +163,195 @@ contains
         type(parameters),                              intent(in)    :: params
     end subroutine shmem_cleanup
 
-    subroutine run_diffmap_denoise_project(params, build, spproj)
+    subroutine worker_initialize(self, params, build, cline)
+        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        type(parameters),                               intent(inout) :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+        call init_common(params, build, cline)
+        if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for diffmap_denoise_project worker execution')
+        if( .not. cline%defined('class_assignment') )then
+            THROW_HARD('CLASS_ASSIGNMENT must be defined for diffmap_denoise_project worker execution')
+        endif
+    end subroutine worker_initialize
+
+    subroutine worker_execute(self, params, build, cline)
+        use simple_qsys_funs, only: qsys_job_finished
+        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        type(parameters),                               intent(inout) :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+        type(sp_project) :: spproj
+        call spproj%read(params%projfile)
+        call run_diffmap_denoise_project(params, build, cline, spproj, params%part, .false.)
+        call qsys_job_finished(params, string('simple_diffmap_denoise_project_strategy :: worker_execute'))
+        call spproj%kill
+    end subroutine worker_execute
+
+    subroutine worker_finalize_run(self, params, build, cline)
+        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        type(parameters),                               intent(in)    :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+    end subroutine worker_finalize_run
+
+    subroutine worker_cleanup(self, params)
+        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        type(parameters),                               intent(in)    :: params
+    end subroutine worker_cleanup
+
+    subroutine master_initialize(self, params, build, cline)
+        use simple_exec_helpers, only: set_master_num_threads
+        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        type(parameters),                               intent(inout) :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+        type(sp_project) :: spproj
+        integer, allocatable :: cls_inds(:), cls_pops(:)
+        logical :: l_phflip
+        call init_common(params, build, cline)
+        call spproj%read(params%projfile)
+        call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        self%nparts_run = min(max(1, params%nparts), size(cls_inds))
+        write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise worker planning: requested_nparts=', params%nparts, &
+            ' eligible_classes=', size(cls_inds), ' effective_nparts=', self%nparts_run
+        call flush(logfhandle)
+        if( self%nparts_run < params%nparts )then
+            write(logfhandle,'(A)') 'Diffmap denoise note: reducing worker count because classes are the scheduling unit.'
+            call flush(logfhandle)
+        endif
+        call set_master_num_threads(self%nthr_master, string('DIFFMAP_DENOISE_PROJECT'))
+        call prepare_class_partitions(self, params, cls_inds, cls_pops)
+        call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
+        call cline%set('mkdir', 'no')
+        call cline%gen_job_descr(self%job_descr)
+        call self%job_descr%set('mkdir', 'no')
+        call self%job_descr%set('nparts', int2str(self%nparts_run))
+        call self%job_descr%set('numlen', int2str(params%numlen))
+        call spproj%kill
+        if( allocated(cls_inds) ) deallocate(cls_inds)
+        if( allocated(cls_pops) ) deallocate(cls_pops)
+    end subroutine master_initialize
+
+    subroutine master_execute(self, params, build, cline)
+        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        type(parameters),                               intent(inout) :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
+                                                     array=L_USE_SLURM_ARR, extra_params=params)
+        call merge_diffmap_worker_outputs(params, self%nparts_run)
+    end subroutine master_execute
+
+    subroutine master_finalize_run(self, params, build, cline)
+        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        type(parameters),                               intent(in)    :: params
+        type(builder),                                  intent(inout) :: build
+        class(cmdline),                                 intent(inout) :: cline
+    end subroutine master_finalize_run
+
+    subroutine master_cleanup(self, params)
+        use simple_qsys_funs, only: qsys_cleanup
+        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        type(parameters),                               intent(in)    :: params
+        integer :: ipart
+        call self%qenv%kill
+        call qsys_cleanup(params)
+        if( allocated(self%part_params) )then
+            do ipart = 1, size(self%part_params)
+                call self%part_params(ipart)%kill
+            end do
+            deallocate(self%part_params)
+        endif
+        call self%job_descr%kill
+    end subroutine master_cleanup
+
+    subroutine prepare_class_partitions(self, params, cls_inds, cls_pops)
+        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        type(parameters),                               intent(in)    :: params
+        integer,                                        intent(in)    :: cls_inds(:), cls_pops(:)
+        integer :: order(size(cls_inds))
+        integer, allocatable :: part_counts(:), part_cls(:,:)
+        integer(kind=8), allocatable :: part_weights(:)
+        integer :: ncls, ipart, iord, icls, lightest
+        type(string) :: fname
+        ncls = size(cls_inds)
+        allocate(part_counts(self%nparts_run), part_cls(ncls, self%nparts_run), part_weights(self%nparts_run))
+        order = [(icls, icls=1,ncls)]
+        call sort_order_by_weight_desc(order, cls_pops)
+        part_counts  = 0
+        part_weights = 0_8
+        part_cls     = 0
+        do iord = 1, ncls
+            icls = order(iord)
+            lightest = minloc(part_weights, dim=1)
+            part_counts(lightest) = part_counts(lightest) + 1
+            part_cls(part_counts(lightest), lightest) = cls_inds(icls)
+            part_weights(lightest) = part_weights(lightest) + int(cls_pops(icls), kind=8)
+        end do
+        allocate(self%part_params(self%nparts_run))
+        do ipart = 1, self%nparts_run
+            if( part_counts(ipart) > 1 ) call hpsort(part_cls(1:part_counts(ipart), ipart))
+            fname = string('diffmap_denoise_classes_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            call arr2txtfile(part_cls(1:part_counts(ipart), ipart), fname)
+            call self%part_params(ipart)%new(1)
+            call self%part_params(ipart)%set('class_assignment', fname%to_char())
+            call fname%kill
+        end do
+        deallocate(part_counts, part_cls, part_weights)
+    end subroutine prepare_class_partitions
+
+    subroutine run_diffmap_denoise_project(params, build, cline, spproj, part, l_write_project)
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
+        class(cmdline),   intent(inout) :: cline
         type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: part
+        logical,          intent(in)    :: l_write_project
         type(sp_project) :: outproj
         type(string), allocatable :: raw_stks(:), den_stks(:)
+        type(string) :: map_fname
         integer, allocatable :: cls_inds(:), cls_pops(:)
         logical, allocatable :: processed(:)
         logical :: l_phflip
-        integer :: icls, nptcls, nprocessed
+        integer :: icls, nptcls, nprocessed, funit_map
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call filter_classes_by_assignment(cline, cls_inds, cls_pops)
         nptcls = spproj%os_ptcl2D%get_noris()
         allocate(processed(nptcls), source=.false.)
-        call prepare_diffmap_particle_stacks(spproj, raw_stks, den_stks)
+        funit_map = -1
+        allocate(raw_stks(1), den_stks(1))
+        if( l_write_project )then
+            raw_stks(1) = string('diffmap_raw_particles.mrcs')
+            den_stks(1) = string('diffmap_denoised_particles.mrcs')
+            map_fname   = string('diffmap_particle_map.txt')
+        else
+            raw_stks(1) = string('diffmap_raw_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            den_stks(1) = string('diffmap_denoised_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            map_fname = string('diffmap_particle_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+        endif
+        call del_file(raw_stks(1))
+        call del_file(den_stks(1))
+        call del_file(map_fname)
+        open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
+        write(funit_map,'(A)') '# particle_index stack_index stack_local_index output_stack_index'
         nprocessed = 0
         do icls = 1, size(cls_inds)
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise project: class=', cls_inds(icls), &
                 ' class_index=', icls, ' nptcls=', cls_pops(icls)
             call flush(logfhandle)
             call write_diffmap_denoised_class(params, build, spproj, cls_inds(icls), l_phflip, &
-                raw_stks, den_stks, processed, nprocessed)
+                raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project)
         end do
-        if( any(.not. processed) )then
+        close(funit_map)
+        if( l_write_project .and. any(.not. processed) )then
             write(logfhandle,'(A,I10)') 'unprocessed particles: ', count(.not. processed)
             THROW_HARD('diffmap_denoise_project requires every ptcl2D particle to have a valid class assignment')
         endif
-        call write_diffmap_project(params, spproj, raw_stks, den_stks, outproj)
-        write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
+        if( l_write_project )then
+            call write_diffmap_project(params, spproj, raw_stks(1), den_stks(1), outproj)
+            write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
+        endif
         write(logfhandle,'(A,I10)') 'Diffmap denoise project particles: ', nprocessed
         call flush(logfhandle)
         call outproj%kill
@@ -159,6 +360,7 @@ contains
         if( allocated(cls_inds) ) deallocate(cls_inds)
         if( allocated(cls_pops) ) deallocate(cls_pops)
         if( allocated(processed) ) deallocate(processed)
+        if( map_fname%is_allocated() ) call map_fname%kill
     end subroutine run_diffmap_denoise_project
 
     subroutine validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
@@ -167,9 +369,9 @@ contains
         integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
         logical, intent(out) :: l_phflip
         type(string) :: ctfstr
-        integer, allocatable :: pinds(:)
+        integer, allocatable :: pinds(:), stk_offsets(:)
         logical, allocatable :: seen_slots(:)
-        integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode
+        integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode, nptcls_slots
         if( trim(params%oritype) /= 'ptcl2D' )then
             THROW_HARD('diffmap_denoise_project supports oritype=ptcl2D input only')
         endif
@@ -191,8 +393,12 @@ contains
         endif
         nstks = spproj%os_stk%get_noris()
         if( nstks < 1 ) THROW_HARD('empty stack field; diffmap_denoise_project')
+        allocate(stk_offsets(nstks), source=0)
+        nptcls_slots = 0
         ctf_mode = 0
         do istk = 1, nstks
+            stk_offsets(istk) = nptcls_slots
+            nptcls_slots = nptcls_slots + spproj%os_stk%get_int(istk, 'nptcls_stk')
             if( .not. spproj%os_stk%isthere(istk, 'ctf') ) THROW_HARD('stack ctf key missing; diffmap_denoise_project')
             call spproj%os_stk%getter(istk, 'ctf', ctfstr)
             select case(trim(ctfstr%to_char()))
@@ -207,7 +413,7 @@ contains
             end select
         enddo
         l_phflip = ctf_mode == CTFFLAG_YES
-        allocate(seen_slots(nptcls), source=.false.)
+        allocate(seen_slots(nptcls_slots), source=.false.)
         do iptcl = 1, nptcls
             if( spproj%os_ptcl2D%get_state(iptcl) <= 0 )then
                 THROW_HARD('diffmap_denoise_project requires all ptcl2D particles to be active')
@@ -222,12 +428,11 @@ contains
             if( indstk < 1 .or. indstk > spproj%os_stk%get_int(stkind, 'nptcls_stk') )then
                 THROW_HARD('invalid particle indstk; diffmap_denoise_project')
             endif
-            slot = spproj%os_stk%get_fromp(stkind) + indstk - 1
-            if( slot < 1 .or. slot > nptcls ) THROW_HARD('invalid particle stack slot; diffmap_denoise_project')
+            slot = stk_offsets(stkind) + indstk
+            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid particle stack slot; diffmap_denoise_project')
             if( seen_slots(slot) ) THROW_HARD('duplicate particle stack slot; diffmap_denoise_project')
             seen_slots(slot) = .true.
         enddo
-        if( any(.not. seen_slots) ) THROW_HARD('particle stack slots do not cover all particles; diffmap_denoise_project')
         cls_inds = spproj%os_ptcl2D%get_label_inds('class')
         cls_inds = pack(cls_inds, mask=cls_inds > 0)
         if( size(cls_inds) < 1 ) THROW_HARD('No positive ptcl2D classes found; diffmap_denoise_project')
@@ -245,39 +450,31 @@ contains
         end do
         if( sum(cls_pops) /= nptcls ) THROW_HARD('class populations do not cover all particles; diffmap_denoise_project')
         if( allocated(seen_slots) ) deallocate(seen_slots)
+        if( allocated(stk_offsets) ) deallocate(stk_offsets)
         call ctfstr%kill
     end subroutine validate_diffmap_denoise_project
 
-    subroutine prepare_diffmap_particle_stacks(spproj, raw_stks, den_stks)
-        type(sp_project), intent(inout) :: spproj
-        type(string), allocatable, intent(out) :: raw_stks(:), den_stks(:)
-        type(string) :: raw_dir, den_dir, raw_tab, den_tab
-        integer :: istk, nstks, numlen
-        nstks = spproj%os_stk%get_noris()
-        allocate(raw_stks(nstks), den_stks(nstks))
-        raw_dir = 'diffmap_raw_stacks'
-        den_dir = 'diffmap_denoised_stacks'
-        call simple_mkdir(raw_dir)
-        call simple_mkdir(den_dir)
-        numlen = max(1, len_trim(int2str(nstks)))
-        do istk = 1, nstks
-            raw_stks(istk) = filepath(raw_dir, string('diffmap_raw_stk')//int2str_pad(istk, numlen)//STK_EXT)
-            den_stks(istk) = filepath(den_dir, string('diffmap_den_stk')//int2str_pad(istk, numlen)//STK_EXT)
-            call del_file(raw_stks(istk))
-            call del_file(den_stks(istk))
+    subroutine filter_classes_by_assignment(cline, cls_inds, cls_pops)
+        class(cmdline),                 intent(inout) :: cline
+        integer, allocatable,           intent(inout) :: cls_inds(:), cls_pops(:)
+        integer, allocatable :: assigned_classes(:)
+        logical, allocatable :: keep_mask(:)
+        integer :: i
+        if( .not. cline%defined('class_assignment') ) return
+        call read_int_file(cline%get_carg('class_assignment'), assigned_classes)
+        allocate(keep_mask(size(cls_inds)), source=.false.)
+        do i = 1, size(assigned_classes)
+            keep_mask = keep_mask .or. (cls_inds == assigned_classes(i))
         end do
-        raw_tab = 'diffmap_raw_stktab.txt'
-        den_tab = 'diffmap_denoised_stktab.txt'
-        call write_filetable(raw_tab, raw_stks)
-        call write_filetable(den_tab, den_stks)
-        call raw_dir%kill
-        call den_dir%kill
-        call raw_tab%kill
-        call den_tab%kill
-    end subroutine prepare_diffmap_particle_stacks
+        cls_inds = pack(cls_inds, mask=keep_mask)
+        cls_pops = pack(cls_pops, mask=keep_mask)
+        deallocate(keep_mask)
+        if( allocated(assigned_classes) ) deallocate(assigned_classes)
+        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for diffmap_denoise_project')
+    end subroutine filter_classes_by_assignment
 
     subroutine write_diffmap_denoised_class(params, build, spproj, cls_id, l_phflip, raw_stks, den_stks, &
-                                            processed, nprocessed)
+                                            processed, nprocessed, l_dense_output, map_unit, l_index_by_pind)
         use simple_diff_map_graphs,  only: diffmap_graph, build_cls_split_graph
         use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
@@ -290,6 +487,9 @@ contains
         type(string),     intent(in)    :: raw_stks(:), den_stks(:)
         logical,          intent(inout) :: processed(:)
         integer,          intent(inout) :: nprocessed
+        logical,          intent(in)    :: l_dense_output
+        integer,          intent(in)    :: map_unit
+        logical,          intent(in)    :: l_index_by_pind
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:), den_ptcls(:)
         type(image) :: cavg_raw
@@ -297,7 +497,7 @@ contains
         real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: pinds(:)
-        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk
+        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind
         real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise
         call transform_ptcls(params, build, spproj, 'ptcl2D', cls_id, imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
         if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; diffmap_denoise_project')
@@ -344,9 +544,20 @@ contains
         do j = 1, nptcls
             if( processed(pinds(j)) ) THROW_HARD('particle was processed twice; diffmap_denoise_project')
             call spproj%map_ptcl_ind2stk_ind('ptcl2D', pinds(j), stkind, indstk)
-            if( stkind < 1 .or. stkind > size(raw_stks) ) THROW_HARD('invalid output stack index; diffmap_denoise_project')
-            call write_diffmap_stack_image(raw_stks(stkind), indstk, imgs(j))
-            call write_diffmap_stack_image(den_stks(stkind), indstk, den_ptcls(j))
+            if( l_dense_output )then
+                if( l_index_by_pind )then
+                    local_ind = pinds(j)
+                else
+                    local_ind = nprocessed + 1
+                endif
+                call write_diffmap_stack_image(raw_stks(1), local_ind, imgs(j))
+                call write_diffmap_stack_image(den_stks(1), local_ind, den_ptcls(j))
+                write(map_unit,'(I10,1X,I8,1X,I8,1X,I10)') pinds(j), stkind, indstk, local_ind
+            else
+                if( stkind < 1 .or. stkind > size(raw_stks) ) THROW_HARD('invalid output stack index; diffmap_denoise_project')
+                call write_diffmap_stack_image(raw_stks(stkind), indstk, imgs(j))
+                call write_diffmap_stack_image(den_stks(stkind), indstk, den_ptcls(j))
+            endif
             processed(pinds(j)) = .true.
             nprocessed = nprocessed + 1
         end do
@@ -382,40 +593,217 @@ contains
         rmat_ptr => null()
     end subroutine write_diffmap_stack_image
 
-    subroutine write_diffmap_project(params, spproj, raw_stks, den_stks, outproj)
+    subroutine write_diffmap_project(params, spproj, raw_stk, den_stk, outproj)
         type(parameters), intent(in)    :: params
         type(sp_project), intent(inout) :: spproj
-        type(string),     intent(in)    :: raw_stks(:), den_stks(:)
+        type(string),     intent(in)    :: raw_stk, den_stk
         type(sp_project), intent(inout) :: outproj
-        integer :: istk, nstks, nraw, nden, ldim_raw(3), ldim_den(3), expected_nptcls
-        nstks = spproj%os_stk%get_noris()
-        if( size(raw_stks) /= nstks .or. size(den_stks) /= nstks )then
-            THROW_HARD('stack-table size mismatch; diffmap_denoise_project')
+        integer :: iptcl, nptcls, nraw, nden, ldim_raw(3), ldim_den(3)
+        nptcls = spproj%os_ptcl2D%get_noris()
+        call find_ldim_nptcls(raw_stk, ldim_raw, nraw)
+        call find_ldim_nptcls(den_stk, ldim_den, nden)
+        if( nraw /= nptcls .or. nden /= nptcls ) THROW_HARD('compact output stack count mismatch; diffmap_denoise_project')
+        if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
+            THROW_HARD('raw/denoised output stack dimensions differ; diffmap_denoise_project')
         endif
         call outproj%copy(spproj)
         call outproj%update_projinfo(params%projfile)
-        do istk = 1, nstks
-            call find_ldim_nptcls(raw_stks(istk), ldim_raw, nraw)
-            call find_ldim_nptcls(den_stks(istk), ldim_den, nden)
-            expected_nptcls = spproj%os_stk%get_int(istk, 'nptcls_stk')
-            if( nraw /= expected_nptcls .or. nden /= expected_nptcls )then
-                THROW_HARD('output stack count does not match input stack row; diffmap_denoise_project')
-            endif
-            if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
-                THROW_HARD('raw/denoised output stack dimensions differ; diffmap_denoise_project')
-            endif
-            call outproj%os_stk%set(istk, 'stk',        simple_abspath(raw_stks(istk)))
-            call outproj%os_stk%set(istk, 'stk_den',    simple_abspath(den_stks(istk)))
-            call outproj%os_stk%set(istk, 'box',        ldim_raw(1))
-            call outproj%os_stk%set(istk, 'nptcls',     nraw)
-            call outproj%os_stk%set(istk, 'nptcls_stk', nraw)
-            call outproj%os_stk%set(istk, 'ctf',        'flip')
-            call outproj%os_stk%set(istk, 'imgkind',    'ptcl')
+        if( outproj%os_stk%get_noris() > 0 ) call outproj%os_stk%kill()
+        call outproj%os_stk%new(1, is_ptcl=.false.)
+        call outproj%os_stk%set(1, 'stk',        simple_abspath(raw_stk))
+        call outproj%os_stk%set(1, 'stk_den',    simple_abspath(den_stk))
+        call outproj%os_stk%set(1, 'box',        ldim_raw(1))
+        call outproj%os_stk%set(1, 'nptcls',     nraw)
+        call outproj%os_stk%set(1, 'nptcls_stk', nraw)
+        call outproj%os_stk%set(1, 'fromp',      1)
+        call outproj%os_stk%set(1, 'top',        nraw)
+        call outproj%os_stk%set(1, 'stkkind',    'single')
+        call outproj%os_stk%set(1, 'imgkind',    'ptcl')
+        call outproj%os_stk%set(1, 'smpd',       params%smpd_crop)
+        call outproj%os_stk%set(1, 'kv',         params%kv)
+        call outproj%os_stk%set(1, 'cs',         params%cs)
+        call outproj%os_stk%set(1, 'fraca',      params%fraca)
+        call outproj%os_stk%set(1, 'ctf',        'flip')
+        call outproj%os_stk%set(1, 'phaseplate', 'no')
+        call outproj%os_stk%set(1, 'state',      1)
+        do iptcl = 1, nptcls
+            call outproj%os_ptcl2D%set(iptcl, 'stkind', 1)
+            call outproj%os_ptcl3D%set(iptcl, 'stkind', 1)
+            call outproj%os_ptcl2D%set(iptcl, 'indstk', iptcl)
+            call outproj%os_ptcl3D%set(iptcl, 'indstk', iptcl)
         end do
         call outproj%os_ptcl2D%zero_inpl()
         call outproj%os_ptcl3D%zero_inpl()
         if( outproj%os_out%get_noris() > 0 ) call outproj%os_out%kill()
         call outproj%write(params%projfile)
     end subroutine write_diffmap_project
+
+    subroutine merge_diffmap_worker_outputs(params, nparts_run)
+        type(parameters), intent(inout) :: params
+        integer,          intent(in)    :: nparts_run
+        type(sp_project) :: spproj, outproj
+        type(string) :: raw_part, den_part, raw_out, den_out
+        type(image) :: img
+        integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:), stk_offsets(:), slot_pind(:)
+        integer :: nptcls, nstks, istk, pind, ipart, total_count, ldim(3), nimgs, probe_part
+        integer :: nptcls_slots, slot
+        logical :: l_phflip
+        integer, allocatable :: cls_inds(:), cls_pops(:)
+        call spproj%read(params%projfile)
+        call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        nptcls = spproj%os_ptcl2D%get_noris()
+        nstks  = spproj%os_stk%get_noris()
+        allocate(row_part(nptcls), row_local(nptcls), row_stkind(nptcls), row_indstk(nptcls), source=0)
+        allocate(stk_offsets(nstks), source=0)
+        nptcls_slots = 0
+        do istk = 1, nstks
+            stk_offsets(istk) = nptcls_slots
+            nptcls_slots = nptcls_slots + spproj%os_stk%get_int(istk, 'nptcls_stk')
+        end do
+        allocate(slot_pind(nptcls_slots), source=0)
+        call read_diffmap_worker_maps(params, nparts_run, row_part, row_local, row_stkind, row_indstk, total_count)
+        if( total_count /= nptcls )then
+            write(logfhandle,'(A,I10,A,I10)') 'Diffmap denoise merge: mapped particles=', total_count, ' expected=', nptcls
+            THROW_HARD('distributed diffmap_denoise_project did not produce exactly one row per particle')
+        endif
+        do pind = 1, nptcls
+            if( row_part(pind) < 1 .or. row_local(pind) < 1 ) THROW_HARD('missing particle in diffmap denoise worker maps')
+            if( row_stkind(pind) < 1 .or. row_stkind(pind) > nstks ) THROW_HARD('invalid stack index in diffmap denoise worker maps')
+            slot = stk_offsets(row_stkind(pind)) + row_indstk(pind)
+            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid stack slot in diffmap denoise worker maps')
+            if( slot_pind(slot) /= 0 ) THROW_HARD('duplicate stack slot in diffmap denoise worker maps')
+            slot_pind(slot) = pind
+        end do
+        probe_part = row_part(max(1, minloc(row_part, dim=1, mask=row_part > 0)))
+        raw_part = string('diffmap_raw_particles_part')//int2str_pad(probe_part, params%numlen)//'.mrcs'
+        if( .not. file_exists(raw_part%to_char()) ) THROW_HARD('missing first diffmap denoise worker raw stack')
+        call find_ldim_nptcls(raw_part, ldim, nimgs)
+        if( nimgs < 1 ) THROW_HARD('empty first diffmap denoise worker raw stack')
+        ldim(3) = 1
+        call img%new(ldim, params%smpd_crop)
+        raw_out = string('diffmap_raw_particles.mrcs')
+        den_out = string('diffmap_denoised_particles.mrcs')
+        call del_file(raw_out)
+        call del_file(den_out)
+        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise merge: start nparts=', nparts_run, ' particles=', nptcls
+        call flush(logfhandle)
+        do pind = 1, nptcls
+            ipart = row_part(pind)
+            raw_part = string('diffmap_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            den_part = string('diffmap_denoised_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            call img%read(raw_part, row_local(pind))
+            call write_diffmap_stack_image(raw_out, pind, img)
+            call img%read(den_part, row_local(pind))
+            call write_diffmap_stack_image(den_out, pind, img)
+            call raw_part%kill
+            call den_part%kill
+        end do
+        call write_diffmap_project(params, spproj, raw_out, den_out, outproj)
+        write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
+        call flush(logfhandle)
+        call outproj%kill
+        call spproj%kill
+        call img%kill
+        if( allocated(cls_inds) ) deallocate(cls_inds)
+        if( allocated(cls_pops) ) deallocate(cls_pops)
+        deallocate(row_part, row_local, row_stkind, row_indstk, stk_offsets, slot_pind)
+        if( raw_part%is_allocated() ) call raw_part%kill
+        if( den_part%is_allocated() ) call den_part%kill
+        if( raw_out%is_allocated() ) call raw_out%kill
+        if( den_out%is_allocated() ) call den_out%kill
+    end subroutine merge_diffmap_worker_outputs
+
+    subroutine read_diffmap_worker_maps(params, nparts_run, row_part, row_local, row_stkind, row_indstk, total_count)
+        type(parameters), intent(in)    :: params
+        integer,          intent(in)    :: nparts_run
+        integer,          intent(inout) :: row_part(:), row_local(:), row_stkind(:), row_indstk(:)
+        integer,          intent(out)   :: total_count
+        type(string) :: map_fname
+        integer :: ipart, funit, ios, pind, stkind, indstk, local_ind, nptcls
+        character(len=XLONGSTRLEN) :: line
+        nptcls = size(row_part)
+        total_count = 0
+        do ipart = 1, nparts_run
+            map_fname = string('diffmap_particle_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            open(newunit=funit, file=map_fname%to_char(), status='old', action='read', iostat=ios)
+            call fileiochk('read_diffmap_worker_maps opening '//map_fname%to_char(), ios)
+            do
+                read(funit,'(A)',iostat=ios) line
+                if( ios /= 0 ) exit
+                if( len_trim(line) == 0 ) cycle
+                if( line(1:1) == '#' ) cycle
+                read(line,*) pind, stkind, indstk, local_ind
+                if( pind < 1 .or. pind > nptcls ) THROW_HARD('invalid particle index in diffmap denoise worker map')
+                if( row_part(pind) /= 0 ) THROW_HARD('duplicate particle index in diffmap denoise worker maps')
+                row_part(pind)   = ipart
+                row_local(pind)  = local_ind
+                row_stkind(pind) = stkind
+                row_indstk(pind) = indstk
+                total_count = total_count + 1
+            end do
+            close(funit)
+            call map_fname%kill
+        end do
+    end subroutine read_diffmap_worker_maps
+
+    subroutine count_data_lines(fname, nlines)
+        type(string), intent(in)  :: fname
+        integer,      intent(out) :: nlines
+        integer :: funit, ios
+        character(len=XLONGSTRLEN) :: line
+        nlines = 0
+        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+        call fileiochk('count_data_lines opening '//fname%to_char(), ios)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            nlines = nlines + 1
+        end do
+        close(funit)
+    end subroutine count_data_lines
+
+    subroutine read_int_file(fname, vals)
+        type(string),         intent(in)  :: fname
+        integer, allocatable, intent(out) :: vals(:)
+        integer :: nvals, funit, ios, i
+        character(len=XLONGSTRLEN) :: line
+        call count_data_lines(fname, nvals)
+        allocate(vals(nvals))
+        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+        call fileiochk('read_int_file opening '//fname%to_char(), ios)
+        i = 0
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            i = i + 1
+            read(line,*) vals(i)
+        end do
+        close(funit)
+    end subroutine read_int_file
+
+    subroutine sort_order_by_weight_desc(order, weights)
+        integer, intent(inout) :: order(:)
+        integer, intent(in)    :: weights(:)
+        integer :: idx(size(order)), perm(size(order)), sortable(size(order))
+        integer :: i, n, tmp
+        n = size(order)
+        if( n <= 1 ) return
+        idx = order
+        perm = [(i, i=1, n)]
+        do i = 1, n
+            sortable(i) = weights(idx(i))
+        end do
+        call hpsort(sortable, perm)
+        order = idx(perm)
+        do i = 1, n / 2
+            tmp = order(i)
+            order(i) = order(n - i + 1)
+            order(n - i + 1) = tmp
+        end do
+    end subroutine sort_order_by_weight_desc
 
 end module simple_diffmap_denoise_project_strategy

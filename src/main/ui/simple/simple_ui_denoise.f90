@@ -257,6 +257,8 @@ contains
             'Local nearest neighbors used for non-steerable diffusion maps', '# neighbors', .false., 10.0)
         call diffmap_denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
+        call diffmap_denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
+            gui_submenu="compute", gui_advanced=.false.)
         call diffmap_denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call add_ui_program('diffmap_denoise_project', diffmap_denoise_project, prgtab)
     end subroutine new_diffmap_denoise_project
