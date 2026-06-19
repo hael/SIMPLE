@@ -240,7 +240,7 @@ contains
         class(cmdline),                                 intent(inout) :: cline
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
                                                      array=L_USE_SLURM_ARR, extra_params=params)
-        call merge_diffmap_worker_outputs(params, self%nparts_run)
+        call finalize_diffmap_worker_outputs(params, self%nparts_run)
     end subroutine master_execute
 
     subroutine master_finalize_run(self, params, build, cline)
@@ -638,15 +638,91 @@ contains
         call outproj%write(params%projfile)
     end subroutine write_diffmap_project
 
-    subroutine merge_diffmap_worker_outputs(params, nparts_run)
+    subroutine write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, outproj)
+        type(parameters), intent(in)    :: params
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: nparts_run
+        integer,          intent(in)    :: part_counts(nparts_run), row_part(:), row_local(:)
+        type(sp_project), intent(inout) :: outproj
+        type(string) :: raw_part, den_part
+        integer :: ipart, iptcl, nptcls, nraw, nden, ldim_raw(3), ldim_den(3), fromp, top, stkind, indstk
+        nptcls = spproj%os_ptcl2D%get_noris()
+        call outproj%copy(spproj)
+        call outproj%update_projinfo(params%projfile)
+        if( outproj%os_stk%get_noris() > 0 ) call outproj%os_stk%kill()
+        call outproj%os_stk%new(nparts_run, is_ptcl=.false.)
+        fromp = 1
+        do ipart = 1, nparts_run
+            raw_part = string('diffmap_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            den_part = string('diffmap_denoised_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            call find_ldim_nptcls(raw_part, ldim_raw, nraw)
+            call find_ldim_nptcls(den_part, ldim_den, nden)
+            if( nraw /= part_counts(ipart) .or. nden /= part_counts(ipart) )then
+                THROW_HARD('diffmap partial project stack count mismatch')
+            endif
+            if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
+                THROW_HARD('diffmap partial project stack dimensions differ')
+            endif
+            top = fromp + part_counts(ipart) - 1
+            call outproj%os_stk%set(ipart, 'stk',        simple_abspath(raw_part))
+            call outproj%os_stk%set(ipart, 'stk_den',    simple_abspath(den_part))
+            call outproj%os_stk%set(ipart, 'box',        ldim_raw(1))
+            call outproj%os_stk%set(ipart, 'nptcls',     part_counts(ipart))
+            call outproj%os_stk%set(ipart, 'nptcls_stk', part_counts(ipart))
+            call outproj%os_stk%set(ipart, 'fromp',      fromp)
+            call outproj%os_stk%set(ipart, 'top',        top)
+            call outproj%os_stk%set(ipart, 'stkkind',    'single')
+            call outproj%os_stk%set(ipart, 'imgkind',    'ptcl')
+            call outproj%os_stk%set(ipart, 'smpd',       params%smpd_crop)
+            call outproj%os_stk%set(ipart, 'kv',         params%kv)
+            call outproj%os_stk%set(ipart, 'cs',         params%cs)
+            call outproj%os_stk%set(ipart, 'fraca',      params%fraca)
+            call outproj%os_stk%set(ipart, 'ctf',        'flip')
+            call outproj%os_stk%set(ipart, 'phaseplate', 'no')
+            call outproj%os_stk%set(ipart, 'state',      1)
+            fromp = top + 1
+            call raw_part%kill
+            call den_part%kill
+        end do
+        do iptcl = 1, nptcls
+            if( row_part(iptcl) < 1 .or. row_part(iptcl) > nparts_run )then
+                THROW_HARD('invalid particle part while writing diffmap partial project')
+            endif
+            if( row_local(iptcl) < 1 .or. row_local(iptcl) > part_counts(row_part(iptcl)) )then
+                THROW_HARD('invalid particle local stack index while writing diffmap partial project')
+            endif
+            call outproj%os_ptcl2D%set(iptcl, 'stkind', row_part(iptcl))
+            call outproj%os_ptcl3D%set(iptcl, 'stkind', row_part(iptcl))
+            call outproj%os_ptcl2D%set(iptcl, 'indstk', row_local(iptcl))
+            call outproj%os_ptcl3D%set(iptcl, 'indstk', row_local(iptcl))
+        end do
+        do iptcl = 1, nptcls
+            call outproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
+            if( stkind /= row_part(iptcl) .or. indstk /= row_local(iptcl) )then
+                THROW_HARD('ptcl2D stack mapping mismatch in diffmap partial project')
+            endif
+            call outproj%map_ptcl_ind2stk_ind('ptcl3D', iptcl, stkind, indstk)
+            if( stkind /= row_part(iptcl) .or. indstk /= row_local(iptcl) )then
+                THROW_HARD('ptcl3D stack mapping mismatch in diffmap partial project')
+            endif
+        end do
+        call outproj%os_ptcl2D%zero_inpl()
+        call outproj%os_ptcl3D%zero_inpl()
+        if( outproj%os_out%get_noris() > 0 ) call outproj%os_out%kill()
+        call outproj%write(params%projfile)
+        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise partial project stacks: ', nparts_run, ' particles=', nptcls
+        call flush(logfhandle)
+    end subroutine write_diffmap_partial_project
+
+    subroutine finalize_diffmap_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
         type(sp_project) :: spproj, outproj
-        type(string) :: raw_part, den_part, raw_out, den_out
-        type(image) :: img
+        type(string) :: raw_part, den_part
         integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:), stk_offsets(:), slot_pind(:)
-        integer :: nptcls, nstks, istk, pind, ipart, total_count, ldim(3), nimgs, probe_part
-        integer :: nptcls_slots, slot
+        integer, allocatable :: part_counts(:), part_nimgs(:), part_seen(:)
+        integer :: nptcls, nstks, istk, pind, ipart, total_count, ldim_raw(3), ldim_den(3), nraw, nden
+        integer :: nptcls_slots, slot, local_slot
         logical :: l_phflip
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call spproj%read(params%projfile)
@@ -655,6 +731,7 @@ contains
         nstks  = spproj%os_stk%get_noris()
         allocate(row_part(nptcls), row_local(nptcls), row_stkind(nptcls), row_indstk(nptcls), source=0)
         allocate(stk_offsets(nstks), source=0)
+        allocate(part_counts(nparts_run), part_nimgs(nparts_run), source=0)
         nptcls_slots = 0
         do istk = 1, nstks
             stk_offsets(istk) = nptcls_slots
@@ -673,45 +750,62 @@ contains
             if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid stack slot in diffmap denoise worker maps')
             if( slot_pind(slot) /= 0 ) THROW_HARD('duplicate stack slot in diffmap denoise worker maps')
             slot_pind(slot) = pind
+            if( row_part(pind) > nparts_run ) THROW_HARD('invalid part index in diffmap denoise worker maps')
+            part_counts(row_part(pind)) = part_counts(row_part(pind)) + 1
         end do
-        probe_part = row_part(max(1, minloc(row_part, dim=1, mask=row_part > 0)))
-        raw_part = string('diffmap_raw_particles_part')//int2str_pad(probe_part, params%numlen)//'.mrcs'
-        if( .not. file_exists(raw_part%to_char()) ) THROW_HARD('missing first diffmap denoise worker raw stack')
-        call find_ldim_nptcls(raw_part, ldim, nimgs)
-        if( nimgs < 1 ) THROW_HARD('empty first diffmap denoise worker raw stack')
-        ldim(3) = 1
-        call img%new(ldim, params%smpd_crop)
-        raw_out = string('diffmap_raw_particles.mrcs')
-        den_out = string('diffmap_denoised_particles.mrcs')
-        call del_file(raw_out)
-        call del_file(den_out)
-        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise merge: start nparts=', nparts_run, ' particles=', nptcls
+        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise finalize: partial stacks=', nparts_run, ' particles=', nptcls
         call flush(logfhandle)
-        do pind = 1, nptcls
-            ipart = row_part(pind)
+        do ipart = 1, nparts_run
+            if( part_counts(ipart) < 1 ) THROW_HARD('empty diffmap denoise worker part')
             raw_part = string('diffmap_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
             den_part = string('diffmap_denoised_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            call img%read(raw_part, row_local(pind))
-            call write_diffmap_stack_image(raw_out, pind, img)
-            call img%read(den_part, row_local(pind))
-            call write_diffmap_stack_image(den_out, pind, img)
+            if( .not. file_exists(raw_part%to_char()) ) THROW_HARD('missing diffmap denoise worker raw stack')
+            if( .not. file_exists(den_part%to_char()) ) THROW_HARD('missing diffmap denoise worker denoised stack')
+            call find_ldim_nptcls(raw_part, ldim_raw, nraw)
+            call find_ldim_nptcls(den_part, ldim_den, nden)
+            if( nraw /= part_counts(ipart) .or. nden /= part_counts(ipart) )then
+                write(logfhandle,'(A,I8,A,I10,A,I10,A,I10)') 'Diffmap denoise part count mismatch: part=', ipart, &
+                    ' map_count=', part_counts(ipart), ' raw=', nraw, ' denoised=', nden
+                THROW_HARD('diffmap denoise partial stack count mismatch')
+            endif
+            if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
+                THROW_HARD('raw/denoised partial stack dimensions differ; diffmap_denoise_project')
+            endif
+            if( ldim_raw(1) /= params%box_crop .or. ldim_raw(2) /= params%box_crop )then
+                THROW_HARD('unexpected diffmap denoise partial stack dimensions')
+            endif
+            part_nimgs(ipart) = nraw
             call raw_part%kill
             call den_part%kill
         end do
-        call write_diffmap_project(params, spproj, raw_out, den_out, outproj)
+        allocate(part_seen(maxval(part_nimgs)), source=0)
+        do ipart = 1, nparts_run
+            part_seen = 0
+            do pind = 1, nptcls
+                if( row_part(pind) /= ipart ) cycle
+                local_slot = row_local(pind)
+                if( local_slot < 1 .or. local_slot > part_nimgs(ipart) )then
+                    THROW_HARD('particle local index out of partial stack range; diffmap_denoise_project')
+                endif
+                if( part_seen(local_slot) /= 0 ) THROW_HARD('duplicate particle local index in partial stack')
+                part_seen(local_slot) = pind
+            end do
+            if( count(part_seen(1:part_nimgs(ipart)) > 0) /= part_nimgs(ipart) )then
+                THROW_HARD('partial stack local index coverage is incomplete; diffmap_denoise_project')
+            endif
+        end do
+        call write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, outproj)
         write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
         call flush(logfhandle)
         call outproj%kill
         call spproj%kill
-        call img%kill
         if( allocated(cls_inds) ) deallocate(cls_inds)
         if( allocated(cls_pops) ) deallocate(cls_pops)
         deallocate(row_part, row_local, row_stkind, row_indstk, stk_offsets, slot_pind)
+        deallocate(part_counts, part_nimgs, part_seen)
         if( raw_part%is_allocated() ) call raw_part%kill
         if( den_part%is_allocated() ) call den_part%kill
-        if( raw_out%is_allocated() ) call raw_out%kill
-        if( den_out%is_allocated() ) call den_out%kill
-    end subroutine merge_diffmap_worker_outputs
+    end subroutine finalize_diffmap_worker_outputs
 
     subroutine read_diffmap_worker_maps(params, nparts_run, row_part, row_local, row_stkind, row_indstk, total_count)
         type(parameters), intent(in)    :: params
