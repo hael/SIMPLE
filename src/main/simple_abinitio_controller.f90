@@ -1,5 +1,4 @@
 submodule(simple_abinitio_utils) simple_abinitio_controller
-use simple_decay_funs, only: inv_cos_decay
 implicit none
 #include "simple_local_flags.inc"
 
@@ -11,7 +10,7 @@ integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,17,17,15,15,30]
-integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
+integer,          parameter :: NSPACE(8)               = [1000,1000,1000,1000,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_SUB              = 126
 
 ! Stage transition policy
@@ -42,12 +41,11 @@ real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative def
 ! Sampling and update defaults
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
-integer,          parameter :: NSAMPLE_START_DEFAULT      = 5000
 
 type :: refine3D_stage_cfg
     type(string) :: ml_reg, fillin, conical_fsc
-    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine, greedy_sampling
-    integer :: iter, inspace, inspace_sub, imaxits, nsample_stage
+    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
+    integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
 end type refine3D_stage_cfg
@@ -141,11 +139,6 @@ contains
         nsample = NSAMPLE_ABINITIO3D_DEFAULT
     end function abinitio_nsample_default
 
-    module function abinitio_nsample_start_default() result(nsample_start)
-        integer :: nsample_start
-        nsample_start = NSAMPLE_START_DEFAULT
-    end function abinitio_nsample_start_default
-
     integer function active_refine3D_nstages() result(nstages_active)
         nstages_active = nstages_refine3D
         if( nstages_active <= 0 ) nstages_active = NSTAGES
@@ -195,11 +188,12 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         real :: update_frac_stage
-        cfg%nsample_stage = stage_nsample(params, istage)
-        update_frac_stage = stage_update_frac(params, cfg%nsample_stage)
-        if( trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage )then
-            update_frac_stage = UPDATE_FRAC_MAX
+        if( docked_split_stage(params, istage) )then
+            cfg%fillin          = 'no'
+            cfg%update_frac_dyn = 1.0
+            return
         endif
+        update_frac_stage = update_frac
         if( istage == active_refine3D_nstages() )then
             cfg%fillin = 'yes'
             if( params%nstates > 1 ) cfg%fillin = 'no'
@@ -210,35 +204,6 @@ contains
         endif
         cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, cfg%update_frac_dyn)
     end subroutine set_refine3D_update_policy
-
-    integer function stage_nsample( params, istage ) result( nsample_stage )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        real    :: nsample_bounds(2)
-        integer :: ramp_it, ramp_maxit, stoch_stage
-        nsample_stage = params%nsample
-        if( params%nsample_start <= 0 ) return
-        stoch_stage = abinitio_stoch_sampl_stage(params)
-        ramp_maxit  = max(1, stoch_stage - 1)
-        ramp_it    = min(max(0, istage - 1), ramp_maxit)
-        nsample_bounds = real([params%nsample_start, params%nsample])
-        if( istage >= stoch_stage )then
-            nsample_stage = params%nsample
-        else
-            nsample_stage = nint(inv_cos_decay(ramp_it, ramp_maxit, nsample_bounds))
-        endif
-        nsample_stage     = max(1, nsample_stage)
-    end function stage_nsample
-
-    real function stage_update_frac( params, nsample_stage ) result( update_frac_stage )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: nsample_stage
-        update_frac_stage = update_frac
-        if( params%nsample_start <= 0 ) return
-        if( nptcls_eff < 1 ) return
-        update_frac_stage = real(nsample_stage * params%nstates) / real(nptcls_eff)
-        update_frac_stage = min(UPDATE_FRAC_MAX, update_frac_stage)
-    end function stage_update_frac
 
     subroutine set_refine3D_symmetry_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -256,20 +221,20 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
-            return
-        endif
-        if( istage <  PROB_REFINE_STAGE )then
+        else if( istage <  PROB_REFINE_STAGE )then
             cfg%refine = 'shc_smpl'
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
             cfg%refine = 'prob'
         else
             cfg%refine = 'prob_neigh'
         endif
-        if( trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage )then
-            cfg%refine = 'shc_smpl'
-        endif 
+        if( docked_split_stage(params, istage) )then
+            cfg%refine           = 'prob_neigh'
+            cfg%prob_neigh_mode  = 'sum'
+        endif
     end subroutine set_refine3D_mode_policy
 
     subroutine set_refine3D_balance_policy( cfg )
@@ -412,6 +377,8 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
+        logical :: l_full_update_stage
+        l_full_update_stage = docked_split_stage(params, istage)
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
             call cline_refine3D%set('envfsc',              'no')
@@ -420,19 +387,29 @@ contains
         else
             call cline_refine3D%set('envfsc',              'no')
         endif
-        if( istage == active_refine3D_nstages() )then
+        if( l_full_update_stage )then
+            call cline_refine3D%delete('update_frac')
+            call cline_refine3D%delete('fillin')
+        else if( istage == active_refine3D_nstages() )then
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%set('fillin',             cfg%fillin)
         else
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
             call cline_refine3D%delete('fillin')
         endif
-        if( params%nsample_start > 0 ) call cline_refine3D%set('nsample', cfg%nsample_stage)
+        if( .not. l_cavgs )then
+            if( l_full_update_stage )then
+                call cline_refine3D%delete('nsample')
+            else
+                call cline_refine3D%set('nsample', params%nsample)
+            endif
+        endif
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
+        call cline_refine3D%set('prob_neigh_mode',        cfg%prob_neigh_mode)
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
@@ -475,6 +452,12 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
     end subroutine emit_refine3D_stage_cfg
+
+    logical function docked_split_stage( params, istage ) result( l_split_stage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        l_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
+    end function docked_split_stage
 
     real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
         type(refine3D_stage_cfg), intent(in) :: cfg

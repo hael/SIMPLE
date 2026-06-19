@@ -59,10 +59,6 @@ contains
             &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}', &
             &'(yes|no){no}', .false., 'no', gui_submenu="model", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.false.)
-        call abinitio3D%add_input(UI_SRCH, 'nsample_start', 'num', 'Starting number of particles to sample',&
-            &'Starting number of particles to sample before ramping to nsample by the stochastic sampling stage; &
-            &stage 4 for multivol_mode=independent and stage 5 otherwise',&
-            &'starting # particles to sample', .false., 0., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, 'nstages', 'num', 'Last ab initio stage to run',&
             &'Last abinitio3D stage to run; default is 5 for multivol_mode=independent and 8 otherwise; &
             &independent mode writes final volumes at its last stage',&

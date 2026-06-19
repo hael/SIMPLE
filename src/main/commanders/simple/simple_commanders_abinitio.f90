@@ -1149,7 +1149,9 @@ contains
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
-        if( .not. cline%defined('nsample_start')       ) call cline%set('nsample_start', abinitio_nsample_start_default())
+        if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
+            THROW_HARD('nsample_start/nsample_stop are no longer supported for abinitio3D; set nsample instead')
+        endif
         if( l_state_continue )then
             if( cline%defined('multivol_mode') )then
                 if( cline%get_carg('multivol_mode').ne.'single' )then
@@ -1328,15 +1330,6 @@ contains
             if( nptcls_eff < 1 ) THROW_HARD('No active particles selected in ptcl2D for abinitio3D')
             if( .not. cline%defined('nsample') ) params%nsample = abinitio_nsample_default()
             if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio3D sampled update')
-            if( cline%defined('nsample_start') )then
-                if( params%nsample_start < 1 ) THROW_HARD('nsample_start must be >= 1 for abinitio3D sampled update')
-                if( params%nsample_start > params%nsample )then
-                    THROW_HARD('nsample_start must be <= nsample for abinitio3D sampled update ramp')
-                endif
-                write(logfhandle,'(A,I0,A,I0,A,I0)') &
-                    &'>>> ABINITIO3D NSAMPLE RAMP: ', params%nsample_start, ' -> ', params%nsample, &
-                    &' BY STAGE ', abinitio_stoch_sampl_stage(params)
-            endif
             update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
             update_frac = min(abinitio_update_frac_max(), update_frac) ! to ensure fractional update is always on
             ! generate a data structure for class sampling on disk
@@ -1460,10 +1453,13 @@ contains
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
-                update_frac    = abinitio_update_frac_max()
+                update_frac    = real(params%nsample * params%nstates) / real(nptcls_eff)
+                update_frac    = min(abinitio_update_frac_max(), update_frac)
                 write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                    &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/UPDATE_FRAC: ', &
+                    &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
                     &split_stage, '/', params%nstates, '/', update_frac
+                write(logfhandle,'(A)') &
+                    &'>>> ABINITIO3D DOCKED SPLIT STAGE RUNS ALL ACTIVE PARTICLES WITH REFINE=PROB_NEIGH PROB_NEIGH_MODE=SUM'
             endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(params, istage, l_cavgs=.false.)

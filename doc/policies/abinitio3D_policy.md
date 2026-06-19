@@ -59,13 +59,15 @@ Stage policy includes:
 
 - stage-specific `nspace` and `maxits`
 - cropped box and sampling from the low-pass plan
+- stages 1 and 2 use the same `nspace=1000`
+- stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
 - staged search mode: early `shc_smpl`, middle `prob`, late `prob_neigh`
 - `nspace_sub` for `prob_neigh`
 - staged point-group policy between `pgrp_start` and `pgrp`
 - staged translation limits
 - staged ML regularization
 - conical FSC regularization by default only while ML regularization is active
-- staged fractional update and optional `nsample` ramp
+- staged fractional update with a fixed `nsample` target
 - mode-specific stochastic sampling start
 - early Gaussian reference filtering
 - optional trailing reconstruction by stage and multivol mode
@@ -150,11 +152,11 @@ independent-mode trailing reconstruction, or staged automasking. After stage 5,
 the workflow still runs the final original-sampling reconstruction so the run
 produces inspectable `rec_final_stateNN` volumes. To improve particle coverage
 before that early exit, independent mode starts stochastic balanced sampling at
-stage 4:
-`nsample_start` reaches the full `nsample` target by stage 4, and the child
-`refine3D` stages switch to `greedy_sampling=no` with `frac_best=1.0` from
-stage 4 onward. This samples each class-balanced quota from the full class
-rather than from a top-ranked fraction of that class.
+stage 4: the child `refine3D` stages switch to `greedy_sampling=no` with
+`frac_best=1.0` from stage 4 onward. This samples each class-balanced quota from
+the full class rather than from a top-ranked fraction of that class. The outer
+particle target remains the fixed `nsample`-derived update fraction at every
+stage.
 
 In `docked` mode, the controller starts as one state, runs stages 1-5 as a
 single-state ab initio model, then expands to the requested number of states at
@@ -164,21 +166,23 @@ after stage 5.
 The docked split starts a new multi-state update epoch:
 
 - restore `nstates` to the requested value
-- force the split-stage particle update target to `UPDATE_FRAC_MAX`
+- recompute the fixed `nsample`-derived update target for later post-split stages
 - clear `ptcl3D%sampled` and `ptcl3D%updatecnt`
 - randomize active particles into the requested state labels
 - reconstruct split state volumes from the randomized labels without trailing
   volume averaging
 
-The first post-split stage is a stabilization stage. It uses `refine=shc_smpl`
-with fractional particle updates still active, but with fractional volume
-averaging disabled. The remaining post-split docked stages use
-`refine=prob_neigh` and restore trailing reconstruction within the new
-multi-state update epoch.
+The first post-split stage is a stabilization stage. It uses
+`refine=prob_neigh` with `prob_neigh_mode=sum`, and it removes fractional
+particle updates entirely: `update_frac`, `nsample`, and `fillin` are not
+emitted, so all active particles are processed. Fractional volume averaging is
+also disabled for this stage. The remaining post-split docked stages use
+`refine=prob_neigh` and restore the fixed `nsample`-derived fractional particle
+target plus trailing reconstruction within the new multi-state update epoch.
 
 For docked mode, trailing reconstruction is allowed before the split and after
-the split stage. The split stage itself must not blend current state volumes
-with previous mixed single-state or pre-split volumes.
+the first post-split stage. The split stage itself must not blend current state
+volumes with previous mixed single-state or pre-split volumes.
 
 `input_oris_start` and `input_oris_fixed` are no longer supported by
 `abinitio3D`. Prior-orientation multi-state refinement belongs in the explicit

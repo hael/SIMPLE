@@ -194,6 +194,13 @@ matchimg_source = denoised recimg_source = denoised  denoised-only diagnostic
 matchimg_source = denoised recimg_source = raw       cross-source diagnostic
 ```
 
+`matchimg_source` and `recimg_source` are literal selectors. No command should
+silently substitute raw images for denoised images, or denoised images for raw
+images, inside either phase. If `matchimg_source=denoised`, alignment, state
+assignment, shift updates, and matcher-owned sigma updates use the denoised
+representatives. If `recimg_source=denoised`, Cartesian reconstruction uses the
+denoised representatives.
+
 Using `matchimg_source=denoised` changes particle-domain statistics and should
 be documented as diagnostic/testing mode unless a later policy promotes it to a
 scientific workflow.
@@ -248,7 +255,7 @@ denoised representatives and CTF correction interact.
 
 ## 8. Sigma And ML Regularization
 
-Sigma calculation remains raw-derived in the intended production mode.
+Sigma calculation follows the matching source.
 
 When `objfun=euclid`, the matcher must calculate residual sigma from the image
 source used for particle-domain matching. In production dual-source mode that
@@ -274,11 +281,17 @@ ML sigma consumption source  = raw sigma, applied during denoised reconstruction
 reconstruction image source  = denoised
 ```
 
-Diagnostic source switching must not accidentally overwrite or relabel raw
-production sigma files as denoised sigma products. V1 rejects
-`matchimg_source=denoised` when Euclidean ML regularization is active. A later
-diagnostic mode may allow that combination only after it has an explicitly
-separated sigma output policy.
+Diagnostic source switching is allowed and intentionally literal:
+
+```text
+matchimg_source = denoised  -> sigma-estimation source = denoised
+matchimg_source = raw       -> sigma-estimation source = raw
+```
+
+Users who need raw sigma estimates while reconstructing denoised volumes should
+run `matchimg_source=raw recimg_source=denoised`. Users who select
+`matchimg_source=denoised` are explicitly choosing denoised particle-domain
+statistics for alignment and sigma updates.
 
 Probabilistic modes keep their existing split: probability-table commands
 choose assignments, while the following matcher pass owns residual sigma
@@ -538,9 +551,13 @@ Minimum tests:
 - `recimg_source=denoised` makes `reconstruct3D` read `stk_den`
 - `refine3D` with `matchimg_source=raw recimg_source=denoised` reads raw
   images for matching and denoised images for reconstruction
+- `refine3D` with `matchimg_source=denoised recimg_source=raw` reads denoised
+  images for matching and raw images for reconstruction
+- `refine3D` with `matchimg_source=denoised recimg_source=denoised` reads
+  denoised images for both matching and reconstruction
 - `refine3D_auto` propagates source selectors to child commands
 - `refine3D_multi` propagates source selectors to child commands
-- users can run raw/raw and raw/denoised reconstructions from the same project
+- users can run all four raw/denoised combinations from the same project
   without rewriting stack metadata
 - ML-regularized production dual-source refinement consumes raw-derived sigma
   spectra

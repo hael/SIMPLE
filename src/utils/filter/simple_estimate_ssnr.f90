@@ -333,6 +333,12 @@ contains
             lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
             lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
         end do
+        ! Stage 1 keeps its low-pass limit but uses the same crop schedule entry as stage 2.
+        lpinfo(1)%box_crop    = lpinfo(2)%box_crop
+        lpinfo(1)%smpd_crop   = lpinfo(2)%smpd_crop
+        lpinfo(1)%scale       = lpinfo(2)%scale
+        lpinfo(1)%trslim      = lpinfo(2)%trslim
+        lpinfo(1)%l_autoscale = lpinfo(2)%l_autoscale
         if( l_verbose )then
             print *, '########## scale info'
             call print_scaleinfo
@@ -394,7 +400,18 @@ contains
                 lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
             endif
             call calc_scaleinfo(i)
-            print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+        enddo
+        if( nstages > 1 )then
+            ! Stage 1 keeps its low-pass limit but uses the same crop schedule entry as stage 2.
+            lpinfo(1)%box_crop    = lpinfo(2)%box_crop
+            lpinfo(1)%smpd_crop   = lpinfo(2)%smpd_crop
+            lpinfo(1)%scale       = lpinfo(2)%scale
+            lpinfo(1)%trslim      = lpinfo(2)%trslim
+            lpinfo(1)%l_autoscale = lpinfo(2)%l_autoscale
+        endif
+        do i = 1,nstages
+            print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
+                &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
         enddo
         contains
 
@@ -444,8 +461,17 @@ contains
                 lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
             end do
         endif
+        if( nstages > 1 )then
+            ! Stage 1 keeps its low-pass limit but uses the same crop schedule entry as stage 2.
+            lpinfo(1)%box_crop    = lpinfo(2)%box_crop
+            lpinfo(1)%smpd_crop   = lpinfo(2)%smpd_crop
+            lpinfo(1)%scale       = lpinfo(2)%scale
+            lpinfo(1)%trslim      = lpinfo(2)%trslim
+            lpinfo(1)%l_autoscale = lpinfo(2)%l_autoscale
+        endif
         do i = 1, nstages
-            print *, 'lpset lp box_crop smpd_crop trslim ',lpinfo(i)%l_lpset,lpinfo(i)%lp,lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+            print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
+                &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
         end do
     end subroutine lpstages_setlims
 

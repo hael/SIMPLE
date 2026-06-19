@@ -133,15 +133,16 @@ iteration writes replacements.
 
 ## 5. Abinitio3D and Refine3D
 
-The 3D controller derives the outer update policy from explicit `nsample`,
-explicit `update_frac`, dynamic `nsample_start`/`nsample_stop`, or default sample
-count bounds. The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
+The 3D controller derives the abinitio3D outer update policy from `nsample`.
+The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
 
 Current high-level ab initio stage policy:
 
 - early stages use `shc_smpl`
 - later stages use `prob`
 - final neighborhood stages use `prob_neigh`
+- stages 1 and 2 use the same `nspace=1000`
+- stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
 - final active stages may switch to `fillin`, except where the multi-state
   policy disables it
 
@@ -152,26 +153,25 @@ user overrides them. This stops after the `prob` phase and before
 and staged automasking. The workflow still runs the final reconstruction step
 at the configured last stage so it writes inspectable final state volumes. To
 increase the chance that all active particles receive assignments before that
-exit, independent mode starts stochastic balanced sampling at stage 4:
-`nsample_start` ramps to `nsample` by stage 4, and the child `refine3D` stages
-use `greedy_sampling=no` with `frac_best=1.0` from stage 4 onward. This keeps
-class-balanced quotas but draws from the whole class, not a top-ranked
-fraction.
+exit, independent mode starts stochastic balanced sampling at stage 4: the child
+`refine3D` stages use `greedy_sampling=no` with `frac_best=1.0` from stage 4
+onward. This keeps class-balanced quotas but draws from the whole class, not a
+top-ranked fraction. The outer particle target remains the fixed
+`nsample`-derived update fraction at every stage.
 
 `abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
 Stages before the split run as one state. The default split stage is 6, so the
 split occurs after stage 5. At the split, the commander restores the requested
 state count, clears `ptcl3D%sampled` and `ptcl3D%updatecnt`, randomizes active
-particles into state labels, and reconstructs split state volumes. The first
-post-split stage uses `shc_smpl`; later post-split stages use `prob_neigh`.
+particles into state labels, and reconstructs split state volumes.
 
-Post-split docked stages keep fractional particle updates for cost control, but
-the split stage disables fractional volume averaging. Because the split-stage
-references are not linearly combined with previous volumes, that stage forces
-the particle update target to `UPDATE_FRAC_MAX`. Later post-split stages
-restore trailing reconstruction inside the new multi-state epoch. This
-preserves the outer sampled-update economy while preventing pre-split
-mixed-volume memory from being blended into the split-stage volumes.
+The first post-split stage uses `refine=prob_neigh` with
+`prob_neigh_mode=sum`, removes `update_frac`, `nsample`, and `fillin`, and
+therefore processes all active particles without fractional particle sampling.
+It also keeps trailing reconstruction off, preventing pre-split mixed-volume
+memory from being blended into the split-stage volumes. Later post-split stages
+restore the fixed `nsample`-derived fractional particle target and trailing
+reconstruction inside the new multi-state epoch.
 
 Because the split clears the counters, `updatecnt` after the split is
 post-split multi-state update history, not single-state history. Final docked

@@ -100,10 +100,6 @@ interface
         integer :: nsample
     end function abinitio_nsample_default
 
-    module function abinitio_nsample_start_default() result(nsample_start)
-        integer :: nsample_start
-    end function abinitio_nsample_start_default
-
     module subroutine set_cline_refine3D( params, istage, l_cavgs )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage

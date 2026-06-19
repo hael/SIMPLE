@@ -603,7 +603,6 @@ contains
             !     call cline_abinitio3D%set('lpstop',                LPSTOP2D)
             !  !   call cline_abinitio3D%set('nstages',              NSTAGES3D)
             !     call cline_abinitio3D%set('mskdiam',             mskdiam_in)
-            ! !    call cline_abinitio3D%set('nsample_start',              200)
             !     call cline_abinitio3D%set('nthr',                         16)
             !  !   call cline_abinitio3D%set('nparts',                       4)
             !     call cline_abinitio3D%set('projfile',      cluster_projfile)
