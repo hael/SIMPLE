@@ -16,6 +16,7 @@ use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,       only: strategy3D_greedy
+use simple_strategy3D_greedy_inpl,  only: strategy3D_greedy_inpl
 use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_shc,          only: strategy3D_shc
@@ -347,6 +348,8 @@ contains
                     allocate(strategy3D_greedy_sub         :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('greedy')
                     allocate(strategy3D_greedy             :: strategy3Dsrch(iptcl_batch)%ptr)
+                case('greedy_inpl')
+                    allocate(strategy3D_greedy_inpl        :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('prob','prob_state','prob_neigh')
                     allocate(strategy3D_prob               :: strategy3Dsrch(iptcl_batch)%ptr)
                 case('sigma')
