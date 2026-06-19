@@ -315,15 +315,15 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P2
         spec%context                 = 'chunk'
-        spec%feature_policy          = 'microchunk_plus_signal'
+        spec%feature_policy          = 'microchunk_plus_score_signal_texture'
         spec%weights                 = [ &
-            1.569628E-01,   2.420765E-01,   2.467391E-01,   5.512793E-02, &
-            0.000000E+00,   0.000000E+00,   2.990936E-01,   0.000000E+00, &
-            0.000000E+00,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
-        spec%boundary_margin         =  -5.000000E-02
-        spec%min_score_separation    =   1.500000E-01
-        spec%otsu_min_offset         =   3.500000E-01
-        spec%otsu_max_offset         =   5.000000E-01
+              9.300453E-02,   9.552415E-02,   1.010380E-01,   9.765499E-02, &
+              1.325033E-01,   1.486267E-01,   1.026389E-01,   4.956052E-02, &
+              1.352742E-01,   4.417469E-02,   0.000000E+00,   0.000000E+00 ]
+        spec%boundary_margin         =   1.500000E-01
+        spec%min_score_separation    =   3.000000E-01
+        spec%otsu_min_offset         =   2.500000E-01
+        spec%otsu_max_offset         =   4.000000E-01
         spec%cluster_rescue_margin   =   2.000000E-01
         spec%min_accept_frac         =   0.000000E+00
         spec%use_lowsep_otsu         = .true.
