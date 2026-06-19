@@ -24,6 +24,7 @@ type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
 type(commander_cls_split)               :: xcls_split
+type(commander_diffmap_denoise_project) :: xdiffmap_denoise_project
 
 ! REFINE3D PROGRAMS
 type(commander_refine3D_distr_worker)   :: xrefine3D_worker
@@ -151,6 +152,8 @@ select case(prg)
         call xexport_cavgs%execute(cline)
     case( 'cls_split' )
         call xcls_split%execute(cline)
+    case( 'diffmap_denoise_project' )
+        call xdiffmap_denoise_project%execute(cline)
 
     ! REFINE3D PROGRAMS
     case( 'refine3D' )

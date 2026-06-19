@@ -9,6 +9,7 @@ type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_polarft_lines
 type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
+type(ui_program), target :: diffmap_denoise_project
 type(ui_program), target :: ppca_volvar
 
 contains
@@ -21,6 +22,7 @@ contains
         call new_ppca_denoise_polarft_lines(prgtab)
         call new_ppca_denoise_classes(prgtab)
         call new_cls_split(prgtab)
+        call new_diffmap_denoise_project(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
@@ -33,6 +35,7 @@ contains
         write(logfhandle,'(A)') ppca_denoise_polarft_lines%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
         write(logfhandle,'(A)') cls_split%name%to_char()
+        write(logfhandle,'(A)') diffmap_denoise_project%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_denoise_programs
@@ -238,5 +241,24 @@ contains
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
         call add_ui_program('cls_split', cls_split, prgtab)
     end subroutine new_cls_split
+
+    subroutine new_diffmap_denoise_project( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call diffmap_denoise_project%new(&
+        &'diffmap_denoise_project',&
+        &'Create dual denoised project',&
+        &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and non-steerable diffusion-map generative particle samples',&
+        &'all',&
+        &.true.)
+        call diffmap_denoise_project%add_input(UI_PARM, 'pre_norm', 'binary', &
+            'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call diffmap_denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
+            'Diffusion graph neighbors (default 10; try 10-30)', &
+            'Local nearest neighbors used for non-steerable diffusion maps', '# neighbors', .false., 10.0)
+        call diffmap_denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
+            gui_submenu="mask", gui_advanced=.false.)
+        call diffmap_denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('diffmap_denoise_project', diffmap_denoise_project, prgtab)
+    end subroutine new_diffmap_denoise_project
 
 end module simple_ui_denoise
