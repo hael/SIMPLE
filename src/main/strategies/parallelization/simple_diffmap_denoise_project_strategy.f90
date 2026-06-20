@@ -1,4 +1,5 @@
 module simple_diffmap_denoise_project_strategy
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
@@ -20,6 +21,11 @@ public :: create_diffmap_denoise_project_strategy
 
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: DIFFMAP_DENOISE_ICM_RANK_MAXITS = 16
+real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC = 0.35
+real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC = 0.10
+real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_LOWER_SEED_FRAC = 0.50
 
 type, abstract :: diffmap_denoise_project_strategy
 contains
@@ -497,8 +503,9 @@ contains
         real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: pinds(:)
-        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind
-        real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise
+        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters
+        real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise, recon_rmse, recon_rel_rmse, icm_score
+        logical :: icm_converged
         call transform_ptcls(params, build, spproj, 'ptcl2D', cls_id, imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
         if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; diffmap_denoise_project')
         nptcls = size(imgs)
@@ -538,9 +545,16 @@ contains
         if( trim(graph%metric) /= 'euclidean' .or. trim(graph%steering) /= 'none' )then
             THROW_HARD('diffmap_denoise_project expected a non-steerable Euclidean graph')
         endif
+        call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
         avg_ptcls = cavg_raw%serialize()
-        call graph_coeffproj_denoise(params, imgs, avg_ptcls, graph, den_ptcls)
+        call graph_coeffproj_denoise(params, imgs, avg_ptcls, graph, den_ptcls, rank_keep_override=den_rank)
         if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map generative denoising failed; diffmap_denoise_project')
+        call calc_diffmap_reconstruction_error(imgs, den_ptcls, recon_rmse, recon_rel_rmse)
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,A,A,I8,A,F12.5,A,ES12.4,A,ES12.4)') &
+            'Diffmap denoise class model: class=', cls_id, ' nptcls=', nptcls, ' rank=', den_rank, &
+            ' icm_converged=', merge('yes','no ',icm_converged), ' icm_iters=', icm_iters, &
+            ' icm_score=', icm_score, ' rmse=', recon_rmse, ' rel_rmse=', recon_rel_rmse
+        call flush(logfhandle)
         do j = 1, nptcls
             if( processed(pinds(j)) ) THROW_HARD('particle was processed twice; diffmap_denoise_project')
             call spproj%map_ptcl_ind2stk_ind('ptcl2D', pinds(j), stkind, indstk)
@@ -574,6 +588,330 @@ contains
         if( allocated(class_diams) ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
     end subroutine write_diffmap_denoised_class
+
+    subroutine estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
+        use simple_diff_map_graphs, only: diffmap_graph
+        use simple_diffusion_maps,  only: embed_graph
+        type(parameters),   intent(in)  :: params
+        type(diffmap_graph), intent(in) :: graph
+        integer,            intent(in)  :: cls_id, nptcls
+        integer,            intent(out) :: den_rank, icm_iters
+        logical,            intent(out) :: icm_converged
+        real,               intent(out) :: icm_score
+        real, allocatable :: coords(:,:), eigvals(:)
+        integer :: rank_scan, max_rank
+        max_rank = max(1, nptcls - 2)
+        if( params%neigs > 0 )then
+            rank_scan = min(max(1, params%neigs), max_rank)
+        else
+            rank_scan = diffmap_denoise_auto_neigs_scan(nptcls)
+        endif
+        rank_scan = min(max(1, rank_scan), max_rank)
+        call embed_graph(graph, rank_scan, coords, eigvals)
+        if( allocated(eigvals) .and. size(eigvals) > 0 )then
+            call select_diffmap_denoise_rank_icm(eigvals, size(eigvals), cls_id, den_rank, &
+                                                 icm_converged, icm_iters, icm_score)
+        else
+            den_rank      = rank_scan
+            icm_converged = .false.
+            icm_iters     = 0
+            icm_score     = huge(icm_score)
+            write(logfhandle,'(A,I8,A,I8)') 'Diffmap denoise ICM rank warning: no eigenspectrum; class=', cls_id, &
+                ' fallback_rank=', den_rank
+            call flush(logfhandle)
+        endif
+        den_rank = min(max(1, den_rank), nptcls)
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Diffmap denoise rank selection: class=', cls_id, &
+            ' nptcls=', nptcls, ' scan=', rank_scan, ' selected=', den_rank
+        call flush(logfhandle)
+        if( allocated(coords) ) deallocate(coords)
+        if( allocated(eigvals) ) deallocate(eigvals)
+    end subroutine estimate_diffmap_denoise_rank
+
+    integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
+        integer, intent(in) :: nptcls
+        neigs_scan = min(24, max(1, nptcls - 2))
+        if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
+    end function diffmap_denoise_auto_neigs_scan
+
+    subroutine select_diffmap_denoise_rank_icm(eigvals, max_neigs, cls_id, nkeep, converged, niter, score)
+        real,    intent(in)  :: eigvals(:)
+        integer, intent(in)  :: max_neigs, cls_id
+        integer, intent(out) :: nkeep, niter
+        logical, intent(out) :: converged
+        real,    intent(out) :: score
+        real, allocatable :: spec(:)
+        real :: smin, smax, delta, beta, complexity, trial_score, best_score
+        integer :: i, n, nmin_rank, upper_rank, lower_rank, best_seed, k_trial, trial_iter
+        integer :: seeds(2)
+        character(len=12) :: seed_names(2)
+        logical :: trial_converged, best_converged
+        n = min(size(eigvals), max(1, max_neigs))
+        nmin_rank = diffmap_denoise_min_neigs(n)
+        if( n <= 0 )then
+            nkeep     = 1
+            niter     = 0
+            score     = 0.
+            converged = .false.
+            return
+        endif
+        allocate(spec(n), source=0.)
+        do i = 1, n
+            if( ieee_is_finite(eigvals(i)) .and. eigvals(i) > real(DTINY) )then
+                spec(i) = log(eigvals(i))
+            else
+                spec(i) = log(real(DTINY))
+            endif
+        end do
+        smin  = minval(spec)
+        smax  = maxval(spec)
+        delta = smax - smin
+        if( .not. ieee_is_finite(delta) .or. delta <= 1.e-6 )then
+            nkeep     = nmin_rank
+            niter     = 0
+            score     = 0.
+            converged = .true.
+            write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank degenerate spectrum: class=', cls_id, &
+                ' scan=', n, ' selected=', nkeep
+            call flush(logfhandle)
+            deallocate(spec)
+            return
+        endif
+        spec = (spec - smin) / delta
+        upper_rank = diffmap_denoise_initial_neigs_from_gap(spec, nmin_rank)
+        upper_rank = max(nmin_rank, min(n, upper_rank))
+        lower_rank = nint(DIFFMAP_DENOISE_ICM_RANK_LOWER_SEED_FRAC * real(upper_rank))
+        lower_rank = max(nmin_rank, min(upper_rank, lower_rank))
+        seeds(1) = upper_rank
+        seeds(2) = lower_rank
+        seed_names = [character(len=12) :: 'upper_gap', 'fraction']
+        beta       = DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC
+        complexity = DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank seeds: class=', cls_id, &
+            ' scan=', n, ' min=', nmin_rank, ' upper=', upper_rank, ' lower_fraction=', lower_rank
+        call flush(logfhandle)
+        best_score     = huge(best_score)
+        nkeep          = upper_rank
+        niter          = 0
+        best_seed      = 1
+        best_converged = .false.
+        do i = 1, size(seeds)
+            call run_diffmap_denoise_icm_rank_seed(spec, cls_id, trim(seed_names(i)), seeds(i), nmin_rank, upper_rank, &
+                beta, complexity, k_trial, trial_score, trial_iter, trial_converged)
+            if( trial_score < best_score )then
+                best_score     = trial_score
+                nkeep          = k_trial
+                niter          = trial_iter
+                best_seed      = i
+                best_converged = trial_converged
+            endif
+        end do
+        score     = best_score
+        converged = best_converged
+        write(logfhandle,'(A,I8,A,A,A,I8,A,A,A,I8,A,F12.5)') 'Diffmap denoise ICM rank selected: class=', cls_id, &
+            ' seed=', trim(seed_names(best_seed)), ' keep=', nkeep, &
+            ' converged=', merge('yes','no ',converged), ' iterations=', niter, ' score=', score
+        call flush(logfhandle)
+        deallocate(spec)
+    end subroutine select_diffmap_denoise_rank_icm
+
+    subroutine run_diffmap_denoise_icm_rank_seed(spec, cls_id, seed_name, seed_rank, nmin_rank, nmax_rank, beta, alpha, &
+                                                 nkeep, score, niter, converged)
+        real,             intent(in)  :: spec(:), beta, alpha
+        character(len=*), intent(in)  :: seed_name
+        integer,          intent(in)  :: cls_id, seed_rank, nmin_rank, nmax_rank
+        integer,          intent(out) :: nkeep, niter
+        real,             intent(out) :: score
+        logical,          intent(out) :: converged
+        integer, allocatable :: labels(:), prev_labels(:)
+        real :: mu_drop, mu_keep, var_drop, var_keep
+        integer :: iter, i, n, nchanged, maxits
+        n = size(spec)
+        allocate(labels(n), prev_labels(n), source=0)
+        labels = 0
+        labels(1:max(nmin_rank, min(nmax_rank, seed_rank))) = 1
+        if( nmax_rank < n ) labels(nmax_rank+1:n) = 0
+        write(logfhandle,'(A,I8,A,A,A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank init: class=', cls_id, &
+            ' seed=', trim(seed_name), ' init=', diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank), &
+            ' min=', nmin_rank, ' max=', nmax_rank
+        call flush(logfhandle)
+        converged = .false.
+        niter     = 0
+        maxits    = max(DIFFMAP_DENOISE_ICM_RANK_MAXITS, n)
+        do iter = 1, maxits
+            prev_labels = labels
+            call estimate_diffmap_denoise_icm_rank_stats(spec, prev_labels, mu_drop, mu_keep, var_drop, var_keep)
+            do i = 1, nmax_rank
+                call update_diffmap_denoise_icm_rank_site(spec, prev_labels, i, beta, alpha, nmin_rank, nmax_rank, &
+                    mu_drop, mu_keep, var_drop, var_keep, labels(i))
+            end do
+            labels(1:nmin_rank) = 1
+            if( nmax_rank < n ) labels(nmax_rank+1:n) = 0
+            nchanged = count(labels /= prev_labels)
+            score = score_diffmap_denoise_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank)
+            niter = iter
+            write(logfhandle,'(A,I8,A,A,A,I8,A,I8,A,I8,A,F12.5)') 'Diffmap denoise ICM rank iter: class=', cls_id, &
+                ' seed=', trim(seed_name), ' iter=', iter, ' changed=', nchanged, &
+                ' keep=', diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank), ' score=', score
+            call flush(logfhandle)
+            if( nchanged == 0 )then
+                converged = .true.
+                exit
+            endif
+        end do
+        nkeep = diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank)
+        score = score_diffmap_denoise_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank)
+        deallocate(labels, prev_labels)
+    end subroutine run_diffmap_denoise_icm_rank_seed
+
+    integer function diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank) result(nkeep)
+        integer, intent(in) :: labels(:), nmin_rank, nmax_rank
+        integer :: i
+        nkeep = 0
+        do i = 1, min(size(labels), nmax_rank)
+            if( labels(i) == 1 ) nkeep = i
+        end do
+        nkeep = max(nmin_rank, min(nmax_rank, nkeep))
+    end function diffmap_denoise_rank_prefix
+
+    integer function diffmap_denoise_min_neigs(max_neigs) result(nmin_rank)
+        integer, intent(in) :: max_neigs
+        nmin_rank = 1
+        if( max_neigs >= 2 ) nmin_rank = 2
+    end function diffmap_denoise_min_neigs
+
+    integer function diffmap_denoise_initial_neigs_from_gap(spec, nmin_rank) result(nkeep)
+        real,    intent(in) :: spec(:)
+        integer, intent(in) :: nmin_rank
+        real :: best_gap, gap
+        integer :: i
+        if( size(spec) <= 1 )then
+            nkeep = 1
+            return
+        endif
+        best_gap = -huge(best_gap)
+        nkeep = min(max(nmin_rank, 2), size(spec))
+        do i = 1, size(spec) - 1
+            gap = spec(i) - spec(i+1)
+            if( gap > best_gap )then
+                best_gap = gap
+                nkeep = i
+            endif
+        end do
+        nkeep = max(nmin_rank, min(size(spec), nkeep))
+    end function diffmap_denoise_initial_neigs_from_gap
+
+    subroutine estimate_diffmap_denoise_icm_rank_stats(spec, labels, mu_drop, mu_keep, var_drop, var_keep)
+        real,    intent(in)  :: spec(:)
+        integer, intent(in)  :: labels(:)
+        real,    intent(out) :: mu_drop, mu_keep, var_drop, var_keep
+        integer :: ndrop, nkeep, i
+        ndrop = count(labels == 0)
+        nkeep = count(labels == 1)
+        if( ndrop > 0 )then
+            mu_drop = sum(spec, mask=(labels == 0)) / real(ndrop)
+        else
+            mu_drop = spec(size(spec))
+        endif
+        if( nkeep > 0 )then
+            mu_keep = sum(spec, mask=(labels == 1)) / real(nkeep)
+        else
+            mu_keep = spec(1)
+        endif
+        var_drop = 0.
+        var_keep = 0.
+        do i = 1, size(spec)
+            if( labels(i) == 0 )then
+                var_drop = var_drop + (spec(i) - mu_drop)**2
+            else
+                var_keep = var_keep + (spec(i) - mu_keep)**2
+            endif
+        end do
+        var_drop = max(var_drop / real(max(1, ndrop)), 1.e-3)
+        var_keep = max(var_keep / real(max(1, nkeep)), 1.e-3)
+    end subroutine estimate_diffmap_denoise_icm_rank_stats
+
+    subroutine update_diffmap_denoise_icm_rank_site(spec, labels, ind, beta, alpha, nmin_rank, nmax_rank, &
+                                                    mu_drop, mu_keep, var_drop, var_keep, label_new)
+        real,    intent(in)  :: spec(:), beta, alpha, mu_drop, mu_keep, var_drop, var_keep
+        integer, intent(in)  :: labels(:), ind, nmin_rank, nmax_rank
+        integer, intent(out) :: label_new
+        real :: cost_drop, cost_keep
+        integer :: kfree
+        cost_drop = (spec(ind) - mu_drop)**2 / var_drop
+        cost_keep = (spec(ind) - mu_keep)**2 / var_keep
+        kfree = min(max(nmin_rank, 4), nmax_rank)
+        cost_keep = cost_keep + alpha * real(max(0, ind - kfree)) / real(max(1, nmax_rank - kfree))
+        if( ind > 1 )then
+            if( labels(ind-1) /= 0 ) cost_drop = cost_drop + beta
+            if( labels(ind-1) /= 1 ) cost_keep = cost_keep + beta
+        endif
+        if( ind < size(labels) )then
+            if( labels(ind+1) /= 0 ) cost_drop = cost_drop + beta
+            if( labels(ind+1) /= 1 ) cost_keep = cost_keep + beta
+        endif
+        if( ind > 1 )then
+            if( labels(ind-1) == 0 ) cost_keep = cost_keep + 2. * beta
+        endif
+        if( ind < size(labels) )then
+            if( labels(ind+1) == 1 ) cost_drop = cost_drop + 2. * beta
+        endif
+        if( cost_keep < cost_drop )then
+            label_new = 1
+        else
+            label_new = 0
+        endif
+    end subroutine update_diffmap_denoise_icm_rank_site
+
+    real function score_diffmap_denoise_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank) result(score)
+        real,    intent(in) :: spec(:), beta, alpha
+        integer, intent(in) :: labels(:), nmin_rank, nmax_rank
+        real :: mu_drop, mu_keep, var_drop, var_keep
+        integer :: i, kfree
+        call estimate_diffmap_denoise_icm_rank_stats(spec, labels, mu_drop, mu_keep, var_drop, var_keep)
+        kfree = min(max(nmin_rank, 4), nmax_rank)
+        score = 0.
+        do i = 1, size(spec)
+            if( labels(i) == 1 )then
+                score = score + (spec(i) - mu_keep)**2 / var_keep
+                score = score + alpha * real(max(0, i - kfree)) / real(max(1, nmax_rank - kfree))
+            else
+                score = score + (spec(i) - mu_drop)**2 / var_drop
+            endif
+        end do
+        do i = 1, size(spec) - 1
+            if( labels(i) /= labels(i+1) ) score = score + beta
+            if( labels(i) == 0 .and. labels(i+1) == 1 ) score = score + 2. * beta
+        end do
+    end function score_diffmap_denoise_icm_rank_solution
+
+    subroutine calc_diffmap_reconstruction_error(raw_imgs, den_imgs, rmse, rel_rmse)
+        type(image), intent(inout) :: raw_imgs(:), den_imgs(:)
+        real,        intent(out)   :: rmse, rel_rmse
+        real, allocatable :: raw_vec(:), den_vec(:)
+        real(kind=8) :: ssq, raw_ssq
+        integer(kind=8) :: npix_total
+        integer :: i
+        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('reconstruction error image count mismatch; diffmap_denoise_project')
+        ssq        = 0.d0
+        raw_ssq    = 0.d0
+        npix_total = 0_8
+        do i = 1, size(raw_imgs)
+            raw_vec = raw_imgs(i)%serialize()
+            den_vec = den_imgs(i)%serialize()
+            if( size(raw_vec) /= size(den_vec) ) THROW_HARD('reconstruction error image size mismatch; diffmap_denoise_project')
+            ssq        = ssq + sum(real(raw_vec - den_vec, kind=8) * real(raw_vec - den_vec, kind=8))
+            raw_ssq    = raw_ssq + sum(real(raw_vec, kind=8) * real(raw_vec, kind=8))
+            npix_total = npix_total + int(size(raw_vec), kind=8)
+            deallocate(raw_vec, den_vec)
+        end do
+        if( npix_total > 0_8 )then
+            rmse = real(sqrt(ssq / real(npix_total, kind=8)))
+        else
+            rmse = 0.
+        endif
+        rel_rmse = real(sqrt(ssq / max(raw_ssq, real(DTINY, kind=8))))
+    end subroutine calc_diffmap_reconstruction_error
 
     subroutine write_diffmap_stack_image(fname, indstk, img)
         type(string), intent(in)    :: fname

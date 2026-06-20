@@ -23,32 +23,35 @@ end type graph_mode_context
 
 contains
 
-    subroutine graph_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls)
+    subroutine graph_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
         type(diffmap_graph), target, intent(in) :: graph
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
+        integer, optional,        intent(in)  :: rank_keep_override
         select case(lowercase(trim(graph%steering)))
             case('none')
-                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta=.true.)
+                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta=.true., &
+                                           rank_keep_override=rank_keep_override)
             case('so2')
-                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls)
+                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override)
             case('se2')
-                call se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls)
+                call se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override)
             case DEFAULT
                 write(logfhandle,'(A,A)') 'Graph coefficient denoising skipped: unknown steering=', trim(graph%steering)
                 call flush(logfhandle)
         end select
     end subroutine graph_coeffproj_denoise
 
-    subroutine so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta)
+    subroutine so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta, rank_keep_override)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
         type(diffmap_graph), target, intent(in) :: graph
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
         logical, optional,        intent(in)  :: force_zero_theta
+        integer, optional,        intent(in)  :: rank_keep_override
         type(parameters) :: params_pft
         type(polarft_calc) :: pftc
         type(image), allocatable :: imgs_work(:)
@@ -80,7 +83,11 @@ contains
         nrots     = pftc%get_nrots()
         nk        = kfromto(2) - kfromto(1) + 1
         mode_max  = min(max(0, params%steerable_nmodes), max(0, pftsz - 1))
-        rank_keep = min(max(2, params%k_nn), nptcls)
+        if( present(rank_keep_override) )then
+            rank_keep = min(max(1, rank_keep_override), nptcls)
+        else
+            rank_keep = min(max(2, params%k_nn), nptcls)
+        endif
         allocate(pfts(pftsz,nk,nptcls), pfts_hat(pftsz,nk,nptcls))
         pfts     = cmplx(0.,0.,kind=sp)
         pfts_hat = cmplx(0.,0.,kind=sp)
@@ -123,12 +130,13 @@ contains
         deallocate(pfts, pfts_hat, pft_tmp, mode_coeff, mode_hat)
     end subroutine so2_coeffproj_denoise
 
-    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls)
+    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
         type(diffmap_graph), target, intent(in) :: graph
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
+        integer, optional,        intent(in)  :: rank_keep_override
         type(image), allocatable :: imgs_sync(:), den_sync(:)
         type(image) :: avg_img, tmp_img
         real, allocatable :: phi(:), sx(:), sy(:), rmat_rot(:,:,:)
@@ -160,7 +168,8 @@ contains
             call imgs_sync(i)%copy(avg_img)
             call imgs_sync(i)%add(tmp_img)
         end do
-        call so2_coeffproj_denoise(params, imgs_sync, avg, graph, den_sync, force_zero_theta=.true.)
+        call so2_coeffproj_denoise(params, imgs_sync, avg, graph, den_sync, force_zero_theta=.true., &
+                                   rank_keep_override=rank_keep_override)
         if( .not. allocated(den_sync) )then
             call dealloc_imgarr(imgs_sync)
             call avg_img%kill
