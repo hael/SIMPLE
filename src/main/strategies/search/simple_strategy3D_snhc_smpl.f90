@@ -44,7 +44,7 @@ contains
         real    :: sorted_corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         real    :: cxy(3), inpl_corr, inpl_dist, neigh_frac, power
         integer :: vec_nrots(self%s%nrots), sorted_inds(self%s%nrefs)
-        integer :: iref, isample, nrefs_bound, inpl_ind, order_ind, smpl_nrefs, smpl_ninpl
+        integer :: iref, isample, nrefs_bound, inpl_ind, order_ind, smpl_nrefs, smpl_ninpl, smpl_rank
         logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! thread index
@@ -107,7 +107,8 @@ contains
             ! Projection direction samling
             sorted_corrs = s3D%proj_space_corrs(:,self%s%ithr)
             call power_sampling( power, self%s%nrefs, sorted_corrs, sorted_inds, smpl_nrefs,&
-                                &iref, self%s%nrefs_eval, inpl_corr )
+                                &iref, smpl_rank, inpl_corr )
+            self%s%nrefs_eval = nrefs_bound
             ! In-plane search
             call self%s%inpl_srch(ref=iref)
             ! prepare weights and orientations

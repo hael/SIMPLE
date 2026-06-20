@@ -90,18 +90,20 @@ contains
         extremal_decay2D = min(SNHC2D_INITFRAC, max(0.,extremal_decay2D))
     end function extremal_decay2D
 
-    ! is cosine decay with updated bounds
+    ! cosine anneal: neigh_frac goes from NEIGH_FRAC_START (10% of refs searched)
+    ! to NEIGH_FRAC_STOP (50% of refs searched) over [1, maxits], then holds at NEIGH_FRAC_STOP
     pure real function extremal_decay( it, maxits )
         integer, intent(in) :: it, maxits
-        if( it <=  2 )then
-            ! because first iteration is greedy
-            extremal_decay = 0.5
-        else if( it <= maxits )then
-            ! cosine
-            extremal_decay = 0.5**2 * (1.0 + cos(real(it)*PI / real(maxits)))
+        real, parameter :: NEIGH_FRAC_START = 0.95  ! 5% of refs searched at it=1
+        real, parameter :: NEIGH_FRAC_STOP  = 0.3   ! 70% of refs searched at it=maxits
+        real :: t
+        if( it <= maxits )then
+            t = real(it - 1) / real(max(1, maxits - 1))
+            extremal_decay = NEIGH_FRAC_STOP + (NEIGH_FRAC_START - NEIGH_FRAC_STOP) &
+                            &* 0.5 * (1.0 + cos(t * PI))
         else
-            ! off
-            extremal_decay = 0.0
+            ! annealing complete: hold at final fraction for remaining iterations
+            extremal_decay = NEIGH_FRAC_STOP
         endif
     end function extremal_decay
 
