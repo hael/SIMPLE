@@ -320,14 +320,16 @@ contains
         type(sp_project) :: outproj
         type(string), allocatable :: raw_stks(:), den_stks(:)
         type(string) :: map_fname
+        type(image)  :: img_blank
         integer, allocatable :: cls_inds(:), cls_pops(:)
         logical, allocatable :: processed(:)
-        logical :: l_phflip
-        integer :: icls, nptcls, nprocessed, funit_map
+        logical :: l_phflip, l_img_blank_init
+        integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
         nptcls = spproj%os_ptcl2D%get_noris()
         allocate(processed(nptcls), source=.false.)
+        l_img_blank_init = .false.
         funit_map = -1
         allocate(raw_stks(1), den_stks(1))
         if( l_write_project )then
@@ -349,10 +351,22 @@ contains
             call write_diffmap_denoised_class(params, build, spproj, cls_inds(icls), l_phflip, &
                 raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project, icls)
         end do
+        if( l_write_project )then
+            ldim_blank = [params%box_crop, params%box_crop, 1]
+            call img_blank%new(ldim_blank, params%smpd_crop, wthreads=.false.)
+            l_img_blank_init = .true.
+            call img_blank%zero_and_unflag_ft
+            do iptcl = 1, nptcls
+                if( spproj%os_ptcl2D%get_state(iptcl) > 0 ) cycle
+                call write_diffmap_stack_image(raw_stks(1), iptcl, img_blank)
+                call write_diffmap_stack_image(den_stks(1), iptcl, img_blank)
+                processed(iptcl) = .true.
+            end do
+        endif
         close(funit_map)
         if( l_write_project .and. any(.not. processed) )then
             write(logfhandle,'(A,I10)') 'unprocessed particles: ', count(.not. processed)
-            THROW_HARD('diffmap_denoise_project requires every ptcl2D particle to have a valid class assignment')
+            THROW_HARD('diffmap_denoise_project requires every active ptcl2D particle to have a valid class assignment')
         endif
         if( l_write_project )then
             call write_diffmap_project(params, spproj, raw_stks(1), den_stks(1), outproj)
@@ -366,6 +380,7 @@ contains
         if( allocated(cls_inds) ) deallocate(cls_inds)
         if( allocated(cls_pops) ) deallocate(cls_pops)
         if( allocated(processed) ) deallocate(processed)
+        if( l_img_blank_init ) call img_blank%kill
         if( map_fname%is_allocated() ) call map_fname%kill
     end subroutine run_diffmap_denoise_project
 
@@ -375,9 +390,9 @@ contains
         integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
         logical, intent(out) :: l_phflip
         type(string) :: ctfstr
-        integer, allocatable :: pinds(:), stk_offsets(:)
+        integer, allocatable :: pinds(:), stk_offsets(:), stk_nptcls(:)
         logical, allocatable :: seen_slots(:)
-        integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode, nptcls_slots
+        integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode, nptcls_slots, nptcls_active
         if( trim(params%oritype) /= 'ptcl2D' )then
             THROW_HARD('diffmap_denoise_project supports oritype=ptcl2D input only')
         endif
@@ -405,12 +420,13 @@ contains
         endif
         nstks = spproj%os_stk%get_noris()
         if( nstks < 1 ) THROW_HARD('empty stack field; diffmap_denoise_project')
-        allocate(stk_offsets(nstks), source=0)
+        allocate(stk_offsets(nstks), stk_nptcls(nstks), source=0)
         nptcls_slots = 0
         ctf_mode = 0
         do istk = 1, nstks
             stk_offsets(istk) = nptcls_slots
-            nptcls_slots = nptcls_slots + spproj%os_stk%get_int(istk, 'nptcls_stk')
+            stk_nptcls(istk) = get_diffmap_stack_nptcls(spproj, istk)
+            nptcls_slots = nptcls_slots + stk_nptcls(istk)
             if( .not. spproj%os_stk%isthere(istk, 'ctf') ) THROW_HARD('stack ctf key missing; diffmap_denoise_project')
             call spproj%os_stk%getter(istk, 'ctf', ctfstr)
             select case(trim(ctfstr%to_char()))
@@ -426,10 +442,10 @@ contains
         enddo
         l_phflip = ctf_mode == CTFFLAG_YES
         allocate(seen_slots(nptcls_slots), source=.false.)
+        nptcls_active = 0
         do iptcl = 1, nptcls
-            if( spproj%os_ptcl2D%get_state(iptcl) <= 0 )then
-                THROW_HARD('diffmap_denoise_project requires all ptcl2D particles to be active')
-            endif
+            if( spproj%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
+            nptcls_active = nptcls_active + 1
             if( .not. spproj%os_ptcl2D%isthere(iptcl, 'class') )then
                 THROW_HARD('ptcl2D class assignment missing; diffmap_denoise_project')
             endif
@@ -437,7 +453,7 @@ contains
             if( cls <= 0 ) THROW_HARD('ptcl2D class assignment must be positive; diffmap_denoise_project')
             call spproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
             if( stkind < 1 .or. stkind > nstks ) THROW_HARD('invalid particle stkind; diffmap_denoise_project')
-            if( indstk < 1 .or. indstk > spproj%os_stk%get_int(stkind, 'nptcls_stk') )then
+            if( indstk < 1 .or. indstk > stk_nptcls(stkind) )then
                 THROW_HARD('invalid particle indstk; diffmap_denoise_project')
             endif
             slot = stk_offsets(stkind) + indstk
@@ -445,6 +461,7 @@ contains
             if( seen_slots(slot) ) THROW_HARD('duplicate particle stack slot; diffmap_denoise_project')
             seen_slots(slot) = .true.
         enddo
+        if( nptcls_active < 1 ) THROW_HARD('No active ptcl2D particles found; diffmap_denoise_project')
         cls_inds = spproj%os_ptcl2D%get_label_inds('class')
         cls_inds = pack(cls_inds, mask=cls_inds > 0)
         if( size(cls_inds) < 1 ) THROW_HARD('No positive ptcl2D classes found; diffmap_denoise_project')
@@ -455,16 +472,48 @@ contains
                 cls_pops(icls) = size(pinds)
                 deallocate(pinds)
             endif
+            if( cls_pops(icls) == 0 ) cycle
             if( cls_pops(icls) < 3 )then
                 write(logfhandle,'(A,I8,A,I8)') 'class=', cls_inds(icls), ' pop=', cls_pops(icls)
                 THROW_HARD('diffmap_denoise_project requires at least 3 particles per class')
             endif
         end do
-        if( sum(cls_pops) /= nptcls ) THROW_HARD('class populations do not cover all particles; diffmap_denoise_project')
+        cls_inds = pack(cls_inds, mask=cls_pops > 0)
+        cls_pops = pack(cls_pops, mask=cls_pops > 0)
+        if( size(cls_inds) < 1 ) THROW_HARD('No active ptcl2D classes found; diffmap_denoise_project')
+        if( sum(cls_pops) /= nptcls_active ) THROW_HARD('class populations do not cover all active particles; diffmap_denoise_project')
         if( allocated(seen_slots) ) deallocate(seen_slots)
+        if( allocated(stk_nptcls) ) deallocate(stk_nptcls)
         if( allocated(stk_offsets) ) deallocate(stk_offsets)
         call ctfstr%kill
     end subroutine validate_diffmap_denoise_project
+
+    integer function get_diffmap_stack_nptcls(spproj, istk) result(nptcls_stk)
+        type(sp_project), intent(in) :: spproj
+        integer,          intent(in) :: istk
+        integer :: fromp, top
+        nptcls_stk = 0
+        if( spproj%os_stk%isthere(istk, 'nptcls_stk') )then
+            nptcls_stk = spproj%os_stk%get_int(istk, 'nptcls_stk')
+        else if( spproj%os_stk%isthere(istk, 'fromp') .and. spproj%os_stk%isthere(istk, 'top') )then
+            fromp = spproj%os_stk%get_fromp(istk)
+            top   = spproj%os_stk%get_top(istk)
+            nptcls_stk = top - fromp + 1
+        endif
+        if( nptcls_stk < 1 )then
+            write(logfhandle,'(A,I8)') 'invalid stack particle count at stkind=', istk
+            THROW_HARD('diffmap_denoise_project requires stack nptcls_stk or valid fromp/top range')
+        endif
+    end function get_diffmap_stack_nptcls
+
+    integer function get_n_active_ptcl2D(spproj) result(n_active)
+        type(sp_project), intent(in) :: spproj
+        integer :: iptcl
+        n_active = 0
+        do iptcl = 1, spproj%os_ptcl2D%get_noris()
+            if( spproj%os_ptcl2D%get_state(iptcl) > 0 ) n_active = n_active + 1
+        end do
+    end function get_n_active_ptcl2D
 
     subroutine filter_classes_by_assignment(cline, cls_inds, cls_pops)
         class(cmdline),                 intent(inout) :: cline
@@ -1106,18 +1155,26 @@ contains
             call den_part%kill
         end do
         do iptcl = 1, nptcls
-            if( row_part(iptcl) < 1 .or. row_part(iptcl) > nparts_run )then
-                THROW_HARD('invalid particle part while writing diffmap partial project')
+            if( spproj%os_ptcl2D%get_state(iptcl) > 0 )then
+                if( row_part(iptcl) < 1 .or. row_part(iptcl) > nparts_run )then
+                    THROW_HARD('invalid particle part while writing diffmap partial project')
+                endif
+                if( row_local(iptcl) < 1 .or. row_local(iptcl) > part_counts(row_part(iptcl)) )then
+                    THROW_HARD('invalid particle local stack index while writing diffmap partial project')
+                endif
+                call outproj%os_ptcl2D%set(iptcl, 'stkind', row_part(iptcl))
+                call outproj%os_ptcl3D%set(iptcl, 'stkind', row_part(iptcl))
+                call outproj%os_ptcl2D%set(iptcl, 'indstk', row_local(iptcl))
+                call outproj%os_ptcl3D%set(iptcl, 'indstk', row_local(iptcl))
+            else
+                call outproj%os_ptcl2D%set(iptcl, 'stkind', 1)
+                call outproj%os_ptcl3D%set(iptcl, 'stkind', 1)
+                call outproj%os_ptcl2D%set(iptcl, 'indstk', 1)
+                call outproj%os_ptcl3D%set(iptcl, 'indstk', 1)
             endif
-            if( row_local(iptcl) < 1 .or. row_local(iptcl) > part_counts(row_part(iptcl)) )then
-                THROW_HARD('invalid particle local stack index while writing diffmap partial project')
-            endif
-            call outproj%os_ptcl2D%set(iptcl, 'stkind', row_part(iptcl))
-            call outproj%os_ptcl3D%set(iptcl, 'stkind', row_part(iptcl))
-            call outproj%os_ptcl2D%set(iptcl, 'indstk', row_local(iptcl))
-            call outproj%os_ptcl3D%set(iptcl, 'indstk', row_local(iptcl))
         end do
         do iptcl = 1, nptcls
+            if( spproj%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
             call outproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
             if( stkind /= row_part(iptcl) .or. indstk /= row_local(iptcl) )then
                 THROW_HARD('ptcl2D stack mapping mismatch in diffmap partial project')
@@ -1150,33 +1207,39 @@ contains
         integer,          intent(in)    :: nparts_run
         type(sp_project) :: spproj, outproj
         type(string) :: raw_part, den_part
-        integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:), stk_offsets(:), slot_pind(:)
+        integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:), stk_offsets(:), slot_pind(:), stk_nptcls(:)
         integer, allocatable :: part_counts(:), part_nimgs(:), part_seen(:)
-        integer :: nptcls, nstks, istk, pind, ipart, total_count, ldim_raw(3), ldim_den(3), nraw, nden
+        integer :: nptcls, nptcls_active, nstks, istk, pind, ipart, total_count, ldim_raw(3), ldim_den(3), nraw, nden
         integer :: nptcls_slots, slot, local_slot
         logical :: l_phflip
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call spproj%read(params%projfile)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         nptcls = spproj%os_ptcl2D%get_noris()
+        nptcls_active = get_n_active_ptcl2D(spproj)
         nstks  = spproj%os_stk%get_noris()
         allocate(row_part(nptcls), row_local(nptcls), row_stkind(nptcls), row_indstk(nptcls), source=0)
-        allocate(stk_offsets(nstks), source=0)
+        allocate(stk_offsets(nstks), stk_nptcls(nstks), source=0)
         allocate(part_counts(nparts_run), part_nimgs(nparts_run), source=0)
         nptcls_slots = 0
         do istk = 1, nstks
             stk_offsets(istk) = nptcls_slots
-            nptcls_slots = nptcls_slots + spproj%os_stk%get_int(istk, 'nptcls_stk')
+            stk_nptcls(istk) = get_diffmap_stack_nptcls(spproj, istk)
+            nptcls_slots = nptcls_slots + stk_nptcls(istk)
         end do
         allocate(slot_pind(nptcls_slots), source=0)
         call read_diffmap_worker_maps(params, nparts_run, row_part, row_local, row_stkind, row_indstk, total_count)
-        if( total_count /= nptcls )then
-            write(logfhandle,'(A,I10,A,I10)') 'Diffmap denoise merge: mapped particles=', total_count, ' expected=', nptcls
-            THROW_HARD('distributed diffmap_denoise_project did not produce exactly one row per particle')
+        if( total_count /= nptcls_active )then
+            write(logfhandle,'(A,I10,A,I10)') 'Diffmap denoise merge: mapped particles=', total_count, ' expected_active=', nptcls_active
+            THROW_HARD('distributed diffmap_denoise_project did not produce exactly one row per active particle')
         endif
         do pind = 1, nptcls
+            if( spproj%os_ptcl2D%get_state(pind) <= 0 ) cycle
             if( row_part(pind) < 1 .or. row_local(pind) < 1 ) THROW_HARD('missing particle in diffmap denoise worker maps')
             if( row_stkind(pind) < 1 .or. row_stkind(pind) > nstks ) THROW_HARD('invalid stack index in diffmap denoise worker maps')
+            if( row_indstk(pind) < 1 .or. row_indstk(pind) > stk_nptcls(row_stkind(pind)) )then
+                THROW_HARD('invalid stack-local index in diffmap denoise worker maps')
+            endif
             slot = stk_offsets(row_stkind(pind)) + row_indstk(pind)
             if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid stack slot in diffmap denoise worker maps')
             if( slot_pind(slot) /= 0 ) THROW_HARD('duplicate stack slot in diffmap denoise worker maps')
@@ -1213,6 +1276,7 @@ contains
         do ipart = 1, nparts_run
             part_seen = 0
             do pind = 1, nptcls
+                if( spproj%os_ptcl2D%get_state(pind) <= 0 ) cycle
                 if( row_part(pind) /= ipart ) cycle
                 local_slot = row_local(pind)
                 if( local_slot < 1 .or. local_slot > part_nimgs(ipart) )then
@@ -1232,7 +1296,7 @@ contains
         call spproj%kill
         if( allocated(cls_inds) ) deallocate(cls_inds)
         if( allocated(cls_pops) ) deallocate(cls_pops)
-        deallocate(row_part, row_local, row_stkind, row_indstk, stk_offsets, slot_pind)
+        deallocate(row_part, row_local, row_stkind, row_indstk, stk_offsets, slot_pind, stk_nptcls)
         deallocate(part_counts, part_nimgs, part_seen)
         if( raw_part%is_allocated() ) call raw_part%kill
         if( den_part%is_allocated() ) call den_part%kill
