@@ -200,10 +200,10 @@ sigma update after that assignment is consumed.
 ### `abinitio3D`
 
 `abinitio3D` sets `objfun='euclid'` and `sigma_est='global'`, then executes
-staged `refine3D` runs. The stage controller uses `shc_smpl` in early stages,
-`prob` in middle stages, and `prob_neigh` in later stages; fixed-orientation
-multivolume mode uses `prob_state`. See
-[src/main/simple_abinitio_controller.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_controller.f90:118).
+staged `refine3D` runs. The stage controller uses `snhc_smpl` in stage 1,
+`shc_smpl` in stage 2, `prob` in middle stages, and `prob_neigh` in later
+stages; fixed-orientation multivolume mode uses `prob_state`. See
+[src/main/simple_abinitio_controller.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_controller.f90:220).
 
 ML consumption is staged separately from sigma calculation. Standard
 `abinitio3D` disables `ml_reg` for stages 1-2 and enables it for stages 3-8,

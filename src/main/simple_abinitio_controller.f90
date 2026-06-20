@@ -224,6 +224,8 @@ contains
         cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
+        else if( istage == 1 )then
+            cfg%refine = 'snhc_smpl'
         else if( istage <  PROB_REFINE_STAGE )then
             cfg%refine = 'shc_smpl'
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
