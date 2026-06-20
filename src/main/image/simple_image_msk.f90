@@ -262,31 +262,36 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine density_inoutside_mask
 
-    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams )
+    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams, verbose )
         class(parameters),              intent(in)    :: params
         class(image),                   intent(inout) :: imgs(:)
         integer,                        intent(in)    :: ngrow, winsz, edge
         real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
         logical, optional,              intent(in)    :: write2disk
         real,    optional, allocatable, intent(inout) :: min_diams(:)
+        logical, optional,              intent(in)    :: verbose
         type(image_bin),   allocatable                :: cc_img(:)
         type(image_bin)                               :: cc_min_dist
         integer :: i, n
         real    :: mm(2)
-        logical :: l_write
+        logical :: l_write, l_verbose
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
         l_write = l_write .and. params%part.eq.1
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         if( allocated(diams)     ) deallocate(diams)
         if( allocated(shifts)    ) deallocate(shifts)
         ! allocate
         allocate(diams(n), shifts(n,2), source=0.)
         allocate(cc_img(n))
-        if( trim(params%automsk).eq.'tight' )then
-            write(logfhandle,'(A)') '>>> 2D AUTOMASKING, TIGHT'
-        else
-            write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
+        if( l_verbose )then
+            if( trim(params%automsk).eq.'tight' )then
+                write(logfhandle,'(A)') '>>> 2D AUTOMASKING, TIGHT'
+            else
+                write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
+            endif
         endif
         call imgs(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)

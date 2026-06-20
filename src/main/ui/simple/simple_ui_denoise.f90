@@ -254,7 +254,11 @@ contains
             'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
         call diffmap_denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 10-30)', &
-            'Local nearest neighbors used for non-steerable diffusion maps', '# neighbors', .false., 10.0)
+            'Local nearest neighbors used for non-steerable diffusion maps', &
+            '# neighbors', .false., 10.0)
+        call diffmap_denoise_project%add_input(UI_FILT, 'preimage_mode', 'multi', &
+            'Diffusion-map pre-image mode', &
+            'Pre-image reconstruction mode(spectral|local){local}', '(spectral|local){local}', .false., 'local')
         call diffmap_denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
         call diffmap_denoise_project%add_input(UI_COMP, nparts, required_override=.false., &

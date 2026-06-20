@@ -126,6 +126,7 @@ type :: parameters
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
+    character(len=STDLEN)     :: preimage_mode='spectral' !< Diffusion-map denoise pre-image mode(spectral|local){spectral}
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
@@ -272,7 +273,7 @@ type :: parameters
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
-    character(len=STDLEN)     :: matchimg_source='raw' !< particle image source for alignment/state assignment(raw|denoised){raw}
+    character(len=STDLEN)     :: match_src='raw' !< particle image source for alignment/state assignment(raw|den){raw}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -298,7 +299,7 @@ type :: parameters
     ! class-average quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}
     character(len=STDLEN)     :: quality_model='chunk_default_v2'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: recimg_source='raw'  !< particle image source for reconstruction(raw|denoised){raw}
+    character(len=STDLEN)     :: rec_src='raw'  !< particle image source for reconstruction(raw|den){raw}
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}

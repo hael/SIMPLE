@@ -63,16 +63,16 @@ contains
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
         logical :: l_backup_imgs, l_copy_rec_from_match
         l_backup_imgs = present(imgs4rec)
-        l_copy_rec_from_match = l_backup_imgs .and. trim(params%recimg_source) == trim(params%matchimg_source)
+        l_copy_rec_from_match = l_backup_imgs .and. trim(params%rec_src) == trim(params%match_src)
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( trim(params%matchimg_source) == 'raw' )then
+        if( trim(params%match_src) == 'raw' )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         else
-            call discrete_read_imgbatch_source(params, build, trim(params%matchimg_source), &
+            call discrete_read_imgbatch_source(params, build, trim(params%match_src), &
                 nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
         endif
         if( l_backup_imgs .and. .not. l_copy_rec_from_match )then
-            call discrete_read_imgbatch_source(params, build, trim(params%recimg_source), &
+            call discrete_read_imgbatch_source(params, build, trim(params%rec_src), &
                 nptcls_here, pinds_here, [1,nptcls_here], imgs4rec)
         endif
         call tmp_imgs(1)%memoize_mask_coords
@@ -103,7 +103,18 @@ contains
         class(image),      intent(inout) :: ptcl_match_imgs(params%nthr)
         class(image),      intent(inout) :: ptcl_match_imgs_pad(params%nthr)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
+        logical :: l_copy_rec_from_match
+        l_copy_rec_from_match = trim(params%rec_src) == trim(params%match_src)
+        if( trim(params%match_src) == 'raw' )then
+            call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
+        else
+            call discrete_read_imgbatch_source(params, build, trim(params%match_src), &
+                nptcls_here, pinds, [1,nptcls_here], build%imgbatch(:nptcls_here))
+        endif
+        if( .not. l_copy_rec_from_match )then
+            call discrete_read_imgbatch_source(params, build, trim(params%rec_src), &
+                nptcls_here, pinds, [1,nptcls_here], ptcl_imgs)
+        endif
         call build%pftc%reallocate_ptcls(nptcls_here, pinds)
         pdim_interp = build%pftc%get_pdim_interp()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
@@ -113,7 +124,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
+            if( l_copy_rec_from_match ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )

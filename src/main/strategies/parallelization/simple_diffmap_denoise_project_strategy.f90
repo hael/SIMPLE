@@ -8,6 +8,7 @@ use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_image,              only: image
 use simple_image_msk,          only: automask2D
+use simple_diff_map_graphs,    only: diffmap_graph
 use simple_classaverager,      only: transform_ptcls
 use simple_imgfile,            only: imgfile
 use simple_srch_sort_loc,      only: hpsort
@@ -127,6 +128,8 @@ contains
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
+        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',     10)
+        if( .not. cline%defined('preimage_mode') ) call cline%set('preimage_mode', 'local')
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -343,11 +346,8 @@ contains
         write(funit_map,'(A)') '# particle_index stack_index stack_local_index output_stack_index'
         nprocessed = 0
         do icls = 1, size(cls_inds)
-            write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise project: class=', cls_inds(icls), &
-                ' class_index=', icls, ' nptcls=', cls_pops(icls)
-            call flush(logfhandle)
             call write_diffmap_denoised_class(params, build, spproj, cls_inds(icls), l_phflip, &
-                raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project)
+                raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project, icls)
         end do
         close(funit_map)
         if( l_write_project .and. any(.not. processed) )then
@@ -392,6 +392,12 @@ contains
         if( trim(params%steering) /= 'none' )then
             THROW_HARD('diffmap_denoise_project supports non-steerable diffusion maps only; use steering=none')
         endif
+        select case(trim(lowercase(params%preimage_mode)))
+            case('spectral','local')
+            case DEFAULT
+                THROW_HARD('diffmap_denoise_project preimage_mode must be spectral|local')
+        end select
+        if( params%k_nn < 1 ) THROW_HARD('diffmap_denoise_project requires k_nn >= 1')
         nptcls = spproj%os_ptcl2D%get_noris()
         if( nptcls < 1 ) THROW_HARD('empty ptcl2D field; diffmap_denoise_project')
         if( spproj%os_ptcl3D%get_noris() /= nptcls )then
@@ -480,7 +486,7 @@ contains
     end subroutine filter_classes_by_assignment
 
     subroutine write_diffmap_denoised_class(params, build, spproj, cls_id, l_phflip, raw_stks, den_stks, &
-                                            processed, nprocessed, l_dense_output, map_unit, l_index_by_pind)
+                                            processed, nprocessed, l_dense_output, map_unit, l_index_by_pind, class_index)
         use simple_diff_map_graphs,  only: diffmap_graph, build_cls_split_graph
         use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
@@ -496,6 +502,7 @@ contains
         logical,          intent(in)    :: l_dense_output
         integer,          intent(in)    :: map_unit
         logical,          intent(in)    :: l_index_by_pind
+        integer,          intent(in)    :: class_index
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:), den_ptcls(:)
         type(image) :: cavg_raw
@@ -503,9 +510,11 @@ contains
         real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: pinds(:)
+        character(len=STDLEN) :: preimage_mode
         integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters
         real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise, recon_rmse, recon_rel_rmse, icm_score
-        logical :: icm_converged
+        real :: resid_ratio
+        logical :: icm_converged, icm_more_iters
         call transform_ptcls(params, build, spproj, 'ptcl2D', cls_id, imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
         if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; diffmap_denoise_project')
         nptcls = size(imgs)
@@ -525,7 +534,7 @@ contains
         params_mask%smpd    = cavg_raw%get_smpd()
         params_mask%msk     = real(class_ldim(1) / 2) - COSMSKHALFWIDTH
         call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, &
-                        class_diams, class_shifts)
+                        class_diams, class_shifts, verbose=.false.)
         class_moldiam = params_mask%smpd * real(min(round2even(class_diams(1) / params_mask%smpd + &
             2. * COSMSKHALFWIDTH), class_ldim(1)))
         class_mskdiam = class_moldiam * MSK_EXP_FAC
@@ -547,13 +556,26 @@ contains
         endif
         call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
         avg_ptcls = cavg_raw%serialize()
-        call graph_coeffproj_denoise(params, imgs, avg_ptcls, graph, den_ptcls, rank_keep_override=den_rank)
+        preimage_mode = lowercase(trim(params%preimage_mode))
+        select case(trim(preimage_mode))
+            case('spectral')
+                call graph_coeffproj_denoise(params, imgs, avg_ptcls, graph, den_ptcls, &
+                    rank_keep_override=den_rank, verbose=.false.)
+            case('local')
+                call graph_local_residual_preimage(imgs, cavg_raw, graph, den_ptcls)
+            case DEFAULT
+                THROW_HARD('unsupported preimage_mode='//trim(params%preimage_mode)//'; expected spectral|local')
+        end select
         if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map generative denoising failed; diffmap_denoise_project')
         call calc_diffmap_reconstruction_error(imgs, den_ptcls, recon_rmse, recon_rel_rmse)
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,A,A,I8,A,F12.5,A,ES12.4,A,ES12.4)') &
-            'Diffmap denoise class model: class=', cls_id, ' nptcls=', nptcls, ' rank=', den_rank, &
-            ' icm_converged=', merge('yes','no ',icm_converged), ' icm_iters=', icm_iters, &
-            ' icm_score=', icm_score, ' rmse=', recon_rmse, ' rel_rmse=', recon_rel_rmse
+        call calc_diffmap_residual_energy_ratio(imgs, den_ptcls, cavg_raw, resid_ratio)
+        icm_more_iters = (.not. icm_converged) .and. icm_iters > 0
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,A,A,ES12.4,A,ES12.4,A,ES12.4,A,I8,A,A,A,A)') &
+            '>>> CLASS class=', cls_id, ' index=', class_index, ' nptcls=', nptcls, ' features=', den_rank, &
+            ' k_nn=', graph%k_nn, ' preimage=', trim(preimage_mode), &
+            ' recon_rmse=', recon_rmse, ' recon_rel_rmse=', recon_rel_rmse, &
+            ' resid_energy=', resid_ratio, ' icm_iters=', icm_iters, &
+            ' icm_converged=', merge('yes','no ',icm_converged), ' icm_more_iters=', merge('yes','no ',icm_more_iters)
         call flush(logfhandle)
         do j = 1, nptcls
             if( processed(pinds(j)) ) THROW_HARD('particle was processed twice; diffmap_denoise_project')
@@ -616,14 +638,11 @@ contains
             icm_converged = .false.
             icm_iters     = 0
             icm_score     = huge(icm_score)
-            write(logfhandle,'(A,I8,A,I8)') 'Diffmap denoise ICM rank warning: no eigenspectrum; class=', cls_id, &
-                ' fallback_rank=', den_rank
+            write(logfhandle,'(A,I8,A,I8)') 'Diffmap denoise rank warning: no eigenspectrum; class=', cls_id, &
+                ' fallback_features=', den_rank
             call flush(logfhandle)
         endif
         den_rank = min(max(1, den_rank), nptcls)
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'Diffmap denoise rank selection: class=', cls_id, &
-            ' nptcls=', nptcls, ' scan=', rank_scan, ' selected=', den_rank
-        call flush(logfhandle)
         if( allocated(coords) ) deallocate(coords)
         if( allocated(eigvals) ) deallocate(eigvals)
     end subroutine estimate_diffmap_denoise_rank
@@ -671,9 +690,6 @@ contains
             niter     = 0
             score     = 0.
             converged = .true.
-            write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank degenerate spectrum: class=', cls_id, &
-                ' scan=', n, ' selected=', nkeep
-            call flush(logfhandle)
             deallocate(spec)
             return
         endif
@@ -687,9 +703,6 @@ contains
         seed_names = [character(len=12) :: 'upper_gap', 'fraction']
         beta       = DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC
         complexity = DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank seeds: class=', cls_id, &
-            ' scan=', n, ' min=', nmin_rank, ' upper=', upper_rank, ' lower_fraction=', lower_rank
-        call flush(logfhandle)
         best_score     = huge(best_score)
         nkeep          = upper_rank
         niter          = 0
@@ -708,10 +721,6 @@ contains
         end do
         score     = best_score
         converged = best_converged
-        write(logfhandle,'(A,I8,A,A,A,I8,A,A,A,I8,A,F12.5)') 'Diffmap denoise ICM rank selected: class=', cls_id, &
-            ' seed=', trim(seed_names(best_seed)), ' keep=', nkeep, &
-            ' converged=', merge('yes','no ',converged), ' iterations=', niter, ' score=', score
-        call flush(logfhandle)
         deallocate(spec)
     end subroutine select_diffmap_denoise_rank_icm
 
@@ -731,10 +740,6 @@ contains
         labels = 0
         labels(1:max(nmin_rank, min(nmax_rank, seed_rank))) = 1
         if( nmax_rank < n ) labels(nmax_rank+1:n) = 0
-        write(logfhandle,'(A,I8,A,A,A,I8,A,I8,A,I8)') 'Diffmap denoise ICM rank init: class=', cls_id, &
-            ' seed=', trim(seed_name), ' init=', diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank), &
-            ' min=', nmin_rank, ' max=', nmax_rank
-        call flush(logfhandle)
         converged = .false.
         niter     = 0
         maxits    = max(DIFFMAP_DENOISE_ICM_RANK_MAXITS, n)
@@ -750,10 +755,6 @@ contains
             nchanged = count(labels /= prev_labels)
             score = score_diffmap_denoise_icm_rank_solution(spec, labels, beta, alpha, nmin_rank, nmax_rank)
             niter = iter
-            write(logfhandle,'(A,I8,A,A,A,I8,A,I8,A,I8,A,F12.5)') 'Diffmap denoise ICM rank iter: class=', cls_id, &
-                ' seed=', trim(seed_name), ' iter=', iter, ' changed=', nchanged, &
-                ' keep=', diffmap_denoise_rank_prefix(labels, nmin_rank, nmax_rank), ' score=', score
-            call flush(logfhandle)
             if( nchanged == 0 )then
                 converged = .true.
                 exit
@@ -885,6 +886,84 @@ contains
         end do
     end function score_diffmap_denoise_icm_rank_solution
 
+    subroutine graph_local_residual_preimage(raw_imgs, avg_img, graph, den_imgs)
+        type(image),       intent(inout) :: raw_imgs(:)
+        type(image),       intent(inout) :: avg_img
+        type(diffmap_graph), intent(in)  :: graph
+        type(image), allocatable, intent(out) :: den_imgs(:)
+        type(image), allocatable :: resid_heap(:)
+        real :: w, wsum
+        real :: smpd
+        integer :: i, j, p, n, ithr, ldim(3)
+        n = size(raw_imgs)
+        if( graph%n /= n ) THROW_HARD('local preimage graph/image count mismatch; diffmap_denoise_project')
+        ldim = avg_img%get_ldim()
+        smpd = avg_img%get_smpd()
+        allocate(den_imgs(n))
+        allocate(resid_heap(nthr_glob))
+        do i = 1,n
+            call den_imgs(i)%new(ldim, smpd, wthreads=.false.)
+        end do
+        do ithr = 1,nthr_glob
+            call resid_heap(ithr)%new(ldim, smpd, wthreads=.false.)
+        end do
+        !$omp parallel do default(shared) private(i,j,p,w,wsum,ithr) schedule(dynamic) proc_bind(close)
+        do i = 1, n
+            ithr = omp_get_thread_num() + 1
+            call den_imgs(i)%copy_fast(avg_img)
+            wsum = 0.
+            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                j = graph%colind(p)
+                if( j < 1 .or. j > n ) cycle
+                w = graph%w(p)
+                if( w <= real(DTINY) ) cycle
+                call resid_heap(ithr)%copy_fast(raw_imgs(j))
+                call resid_heap(ithr)%subtr(avg_img)
+                call den_imgs(i)%add(resid_heap(ithr), w)
+                wsum = wsum + w
+            end do
+            if( wsum > real(DTINY) )then
+                call den_imgs(i)%subtr(avg_img)
+                call den_imgs(i)%mul(1. / wsum)
+                call den_imgs(i)%add(avg_img)
+            else
+                call den_imgs(i)%copy_fast(raw_imgs(i))
+            endif
+        end do
+        !$omp end parallel do
+        do ithr = 1,nthr_glob
+            if( resid_heap(ithr)%exists() ) call resid_heap(ithr)%kill
+        end do
+        deallocate(resid_heap)
+    end subroutine graph_local_residual_preimage
+
+    subroutine calc_diffmap_residual_energy_ratio(raw_imgs, den_imgs, avg_img, ratio)
+        type(image), intent(inout) :: raw_imgs(:), den_imgs(:), avg_img
+        real,        intent(out)   :: ratio
+        real, allocatable :: raw_vec(:), den_vec(:), avg_vec(:)
+        real(kind=8) :: raw_ssq, den_ssq
+        integer :: i
+        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('residual energy image count mismatch; diffmap_denoise_project')
+        avg_vec = avg_img%serialize()
+        raw_ssq = 0.d0
+        den_ssq = 0.d0
+        !$omp parallel do default(shared) private(i,raw_vec,den_vec) schedule(static) proc_bind(close) &
+        !$omp& reduction(+:raw_ssq,den_ssq)
+        do i = 1, size(raw_imgs)
+            raw_vec = raw_imgs(i)%serialize()
+            den_vec = den_imgs(i)%serialize()
+            if( size(raw_vec) /= size(avg_vec) .or. size(den_vec) /= size(avg_vec) )then
+                THROW_HARD('residual energy image size mismatch; diffmap_denoise_project')
+            endif
+            raw_ssq = raw_ssq + sum(real(raw_vec - avg_vec, kind=8) * real(raw_vec - avg_vec, kind=8))
+            den_ssq = den_ssq + sum(real(den_vec - avg_vec, kind=8) * real(den_vec - avg_vec, kind=8))
+            deallocate(raw_vec, den_vec)
+        end do
+        !$omp end parallel do
+        ratio = real(sqrt(den_ssq / max(raw_ssq, real(DTINY, kind=8))))
+        deallocate(avg_vec)
+    end subroutine calc_diffmap_residual_energy_ratio
+
     subroutine calc_diffmap_reconstruction_error(raw_imgs, den_imgs, rmse, rel_rmse)
         type(image), intent(inout) :: raw_imgs(:), den_imgs(:)
         real,        intent(out)   :: rmse, rel_rmse
@@ -896,6 +975,8 @@ contains
         ssq        = 0.d0
         raw_ssq    = 0.d0
         npix_total = 0_8
+        !$omp parallel do default(shared) private(i,raw_vec,den_vec) schedule(static) proc_bind(close) &
+        !$omp& reduction(+:ssq,raw_ssq,npix_total)
         do i = 1, size(raw_imgs)
             raw_vec = raw_imgs(i)%serialize()
             den_vec = den_imgs(i)%serialize()
@@ -905,6 +986,7 @@ contains
             npix_total = npix_total + int(size(raw_vec), kind=8)
             deallocate(raw_vec, den_vec)
         end do
+        !$omp end parallel do
         if( npix_total > 0_8 )then
             rmse = real(sqrt(ssq / real(npix_total, kind=8)))
         else
@@ -973,6 +1055,7 @@ contains
         call outproj%os_ptcl2D%zero_inpl()
         call outproj%os_ptcl3D%zero_inpl()
         if( outproj%os_out%get_noris() > 0 ) call outproj%os_out%kill()
+        call preserve_diffmap_frc2D(spproj, outproj)
         call outproj%write(params%projfile)
     end subroutine write_diffmap_project
 
@@ -1047,10 +1130,20 @@ contains
         call outproj%os_ptcl2D%zero_inpl()
         call outproj%os_ptcl3D%zero_inpl()
         if( outproj%os_out%get_noris() > 0 ) call outproj%os_out%kill()
+        call preserve_diffmap_frc2D(spproj, outproj)
         call outproj%write(params%projfile)
         write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise partial project stacks: ', nparts_run, ' particles=', nptcls
         call flush(logfhandle)
     end subroutine write_diffmap_partial_project
+
+    subroutine preserve_diffmap_frc2D(spproj, outproj)
+        type(sp_project), intent(in)    :: spproj
+        type(sp_project), intent(inout) :: outproj
+        type(string) :: frcs_fname
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( file_exists(frcs_fname%to_char()) ) call outproj%add_frcs2os_out(frcs_fname, 'frc2D')
+        if( frcs_fname%is_allocated() ) call frcs_fname%kill
+    end subroutine preserve_diffmap_frc2D
 
     subroutine finalize_diffmap_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params

@@ -127,7 +127,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
@@ -185,7 +185,12 @@ contains
             do i = 1, nptcls_part_sel, batchsz_max
                 batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                 nbatch    = batchlims(2) - batchlims(1) + 1
-                call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                if( trim(params%match_src) == 'raw' )then
+                    call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                else
+                    call discrete_read_imgbatch_source(params, build, trim(params%match_src), nbatch, &
+                        pinds(batchlims(1):batchlims(2)), [1,nbatch], build%imgbatch(:nbatch))
+                endif
                 ! allocate contigous local sigma2 array for optimal caching in parallell loop
                 cmat_thr_sum = dcmplx(0.d0, 0.d0)
                 !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&

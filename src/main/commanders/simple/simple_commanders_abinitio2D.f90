@@ -67,6 +67,8 @@ contains
         ! master parameters
         call params%new(cline)
         if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_abinitio2D')
+        write(logfhandle,'(A,A,A,A)') '>>> ABINITIO2D IMAGE SOURCES: match=', trim(params%match_src), &
+            ' rec=', trim(params%rec_src)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = params%extr_lim

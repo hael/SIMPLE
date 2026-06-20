@@ -753,9 +753,9 @@ contains
             case('raw')
                 call self%get_stkname_and_ind(oritype, iptcl, stkname, ind_in_stk)
                 return
-            case('denoised')
+            case('den')
                 if( trim(oritype) /= 'ptcl2D' .and. trim(oritype) /= 'ptcl3D' )then
-                    THROW_HARD('denoised particle sources are supported only for ptcl2D|ptcl3D; get_ptcl_source_stkname_and_ind')
+                    THROW_HARD('den particle sources are supported only for ptcl2D|ptcl3D; get_ptcl_source_stkname_and_ind')
                 endif
             case DEFAULT
                 THROW_HARD('unsupported particle source: '//trim(source)//'; get_ptcl_source_stkname_and_ind')

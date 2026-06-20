@@ -23,28 +23,31 @@ end type graph_mode_context
 
 contains
 
-    subroutine graph_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override)
+    subroutine graph_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override, verbose)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
         type(diffmap_graph), target, intent(in) :: graph
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
         integer, optional,        intent(in)  :: rank_keep_override
+        logical, optional,        intent(in)  :: verbose
         select case(lowercase(trim(graph%steering)))
             case('none')
                 call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta=.true., &
-                                           rank_keep_override=rank_keep_override)
+                                           rank_keep_override=rank_keep_override, verbose=verbose)
             case('so2')
-                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override)
+                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override, &
+                                           verbose=verbose)
             case('se2')
-                call se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override)
+                call se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override, &
+                                                verbose=verbose)
             case DEFAULT
                 write(logfhandle,'(A,A)') 'Graph coefficient denoising skipped: unknown steering=', trim(graph%steering)
                 call flush(logfhandle)
         end select
     end subroutine graph_coeffproj_denoise
 
-    subroutine so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta, rank_keep_override)
+    subroutine so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta, rank_keep_override, verbose)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
@@ -52,6 +55,7 @@ contains
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
         logical, optional,        intent(in)  :: force_zero_theta
         integer, optional,        intent(in)  :: rank_keep_override
+        logical, optional,        intent(in)  :: verbose
         type(parameters) :: params_pft
         type(polarft_calc) :: pftc
         type(image), allocatable :: imgs_work(:)
@@ -61,12 +65,14 @@ contains
         integer :: nptcls, ldim(3), kfromto(2), pdim_srch(3), pftsz, nrots, nk
         integer :: i, k, mode, mode_max, rank_keep
         real :: smpd
-        logical :: zero_theta
+        logical :: zero_theta, l_verbose
         nptcls = size(imgs)
         if( nptcls < 2 ) return
         if( graph%n /= nptcls ) return
         zero_theta = .false.
         if( present(force_zero_theta) ) zero_theta = force_zero_theta
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         if( .not. zero_theta .and. .not. graph%has_theta() ) return
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
@@ -117,33 +123,40 @@ contains
             endif
         end do
         coeff_ptcls = copy_imgarr(imgs)
+        call synth_img%new(ldim, smpd, wthreads=.false.)
         do i = 1,nptcls
             call synthesize_pft_residual(pfts_hat(:,:,i), kfromto, nrots, ldim, smpd, synth_img)
-            call coeff_ptcls(i)%copy(avg_img)
+            call coeff_ptcls(i)%copy_fast(avg_img)
             call coeff_ptcls(i)%add(synth_img)
         end do
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Graph coefficient denoising: n=', nptcls, &
-            ' modes=', mode_max, ' rank=', rank_keep, ' pftsz=', pftsz, ' kmin=', kfromto(1), ' kmax=', kfromto(2)
-        call flush(logfhandle)
-        if( synth_img%exists() ) call synth_img%kill
+        call synth_img%kill
+        if( l_verbose )then
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Graph coefficient denoising: n=', nptcls, &
+                ' modes=', mode_max, ' rank=', rank_keep, ' pftsz=', pftsz, ' kmin=', kfromto(1), ' kmax=', kfromto(2)
+            call flush(logfhandle)
+        endif
         call avg_img%kill
         deallocate(pfts, pfts_hat, pft_tmp, mode_coeff, mode_hat)
     end subroutine so2_coeffproj_denoise
 
-    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override)
+    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override, verbose)
         type(parameters),         intent(in)  :: params
         class(image),             intent(in)  :: imgs(:)
         real,                     intent(in)  :: avg(:)
         type(diffmap_graph), target, intent(in) :: graph
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
         integer, optional,        intent(in)  :: rank_keep_override
+        logical, optional,        intent(in)  :: verbose
         type(image), allocatable :: imgs_sync(:), den_sync(:)
         type(image) :: avg_img, tmp_img
         real, allocatable :: phi(:), sx(:), sy(:), rmat_rot(:,:,:)
         integer :: nptcls, ldim(3), i
         real :: smpd, angle_deg
+        logical :: l_verbose
         nptcls = size(imgs)
         if( nptcls < 2 ) return
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         if( graph%n /= nptcls .or. .not. graph%has_theta() .or. .not. graph%has_shift() ) return
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
@@ -169,7 +182,7 @@ contains
             call imgs_sync(i)%add(tmp_img)
         end do
         call so2_coeffproj_denoise(params, imgs_sync, avg, graph, den_sync, force_zero_theta=.true., &
-                                   rank_keep_override=rank_keep_override)
+                                   rank_keep_override=rank_keep_override, verbose=verbose)
         if( .not. allocated(den_sync) )then
             call dealloc_imgarr(imgs_sync)
             call avg_img%kill
@@ -190,10 +203,12 @@ contains
             call coeff_ptcls(i)%copy(avg_img)
             call coeff_ptcls(i)%add(tmp_img)
         end do
-        write(logfhandle,'(A,I8,A,I8,A,F8.3,A,F8.3)') 'SE2 graph coefficient denoising: n=', nptcls, &
-            ' directed_edges=', graph%nnz, ' phi_span_deg=', rad2deg(maxval(phi) - minval(phi)), &
-            ' shift_span_px=', max(maxval(sx)-minval(sx), maxval(sy)-minval(sy))
-        call flush(logfhandle)
+        if( l_verbose )then
+            write(logfhandle,'(A,I8,A,I8,A,F8.3,A,F8.3)') 'SE2 graph coefficient denoising: n=', nptcls, &
+                ' directed_edges=', graph%nnz, ' phi_span_deg=', rad2deg(maxval(phi) - minval(phi)), &
+                ' shift_span_px=', max(maxval(sx)-minval(sx), maxval(sy)-minval(sy))
+            call flush(logfhandle)
+        endif
         call dealloc_imgarr(imgs_sync)
         call dealloc_imgarr(den_sync)
         call avg_img%kill
@@ -273,54 +288,67 @@ contains
         complex(sp), intent(out) :: mode_hat(:,:)
         logical,     intent(in)  :: zero_theta
         type(graph_mode_context) :: ctx
-        real, allocatable :: evals(:), evecs(:,:), y(:,:), yhat(:,:), coeff_r(:)
-        complex(sp), allocatable :: coeff_c(:)
-        integer :: n, n2, nk, nkeep, a, i, info, max_basis
+        real, allocatable :: evals(:), evecs(:,:), y(:,:), yhat(:,:)
+        complex(sp) :: coeff_ck
+        real :: coeff_rk
+        integer :: n, n2, nk, nkeep, a, i, k, info, max_basis
         n  = size(mode_coeff,1)
         nk = size(mode_coeff,2)
         mode_hat = cmplx(0.,0.,kind=sp)
         if( n < 1 .or. nk < 1 ) return
         if( mode == 0 .or. zero_theta )then
             nkeep = min(max(1, rank_keep), n)
-            allocate(evals(nkeep), evecs(n,nkeep), coeff_c(nk))
+            allocate(evals(nkeep), evecs(n,nkeep))
             max_basis = min(n, max(160, 8 * nkeep + 80))
             call sparse_eigh(graph_matvec, graph, n, nkeep, evals, evecs, tol=1.e-5, max_basis=max_basis, info=info)
-            do a = 1,nkeep
-                coeff_c = cmplx(0.,0.,kind=sp)
-                do i = 1,n
-                    coeff_c = coeff_c + real(evecs(i,a), kind=sp) * mode_coeff(i,:)
-                end do
-                do i = 1,n
-                    mode_hat(i,:) = mode_hat(i,:) + real(evecs(i,a), kind=sp) * coeff_c
+            !$omp parallel do default(shared) private(k,a,i,coeff_ck) schedule(static) proc_bind(close)
+            do k = 1,nk
+                do a = 1,nkeep
+                    coeff_ck = cmplx(0.,0.,kind=sp)
+                    do i = 1,n
+                        coeff_ck = coeff_ck + real(evecs(i,a), kind=sp) * mode_coeff(i,k)
+                    end do
+                    do i = 1,n
+                        mode_hat(i,k) = mode_hat(i,k) + real(evecs(i,a), kind=sp) * coeff_ck
+                    end do
                 end do
             end do
-            deallocate(evals, evecs, coeff_c)
+            !$omp end parallel do
+            deallocate(evals, evecs)
         else
             n2 = 2 * n
             nkeep = min(max(2, 2 * rank_keep), n2)
             ctx%graph => graph
             ctx%mode  = mode
-            allocate(evals(nkeep), evecs(n2,nkeep), y(n2,nk), yhat(n2,nk), coeff_r(nk))
+            allocate(evals(nkeep), evecs(n2,nkeep), y(n2,nk), yhat(n2,nk))
             max_basis = min(n2, max(160, 8 * nkeep + 80))
             call sparse_eigh(so2_graph_matvec, ctx, n2, nkeep, evals, evecs, tol=1.e-5, max_basis=max_basis, info=info)
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,n
                 y(i,:)   = real(mode_coeff(i,:))
                 y(n+i,:) = aimag(mode_coeff(i,:))
             end do
+            !$omp end parallel do
             yhat = 0.
-            do a = 1,nkeep
-                coeff_r = 0.
-                do i = 1,n2
-                    coeff_r = coeff_r + evecs(i,a) * y(i,:)
-                end do
-                do i = 1,n2
-                    yhat(i,:) = yhat(i,:) + evecs(i,a) * coeff_r
+            !$omp parallel do default(shared) private(k,a,i,coeff_rk) schedule(static) proc_bind(close)
+            do k = 1,nk
+                do a = 1,nkeep
+                    coeff_rk = 0.
+                    do i = 1,n2
+                        coeff_rk = coeff_rk + evecs(i,a) * y(i,k)
+                    end do
+                    do i = 1,n2
+                        yhat(i,k) = yhat(i,k) + evecs(i,a) * coeff_rk
+                    end do
                 end do
             end do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,n
                 mode_hat(i,:) = cmplx(yhat(i,:), yhat(n+i,:), kind=sp)
             end do
-            deallocate(evals, evecs, y, yhat, coeff_r)
+            !$omp end parallel do
+            deallocate(evals, evecs, y, yhat)
         endif
     end subroutine project_pft_angular_mode
 
@@ -370,6 +398,7 @@ contains
         nk     = kfromto(2) - kfromto(1) + 1
         mode_coeff = cmplx(0.,0.,kind=sp)
         parity = merge(1., -1., mod(abs(mode), 2) == 0)
+        !$omp parallel do collapse(2) default(shared) private(i,k,irot,acc,theta,phase_arg,phase,val) schedule(static) proc_bind(close)
         do i = 1,nptcls
             do k = 1,nk
                 acc = cmplx(0.,0.,kind=sp)
@@ -383,6 +412,7 @@ contains
                 mode_coeff(i,k) = acc / real(nrots, kind=sp)
             end do
         end do
+        !$omp end parallel do
     end subroutine extract_pft_angular_mode
 
     subroutine accumulate_pft_angular_mode(pfts_hat, kfromto, nrots, mode, mode_hat)
@@ -395,6 +425,7 @@ contains
         nptcls = size(pfts_hat,3)
         pftsz  = size(pfts_hat,1)
         nk     = kfromto(2) - kfromto(1) + 1
+        !$omp parallel do collapse(2) default(shared) private(i,k,irot,theta,phase_arg,phase) schedule(static) proc_bind(close)
         do i = 1,nptcls
             do k = 1,nk
                 do irot = 1,pftsz
@@ -405,6 +436,7 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
     end subroutine accumulate_pft_angular_mode
 
     subroutine synthesize_pft_residual(pft_half, kfromto, nrots, ldim, smpd, img_out)
@@ -416,8 +448,8 @@ contains
         real,    allocatable :: rho(:,:,:)
         real :: theta, x, y
         integer :: ashape(3), lims(3,2), pftsz, nk, irot, k, krad, h, l
-        if( img_out%exists() ) call img_out%kill
-        call img_out%new(ldim, smpd)
+        if( .not. img_out%exists() ) THROW_HARD('synthesize_pft_residual requires preconstructed output image')
+        if( any(img_out%get_ldim() /= ldim) ) THROW_HARD('synthesize_pft_residual output image dimension mismatch')
         call img_out%zero_and_flag_ft
         ashape = img_out%get_array_shape()
         allocate(rho(ashape(1),ashape(2),ashape(3)), source=0.)

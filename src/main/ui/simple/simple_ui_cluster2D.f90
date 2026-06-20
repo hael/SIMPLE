@@ -71,6 +71,8 @@ contains
         &'(snhc_smpl|prob){snhc_smpl}', .false., 'snhc_smpl', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, match_src, gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, rec_src,   gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.true.)
         ! filter controls
@@ -197,7 +199,7 @@ contains
         call make_cavgs%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%add_input(UI_PARM, remap_cls)
-        call make_cavgs%add_input(UI_PARM, recimg_source)
+        call make_cavgs%add_input(UI_PARM, rec_src)
         call make_cavgs%add_input(UI_PARM, nspace, required_override=.false.)
         ! alternative inputs
         ! <empty>

@@ -449,7 +449,12 @@ contains
         if( present(fail) )fail_here = fail
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 ) THROW_HARD('trying to fetch from empty os_out field; get_frcs')
+        if( n_os_out == 0 )then
+            if( fail_here ) THROW_HARD('trying to fetch from empty os_out field; get_frcs')
+            call frcs%kill
+            frcs = NIL
+            return
+        endif
         ! look for cavgs
         ind   = 0
         cnt   = 0

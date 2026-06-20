@@ -164,15 +164,15 @@ The implementation should expose image-source selection by role, because
 refinement has two different image consumers:
 
 ```text
-matchimg_source = raw | denoised
-recimg_source   = raw | denoised
+match_src = raw | den
+rec_src   = raw | den
 ```
 
 Defaults:
 
 ```text
-matchimg_source = raw
-recimg_source   = raw
+match_src = raw
+rec_src   = raw
 ```
 
 Defaulting both to raw preserves existing behavior for all projects and
@@ -181,31 +181,31 @@ commands.
 The intended production dual-source mode is:
 
 ```text
-matchimg_source = raw
-recimg_source   = denoised
+match_src = raw
+rec_src   = den
 ```
 
 Diagnostic combinations are allowed when the required source exists:
 
 ```text
-matchimg_source = raw      recimg_source = raw       current behavior
-matchimg_source = raw      recimg_source = denoised  production dual-source mode
-matchimg_source = denoised recimg_source = denoised  denoised-only diagnostic
-matchimg_source = denoised recimg_source = raw       cross-source diagnostic
+match_src = raw      rec_src = raw       current behavior
+match_src = raw      rec_src = den       production dual-source mode
+match_src = den      rec_src = den       denoised-only diagnostic
+match_src = den      rec_src = raw       cross-source diagnostic
 ```
 
-`matchimg_source` and `recimg_source` are literal selectors. No command should
+`match_src` and `rec_src` are literal selectors. No command should
 silently substitute raw images for denoised images, or denoised images for raw
-images, inside either phase. If `matchimg_source=denoised`, alignment, state
+images, inside either phase. If `match_src=den`, alignment, state
 assignment, shift updates, and matcher-owned sigma updates use the denoised
-representatives. If `recimg_source=denoised`, Cartesian reconstruction uses the
+representatives. If `rec_src=den`, Cartesian reconstruction uses the
 denoised representatives.
 
-Using `matchimg_source=denoised` changes particle-domain statistics and should
+Using `match_src=den` changes particle-domain statistics and should
 be documented as diagnostic/testing mode unless a later policy promotes it to a
 scientific workflow.
 
-For `reconstruct3D`, only `recimg_source` is relevant because there is no
+For `reconstruct3D`, only `rec_src` is relevant because there is no
 matcher pass.
 
 ## 6. V1 Scope
@@ -262,8 +262,8 @@ source used for particle-domain matching. In production dual-source mode that
 source is raw:
 
 ```text
-matchimg_source = raw
-recimg_source   = denoised
+match_src = raw
+rec_src   = den
 ```
 
 When `ml_reg=yes`, reconstruction may consume grouped sigma spectra through the
@@ -284,13 +284,13 @@ reconstruction image source  = denoised
 Diagnostic source switching is allowed and intentionally literal:
 
 ```text
-matchimg_source = denoised  -> sigma-estimation source = denoised
-matchimg_source = raw       -> sigma-estimation source = raw
+match_src = den  -> sigma-estimation source = denoised
+match_src = raw       -> sigma-estimation source = raw
 ```
 
 Users who need raw sigma estimates while reconstructing denoised volumes should
-run `matchimg_source=raw recimg_source=denoised`. Users who select
-`matchimg_source=denoised` are explicitly choosing denoised particle-domain
+run `match_src=raw rec_src=den`. Users who select
+`match_src=den` are explicitly choosing denoised particle-domain
 statistics for alignment and sigma updates.
 
 Probabilistic modes keep their existing split: probability-table commands
@@ -315,10 +315,10 @@ are true:
 - raw and denoised physical image counts match at import time
 - every active particle's `indstk` is within the denoised physical image count
 
-For `reconstruct3D`, validation is needed when `recimg_source=denoised`.
+For `reconstruct3D`, validation is needed when `rec_src=den`.
 
 For `refine3D`, `refine3D_auto`, and `refine3D_multi`, validation is needed
-when either `matchimg_source=denoised` or `recimg_source=denoised`.
+when either `match_src=den` or `rec_src=den`.
 
 Validation must use the same stack-indexing contract as ordinary particle
 reads:
@@ -339,10 +339,10 @@ numbers when a valid `indstk` exists.
 Commanders own command shape, defaults, and early validation. They should not
 own low-level image-read loops or assembled-volume postprocessing.
 
-`reconstruct3D` must apply `recimg_source` to its reconstruction image reads.
+`reconstruct3D` must apply `rec_src` to its reconstruction image reads.
 
-`refine3D` must apply `matchimg_source` to matcher/probability-table particle
-input and `recimg_source` to Cartesian reconstruction particle input.
+`refine3D` must apply `match_src` to matcher/probability-table particle
+input and `rec_src` to Cartesian reconstruction particle input.
 
 `refine3D_auto` and `refine3D_multi` must pass source selectors through to
 their internal `refine3D` or `reconstruct3D` invocations.
@@ -413,16 +413,16 @@ For one matcher batch in production dual-source mode:
 ```
 
 For diagnostic source combinations, steps 2 and 6 use the selected
-`matchimg_source` and `recimg_source` respectively.
+`match_src` and `rec_src` respectively.
 
 ## 12. Reconstruct3D Flow
 
-`reconstruct3D` should use `recimg_source` to select the image source for the
+`reconstruct3D` should use `rec_src` to select the image source for the
 entire reconstruction.
 
 ```text
-recimg_source=raw       -> read os_stk%stk
-recimg_source=denoised  -> read os_stk%stk_den
+rec_src=raw       -> read os_stk%stk
+rec_src=den       -> read os_stk%stk_den
 ```
 
 It should still use the same `ptcl3D` orientation, state, shift, CTF, and
@@ -441,7 +441,7 @@ the child `refine3D` invocations. It must not force a raw-only child command
 when the parent requested denoised reconstruction.
 
 If `refine3D_auto` runs terminal or helper reconstruction commands, those
-commands must receive the selected `recimg_source`.
+commands must receive the selected `rec_src`.
 
 ### `refine3D_multi`
 
@@ -466,7 +466,7 @@ For distributed workflows:
 
 - master-side validation should check all referenced `stk_den` paths before
   scheduling workers
-- worker command lines must include `matchimg_source` and `recimg_source`
+- worker command lines must include `match_src` and `rec_src`
 - workers must resolve `stk_den` paths with the same project/current
   working-directory rules used for `stk`
 - partition-local partials have the same filenames and downstream contracts as
@@ -531,7 +531,7 @@ missing denoised stack for raw stack raw_particles.mrcs: stk_den=my_denoised_par
 raw/denoised stack image counts differ: raw_particles.mrcs has 120000, my_denoised_particles.mrcs has 119998
 raw/denoised stack dimensions differ: raw_particles.mrcs is 256x256, my_denoised_particles.mrcs is 384x384
 particle indstk is outside denoised stack range
-refine3D_auto did not propagate recimg_source to child refine3D command
+refine3D_auto did not propagate rec_src to child refine3D command
 ```
 
 ## 17. Testing Requirements
@@ -547,13 +547,13 @@ Minimum tests:
 - validation fails when image counts differ
 - validation fails for non-`ptcl3D` dual-source use
 - validation fails when raw stack CTF is not `flip`
-- `recimg_source=raw` preserves existing `reconstruct3D` behavior
-- `recimg_source=denoised` makes `reconstruct3D` read `stk_den`
-- `refine3D` with `matchimg_source=raw recimg_source=denoised` reads raw
+- `rec_src=raw` preserves existing `reconstruct3D` behavior
+- `rec_src=den` makes `reconstruct3D` read `stk_den`
+- `refine3D` with `match_src=raw rec_src=den` reads raw
   images for matching and denoised images for reconstruction
-- `refine3D` with `matchimg_source=denoised recimg_source=raw` reads denoised
+- `refine3D` with `match_src=den rec_src=raw` reads denoised
   images for matching and raw images for reconstruction
-- `refine3D` with `matchimg_source=denoised recimg_source=denoised` reads
+- `refine3D` with `match_src=den rec_src=den` reads
   denoised images for both matching and reconstruction
 - `refine3D_auto` propagates source selectors to child commands
 - `refine3D_multi` propagates source selectors to child commands
@@ -563,7 +563,7 @@ Minimum tests:
   spectra
 
 Distributed tests should verify that worker command lines preserve
-`matchimg_source` and `recimg_source`.
+`match_src` and `rec_src`.
 
 ## 18. Follow-Up Documentation Updates
 
@@ -586,7 +586,7 @@ Future versions may consider:
 
 - dual-source support for `cls3D` class-average workflows
 - support for CTF conventions other than `flip`
-- explicit diagnostic sigma products for `matchimg_source=denoised`
+- explicit diagnostic sigma products for `match_src=den`
 - source-provenance labels in output volumes and FSC reports
 - side-by-side raw and denoised reconstruction diagnostics
 

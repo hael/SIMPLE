@@ -791,17 +791,17 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
-        select case(trim(self%matchimg_source))
-            case('raw','denoised')
+        select case(trim(self%match_src))
+            case('raw','den')
             case DEFAULT
-                THROW_HARD('Unsupported matchimg_source='//trim(self%matchimg_source)//'; expected raw|denoised')
+                THROW_HARD('Unsupported match_src='//trim(self%match_src)//'; expected raw|den')
         end select
-        select case(trim(self%recimg_source))
-            case('raw','denoised')
+        select case(trim(self%rec_src))
+            case('raw','den')
             case DEFAULT
-                THROW_HARD('Unsupported recimg_source='//trim(self%recimg_source)//'; expected raw|denoised')
+                THROW_HARD('Unsupported rec_src='//trim(self%rec_src)//'; expected raw|den')
         end select
-        if( (trim(self%matchimg_source) == 'denoised' .or. trim(self%recimg_source) == 'denoised') .and. &
+        if( (trim(self%match_src) == 'den' .or. trim(self%rec_src) == 'den') .and. &
             trim(self%oritype) /= 'ptcl2D' .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl2D|ptcl3D')
         endif
