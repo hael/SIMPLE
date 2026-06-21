@@ -119,7 +119,7 @@ contains
         call set_cluster2D_stage_iteration_policy( cfg, cline_cluster2D )
         call set_cluster2D_stage_phase_policy( cfg, istage )
         call set_cluster2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
-        call set_cluster2D_stage_search_policy( cfg )
+        call set_cluster2D_stage_search_policy( cfg, istage )
     end subroutine build_cluster2D_stage_cfg
 
     subroutine set_cluster2D_stage_objfun_policy( cfg, params )
@@ -250,9 +250,14 @@ contains
         cfg%gauref   = 'no'
     end subroutine set_cluster2D_stage_regular_refs
 
-    subroutine set_cluster2D_stage_search_policy( cfg )
+    subroutine set_cluster2D_stage_search_policy( cfg, istage )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
-        cfg%refine = 'prob_snhc'
+        integer,                   intent(in)    :: istage
+        if( istage < PROBREFINE_STAGE )then
+            cfg%refine = 'snhc_smpl'
+        else
+            cfg%refine = 'prob_snhc'
+        endif
     end subroutine set_cluster2D_stage_search_policy
 
     logical function cluster2D_stage_is_fillin( cfg, stage_parms, istage ) result( l_fillin_stage )

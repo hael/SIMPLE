@@ -117,9 +117,9 @@ Current stage policy:
   `cluster2D_exec` reproduce the same subset
 - final fill-in is assignment-only for active particles with `updatecnt == 0`;
   it uses existing class averages and does not restore new class-average sums
-- staged `abinitio2D` refinement uses sparse probabilistic SNHC
-  (`refine=prob_snhc`) for every staged `cluster2D` invocation, including
-  staged fill-in targets
+- staged `abinitio2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
+  stages 1-4, then sparse probabilistic SNHC (`refine=prob_snhc`) for stage 5
+  and later staged `cluster2D` invocations, including staged fill-in targets
 - when staged updates were sampled, `abinitio2D` then runs a separate terminal
   dense probabilistic all-particle pass with `update_frac` and `fillin`
   disabled, refreshing class, in-plane, and shift parameters before final

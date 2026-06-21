@@ -42,12 +42,13 @@ takes effect once `ml_reg` is active. `abinitio2D_chunks` must preserve that
 behavior when constructing child `abinitio2D` command lines, applying only the
 chunk-local Nyquist floor.
 
-The default `abinitio2D` search policy uses sparse probabilistic SNHC
-(`refine=prob_snhc`) for every staged `cluster2D` invocation, including
-staged fill-in targets. Dense 2D probabilistic assignment (`refine=prob`) is
-reserved for the separate terminal all-particle coverage pass after sampled
-staged updates. `abinitio2D_chunks` must preserve this policy when constructing
-child `abinitio2D` command lines.
+The default `abinitio2D` search policy uses staged sampled SNHC
+(`refine=snhc_smpl`) for stages 1-4, then switches to sparse probabilistic SNHC
+(`refine=prob_snhc`) for stage 5 and later staged `cluster2D` invocations,
+including staged fill-in targets. Dense 2D probabilistic assignment
+(`refine=prob`) is reserved for the separate terminal all-particle coverage
+pass after sampled staged updates. `abinitio2D_chunks` must preserve this
+policy when constructing child `abinitio2D` command lines.
 
 ## 3. Ownership Policy
 

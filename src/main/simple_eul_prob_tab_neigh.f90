@@ -333,7 +333,7 @@ contains
                 call put_last(prev_full_ref_loc, direct_srch_order(:,ithr_loc))
             endif
             l_greedy_first_loc      = l_shc_neigh .and. self%b_ptr%spproj_field%is_first_update(self%p_ptr%which_iter, iptcl_loc)
-            l_first_improvement_loc = l_shc_neigh .or. l_snhc_neigh
+            l_first_improvement_loc = l_shc_neigh
             nrefs_bound_loc = nfull_refs
             smpl_ninpl_loc  = self%b_ptr%pftc%get_nrots()
             power_loc       = POST_EXTR_POWER
