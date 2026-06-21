@@ -119,7 +119,7 @@ contains
         call set_cluster2D_stage_iteration_policy( cfg, cline_cluster2D )
         call set_cluster2D_stage_phase_policy( cfg, istage )
         call set_cluster2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
-        call set_cluster2D_stage_search_policy( cfg, istage, size(stage_parms) )
+        call set_cluster2D_stage_search_policy( cfg )
     end subroutine build_cluster2D_stage_cfg
 
     subroutine set_cluster2D_stage_objfun_policy( cfg, params )
@@ -250,16 +250,18 @@ contains
         cfg%gauref   = 'no'
     end subroutine set_cluster2D_stage_regular_refs
 
-    subroutine set_cluster2D_stage_search_policy( cfg, istage, nstages )
+    subroutine set_cluster2D_stage_search_policy( cfg )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
-        integer,                   intent(in)    :: istage
-        integer,                   intent(in)    :: nstages
-        if( cfg%iphase == size(PHASES) .or. istage == nstages )then
-            cfg%refine = 'prob'
-        else
-            cfg%refine = 'prob_snhc'
-        endif
+        cfg%refine = 'prob_snhc'
     end subroutine set_cluster2D_stage_search_policy
+
+    logical function cluster2D_stage_is_fillin( cfg, stage_parms, istage ) result( l_fillin_stage )
+        type(cluster2D_stage_cfg), intent(in) :: cfg
+        type(stage_params),        intent(in) :: stage_parms(:)
+        integer,                   intent(in) :: istage
+        l_fillin_stage = stage_parms(istage)%l_update_frac .and.&
+            &(cfg%iphase == size(PHASES) .or. istage == size(stage_parms))
+    end function cluster2D_stage_is_fillin
 
     subroutine emit_cluster2D_stage_cfg( cline_cluster2D, cfg, stage_parms, istage )
         use simple_cmdline, only: cmdline
@@ -267,6 +269,8 @@ contains
         type(cluster2D_stage_cfg), intent(in)    :: cfg
         type(stage_params),        intent(in)    :: stage_parms(:)
         integer,                   intent(in)    :: istage
+        logical :: l_fillin_stage
+        l_fillin_stage = cluster2D_stage_is_fillin(cfg, stage_parms, istage)
         call cline_cluster2D%delete('which_iter')
         if( stage_parms(istage)%l_lpset )then
             call cline_cluster2D%set('lp', stage_parms(istage)%lp)
@@ -302,7 +306,7 @@ contains
         else
             call cline_cluster2D%delete('update_frac')
         endif
-        if( cfg%iphase == size(PHASES) .or. istage == size(stage_parms) )then
+        if( l_fillin_stage )then
             call cline_cluster2D%set('fillin', 'yes')
         else
             call cline_cluster2D%delete('fillin')
