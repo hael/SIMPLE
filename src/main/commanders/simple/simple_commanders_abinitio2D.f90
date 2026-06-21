@@ -60,7 +60,7 @@ contains
         if( .not. cline%defined('eo_stage')      ) call cline%set('eo_stage',      EO_STAGE)
         if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs',    'yes')
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
-        if( .not. cline%defined('refine')        ) call cline%set('refine',        'snhc_smpl')
+        if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_snhc')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
@@ -109,7 +109,7 @@ contains
             ! classify
             call execute_cluster2D
         enddo
-        call execute_terminal_greedy_pass
+        call execute_terminal_prob_pass
         ! transfer 2D shifts to 3D field
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
@@ -322,7 +322,7 @@ contains
             if( allocated(phase_label) ) deallocate(phase_label)
         end subroutine execute_cluster2D
 
-        subroutine execute_terminal_greedy_pass
+        subroutine execute_terminal_prob_pass
             type(string) :: terminal_refs
             integer      :: terminal_start
             if( .not. any(stage_parms(:)%l_update_frac) ) return
@@ -341,9 +341,9 @@ contains
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('fillin')
             call cline_cluster2D%delete('endit')
-            call execute_cluster2D('terminal_greedy', nstages + 1)
+            call execute_cluster2D('terminal_prob', nstages + 1)
             call terminal_refs%kill
-        end subroutine execute_terminal_greedy_pass
+        end subroutine execute_terminal_prob_pass
 
         subroutine output_stats( prefix )
             character(len=*) :: prefix
@@ -396,16 +396,18 @@ contains
         subroutine write_abinitio_benchmark( iter, phase, stage )
             integer,          intent(in) :: iter, stage
             character(len=*), intent(in) :: phase
-            type(string) :: benchfname
+            type(string) :: benchfname, cluster_refine
             integer :: fnr
             if( .not. L_BENCH_GLOB ) return
             rt_tot = toc(t_tot)
             benchfname = string('ABINITIO2D_BENCH_ITER')//int2str_pad(iter,3)//'.txt'
+            cluster_refine = cline_cluster2D%get_carg('refine')
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'abinitio2D phase                   : ', trim(phase)
             write(fnr,'(a,a)')  'abinitio2D execution mode          : ', merge('shared-memory', 'distributed  ', l_shmem)
-            write(fnr,'(a,a)')  'abinitio2D refine mode             : ', trim(params%refine)
+            write(fnr,'(a,a)')  'abinitio2D requested refine mode   : ', trim(params%refine)
+            write(fnr,'(a,a)')  'abinitio2D cluster2D refine mode   : ', cluster_refine%to_char()
             write(fnr,'(a,i0)') 'abinitio2D stage                   : ', stage
             write(fnr,'(a,i0)') 'abinitio2D nstages                 : ', nstages
             write(fnr,'(a,i0)') 'abinitio2D nclasses                : ', params%ncls
@@ -425,6 +427,7 @@ contains
             write(fnr,'(a,t52,f9.2)') 'abinitio2D % accounted for          : ', &
                 &((rt_setup + rt_calc_pspec + rt_cluster2D + rt_final_cavgs) / rt_tot) * 100.
             call fclose(fnr)
+            call cluster_refine%kill
             call benchfname%kill
         end subroutine write_abinitio_benchmark
 

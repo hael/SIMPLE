@@ -36,7 +36,7 @@ contains
         class(strategy2D_prob), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer :: iptcl_map, icls, inpl
-        real    :: corr
+        real    :: corr, frac
         if( os%get_state(self%s%iptcl) > 0 )then
             if( .not. associated(self%spec%eulprob_obj_part2D) ) THROW_HARD('strategy2D_prob requires eulprob_obj_part2D')
             call self%s%prep4srch(os)
@@ -44,6 +44,9 @@ contains
             iptcl_map = self%s%iptcl_map
             icls      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%icls
             inpl      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%inpl
+            frac      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%frac
+            if( frac <= 0. ) frac = 100.
+            self%s%nrefs_eval = max(1, min(self%s%nrefs, nint(real(self%s%nrefs) * frac / 100.)))
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             self%s%best_class = icls
             self%s%best_rot   = inpl
@@ -55,6 +58,7 @@ contains
             endif
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
+            call os%set(self%s%iptcl, 'frac', frac)
         else
             call os%reject(self%s%iptcl)
         endif

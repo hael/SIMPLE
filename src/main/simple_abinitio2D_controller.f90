@@ -48,7 +48,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','snhc_smpl_many','prob')
+            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
@@ -119,7 +119,7 @@ contains
         call set_cluster2D_stage_iteration_policy( cfg, cline_cluster2D )
         call set_cluster2D_stage_phase_policy( cfg, istage )
         call set_cluster2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
-        call set_cluster2D_stage_search_policy( cfg, params, istage )
+        call set_cluster2D_stage_search_policy( cfg, istage, size(stage_parms) )
     end subroutine build_cluster2D_stage_cfg
 
     subroutine set_cluster2D_stage_objfun_policy( cfg, params )
@@ -250,16 +250,14 @@ contains
         cfg%gauref   = 'no'
     end subroutine set_cluster2D_stage_regular_refs
 
-    subroutine set_cluster2D_stage_search_policy( cfg, params, istage )
+    subroutine set_cluster2D_stage_search_policy( cfg, istage, nstages )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
-        class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage
-        if( trim(params%refine) == 'prob' )then
+        integer,                   intent(in)    :: nstages
+        if( cfg%iphase == size(PHASES) .or. istage == nstages )then
             cfg%refine = 'prob'
-        else if( istage < STOCH_SAMPL_STAGE )then
-            cfg%refine = 'snhc_smpl'
         else
-            cfg%refine = 'prob'
+            cfg%refine = 'prob_snhc'
         endif
     end subroutine set_cluster2D_stage_search_policy
 

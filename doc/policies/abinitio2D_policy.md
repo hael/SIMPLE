@@ -27,7 +27,7 @@ selector has been removed for `abinitio2D` and `cluster2D`.
 6. update particle class, in-plane, shift, sampled, and update-count state
 7. restore class averages through shared-memory or distributed class-average pathways
 8. run a final fill-in assignment pass for active particles that were never updated
-9. when sampled updates were active, run a terminal greedy all-particle pass
+9. when sampled updates were active, run a terminal dense probabilistic all-particle pass
 10. generate final class averages, FRC metadata, and ranked outputs
 
 The main policy boundary is:
@@ -42,10 +42,12 @@ takes effect once `ml_reg` is active. `abinitio2D_chunks` must preserve that
 behavior when constructing child `abinitio2D` command lines, applying only the
 chunk-local Nyquist floor.
 
-Command-line `refine=prob` is a fixed search-mode override for `abinitio2D`:
-it keeps probabilistic refinement active for every stage instead of using the
-default staged `snhc_smpl`-to-`prob` transition. `abinitio2D_chunks` must
-preserve this override when constructing child `abinitio2D` command lines.
+The default `abinitio2D` search policy uses sparse probabilistic SNHC
+(`refine=prob_snhc`) for staged refinement. Dense 2D probabilistic assignment
+(`refine=prob`) is reserved for final fill-in and terminal all-particle
+coverage passes, where the workflow should avoid stochastic class-neighborhood
+truncation. `abinitio2D_chunks` must preserve this policy when constructing
+child `abinitio2D` command lines.
 
 ## 3. Ownership Policy
 
@@ -56,7 +58,7 @@ preserve this override when constructing child `abinitio2D` command lines.
 - run orchestration across stages
 - initial reference handling
 - final fill-in dispatch
-- terminal greedy all-particle dispatch after sampled staged updates
+- terminal dense probabilistic all-particle dispatch after sampled staged updates
 - final class-average generation/ranking
 
 This layer should stay thin enough that stage rules are readable elsewhere.
@@ -128,7 +130,7 @@ Stage policy:
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
 - final fill-in is an assignment-only pass for active particles that still have `updatecnt == 0`
 - if any staged update used `update_frac`, `abinitio2D` runs a terminal
-  `refine=greedy` all-particle `cluster2D` pass with `update_frac` and
+  dense `refine=prob` all-particle `cluster2D` pass with `update_frac` and
   `fillin` disabled, refreshing class, in-plane, and shift parameters before
   final class-average generation
 
@@ -174,7 +176,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Does fill-in remain assignment-only unless the policy is explicitly changed?
-- When staged updates are sampled, does terminal greedy refresh all active
+- When staged updates are sampled, does terminal dense probabilistic assignment refresh all active
   particles before final class-average generation?
 - Does the change preserve Cartesian-only `abinitio2D`?
 
@@ -185,7 +187,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not treat final fill-in as a normal class-average restoration stage.
-- Do not use final fill-in as a substitute for the terminal greedy all-particle
+- Do not use final fill-in as a substitute for the terminal dense probabilistic all-particle
   refresh when sampled abinitio2D updates were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the

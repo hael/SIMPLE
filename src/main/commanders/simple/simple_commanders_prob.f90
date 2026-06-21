@@ -364,6 +364,10 @@ contains
             eulprob_obj_part%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch%loc_tab(:,1:batchsz)
             eulprob_obj_part%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch%seed_shifts(:,1:batchsz)
             eulprob_obj_part%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch%seed_has_sh(1:batchsz)
+            if( eulprob_obj_part%l_sparse_snhc )then
+                eulprob_obj_part%eval_touched_counts(batch_start:batch_end) = eulprob_obj_batch%eval_touched_counts(1:batchsz)
+                eulprob_obj_part%eval_touched_refs(:,batch_start:batch_end) = eulprob_obj_batch%eval_touched_refs(:,1:batchsz)
+            endif
             if( eulprob_obj_part%seed_nrots == 0 ) eulprob_obj_part%seed_nrots = eulprob_obj_batch%seed_nrots
             if( eulprob_obj_part%seed_nrots /= eulprob_obj_batch%seed_nrots )then
                 THROW_HARD('seed_nrots mismatch in exec_prob_tab2D batching')

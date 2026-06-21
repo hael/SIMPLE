@@ -753,7 +753,7 @@ contains
         end select
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_state','prob_neigh')
+            case('prob','prob_state','prob_neigh','prob_snhc')
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
@@ -773,7 +773,7 @@ contains
         endif
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhc_smpl','snhc_smpl_many')
+                case('snhc','snhc_smpl','snhc_smpl_many','prob_snhc')
                     self%trs = 0.
                 case DEFAULT
                     if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'snhc' )then

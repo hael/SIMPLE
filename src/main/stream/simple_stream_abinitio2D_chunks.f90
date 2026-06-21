@@ -46,7 +46,7 @@ contains
         call cline%set('objfun',       'euclid')
         call cline%set('numlen',       5)
         call cline%set('sigma_est',    'global')
-        if( .not. cline%defined('refine') ) call cline%set('refine', 'snhc_smpl')
+        if( .not. cline%defined('refine') ) call cline%set('refine', 'prob_snhc')
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')         ) call cline%set('center',        'yes')

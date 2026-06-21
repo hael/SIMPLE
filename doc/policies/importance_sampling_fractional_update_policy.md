@@ -117,9 +117,14 @@ Current stage policy:
   `cluster2D_exec` reproduce the same subset
 - final fill-in is assignment-only for active particles with `updatecnt == 0`;
   it uses existing class averages and does not restore new class-average sums
+- staged `abinitio2D` refinement uses sparse probabilistic SNHC
+  (`refine=prob_snhc`) for normal candidate-level class exploration
+- final fill-in and the terminal all-particle coverage refresh use dense
+  `refine=prob` so coverage cleanup does not truncate the class candidate set
 - when staged updates were sampled, `abinitio2D` then runs a separate terminal
-  greedy all-particle pass with `update_frac` and `fillin` disabled, refreshing
-  class, in-plane, and shift parameters before final class-average generation
+  dense probabilistic all-particle pass with `update_frac` and `fillin`
+  disabled, refreshing class, in-plane, and shift parameters before final
+  class-average generation
 
 Fractional 2D restoration is class-local. `cavger_init_online` reads or centers
 previous partial sums when fractional update is active, obtains per-class
@@ -263,7 +268,7 @@ are separate workflow stages and may perform their own reads.
 - 2D fractional class-average restoration remains class-local.
 - Final `abinitio2D` fill-in remains assignment-only unless the policy is
   explicitly changed.
-- Sampled `abinitio2D` runs a terminal greedy all-particle refresh before final
+- Sampled `abinitio2D` runs a terminal dense probabilistic all-particle refresh before final
   class-average generation.
 - `volassemble` and the classaverager remain consumers of sampled-update state,
   not producers of particle-selection policy.

@@ -193,7 +193,7 @@ final grouped sigma STAR file in the project output. See
 [src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:347) and
 [src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:358).
 
-When `abinitio2D` uses `refine='prob'`, `prob_align2D` owns sampling and
+When `abinitio2D` uses a probabilistic `refine='prob*'` mode, `prob_align2D` owns sampling and
 probabilistic class assignment, but `cluster2D_exec` still owns the residual
 sigma update after that assignment is consumed.
 
