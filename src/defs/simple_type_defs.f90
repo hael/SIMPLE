@@ -120,7 +120,7 @@ end type clust_info
 ! type for particle reference relation in eul_prob_tab
 type ptcl_ref
     integer :: pind = 0, iproj = 0, inpl = 0, istate=0, icls=0
-    real    :: dist = 0., x = 0., y = 0.
+    real    :: dist = 0., x = 0., y = 0., frac = 100.
     logical :: has_sh = .false.
 end type ptcl_ref
 

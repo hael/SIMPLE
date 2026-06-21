@@ -323,7 +323,7 @@ contains
             integer :: full_ref_loc, prev_full_ref_loc, isample_loc, ri_loc, irot_loc
             integer :: nrefs_bound_loc, smpl_ninpl_loc
             real    :: dist_loc, corr_loc, prev_corr_loc, neigh_frac_loc, power_loc
-            logical :: l_greedy_first_loc
+            logical :: l_greedy_first_loc, l_first_improvement_loc
             neval_loc = 0
             call direct_rts(ithr_loc)%ne_ran_iarr(direct_srch_order(:,ithr_loc))
             prev_full_ref_loc = 0
@@ -332,7 +332,8 @@ contains
                 prev_full_ref_loc = (prev_state_loc - 1) * self%p_ptr%nspace + prev_proj_loc
                 call put_last(prev_full_ref_loc, direct_srch_order(:,ithr_loc))
             endif
-            l_greedy_first_loc = l_shc_neigh .and. self%b_ptr%spproj_field%is_first_update(self%p_ptr%which_iter, iptcl_loc)
+            l_greedy_first_loc      = l_shc_neigh .and. self%b_ptr%spproj_field%is_first_update(self%p_ptr%which_iter, iptcl_loc)
+            l_first_improvement_loc = l_shc_neigh .or. l_snhc_neigh
             nrefs_bound_loc = nfull_refs
             smpl_ninpl_loc  = self%b_ptr%pftc%get_nrots()
             power_loc       = POST_EXTR_POWER
@@ -343,7 +344,7 @@ contains
                 power_loc       = merge(EXTR_POWER, POST_EXTR_POWER, self%p_ptr%extr_iter <= self%p_ptr%extr_lim)
             endif
             prev_corr_loc = -huge(1.0)
-            if( l_shc_neigh .and. (.not. l_greedy_first_loc) )then
+            if( l_first_improvement_loc .and. (.not. l_greedy_first_loc) )then
                 call calc_previous_corr(ithr_loc, iptcl_loc, prev_full_ref_loc, prev_corr_loc)
             endif
             do isample_loc = 1,nfull_refs
@@ -358,7 +359,7 @@ contains
                 neval_loc = neval_loc + 1
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)  = ri_loc
                 eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
-                if( l_shc_neigh .and. (.not. l_greedy_first_loc) .and. corr_loc > prev_corr_loc ) exit
+                if( l_first_improvement_loc .and. (.not. l_greedy_first_loc) .and. corr_loc > prev_corr_loc ) exit
             enddo
         end subroutine evaluate_direct_stochastic_refs
 
@@ -1157,6 +1158,7 @@ contains
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
+            self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
 
@@ -1194,9 +1196,19 @@ contains
                 self%assgn_map(i) = self%loc_tab(fallback_ref,i)
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
+                self%assgn_map(i)%frac = search_frac(i)
                 final_assigned(i) = .true.
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
+
+        real function search_frac(iptcl_loc)
+            integer, intent(in) :: iptcl_loc
+            if( self%nrefs > 0 )then
+                search_frac = 100.0 * real(self%eval_touched_counts(iptcl_loc)) / real(self%nrefs)
+            else
+                search_frac = 100.0
+            endif
+        end function search_frac
 
         integer function pick_best_evaluated_ref(iptcl_loc, state_filter) result(ri_best)
             integer, intent(in) :: iptcl_loc

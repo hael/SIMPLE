@@ -40,7 +40,7 @@ contains
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref
-        real    :: corr
+        real    :: corr, frac
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -52,6 +52,7 @@ contains
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
+            frac      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%frac
             iref      = (istate-1)*self%s%p_ptr%nspace + iproj
             if( trim(self%s%p_ptr%multivol_mode).eq.'input_oris_fixed' .and. &
                 &trim(self%s%p_ptr%refine).eq.'prob_state' )then
@@ -67,6 +68,7 @@ contains
             else
                 call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
+            call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
         else
             call os%reject(self%s%iptcl)
         endif
