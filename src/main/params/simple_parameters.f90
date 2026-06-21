@@ -273,7 +273,6 @@ type :: parameters
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
-    character(len=STDLEN)     :: match_src='raw' !< particle image source for alignment/state assignment(raw|den){raw}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -292,14 +291,14 @@ type :: parameters
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
-    character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|sum){state}
+    character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|sum|shc|snhc){state}
+    character(len=STDLEN)     :: ptcl_src='raw' !< 3D particle image source for alignment/state assignment and reconstruction(raw|den){raw}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
     ! class-average quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}
     character(len=STDLEN)     :: quality_model='chunk_default_v2'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: rec_src='raw'  !< particle image source for reconstruction(raw|den){raw}
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}

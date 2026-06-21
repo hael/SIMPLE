@@ -185,10 +185,10 @@ contains
             do i = 1, nptcls_part_sel, batchsz_max
                 batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                 nbatch    = batchlims(2) - batchlims(1) + 1
-                if( trim(params%match_src) == 'raw' )then
+                if( trim(params%ptcl_src) == 'raw' )then
                     call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
                 else
-                    call discrete_read_imgbatch_source(params, build, trim(params%match_src), nbatch, &
+                    call discrete_read_imgbatch_source(params, build, trim(params%ptcl_src), nbatch, &
                         pinds(batchlims(1):batchlims(2)), [1,nbatch], build%imgbatch(:nbatch))
                 endif
                 ! allocate contigous local sigma2 array for optimal caching in parallell loop

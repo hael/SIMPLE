@@ -86,10 +86,10 @@ contains
             batchsz   = batchlims(2) - batchlims(1) + 1
             ! read images
             if( DEBUG ) t = tic()
-            if( trim(params%rec_src) == 'raw' )then
+            if( trim(params%ptcl_src) == 'raw' )then
                 call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
             else
-                call discrete_read_imgbatch_source(params, build, trim(params%rec_src), &
+                call discrete_read_imgbatch_source(params, build, trim(params%ptcl_src), &
                     nptcls, pinds, batchlims, build%imgbatch(:batchsz))
             endif
             if( DEBUG ) t_read = t_read + toc(t)

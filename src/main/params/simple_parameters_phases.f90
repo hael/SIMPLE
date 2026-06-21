@@ -758,9 +758,9 @@ contains
             case DEFAULT
         end select
         select case(trim(self%prob_neigh_mode))
-            case('state','geom','sum')
+            case('state','geom','sum','shc','snhc')
             case DEFAULT
-                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|sum')
+                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|sum|shc|snhc')
         end select
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
@@ -776,7 +776,11 @@ contains
                 case('snhc','snhc_smpl','snhc_smpl_many')
                     self%trs = 0.
                 case DEFAULT
-                    self%trs = MINSHIFT
+                    if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'snhc' )then
+                        self%trs = 0.
+                    else
+                        self%trs = MINSHIFT
+                    endif
             end select
         endif
         self%trs = abs(self%trs)
@@ -791,19 +795,13 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
-        select case(trim(self%match_src))
+        select case(trim(self%ptcl_src))
             case('raw','den')
             case DEFAULT
-                THROW_HARD('Unsupported match_src='//trim(self%match_src)//'; expected raw|den')
+                THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        select case(trim(self%rec_src))
-            case('raw','den')
-            case DEFAULT
-                THROW_HARD('Unsupported rec_src='//trim(self%rec_src)//'; expected raw|den')
-        end select
-        if( (trim(self%match_src) == 'den' .or. trim(self%rec_src) == 'den') .and. &
-            trim(self%oritype) /= 'ptcl2D' .and. trim(self%oritype) /= 'ptcl3D' )then
-            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl2D|ptcl3D')
+        if( trim(self%ptcl_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
+            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
         endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')

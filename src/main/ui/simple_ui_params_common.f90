@@ -58,7 +58,6 @@ type(ui_param) :: lpthres
 type(ui_param) :: max_dose
 type(ui_param) :: max_rad
 type(ui_param) :: maxits
-type(ui_param) :: match_src
 type(ui_param) :: maxnchunks
 type(ui_param) :: mcconvention
 type(ui_param) :: mcpatch
@@ -129,7 +128,7 @@ type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
-type(ui_param) :: rec_src
+type(ui_param) :: ptcl_src
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -393,8 +392,8 @@ subroutine set_ui_params
                                    'Maximum number of iterations', &
                                    'Max # iterations', .false., 100.)
 
-    call match_src%set_param('match_src','multi',  'Particle source for matching', &
-                                   'Particle image representation used for alignment and state assignment(raw|den){raw}', &
+    call ptcl_src%set_param('ptcl_src','multi',  '3D particle source', &
+                                   '3D particle image representation used for alignment, state assignment, and reconstruction(raw|den){raw}', &
                                    '(raw|den){raw}', .false., 'raw')
 
     call maxnchunks%set_param(     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', &
@@ -666,10 +665,6 @@ subroutine set_ui_params
     call qsys_reservation%set_param('qsys_reservation','str',   'Name of reserved partition', &
                                     'Name of reserved target partition of distributed computer system (SLURM/PBS/LSF)', &
                                     'give your part', .false., '')
-
-    call rec_src%set_param(  'rec_src',   'multi',  'Particle source for reconstruction', &
-                                   'Particle image representation used for reconstruction(raw|den){raw}', &
-                                   '(raw|den){raw}', .false., 'raw')
 
     call remap_cls%set_param(      'remap_cls',       'binary', 'Whether to remap 2D clusters', &
                                    'Whether to remap the number of 2D clusters(yes|no){no}', &

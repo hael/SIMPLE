@@ -67,8 +67,6 @@ contains
         ! master parameters
         call params%new(cline)
         if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_abinitio2D')
-        write(logfhandle,'(A,A,A,A)') '>>> ABINITIO2D IMAGE SOURCES: match=', trim(params%match_src), &
-            ' rec=', trim(params%rec_src)
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = params%extr_lim
@@ -283,6 +281,8 @@ contains
             class(cmdline), intent(in) :: cline
             cline_cluster2D  = cline
             cline_calc_pspec = cline
+            call cline_cluster2D%delete('ptcl_src')
+            call cline_calc_pspec%delete('ptcl_src')
             ! initial sigma2
             call cline_calc_pspec%set('prg',      'calc_pspec')
             ! cluster2D
@@ -364,6 +364,7 @@ contains
             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
             ! classes generation
             cline_make_cavgs = cline ! ncls is transferred here
+            call cline_make_cavgs%delete('ptcl_src')
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
             call cline_make_cavgs%delete('smpd_crop')

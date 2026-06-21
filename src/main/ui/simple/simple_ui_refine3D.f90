@@ -128,7 +128,7 @@ contains
         ! <empty>
         ! search controls
         call reconstruct3D%add_input(UI_SRCH, pgrp)
-        call reconstruct3D%add_input(UI_SRCH, rec_src)
+        call reconstruct3D%add_input(UI_SRCH, ptcl_src)
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
         call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
@@ -206,12 +206,11 @@ contains
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, match_src, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, rec_src, gui_submenu="search")
+        call refine3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|sum){state}', '(state|geom|sum){state}', .false., 'state', &
+        &'Prob-neigh neighborhood mode(state|geom|sum|shc|snhc){state}', '(state|geom|sum|shc|snhc){state}', .false., 'state', &
         &gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
@@ -264,8 +263,7 @@ contains
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
-        call refine3D_auto%add_input(UI_SRCH, match_src, gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, rec_src, gui_submenu="search")
+        call refine3D_auto%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
@@ -309,11 +307,10 @@ contains
         &'(input_oris_start|input_oris_refine|input_oris_fixed){input_oris_start}', .false., 'input_oris_start', &
         &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|sum){sum}', '(state|geom|sum){sum}', .false., 'sum', &
+        &'Prob-neigh neighborhood mode(state|geom|sum|shc|snhc){sum}', '(state|geom|sum|shc|snhc){sum}', .false., 'sum', &
         &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
-        call refine3D_multi%add_input(UI_SRCH, match_src, gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, rec_src, gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', &

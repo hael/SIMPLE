@@ -239,7 +239,7 @@ contains
         call cavger_assemble_sums(.false.)
     end subroutine cavger_prepare_and_assemble
 
-    subroutine print_rec_src_verification(params, build, context)
+    subroutine print_raw_source_verification(params, build, context)
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         character(len=*), intent(in)    :: context
@@ -252,15 +252,14 @@ contains
         if( params%fromp > 0 ) first_ptcl = max(1, params%fromp)
         if( params%top   > 0 ) last_ptcl  = min(nptcls, params%top)
         if( first_ptcl > last_ptcl ) return
-        call build%spproj%get_ptcl_source_stkname_and_ind(params%oritype, first_ptcl, params%rec_src, &
-            source_stk, ind_in_stk)
-        write(logfhandle,'(A,A,A,A,A,A,A,I0,A,I0,A,A,A,I0)') '>>> MAKE_CAVGS RECIMG_SOURCE ', &
-            trim(context), ': ', trim(params%rec_src), ' oritype=', trim(params%oritype), &
+        call build%spproj%get_stkname_and_ind(params%oritype, first_ptcl, source_stk, ind_in_stk)
+        write(logfhandle,'(A,A,A,A,A,I0,A,I0,A,A,A,I0)') '>>> MAKE_CAVGS RAW_SOURCE ', &
+            trim(context), ': oritype=', trim(params%oritype), &
             ' particles=', first_ptcl, '-', last_ptcl, ' stack=', trim(source_stk%to_char()), &
             ' indstk(first)=', ind_in_stk
         call flush(logfhandle)
         call source_stk%kill
-    end subroutine print_rec_src_verification
+    end subroutine print_raw_source_verification
 
     subroutine shmem_bookkeeping(build, params, cline)
         type(builder),    intent(inout) :: build
@@ -413,7 +412,7 @@ contains
             call cline%set('ncls', ncls_here)
             params%ncls = ncls_here
         endif
-        call print_rec_src_verification(params, build_tmp, 'MASTER')
+        call print_raw_source_verification(params, build_tmp, 'MASTER')
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

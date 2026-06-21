@@ -239,12 +239,14 @@ contains
         type(image) :: mskimg
         type(ori)   :: o, o_sub, osym
         integer     :: lfny, i, j
-        logical     :: ddo3d
+        logical     :: ddo3d, l_direct_prob_neigh
         real, allocatable :: sub_distmat(:,:)
         real :: dtmp, inplrotdist
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
+        l_direct_prob_neigh = trim(params%refine) == 'prob_neigh' .and.&
+            &(trim(params%prob_neigh_mode) == 'shc' .or. trim(params%prob_neigh_mode) == 'snhc')
         ! set up symmetry functionality
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
@@ -263,7 +265,7 @@ contains
                 case DEFAULT
                     call self%eulspace%new(params%nspace, is_ptcl=.false.)
                     call self%pgrpsyms%build_refspiral(self%eulspace)
-                    if( params%l_neigh )then
+                    if( params%l_neigh .and. (.not. l_direct_prob_neigh) )then
                         call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                         call self%pgrpsyms%build_refspiral(eulspace_sub)
                         allocate(sub_distmat(params%nspace_sub, params%nspace))

@@ -394,7 +394,7 @@ contains
 
     !>  \brief  is for generating class averages offline
     module subroutine cavger_assemble_sums( do_frac_update )
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         logical,  intent(in) :: do_frac_update
         class(oris), pointer :: spproj_field
         type(string)         :: source_stk
@@ -410,10 +410,9 @@ contains
         ! Stack & batch loops
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%fromp, first_stkind, ind_in_stk)
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%top,   last_stkind,  ind_in_stk)
-        call b_ptr%spproj%get_ptcl_source_stkname_and_ind(p_ptr%oritype, p_ptr%fromp, p_ptr%rec_src, &
-            source_stk, ind_in_stk)
-        write(logfhandle,'(A,A,A,A,A,I0,A,I0,A,A,A,I0)') '>>> MAKE_CAVGS RECIMG_SOURCE: ', &
-            trim(p_ptr%rec_src), ' oritype=', trim(p_ptr%oritype), ' particles=', p_ptr%fromp, '-', &
+        call b_ptr%spproj%get_stkname_and_ind(p_ptr%oritype, p_ptr%fromp, source_stk, ind_in_stk)
+        write(logfhandle,'(A,A,A,I0,A,I0,A,A,A,I0)') '>>> MAKE_CAVGS RAW_SOURCE: oritype=', &
+            trim(p_ptr%oritype), ' particles=', p_ptr%fromp, '-', &
             p_ptr%top, ' stack=', trim(source_stk%to_char()), ' indstk(first)=', ind_in_stk
         call flush(logfhandle)
         do istk = first_stkind,last_stkind
@@ -440,12 +439,7 @@ contains
                 ! Transfer orientation parameters
                 call cavger_transf_oridat( nptcls_eff, pinds(1:nptcls_eff) )
                 ! Read images
-                if( trim(p_ptr%rec_src) == 'raw' )then
-                    call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
-                else
-                    call discrete_read_imgbatch_source(p_ptr, b_ptr, p_ptr%rec_src, nptcls_eff, &
-                        pinds(1:nptcls_eff), [1,nptcls_eff], b_ptr%imgbatch)
-                endif
+                call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
                 ! Interpolate images and update class sums
                 call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff))
             enddo   ! batch loop

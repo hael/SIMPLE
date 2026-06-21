@@ -17,7 +17,7 @@ integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
-integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
+integer,          parameter :: PROB_REFINE_STAGE       = 4           ! prob refinement stages 4-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
@@ -225,9 +225,11 @@ contains
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
         else if( istage == 1 )then
-            cfg%refine = 'snhc_smpl'
+            cfg%refine           = 'prob_neigh'
+            cfg%prob_neigh_mode  = 'snhc'
         else if( istage <  PROB_REFINE_STAGE )then
-            cfg%refine = 'shc_smpl'
+            cfg%refine           = 'prob_neigh'
+            cfg%prob_neigh_mode  = 'shc'
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
             cfg%refine = 'prob'
         else
@@ -369,7 +371,12 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         select case(cfg%refine%to_char())
             case('prob_neigh')
-                cfg%inspace_sub = NSPACE_SUB
+                select case(cfg%prob_neigh_mode%to_char())
+                    case('shc','snhc')
+                        cfg%inspace_sub = 0
+                    case DEFAULT
+                        cfg%inspace_sub = NSPACE_SUB
+                end select
         end select
     end subroutine apply_refine3D_search_overrides
 

@@ -1186,8 +1186,7 @@ contains
         endif
         ! make master parameters
         call params%new(cline)
-        write(logfhandle,'(A,A,A,A)') '>>> ABINITIO3D IMAGE SOURCES: match=', trim(params%match_src), &
-            ' rec=', trim(params%rec_src)
+        write(logfhandle,'(A,A)') '>>> ABINITIO3D PARTICLE SOURCE: ', trim(params%ptcl_src)
         l_state_continue_mode = l_state_continue
         if( trim(params%multivol_mode).eq.'independent' )then
             if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &
