@@ -129,6 +129,7 @@ contains
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
+        write(logfhandle,609) '>>> | PROB NEIGH MODE               | '//trim(params%prob_neigh_mode)
         if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
@@ -327,6 +328,7 @@ contains
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
+        write(logfhandle,609) '>>> | PROB NEIGH MODE               | '//trim(params%prob_neigh_mode)
         write(logfhandle,609) '>>> | NSPACE PROJECTION DIRECTIONS  | '//trim(int2str(params%nspace))
         if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
