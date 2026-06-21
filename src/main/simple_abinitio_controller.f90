@@ -28,6 +28,9 @@ integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-stan
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
+character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
+character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
+character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'sum'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -221,23 +224,25 @@ contains
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
+        cfg%prob_neigh_mode = ''
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
+            if( cfg%refine.eq.'prob_neigh' ) cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
         else if( istage == 1 )then
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = 'snhc'
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1
         else if( istage <  PROB_REFINE_STAGE )then
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = 'shc'
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
         else if( istage < PROB_NEIGH_REFINE_STAGE )then
             cfg%refine = 'prob'
         else
-            cfg%refine = 'prob_neigh'
+            cfg%refine           = 'prob_neigh'
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
         endif
         if( docked_split_stage(params, istage) )then
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = 'sum'
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
         endif
     end subroutine set_refine3D_mode_policy
 
@@ -418,7 +423,11 @@ contains
         call cline_refine3D%set('which_iter',             cfg%iter)
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
-        call cline_refine3D%set('prob_neigh_mode',        cfg%prob_neigh_mode)
+        if( cfg%refine.eq.'prob_neigh' )then
+            call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
+        else
+            call cline_refine3D%delete('prob_neigh_mode')
+        endif
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
