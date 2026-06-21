@@ -33,8 +33,11 @@ contains
             do i = 1, size(aux_resolutions)
                 if( aux_resolutions(i) <= TINY ) THROW_HARD('Auxiliary resolution must be positive; setup_nu_dmats')
                 if( aux_resolutions(i) < finest_lp - TINY )then
-                    if( aux_replacement_idx == 0 .or. aux_resolutions(i) < aux_resolutions(aux_replacement_idx) ) &
-                        &aux_replacement_idx = i
+                    if( aux_replacement_idx == 0 )then
+                        aux_replacement_idx = i
+                    else if( aux_resolutions(i) < aux_resolutions(aux_replacement_idx) )then
+                        aux_replacement_idx = i
+                    endif
                 endif
             end do
             if( aux_replacement_idx > 0 )then
