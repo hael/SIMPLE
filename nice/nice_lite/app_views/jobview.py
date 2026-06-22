@@ -3,7 +3,7 @@ import math
 
 from django.shortcuts import render
 
-from ..data_structures.jobclassic import JobClassic
+from ..data_structures.batchjob import BatchJob
 #from ..data_structures.simple  import SIMPLEStream
 
 class JobView:
@@ -12,7 +12,7 @@ class JobView:
 
     def __init__(self, request, jobid):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         
     def render(self):
         projstats = self.job.getProjectStats()
@@ -38,7 +38,7 @@ class JobViewMicrographs:
 
     def __init__(self, request, jobid, sort_micrographs_key, sort_micrographs_asc):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_micrographs_key is not None:
             self.sortkey = sort_micrographs_key
         if sort_micrographs_asc is not None:
@@ -85,7 +85,7 @@ class JobViewMicrographsHistogram:
 
     def __init__(self, request, jobid, sort_micrographs_key):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_micrographs_key is not None:
             self.sortkey = sort_micrographs_key
 
@@ -109,7 +109,7 @@ class JobViewMicrographsPlot:
 
     def __init__(self, request, jobid, sort_micrographs_key, plot_micrographs_key):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_micrographs_key is not None:
             self.sortkey = sort_micrographs_key
         if plot_micrographs_key is not None:
@@ -136,7 +136,7 @@ class JobViewCls2D:
 
     def __init__(self, request, jobid, sort_micrographs_key, sort_micrographs_asc):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_micrographs_key is not None:
             self.sortkey = sort_micrographs_key
         if sort_micrographs_asc is not None:
@@ -179,7 +179,7 @@ class JobViewCls2DHistogram:
 
     def __init__(self, request, jobid, sort_cls2d_key):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_cls2d_key is not None:
             self.sortkey = sort_cls2d_key
 
@@ -203,7 +203,7 @@ class JobViewCls2DPlot:
 
     def __init__(self, request, jobid, sort_cls2d_key, plot_cls2d_key):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
         if sort_cls2d_key is not None:
             self.sortkey = sort_cls2d_key
         if plot_cls2d_key is not None:
@@ -228,7 +228,7 @@ class JobViewLogs:
 
     def __init__(self, request, jobid):
         self.request = request
-        self.job     = JobClassic(id=jobid)
+        self.job     = BatchJob(id=jobid)
 
     def render(self):
         jobdir = self.job.getAbsDir()

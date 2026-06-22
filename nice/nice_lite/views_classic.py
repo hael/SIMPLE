@@ -13,7 +13,7 @@ from .app_views.newjobview     import NewJobView, NewJobTypeView
 
 from .data_structures.project    import Project
 from .data_structures.workspace  import Workspace
-from .data_structures.jobclassic import JobClassic
+from .data_structures.batchjob import BatchJob
 
 @login_required(login_url="/login")
 def classic(request):
@@ -108,7 +108,7 @@ def select_job_micrographs(request, jobid):
     time.sleep(1) # gives user time to see message on button
     project      = Project(request=request)
     workspace    = Workspace(request=request)
-    selectionjob = JobClassic()
+    selectionjob = BatchJob()
     selectionjob.newSelection(request, project, workspace, jobid)
     response = redirect('nice_lite:view_job_micrographs', jobid)
     return response
@@ -118,7 +118,7 @@ def select_job_cls2D(request, jobid):
     time.sleep(1) # gives user time to see message on button
     project      = Project(request=request)
     workspace    = Workspace(request=request)
-    selectionjob = JobClassic()
+    selectionjob = BatchJob()
     selectionjob.newSelection(request, project, workspace, jobid)
     response = redirect('nice_lite:view_job_cls2D', jobid)
     return response
@@ -135,7 +135,7 @@ def new_job(request, parentid, package, jobtype):
 
 @login_required(login_url="/login/")
 def rerun_job(request, jobid):
-    job = JobClassic(id=jobid)
+    job = BatchJob(id=jobid)
     newjobview = NewJobView(request, job.prnt, job.pckg, job.prog, args=job.args)
     return newjobview.render()
 
@@ -161,7 +161,7 @@ def delete_workspace(request, workspaceid):
 def create_job(request, parentid, package, jobtype):
     project   = Project(request=request)
     workspace = Workspace(request=request)
-    job = JobClassic()
+    job = BatchJob()
     job.new(request, project, workspace, parentid, package, jobtype)
     response = redirect('nice_lite:workspace')
     return response
@@ -183,7 +183,7 @@ def update_workspace_description(request):
 
 @login_required(login_url="/login/")
 def update_job_description(request, jobid):
-    job = JobClassic(id=jobid)
+    job = BatchJob(id=jobid)
     job.updateDescription(request)
     response = redirect('nice_lite:workspace')
     return response
@@ -192,7 +192,7 @@ def update_job_description(request, jobid):
 def mark_job_complete(request, jobid):
     project   = Project(request=request)
     workspace = Workspace(request=request)
-    job = JobClassic(id=jobid)
+    job = BatchJob(id=jobid)
     job.markComplete(project, workspace)
     response = redirect('nice_lite:workspace')
     return response
@@ -201,7 +201,7 @@ def mark_job_complete(request, jobid):
 def delete_job(request, jobid):
     project   = Project(request=request)
     workspace = Workspace(request=request)
-    job = JobClassic(id=jobid)
+    job = BatchJob(id=jobid)
     job.delete(project, workspace)
     response = redirect('nice_lite:workspace')
     return response

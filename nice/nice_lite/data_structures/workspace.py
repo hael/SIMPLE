@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 
 # local imports
 from ..models    import ProjectModel, WorkspaceModel, JobClassicModel, DatasetModel
-from .jobclassic import JobClassic
+from .batchjob import BatchJob
 from .simple     import SIMPLEProject
 
 class Workspace:
@@ -128,14 +128,14 @@ class Workspace:
                     item = addNodeHTML(child)
             if "innerHTML" in obj and "type" in obj and "jobid" in obj:
                 if "job" in obj["type"]:
-                    jobclassic = JobClassic(id=obj["jobid"])
+                    batchjob = BatchJob(id=obj["jobid"])
                     context = { 
                         'id'     : obj["jobid"],
-                        'status' : jobclassic.status,
-                        'disp'   : jobclassic.disp,
-                        'name'   : jobclassic.name,
-                        'desc'   : jobclassic.desc,
-                        'pckg'   : jobclassic.pckg,
+                        'status' : batchjob.status,
+                        'disp'   : batchjob.disp,
+                        'name'   : batchjob.name,
+                        'desc'   : batchjob.desc,
+                        'pckg'   : batchjob.pckg,
                     }
                     obj["innerHTML"] = render_to_string('nice_classic/jobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
                 elif "new" in obj["type"]:

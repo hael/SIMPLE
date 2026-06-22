@@ -23,7 +23,7 @@ from .data_structures.project    import Project
 from .data_structures.dataset    import Dataset
 from .data_structures.workspace  import Workspace
 from .data_structures.streamjob  import StreamJob
-from .data_structures.jobclassic import JobClassic
+from .data_structures.batchjob import BatchJob
 
 @login_required(login_url="/login")
 def stream_index(request):
@@ -427,7 +427,7 @@ def link_stream_particle_set(request, jobid, setid, filename, type):
     # this ties stream and classic together !!!
     link_workspace_id = int(request.POST["link_workspace_id"])
     streamjob  = Job(id=jobid)
-    classicjob = JobClassic()
+    classicjob = BatchJob()
     project    = Project(request=request)
     workspace  = Workspace(workspace_id=link_workspace_id)
     dataset    = Dataset(request=request)

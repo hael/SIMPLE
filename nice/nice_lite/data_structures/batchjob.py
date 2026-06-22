@@ -7,7 +7,7 @@ from django.utils import timezone
 from ..models   import JobClassicModel, WorkspaceModel, ProjectModel
 from .simple    import SIMPLE, SIMPLEProjFile
 
-class JobClassic:
+class BatchJob:
 
     id       = 0
     disp     = 0
