@@ -23,6 +23,7 @@ type, extends(eul_prob_tab) :: eul_prob_tab_neigh
 contains
     procedure :: new_neigh
     procedure :: fill_tab      => fill_tab_neigh
+    procedure :: fill_tab_range => fill_tab_neigh_range
     procedure :: ref_normalize => ref_normalize_neigh
     procedure :: ref_assign    => ref_assign_neigh
     procedure :: kill          => kill_neigh
@@ -64,6 +65,12 @@ contains
 
     subroutine fill_tab_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
+        call self%fill_tab_range(1, self%nptcls)
+    end subroutine fill_tab_neigh
+
+    subroutine fill_tab_neigh_range( self, i_first, i_last )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer,                   intent(in)    :: i_first, i_last
         ! Per particle:
         ! 1) get previous-state context and estimate one shift seed
         ! 2) choose sparse support from direct stochastic search or existing subspace modes
@@ -95,10 +102,10 @@ contains
         integer, allocatable     :: inds_sorted(:,:), direct_srch_order(:,:)
         real,    allocatable     :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:), corrs_inpl(:,:)
         integer :: i, ri, istate, ithr, max_refs_to_refine, nfull_refs
-        integer :: iptcl, nsubs, npeak_target, si, iref_full, isub
+        integer :: iptcl, nsubs, npeak_target, si, iref_full, isub, i_from, i_to
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_prob_objfun, l_geom_neigh, l_sum_neigh, l_shc_neigh, l_snhc_neigh, l_direct_stoch_neigh
-        logical :: l_sh_first, l_seed_sh_first
+        logical :: l_seed_sh_first
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
@@ -106,8 +113,10 @@ contains
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
         l_snhc_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'snhc')
         l_direct_stoch_neigh = l_shc_neigh .or. l_snhc_neigh
-        l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
-        l_seed_sh_first = l_sh_first .and. (.not. l_snhc_neigh)
+        l_seed_sh_first = self%p_ptr%l_doshift .and. (.not. l_snhc_neigh)
+        i_from = max(1, i_first)
+        i_to   = min(self%nptcls, i_last)
+        if( i_to < i_from ) return
         call seed_rnd
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
         if( l_direct_stoch_neigh )then
@@ -195,7 +204,7 @@ contains
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 call process_particle(i, iptcl, ithr, .true., shift_seed)
@@ -207,7 +216,7 @@ contains
             ! no shift search - evaluate pooled neighborhoods with zero shift only
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 shift_seed = 0.
@@ -237,7 +246,7 @@ contains
         subroutine clear_sparse_eval_table()
             integer :: i_loc, k_loc, ri_loc
             !$omp parallel do default(shared) private(i_loc,k_loc,ri_loc) proc_bind(close) schedule(static)
-            do i_loc = 1, self%nptcls
+            do i_loc = i_from, i_to
                 do k_loc = 1, self%eval_touched_counts(i_loc)
                     ri_loc = self%eval_touched_refs(k_loc,i_loc)
                     if( ri_loc > 0 )then
@@ -734,7 +743,7 @@ contains
             self%eval_touched_refs(self%eval_touched_counts(iptcl_loc),iptcl_loc) = ri_loc
         end subroutine mark_ref_touched
 
-    end subroutine fill_tab_neigh
+    end subroutine fill_tab_neigh_range
 
     subroutine write_tab_neigh( self, binfname )
         class(eul_prob_tab_neigh), intent(in) :: self
@@ -974,10 +983,10 @@ contains
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val
-        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_sh_first
+        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift
         huge_val = huge(1.0)
         l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
-        l_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
+        l_seed_fallback_shift = self%p_ptr%l_doshift .and. trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
         greedy_state = 0
         final_assigned = .false.
         l_filter_greedy_state = .false.
@@ -1290,7 +1299,7 @@ contains
                 fallback_proj  = self%jinds(fallback_ref_loc)
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
-                if( l_sh_first ) sh_seed = o_prev_loc%get_2Dshift()
+                if( l_seed_fallback_shift ) sh_seed = o_prev_loc%get_2Dshift()
                 if( l_prob_objfun )then
                     if( self%p_ptr%l_prob_inpl )then
                         inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&

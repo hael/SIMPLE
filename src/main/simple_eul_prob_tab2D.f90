@@ -38,6 +38,7 @@ type :: eul_prob_tab2D
     procedure :: new
     ! MAIN PROCEDURES
     procedure :: fill_tab
+    procedure :: fill_tab_range
     procedure :: ref_assign => ref_assign_pow_smpl
     procedure :: write_tab
     procedure :: read_tab_to_glob
@@ -48,6 +49,7 @@ type :: eul_prob_tab2D
     ! PRIVATE
     procedure, private :: ref_normalize
     procedure, private :: fill_tab_prob_snhc
+    procedure, private :: fill_tab_prob_snhc_range
     procedure, private :: ref_normalize_sparse_snhc
     procedure, private :: write_sparse_tab
     procedure, private :: read_sparse_tab_to_glob
@@ -121,9 +123,16 @@ contains
     ! table filling for 2D multi-class assignment
     subroutine fill_tab( self )
         class(eul_prob_tab2D), intent(inout) :: self
+        call self%fill_tab_range(1, self%nptcls)
+    end subroutine fill_tab
+
+    subroutine fill_tab_range( self, i_first, i_last )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
         integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nhood_sz_loc, ninpl_smpl, order_ind
+        integer :: i_from, i_to
         integer :: active_cls(self%nclasses)
         integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
@@ -132,9 +141,12 @@ contains
         logical :: class_active(self%nclasses)
         logical :: l_prob_objfun
         if( self%l_sparse_snhc )then
-            call self%fill_tab_prob_snhc
+            call self%fill_tab_prob_snhc_range(i_first, i_last)
             return
         endif
+        i_from = max(1, i_first)
+        i_to   = min(self%nptcls, i_last)
+        if( i_to < i_from ) return
         call seed_rnd
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
@@ -171,7 +183,7 @@ contains
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,&
             !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,order_ind,inpl_corr,inpl_dist)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best class
@@ -233,7 +245,7 @@ contains
             ! shift-free path: evaluate classes/in-planes at zero shift
             !$omp parallel do default(shared) private(i,iptcl,ithr,icls,iref_n,inpl_corrs,vec_nrots,irot,order_ind,&
             !$omp& inpl_corr,inpl_dist) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 do iref_n = 1, nactive
@@ -260,17 +272,27 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call o_prev%kill
-    end subroutine fill_tab
+    end subroutine fill_tab_range
 
     subroutine fill_tab_prob_snhc( self )
         class(eul_prob_tab2D), intent(inout) :: self
+        call self%fill_tab_prob_snhc_range(1, self%nptcls)
+    end subroutine fill_tab_prob_snhc
+
+    subroutine fill_tab_prob_snhc_range( self, i_first, i_last )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(ran_tabu), allocatable :: direct_rts(:)
         integer,        allocatable :: direct_srch_order(:,:), vec_nrots(:,:), eval_cls(:,:), best_locs(:,:)
         real,           allocatable :: inpl_corrs(:,:), eval_dists(:,:)
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, ninpl_smpl, nrots
+        integer :: i_from, i_to
         real    :: lims(2,2), lims_init(2,2), neigh_frac, power, cxy(3)
         logical :: l_prob_objfun
+        i_from = max(1, i_first)
+        i_to   = min(self%nptcls, i_last)
+        if( i_to < i_from ) return
         call seed_rnd
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
@@ -308,7 +330,7 @@ contains
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 call process_particle(i, iptcl, ithr, .true., cxy)
@@ -318,7 +340,7 @@ contains
             !$omp end parallel do
         else
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 cxy   = 0.
@@ -336,7 +358,7 @@ contains
         subroutine clear_sparse_eval_table()
             integer :: i_loc, k_loc, icls_loc
             !$omp parallel do default(shared) private(i_loc,k_loc,icls_loc) proc_bind(close) schedule(static)
-            do i_loc = 1, self%nptcls
+            do i_loc = i_from, i_to
                 do k_loc = 1, self%eval_touched_counts(i_loc)
                     icls_loc = self%eval_touched_refs(k_loc,i_loc)
                     if( icls_loc > 0 )then
@@ -459,7 +481,7 @@ contains
             self%eval_touched_refs(self%eval_touched_counts(i_loc),i_loc) = icls_loc
         end subroutine mark_ref_touched
 
-    end subroutine fill_tab_prob_snhc
+    end subroutine fill_tab_prob_snhc_range
 
     ! class normalization (same energy) of the loc_tab, [0,1] normalization
     subroutine ref_normalize( self )

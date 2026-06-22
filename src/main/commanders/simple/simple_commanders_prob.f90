@@ -123,7 +123,7 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh, eulprob_obj_batch_neigh
+        type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
         call cline%set('mkdir', 'no')
@@ -150,20 +150,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
-            call eulprob_obj_batch_neigh%new_neigh(params, build, pinds(batch_start:batch_end))
-            call eulprob_obj_batch_neigh%fill_tab
-            eulprob_obj_part_neigh%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch_neigh%loc_tab(:,1:batchsz)
-            eulprob_obj_part_neigh%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch_neigh%seed_shifts(:,1:batchsz)
-            eulprob_obj_part_neigh%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch_neigh%seed_has_sh(1:batchsz)
-            eulprob_obj_part_neigh%eval_touched_counts(batch_start:batch_end) =&
-                &eulprob_obj_batch_neigh%eval_touched_counts(1:batchsz)
-            eulprob_obj_part_neigh%eval_touched_refs(:,batch_start:batch_end) =&
-                &eulprob_obj_batch_neigh%eval_touched_refs(:,1:batchsz)
-            if( eulprob_obj_part_neigh%seed_nrots == 0 ) eulprob_obj_part_neigh%seed_nrots = eulprob_obj_batch_neigh%seed_nrots
-            if( eulprob_obj_part_neigh%seed_nrots /= eulprob_obj_batch_neigh%seed_nrots )then
-                THROW_HARD('seed_nrots mismatch in exec_prob_tab_neigh batching')
-            endif
-            call eulprob_obj_batch_neigh%kill
+            call eulprob_obj_part_neigh%fill_tab_range(batch_start, batch_end)
         end do
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part_neigh%write_tab(fname)
@@ -278,6 +265,9 @@ contains
         endif
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .true.)
+        ! Global object only needs sampled-set maps before reading partition sparse tables.
+        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
+        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
@@ -287,9 +277,6 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
-        ! Global object only needs sampled-set maps before reading partition sparse tables.
-        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
-        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
         ! write the iptcl->(iref,istate) assignment
@@ -321,7 +308,7 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab2D)     :: eulprob_obj_part, eulprob_obj_batch
+        type(eul_prob_tab2D)     :: eulprob_obj_part
         real    :: frac_srch_space
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
@@ -359,20 +346,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end),&
                 &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
-            call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end))
-            call eulprob_obj_batch%fill_tab
-            eulprob_obj_part%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch%loc_tab(:,1:batchsz)
-            eulprob_obj_part%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch%seed_shifts(:,1:batchsz)
-            eulprob_obj_part%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch%seed_has_sh(1:batchsz)
-            if( eulprob_obj_part%l_sparse_snhc )then
-                eulprob_obj_part%eval_touched_counts(batch_start:batch_end) = eulprob_obj_batch%eval_touched_counts(1:batchsz)
-                eulprob_obj_part%eval_touched_refs(:,batch_start:batch_end) = eulprob_obj_batch%eval_touched_refs(:,1:batchsz)
-            endif
-            if( eulprob_obj_part%seed_nrots == 0 ) eulprob_obj_part%seed_nrots = eulprob_obj_batch%seed_nrots
-            if( eulprob_obj_part%seed_nrots /= eulprob_obj_batch%seed_nrots )then
-                THROW_HARD('seed_nrots mismatch in exec_prob_tab2D batching')
-            endif
-            call eulprob_obj_batch%kill
+            call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
         end do
         ! write the 2D probability table
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
