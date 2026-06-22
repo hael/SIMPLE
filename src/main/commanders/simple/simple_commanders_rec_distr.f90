@@ -452,13 +452,15 @@ contains
 
         subroutine setup_nonuniform_filter()
             integer :: n_highres_steps
+            real    :: aux_resolution
             n_highres_steps = nu_highres_steps_for_state()
             call cleanup_nu_aux_images()
             if( use_static_nu_aux_replacement() )then
                 allocate(nu_aux_even(1), nu_aux_odd(1))
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [res0143s(state)], &
+                aux_resolution = nu_aux_effective_resolution()
+                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [aux_resolution], &
                     &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
             else
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::], &
@@ -469,6 +471,18 @@ contains
         logical function use_static_nu_aux_replacement() result(l_use_aux)
             l_use_aux = params%l_ml_reg .and. .not. params%l_nu_refine
         end function use_static_nu_aux_replacement
+
+        real function nu_aux_effective_resolution() result(aux_resolution)
+            aux_resolution = res0143s(state)
+            if( params%l_lpset .and. params%lp > TINY )then
+                if( aux_resolution > params%lp + TINY )then
+                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                        &'>>> NU auxiliary effective resolution clamped by matching low-pass: FSC ', &
+                        &aux_resolution, ' A; matching LP ', params%lp, ' A'
+                endif
+                aux_resolution = min(aux_resolution, params%lp)
+            endif
+        end function nu_aux_effective_resolution
 
         subroutine refine_nonuniform_filter_bank()
             type(nu_highres_extension_stats) :: ext_stats
