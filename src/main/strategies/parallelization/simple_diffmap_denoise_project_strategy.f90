@@ -9,6 +9,7 @@ use simple_sp_project,         only: sp_project
 use simple_image,              only: image
 use simple_image_msk,          only: automask2D
 use simple_diff_map_graphs,    only: diffmap_graph
+use simple_eulspace_neigh_map, only: eulspace_neigh_map
 use simple_classaverager,      only: transform_ptcls
 use simple_imgfile,            only: imgfile
 use simple_srch_sort_loc,      only: hpsort
@@ -221,7 +222,11 @@ contains
         call init_common(params, build, cline)
         call spproj%read(params%projfile)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
-        self%nparts_run = min(max(1, params%nparts), size(cls_inds))
+        if( trim(lowercase(params%graph)) == 'ori' )then
+            self%nparts_run = 1
+        else
+            self%nparts_run = min(max(1, params%nparts), size(cls_inds))
+        endif
         write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise worker planning: requested_nparts=', params%nparts, &
             ' eligible_classes=', size(cls_inds), ' effective_nparts=', self%nparts_run
         call flush(logfhandle)
@@ -327,6 +332,12 @@ contains
         integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
+        if( trim(lowercase(params%graph)) == 'ori' )then
+            call run_diffmap_so3_mixture_graphs(params, build, spproj, cls_inds)
+            if( allocated(cls_inds) ) deallocate(cls_inds)
+            if( allocated(cls_pops) ) deallocate(cls_pops)
+            return
+        endif
         nptcls = spproj%os_ptcl2D%get_noris()
         allocate(processed(nptcls), source=.false.)
         l_img_blank_init = .false.
@@ -399,13 +410,23 @@ contains
         if( trim(params%pca_mode) /= 'diffusion_maps' )then
             THROW_HARD('diffmap_denoise_project supports pca_mode=diffusion_maps only')
         endif
-        select case(trim(params%graph))
-            case('euc','euclidean')
+        select case(trim(lowercase(params%graph)))
+            case('euc','ori')
             case DEFAULT
-                THROW_HARD('diffmap_denoise_project supports non-steerable Euclidean diffusion maps only; use graph=euc')
+                THROW_HARD('diffmap_denoise_project supports graph=euc|ori')
         end select
         if( trim(params%steering) /= 'none' )then
             THROW_HARD('diffmap_denoise_project supports non-steerable diffusion maps only; use steering=none')
+        endif
+        if( trim(lowercase(params%graph)) == 'ori' )then
+            if( params%nspace < 2 ) THROW_HARD('diffmap_denoise_project graph=ori requires nspace >= 2')
+            if( params%nspace_sub < 1 ) THROW_HARD('diffmap_denoise_project graph=ori requires nspace_sub >= 1')
+            if( params%nspace_sub > params%nspace )then
+                THROW_HARD('diffmap_denoise_project graph=ori requires nspace_sub <= nspace')
+            endif
+            if( mod(params%nspace, 2) /= 0 .or. mod(params%nspace_sub, 2) /= 0 )then
+                THROW_HARD('diffmap_denoise_project graph=ori requires even nspace and nspace_sub')
+            endif
         endif
         select case(trim(lowercase(params%preimage_mode)))
             case('spectral','local','nystrom')
@@ -661,6 +682,139 @@ contains
         if( allocated(class_diams) ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
     end subroutine write_diffmap_denoised_class
+
+    subroutine setup_diffmap_so3_mixture_map(params, build, eulspace, neigh_map)
+        type(parameters),         intent(in)    :: params
+        type(builder),            intent(inout) :: build
+        type(oris),               intent(inout) :: eulspace
+        type(eulspace_neigh_map), intent(inout) :: neigh_map
+        type(oris) :: eulspace_sub
+        call eulspace%kill
+        call neigh_map%kill
+        call eulspace%new(params%nspace, is_ptcl=.false.)
+        call build%pgrpsyms%build_refspiral(eulspace)
+        call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
+        call build%pgrpsyms%build_refspiral(eulspace_sub)
+        call neigh_map%new(eulspace, eulspace_sub, build%pgrpsyms)
+        call eulspace_sub%kill
+    end subroutine setup_diffmap_so3_mixture_map
+
+    subroutine assign_global_so3_mixtures(build, spproj, eulspace, neigh_map, cls_inds, particle_mix, mix_counts)
+        type(builder),            intent(inout) :: build
+        type(sp_project),         intent(inout) :: spproj
+        type(oris),               intent(in)    :: eulspace
+        type(eulspace_neigh_map), intent(in)    :: neigh_map
+        integer,                  intent(in)    :: cls_inds(:)
+        integer, allocatable,     intent(out)   :: particle_mix(:), mix_counts(:)
+        integer, allocatable :: full2sub(:)
+        type(ori) :: o
+        integer :: iptcl, full_proj, isub, nptcls, cls
+        nptcls = spproj%os_ptcl2D%get_noris()
+        full2sub = neigh_map%get_full2sub_map()
+        allocate(particle_mix(nptcls), source=0)
+        allocate(mix_counts(neigh_map%get_nsub()), source=0)
+        do iptcl = 1, nptcls
+            if( spproj%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
+            cls = spproj%os_ptcl2D%get_int(iptcl, 'class')
+            if( .not. any(cls_inds == cls) ) cycle
+            call spproj%os_ptcl3D%get_ori(iptcl, o)
+            full_proj = build%pgrpsyms%find_closest_proj(eulspace, o)
+            if( full_proj < 1 .or. full_proj > size(full2sub) )then
+                THROW_HARD('SO3 closest projection outside mixture map; diffmap_denoise_project')
+            endif
+            isub = full2sub(full_proj)
+            if( isub < 1 .or. isub > size(mix_counts) )then
+                THROW_HARD('SO3 mixture id outside subspace range; diffmap_denoise_project')
+            endif
+            particle_mix(iptcl) = isub
+            mix_counts(isub) = mix_counts(isub) + 1
+            call o%kill
+        end do
+        if( allocated(full2sub) ) deallocate(full2sub)
+    end subroutine assign_global_so3_mixtures
+
+    subroutine pack_diffmap_so3_mixture_pinds(particle_mix, mix_counts, mix_rowptr, mix_pinds)
+        integer,              intent(in)  :: particle_mix(:), mix_counts(:)
+        integer, allocatable, intent(out) :: mix_rowptr(:), mix_pinds(:)
+        integer, allocatable :: cursor(:)
+        integer :: iptcl, isub, pos, nsub, total_count
+        nsub = size(mix_counts)
+        allocate(mix_rowptr(nsub + 1), source=1)
+        do isub = 1, nsub
+            mix_rowptr(isub + 1) = mix_rowptr(isub) + mix_counts(isub)
+        end do
+        total_count = mix_rowptr(nsub + 1) - 1
+        allocate(mix_pinds(total_count), source=0)
+        allocate(cursor(nsub), source=mix_rowptr(1:nsub))
+        do iptcl = 1, size(particle_mix)
+            isub = particle_mix(iptcl)
+            if( isub == 0 ) cycle
+            if( isub < 1 .or. isub > nsub ) THROW_HARD('missing global SO3 mixture assignment')
+            pos = cursor(isub)
+            if( pos < mix_rowptr(isub) .or. pos >= mix_rowptr(isub + 1) )then
+                THROW_HARD('SO3 mixture particle list overflow; diffmap_denoise_project')
+            endif
+            mix_pinds(pos) = iptcl
+            cursor(isub) = pos + 1
+        end do
+        do isub = 1, nsub
+            if( cursor(isub) /= mix_rowptr(isub + 1) )then
+                THROW_HARD('SO3 mixture particle list population mismatch; diffmap_denoise_project')
+            endif
+        end do
+        deallocate(cursor)
+    end subroutine pack_diffmap_so3_mixture_pinds
+
+    subroutine build_diffmap_so3_mixture_graphs(params, spproj, mix_counts, mix_rowptr, mix_pinds)
+        use simple_diff_map_graphs, only: diffmap_graph, build_cls_split_graph
+        type(parameters), intent(inout) :: params
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: mix_counts(:), mix_rowptr(:), mix_pinds(:)
+        type(diffmap_graph) :: graph
+        integer :: isub, nptcls, fromp, top
+        if( size(mix_rowptr) /= size(mix_counts) + 1 )then
+            THROW_HARD('SO3 mixture row pointer/count size mismatch; diffmap_denoise_project')
+        endif
+        do isub = 1, size(mix_counts)
+            nptcls = mix_counts(isub)
+            if( nptcls < 2 ) cycle
+            fromp = mix_rowptr(isub)
+            top   = mix_rowptr(isub + 1) - 1
+            if( fromp < 1 .or. top > size(mix_pinds) .or. top - fromp + 1 /= nptcls )then
+                THROW_HARD('SO3 mixture particle list range mismatch; diffmap_denoise_project')
+            endif
+            call build_cls_split_graph(params=params, spproj=spproj, pinds=mix_pinds(fromp:top), graph=graph)
+            if( graph%n /= nptcls ) THROW_HARD('SO3 mixture graph size mismatch; diffmap_denoise_project')
+            if( trim(graph%metric) /= 'orientation' .or. trim(graph%steering) /= 'none' )then
+                THROW_HARD('diffmap_denoise_project expected a non-steerable orientation graph')
+            endif
+            write(logfhandle,'(A,I8,A,I10,A,A,A,I8,A,I10)') &
+                '>>> SO3_MIXTURE mixture=', isub, ' nptcls=', nptcls, ' graph=', trim(graph%metric), &
+                ' k_nn=', graph%k_nn, ' nnz=', graph%nnz
+            call flush(logfhandle)
+            call graph%kill()
+        end do
+    end subroutine build_diffmap_so3_mixture_graphs
+
+    subroutine run_diffmap_so3_mixture_graphs(params, build, spproj, cls_inds)
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: cls_inds(:)
+        type(oris) :: eulspace
+        type(eulspace_neigh_map) :: neigh_map
+        integer, allocatable :: particle_mix(:), mix_counts(:), mix_rowptr(:), mix_pinds(:)
+        call setup_diffmap_so3_mixture_map(params, build, eulspace, neigh_map)
+        call assign_global_so3_mixtures(build, spproj, eulspace, neigh_map, cls_inds, particle_mix, mix_counts)
+        call pack_diffmap_so3_mixture_pinds(particle_mix, mix_counts, mix_rowptr, mix_pinds)
+        call build_diffmap_so3_mixture_graphs(params, spproj, mix_counts, mix_rowptr, mix_pinds)
+        if( allocated(particle_mix) ) deallocate(particle_mix)
+        if( allocated(mix_counts) ) deallocate(mix_counts)
+        if( allocated(mix_rowptr) ) deallocate(mix_rowptr)
+        if( allocated(mix_pinds) ) deallocate(mix_pinds)
+        call neigh_map%kill
+        call eulspace%kill
+    end subroutine run_diffmap_so3_mixture_graphs
 
     subroutine estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
         use simple_diff_map_graphs, only: diffmap_graph

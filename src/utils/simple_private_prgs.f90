@@ -386,6 +386,7 @@ contains
         call cmd_dict%push('nrepeats',      '# times to restart workflow{1}')
         call cmd_dict%push('nsig',          '# sigmas')
         call cmd_dict%push('nspace',        '# projection directions')
+        call cmd_dict%push('nspace_sub',    '# projection directions in subspace')
         call cmd_dict%push('nstates',       '# states to reconstruct')
         call cmd_dict%push('nsub',          '# proj dirs in coarse grid search{300}')
         call cmd_dict%push('nthr',          '# OpenMP threads{1}')

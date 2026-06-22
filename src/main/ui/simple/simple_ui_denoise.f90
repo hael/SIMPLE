@@ -256,6 +256,12 @@ contains
             'Diffusion graph neighbors (default 10; try 10-30)', &
             'Local nearest neighbors used for non-steerable diffusion maps', &
             '# neighbors', .false., 10.0)
+        call diffmap_denoise_project%add_input(UI_FILT, 'graph', 'multi', &
+            'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
+        call diffmap_denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
+        call diffmap_denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
+            'SO3 mixture subspace size', 'SO3 mixture subspace size', &
+            '# subspace directions', .false., 500.0)
         call diffmap_denoise_project%add_input(UI_FILT, 'preimage_mode', 'multi', &
             'Diffusion-map pre-image mode', &
             'Pre-image reconstruction mode(spectral|local|nystrom){local}', '(spectral|local|nystrom){local}', .false., 'local')
