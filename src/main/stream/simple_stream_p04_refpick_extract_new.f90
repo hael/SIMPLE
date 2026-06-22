@@ -353,6 +353,7 @@ contains
         call write_project
         ! write star files (just in case you want to import these particles/micrographs elsewhere)
         call spproj%write_mics_star(string("micrographs.star"))
+        call validate_ptcl2D_star_inputs()
         call spproj%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj%kill
@@ -467,6 +468,48 @@ contains
                     print *,'rt_write  : ', rt_write; call flush(6)
                 endif
             end subroutine write_project
+
+            subroutine validate_ptcl2D_star_inputs()
+                integer :: nstks, nptcls, iptcl, stkind, indstk, fromp, top
+
+                nstks  = spproj%os_stk%get_noris()
+                nptcls = spproj%os_ptcl2D%get_noris()
+                if( nptcls == 0 ) return
+                if( nstks == 0 ) THROW_HARD('cannot export particles.star: os_stk is empty while os_ptcl2D is non-empty')
+
+                do iptcl = 1, nptcls
+                    if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+
+                    if( .not. spproj%os_ptcl2D%isthere(iptcl, 'stkind') )then
+                        THROW_HARD('cannot export particles.star: missing stkind for active particle '//int2str(iptcl))
+                    endif
+                    stkind = spproj%os_ptcl2D%get_int(iptcl, 'stkind')
+                    if( stkind < 1 .or. stkind > nstks )then
+                        THROW_HARD('cannot export particles.star: stkind out of bounds for particle '//int2str(iptcl))
+                    endif
+
+                    if( spproj%os_ptcl2D%isthere(iptcl, 'indstk') )then
+                        indstk = spproj%os_ptcl2D%get_int(iptcl, 'indstk')
+                        if( indstk <= 0 )then
+                            THROW_HARD('cannot export particles.star: non-positive indstk for particle '//int2str(iptcl))
+                        endif
+                        if( spproj%os_stk%isthere(stkind, 'nptcls_stk') )then
+                            if( indstk > spproj%os_stk%get_int(stkind, 'nptcls_stk') )then
+                                THROW_HARD('cannot export particles.star: indstk exceeds nptcls_stk for particle '//int2str(iptcl))
+                            endif
+                        endif
+                    else
+                        if( .not.(spproj%os_stk%isthere(stkind, 'fromp') .and. spproj%os_stk%isthere(stkind, 'top')) )then
+                            THROW_HARD('cannot export particles.star: missing stack fromp/top for stkind '//int2str(stkind))
+                        endif
+                        fromp = spproj%os_stk%get_fromp(stkind)
+                        top   = spproj%os_stk%get_top(stkind)
+                        if( iptcl < fromp .or. iptcl > top )then
+                            THROW_HARD('cannot export particles.star: particle index outside stack fromp/top for particle '//int2str(iptcl))
+                        endif
+                    endif
+                enddo
+            end subroutine validate_ptcl2D_star_inputs
 
             ! updates global project, returns records of processed micrographs
             subroutine update_projects_list( project_list, nimported )
