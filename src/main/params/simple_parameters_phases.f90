@@ -762,6 +762,9 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|sum|shc|snhc')
         end select
+        if( self%nstates == 1 .and. trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'sum' )then
+            self%prob_neigh_mode = 'state'
+        endif
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500

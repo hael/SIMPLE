@@ -257,7 +257,7 @@ the strategy dispatches `volassemble`.
 - restores dense even/odd half-volumes
 - calculates FSC curves and state resolutions
 - applies conical FSC curves for directional ML regularization when
-  `ml_reg=yes`; `conical_fsc=yes` is the default
+  `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
 - restores merged state volumes
 - runs automask and NU postprocessing decisions
 - writes derived reference products

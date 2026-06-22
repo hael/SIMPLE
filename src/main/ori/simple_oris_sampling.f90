@@ -117,8 +117,8 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         type(ran_tabu)       :: rt
-        integer, allocatable :: states(:), updatecnts(:), inds_pool(:), inds_fill(:)
-        integer              :: i, cnt, nptcls, ucnt, ucnt_min, ucnt_max, nfill
+        integer, allocatable :: states(:), updatecnts(:)
+        integer              :: i, cnt, nptcls, ucnt, ucnt_min, ucnt_max, ucnt_lim
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
@@ -137,19 +137,23 @@ contains
         ucnt_min    = minval(updatecnts)
         ucnt_max    = maxval(updatecnts)
         nsamples    = min(nptcls, max(1, nint(update_frac * real(nptcls))))
-        allocate(inds_pool(0), source=0)
-        do ucnt = ucnt_min, ucnt_max
-            if( size(inds_pool) >= nsamples ) exit
-            inds_fill = pack(inds, mask=updatecnts == ucnt)
-            if( size(inds_fill) == 0 ) cycle
-            rt = ran_tabu(size(inds_fill))
-            call rt%shuffle(inds_fill)
-            call rt%kill
-            nfill = min(nsamples - size(inds_pool), size(inds_fill))
-            inds_pool = [inds_pool, inds_fill(1:nfill)]
-        end do
-        if( size(inds_pool) < nsamples ) THROW_HARD('insufficient active update candidates')
-        inds = inds_pool(1:nsamples)
+        ucnt_lim    = 0
+        if( ucnt_max > ucnt_min )then
+            do ucnt = ucnt_min,ucnt_max
+                if( count(updatecnts < ucnt) >= nsamples )then
+                    ucnt_lim = ucnt
+                    exit
+                endif
+            end do
+        endif
+        if( ucnt_lim > 0 )then
+            inds   = pack(inds, mask=updatecnts < ucnt_lim)
+            nptcls = size(inds)
+        endif
+        rt = ran_tabu(nptcls)
+        call rt%shuffle(inds)
+        call rt%kill
+        inds = inds(1:nsamples)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
