@@ -22,6 +22,7 @@ logical          :: l_automsk         = .false.
 logical          :: l_nonuniform      = .false.
 logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override = .false.
+logical          :: l_refine3D_lp_override = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
 type(string)     :: refine3D_mode_override
@@ -118,6 +119,7 @@ contains
         cline_reconstruct3D = cline
         cline_reproject     = cline
         l_refine3D_mode_override = cline%defined('refine')
+        l_refine3D_lp_override   = cline%defined('lp')
         if( l_refine3D_mode_override ) refine3D_mode_override = trim(params%refine)
         if( l_refine3D_mode_override ) write(logfhandle,'(A,A)') &
             &'>>> ABINITIO3D REFINE MODE OVERRIDE: ', refine3D_mode_override%to_char()

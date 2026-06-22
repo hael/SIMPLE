@@ -152,11 +152,8 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        logical :: l_cmdline_lp_override
-        ! Capture parent command-line intent before child refine3D stages set lp internally.
-        l_cmdline_lp_override = params%l_lpset
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override )
     end procedure set_cline_refine3D
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
@@ -228,7 +225,10 @@ contains
         cfg%prob_neigh_mode = ''
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
-            if( cfg%refine.eq.'prob_neigh' ) cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
+            if( cfg%refine.eq.'prob_neigh' )then
+                cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
+                if( params%nstates == 1 .and. cfg%prob_neigh_mode.eq.'sum' ) cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
+            endif
         else if( istage == 1 )then
             cfg%refine           = 'prob_neigh'
             cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1

@@ -53,6 +53,7 @@ contains
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             frac      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%frac
+            if( frac <= 0. ) frac = 100.
             iref      = (istate-1)*self%s%p_ptr%nspace + iproj
             if( trim(self%s%p_ptr%multivol_mode).eq.'input_oris_fixed' .and. &
                 &trim(self%s%p_ptr%refine).eq.'prob_state' )then

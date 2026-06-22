@@ -39,7 +39,9 @@ type :: eul_prob_tab
     procedure :: new_assignment
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
+    procedure :: fill_tab_range
     procedure :: fill_tab_state_only
+    procedure :: fill_tab_state_only_range
     procedure :: write_tab
     procedure :: write_state_tab
     procedure :: read_assignment
@@ -178,6 +180,12 @@ contains
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self )
         class(eul_prob_tab), intent(inout) :: self
+        call self%fill_tab_range(1, self%nptcls)
+    end subroutine fill_tab
+
+    subroutine fill_tab_range( self, i_first, i_last )
+        class(eul_prob_tab), intent(inout) :: self
+        integer,             intent(in)    :: i_first, i_last
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
@@ -186,6 +194,9 @@ contains
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         logical :: l_prob_objfun, l_sh_first
+        if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
+            THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_range')
+        endif
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
@@ -212,7 +223,7 @@ contains
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best reference
@@ -279,7 +290,7 @@ contains
         else
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 do ri = 1, self%nrefs
@@ -305,14 +316,23 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call o_prev%kill
-    end subroutine fill_tab
+    end subroutine fill_tab_range
 
     subroutine fill_tab_state_only( self )
         class(eul_prob_tab), intent(inout) :: self
+        call self%fill_tab_state_only_range(1, self%nptcls)
+    end subroutine fill_tab_state_only
+
+    subroutine fill_tab_state_only_range( self, i_first, i_last )
+        class(eul_prob_tab), intent(inout) :: self
+        integer,             intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
         integer :: i, iproj, iptcl, ithr, irot, istate, iref_start, is
         real    :: lims(2,2), lims_init(2,2), cxy(3)
+        if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
+            THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_state_only_range')
+        endif
         call seed_rnd
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -327,7 +347,7 @@ contains
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,is,istate,irot,iref_start,cxy)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! identify shifts using the previously assigned best reference
@@ -358,7 +378,7 @@ contains
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,o_prev,irot,iproj,is,istate,iref_start)&
             !$omp proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
+            do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ! identify shifts using the previously assigned best reference
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
@@ -382,7 +402,7 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call o_prev%kill
-    end subroutine fill_tab_state_only
+    end subroutine fill_tab_state_only_range
 
     ! Legacy in-place normalization retained for subclasses that override this
     ! binding. Plain prob assignment uses compact score vectors instead,
@@ -573,6 +593,7 @@ contains
             self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
+            self%assgn_map(assigned_ptcl)%frac = 100.
         end subroutine assign_current_ref
 
         subroutine assign_greedy_state_labels()
@@ -676,6 +697,7 @@ contains
         logical :: ptcl_avail(self%nptcls)
         if( self%nstates == 1 )then
             self%assgn_map = self%state_tab(1,:)
+            self%assgn_map%frac = 100.
             return
         endif
         call self%state_normalize
@@ -697,6 +719,7 @@ contains
             assigned_ptcl   = stab_inds(state_dist_inds(assigned_istate), assigned_istate)
             ptcl_avail(assigned_ptcl)     = .false.
             self%assgn_map(assigned_ptcl) = self%state_tab(assigned_istate,assigned_ptcl)
+            self%assgn_map(assigned_ptcl)%frac = 100.
             ! update the state_dist and state_dist_inds
             do istate = 1, self%nstates
                 do while( state_dist_inds(istate) < self%nptcls .and. .not.(ptcl_avail(stab_inds(state_dist_inds(istate), istate))))

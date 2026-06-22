@@ -48,7 +48,7 @@ contains
         type(string)             :: fname
         type(builder)            :: build
         type(parameters)         :: params
-        type(eul_prob_tab)       :: eulprob_obj_part, eulprob_obj_batch
+        type(eul_prob_tab)       :: eulprob_obj_part
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
         logical :: l_state_only
@@ -81,21 +81,11 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
-            call eulprob_obj_batch%new(params, build, pinds(batch_start:batch_end), state_only=l_state_only)
             if( l_state_only )then
-                call eulprob_obj_batch%fill_tab_state_only
-                eulprob_obj_part%state_tab(:,batch_start:batch_end) = eulprob_obj_batch%state_tab(:,1:batchsz)
+                call eulprob_obj_part%fill_tab_state_only_range(batch_start, batch_end)
             else
-                call eulprob_obj_batch%fill_tab
-                eulprob_obj_part%loc_tab(:,batch_start:batch_end)     = eulprob_obj_batch%loc_tab(:,1:batchsz)
-                eulprob_obj_part%seed_shifts(:,batch_start:batch_end) = eulprob_obj_batch%seed_shifts(:,1:batchsz)
-                eulprob_obj_part%seed_has_sh(batch_start:batch_end)   = eulprob_obj_batch%seed_has_sh(1:batchsz)
-                if( eulprob_obj_part%seed_nrots == 0 ) eulprob_obj_part%seed_nrots = eulprob_obj_batch%seed_nrots
-                if( eulprob_obj_part%seed_nrots /= eulprob_obj_batch%seed_nrots )then
-                    THROW_HARD('seed_nrots mismatch in exec_prob_tab batching')
-                endif
+                call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
             endif
-            call eulprob_obj_batch%kill
         end do
         if( l_state_only )then
             call eulprob_obj_part%write_state_tab(fname)
