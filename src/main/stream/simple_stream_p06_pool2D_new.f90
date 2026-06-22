@@ -194,7 +194,7 @@ contains
             if( nimported > 0 )then
                 time_last_import = time8()
                 iter_last_import = get_pool_iter()
-                if( nptcls_glob_state_1 > nptcls_dynamic_threshold ) call unpause_pool()
+                if( nptcls_glob_state_1 > nptcls_dynamic_threshold .or. l_sieve_final ) call unpause_pool()
             endif
             l_imported            = setslist%get_included_flags()
             ! Adaptive pause policy:
