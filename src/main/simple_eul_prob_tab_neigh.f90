@@ -588,7 +588,9 @@ contains
 
         subroutine build_pooled_neighborhood(ithr_loc, prev_proj_loc)
             integer, intent(in) :: ithr_loc, prev_proj_loc
-            integer :: si_loc, istate_loc, npeak_found_loc, isub_loc, coarse_proj_loc, iproj_loc
+            integer :: si_loc, istate_loc, npeak_found_loc, coarse_proj_loc, iproj_loc
+            integer :: prev_isub_loc, k_loc, slot_loc
+            logical :: already_in_pool_loc
             coarse_ws%pooled_sub_count(:,ithr_loc) = 0
             do si_loc = 1, self%nstates
                 istate_loc = self%ssinds(si_loc)
@@ -597,23 +599,41 @@ contains
                     coarse_ws%pooled_sub_inds(1:npeak_found_loc,istate_loc,ithr_loc) =&
                         &coarse_ws%peak_subspace_inds(1:npeak_found_loc,istate_loc,ithr_loc)
                     coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = npeak_found_loc
-                else
-                    coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
-                    if( .not. self%proj_exists(coarse_proj_loc,istate_loc) )then
-                        coarse_proj_loc = 0
-                        do iproj_loc = 1, self%p_ptr%nspace
-                            if( self%proj_exists(iproj_loc,istate_loc) )then
-                                coarse_proj_loc = iproj_loc
-                                exit
-                            endif
-                        enddo
-                    endif
-                    if( coarse_proj_loc < 1 ) cycle
-                    isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
-                    if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
-                    coarse_ws%pooled_sub_inds(1,istate_loc,ithr_loc) = isub_loc
-                    coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = 1
                 endif
+                ! Always include the neighborhood corresponding to the previous best
+                ! identified orientation for all non-stochastic, non-geom modes.
+                ! Resolve the previous projection to a valid one for this state.
+                coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
+                if( .not. self%proj_exists(coarse_proj_loc,istate_loc) )then
+                    coarse_proj_loc = 0
+                    do iproj_loc = 1, self%p_ptr%nspace
+                        if( self%proj_exists(iproj_loc,istate_loc) )then
+                            coarse_proj_loc = iproj_loc
+                            exit
+                        endif
+                    enddo
+                endif
+                if( coarse_proj_loc < 1 ) cycle
+                prev_isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
+                if( prev_isub_loc < 1 .or. prev_isub_loc > nsubs ) prev_isub_loc = 1
+                ! Skip if already in pool to avoid duplicate evaluation
+                already_in_pool_loc = .false.
+                do k_loc = 1, coarse_ws%pooled_sub_count(istate_loc,ithr_loc)
+                    if( coarse_ws%pooled_sub_inds(k_loc,istate_loc,ithr_loc) == prev_isub_loc )then
+                        already_in_pool_loc = .true.
+                        exit
+                    endif
+                enddo
+                if( already_in_pool_loc ) cycle
+                ! Make the previous-orientation subspace part of the npeak_target peaks.
+                ! If there is room, append it; otherwise evict the worst (last) entry.
+                if( coarse_ws%pooled_sub_count(istate_loc,ithr_loc) < npeak_target )then
+                    slot_loc = coarse_ws%pooled_sub_count(istate_loc,ithr_loc) + 1
+                    coarse_ws%pooled_sub_count(istate_loc,ithr_loc) = slot_loc
+                else
+                    slot_loc = npeak_target
+                endif
+                coarse_ws%pooled_sub_inds(slot_loc,istate_loc,ithr_loc) = prev_isub_loc
             enddo
         end subroutine build_pooled_neighborhood
 
