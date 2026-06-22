@@ -258,7 +258,7 @@ contains
             '# neighbors', .false., 10.0)
         call diffmap_denoise_project%add_input(UI_FILT, 'preimage_mode', 'multi', &
             'Diffusion-map pre-image mode', &
-            'Pre-image reconstruction mode(spectral|local){local}', '(spectral|local){local}', .false., 'local')
+            'Pre-image reconstruction mode(spectral|local|nystrom){local}', '(spectral|local|nystrom){local}', .false., 'local')
         call diffmap_denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
         call diffmap_denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
