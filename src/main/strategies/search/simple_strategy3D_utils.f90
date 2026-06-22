@@ -77,22 +77,13 @@ contains
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
             select case(trim(s%refine))
-                case('prob_neigh')
-                    ! Keep convergence accounting consistent with refine=prob.
-                    ! prob_neigh uses a sparse candidate graph, but nrefs_eval is
-                    ! already set by the probabilistic strategy in full-space terms.
-                    nrefs_tot  = s%nprojs * neff_states
-                    nrefs_eval = s%nrefs_eval
                 case('shc_neigh')
                     nrefs_tot  = s%nprojs_sub * neff_states
                     nrefs_eval = s%nrefs_eval
                 case DEFAULT
-                    nrefs_tot  = s%nnn * neff_states
-                    if( s%nnn > 1 )then
-                        nrefs_eval = s%nrefs_eval
-                    else
-                        nrefs_eval = nrefs_tot  ! the case of global srch
-                    endif
+                    ! Deterministic neighborhood refinement is local refinement, not stochastic coverage.
+                    nrefs_tot  = 1
+                    nrefs_eval = 1
             end select
         else if( s%l_greedy )then
             nrefs_tot  = s%nprojs * neff_states

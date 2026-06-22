@@ -1203,12 +1203,25 @@ contains
 
         real function search_frac(iptcl_loc)
             integer, intent(in) :: iptcl_loc
-            if( self%nrefs > 0 )then
+            if( reports_sparse_search_frac() .and. self%nrefs > 0 )then
                 search_frac = 100.0 * real(self%eval_touched_counts(iptcl_loc)) / real(self%nrefs)
             else
                 search_frac = 100.0
             endif
         end function search_frac
+
+        logical function reports_sparse_search_frac()
+            reports_sparse_search_frac = .false.
+            select case(trim(self%p_ptr%refine))
+                case('prob_neigh')
+                    select case(trim(self%p_ptr%prob_neigh_mode))
+                        case('shc','snhc')
+                            reports_sparse_search_frac = .true.
+                        case DEFAULT
+                    end select
+                case DEFAULT
+            end select
+        end function reports_sparse_search_frac
 
         integer function pick_best_evaluated_ref(iptcl_loc, state_filter) result(ri_best)
             integer, intent(in) :: iptcl_loc

@@ -30,7 +30,8 @@ integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
 character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
-character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'sum'
+character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
+character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'sum'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -238,11 +239,15 @@ contains
             cfg%refine = 'prob'
         else
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+            if( params%nstates > 1 )then
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
+            else
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+            endif
         endif
         if( docked_split_stage(params, istage) )then
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
         endif
     end subroutine set_refine3D_mode_policy
 
