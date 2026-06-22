@@ -231,7 +231,11 @@ contains
             endif
             cavgs = cavgs_tmp
         endif
-        call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
+        if( file_exists(cavgs) )then
+            call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
+        else
+            THROW_WARN('merge_chunk_projfiles: missing class-average stack; skipping os_out cavg registration: '//cavgs%to_char())
+        endif
         ! merge and add sigmas
         if( l_merge_sigma2 )then
             call average_sigma2_groups(sigma2_fname, chunks_sigma2)

@@ -33,7 +33,7 @@ integer,          parameter :: PAUSE_NITERS               = 5                   
 integer,          parameter :: PAUSE_TIMELIMIT            = 600                       ! time (secs) after which 2D analysis is paused
 integer,          parameter :: POOL_FREQ_REJECTION        = 5                         ! pool class rejection performed every POOL_FREQ_REJECTION iteration
 integer,          parameter :: POOL_NPREV_RES             = 5                         ! # of previous resolution resolutions to store for resolution update (>=2)
-integer,          parameter :: PREPROC_NINIPICK           = 500                       ! number of micrographs to perform pick preprocessing on
+integer,          parameter :: PREPROC_NINIPICK           = 1000                      ! number of micrographs to perform pick preprocessing on
 integer,          parameter :: PREPROC_NPARTS             = 10
 integer,          parameter :: PREPROC_NTHR               = 4
 integer,          parameter :: REFPICK_NPARTS             = 10
