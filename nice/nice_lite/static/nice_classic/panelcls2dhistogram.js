@@ -1,11 +1,11 @@
 window.addEventListener("load", () =>{
     for(const cls2d_histogram of document.getElementsByClassName("cls2d_histogram")){
         const ctx = cls2d_histogram.getContext("2d");
-        const labels = JSON.parse(cls2d_histogram.dataset.labels.replaceAll("'", '"'))
+        const labels = JSON.parse(cls2d_histogram.workspace.labels.replaceAll("'", '"'))
         while(labels.length < 24){
           labels.push("")
         }
-        const data = JSON.parse(cls2d_histogram.dataset.values.replaceAll("'", '"'))
+        const data = JSON.parse(cls2d_histogram.workspace.values.replaceAll("'", '"'))
   
         new Chart(ctx, {
             type: 'bar',
@@ -28,7 +28,7 @@ window.addEventListener("load", () =>{
             },
             data: {
               labels: labels,
-              datasets: [{
+              workspaces: [{
                   data: data,
                   backgroundColor: [
                     window.getComputedStyle(document.body).getPropertyValue('--color-nice4header')

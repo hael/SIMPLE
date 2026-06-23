@@ -23,7 +23,7 @@ const updateLabel = (slider) => {
     const idx = Math.round(slider.scrollLeft / slider.clientWidth);
     const slide = slider.children[idx];
     if (!slide) return;
-    const newText = slide.dataset.label ?? '';
+    const newText = slide.workspace.label ?? '';
     if (label.textContent === newText) return;
     label.style.opacity = '0';
     setTimeout(() => {
@@ -91,10 +91,10 @@ const updateContrast = (element) => {
 // labelFn converts a raw label value to the annotation display string.
 const buildDraggerHistogram = (canvas, formId, fieldName, labelFn) => {
     const style  = getComputedStyle(document.body);
-    const labels = JSON.parse(canvas.dataset.labels.replaceAll("'", '"'));
-    const data   = JSON.parse(canvas.dataset.values.replaceAll("'", '"'));
+    const labels = JSON.parse(canvas.workspace.labels.replaceAll("'", '"'));
+    const data   = JSON.parse(canvas.workspace.values.replaceAll("'", '"'));
 
-    let savedval   = Number(canvas.dataset.savedval);
+    let savedval   = Number(canvas.workspace.savedval);
     let savedidx   = labels.indexOf(savedval);
     let dragactive = false;
 
@@ -182,7 +182,7 @@ const buildDraggerHistogram = (canvas, formId, fieldName, labelFn) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data,
                 backgroundColor: style.getPropertyValue('--color-streamring').trim() + '33',
                 borderColor:     style.getPropertyValue('--color-streambar').trim(),
@@ -202,7 +202,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),     // imported / accepted
@@ -224,13 +224,13 @@ window.addEventListener('load', () => {
 
     for (const canvas of document.getElementsByClassName('movies_pie_chart')) {
         // Skip when preprocessing stats are not yet populated (empty string = no data).
-        if (!canvas.dataset.imported) continue;
+        if (!canvas.workspace.imported) continue;
         buildDonut(
             canvas,
             [
-                Number(canvas.dataset.imported),
-                Number(canvas.dataset.processed || 0),
-                Number(canvas.dataset.rejected  || 0)
+                Number(canvas.workspace.imported),
+                Number(canvas.workspace.processed || 0),
+                Number(canvas.workspace.rejected  || 0)
             ],
             ['imported', 'processed', 'rejected']
         );

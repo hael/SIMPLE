@@ -2,19 +2,19 @@
   stream.html — outer shell for the SIMPLE Stream interface.
 
   Structure:
-    - Fixed header bar: logo, project/dataset selectors, classic/logout actions.
-    - Full-height iframe: loads the dataset view (stream list and details) at
-      iframeurl, or remains blank until a project and dataset are selected.
+    - Fixed header bar: logo, project/workspace selectors, classic/logout actions.
+    - Full-height iframe: loads the workspace view (stream list and details) at
+      iframeurl, or remains blank until a project and workspace are selected.
     - messages.html: renders any Django flash messages.
 
   Context variables:
     projects           — queryset of all projects available to this user
-    datasets           — queryset of datasets for the selected project
+    workspaces           — queryset of workspaces for the selected project
     current_project_id — id of the currently selected project (0 = none)
-    current_dataset_id — id of the currently selected dataset (0 = none)
+    current_workspace_id — id of the currently selected workspace (0 = none)
     iframeurl          — URL to load inside the content iframe, or None
 
-  Selecting a project or dataset submits a GET form, reloading the page with
+  Selecting a project or workspace submits a GET form, reloading the page with
   the new selection reflected in the URL query string.
 {% endcomment %}
 {% load static %}
@@ -63,18 +63,18 @@
                 </form>
             </div>
 
-            <!-- Dataset -->
+            <!-- Workspace -->
             <div class="flex items-center gap-1.5">
-                <span class="text-xs text-streamlabel">dataset</span>
+                <span class="text-xs text-streamlabel">workspace</span>
                 <form method="GET">
-                    <select name="selected_dataset_id" onchange="this.form.submit()"
+                    <select name="selected_workspace_id" onchange="this.form.submit()"
                             class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                        {% if current_dataset_id == 0 %}
+                        {% if current_workspace_id == 0 %}
                             <option disabled selected value="">select</option>
                         {% endif %}
                         <option value="-1">✚ create new</option>
-                        {% for dataset in datasets %}
-                            <option value="{{ dataset.id }}" {% if dataset.id == current_dataset_id %}selected{% endif %}>{{ dataset.name }}</option>
+                        {% for workspace in workspaces %}
+                            <option value="{{ workspace.id }}" {% if workspace.id == current_workspace_id %}selected{% endif %}>{{ workspace.name }}</option>
                         {% endfor %}
                     </select>
                 </form>
@@ -84,8 +84,6 @@
 
         <!-- Right actions -->
         <div class="flex items-center gap-2 ml-auto">
-            <a href="{% url 'nice_lite:classic' %}"
-               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">classic</a>
             <a href="{% url 'nice_lite:logout' %}"
                class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</a>
         </div>

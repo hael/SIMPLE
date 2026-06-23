@@ -11,27 +11,27 @@ def assertProject(project, name=None, desc=None, dirc=None, id=None):
   if id != None:  
     testcase.assertEqual(project.id,   id,   "project id is not equal to"           + str(id))
 
-def assertWorkspace(workspace, id=None, user=None, name=None, desc=None):
+def assertWorkspaceAlias(workspace, id=None, user=None, name=None, desc=None):
   testcase = TestCase()
   if id != None:  
     testcase.assertEqual(workspace.id,   id,   "workspace id is not equal to"         + str(id))
   if user != None:  
     testcase.assertEqual(workspace.user, user, "workspace user is not equal to"       + user   )
   if name != None:
-    testcase.assertEqual(workspace.name, name, "dataset name is not equal to "        + name   )
+    testcase.assertEqual(workspace.name, name, "workspace name is not equal to "        + name   )
   if desc != None:
-    testcase.assertEqual(workspace.desc, desc, "dataset description is not equal to " + desc   )
+    testcase.assertEqual(workspace.desc, desc, "workspace description is not equal to " + desc   )
 
-def assertDataset(dataset, id=None, user=None, name=None, desc=None):
+def assertWorkspace(workspace, id=None, user=None, name=None, desc=None):
   testcase = TestCase()
   if id != None:  
-    testcase.assertEqual(dataset.id,   id,    "dataset id is not equal to"          + str(id))
+    testcase.assertEqual(workspace.id,   id,    "workspace id is not equal to"          + str(id))
   if user != None:  
-    testcase.assertEqual(dataset.user, user, "dataset user is not equal to"         + user   )
+    testcase.assertEqual(workspace.user, user, "workspace user is not equal to"         + user   )
   if name != None:
-    testcase.assertEqual(dataset.name, name, "dataset name is not equal to "        + name   )
+    testcase.assertEqual(workspace.name, name, "workspace name is not equal to "        + name   )
   if desc != None:
-    testcase.assertEqual(dataset.desc, desc, "dataset description is not equal to " + desc   )
+    testcase.assertEqual(workspace.desc, desc, "workspace description is not equal to " + desc   )
 
 def assertDispatch(dispatch, id=None):
   testcase = TestCase()

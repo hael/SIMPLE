@@ -1,9 +1,13 @@
+"""Launchers and project-file helpers for SIMPLE stream and classic workflows."""
+
 # global imports
-import os
-import stat
 import json
+import os
 import shutil
+import stat
 import subprocess
+
+# local imports
 from ..helpers import *
 from ..models import DispatchModel
 
@@ -285,7 +289,7 @@ class SIMPLE:
         Falls back to an empty dict on failure so callers can still inspect the object.
         """
         try:
-            result  = subprocess.run(
+            result = subprocess.run(
                 self.ui_cmd,
                 capture_output=True,
                 check=True,
@@ -293,7 +297,7 @@ class SIMPLE:
             )
             self.ui = json.loads(result.stdout)
         except subprocess.CalledProcessError as cpe:
-            print(cpe.stderr, end="")
+            print_error(cpe.stderr)
             self.ui = {}
 
     # ------------------------------------------------------------------
@@ -312,10 +316,14 @@ class SIMPLE:
         self.jobtype     = jobtype
         self.jobid       = jobid
         self.parent_proj = parent_proj if parent_proj is not None else os.path.join(parent_dir, "workspace.simple")
-        if not self.base_dir:                    return False
-        if not os.path.isdir(self.base_dir):     return False
-        if not os.path.isdir(parent_dir):        return False
-        if not os.path.exists(self.parent_proj): return False
+        if not self.base_dir:
+            return False
+        if not os.path.isdir(self.base_dir):
+            return False
+        if not os.path.isdir(parent_dir):
+            return False
+        if not os.path.exists(self.parent_proj):
+            return False
         return self.dispatch()
 
     def dispatch(self):
@@ -358,7 +366,7 @@ class SIMPLE:
             with open(dispatch_script_path, "w") as scriptfile:
                 scriptfile.write(dispatch_script)
         except IOError:
-            print("File '%s' can not be written")
+            print_error("File '%s' can not be written" % dispatch_script_path)
             return False
         os.chmod(dispatch_script_path, stat.S_IRWXU)
 
@@ -367,7 +375,7 @@ class SIMPLE:
         try:
             _submit(dispatchmodel, dispatch_script_path, self.base_dir)
         except Exception as e:
-            print(str(e), end="")
+            print_error(str(e))
             return False
         return True
 
@@ -397,7 +405,7 @@ class SIMPLEProject:
         try:
             subprocess.run(cmd)
         except subprocess.CalledProcessError as cpe:
-            print(cpe.stderr, end="")
+            print_error(cpe.stderr)
 
 
 class SIMPLEProjFile:
@@ -426,7 +434,7 @@ class SIMPLEProjFile:
             )
             return json.loads(result.stdout)
         except subprocess.CalledProcessError as cpe:
-            print(cpe.stderr, end="")
+            print_error(cpe.stderr)
             return {}
 
     def _check_projfile(self):

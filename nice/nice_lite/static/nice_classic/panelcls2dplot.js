@@ -1,7 +1,7 @@
 window.addEventListener("load", () =>{
     for(const micrographs_plot of document.getElementsByClassName("cls2d_plot")){
         const ctx = micrographs_plot.getContext("2d");
-        const data   = JSON.parse(micrographs_plot.dataset.values.replaceAll("'", '"'))
+        const data   = JSON.parse(micrographs_plot.workspace.values.replaceAll("'", '"'))
         new Chart(ctx, {
             type: 'scatter',
             options:{
@@ -29,7 +29,7 @@ window.addEventListener("load", () =>{
                 maintainAspectRatio : false,
             },
             data: {
-                datasets: [{
+                workspaces: [{
                   data: data,
                   backgroundColor: [
                     window.getComputedStyle(document.body).getPropertyValue('--color-nice4header')

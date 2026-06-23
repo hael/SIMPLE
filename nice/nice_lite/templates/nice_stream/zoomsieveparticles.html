@@ -119,14 +119,7 @@
                     </div>
                 </div>
                 {% if status == "running" and jobstats.user_input is True %}
-                    <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline">
-                        <form method="POST" action="{% url 'nice_lite:select_stream_sieve_particles' %}">
-                            {% csrf_token %}
-                            <input name="selected_job_id" value="{{ jobid }}" type="hidden">
-                            <input type="hidden" id="accepted_cls2D" name="accepted_cls2D" value="">
-                            <button type="button" onclick="selectSievecls(this.form)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">update reference selection</button>
-                        </form>
-                    </div>
+                    <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline"></div>
                 {% endif %}
                 </div>
             </div>

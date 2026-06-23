@@ -22,7 +22,7 @@ selectAbove = (element, id) => {
       deselected.classList.add("hidden")
     }else{
       deselected.classList.remove("hidden")
-      cls2ddeselection.push(Number(cls2dcontainer.dataset.idx))
+      cls2ddeselection.push(Number(cls2dcontainer.workspace.idx))
     }
     if(cls2dcontainer == element){
       threshold = false
@@ -45,7 +45,7 @@ selectBelow = (element, id) => {
       deselected.classList.add("hidden")
     }else{
       deselected.classList.remove("hidden")
-      cls2ddeselection.push(Number(cls2dcontainer.dataset.idx))
+      cls2ddeselection.push(Number(cls2dcontainer.workspace.idx))
     }
   }
   hideMenu()
@@ -111,8 +111,8 @@ updateCounts = () => {
   nptcls_tot = 0
   for(const cls2dcontainer of cls2dcontainers){
     const deselected = cls2dcontainer.querySelector(".deselected")
-    const pop = Number(cls2dcontainer.dataset.pop)
-    const idx = Number(cls2dcontainer.dataset.idx)
+    const pop = Number(cls2dcontainer.workspace.pop)
+    const idx = Number(cls2dcontainer.workspace.idx)
     nptcls_tot = nptcls_tot + pop
     if(!cls2ddeselection.includes(idx)){
       nptcls = nptcls + pop
@@ -126,7 +126,7 @@ window.addEventListener("load", () =>{
   let cls2ddeselection = []
   if(cls2ddeselectiontext != null) cls2ddeselection = JSON.parse(cls2ddeselectiontext)
   for(const cls2dcontainer of  document.querySelectorAll(".cls2dcontainer")){
-    const idx = Number(cls2dcontainer.dataset.idx)
+    const idx = Number(cls2dcontainer.workspace.idx)
     if(cls2ddeselection.includes(idx)){
       const deselected = cls2dcontainer.querySelector(".deselected")
       deselected.classList.remove("hidden")

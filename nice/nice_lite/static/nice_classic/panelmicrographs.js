@@ -22,7 +22,7 @@ selectAbove = (element, id) => {
       deselected.classList.add("hidden")
     }else{
       deselected.classList.remove("hidden")
-      micrographsdeselection.push(Number(miccontainer.dataset.idx))
+      micrographsdeselection.push(Number(miccontainer.workspace.idx))
     }
     if(miccontainer == element){
       threshold = false
@@ -45,7 +45,7 @@ selectBelow = (element, id) => {
       deselected.classList.add("hidden")
     }else{
       deselected.classList.remove("hidden")
-      micrographsdeselection.push(Number(miccontainer.dataset.idx))
+      micrographsdeselection.push(Number(miccontainer.workspace.idx))
     }
 
   }
@@ -80,8 +80,8 @@ hideMenu = () => {
 changePage = (element) => {
     const fromp = element.parentElement.parentElement.querySelector("[name='fromp']")
     const top   = element.parentElement.parentElement.querySelector("[name='top']")
-    fromp.value = Number(element.options[element.selectedIndex].dataset.fromp)
-    top.value   = Number(element.options[element.selectedIndex].dataset.top)
+    fromp.value = Number(element.options[element.selectedIndex].workspace.fromp)
+    top.value   = Number(element.options[element.selectedIndex].workspace.top)
     element.form.submit()
 }
 
@@ -91,8 +91,8 @@ setSortDesc = (element) => {
     const fromp = element.parentElement.parentElement.querySelector("[name='fromp']")
     const top   = element.parentElement.parentElement.querySelector("[name='top']")
     page.value  = 1
-    fromp.value = Number(page.options[0].dataset.fromp)
-    top.value   = Number(page.options[0].dataset.top)
+    fromp.value = Number(page.options[0].workspace.fromp)
+    top.value   = Number(page.options[0].workspace.top)
     sort_micrographs_asc.value = false
     sort_micrographs_asc.form.submit()
 }
@@ -103,8 +103,8 @@ setSortAsc = (element) => {
     const fromp = element.parentElement.parentElement.querySelector("[name='fromp']")
     const top   = element.parentElement.parentElement.querySelector("[name='top']")
     page.value  = 1
-    fromp.value = Number(page.options[0].dataset.fromp)
-    top.value   = Number(page.options[0].dataset.top)
+    fromp.value = Number(page.options[0].workspace.fromp)
+    top.value   = Number(page.options[0].workspace.top)
     sort_micrographs_asc.value = true
     sort_micrographs_asc.form.submit()
 }
@@ -138,12 +138,12 @@ drawBoxes = () => {
     if(canvas == undefined) continue
     const micimg = micrographcontainer.querySelector('.micimg')
     if(micimg == undefined) continue
-    if(!micrographcontainer.dataset.hasOwnProperty('boxes')) continue
-    if(!micrographcontainer.dataset.hasOwnProperty('xdim'))  continue
-    if(!micrographcontainer.dataset.hasOwnProperty('ydim'))  continue
-    const boxes = JSON.parse(micrographcontainer.dataset.boxes.replaceAll("'", '"'))
-    const xdim  = Number(micrographcontainer.dataset.xdim)
-    const ydim  = Number(micrographcontainer.dataset.ydim)
+    if(!micrographcontainer.workspace.hasOwnProperty('boxes')) continue
+    if(!micrographcontainer.workspace.hasOwnProperty('xdim'))  continue
+    if(!micrographcontainer.workspace.hasOwnProperty('ydim'))  continue
+    const boxes = JSON.parse(micrographcontainer.workspace.boxes.replaceAll("'", '"'))
+    const xdim  = Number(micrographcontainer.workspace.xdim)
+    const ydim  = Number(micrographcontainer.workspace.ydim)
     const imgrect   = micimg.getBoundingClientRect()
     const imgwidth  = imgrect.width / 2 // divide by 2 as has PS
     const imgheight = imgrect.height
@@ -171,7 +171,7 @@ window.addEventListener("load", () =>{
   let micrographsdeselection = []
   if(micrographsdeselectiontext != null) micrographsdeselection = JSON.parse(micrographsdeselectiontext)
   for(const miccontainer of  document.querySelectorAll(".micrographcontainer")){
-    const idx = Number(miccontainer.dataset.idx)
+    const idx = Number(miccontainer.workspace.idx)
     if(micrographsdeselection.includes(idx)){
       const deselected = miccontainer.querySelector(".deselected")
       deselected.classList.remove("hidden")

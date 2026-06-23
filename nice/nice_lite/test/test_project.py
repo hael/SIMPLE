@@ -6,7 +6,6 @@ from django.utils import timezone
 
 from ..data_structures.project    import Project
 from ..models                     import ProjectModel
-from ..models                     import DatasetModel
 from ..models                     import WorkspaceModel
 from .test_helpers                import assertProject
 
@@ -20,7 +19,7 @@ class ProjectTest(TestCase):
     # test projectmodel object creation with non-optional fields
     ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
     project = ProjectModel.objects.get(id=1)
-    DatasetModel.objects.create(proj=project)
+    WorkspaceModel.objects.create(proj=project)
     WorkspaceModel.objects.create(proj=project)
 
   def test_project_init(self):
@@ -61,27 +60,15 @@ class ProjectTest(TestCase):
       assertProject(project, name=self.test_project_name, id=2)
       self.assertEqual(project.ensureTrashfolder(), True,  "failed to generate trash folder")
 
-  def test_project_contains_dataset(self):
-    # test project contains dataset returns true when exists
-    project = Project(project_id=1)
-    self.assertEqual(project.containsDataset(1), True, "project doesn't contain dataset")
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
-  
   def test_project_contains_workspace(self):
     # test project contains workspace returns true when exists
     project = Project(project_id=1)
-    self.assertEqual(project.containsWorkspace(1), True, "project doesn't contain workspace") 
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
-
-  def test_project_doesnt_contain_dataset(self):
-    # test project contains dataset returns false when not exists
-    project = Project(project_id=1)
-    self.assertEqual(project.containsDataset(2), False, "project contains dataset")
+    self.assertEqual(project.containsWorkspace(1), True, "project doesn't contain workspace")
     assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
   
   def test_project_doesnt_contain_workspace(self):
     # test project contains workspace returns false when not exists
     project = Project(project_id=1)
-    self.assertEqual(project.containsWorkspace(2), False, "project contains workspace") 
+    self.assertEqual(project.containsWorkspace(2), False, "project contains workspace")
     assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
     

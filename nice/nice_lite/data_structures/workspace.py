@@ -1,331 +1,264 @@
+"""Workspace data structure: filesystem mapping and lifecycle helpers."""
+
 # global imports
 import os
 import re
-import copy
-from django.utils           import timezone
-from django.template.loader import render_to_string
+
+from django.utils import timezone
 
 # local imports
-from ..models    import ProjectModel, WorkspaceModel, JobClassicModel, DatasetModel
-from .batchjob import BatchJob
-from .simple     import SIMPLEProject
+from ..helpers import *
+from ..models import WorkspaceModel
+
 
 class Workspace:
+    """
+    Represents a cryo-EM workspace within a project.
 
-    id       = 0
-    
-    disp     = 0
-    name     = ""
-    desc     = ""
-    dirc     = ""
-    link     = ""
-    cdat     = ""
-    mdat     = ""
-    user     = ""
-    nstr     = {}
-    nstrhtml = {}
-    request  = None
-    trashfolder = ""
+    A workspace maps to:
+      - a hidden directory  (.workspace_<id>/)  inside the project directory
+      - a human-readable symlink (ds_<name>/) pointing to that directory
+      - a TRASH/ subdirectory inside the workspace directory used for soft-deletes
 
-    def __init__(self, workspace_id=None, request=None):
-        # unit tests: test_workspace_init, test_workspace_init_by_request, test_workspace_init_by_id
-        if workspace_id is not None:
-            self.id = workspace_id
-        elif request is not None:
-            self.setIDFromRequest(request)
-            self.request = request
-        if self.id > 0:
+    Lifecycle:
+      - Create : Workspace().new(project, user)
+      - Load   : Workspace(id)
+      - Delete : workspace.delete()     — moves files to project TRASH, removes DB record
+      - Rename : workspace.rename(name) — renames the symlink and updates the DB
+    """
+
+    def __init__(self, id=None):
+        # unit tests: test_workspace_init, test_workspace_init_by_id
+        self.id             = 0
+        self.workspacemodel = None
+        self.absdir         = None  # absolute path to the hidden workspace directory
+        self.linkpath       = None  # absolute path to the human-readable symlink
+        self.trashdir       = None  # absolute path to the TRASH subdirectory
+        if id is not None:
+            self.id = id
             self.load()
 
-    def setIDFromRequest(self, request):
-        # unit tests: test_workspace_init_by_request
-        if "selected_workspace_id" in request.POST:
-            test_id_str = request.POST["selected_workspace_id"]
-        else:
-            test_id_str = request.COOKIES.get('selected_workspace_id', 'none')
-        if test_id_str.isnumeric():
-            self.id = int(test_id_str)
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
 
     def load(self):
-        # unit tests: test_workspace_init_by_request, test_workspace_init_by_id
-        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-        if workspacemodel is not None:
-            self.name     = workspacemodel.name
-            self.dirc     = workspacemodel.dirc
-            self.link     = workspacemodel.link
-            self.cdat     = workspacemodel.cdat
-            self.mdat     = workspacemodel.mdat
-            self.nstr     = workspacemodel.nstr
-            self.desc     = workspacemodel.desc
-            self.disp     = workspacemodel.disp
-            self.user     = workspacemodel.user
-            self.nstrhtml = copy.deepcopy(self.nstr)
-            self.addNodesHTML()
+        """Populate fields from the database. Resets to empty state if not found."""
+        self.workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
+        if self.workspacemodel is None:
+            self.id       = 0
+            self.absdir   = None
+            self.linkpath = None
+            self.trashdir = None
+        else:
+            self.absdir   = os.path.join(self.workspacemodel.proj.dirc, self.workspacemodel.dirc)
+            self.linkpath = os.path.join(self.workspacemodel.proj.dirc, self.workspacemodel.link)
+            self.trashdir = os.path.join(self.absdir, "TRASH")
+
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    def in_project(self, projectid):
+        """Return True if this workspace belongs to the given project id."""
+        return self.workspacemodel is not None and self.workspacemodel.proj.id == projectid
+
+    def get_id(self):
+        """Return the workspace id."""
+        return self.id
+
+    def get_workspacemodel(self):
+        if self.workspacemodel is None:
+            print_error("workspacemodel is none")
+            return None
+        return self.workspacemodel
+
+    def get_absdir(self):
+        """Return absolute path to the hidden workspace directory."""
+        return self.absdir
+
+    def get_linkpath(self):
+        """Return absolute path to the human-readable workspace symlink."""
+        return self.linkpath
+
+    def get_trashdir(self):
+        """Return absolute path to the workspace TRASH directory."""
+        return self.trashdir
+
+    # ------------------------------------------------------------------
+    # Mutators
+    # ------------------------------------------------------------------
 
     def new(self, project, user):
-        # unit tests: test_workspace_new
-        projectmodel = ProjectModel.objects.filter(id=project.id).first()
+        """
+        Create a new workspace inside the given project.
+
+        Creates the hidden directory and symlink on disk, then writes the DB record.
+        The DB record is rolled back if filesystem operations fail.
+        Returns True on success, False on any failure.
+
+        unit tests: test_workspace_new
+        """
+        projectmodel = project.get_projectmodel()
+        projectdir   = project.get_absdir()
         if projectmodel is None:
+            print_error("projectmodel is none")
             return False
-      
-        if not os.path.exists(project.dirc):
+        if not directory_exists(projectdir):
+            print_error("project directory " + projectdir + " doesn't exist")
             return False
-        
-        if not os.path.isdir(project.dirc):
-            return False
-        
-        workspacemodels = WorkspaceModel.objects.filter(proj=projectmodel)
-        self.disp = workspacemodels.count() + 1
-        new_workspace_name = "new workspace " + str(self.disp)
-        workspacemodel = WorkspaceModel(proj=projectmodel, disp=self.disp, name=new_workspace_name, cdat=timezone.now(), mdat=timezone.now(), user=user)
+
+        # derive a display index and default name from existing workspace count
+        display_id = WorkspaceModel.objects.filter(proj=projectmodel).count() + 1
+        new_workspace_name = "new workspace " + str(display_id)
+
+        # save the record early to obtain the auto-assigned id, which is used for the directory name
+        workspacemodel = WorkspaceModel(
+            proj=projectmodel, name=new_workspace_name, disp=display_id,
+            cdat=timezone.now(), mdat=timezone.now(), user=user
+        )
         workspacemodel.save()
         self.id = workspacemodel.id
         if self.id == 0:
             return False
-        
-        new_workspace_dirc = ".workspace_" + str(self.id)
-        new_workspace_link = "ws_" + new_workspace_name.replace(" ", "_")
-        new_workspace_path = os.path.join(project.dirc, new_workspace_dirc)
 
-        try:
-            os.makedirs(new_workspace_path)
-        except OSError as error:
-            print("Directory '%s' can not be created")
+        new_workspace_dirc = ".workspace_" + str(self.id)
+        new_workspace_link = "ds_" + new_workspace_name.replace(" ", "_")
+        new_workspace_path = os.path.join(projectdir, new_workspace_dirc)
+
+        if not ensure_directory(new_workspace_path):
+            workspacemodel.delete()
             return False
-        
-        try:
-            os.symlink(new_workspace_path, os.path.join(project.dirc, new_workspace_link))
-        except FileExistsError:
-            print("Symlink already exists.")
-        except PermissionError:
-            print("Permission denied: You might need admin rights.")
-        except OSError as e:
-            print("OS error occurred:", e)
+        if not create_symlink(new_workspace_path, os.path.join(projectdir, new_workspace_link)):
+            workspacemodel.delete()
+            return False
 
         workspacemodel.dirc = new_workspace_dirc
         workspacemodel.link = new_workspace_link
-        workspacemodel.nstr = {
-            "children":[
-                {
-                    "type"      : "new",
-                    "jobid"     : 0,
-                    "innerHTML" : ""
-                }
-            ]
-        }
         workspacemodel.save()
         self.load()
-        project.load()
-        simpleproject = SIMPLEProject(new_workspace_path)
-        simpleproject.create()
         return True
-    
-    def addNodesHTML(self):
-        # unit tests: 
-        def addNodeHTML(obj):
-            if "children" in obj:
-                for child in obj["children"]:
-                    item = addNodeHTML(child)
-            if "innerHTML" in obj and "type" in obj and "jobid" in obj:
-                if "job" in obj["type"]:
-                    batchjob = BatchJob(id=obj["jobid"])
-                    context = { 
-                        'id'     : obj["jobid"],
-                        'status' : batchjob.status,
-                        'disp'   : batchjob.disp,
-                        'name'   : batchjob.name,
-                        'desc'   : batchjob.desc,
-                        'pckg'   : batchjob.pckg,
-                    }
-                    obj["innerHTML"] = render_to_string('nice_classic/jobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
-                elif "new" in obj["type"]:
-                    context = { 
-                        'id': obj["jobid"], 
-                    }
-                    obj["innerHTML"] = render_to_string('nice_classic/newjobnode.html', context, request=self.request).replace("\n", "").replace('"','\\"')
 
-        if self.request != None:
-            addNodeHTML(self.nstrhtml)
-        
-    def addChild(self, parentid, jobid):
-        # unit tests: 
-        def findParent(obj):
-            if "jobid" in obj:
-                if parentid == obj["jobid"]:
-                    return obj
-            if "children" in obj:
-                for child in obj["children"]:
-                    item = findParent(child)
-                    if item is not None:
-                        return item
-            return None
+    def delete(self):
+        """
+        Soft-delete this workspace by moving its directory and symlink into the project TRASH.
 
-        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-        if workspacemodel is not None:
-            updated = workspacemodel.nstr
-            newchild = {
-                    "jobid"     : jobid,
-                    "type"      : "job",
-                    "innerHTML" : "",
-                    "children"  : [
-                        {
-                            "type"      : "new",
-                            "jobid"     : jobid,
-                            "innerHTML" : ""
-                        }
-                    ]
-            }
-            if parentid == 0:
-                updated["children"].insert(0,newchild)
-            else:
-                parent = findParent(updated)
-                if parent is not None:
-                    parent["children"].insert(0,newchild)
-            workspacemodel.nstr = updated
-            workspacemodel.save()
-            self.nstr = updated
+        Also removes the DB record. If the project has no remaining workspaces
+        after deletion, the project itself is also deleted.
+        Returns True on success, False on any failure.
 
-    def removeChild(self, jobid):
-        # unit tests: 
-        def findChild(obj):
-            if "jobid" in obj:
-                if jobid == obj["jobid"]:
-                    return obj
-            if "children" in obj:
-                for child in obj["children"]:
-                    item = findChild(child)
-                    if item is not None:
-                        return item
-            return None
-        
-        def pruneDeleted(obj):
-            if "children" in obj:
-                for i, child in enumerate(obj["children"]):
-                    if "type" in child and "children" in child and child["type"] == "deleted" and len(child["children"]) == 0:
-                        del obj["children"][i]
-                        return True
-                    else:
-                        rtn = pruneDeleted(child)
-                        if rtn is not None:
-                            return rtn
-            return None
-
-        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-        if workspacemodel is not None:
-            updated = workspacemodel.nstr
-            jobobj  = findChild(updated)
-            if jobobj is not None:
-                jobobj["type"] = "deleted"
-                if "children" in jobobj:
-                    for i, child in enumerate(jobobj["children"]):
-                        if child["type"] == "new":
-                            del jobobj["children"][i]
-            pruned = None
-            while pruned is not True:
-                pruned = pruneDeleted(updated) 
-            workspacemodel.nstr = updated
-            workspacemodel.save()
-            self.nstr = updated
-
-    def delete(self, project):
-        # unit tests: test_workspace_delete
-        workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-        if project.ensureTrashfolder() and workspacemodel is not None:
-            workspace_path = os.path.join(project.dirc, self.dirc)
-            workspace_link = os.path.join(project.dirc, self.link)
-            trash_path   = os.path.join(project.trashfolder, self.dirc)
-            trash_link   = os.path.join(project.trashfolder, self.link)
-            if not os.path.exists(workspace_path):
-                return 
-            if not os.path.isdir(workspace_path):
-                return 
-            if not os.path.exists(workspace_link):
-                return 
-            if not os.path.islink(workspace_link):
-                return 
-            if os.path.exists(trash_path):
-                return 
-            if os.path.isdir(trash_path):
-                return
-            if os.path.exists(trash_link):
-                return 
-            if os.path.islink(trash_link):
-                return
-            try:
-                os.rename(workspace_path, trash_path)
-            except OSError as error:
-                print("Directory '%s' can not be renamed")
-                return
-            try:
-                os.remove(workspace_link)
-                os.symlink(trash_path, trash_link)
-            except OSError as error:
-                print("Link '%s' can not be renamed")
-                return
-            workspacemodel.delete()
-        workspacemodels = WorkspaceModel.objects.filter(proj=project.id)
-        datasetmodels   = DatasetModel.objects.filter(proj=project.id)
-        if workspacemodels.count() + datasetmodels.count() > 0:
-            project.delete()
-
-    def rename(self, request, project):
-        # unit tests: test_workspace_rename
-        if "new_workspace_name" in request.POST:
-            new_workspace_name = request.POST["new_workspace_name"]
-            workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-            workspacemodel.name = new_workspace_name
-            # strip any non-alphanumeric characters(except _)
-            new_workspace_name = new_workspace_name.replace(" ", "_")
-            new_workspace_name = "ws_" + re.sub(r'\W+', '', new_workspace_name)
-            current_workspace_link = os.path.join(project.dirc, self.link)
-            new_workspace_link     = os.path.join(project.dirc, new_workspace_name)
-            try :
-                os.rename(current_workspace_link, new_workspace_link)
-                print("Source path renamed to destination path successfully.")
-            except IsADirectoryError:
-                print("Source is a file but destination is a directory.")
-                return False
-            except NotADirectoryError:
-                print("Source is a directory but destination is a file.")
-                return False
-            except PermissionError:
-                print("Operation not permitted")
-                return False
-            except OSError as error:
-                print(error)
-                return False
-            self.link = new_workspace_name
-            workspacemodel.link = new_workspace_name
-            workspacemodel.save()
-            return True
-        return False
-
-    def updateDescription(self, request):
-        # unit tests: test_workspace_update_description
-        if "new_workspace_description" in request.POST:
-            new_workspace_description = request.POST["new_workspace_description"]
-            workspacemodel = WorkspaceModel.objects.filter(id=self.id).first()
-            workspacemodel.desc = new_workspace_description
-            workspacemodel.save()
-            return True
-        return False
-        
-    def ensureTrashfolder(self, project):
-        # unit tests: test_workspace_trash
-        if not os.path.exists(os.path.join(project.dirc, self.dirc)):
+        unit tests: test_workspace_delete
+        """
+        if self.workspacemodel is None:
+            print_error("workspacemodel is none")
             return False
-        if not os.path.isdir(os.path.join(project.dirc, self.dirc)):
+
+        projecttrash = os.path.join(self.workspacemodel.proj.dirc, "TRASH")
+        if not ensure_directory(projecttrash):
+            print_error("project trash folder doesn't exist")
             return False
-        trashfolder = os.path.join(project.dirc, self.dirc, "TRASH")
-        if os.path.isdir(trashfolder):
-            self.trashfolder = trashfolder
-            return True
+
+        trash_path = os.path.join(projecttrash, self.workspacemodel.dirc)
+        trash_link = os.path.join(projecttrash, self.workspacemodel.link)
+
+        # verify source filesystem state
+        if not os.path.exists(self.absdir):
+            print_error("workspace directory doesn't exist")
+            return False
+        if not os.path.isdir(self.absdir):
+            print_error("workspace directory isn't a directory")
+            return False
+        if not os.path.exists(self.linkpath):
+            print_error("workspace link doesn't exist")
+            return False
+        if not os.path.islink(self.linkpath):
+            print_error("workspace link isn't a link")
+            return False
+
+        # verify trash destinations are free
+        if os.path.exists(trash_path):
+            print_error("workspace trash directory already exists")
+            return False
+        if os.path.exists(trash_link):
+            print_error("trash link already exists")
+            return False
+
         try:
-            os.makedirs(trashfolder, exist_ok=True)
-        except OSError as error:
-            print("Directory '%s' can not be created")
+            os.rename(self.absdir, trash_path)
+        except OSError:
+            print_error("directory cannot be renamed: " + self.absdir)
             return False
-        self.trashfolder = trashfolder
+
+        try:
+            os.remove(self.linkpath)
+            os.symlink(trash_path, trash_link)
+        except OSError:
+            print_error("link cannot be updated: " + self.linkpath)
+            return False
+
+        # remove DB record; delete the parent project if it is now empty
+        projectmodel = self.workspacemodel.proj
+        self.workspacemodel.delete()
+        remaining_workspaces = WorkspaceModel.objects.filter(proj=projectmodel).count()
+        if remaining_workspaces == 0:
+            projectmodel.delete()
+
         return True
-    
-    
+
+    def rename(self, newworkspacename):
+        """
+        Rename this workspace: renames the symlink on disk and updates the DB record.
+        The directory itself is not moved — only the symlink is renamed.
+        Returns True on success, False on any failure.
+
+        unit tests: test_workspace_rename
+        """
+        if self.workspacemodel is None:
+            print_error("workspacemodel is none")
+            return False
+        if newworkspacename is None:
+            print_error("new workspace name is none")
+            return False
+
+        # build a filesystem-safe link name: spaces become _, non-alphanumeric stripped
+        new_link_name    = "ds_" + re.sub(r'\W+', '', newworkspacename.replace(" ", "_"))
+        new_workspace_link = os.path.join(self.workspacemodel.proj.dirc, new_link_name)
+
+        try:
+            os.rename(self.linkpath, new_workspace_link)
+        except IsADirectoryError:
+            print_error("Source is a file but destination is a directory.")
+            return False
+        except NotADirectoryError:
+            print_error("Source is a directory but destination is a file.")
+            return False
+        except PermissionError:
+            print_error("Operation not permitted")
+            return False
+        except OSError as error:
+            print_error(error)
+            return False
+
+        # update in-memory state and DB only after the filesystem rename succeeds
+        self.linkpath = new_workspace_link
+        self.workspacemodel.name = newworkspacename
+        self.workspacemodel.link = new_link_name
+        self.workspacemodel.save()
+        return True
+
+    def updateDescription(self, newdescription):
+        """
+        Update the human-readable description of this workspace in the DB.
+        Returns True on success, False on any failure.
+
+        unit tests: test_workspace_update_description
+        """
+        if self.workspacemodel is None:
+            print_error("workspacemodel is none")
+            return False
+        if newdescription is None:
+            print_error("new description is none")
+            return False
+        self.workspacemodel.desc = newdescription
+        self.workspacemodel.save()
+        return True

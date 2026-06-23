@@ -150,16 +150,16 @@ def get_project_id( request ):
   else:
     return None
 
-def get_dataset_id( request ):
-  selected_dataset_id_get    = get_integer(request.GET,     "selected_dataset_id", silent=True)
-  selected_dataset_id_post   = get_integer(request.POST,    "selected_dataset_id", silent=True)
-  selected_dataset_id_cookie = get_integer(request.COOKIES, "selected_dataset_id", silent=True)
-  if selected_dataset_id_get is not None:
-    return selected_dataset_id_get
-  elif selected_dataset_id_post is not None:
-    return selected_dataset_id_post  
-  elif selected_dataset_id_cookie is not None:
-    return selected_dataset_id_cookie
+def get_workspace_id( request ):
+  selected_workspace_id_get    = get_integer(request.GET,     "selected_workspace_id", silent=True)
+  selected_workspace_id_post   = get_integer(request.POST,    "selected_workspace_id", silent=True)
+  selected_workspace_id_cookie = get_integer(request.COOKIES, "selected_workspace_id", silent=True)
+  if selected_workspace_id_get is not None:
+    return selected_workspace_id_get
+  elif selected_workspace_id_post is not None:
+    return selected_workspace_id_post  
+  elif selected_workspace_id_cookie is not None:
+    return selected_workspace_id_cookie
   else:
     return None
 

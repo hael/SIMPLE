@@ -17,14 +17,14 @@ const stopProcess = (element)  => {
 window.addEventListener("load", () =>{
     for(const optics_scatter_chart of document.getElementsByClassName("optics_scatter_chart")){
         const ctx = optics_scatter_chart.getContext("2d");
-        const assignments = JSON.parse(optics_scatter_chart.dataset.assignments.replaceAll("'", '"'))
-        const datasets = []
+        const assignments = JSON.parse(optics_scatter_chart.workspace.assignments.replaceAll("'", '"'))
+        const workspaces = []
     const points = []
         for(const group of assignments){
-            const dataset = {}
-            dataset["label"] = group["id"]
-            dataset["data"]  = group["coordinates"]
-            datasets.push(dataset)
+            const workspace = {}
+            workspace["label"] = group["id"]
+            workspace["data"]  = group["coordinates"]
+            workspaces.push(workspace)
       for(const coordinate of group["coordinates"]){
         points.push(coordinate)
       }
@@ -81,7 +81,7 @@ window.addEventListener("load", () =>{
         aspectRatio: 1,
             },
             data: {
-                datasets:datasets 
+                workspaces:workspaces 
             }
         })
     }

@@ -12,7 +12,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),
@@ -67,8 +67,8 @@ const selectRefs = (element) => {
     let path = "";
     for (const pick_template of document.getElementsByClassName("picktemplate")) {
         if (!pick_template.classList.contains("disabledbutton")) {
-            path = pick_template.dataset.path;
-            selected.push([Number(pick_template.dataset.idx), 1]);
+            path = pick_template.workspace.path;
+            selected.push([Number(pick_template.workspace.idx), 1]);
         }
     }
    // document.getElementById("final_selection_source").value = path;
@@ -117,7 +117,7 @@ const hideMenu = () => {
 const sortPop = () => {
     if (!currentMenuContainer) return;
     const templates = Array.from(currentMenuContainer.querySelectorAll(".picktemplatecontainer"));
-    templates.sort((a, b) => Number(b.dataset.pop) - Number(a.dataset.pop));
+    templates.sort((a, b) => Number(b.workspace.pop) - Number(a.workspace.pop));
     templates.forEach(item => currentMenuContainer.appendChild(item));
     hideMenu();
 };
@@ -125,7 +125,7 @@ const sortPop = () => {
 const sortRes = () => {
     if (!currentMenuContainer) return;
     const templates = Array.from(currentMenuContainer.querySelectorAll(".picktemplatecontainer"));
-    templates.sort((a, b) => Number(a.dataset.res) - Number(b.dataset.res));
+    templates.sort((a, b) => Number(a.workspace.res) - Number(b.workspace.res));
     templates.forEach(item => currentMenuContainer.appendChild(item));
     hideMenu();
 };
@@ -162,7 +162,7 @@ const updateCounts = () => {
     if (clustercount == null || particlecount == null) return;
     let ncls = 0, ncls_tot = 0, nptcls = 0, nptcls_tot = 0;
     for (const pick_template of document.getElementsByClassName("picktemplate")) {
-        const pop = Number(pick_template.dataset.pop);
+        const pop = Number(pick_template.workspace.pop);
         nptcls_tot += pop;
         ncls_tot   += 1;
         if (!pick_template.classList.contains("disabledbutton")) {
@@ -199,8 +199,8 @@ const updateScale = (element) => {
 
 const drawMask = () => {
     for (const mskcanvas of document.getElementsByClassName("mskcanvas")) {
-        const mskscale = Number(mskcanvas.dataset.mskscale);
-        const mskdiam  = Number(mskcanvas.dataset.mskdiam);
+        const mskscale = Number(mskcanvas.workspace.mskscale);
+        const mskdiam  = Number(mskcanvas.workspace.mskdiam);
         const ctx = mskcanvas.getContext("2d");
         ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
         ctx.clearRect(0, 0, mskcanvas.width, mskcanvas.height);
@@ -217,9 +217,9 @@ window.addEventListener("load", () => {
     root.style.setProperty('--genpickrefs-brightness', 1.0);
 
     for (const canvas of document.getElementsByClassName("particles_pie_chart")) {
-        const n_imported  = Number(canvas.dataset.imported);
-        const n_processed = Number(canvas.dataset.processed);
-        const n_rejected  = Number(canvas.dataset.rejected);
+        const n_imported  = Number(canvas.workspace.imported);
+        const n_processed = Number(canvas.workspace.processed);
+        const n_rejected  = Number(canvas.workspace.rejected);
         buildDonut(canvas, [n_imported - n_processed - n_rejected, n_processed, n_rejected], ['unclassified', 'accepted', 'rejected']);
     }
 

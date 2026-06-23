@@ -7,7 +7,7 @@ const updateLabel = (slider) => {
     const idx = Math.round(slider.scrollLeft / slider.clientWidth);
     const slide = slider.children[idx];
     if (!slide) return;
-    const newText = slide.dataset.label ?? '';
+    const newText = slide.workspace.label ?? '';
     if (label.textContent === newText) return;
     label.style.opacity = '0';
     setTimeout(() => {
@@ -56,9 +56,9 @@ const startAutoscroll = (slider) => {
 };
 
 // Build a stacked bar chart using stream* CSS colour variables.
-// datasets is an array of { data, stacked } objects; the second dataset
+// workspaces is an array of { data, stacked } objects; the second workspace
 // (if present) uses streamicon as its fill colour.
-const buildBar = (canvas, labels, datasets) => {
+const buildBar = (canvas, labels, workspaces) => {
     const style = getComputedStyle(document.body);
     const colorPrimary   = style.getPropertyValue('--color-streamring').trim() + '33';
     const colorSecondary = style.getPropertyValue('--color-streamicon').trim();
@@ -68,7 +68,7 @@ const buildBar = (canvas, labels, datasets) => {
     const paddedLabels = [...labels];
     while (paddedLabels.length < 24) paddedLabels.push('');
 
-    const stacked = datasets.length > 1;
+    const stacked = workspaces.length > 1;
 
     new Chart(canvas.getContext('2d'), {
         type: 'bar',
@@ -87,7 +87,7 @@ const buildBar = (canvas, labels, datasets) => {
         },
         data: {
             labels: paddedLabels,
-            datasets: datasets.map((ds, i) => ({
+            workspaces: workspaces.map((ds, i) => ({
                 data: ds.data,
                 hoverOffset: 4,
                 backgroundColor: i === 0 ? colorPrimary : colorSecondary,
@@ -103,29 +103,29 @@ const parseAttr = (str) => JSON.parse(str.replaceAll("'", '"'));
 window.addEventListener('load', () => {
 
     for (const canvas of document.getElementsByClassName('astig_histogram')) {
-        buildBar(canvas, parseAttr(canvas.dataset.labels), [
-            { data: parseAttr(canvas.dataset.values)  },
-            { data: parseAttr(canvas.dataset.values2) }
+        buildBar(canvas, parseAttr(canvas.workspace.labels), [
+            { data: parseAttr(canvas.workspace.values)  },
+            { data: parseAttr(canvas.workspace.values2) }
         ]);
     }
 
     for (const canvas of document.getElementsByClassName('ctfres_histogram')) {
-        buildBar(canvas, parseAttr(canvas.dataset.labels), [
-            { data: parseAttr(canvas.dataset.values)  },
-            { data: parseAttr(canvas.dataset.values2) }
+        buildBar(canvas, parseAttr(canvas.workspace.labels), [
+            { data: parseAttr(canvas.workspace.values)  },
+            { data: parseAttr(canvas.workspace.values2) }
         ]);
     }
 
     for (const canvas of document.getElementsByClassName('df_histogram')) {
-        buildBar(canvas, parseAttr(canvas.dataset.labels), [
-            { data: parseAttr(canvas.dataset.values)  },
-            { data: parseAttr(canvas.dataset.values2) }
+        buildBar(canvas, parseAttr(canvas.workspace.labels), [
+            { data: parseAttr(canvas.workspace.values)  },
+            { data: parseAttr(canvas.workspace.values2) }
         ]);
     }
 
     for (const canvas of document.getElementsByClassName('rate_histogram')) {
-        buildBar(canvas, parseAttr(canvas.dataset.labels), [
-            { data: parseAttr(canvas.dataset.values) }
+        buildBar(canvas, parseAttr(canvas.workspace.labels), [
+            { data: parseAttr(canvas.workspace.values) }
         ]);
     }
 

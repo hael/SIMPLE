@@ -11,7 +11,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),
@@ -88,7 +88,7 @@ const toggleSievecls = (element)  => {
 const selectSievecls = (form)  => {
     const accepted = []
     for(const cls of document.getElementsByClassName("sieveclsselected")){
-        const idx  = Number(cls.dataset.idx)
+        const idx  = Number(cls.workspace.idx)
         accepted.push(idx)
     }
     document.getElementById("accepted_cls2D").value = accepted
@@ -134,13 +134,13 @@ const sortPop = ()  => {
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".sieveclscontainer"))
   const rejectedtemplates     = Array.from(rejected_cls2D_slider.querySelectorAll(".sieveclscontainer"))
   acceptedtemplates.sort((a, b) => {
-        return Number(b.dataset.pop) - Number(a.dataset.pop);
+        return Number(b.workspace.pop) - Number(a.workspace.pop);
   });
   acceptedtemplates.forEach((item) => {
         accepted_cls2D_slider.appendChild(item);
   });
   rejectedtemplates.sort((a, b) => {
-        return Number(b.dataset.pop) - Number(a.dataset.pop);
+        return Number(b.workspace.pop) - Number(a.workspace.pop);
   });
   rejectedtemplates.forEach((item) => {
         rejected_cls2D_slider.appendChild(item);
@@ -154,13 +154,13 @@ const sortRes = ()  => {
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".sieveclscontainer"))
   const rejectedtemplates     = Array.from(rejected_cls2D_slider.querySelectorAll(".sieveclscontainer"))
   acceptedtemplates.sort((a, b) => {
-        return Number(a.dataset.res) - Number(b.dataset.res);
+        return Number(a.workspace.res) - Number(b.workspace.res);
   });
   acceptedtemplates.forEach((item) => {
         accepted_cls2D_slider.appendChild(item);
   });
   rejectedtemplates.sort((a, b) => {
-        return Number(a.dataset.res) - Number(b.dataset.res);
+        return Number(a.workspace.res) - Number(b.workspace.res);
   });
   rejectedtemplates.forEach((item) => {
         rejected_cls2D_slider.appendChild(item);
@@ -214,11 +214,11 @@ const updateCounts = ()  => {
   let nptcls     = 0
   let nptcls_tot = 0
   for(const sieveclscontainer of sieveclscontainers){
-    const pop = Number(sieveclscontainer.dataset.pop)
+    const pop = Number(sieveclscontainer.workspace.pop)
     nptcls_tot = nptcls_tot + pop
   }
   for(const sieveclscontainer of sieveclscontainers_accepted){
-    const pop = Number(sieveclscontainer.dataset.pop)
+    const pop = Number(sieveclscontainer.workspace.pop)
     nptcls = nptcls + pop
     ncls = ncls + 1
   }
@@ -261,9 +261,9 @@ window.addEventListener("load", () => {
 
 window.addEventListener("load", () =>{
     for(const canvas of document.getElementsByClassName("particles_pie_chart")){
-        const n_imported = Number(canvas.dataset.imported)
-        const n_accepted = Number(canvas.dataset.accepted)
-        const n_rejected = Number(canvas.dataset.rejected)
+        const n_imported = Number(canvas.workspace.imported)
+        const n_accepted = Number(canvas.workspace.accepted)
+        const n_rejected = Number(canvas.workspace.rejected)
         buildDonut(canvas, [n_imported - n_accepted - n_rejected, n_accepted, n_rejected], ['unclassified', 'accepted', 'rejected'])
     }
 },false);

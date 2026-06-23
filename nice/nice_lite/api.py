@@ -7,7 +7,7 @@ from django.views.decorators.csrf   import csrf_exempt
 
 # local imports
 from .helpers                    import *
-from .data_structures.workspace  import Workspace
+from .data_structures.workspace    import Workspace
 from .data_structures.project    import Project
 from .data_structures.batchjob import BatchJob
 from .data_structures.streamjob  import StreamJob
@@ -52,8 +52,10 @@ def index_classic(request):
         return JsonResponse(response)
     if "jobid" in request_json:
         job = BatchJob(id=request_json["jobid"])
-        workspace = Workspace(workspace_id=job.wspc.id)
-        project   = Project(project_id=job.wspc.proj.id)
+        if job.jobmodel is None:
+            return JsonResponse(response)
+        workspace = Workspace(job.jobmodel.wspc_id)
+        project = Project(job.jobmodel.wspc.proj_id)
         response = job.updateStats(request_json, project, workspace)
     return JsonResponse(response)
 

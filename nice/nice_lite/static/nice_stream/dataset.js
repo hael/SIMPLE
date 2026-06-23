@@ -4,15 +4,15 @@ const submitUpdate = (element, event) => {
     if (event.key === 'Enter') element.form.submit();
 };
 
-const enableDatasetRename = () => {
-    const el = document.querySelector('#datasetrename');
+const enableWorkspaceRename = () => {
+    const el = document.querySelector('#workspacerename');
     el.disabled = false;
     el.focus();
     lastinteraction = Date.now();
 };
 
-const enableDatasetDescription = () => {
-    const el = document.querySelector('#datasetdescription');
+const enableWorkspaceDescription = () => {
+    const el = document.querySelector('#workspacedescription');
     el.disabled = false;
     el.focus();
     lastinteraction = Date.now();
@@ -27,14 +27,14 @@ const enableStreamDescription = (button) => {
 
 // Read job id from data-job-id attribute; submit the enclosing form on confirm.
 const deleteStream = (button) => {
-    const jobid = button.dataset.jobId;
+    const jobid = button.workspace.jobId;
     if (confirm('Please confirm that you wish to delete stream ' + jobid)) {
         button.closest('form').submit();
     }
 };
 
 const terminateStream = (button) => {
-    const jobid = button.dataset.jobId;
+    const jobid = button.workspace.jobId;
     if (confirm('Please confirm that you wish to terminate all processes in stream ' + jobid)) {
         button.closest('form').submit();
     }
@@ -52,7 +52,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),     // imported / accepted
@@ -69,23 +69,23 @@ window.addEventListener('load', () => {
 
     for (const canvas of document.getElementsByClassName('movies_pie_chart')) {
         // Skip when preprocessing stats are not yet populated (empty string = no data).
-        if (!canvas.dataset.imported) continue;
+        if (!canvas.workspace.imported) continue;
         buildDonut(
             canvas,
             [
-                Number(canvas.dataset.imported),
-                Number(canvas.dataset.processed || 0),
-                Number(canvas.dataset.rejected  || 0)
+                Number(canvas.workspace.imported),
+                Number(canvas.workspace.processed || 0),
+                Number(canvas.workspace.rejected  || 0)
             ],
             ['imported', 'processed', 'rejected']
         );
     }
 
     for (const canvas of document.getElementsByClassName('particles_pie_chart')) {
-        if (!canvas.dataset.imported) continue;
-        const imported = Number(canvas.dataset.imported);
-        const accepted = Number(canvas.dataset.accepted || 0);
-        const rejected = Number(canvas.dataset.rejected || 0);
+        if (!canvas.workspace.imported) continue;
+        const imported = Number(canvas.workspace.imported);
+        const accepted = Number(canvas.workspace.accepted || 0);
+        const rejected = Number(canvas.workspace.rejected || 0);
         buildDonut(
             canvas,
             [imported - accepted - rejected, accepted, rejected],

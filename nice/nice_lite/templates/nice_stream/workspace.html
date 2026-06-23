@@ -1,20 +1,20 @@
 {% comment %}
-  dataset.html — stream grid and dataset details footer, loaded inside the
+  workspace.html — stream grid and workspace details footer, loaded inside the
   workspace iframe by stream.html.
 
   Structure:
     - Sub-bar : new-stream button and live stream count.
     - Grid    : responsive column grid of stream cards (see _stream_card.html).
-    - Footer  : editable dataset metadata and delete-dataset button.
+    - Footer  : editable workspace metadata and delete-workspace button.
 
   Context variables:
-    current_dataset_id   — 0 when no dataset is selected
-    current_dataset_name — display name of the selected dataset
-    jobs                 — queryset of StreamJob view-objects for this dataset
+    current_workspace_id   — 0 when no workspace is selected
+    current_workspace_name — display name of the selected workspace
+    jobs                 — queryset of StreamJob view-objects for this workspace
     created, modified    — formatted date strings
-    user                 — username of dataset creator
-    folder               — absolute path to the dataset directory
-    description          — dataset description string
+    user                 — username of workspace creator
+    folder               — absolute path to the workspace directory
+    description          — workspace description string
 {% endcomment %}
 {% load static %}
 {% load humanize %}
@@ -29,14 +29,14 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
             crossorigin="anonymous" defer></script>
     {% endif %}
-    <script src="{% static 'nice_stream/dataset.js' %}" defer></script>
+    <script src="{% static 'nice_stream/workspace.js' %}" defer></script>
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
 
-{% if current_dataset_id == 0 %}
+{% if current_workspace_id == 0 %}
 
     <div class="flex-1 flex items-center justify-center text-streamlabel text-sm">
-        select a dataset to continue
+        select a workspace to continue
     </div>
 
 {% else %}
@@ -59,24 +59,24 @@
         </div>
     </div>
 
-    <!-- Dataset details footer (natural flow — no fixed positioning) -->
+    <!-- Workspace details footer (natural flow — no fixed positioning) -->
     <div class="bg-streambar border-t border-streamline px-6 py-3 flex-shrink-0">
         <div class="flex items-start justify-between gap-8">
 
             <!-- Left: name, modified, location -->
             <div>
-                <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">Dataset details</p>
+                <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">Workspace details</p>
                 <div class="flex gap-10">
                     <div>
                         <p class="text-[10px] text-streamlabel mb-0.5">name</p>
                         <div class="flex items-center gap-1">
-                            <form method="POST" action="{% url 'nice_lite:update_dataset_name' %}" target="_parent" class="flex">
+                            <form method="POST" action="{% url 'nice_lite:update_workspace_name' %}" target="_parent" class="flex">
                                 {% csrf_token %}
-                                <input id="datasetrename" name="new_dataset_name" value="{{ current_dataset_name }}"
+                                <input id="workspacerename" name="new_workspace_name" value="{{ current_workspace_name }}"
                                        onblur="this.form.submit()" onkeydown="submitUpdate(this, event)" disabled
                                        class="text-xs text-streaminput font-medium bg-transparent border-none outline-none disabled:cursor-default">
                             </form>
-                            <button onclick="enableDatasetRename()"
+                            <button onclick="enableWorkspaceRename()"
                                     class="text-streamicon hover:text-streamsubtle transition-colors">
                                 <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
@@ -111,13 +111,13 @@
                     <div>
                         <p class="text-[10px] text-streamlabel mb-0.5">description</p>
                         <div class="flex items-center gap-1">
-                            <form method="POST" action="{% url 'nice_lite:update_dataset_description' %}" target="_parent">
+                            <form method="POST" action="{% url 'nice_lite:update_workspace_description' %}" target="_parent">
                                 {% csrf_token %}
-                                <input id="datasetdescription" name="new_dataset_description" value="{{ description }}"
+                                <input id="workspacedescription" name="new_workspace_description" value="{{ description }}"
                                        onblur="this.form.submit()" disabled
                                        class="text-xs text-streamsubtle italic bg-transparent border-none outline-none disabled:cursor-default">
                             </form>
-                            <button onclick="enableDatasetDescription()"
+                            <button onclick="enableWorkspaceDescription()"
                                     class="text-streamicon hover:text-streamsubtle transition-colors">
                                 <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
@@ -129,12 +129,12 @@
                 </div>
             </div>
 
-            <!-- Delete dataset -->
-            <form method="POST" action="{% url 'nice_lite:delete_dataset' %}" target="_parent" class="self-end">
+            <!-- Delete workspace -->
+            <form method="POST" action="{% url 'nice_lite:delete_workspace' %}" target="_parent" class="self-end">
                 {% csrf_token %}
-                <input name="delete_dataset_id" value="{{ current_dataset_id }}" type="hidden">
-                <button onclick="return confirm('please confirm that you wish to delete dataset {{ current_dataset_name|escapejs }}')"
-                        type="submit" title="delete dataset"
+                <input name="delete_workspace_id" value="{{ current_workspace_id }}" type="hidden">
+                <button onclick="return confirm('please confirm that you wish to delete workspace {{ current_workspace_name|escapejs }}')"
+                        type="submit" title="delete workspace"
                         class="text-streamicon hover:text-streamerror transition-colors">
                     <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                         <polyline points="2,4 14,4"/>

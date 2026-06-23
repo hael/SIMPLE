@@ -1,73 +1,50 @@
+"""Stream job data structure and lifecycle/control helpers."""
+
 # global imports
-import os
 import copy
-import time
 import json
+import os
+import time
 from time import gmtime, strftime
+
 from django.utils import timezone
 
 # local imports
 from ..helpers import *
-from ..models  import JobModel
-from .simple   import SIMPLEStream
+from ..models import JobModel
+from .job import Job
+from .simple import SIMPLEStream
 
 
-class StreamJob:
+class StreamJob(Job):
     """
-    Represents a single SIMPLE stream processing job within a dataset.
+    Represents a single SIMPLE stream processing job within a workspace.
 
     A stream job orchestrates a multi-stage cryo-EM pipeline (preprocessing,
     optics assignment, picking, 2D classification, etc.). Each stage runs as a
     separate subprocess managed by SIMPLEStream and communicates its status back
     via heartbeat updates written to the DB.
 
-    The job directory sits inside the dataset directory and is named
-    <jcnt>_simple_stream/, where jcnt is a per-dataset counter.
+    The job directory sits inside the workspace directory and is named
+    <jcnt>_simple_stream/, where jcnt is a per-workspace counter.
 
     Lifecycle:
-      - Create  : StreamJob().new(dataset, args)
+      - Create  : StreamJob().new(workspace, args)
       - Load    : StreamJob(id)
-      - Delete  : job.delete()          — moves directory to dataset TRASH
+      - Delete  : job.delete()          — moves directory to workspace TRASH
       - Control : terminate_master(), terminate_process(), restart_process()
       - Updates : update_stats()        — called by the running job via the API
                   update()              — called by the GUI to adjust thresholds
     """
 
     def __init__(self, id=None):
-        self.id       = 0
-        self.jobmodel = None
-        self.absdir   = None  # absolute path to the job directory
-        if id is not None:
-            self.id = id
-            self.load()
-
-    # ------------------------------------------------------------------
-    # Loading
-    # ------------------------------------------------------------------
-
-    def load(self):
-        """Populate fields from the database. Resets to empty state if not found."""
-        self.jobmodel = JobModel.objects.filter(id=self.id).first()
-        if self.jobmodel is None:
-            self.id     = 0
-            self.absdir = None
-        else:
-            self.absdir = os.path.join(
-                self.jobmodel.dset.proj.dirc,
-                self.jobmodel.dset.dirc,
-                self.jobmodel.dirc
-            )
+        super().__init__(id=id)
 
     # ------------------------------------------------------------------
     # Accessors
     # ------------------------------------------------------------------
 
-    def get_absdir(self):
-        return self.absdir
-
-    def get_jobmodel(self):
-        return self.jobmodel
-
+    # Override base status accessor to enforce stream heartbeat timeout handling.
     def get_status(self):
         """
         Return the master status string for this job.
@@ -86,34 +63,28 @@ class StreamJob:
             self.jobmodel.save()
         return self.jobmodel.master_status
 
-    def get_master_update(self):
-        """Return the master_update dict, used by the running job to poll for GUI commands."""
-        if self.jobmodel is None:
-            return None
-        return self.jobmodel.master_update
-
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def new(self, dataset, args):
+    def new(self, workspace, args):
         """
-        Create a new stream job inside the given dataset.
+        Create a new stream job inside the given workspace.
 
         Validates the UI JSON from args, creates the job directory, initialises
         all stage statuses to 'queued', saves the DB record, then launches the
         SIMPLEStream subprocess.
         Returns True on success, False on any failure.
         """
-        if dataset is None:
-            print_error("dataset is None")
+        if workspace is None:
+            print_error("workspace is none")
             return False
 
-        datasetmodel = dataset.get_datasetmodel()
-        disp         = datasetmodel.jcnt + 1
-        datasetmodel.jcnt = disp
-        dirc   = str(disp) + "_simple_stream"
-        absdir = os.path.join(dataset.get_absdir(), dirc)
+        workspacemodel = workspace.get_workspacemodel()
+        disp = workspacemodel.jcnt + 1
+        workspacemodel.jcnt = disp
+        dirc = str(disp) + "_simple_stream"
+        absdir = os.path.join(workspace.get_absdir(), dirc)
 
         # validate the UI JSON before touching the filesystem or DB
         simplestream = SIMPLEStream(copy.deepcopy(args))
@@ -124,7 +95,7 @@ class StreamJob:
             return False
 
         # initialise all stage statuses and heartbeats
-        jobmodel = JobModel(dset=datasetmodel, disp=disp, dirc=dirc, cdat=timezone.now(), args=args)
+        jobmodel = JobModel(dset=workspacemodel, disp=disp, dirc=dirc, cdat=timezone.now(), args=args)
         jobmodel.master_status               = "queued"
         jobmodel.preprocessing_status        = "queued"
         jobmodel.optics_assignment_status    = "queued"
@@ -142,7 +113,7 @@ class StreamJob:
         jobmodel.particle_sieving_heartbeat  = 0
         jobmodel.classification_2D_heartbeat = 0
         jobmodel.save()
-        datasetmodel.save()
+        workspacemodel.save()
 
         self.id     = jobmodel.id
         self.absdir = absdir
@@ -151,53 +122,9 @@ class StreamJob:
             return False
         return True
 
-    def delete(self):
-        """
-        Soft-delete this job by moving its directory into the dataset TRASH.
-        The DB record is removed only after the filesystem move succeeds.
-        Returns True on success, False on any failure.
-        """
-        if self.jobmodel is None:
-            print_error("jobmodel is None")
-            return False
-
-        # derive trashdir from the already-loaded related model to avoid an extra DB query
-        trashdir   = os.path.join(self.jobmodel.dset.proj.dirc, self.jobmodel.dset.dirc, "TRASH")
-        trash_path = os.path.join(trashdir, self.jobmodel.dirc)
-
-        if not ensure_directory(trashdir):
-            print_error("failed to create trash directory")
-            return False
-        if directory_exists(trash_path):
-            print_error("trash directory already exists")
-            return False
-        if not directory_exists(self.absdir):
-            print_error("job directory doesn't exist")
-            return False
-        try:
-            os.rename(self.absdir, trash_path)
-        except OSError:
-            print_error("failed to rename job directory: " + self.absdir)
-            return False
-
-        self.jobmodel.delete()
-        return True
-
     # ------------------------------------------------------------------
     # GUI parameter updates
     # ------------------------------------------------------------------
-
-    def update_description(self, description):
-        """Update the human-readable description of this job in the DB."""
-        if self.jobmodel is None:
-            print_error("jobmodel is none")
-            return False
-        if description is None:
-            print_error("description is none")
-            return False
-        self.jobmodel.desc = description
-        self.jobmodel.save()
-        return True
 
     def update(self, ctfres=None, astigmatism=None, icescore=None, increase_nmics=None):
         """
@@ -266,7 +193,7 @@ class StreamJob:
     # def update_moldiam_refine_initial_pick(self, diameter):
     # def select_refs_generate_pickrefs(self, final_selection, final_selection_source):
     # def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
-    # def selection_classification_2D(self, final_deselection, project, dataset, final_selection_ptcls):
+    # def selection_classification_2D(self, final_deselection, project, workspace, final_selection_ptcls):
 
     # ------------------------------------------------------------------
     # Stage heartbeat / stats ingestion (called by the running job via API)
@@ -345,7 +272,7 @@ class StreamJob:
                 status, _ = analyse_heartbeat(heartbeat["pool2D"])
                 self.jobmodel.classification_2D_status = status
                 if status == "running":
-                    master_update.pop("restart_pool2D", None)       
+                    master_update.pop("restart_pool2D", None)
             self.jobmodel.master_update = master_update
 
         if "preprocessing" in stats_json:
@@ -458,7 +385,7 @@ class StreamJob:
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True
-    
+
     def update_mskdiam(self, mskdiam):
         """Store the mask diameter for 2D classification.
         Writes mskdiam2D into master_update so the stream picks it up.
@@ -471,7 +398,7 @@ class StreamJob:
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True
-    
+
     def snapshot_classification_2D(self, snapshot_selection, snapshot_iteration):
         """Record a 2D-classification snapshot particle set and queue it for the stream.
 
@@ -485,11 +412,11 @@ class StreamJob:
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return False
-        master_update       = self.jobmodel.master_update
+        master_update = self.jobmodel.master_update
         particle_sets_stats = self.jobmodel.particle_sets_stats
-        if not "particle_sets" in particle_sets_stats:
+        if "particle_sets" not in particle_sets_stats:
             particle_sets_stats["particle_sets"] = []
-        setid    = len(particle_sets_stats["particle_sets"]) + 1
+        setid = len(particle_sets_stats["particle_sets"]) + 1
         projfile = "snapshot_" + str(setid) + ".simple"
         newset = {
             "id"       : setid,
@@ -504,11 +431,11 @@ class StreamJob:
             "selection" : snapshot_selection,
             "filename"  : projfile
         }
-        self.jobmodel.master_update       = master_update
+        self.jobmodel.master_update = master_update
         self.jobmodel.particle_sets_stats = particle_sets_stats
         self.jobmodel.save()
         return True
-    
+
     def selection_classification_2D(self, final_deselection, final_selection_ptcls):
         """Record the final 2D-classification particle selection and persist it to disk.
 
@@ -522,9 +449,9 @@ class StreamJob:
             print_error("jobmodel is none")
             return False
         particle_sets_stats = self.jobmodel.particle_sets_stats
-        if not "particle_sets" in particle_sets_stats:
+        if "particle_sets" not in particle_sets_stats:
             particle_sets_stats["particle_sets"] = []
-        setid    = len(particle_sets_stats["particle_sets"]) + 1
+        setid = len(particle_sets_stats["particle_sets"]) + 1
         deselfile = "particle_set_" + str(setid) + "_deselected.txt"
         newset = {
             "id"       : setid,
@@ -538,7 +465,7 @@ class StreamJob:
         with open(os.path.join(self.absdir, deselfile), "w") as f:
             for deselected in final_deselection:
                 f.write(str(deselected) + '\n')
-        self.jobmodel.particle_sets_stats = particle_sets_stats 
+        self.jobmodel.particle_sets_stats = particle_sets_stats
         self.jobmodel.save()
         return True
 

@@ -12,8 +12,8 @@ filterPrograms = (filterelement) => {
     const filtertext = filterelement.value.toLowerCase();
     for(const program of document.querySelectorAll(".program")){
         let display = false
-        const disp = program.dataset.disp.toLowerCase()
-        const desc = program.dataset.desc.toLowerCase()
+        const disp = program.workspace.disp.toLowerCase()
+        const desc = program.workspace.desc.toLowerCase()
         if(disp.includes(filtertext)) display = true
         if(desc.includes(filtertext)) display = true
         if(display){

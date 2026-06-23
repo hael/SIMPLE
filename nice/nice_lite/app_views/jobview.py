@@ -4,7 +4,6 @@ import math
 from django.shortcuts import render
 
 from ..data_structures.batchjob import BatchJob
-#from ..data_structures.simple  import SIMPLEStream
 
 class JobView:
 

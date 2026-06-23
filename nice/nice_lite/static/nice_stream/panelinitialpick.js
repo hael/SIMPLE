@@ -11,7 +11,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),
@@ -46,9 +46,9 @@ var multipick_observer = new IntersectionObserver(
       if(entry.intersectionRatio > 0.5){
         const boxes_overlay = document.getElementById("boxes_overlay")
         if(boxes_overlay ==  null) return
-        boxes_overlay.dataset.xdim  = entry.target.dataset.xdim
-        boxes_overlay.dataset.ydim  = entry.target.dataset.ydim
-        boxes_overlay.dataset.boxes = entry.target.dataset.boxes
+        boxes_overlay.workspace.xdim  = entry.target.workspace.xdim
+        boxes_overlay.workspace.ydim  = entry.target.workspace.ydim
+        boxes_overlay.workspace.boxes = entry.target.workspace.boxes
         draw_overlay_coordinates()
       }
     })
@@ -72,23 +72,23 @@ const draw_overlay_coordinates = ()  => {
     const diameter_input = document.getElementsByName("diameter")[0]
     if(diameter_input ==  null) multipick = false
     const micrographs_slider = document.querySelector("#micrographs_slider")
-    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.dataset && "picking_diameters" in micrographs_slider.dataset){
-      const available_diameters = JSON.parse(micrographs_slider.dataset.picking_diameters.replaceAll("'", '"'))
+    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.workspace && "picking_diameters" in micrographs_slider.workspace){
+      const available_diameters = JSON.parse(micrographs_slider.workspace.picking_diameters.replaceAll("'", '"'))
       multipick = true
-      best_diam = closest(available_diameters, Number(micrographs_slider.dataset.best_diam))
+      best_diam = closest(available_diameters, Number(micrographs_slider.workspace.best_diam))
     }
-    const xdim = Number(boxes_overlay.dataset.xdim)
-    const ydim = Number(boxes_overlay.dataset.ydim)
+    const xdim = Number(boxes_overlay.workspace.xdim)
+    const ydim = Number(boxes_overlay.workspace.ydim)
     let scale  = 1
     if(xdim > ydim){
-      scale = boxes_overlay.width  / Number(boxes_overlay.dataset.xdim)
+      scale = boxes_overlay.width  / Number(boxes_overlay.workspace.xdim)
     }else{
-      scale = boxes_overlay.height  / Number(boxes_overlay.dataset.ydim)
+      scale = boxes_overlay.height  / Number(boxes_overlay.workspace.ydim)
     }
     // account for rectangular images
-    var yoffset = (boxes_overlay.height - (scale * Number(boxes_overlay.dataset.ydim))) / 2
-    var xoffset = (boxes_overlay.width  - (scale * Number(boxes_overlay.dataset.xdim))) / 2
-    const boxes = JSON.parse(boxes_overlay.dataset.boxes.replaceAll("'", '"'))
+    var yoffset = (boxes_overlay.height - (scale * Number(boxes_overlay.workspace.ydim))) / 2
+    var xoffset = (boxes_overlay.width  - (scale * Number(boxes_overlay.workspace.xdim))) / 2
+    const boxes = JSON.parse(boxes_overlay.workspace.boxes.replaceAll("'", '"'))
     const ctx = boxes_overlay.getContext("2d");
     ctx.clearRect(0, 0, boxes_overlay.width, boxes_overlay.height)
     for(const box of boxes){
@@ -167,9 +167,9 @@ window.addEventListener("load", () => {
 
 window.addEventListener("load", () =>{
     const micrographs_slider = document.querySelector("#micrographs_slider")
-    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.dataset && "picking_diameters" in micrographs_slider.dataset){
-      const available_diameters = JSON.parse(micrographs_slider.dataset.picking_diameters.replaceAll("'", '"'))
-      const best_diam = closest(available_diameters, Number(micrographs_slider.dataset.best_diam))
+    if(micrographs_slider != undefined && "best_diam" in micrographs_slider.workspace && "picking_diameters" in micrographs_slider.workspace){
+      const available_diameters = JSON.parse(micrographs_slider.workspace.picking_diameters.replaceAll("'", '"'))
+      const best_diam = closest(available_diameters, Number(micrographs_slider.workspace.best_diam))
       const diameter_input = document.getElementsByName("diameter")[0]
       if(diameter_input != undefined) diameter_input.value = available_diameters.indexOf(best_diam)
     }
@@ -179,18 +179,18 @@ window.addEventListener("load", () =>{
 window.addEventListener("load", () =>{
     for(const miccontainer of document.getElementsByClassName("miccontainer")){
       const box_overlay = miccontainer.querySelector('.boxes-overlay')
-      const xdim = Number(miccontainer.dataset.xdim)
-      const ydim = Number(miccontainer.dataset.ydim)
+      const xdim = Number(miccontainer.workspace.xdim)
+      const ydim = Number(miccontainer.workspace.ydim)
       let scale  = 1
       if(xdim > ydim){
-        scale = box_overlay.width  / Number(miccontainer.dataset.xdim)
+        scale = box_overlay.width  / Number(miccontainer.workspace.xdim)
       }else{
-        scale = box_overlay.height  / Number(miccontainer.dataset.ydim)
+        scale = box_overlay.height  / Number(miccontainer.workspace.ydim)
       }
       // account for rectangular images
-      var yoffset = (box_overlay.height - (scale * Number(miccontainer.dataset.ydim))) / 2
-      var xoffset = (box_overlay.width  - (scale * Number(miccontainer.dataset.xdim))) / 2
-      const boxes = JSON.parse(miccontainer.dataset.boxes.replaceAll("'", '"'))
+      var yoffset = (box_overlay.height - (scale * Number(miccontainer.workspace.ydim))) / 2
+      var xoffset = (box_overlay.width  - (scale * Number(miccontainer.workspace.xdim))) / 2
+      const boxes = JSON.parse(miccontainer.workspace.boxes.replaceAll("'", '"'))
       const ctx = box_overlay.getContext("2d");
       for(const box of boxes){
         ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
@@ -203,9 +203,9 @@ window.addEventListener("load", () =>{
 
 window.addEventListener("load", () =>{
     for(const canvas of document.getElementsByClassName("micrographs_pie_chart")){
-        const n_imported  = Number(canvas.dataset.imported)
-        const n_processed = Number(canvas.dataset.processed)
-        const n_rejected  = Number(canvas.dataset.rejected)
+        const n_imported  = Number(canvas.workspace.imported)
+        const n_processed = Number(canvas.workspace.processed)
+        const n_rejected  = Number(canvas.workspace.rejected)
         buildDonut(canvas, [n_imported - n_processed - n_rejected, n_processed, n_rejected], ['queued', 'accepted', 'rejected'])
     }
 },false);

@@ -11,7 +11,7 @@ const buildDonut = (canvas, dataValues, labels) => {
         },
         data: {
             labels,
-            datasets: [{
+            workspaces: [{
                 data: dataValues,
                 backgroundColor: [
                     style.getPropertyValue('--color-streamring').trim(),
@@ -72,7 +72,7 @@ const toggleCls = (element)  => {
 const selectCls = (element)  => {
     const selected = []
     for(const cls2D of document.getElementsByClassName("cls2D")){
-        const idx  = Number(cls2D.dataset.idx)
+        const idx  = Number(cls2D.workspace.idx)
         if(!cls2D.classList.contains("disabledbutton")){
             selected.push(idx)
         }
@@ -93,7 +93,7 @@ const selectCls = (element)  => {
 const selectClsFinal = (element)  => {
     const deselected = []
     for(const cls2D of document.getElementsByClassName("cls2D")){
-        const idx  = Number(cls2D.dataset.idx)
+        const idx  = Number(cls2D.workspace.idx)
         if(cls2D.classList.contains("disabledbutton")){
             deselected.push(idx)
         }
@@ -116,7 +116,7 @@ const drawMask = ()  => {
   if(selected_mskdiam.value == "") return
   for(const cls2D of document.getElementsByClassName("cls2D")){
     const canvas   = cls2D.getElementsByClassName("mskcanvas")[0]
-    const mskscale = Number(canvas.dataset.mskscale)
+    const mskscale = Number(canvas.workspace.mskscale)
     const ctx = canvas.getContext("2d")
     ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--color-streamaction').trim();
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -182,7 +182,7 @@ const sortPop = ()  => {
   const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
   acceptedtemplates.sort((a, b) => {
-        return Number(b.dataset.pop) - Number(a.dataset.pop);
+        return Number(b.workspace.pop) - Number(a.workspace.pop);
   });
   acceptedtemplates.forEach((item) => {
         accepted_cls2D_slider.appendChild(item);
@@ -194,7 +194,7 @@ const sortRes = ()  => {
   const accepted_cls2D_slider = document.querySelector("#accepted_cls2D_slider")
   const acceptedtemplates     = Array.from(accepted_cls2D_slider.querySelectorAll(".cls2dcontainer"))
   acceptedtemplates.sort((a, b) => {
-        return Number(a.dataset.res) - Number(b.dataset.res);
+        return Number(a.workspace.res) - Number(b.workspace.res);
   });
   acceptedtemplates.forEach((item) => {
         accepted_cls2D_slider.appendChild(item);
@@ -262,8 +262,8 @@ const updateCounts = ()  => {
   let nptcls_tot = 0
   for(const cls2dcontainer of cls2dcontainers){
     const deselected = cls2dcontainer.querySelector(".disabledbutton")
-    const pop = Number(cls2dcontainer.dataset.pop)
-    const idx = Number(cls2dcontainer.dataset.idx)
+    const pop = Number(cls2dcontainer.workspace.pop)
+    const idx = Number(cls2dcontainer.workspace.idx)
     nptcls_tot = nptcls_tot + pop
     if(deselected == undefined){
       nptcls = nptcls + pop
@@ -314,9 +314,9 @@ window.addEventListener("load", () => {
 
 window.addEventListener("load", () =>{
     for(const canvas of document.getElementsByClassName("particles_pie_chart")){
-        const n_imported = Number(canvas.dataset.imported)
-        const n_accepted = Number(canvas.dataset.accepted)
-        const n_rejected = Number(canvas.dataset.rejected)
+        const n_imported = Number(canvas.workspace.imported)
+        const n_accepted = Number(canvas.workspace.accepted)
+        const n_rejected = Number(canvas.workspace.rejected)
         buildDonut(canvas, [n_imported - n_accepted - n_rejected, n_accepted, n_rejected], ['unclassified', 'accepted', 'rejected'])
     }
 },false);
@@ -328,7 +328,7 @@ window.addEventListener("load", () =>{
   if(current_mskdiam == undefined || selected_mskdiam == undefined || mskdiam_selector == undefined) return
   for(const cls2D of document.getElementsByClassName("cls2D")){
     const canvas   = cls2D.getElementsByClassName("mskcanvas")[0]
-    const mskdiam  = Number(canvas.dataset.mskdiam)
+    const mskdiam  = Number(canvas.workspace.mskdiam)
     current_mskdiam.innerHTML = mskdiam + "Å" 
     selected_mskdiam.value    = mskdiam
     const half_mskdiam = Math.round(mskdiam/2)
