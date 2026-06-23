@@ -235,7 +235,6 @@ contains
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
         call cls_split%add_input(UI_FILT, 'graph', 'multi', 'Class split graph', 'Class split graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
         call cls_split%add_input(UI_FILT, 'steering', 'multi', 'Orientation graph steering', 'Orientation graph steering for graph=ori(none|so2|se2){none}', '(none|so2|se2){none}', .false., 'none')
-        call cls_split%add_input(UI_FILT, 'gen_model', 'binary', 'Generative particle model', 'Fit generative denoising model and write generated/denoised particle stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
@@ -250,8 +249,6 @@ contains
         &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and non-steerable diffusion-map generative particle samples',&
         &'all',&
         &.true.)
-        call diffmap_denoise_project%add_input(UI_PARM, 'pre_norm', 'binary', &
-            'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
         call diffmap_denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 10-30)', &
             'Local nearest neighbors used for non-steerable diffusion maps', &

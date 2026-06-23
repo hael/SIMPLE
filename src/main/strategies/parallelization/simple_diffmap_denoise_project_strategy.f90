@@ -328,7 +328,7 @@ contains
         type(image)  :: img_blank
         integer, allocatable :: cls_inds(:), cls_pops(:)
         logical, allocatable :: processed(:)
-        logical :: l_phflip, l_img_blank_init
+        logical :: l_phflip, l_img_blank_init, l_mskdiam_override
         integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
@@ -338,6 +338,7 @@ contains
             if( allocated(cls_pops) ) deallocate(cls_pops)
             return
         endif
+        l_mskdiam_override = cline%defined('mskdiam')
         nptcls = spproj%os_ptcl2D%get_noris()
         allocate(processed(nptcls), source=.false.)
         l_img_blank_init = .false.
@@ -360,7 +361,7 @@ contains
         nprocessed = 0
         do icls = 1, size(cls_inds)
             call write_diffmap_denoised_class(params, build, spproj, cls_inds(icls), l_phflip, &
-                raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project, icls)
+                l_mskdiam_override, raw_stks, den_stks, processed, nprocessed, .true., funit_map, l_write_project, icls)
         end do
         if( l_write_project )then
             ldim_blank = [params%box_crop, params%box_crop, 1]
@@ -555,7 +556,7 @@ contains
         if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for diffmap_denoise_project')
     end subroutine filter_classes_by_assignment
 
-    subroutine write_diffmap_denoised_class(params, build, spproj, cls_id, l_phflip, raw_stks, den_stks, &
+    subroutine write_diffmap_denoised_class(params, build, spproj, cls_id, l_phflip, l_mskdiam_override, raw_stks, den_stks, &
                                             processed, nprocessed, l_dense_output, map_unit, l_index_by_pind, class_index)
         use simple_diff_map_graphs,  only: diffmap_graph, build_cls_split_graph
         use simple_diff_map_denoise, only: graph_coeffproj_denoise
@@ -565,7 +566,7 @@ contains
         type(builder),    intent(inout) :: build
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: cls_id
-        logical,          intent(in)    :: l_phflip
+        logical,          intent(in)    :: l_phflip, l_mskdiam_override
         type(string),     intent(in)    :: raw_stks(:), den_stks(:)
         logical,          intent(inout) :: processed(:)
         integer,          intent(inout) :: nprocessed
@@ -603,21 +604,20 @@ contains
         params_mask%box     = class_ldim(1)
         params_mask%smpd    = cavg_raw%get_smpd()
         params_mask%msk     = real(class_ldim(1) / 2) - COSMSKHALFWIDTH
-        call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, &
-                        class_diams, class_shifts, verbose=.false.)
-        class_moldiam = params_mask%smpd * real(min(round2even(class_diams(1) / params_mask%smpd + &
-            2. * COSMSKHALFWIDTH), class_ldim(1)))
-        class_mskdiam = class_moldiam * MSK_EXP_FAC
+        if( l_mskdiam_override )then
+            class_mskdiam = params%mskdiam
+        else
+            call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, &
+                            class_diams, class_shifts, verbose=.false.)
+            class_moldiam = params_mask%smpd * real(min(round2even(class_diams(1) / params_mask%smpd + &
+                2. * COSMSKHALFWIDTH), class_ldim(1)))
+            class_mskdiam = class_moldiam * MSK_EXP_FAC
+        endif
         class_mskrad  = min(real(class_ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * class_mskdiam / params_mask%smpd)
         do j = 1, nptcls
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
-        if( trim(params%pre_norm) == 'yes' )then
-            do j = 1, nptcls
-                call imgs_ppca(j)%norm
-            end do
-        endif
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         call build_cls_split_graph(params, spproj, pinds, pcavecs, imgs_ppca, graph)
         if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; diffmap_denoise_project')

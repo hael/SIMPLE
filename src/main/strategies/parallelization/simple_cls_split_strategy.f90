@@ -24,8 +24,6 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: CLS_SPLIT_ICM_RANK_MAXITS = 16 
-integer, parameter :: CLS_SPLIT_REFINE2D_MAXITS = 3
-character(len=*), parameter :: CLS_SPLIT_REFINE2D_ALN_FBODY = 'cls_split_refine2D_alignments_part'
 real,    parameter :: CLS_SPLIT_ICM_RANK_BETA_FRAC = 0.35       ! neighbor penalty: larger values discourage fragmented spectra such as keep/drop/keep.
 real,    parameter :: CLS_SPLIT_ICM_RANK_COMPLEXITY_FRAC = 0.10 ! Late-rank complexity penalty: larger values make high-index eigenfeatures harder to retain.
 real,    parameter :: CLS_SPLIT_ICM_RANK_LOWER_SEED_FRAC = 0.50 ! Lower-seed fraction of the eigengap upper bound; smaller values probe more compact latent spaces.
@@ -389,65 +387,28 @@ contains
     end subroutine determine_phase_flip
 
     subroutine run_local_split(params, build, cline, spproj, part, l_write_project)
-        use simple_imgarr_utils,     only: dealloc_imgarr
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: part
         logical,          intent(in)    :: l_write_project
-        type(string) :: label, map_fname, assign_fname, raw_fname, den_fname, coeff_fname, refine2D_align_fname
-        type(string) :: den_ptcl_fname, ptcl_map_fname
-        type(image), allocatable :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
-        type(image), allocatable :: den_ptcls(:), coeff_ptcls(:), den_ptcls_write(:)
+        type(string) :: label, map_fname, assign_fname
         integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
-        integer :: i, j, k, iglob, iptcl_glob, nsplit, subcls_offset, funit_map, funit_assign, funit_ptcl_map
-        integer :: funit_refine2D_align, refine2D_nptcls
-        real    :: refine2D_sum_corr_before, refine2D_sum_corr_after
-        logical :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls, l_refine2D, l_write_refine2D_align
+        integer :: i, j, k, iglob, nsplit, funit_map, funit_assign
+        logical :: l_phflip, l_fixed_nsubcls, l_mskdiam_override
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         call determine_split_label(params, build, label)
-        l_pre_norm = (trim(params%pre_norm) .eq. 'yes')
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
-        select case(trim(params%gen_model))
-            case('yes')
-                l_write_ptcls = .true.
-            case('no')
-                l_write_ptcls = .false.
-            case DEFAULT
-                THROW_HARD('gen_model must be yes or no; cls_split')
-        end select
-        l_refine2D = (trim(params%oritype) == 'ptcl2D') .and. (trim(params%objfun) == 'cc')
-        l_write_refine2D_align = l_refine2D .and. (.not. l_write_project)
-        funit_refine2D_align = -1
-        refine2D_nptcls = 0
-        refine2D_sum_corr_before = 0.
-        refine2D_sum_corr_after  = 0.
+        l_mskdiam_override = cline%defined('mskdiam')
+        if( trim(params%gen_model) == 'yes' )then
+            THROW_WARN('gen_model is ignored by cls_split; use diffmap_denoise_project for generated/denoised particles')
+        endif
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then
             map_fname = string('cls_split_class_map.txt')
-            raw_fname = string('cls_split_subclass_avgs.mrcs')
-            den_fname = string('cls_split_subclass_avgs_conditioned.mrcs')
-            coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj.mrcs')
-            if( l_write_ptcls )then
-                den_ptcl_fname    = string('cls_split_particles_denoised.mrcs')
-                ptcl_map_fname    = string('cls_split_particles_map.txt')
-            endif
-            call del_file(raw_fname)
-            call del_file(den_fname)
-            call del_file(coeff_fname)
-            if( l_write_ptcls )then
-                call del_file(string('cls_split_particles_original.mrcs'))
-                call del_file(den_ptcl_fname)
-                call del_file(string('cls_split_particles.mrcs'))
-                call del_file(string('cls_split_particles_steer_coeffproj.mrcs'))
-            endif
             open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
             write(funit_map,'(A)') '# global_subclass parent_class local_subclass pop'
-            if( l_write_ptcls )then
-                open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
-                write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
-            endif
             select case(trim(params%oritype))
                 case('ptcl2D')
                     allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
@@ -458,49 +419,17 @@ contains
         else
             map_fname    = string('cls_split_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
             assign_fname = string('cls_split_assignments_part')//int2str_pad(part, params%numlen)//TXT_EXT
-            raw_fname    = string('cls_split_subclass_avgs_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            den_fname    = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            coeff_fname  = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            if( l_write_ptcls )then
-                den_ptcl_fname    = string('cls_split_particles_denoised_part')//int2str_pad(part, params%numlen)//'.mrcs'
-                ptcl_map_fname    = string('cls_split_particles_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
-            endif
-            if( l_write_refine2D_align )then
-                refine2D_align_fname = string(CLS_SPLIT_REFINE2D_ALN_FBODY)//int2str_pad(part, params%numlen)//TXT_EXT
-                call del_file(refine2D_align_fname)
-            endif
-            call del_file(raw_fname)
-            call del_file(den_fname)
-            call del_file(coeff_fname)
-            if( l_write_ptcls )then
-                call del_file(string('cls_split_particles_original_part')//int2str_pad(part, params%numlen)//'.mrcs')
-                call del_file(den_ptcl_fname)
-                call del_file(string('cls_split_particles_part')//int2str_pad(part, params%numlen)//'.mrcs')
-                call del_file(string('cls_split_particles_steer_coeffproj_part')//int2str_pad(part, params%numlen)//'.mrcs')
-            endif
             open(newunit=funit_map,    file=map_fname%to_char(),    status='replace', action='write')
             open(newunit=funit_assign, file=assign_fname%to_char(), status='replace', action='write')
-            write(funit_map,'(A)')    '# local_stack_index parent_class local_subclass pop'
+            write(funit_map,'(A)')    '# local_subclass_row parent_class local_subclass pop'
             write(funit_assign,'(A)') '# particle_index parent_class local_subclass'
-            if( l_write_refine2D_align )then
-                open(newunit=funit_refine2D_align, file=refine2D_align_fname%to_char(), status='replace', action='write')
-                write(funit_refine2D_align,'(A)') '# particle_index e3 x y corr'
-            endif
-            if( l_write_ptcls )then
-                open(newunit=funit_ptcl_map, file=ptcl_map_fname%to_char(), status='replace', action='write')
-                write(funit_ptcl_map,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
-            endif
         endif
         iglob = 0
-        iptcl_glob = 0
         do i = 1, size(cls_inds)
             write(logfhandle,'(A,I8,A,I8)') 'Cls split starting: class=', cls_inds(i), ' nptcls=', cls_pops(i)
             call flush(logfhandle)
-            call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_pre_norm, l_fixed_nsubcls, &
-                                        l_write_ptcls, l_refine2D, &
-                                        nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                        den_ptcls, coeff_ptcls, den_ptcls_write, refine2D_nptcls, &
-                                        refine2D_sum_corr_before, refine2D_sum_corr_after)
+            call split_one_parent_class(params, build, spproj, cls_inds(i), l_phflip, l_fixed_nsubcls, &
+                                        l_mskdiam_override, nsplit, pinds, labels)
             if( nsplit < 1 ) cycle
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls split summary: class=', cls_inds(i), ' nptcls=', size(labels), ' nsubcls=', nsplit
             call flush(logfhandle)
@@ -510,26 +439,10 @@ contains
                     parent_of_subcls(iglob) = cls_inds(i)
                     pop_of_subcls(iglob)    = count(labels == j)
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
-                    call raw_subavgs(j)%write(raw_fname, iglob)
-                    call den_subavgs(j)%write(den_fname, iglob)
-                    if( allocated(coeff_subavgs) ) call coeff_subavgs(j)%write(coeff_fname, iglob)
                 else
                     write(funit_map,'(I8,1X,I8,1X,I8,1X,I8)') iglob, cls_inds(i), j, count(labels == j)
-                    call raw_subavgs(j)%write(raw_fname, iglob)
-                    call den_subavgs(j)%write(den_fname, iglob)
-                    if( allocated(coeff_subavgs) ) call coeff_subavgs(j)%write(coeff_fname, iglob)
                 endif
             end do
-            subcls_offset = iglob - nsplit
-            if( l_write_ptcls .and. allocated(den_ptcls_write) )then
-                do k = 1, size(labels)
-                    if( labels(k) <= 0 ) cycle
-                    iptcl_glob = iptcl_glob + 1
-                    call den_ptcls_write(k)%write(den_ptcl_fname, iptcl_glob)
-                    write(funit_ptcl_map,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
-                        iptcl_glob, pinds(k), cls_inds(i), labels(k), subcls_offset + labels(k)
-                end do
-            endif
             if( l_write_project )then
                 do k = 1, size(labels)
                     if( labels(k) <= 0 ) cycle
@@ -541,28 +454,12 @@ contains
                     if( labels(k) <= 0 ) cycle
                     write(funit_assign,'(I10,1X,I10,1X,I10)') pinds(k), cls_inds(i), labels(k)
                 end do
-                if( l_write_refine2D_align ) call write_refine2D_alignment_rows(spproj, funit_refine2D_align, pinds, labels)
             endif
-            if( allocated(raw_subavgs) ) call dealloc_imgarr(raw_subavgs)
-            if( allocated(den_subavgs) ) call dealloc_imgarr(den_subavgs)
-            if( allocated(coeff_subavgs) ) call dealloc_imgarr(coeff_subavgs)
-            if( allocated(den_ptcls)    ) call dealloc_imgarr(den_ptcls)
-            if( allocated(den_ptcls_write) ) call dealloc_imgarr(den_ptcls_write)
-            if( allocated(coeff_ptcls)  ) call dealloc_imgarr(coeff_ptcls)
             if( allocated(pinds) ) deallocate(pinds)
             if( allocated(labels) ) deallocate(labels)
         end do
         close(funit_map)
-        if( l_write_ptcls ) close(funit_ptcl_map)
         if( .not. l_write_project ) close(funit_assign)
-        if( l_write_refine2D_align )then
-            write(funit_refine2D_align,'(A,1X,I12,1X,2(ES18.8,1X))') '# summary', refine2D_nptcls, &
-                refine2D_sum_corr_before, refine2D_sum_corr_after
-            close(funit_refine2D_align)
-        endif
-        if( l_refine2D .and. l_write_project ) &
-            call log_refine2D_summary(part, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
-        if( l_write_project .and. l_write_ptcls ) call sort_cls_split_particle_outputs_by_pind(params%smpd_crop)
         if( l_write_project )then
             call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls(1:iglob), pop_of_subcls(1:iglob))
             deallocate(new_class, new_parent, parent_of_subcls, pop_of_subcls)
@@ -572,21 +469,11 @@ contains
         call label%kill
         call map_fname%kill
         if( assign_fname%is_allocated() ) call assign_fname%kill
-        if( raw_fname%is_allocated() ) call raw_fname%kill
-        if( den_fname%is_allocated() ) call den_fname%kill
-        if( coeff_fname%is_allocated() ) call coeff_fname%kill
-        if( refine2D_align_fname%is_allocated() ) call refine2D_align_fname%kill
-        if( den_ptcl_fname%is_allocated()    ) call den_ptcl_fname%kill
-        if( ptcl_map_fname%is_allocated()    ) call ptcl_map_fname%kill
     end subroutine run_local_split
 
-    subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_pre_norm, l_fixed_nsubcls, &
-                                      l_write_ptcls, l_refine2D, &
-                                      nsplit, pinds, labels, raw_subavgs, den_subavgs, coeff_subavgs, &
-                                      den_ptcls, coeff_ptcls, den_ptcls_write, refine2D_nptcls, &
-                                      refine2D_sum_corr_before, refine2D_sum_corr_after)
+    subroutine split_one_parent_class(params, build, spproj, cls_id, l_phflip, l_fixed_nsubcls, &
+                                      l_mskdiam_override, nsplit, pinds, labels)
         use simple_diff_map_graphs,  only: diffmap_graph
-        use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -594,24 +481,18 @@ contains
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
         integer,                  intent(in)    :: cls_id
-        logical,                  intent(in)    :: l_phflip, l_pre_norm, l_fixed_nsubcls, l_write_ptcls, l_refine2D
+        logical,                  intent(in)    :: l_phflip, l_fixed_nsubcls, l_mskdiam_override
         integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
-        type(image), allocatable, intent(out)   :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
-        type(image), allocatable, intent(out)   :: den_ptcls(:), coeff_ptcls(:), den_ptcls_write(:)
-        integer,                  intent(inout) :: refine2D_nptcls
-        real,                     intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
         type(parameters) :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:)
-        type(image), allocatable :: refined_subavgs(:)
-        type(image) :: cavg_raw, cavg_den, cavg_coeff
-        real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
+        type(image) :: cavg_raw
+        real, allocatable :: avg(:), pcavecs(:,:), coords(:,:), eigvals(:), dmat(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         type(diffmap_graph) :: split_graph
         integer, allocatable :: i_medoids(:)
         integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
-        logical :: l_refine_collapse
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(labels) ) deallocate(labels)
@@ -641,48 +522,29 @@ contains
         params_mask%box   = class_ldim(1)
         params_mask%smpd  = cavg_raw%get_smpd()
         params_mask%msk   = real(class_ldim(1) / 2) - COSMSKHALFWIDTH
-        call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, class_diams, class_shifts)
-        class_moldiam = params_mask%smpd * real(min(round2even(class_diams(1) / params_mask%smpd + 2. * COSMSKHALFWIDTH), class_ldim(1)))
-        class_mskdiam = class_moldiam * MSK_EXP_FAC
+        if( l_mskdiam_override )then
+            class_mskdiam = params%mskdiam
+        else
+            call automask2D(params_mask, class_mask, params_mask%ngrow, nint(params_mask%winsz), params_mask%edge, class_diams, class_shifts)
+            class_moldiam = params_mask%smpd * real(min(round2even(class_diams(1) / params_mask%smpd + 2. * COSMSKHALFWIDTH), class_ldim(1)))
+            class_mskdiam = class_moldiam * MSK_EXP_FAC
+        endif
         class_mskrad  = min(real(class_ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * class_mskdiam / params_mask%smpd)
-        write(logfhandle,'(A,I8,A,F8.2,A,F8.2,A,F8.2)') 'Cls split mask update: class=', cls_id, &
-            ' automask_diam=', class_diams(1), ' mskdiam=', class_mskdiam, ' mskrad=', class_mskrad
+        if( l_mskdiam_override )then
+            write(logfhandle,'(A,I8,A,F8.2,A,F8.2)') 'Cls split mask update: class=', cls_id, &
+                ' input_mskdiam=', class_mskdiam, ' mskrad=', class_mskrad
+        else
+            write(logfhandle,'(A,I8,A,F8.2,A,F8.2,A,F8.2)') 'Cls split mask update: class=', cls_id, &
+                ' automask_diam=', class_diams(1), ' mskdiam=', class_mskdiam, ' mskrad=', class_mskrad
+        endif
         call flush(logfhandle)
         do j = 1, nptcls
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
-        if( l_pre_norm )then
-            do j = 1, nptcls
-                call imgs_ppca(j)%norm
-            end do
-        endif
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         call make_split_embedding(params, spproj, pinds, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
                                   split_graph)
-        if( l_write_ptcls .and. split_graph%n > 0 .and. &
-            (trim(split_graph%steering) /= 'none' .or. trim(split_graph%metric) == 'euclidean') )then
-            call graph_coeffproj_denoise(params, imgs_ppca, avg, split_graph, coeff_ptcls)
-            if( allocated(coeff_ptcls) )then
-                den_ptcls = copy_imgarr(coeff_ptcls)
-                if( l_write_ptcls )then
-                    avg_ptcls = cavg_raw%serialize()
-                    call graph_coeffproj_denoise(params, imgs, avg_ptcls, split_graph, den_ptcls_write)
-                    if( allocated(den_ptcls_write) )then
-                        do k = 1, size(den_ptcls_write)
-                            call inverse_register_split_particle(spproj, params%oritype, pinds(k), den_ptcls_write(k))
-                        end do
-                    endif
-                endif
-                write(logfhandle,'(A,I8,A,A,A,A,A)') 'Cls split graph generated model: class=', cls_id, &
-                    ' graph=', trim(split_graph%metric), ' steering=', trim(split_graph%steering), ' method=coeff_projection'
-                call flush(logfhandle)
-            else
-                write(logfhandle,'(A,I8,A,A,A,A,A)') 'Cls split graph generated model skipped: class=', cls_id, &
-                    ' graph=', trim(split_graph%metric), ' steering=', trim(split_graph%steering), ' no coeff projection'
-                call flush(logfhandle)
-            endif
-        endif
         call sanitize_embedding_coords(trim(params%pca_mode), cls_id, coords)
         allocate(dmat(nptcls,nptcls), source=0.)
         do j = 1, nptcls - 1
@@ -708,57 +570,13 @@ contains
                 ' max=', params%nsubcls_max, ' selected=', nsplit
             call flush(logfhandle)
         endif
-        call cavg_den%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
-        if( allocated(coeff_ptcls) ) call cavg_coeff%new(cavg_raw%get_ldim(), cavg_raw%get_smpd())
-        allocate(raw_subavgs(nsplit), den_subavgs(nsplit))
-        if( allocated(coeff_ptcls) ) allocate(coeff_subavgs(nsplit))
-        do j = 1, nsplit
-            call cavg_raw%zero_and_unflag_ft
-            call cavg_den%zero_and_unflag_ft
-            if( allocated(coeff_ptcls) ) call cavg_coeff%zero_and_unflag_ft
-            do k = 1, size(labels)
-                if( labels(k) /= j ) cycle
-                call cavg_raw%add(imgs(k))
-                if( allocated(den_ptcls) )then
-                    call cavg_den%add(den_ptcls(k))
-                else
-                    call cavg_den%add(imgs_ppca(k))
-                endif
-                if( allocated(coeff_ptcls) ) call cavg_coeff%add(coeff_ptcls(k))
-            end do
-            call cavg_raw%div(real(max(count(labels == j), 1)))
-            call cavg_den%div(real(max(count(labels == j), 1)))
-            if( allocated(coeff_ptcls) ) call cavg_coeff%div(real(max(count(labels == j), 1)))
-            call raw_subavgs(j)%copy(cavg_raw)
-            call den_subavgs(j)%copy(cavg_den)
-            if( allocated(coeff_ptcls) ) call coeff_subavgs(j)%copy(cavg_coeff)
-        end do
-        if( l_refine2D .and. nsplit > 0 )then
-            call refine_split_subclasses2D(params, spproj, cls_id, pinds, labels, nsplit, raw_subavgs, &
-                                          l_refine_collapse, refined_subavgs, refine2D_nptcls, &
-                                          refine2D_sum_corr_before, refine2D_sum_corr_after)
-            if( l_refine_collapse )then
-                labels = 1
-                nsplit = 1
-                call rebuild_collapsed_subavg(imgs, imgs_ppca, den_ptcls, coeff_ptcls, raw_subavgs, den_subavgs, coeff_subavgs)
-            else if( allocated(refined_subavgs) )then
-                do j = 1, min(nsplit, size(refined_subavgs))
-                    call raw_subavgs(j)%copy(refined_subavgs(j))
-                    call den_subavgs(j)%copy(refined_subavgs(j))
-                end do
-            endif
-            if( allocated(refined_subavgs) ) call dealloc_imgarr(refined_subavgs)
-        endif
         call cavg_raw%kill
-        call cavg_den%kill
-        if( cavg_coeff%exists() ) call cavg_coeff%kill
         if( allocated(coords)       ) deallocate(coords)
         if( allocated(eigvals)      ) deallocate(eigvals)
         if( allocated(dmat)         ) deallocate(dmat)
         call split_graph%kill()
         if( allocated(i_medoids)    ) deallocate(i_medoids)
         if( allocated(avg)          ) deallocate(avg)
-        if( allocated(avg_ptcls)    ) deallocate(avg_ptcls)
         if( allocated(pcavecs)      ) deallocate(pcavecs)
         if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
@@ -766,338 +584,6 @@ contains
         if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
         if( allocated(imgs)         ) call dealloc_imgarr(imgs)
     end subroutine split_one_parent_class
-
-    subroutine inverse_register_split_particle(spproj, oritype, pind, ptcl)
-        type(sp_project), intent(inout) :: spproj
-        character(len=*), intent(in)    :: oritype
-        integer,          intent(in)    :: pind
-        type(image),      intent(inout) :: ptcl
-        real, allocatable :: rmat_rot(:,:,:)
-        real :: e3, shift(2)
-        integer :: ldim(3)
-        select case(trim(oritype))
-            case('ptcl2D')
-                e3    = spproj%os_ptcl2D%e3get(pind)
-                shift = spproj%os_ptcl2D%get_2Dshift(pind)
-            case('ptcl3D')
-                e3    = spproj%os_ptcl3D%e3get(pind)
-                shift = spproj%os_ptcl3D%get_2Dshift(pind)
-            case DEFAULT
-                THROW_HARD('Unsupported oritype for cls_split particle inverse registration')
-        end select
-        ldim = ptcl%get_ldim()
-        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
-        call ptcl%rtsq_serial(-e3, 0., 0., rmat_rot)
-        call ptcl%set_rmat(rmat_rot, .false.)
-        call ptcl%fft()
-        call ptcl%shift2Dserial(shift)
-        call ptcl%ifft()
-        deallocate(rmat_rot)
-    end subroutine inverse_register_split_particle
-
-    subroutine rebuild_collapsed_subavg(imgs, imgs_ppca, den_ptcls, coeff_ptcls, raw_subavgs, den_subavgs, coeff_subavgs)
-        use simple_imgarr_utils, only: dealloc_imgarr
-        type(image), allocatable, intent(inout) :: imgs(:), imgs_ppca(:), den_ptcls(:), coeff_ptcls(:)
-        type(image), allocatable, intent(inout) :: raw_subavgs(:), den_subavgs(:), coeff_subavgs(:)
-        type(image) :: cavg_raw, cavg_den, cavg_coeff
-        integer :: k, nptcls
-        if( .not. allocated(imgs) ) return
-        nptcls = size(imgs)
-        call cavg_raw%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
-        call cavg_den%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
-        if( allocated(coeff_ptcls) ) call cavg_coeff%new(imgs(1)%get_ldim(), imgs(1)%get_smpd())
-        do k = 1, nptcls
-            call cavg_raw%add(imgs(k))
-            if( allocated(den_ptcls) )then
-                call cavg_den%add(den_ptcls(k))
-            else if( allocated(imgs_ppca) )then
-                call cavg_den%add(imgs_ppca(k))
-            else
-                call cavg_den%add(imgs(k))
-            endif
-            if( allocated(coeff_ptcls) ) call cavg_coeff%add(coeff_ptcls(k))
-        end do
-        call cavg_raw%div(real(max(nptcls, 1)))
-        call cavg_den%div(real(max(nptcls, 1)))
-        if( allocated(coeff_ptcls) ) call cavg_coeff%div(real(max(nptcls, 1)))
-        if( allocated(raw_subavgs) ) call dealloc_imgarr(raw_subavgs)
-        if( allocated(den_subavgs) ) call dealloc_imgarr(den_subavgs)
-        allocate(raw_subavgs(1), den_subavgs(1))
-        call raw_subavgs(1)%copy(cavg_raw)
-        call den_subavgs(1)%copy(cavg_den)
-        if( allocated(coeff_subavgs) ) call dealloc_imgarr(coeff_subavgs)
-        if( allocated(coeff_ptcls) )then
-            allocate(coeff_subavgs(1))
-            call coeff_subavgs(1)%copy(cavg_coeff)
-            call cavg_coeff%kill
-        endif
-        call cavg_raw%kill
-        call cavg_den%kill
-    end subroutine rebuild_collapsed_subavg
-
-    subroutine refine_split_subclasses2D(params, spproj, cls_id, pinds, labels, nsplit, seed_subavgs, collapse, &
-                                         refined_subavgs, refine2D_nptcls, refine2D_sum_corr_before, &
-                                         refine2D_sum_corr_after)
-        use simple_imgarr_utils, only: dealloc_imgarr
-        type(parameters),         intent(inout) :: params
-        type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, pinds(:), nsplit
-        integer,                  intent(inout) :: labels(:)
-        type(image),              intent(inout) :: seed_subavgs(:)
-        logical,                  intent(out)   :: collapse
-        type(image), allocatable, intent(out)   :: refined_subavgs(:)
-        integer,                  intent(inout) :: refine2D_nptcls
-        real,                     intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
-        integer, allocatable :: sub_pinds(:)
-        real, allocatable    :: old_e3(:), old_x(:), old_y(:), old_corr(:), sub_corrs(:)
-        real :: parent_corr, corr_after
-        integer :: i, j, nptcls
-        logical :: any_refined
-        collapse = .false.
-        nptcls = size(pinds)
-        if( nptcls < 1 .or. nsplit < 1 ) return
-        allocate(old_e3(nptcls), old_x(nptcls), old_y(nptcls), old_corr(nptcls), source=0.)
-        do i = 1, nptcls
-            old_e3(i) = spproj%os_ptcl2D%e3get(pinds(i))
-            if( spproj%os_ptcl2D%isthere(pinds(i), 'x') ) old_x(i) = spproj%os_ptcl2D%get(pinds(i), 'x')
-            if( spproj%os_ptcl2D%isthere(pinds(i), 'y') ) old_y(i) = spproj%os_ptcl2D%get(pinds(i), 'y')
-            if( spproj%os_ptcl2D%isthere(pinds(i), 'corr') ) old_corr(i) = spproj%os_ptcl2D%get(pinds(i), 'corr')
-        end do
-        parent_corr = sum(old_corr) / real(max(nptcls, 1))
-        if( spproj%os_cls2D%get_noris() >= cls_id )then
-            if( spproj%os_cls2D%isthere(cls_id, 'corr') ) parent_corr = spproj%os_cls2D%get(cls_id, 'corr')
-        endif
-        allocate(sub_corrs(nsplit), source=-huge(1.))
-        allocate(refined_subavgs(nsplit))
-        any_refined = .false.
-        do j = 1, nsplit
-            sub_pinds = pack(pinds, mask=(labels == j))
-            if( size(sub_pinds) < 2 )then
-                if( size(sub_pinds) == 1 )then
-                    sub_corrs(j) = old_corr(minloc(abs(pinds - sub_pinds(1)), dim=1))
-                else
-                    sub_corrs(j) = parent_corr
-                endif
-                call refined_subavgs(j)%copy(seed_subavgs(j))
-            else
-                call run_refine2D_subclass(params, spproj, cls_id, j, sub_pinds, seed_subavgs(j), &
-                                           corr_after, refined_subavgs(j), refine2D_nptcls)
-                sub_corrs(j) = corr_after
-                any_refined = .true.
-                refine2D_sum_corr_before = refine2D_sum_corr_before + parent_corr * real(size(sub_pinds))
-                refine2D_sum_corr_after  = refine2D_sum_corr_after  + corr_after  * real(size(sub_pinds))
-            endif
-            if( allocated(sub_pinds) ) deallocate(sub_pinds)
-        end do
-        collapse = any_refined .and. all(sub_corrs <= parent_corr)
-        if( collapse ) call restore_ptcl2D_alignment_subset(spproj, pinds, old_e3, old_x, old_y, old_corr)
-        deallocate(old_e3, old_x, old_y, old_corr, sub_corrs)
-        if( collapse .and. allocated(refined_subavgs) ) call dealloc_imgarr(refined_subavgs)
-    end subroutine refine_split_subclasses2D
-
-    subroutine restore_ptcl2D_alignment_subset(spproj, pinds, old_e3, old_x, old_y, old_corr)
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: pinds(:)
-        real,             intent(in)    :: old_e3(:), old_x(:), old_y(:), old_corr(:)
-        integer :: i
-        do i = 1, size(pinds)
-            call spproj%os_ptcl2D%e3set(pinds(i), old_e3(i))
-            call spproj%os_ptcl2D%set(pinds(i), 'x',    old_x(i))
-            call spproj%os_ptcl2D%set(pinds(i), 'y',    old_y(i))
-            call spproj%os_ptcl2D%set(pinds(i), 'corr', old_corr(i))
-        end do
-    end subroutine restore_ptcl2D_alignment_subset
-
-    subroutine write_refine2D_alignment_rows(spproj, funit, pinds, labels)
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: funit, pinds(:), labels(:)
-        real :: e3, x, y, corr
-        integer :: i, pind
-        do i = 1, size(pinds)
-            if( labels(i) <= 0 ) cycle
-            pind = pinds(i)
-            e3 = spproj%os_ptcl2D%e3get(pind)
-            x = 0.; y = 0.; corr = 0.
-            if( spproj%os_ptcl2D%isthere(pind, 'x')    ) x    = spproj%os_ptcl2D%get(pind, 'x')
-            if( spproj%os_ptcl2D%isthere(pind, 'y')    ) y    = spproj%os_ptcl2D%get(pind, 'y')
-            if( spproj%os_ptcl2D%isthere(pind, 'corr') ) corr = spproj%os_ptcl2D%get(pind, 'corr')
-            write(funit,'(I10,1X,F12.5,1X,F12.5,1X,F12.5,1X,F12.5)') pind, e3, x, y, corr
-        end do
-    end subroutine write_refine2D_alignment_rows
-
-    subroutine run_refine2D_subclass(params, spproj, cls_id, subcls_id, sub_pinds, seed_cavg, corr_after, &
-                                     refined_cavg, refine2D_nptcls)
-        use simple_commanders_cluster2D, only: commander_cluster2D
-        type(parameters), intent(inout) :: params
-        type(sp_project), intent(inout) :: spproj
-        integer,          intent(in)    :: cls_id, subcls_id, sub_pinds(:)
-        type(image),      intent(inout) :: seed_cavg
-        real,             intent(out)   :: corr_after
-        type(image),      intent(inout) :: refined_cavg
-        integer,          intent(inout) :: refine2D_nptcls
-        type(commander_cluster2D) :: xcluster2D
-        type(sp_project) :: refined_proj
-        type(cmdline)    :: c2d_cline
-        type(string) :: cwd_before, cwd_now, workdir, projfile, stk_fname, refs_fname, refs_even_fname, refs_odd_fname, final_refs
-        integer, allocatable :: local_to_global(:)
-        integer :: istat, next_dir
-        real :: smpd, mskdiam_local
-        corr_after = 0.
-        call simple_getcwd(cwd_before)
-        next_dir = find_next_int_dir_prefix(string('.'))
-        workdir  = int2str(next_dir)//'_cls_split_refine2D_'//int2str(cls_id)//'_'//int2str(subcls_id)
-        call simple_mkdir(workdir, verbose=.false.)
-        call simple_chdir(workdir, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to enter cls_split refine2D directory')
-        call simple_getcwd(cwd_now)
-        CWD_GLOB = cwd_now%to_char()
-        projfile       = 'refine2D_subclass.simple'
-        stk_fname      = 'particles.mrcs'
-        refs_fname     = 'start2Drefs.mrc'
-        refs_even_fname = 'start2Drefs_even.mrc'
-        refs_odd_fname  = 'start2Drefs_odd.mrc'
-        call write_refine2D_subset_project(spproj, sub_pinds, projfile, stk_fname, local_to_global)
-        call seed_cavg%write(refs_fname,      1, del_if_exists=.true.)
-        call seed_cavg%write(refs_even_fname, 1, del_if_exists=.true.)
-        call seed_cavg%write(refs_odd_fname,  1, del_if_exists=.true.)
-        smpd = seed_cavg%get_smpd()
-        mskdiam_local = params%mskdiam
-        if( mskdiam_local <= 0. ) mskdiam_local = real(seed_cavg%get_box()) * smpd
-        call c2d_cline%set('projfile',      projfile%to_char())
-        call c2d_cline%set('refs',          refs_fname%to_char())
-        call c2d_cline%set('ncls',          1)
-        call c2d_cline%set('mskdiam',       mskdiam_local)
-        call c2d_cline%set('objfun',        'cc')
-        call c2d_cline%set('refine',        'inpl')
-        call c2d_cline%set('maxits',        CLS_SPLIT_REFINE2D_MAXITS)
-        call c2d_cline%set('startit',       2)
-        call c2d_cline%set('nthr',          max(1, params%nthr))
-        call c2d_cline%set('trs',           params%trs)
-        call c2d_cline%set('mkdir',         'no')
-        call xcluster2D%execute(c2d_cline)
-        call refined_proj%read(projfile)
-        call merge_refined_subset2D(spproj, refined_proj, local_to_global, corr_after, refine2D_nptcls)
-        final_refs = c2d_cline%get_carg('refs')
-        if( file_exists(final_refs%to_char()) )then
-            if( .not. refined_cavg%exists() ) call refined_cavg%new(seed_cavg%get_ldim(), seed_cavg%get_smpd())
-            call refined_cavg%read(final_refs, 1)
-        else
-            call refined_cavg%copy(seed_cavg)
-        endif
-        call refined_proj%kill
-        call c2d_cline%kill()
-        if( allocated(local_to_global) ) deallocate(local_to_global)
-        call simple_chdir(cwd_before, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to restore cwd after cls_split refine2D')
-        call simple_getcwd(cwd_now)
-        CWD_GLOB = cwd_now%to_char()
-        call cwd_before%kill
-        call cwd_now%kill
-        call workdir%kill
-        call projfile%kill
-        call stk_fname%kill
-        call refs_fname%kill
-        call refs_even_fname%kill
-        call refs_odd_fname%kill
-        if( final_refs%is_allocated() ) call final_refs%kill
-    end subroutine run_refine2D_subclass
-
-    subroutine write_refine2D_subset_project(spproj, sub_pinds, projfile, stk_fname, local_to_global)
-        type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: sub_pinds(:)
-        type(string),             intent(in)    :: projfile, stk_fname
-        integer, allocatable,     intent(out)   :: local_to_global(:)
-        type(sp_project) :: subproj
-        type(oris)       :: local_os
-        type(image)      :: img
-        type(ctfparams)  :: ctfvars
-        type(string)     :: stkname
-        integer :: i, stkind, ind_in_stk, n, ldim(3), nstk
-        real    :: smpd
-        n = size(sub_pinds)
-        if( n < 1 ) THROW_HARD('empty particle subset in write_refine2D_subset_project')
-        allocate(local_to_global(n), source=sub_pinds)
-        ctfvars = spproj%get_ctfparams('ptcl2D', sub_pinds(1))
-        call spproj%map_ptcl_ind2stk_ind('ptcl2D', sub_pinds(1), stkind, ind_in_stk)
-        call spproj%os_stk%getter(stkind, 'stk', stkname)
-        call find_ldim_nptcls(stkname, ldim, nstk)
-        smpd = find_img_smpd(stkname)
-        call img%new([ldim(1), ldim(2), 1], smpd)
-        call local_os%new(n, is_ptcl=.true.)
-        do i = 1, n
-            call spproj%map_ptcl_ind2stk_ind('ptcl2D', sub_pinds(i), stkind, ind_in_stk)
-            call spproj%os_stk%getter(stkind, 'stk', stkname)
-            call img%read(stkname, ind_in_stk)
-            call img%write(stk_fname, i, del_if_exists=(i == 1))
-            call local_os%transfer_ori(i, spproj%os_ptcl2D, sub_pinds(i))
-            call local_os%set(i, 'class', 1)
-            call local_os%set(i, 'state', 1)
-            call local_os%set(i, 'pind',  i)
-            call local_os%set(i, 'indstk', i)
-        end do
-        call subproj%update_projinfo(projfile)
-        call subproj%add_single_stk(stk_fname, ctfvars, local_os)
-        call subproj%os_cls2D%new(1, is_ptcl=.false.)
-        call subproj%os_cls2D%set(1, 'pop',    n)
-        call subproj%os_cls2D%set(1, 'state',  1)
-        call subproj%os_cls2D%set(1, 'accept', 1)
-        call subproj%os_cls3D%new(1, is_ptcl=.false.)
-        call subproj%os_cls3D%set(1, 'state',  1)
-        call subproj%os_cls3D%set(1, 'accept', 1)
-        call subproj%write(projfile)
-        call img%kill
-        call local_os%kill
-        call subproj%kill
-        call stkname%kill
-    end subroutine write_refine2D_subset_project
-
-    subroutine merge_refined_subset2D(spproj, refined_proj, local_to_global, corr_after, refine2D_nptcls)
-        type(sp_project), intent(inout) :: spproj, refined_proj
-        integer,          intent(in)    :: local_to_global(:)
-        real,             intent(out)   :: corr_after
-        integer,          intent(inout) :: refine2D_nptcls
-        real :: e3_after, x_after, y_after, sum_corr
-        integer :: i, gp, n
-        n = size(local_to_global)
-        sum_corr = 0.
-        do i = 1, n
-            gp = local_to_global(i)
-            e3_after = refined_proj%os_ptcl2D%e3get(i)
-            x_after = 0.; y_after = 0.
-            if( refined_proj%os_ptcl2D%isthere(i, 'x') ) x_after = refined_proj%os_ptcl2D%get(i, 'x')
-            if( refined_proj%os_ptcl2D%isthere(i, 'y') ) y_after = refined_proj%os_ptcl2D%get(i, 'y')
-            call spproj%os_ptcl2D%e3set(gp, e3_after)
-            call spproj%os_ptcl2D%set(gp, 'x', x_after)
-            call spproj%os_ptcl2D%set(gp, 'y', y_after)
-            if( refined_proj%os_ptcl2D%isthere(i, 'corr') )then
-                call spproj%os_ptcl2D%set(gp, 'corr', refined_proj%os_ptcl2D%get(i, 'corr'))
-                sum_corr = sum_corr + refined_proj%os_ptcl2D%get(i, 'corr')
-            endif
-        end do
-        corr_after = sum_corr / real(max(n, 1))
-        if( refined_proj%os_cls2D%get_noris() >= 1 )then
-            if( refined_proj%os_cls2D%isthere(1, 'corr') ) corr_after = refined_proj%os_cls2D%get(1, 'corr')
-        endif
-        refine2D_nptcls = refine2D_nptcls + n
-    end subroutine merge_refined_subset2D
-
-    subroutine log_refine2D_summary(part, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
-        integer, intent(in) :: part
-        integer, intent(in) :: refine2D_nptcls
-        real,    intent(in) :: refine2D_sum_corr_before, refine2D_sum_corr_after
-        real :: mean_corr_before, mean_corr_after, mean_corr_delta
-        mean_corr_before = 0.; mean_corr_after = 0.; mean_corr_delta = 0.
-        if( refine2D_nptcls > 0 )then
-            mean_corr_before = refine2D_sum_corr_before / real(refine2D_nptcls)
-            mean_corr_after  = refine2D_sum_corr_after  / real(refine2D_nptcls)
-            mean_corr_delta  = mean_corr_after - mean_corr_before
-        endif
-        write(logfhandle,'(A,I8,A,I8,A,F10.5)') &
-            'Cls split refine2D run summary: part=', part, &
-            ' particles_refined=', refine2D_nptcls, &
-            ' mean_corr_delta=',  mean_corr_delta
-        call flush(logfhandle)
-    end subroutine log_refine2D_summary
 
     subroutine select_kmedoids_by_silhouette(dmat, cls_id, k_min_in, k_max_in, nsplit, i_medoids, labels)
         use simple_clustering_utils, only: cluster_dmat, silhouette_score
@@ -1630,27 +1116,16 @@ contains
     end subroutine apply_split_project_updates
 
     subroutine merge_worker_outputs(params, nparts_run)
-        use simple_stack_io, only: stack_io
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
         type(sp_project) :: spproj
-        type(image)      :: img
-        type(stack_io), allocatable :: raw_ios(:), den_ios(:), coeff_ios(:)
-        type(stack_io) :: raw_out_io, den_out_io, coeff_out_io
         integer, allocatable :: part_counts(:), part_localstack(:,:), part_parent(:,:), part_local(:,:)
         integer, allocatable :: part_pop(:,:), part_global(:,:)
-        integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:), last_localstack(:)
+        integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
         integer, allocatable :: new_class(:), new_parent(:)
-        type(string) :: map_fname, assign_fname, raw_fname, den_fname, coeff_fname
-        integer, parameter :: MERGE_STACK_BUFSZ = 64
-        integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls, ldim(3), nstk
-        integer :: refine2D_nptcls
-        real    :: smpd, refine2D_sum_corr_before, refine2D_sum_corr_after
-        logical :: have_coeff_avgs
+        type(string) :: map_fname, assign_fname
+        integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls
         character(len=XLONGSTRLEN) :: line
-        refine2D_nptcls = 0
-        refine2D_sum_corr_before = 0.
-        refine2D_sum_corr_after  = 0.
         call spproj%read(params%projfile)
         write(logfhandle,'(A,I8)') 'Cls split merge: start nparts=', nparts_run
         call flush(logfhandle)
@@ -1698,78 +1173,6 @@ contains
         write(logfhandle,'(A,I8)') 'Cls split merge: sorting subclass map rows=', total
         call flush(logfhandle)
         call sort_combined_maps(comb_part, comb_row, comb_parent, comb_local, comb_pop)
-        write(logfhandle,'(A)') 'Cls split merge: deleting previous global class-average stacks'
-        call flush(logfhandle)
-        call del_file(string('cls_split_subclass_avgs.mrcs'))
-        call del_file(string('cls_split_subclass_avgs_conditioned.mrcs'))
-        call del_file(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'))
-        raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
-        coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(comb_part(1), params%numlen)//'.mrcs'
-        have_coeff_avgs = trim(params%steering) /= 'none' .and. file_exists(coeff_fname%to_char())
-        call coeff_fname%kill
-        if( have_coeff_avgs )then
-            do ipart = 1, nparts_run
-                coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-                if( .not. file_exists(coeff_fname%to_char()) )then
-                    write(logfhandle,'(A,I8,A,A)') 'Cls split merge: disabling coeff-stack merge; missing part=', ipart, &
-                        ' file=', trim(coeff_fname%to_char())
-                    call flush(logfhandle)
-                    have_coeff_avgs = .false.
-                    exit
-                endif
-                call coeff_fname%kill
-            end do
-        endif
-        if( .not. file_exists(raw_fname%to_char()) )then
-            write(logfhandle,'(A,A)') 'Cls split merge error: missing first raw class-average stack file=', &
-                trim(raw_fname%to_char())
-            call flush(logfhandle)
-            THROW_HARD('Missing raw class-average stack while merging cls_split outputs')
-        endif
-        write(logfhandle,'(A,A)') 'Cls split merge: probing class-average stack file=', trim(raw_fname%to_char())
-        call flush(logfhandle)
-        call find_ldim_nptcls(raw_fname, ldim, nstk)
-        write(logfhandle,'(A,3(I8,1X),A,I8,A,L1)') 'Cls split merge: class-average stack dims=', ldim, &
-            ' nstk=', nstk, ' have_coeff=', have_coeff_avgs
-        call flush(logfhandle)
-        smpd = params%smpd_crop
-        ldim(3) = 1
-        call img%new(ldim, smpd)
-        allocate(raw_ios(nparts_run), den_ios(nparts_run))
-        if( have_coeff_avgs ) allocate(coeff_ios(nparts_run))
-        do ipart = 1, nparts_run
-            if( part_counts(ipart) < 1 ) cycle
-            raw_fname = string('cls_split_subclass_avgs_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            den_fname = string('cls_split_subclass_avgs_conditioned_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            if( .not. file_exists(raw_fname%to_char()) )then
-                write(logfhandle,'(A,A)') 'Cls split merge error: missing raw class-average stack file=', trim(raw_fname%to_char())
-                call flush(logfhandle)
-                THROW_HARD('Missing raw class-average stack while merging cls_split outputs')
-            endif
-            if( .not. file_exists(den_fname%to_char()) )then
-                write(logfhandle,'(A,A)') 'Cls split merge error: missing conditioned class-average stack file=', &
-                    trim(den_fname%to_char())
-                call flush(logfhandle)
-                THROW_HARD('Missing conditioned class-average stack while merging cls_split outputs')
-            endif
-            write(logfhandle,'(A,I8,A,I8)') 'Cls split merge: opening class-average part=', ipart, ' rows=', part_counts(ipart)
-            call flush(logfhandle)
-            call raw_ios(ipart)%open(raw_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
-            call den_ios(ipart)%open(den_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
-            if( have_coeff_avgs )then
-                coeff_fname = string('cls_split_subclass_avgs_steer_coeffproj_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-                call coeff_ios(ipart)%open(coeff_fname, smpd, 'READ', bufsz=MERGE_STACK_BUFSZ)
-                call coeff_fname%kill
-            endif
-            call raw_fname%kill
-            call den_fname%kill
-        end do
-        call raw_out_io%open(string('cls_split_subclass_avgs.mrcs'), smpd, 'WRITE', box=ldim(1), bufsz=MERGE_STACK_BUFSZ)
-        call den_out_io%open(string('cls_split_subclass_avgs_conditioned.mrcs'), smpd, 'WRITE', box=ldim(1), &
-            bufsz=MERGE_STACK_BUFSZ)
-        if( have_coeff_avgs ) call coeff_out_io%open(string('cls_split_subclass_avgs_steer_coeffproj.mrcs'), &
-            smpd, 'WRITE', box=ldim(1), bufsz=MERGE_STACK_BUFSZ)
-        allocate(last_localstack(nparts_run), source=0)
         map_fname = string('cls_split_class_map.txt')
         open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
         write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
@@ -1781,37 +1184,9 @@ contains
             endif
             part_global(comb_row(idx), comb_part(idx)) = idx
             write(funit,'(I8,1X,I8,1X,I8,1X,I8)') idx, comb_parent(idx), comb_local(idx), comb_pop(idx)
-            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split merge avg: idx=', idx, ' total=', total, &
-                ' part=', comb_part(idx), ' row=', comb_row(idx), ' stack=', part_localstack(comb_row(idx), comb_part(idx))
-            call flush(logfhandle)
-            if( part_localstack(comb_row(idx), comb_part(idx)) <= last_localstack(comb_part(idx)) )then
-                THROW_HARD('Non-monotonic class-average stack merge order; merge_worker_outputs')
-            endif
-            last_localstack(comb_part(idx)) = part_localstack(comb_row(idx), comb_part(idx))
-            call raw_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
-            call raw_out_io%write(idx, img)
-            call den_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
-            call den_out_io%write(idx, img)
-            if( have_coeff_avgs )then
-                call coeff_ios(comb_part(idx))%read(part_localstack(comb_row(idx), comb_part(idx)), img)
-                call coeff_out_io%write(idx, img)
-            endif
-            write(logfhandle,'(A,I8)') 'Cls split merge avg: done idx=', idx
-            call flush(logfhandle)
         end do
         close(funit)
-        call raw_out_io%close
-        call den_out_io%close
-        if( have_coeff_avgs ) call coeff_out_io%close
-        do ipart = 1, nparts_run
-            if( part_counts(ipart) < 1 ) cycle
-            call raw_ios(ipart)%close
-            call den_ios(ipart)%close
-            if( have_coeff_avgs ) call coeff_ios(ipart)%close
-        end do
-        deallocate(raw_ios, den_ios, last_localstack)
-        if( allocated(coeff_ios) ) deallocate(coeff_ios)
-        write(logfhandle,'(A,I8)') 'Cls split merge: class-average stacks merged total=', total
+        write(logfhandle,'(A,I8)') 'Cls split merge: subclass map merged total=', total
         call flush(logfhandle)
         if( trim(params%oritype) .eq. 'ptcl2D' )then
             allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
@@ -1838,258 +1213,12 @@ contains
             close(funit)
             call assign_fname%kill
         end do
-        if( trim(params%oritype) == 'ptcl2D' .and. trim(params%objfun) == 'cc' )then
-            call merge_refine2D_alignment_sidecars(spproj, params, nparts_run, refine2D_nptcls, &
-                                                   refine2D_sum_corr_before, refine2D_sum_corr_after)
-            call log_refine2D_summary(0, refine2D_nptcls, refine2D_sum_corr_before, refine2D_sum_corr_after)
-        endif
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop)
-        if( trim(params%gen_model) == 'yes' )then
-            call merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
-        endif
         call spproj%kill
-        call img%kill
         deallocate(new_class, new_parent, part_counts, part_localstack, part_parent, part_local, part_pop, part_global, &
                    comb_part, comb_row, comb_parent, comb_local, comb_pop)
         call map_fname%kill
     end subroutine merge_worker_outputs
-
-    subroutine merge_refine2D_alignment_sidecars(spproj, params, nparts_run, refine2D_nptcls, &
-                                                 refine2D_sum_corr_before, refine2D_sum_corr_after)
-        type(sp_project), intent(inout) :: spproj
-        type(parameters), intent(in)    :: params
-        integer,          intent(in)    :: nparts_run
-        integer,          intent(inout) :: refine2D_nptcls
-        real,             intent(inout) :: refine2D_sum_corr_before, refine2D_sum_corr_after
-        type(string) :: fname
-        logical, allocatable :: seen(:)
-        logical :: got_summary
-        integer :: ipart, funit, ios, pind, noris
-        integer :: nptcls
-        real :: e3, x, y, corr, sum_corr_before, sum_corr_after
-        character(len=XLONGSTRLEN) :: line
-        noris = spproj%os_ptcl2D%get_noris()
-        allocate(seen(noris), source=.false.)
-        do ipart = 1, nparts_run
-            got_summary = .false.
-            fname = string(CLS_SPLIT_REFINE2D_ALN_FBODY)//int2str_pad(ipart, params%numlen)//TXT_EXT
-            if( .not. file_exists(fname%to_char()) ) THROW_HARD('missing cls_split refine2D alignment sidecar')
-            open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
-            call fileiochk('merge_refine2D_alignment_sidecars opening '//fname%to_char(), ios)
-            do
-                read(funit,'(A)',iostat=ios) line
-                if( ios /= 0 ) exit
-                if( len_trim(line) == 0 ) cycle
-                if( line(1:1) == '#' )then
-                    if( index(adjustl(line), '# summary') == 1 )then
-                        read(line(10:),*,iostat=ios) nptcls, sum_corr_before, sum_corr_after
-                        if( ios /= 0 ) THROW_HARD('malformed cls_split refine2D alignment summary row')
-                        refine2D_nptcls          = refine2D_nptcls + nptcls
-                        refine2D_sum_corr_before = refine2D_sum_corr_before + sum_corr_before
-                        refine2D_sum_corr_after  = refine2D_sum_corr_after  + sum_corr_after
-                        got_summary = .true.
-                    endif
-                    cycle
-                endif
-                read(line,*,iostat=ios) pind, e3, x, y, corr
-                if( ios /= 0 ) THROW_HARD('malformed cls_split refine2D alignment sidecar row')
-                if( pind < 1 .or. pind > noris ) THROW_HARD('particle index out of range in cls_split refine2D alignment sidecar')
-                if( seen(pind) ) THROW_HARD('duplicate particle index in cls_split refine2D alignment sidecars')
-                seen(pind) = .true.
-                call spproj%os_ptcl2D%e3set(pind, e3)
-                call spproj%os_ptcl2D%set(pind, 'x',    x)
-                call spproj%os_ptcl2D%set(pind, 'y',    y)
-                call spproj%os_ptcl2D%set(pind, 'corr', corr)
-            end do
-            close(funit)
-            if( .not. got_summary ) THROW_HARD('missing cls_split refine2D alignment summary row')
-            call fname%kill
-        end do
-        deallocate(seen)
-    end subroutine merge_refine2D_alignment_sidecars
-
-    subroutine merge_worker_particle_stacks(params, nparts_run, part_counts, part_parent, part_local, part_global)
-        type(parameters), intent(inout) :: params
-        integer,          intent(in)    :: nparts_run
-        integer,          intent(in)    :: part_counts(:), part_parent(:,:), part_local(:,:), part_global(:,:)
-        type(image) :: img
-        type(string) :: part_map_fname, den_fname, out_map_fname
-        integer :: ipart, funit_in, funit_out, ios, stack_idx, pind, parent_cls, local_cls, local_global
-        integer :: global_cls, global_stack, first_part, ldim(3), nstk
-        real    :: smpd
-        logical :: have_ptcls
-        character(len=XLONGSTRLEN) :: line
-        have_ptcls = .false.
-        first_part = 0
-        do ipart = 1, nparts_run
-            den_fname = string('cls_split_particles_denoised_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            if( file_exists(den_fname%to_char()) )then
-                have_ptcls = .true.
-                first_part = ipart
-                exit
-            endif
-            call den_fname%kill
-        end do
-        if( .not. have_ptcls ) return
-        if( den_fname%is_allocated() ) call den_fname%kill
-        call del_file(string('cls_split_particles_original.mrcs'))
-        call del_file(string('cls_split_particles.mrcs'))
-        call del_file(string('cls_split_particles_denoised.mrcs'))
-        call del_file(string('cls_split_particles_steer_coeffproj.mrcs'))
-        den_fname = string('cls_split_particles_denoised_part')//int2str_pad(first_part, params%numlen)//'.mrcs'
-        call find_ldim_nptcls(den_fname, ldim, nstk)
-        smpd = params%smpd_crop
-        ldim(3) = 1
-        call img%new(ldim, smpd)
-        out_map_fname = string('cls_split_particles_map.txt')
-        open(newunit=funit_out, file=out_map_fname%to_char(), status='replace', action='write', iostat=ios)
-        if( ios /= 0 )then
-            write(logfhandle,'(A,A)') 'Cls split particle-stack merge skipped: could not open ', out_map_fname%to_char()
-            call flush(logfhandle)
-            call img%kill
-            call out_map_fname%kill
-            if( den_fname%is_allocated() ) call den_fname%kill
-            return
-        endif
-        write(funit_out,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
-        global_stack = 0
-        do ipart = 1, nparts_run
-            part_map_fname = string('cls_split_particles_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
-            den_fname      = string('cls_split_particles_denoised_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            if( .not. file_exists(part_map_fname%to_char()) .or. .not. file_exists(den_fname%to_char()) )then
-                call part_map_fname%kill
-                call den_fname%kill
-                cycle
-            endif
-            open(newunit=funit_in, file=part_map_fname%to_char(), status='old', action='read', iostat=ios)
-            if( ios /= 0 )then
-                write(logfhandle,'(A,A)') 'Cls split particle-stack merge skipping unreadable map ', part_map_fname%to_char()
-                call flush(logfhandle)
-                call part_map_fname%kill
-                call den_fname%kill
-                cycle
-            endif
-            do
-                read(funit_in,'(A)',iostat=ios) line
-                if( ios /= 0 ) exit
-                if( len_trim(line) == 0 ) cycle
-                if( line(1:1) == '#' ) cycle
-                read(line,*,iostat=ios) stack_idx, pind, parent_cls, local_cls, local_global
-                if( ios /= 0 )then
-                    write(logfhandle,'(A,A)') 'Cls split particle-stack merge skipping malformed row in ', part_map_fname%to_char()
-                    call flush(logfhandle)
-                    cycle
-                endif
-                global_cls = lookup_part_global(part_counts(ipart), part_parent(1:part_counts(ipart), ipart), &
-                                                part_local(1:part_counts(ipart), ipart), part_global(1:part_counts(ipart), ipart), &
-                                                parent_cls, local_cls)
-                if( global_cls <= 0 )then
-                    write(logfhandle,'(A,I8,A,I8)') 'Cls split particle-stack merge skipping unmapped row: parent=', parent_cls, &
-                        ' local=', local_cls
-                    call flush(logfhandle)
-                    cycle
-                endif
-                global_stack = global_stack + 1
-                call img%read(den_fname, stack_idx)
-                call img%write(string('cls_split_particles_denoised.mrcs'), global_stack)
-                write(funit_out,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
-                    global_stack, pind, parent_cls, local_cls, global_cls
-            end do
-            close(funit_in)
-            call part_map_fname%kill
-            call den_fname%kill
-        end do
-        close(funit_out)
-        call sort_cls_split_particle_outputs_by_pind(params%smpd_crop)
-        write(logfhandle,'(A,I10)') 'Cls split merged particle stacks: n=', global_stack
-        call flush(logfhandle)
-        call img%kill
-        call out_map_fname%kill
-        if( den_fname%is_allocated() ) call den_fname%kill
-    end subroutine merge_worker_particle_stacks
-
-    subroutine sort_cls_split_particle_outputs_by_pind(smpd)
-        real, intent(in) :: smpd
-        type(image) :: img
-        type(string) :: map_fname, den_fname, tmp_map_fname, tmp_den_fname
-        integer, allocatable :: stack_idxs(:), pinds(:), parent_cls(:), local_cls(:), global_cls(:)
-        integer, allocatable :: keys(:), perm(:)
-        integer :: nrows, funit_in, funit_out, ios, irow, iout, src_row, ldim(3), nstk
-        character(len=XLONGSTRLEN) :: line
-        map_fname    = string('cls_split_particles_map.txt')
-        den_fname    = string('cls_split_particles_denoised.mrcs')
-        if( .not. file_exists(map_fname%to_char()) .or. .not. file_exists(den_fname%to_char()) )then
-            call map_fname%kill
-            call den_fname%kill
-            return
-        endif
-        call count_data_lines(map_fname, nrows)
-        if( nrows < 2 )then
-            call map_fname%kill
-            call den_fname%kill
-            return
-        endif
-        allocate(stack_idxs(nrows), pinds(nrows), parent_cls(nrows), local_cls(nrows), global_cls(nrows), &
-                 keys(nrows), perm(nrows), source=0)
-        open(newunit=funit_in, file=map_fname%to_char(), status='old', action='read', iostat=ios)
-        call fileiochk('sort_cls_split_particle_outputs_by_pind opening '//map_fname%to_char(), ios)
-        irow = 0
-        do
-            read(funit_in,'(A)',iostat=ios) line
-            if( ios /= 0 ) exit
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            irow = irow + 1
-            if( irow > nrows ) exit
-            read(line,*) stack_idxs(irow), pinds(irow), parent_cls(irow), local_cls(irow), global_cls(irow)
-        end do
-        close(funit_in)
-        if( irow /= nrows ) THROW_HARD('Unexpected row count while sorting cls_split particle map')
-        keys = pinds
-        perm = [(irow, irow=1,nrows)]
-        call hpsort(keys, perm)
-        do irow = 2, nrows
-            if( keys(irow) == keys(irow-1) ) THROW_HARD('Duplicate particle index while sorting cls_split particle stack')
-        end do
-        if( all(perm == [(irow, irow=1,nrows)]) )then
-            call map_fname%kill
-            call den_fname%kill
-            deallocate(stack_idxs, pinds, parent_cls, local_cls, global_cls, keys, perm)
-            return
-        endif
-        tmp_map_fname    = string('cls_split_particles_map_sorted_tmp.txt')
-        tmp_den_fname    = string('cls_split_particles_denoised_sorted_tmp.mrcs')
-        call del_file(tmp_map_fname)
-        call del_file(tmp_den_fname)
-        call find_ldim_nptcls(den_fname, ldim, nstk)
-        if( nstk < maxval(stack_idxs) ) THROW_HARD('Particle stack shorter than cls_split particle map while sorting')
-        ldim(3) = 1
-        call img%new(ldim, smpd)
-        do iout = 1, nrows
-            src_row = perm(iout)
-            call img%read(den_fname, stack_idxs(src_row))
-            call img%write(tmp_den_fname, iout)
-        end do
-        if( img%exists() ) call img%kill
-        open(newunit=funit_out, file=tmp_map_fname%to_char(), status='replace', action='write', iostat=ios)
-        call fileiochk('sort_cls_split_particle_outputs_by_pind opening '//tmp_map_fname%to_char(), ios)
-        write(funit_out,'(A)') '# stack_index particle_index parent_class local_subclass global_subclass'
-        do iout = 1, nrows
-            src_row = perm(iout)
-            write(funit_out,'(I10,1X,I10,1X,I10,1X,I10,1X,I10)') &
-                iout, pinds(src_row), parent_cls(src_row), local_cls(src_row), global_cls(src_row)
-        end do
-        close(funit_out)
-        call simple_rename(tmp_den_fname, den_fname)
-        call simple_rename(tmp_map_fname, map_fname)
-        write(logfhandle,'(A,I10)') 'Cls split denoised particle stack sorted by particle index: n=', nrows
-        call flush(logfhandle)
-        call map_fname%kill
-        call den_fname%kill
-        call tmp_map_fname%kill
-        call tmp_den_fname%kill
-        deallocate(stack_idxs, pinds, parent_cls, local_cls, global_cls, keys, perm)
-    end subroutine sort_cls_split_particle_outputs_by_pind
 
     integer function lookup_part_global(nrows, parents, locals, globals, parent_cls, local_cls) result(global_cls)
         integer, intent(in) :: nrows, parents(:), locals(:), globals(:), parent_cls, local_cls
