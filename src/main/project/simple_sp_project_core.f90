@@ -84,13 +84,13 @@ contains
     module subroutine update_projinfo_1( self, cline )
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        type(string) :: projname, projfile, cwd
+        type(string) :: projname, projfile, cwd, abs_projfile
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
             call self%projinfo%new(1, is_ptcl=.false.)
         endif
-        ! projname & profile
+        ! projname & projfile
         if( self%projinfo%isthere('projname').and.cline%defined('projname') )then
             projname = cline%get_carg('projname')
             call self%projinfo%set(1, 'projname', projname%to_char())
@@ -107,7 +107,7 @@ contains
                     case DEFAULT
                         THROW_HARD('unsupported format of projfile: '//projfile%to_char()//'; update_projinfo')
                 end select
-                projname = get_fbody(projfile, string('simple'))
+                projname = get_fbody(basename(projfile), string('simple'))
                 call self%projinfo%set(1, 'projname', projname%to_char())
             endif
             if( cline%defined('projname') )then
@@ -116,15 +116,17 @@ contains
                 call self%projinfo%set(1, 'projfile', projname%to_char()//'.simple')
             endif
         endif
-        ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
-        call simple_getcwd(cwd)
+        ! Stash the project directory, not the caller's transient execution directory.
+        call self%projinfo%getter(1, 'projfile', projfile)
+        abs_projfile = simple_abspath(projfile, check_exists=.false.)
+        cwd = stemname(abs_projfile)
         call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_1
 
     module subroutine update_projinfo_2( self, projfile )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: projfile
-        type(string) :: projname, cwd
+        type(string) :: projname, cwd, abs_projfile
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
@@ -137,10 +139,11 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported format of projfile: '//projfile%to_char()//'; update_projinfo_2')
         end select
-        projname = get_fbody(projfile, string('simple'))
+        projname = get_fbody(basename(projfile), string('simple'))
         call self%projinfo%set(1, 'projname', projname%to_char())
-        ! it is assumed that the project is created in the root "project directory", i.e. stash cwd
-        call simple_getcwd(cwd)
+        ! Stash the project directory, not the caller's transient execution directory.
+        abs_projfile = simple_abspath(projfile, check_exists=.false.)
+        cwd = stemname(abs_projfile)
         call self%projinfo%set(1, 'cwd', cwd%to_char())
     end subroutine update_projinfo_2
 

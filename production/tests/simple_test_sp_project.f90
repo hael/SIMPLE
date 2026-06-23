@@ -6,9 +6,9 @@ implicit none
 integer, parameter :: NMICS = 87
 integer, parameter :: NPTCLS = 5646
 type(sp_project)   :: project1, project2, project3
-type(string)       :: template, str1, str2
+type(string)       :: template, str1, str2, cwd_orig, probe_dir, proj_abs, projinfo_before, projinfo_after
 real    :: eullims(3,2)
-integer :: i
+integer :: i, status
 call seed_rnd
 eullims(1,:) = [0.,360.]
 eullims(2,:) = [0.,180.]
@@ -51,6 +51,36 @@ enddo
 call project1%update_projinfo(string('myproject.simple'))
 ! write/read
 call project1%write(string('myproject.simple'))
+call project2%read_segment('projinfo', string('myproject.simple'))
+projinfo_before = project2%projinfo%ori2str(1)
+call project2%kill
+call simple_getcwd(cwd_orig)
+proj_abs  = filepath(cwd_orig, string('myproject.simple'))
+probe_dir = filepath(cwd_orig, string('sp_project_read_probe_'//int2str(get_process_id())))
+call simple_mkdir(probe_dir)
+call simple_chdir(probe_dir, status)
+if( status /= 0 )then
+    write(*,*)'TEST FAILED CHDIR INTO READ PROBE'
+    stop
+endif
+call project2%read(proj_abs)
+call project2%kill
+call simple_chdir(cwd_orig, status)
+if( status /= 0 )then
+    write(*,*)'TEST FAILED CHDIR OUT OF READ PROBE'
+    stop
+endif
+call project2%read_segment('projinfo', string('myproject.simple'))
+projinfo_after = project2%projinfo%ori2str(1)
+if( projinfo_before /= projinfo_after )then
+    write(*,*)'TEST FAILED: sp_project%read mutated on-disk projinfo'
+    write(*,*)'BEFORE: ', projinfo_before%to_char()
+    write(*,*)'AFTER : ', projinfo_after%to_char()
+    stop
+endif
+call project2%kill
+call simple_rmdir(probe_dir, status)
+write(*,*)'TEST SUCCES READ DOES NOT MUTATE projinfo'
 call project2%read(string('myproject.simple'))
 ! compare
 do i = 1,NMICS

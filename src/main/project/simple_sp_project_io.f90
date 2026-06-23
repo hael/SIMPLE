@@ -828,8 +828,9 @@ contains
             call self%segreader(isegment, wthreads=wthreads)
         end do
         call self%bos%close
+        ! Keep the in-memory project metadata consistent with the file that was read,
+        ! but do not mutate the project file as a side effect of reading it.
         call self%update_projinfo(fname)
-        call self%write_segment_inside('projinfo', fname)
     end subroutine read
 
     module subroutine read_non_data_segments( self, fname )
