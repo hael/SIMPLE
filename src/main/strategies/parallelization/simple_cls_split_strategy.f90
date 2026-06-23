@@ -683,7 +683,7 @@ contains
         end select
         select case(trim(params%pca_mode))
             case('diffusion_maps')
-                call build_cls_split_graph(params, spproj, pinds, pcavecs, imgs_ppca, graph)
+                call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
                 select case(trim(graph%steering))
                     case('none')
                         call embed_graph(graph, neigs, coords, eigvals)

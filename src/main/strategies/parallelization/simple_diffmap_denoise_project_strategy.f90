@@ -619,9 +619,9 @@ contains
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        call build_cls_split_graph(params, spproj, pinds, pcavecs, imgs_ppca, graph)
+        call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
         if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; diffmap_denoise_project')
-        if( trim(graph%metric) /= 'euclidean' .or. trim(graph%steering) /= 'none' )then
+        if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
             THROW_HARD('diffmap_denoise_project expected a non-steerable Euclidean graph')
         endif
         call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
@@ -785,7 +785,7 @@ contains
             endif
             call build_cls_split_graph(params=params, spproj=spproj, pinds=mix_pinds(fromp:top), graph=graph)
             if( graph%n /= nptcls ) THROW_HARD('SO3 mixture graph size mismatch; diffmap_denoise_project')
-            if( trim(graph%metric) /= 'orientation' .or. trim(graph%steering) /= 'none' )then
+            if( trim(graph%metric) /= 'ori' .or. trim(graph%steering) /= 'none' )then
                 THROW_HARD('diffmap_denoise_project expected a non-steerable orientation graph')
             endif
             write(logfhandle,'(A,I8,A,I10,A,A,A,I8,A,I10)') &

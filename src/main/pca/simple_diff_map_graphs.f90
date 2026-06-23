@@ -3,11 +3,6 @@ module simple_diff_map_graphs
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 !$ use omp_lib
-use simple_builder,             only: builder
-use simple_cmdline,             only: cmdline
-use simple_default_clines,      only: set_cluster2D_defaults
-use simple_image,               only: image
-use simple_imgarr_utils,        only: dealloc_imgarr, write_imgarr
 use simple_ori,                 only: ori
 use simple_parameters,          only: parameters
 use simple_srch_sort_loc,       only: hpsort
@@ -16,14 +11,11 @@ implicit none
 #include "simple_local_flags.inc"
 
 private
-integer, parameter :: GRAPH_GAUGE_CLUSTER2D_MAXITS = 5
 
 public :: diffmap_graph
-public :: diffmap_gauge
 public :: build_cls_split_graph
 public :: build_euclidean_knn_graph
 public :: build_orientation_knn_graph
-public :: run_single_class_cluster2d_gauge
 public :: graph_matvec
 public :: estimate_graph_shift_scale
 public :: graph_directed_edges
@@ -32,7 +24,7 @@ type :: diffmap_graph
     integer :: n   = 0
     integer :: nnz = 0
     integer :: k_nn = 0
-    character(len=16) :: metric   = 'euclidean'
+    character(len=16) :: metric   = 'euc'
     character(len=16) :: steering = 'none'
     integer, allocatable :: rowptr(:)
     integer, allocatable :: colind(:)
@@ -49,39 +41,21 @@ contains
     procedure :: has_shift => diffmap_graph_has_shift
 end type diffmap_graph
 
-type :: diffmap_gauge
-    real, allocatable :: angle(:)
-    real, allocatable :: shift_x(:)
-    real, allocatable :: shift_y(:)
-    real, allocatable :: img_dist(:)
-contains
-    procedure :: kill => kill_diffmap_gauge
-end type diffmap_gauge
-
 contains
 
-    subroutine build_cls_split_graph( params, spproj, pinds, pcavecs, imgs, graph )
+    subroutine build_cls_split_graph( params, spproj, pinds, pcavecs, graph, algninfo )
         type(parameters),           intent(in)    :: params
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: pinds(:)
         real, optional,             intent(in)    :: pcavecs(:,:)
-        type(image), optional,      intent(inout) :: imgs(:)
         type(diffmap_graph),        intent(out)   :: graph
-        type(diffmap_gauge) :: gauge
+        type(inpl_struct), optional, intent(in)   :: algninfo(:)
         character(len=16) :: metric, steering
-        logical :: need_gauge
+        logical :: need_algninfo
         metric = lowercase(trim(params%graph))
-        select case(trim(metric))
-            case('', 'auto')
-                metric = 'euclidean'
-                if( trim(params%oritype) == 'ptcl3D' ) metric = 'orientation'
-            case('euc', 'euclidean')
-                metric = 'euclidean'
-            case('ori', 'orientation')
-                metric = 'orientation'
-            case DEFAULT
-                THROW_HARD('graph must be euc or ori in build_cls_split_graph')
-        end select
+        if( trim(metric) /= 'euc' .and. trim(metric) /= 'ori' )then
+            THROW_HARD('graph must be euc or ori in build_cls_split_graph')
+        endif
         steering = lowercase(trim(params%steering))
         if( trim(steering) == '' .or. trim(steering) == 'auto' ) steering = 'none'
         select case(trim(steering))
@@ -89,18 +63,18 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported graph steering in build_cls_split_graph')
         end select
-        if( trim(metric) == 'euclidean' .and. trim(steering) /= 'none' )then
+        if( trim(metric) == 'euc' .and. trim(steering) /= 'none' )then
             THROW_HARD('graph=euc supports steering=none only in class splitting')
         endif
-        need_gauge = trim(metric) == 'orientation' .and. trim(steering) /= 'none'
-        if( need_gauge )then
-            if( .not. present(imgs) ) THROW_HARD('steered orientation graph requires images')
-            call run_single_class_cluster2d_gauge(params, pinds, imgs, gauge, steering)
+        need_algninfo = trim(metric) == 'ori' .and. trim(steering) /= 'none'
+        if( need_algninfo )then
+            if( .not. present(algninfo) ) THROW_HARD('steered orientation graph requires alignment info')
+            if( size(algninfo) /= size(pinds) ) THROW_HARD('alignment info size mismatch in build_cls_split_graph')
         endif
         select case(trim(metric))
-            case('orientation')
-                if( need_gauge )then
-                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph, gauge)
+            case('ori')
+                if( present(algninfo) )then
+                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph, algninfo)
                 else
                     call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph)
                 endif
@@ -108,55 +82,70 @@ contains
                 if( .not. present(pcavecs) ) THROW_HARD('Euclidean graph requires pcavecs')
                 call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), 'none', graph)
         end select
-        if( need_gauge ) call gauge%kill
     end subroutine build_cls_split_graph
 
-    subroutine build_euclidean_knn_graph( pcavecs, k_nn, steering, graph, gauge )
+    subroutine build_euclidean_knn_graph( pcavecs, k_nn, steering, graph, algninfo )
         real,                 intent(in)  :: pcavecs(:,:)
         integer,              intent(in)  :: k_nn
         character(len=*),     intent(in)  :: steering
         type(diffmap_graph),  intent(out) :: graph
-        type(diffmap_gauge), optional, intent(in) :: gauge
+        type(inpl_struct), optional, intent(in) :: algninfo(:)
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
         n = size(pcavecs, 2)
         if( n < 1 ) THROW_HARD('empty Euclidean graph')
         if( n == 1 )then
-            call make_singleton_graph('euclidean', steering, graph)
+            call make_singleton_graph('euc', steering, graph)
             return
+        endif
+        if( trim(steering) /= 'none' )then
+            if( .not. present(algninfo) ) THROW_HARD('steered Euclidean graph requires alignment info')
+            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in build_euclidean_knn_graph')
         endif
         k_used = min(max(1, k_nn), n - 1)
         allocate(nbrs(k_used,n), source=0)
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_euclidean_neighbors(pcavecs, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euclidean', steering, graph, gauge)
+        if( present(algninfo) )then
+            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', steering, graph, algninfo)
+        else
+            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', steering, graph)
+        endif
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_euclidean_knn_graph
 
-    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, gauge )
+    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, algninfo )
         type(parameters),      intent(in)    :: params
         type(sp_project),      intent(inout) :: spproj
         integer,               intent(in)    :: pinds(:), k_nn
         character(len=*),      intent(in)    :: steering
         type(diffmap_graph),   intent(out)   :: graph
-        type(diffmap_gauge), optional, intent(in) :: gauge
+        type(inpl_struct), optional, intent(in) :: algninfo(:)
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
         n = size(pinds)
         if( n < 1 ) THROW_HARD('empty orientation graph')
         if( n == 1 )then
-            call make_singleton_graph('orientation', steering, graph)
+            call make_singleton_graph('ori', steering, graph)
             return
+        endif
+        if( trim(steering) /= 'none' )then
+            if( .not. present(algninfo) ) THROW_HARD('steered orientation graph requires alignment info')
+            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in build_orientation_knn_graph')
         endif
         k_used = min(max(1, k_nn), n - 1)
         allocate(nbrs(k_used,n), source=0)
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_orientation_neighbors(spproj, pinds, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'orientation', steering, graph, gauge)
+        if( present(algninfo) )then
+            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', steering, graph, algninfo)
+        else
+            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', steering, graph)
+        endif
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_orientation_knn_graph
 
@@ -229,19 +218,23 @@ contains
         end do
     end subroutine find_orientation_neighbors
 
-    subroutine pack_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph, gauge )
+    subroutine pack_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph, algninfo )
         integer,              intent(in)  :: n, k_used, nbrs(:,:)
         real,                 intent(in)  :: d2s(:,:), kth_d2(:)
         character(len=*),     intent(in)  :: metric, steering
         type(diffmap_graph),  intent(out) :: graph
-        type(diffmap_gauge), optional, intent(in) :: gauge
+        type(inpl_struct), optional, intent(in) :: algninfo(:)
         integer, allocatable :: rows(:), cols(:)
         real,    allocatable :: weights(:), theta(:), sx(:), sy(:)
         real :: eps, w, th, dx, dy
         integer :: max_edges, pos, i, m, j
         logical :: use_theta, use_shift
-        use_theta = present(gauge) .and. (trim(steering) == 'so2' .or. trim(steering) == 'se2')
-        use_shift = present(gauge) .and. trim(steering) == 'se2'
+        use_theta = trim(steering) == 'so2' .or. trim(steering) == 'se2'
+        use_shift = trim(steering) == 'se2'
+        if( use_theta )then
+            if( .not. present(algninfo) ) THROW_HARD('steered graph requires alignment info in pack_knn_to_csr')
+            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in pack_knn_to_csr')
+        endif
         if( .not. use_theta )then
             call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, metric, steering, graph)
             return
@@ -286,12 +279,12 @@ contains
             cols(pos) = jj
             weights(pos) = ww
             if( use_theta )then
-                th = deg2rad(wrap_angle_pm180(gauge%angle(jj) - gauge%angle(ii)))
+                th = deg2rad(wrap_angle_pm180(algninfo(jj)%e3 - algninfo(ii)%e3))
                 theta(pos) = sign * th
             endif
             if( use_shift )then
-                dx = gauge%shift_x(jj) - gauge%shift_x(ii)
-                dy = gauge%shift_y(jj) - gauge%shift_y(ii)
+                dx = algninfo(jj)%x - algninfo(ii)%x
+                dy = algninfo(jj)%y - algninfo(ii)%y
                 sx(pos) = sign * dx
                 sy(pos) = sign * dy
             endif
@@ -550,158 +543,9 @@ contains
         self%n = 0
         self%nnz = 0
         self%k_nn = 0
-        self%metric = 'euclidean'
+        self%metric = 'euc'
         self%steering = 'none'
     end subroutine kill_diffmap_graph
-
-    subroutine kill_diffmap_gauge( self )
-        class(diffmap_gauge), intent(inout) :: self
-        if( allocated(self%angle)    ) deallocate(self%angle)
-        if( allocated(self%shift_x)  ) deallocate(self%shift_x)
-        if( allocated(self%shift_y)  ) deallocate(self%shift_y)
-        if( allocated(self%img_dist) ) deallocate(self%img_dist)
-    end subroutine kill_diffmap_gauge
-
-    subroutine run_single_class_cluster2d_gauge( params, pinds, imgs, gauge, steering )
-        use simple_strategy2D_matcher, only: cluster2D_exec
-        type(parameters),    intent(in)    :: params
-        integer,             intent(in)    :: pinds(:)
-        type(image),         intent(inout) :: imgs(:)
-        type(diffmap_gauge), intent(out)   :: gauge
-        character(len=*), optional, intent(in) :: steering
-        type(parameters) :: c2d_params
-        type(builder)    :: c2d_build
-        type(cmdline)    :: c2d_cline
-        type(sp_project) :: local_proj
-        type(oris)       :: local_os
-        type(ori)        :: o
-        type(ctfparams)  :: ctfvars
-        type(image), allocatable :: ref_imgs(:)
-        type(string) :: cwd_before, cwd_now, workdir, stk_fname, projfile, refs_fname, refs_even_fname, refs_odd_fname, dot
-        integer :: n, i, iter, ldim(3), istat, next_dir, nlocal_maxits, first_label
-        logical :: converged
-        real :: smpd, mskdiam_local, local_trs
-        character(len=16) :: local_steering
-        n = size(imgs)
-        if( n /= size(pinds) ) THROW_HARD('gauge particle/image count mismatch')
-        allocate(gauge%angle(n), gauge%shift_x(n), gauge%shift_y(n), gauge%img_dist(n), source=0.)
-        if( n < 1 ) return
-        ldim = imgs(1)%get_ldim()
-        smpd = imgs(1)%get_smpd()
-        call simple_getcwd(cwd_before)
-        dot      = '.'
-        next_dir = find_next_int_dir_prefix(dot)
-        first_label = merge(pinds(1), 1, size(pinds) > 0)
-        workdir  = int2str(next_dir)//'_diffmap_gauge_cluster2d_'//int2str(first_label)
-        call simple_mkdir(workdir, verbose=.false.)
-        call simple_chdir(workdir, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to enter diffusion-map gauge cluster2D directory')
-        call simple_getcwd(cwd_now)
-        CWD_GLOB = cwd_now%to_char()
-
-        stk_fname = 'particles.mrcs'
-        projfile  = 'gauge_cluster2d.simple'
-        refs_fname      = 'start2Drefs.mrc'
-        refs_even_fname = 'start2Drefs_even.mrc'
-        refs_odd_fname  = 'start2Drefs_odd.mrc'
-        call write_imgarr(imgs, stk_fname)
-        allocate(ref_imgs(1))
-        call ref_imgs(1)%new(ldim, smpd)
-        call ref_imgs(1)%zero_and_unflag_ft
-        do i = 1,n
-            call ref_imgs(1)%add(imgs(i))
-        end do
-        call ref_imgs(1)%div(real(max(n,1)))
-        call write_imgarr(ref_imgs, refs_fname)
-        call write_imgarr(ref_imgs, refs_even_fname)
-        call write_imgarr(ref_imgs, refs_odd_fname)
-        call local_proj%update_projinfo(projfile)
-        call local_os%new(n, is_ptcl=.true.)
-        do i = 1,n
-            call o%new(is_ptcl=.true.)
-            call o%set('state', 1.)
-            call o%set('w',     1.)
-            call o%set('x',     0.)
-            call o%set('y',     0.)
-            call o%set('class', 1.)
-            call o%e3set(0.)
-            call local_os%set_ori(i, o)
-            call o%kill
-        end do
-        ctfvars%ctfflag = CTFFLAG_NO
-        ctfvars%smpd    = smpd
-        ctfvars%kv      = max(params%kv, 300.)
-        ctfvars%cs      = max(params%cs, 2.7)
-        ctfvars%fraca   = max(params%fraca, 0.1)
-        call local_proj%add_single_stk(stk_fname, ctfvars, local_os)
-        call local_proj%write(projfile)
-
-        mskdiam_local = params%mskdiam
-        if( mskdiam_local <= 0. ) mskdiam_local = real(ldim(1)) * smpd
-        local_steering = lowercase(trim(params%steering))
-        if( present(steering) ) local_steering = lowercase(trim(steering))
-        local_trs = 0.
-        if( trim(local_steering) == 'se2' ) local_trs = max(params%trs, 3.)
-        nlocal_maxits = GRAPH_GAUGE_CLUSTER2D_MAXITS
-        call c2d_cline%set('prg',           'cluster2D')
-        call c2d_cline%set('projfile',      projfile%to_char())
-        call c2d_cline%set('refs',          refs_fname%to_char())
-        call c2d_cline%set('refs_even',     refs_even_fname%to_char())
-        call c2d_cline%set('refs_odd',      refs_odd_fname%to_char())
-        call c2d_cline%set('outfile',       ALGN_FBODY//int2str(1)//METADATA_EXT)
-        call c2d_cline%set('ncls',          1)
-        call c2d_cline%set('mskdiam',       mskdiam_local)
-        call c2d_cline%set('smpd',          smpd)
-        call c2d_cline%set('box',           ldim(1))
-        call c2d_cline%set('ctf',           'no')
-        call c2d_cline%set('objfun',        'cc')
-        call c2d_cline%set('refine',        'inpl')
-        call c2d_cline%set('ml_reg',        'no')
-        call c2d_cline%set('maxits',        nlocal_maxits)
-        call c2d_cline%set('minits',        nlocal_maxits)
-        call c2d_cline%set('converge',      'no')
-        call c2d_cline%set('startit',       1)
-        call c2d_cline%set('nthr',          max(1, params%nthr))
-        call c2d_cline%set('trs',           local_trs)
-        call c2d_cline%set('mkdir',         'no')
-        call c2d_cline%set('restore_cavgs', 'yes')
-        call set_cluster2D_defaults(c2d_cline)
-        call c2d_build%init_params_and_build_strategy2D_tbox(c2d_cline, c2d_params, wthreads=.true.)
-        if( c2d_build%spproj_field%get_nevenodd() == 0 )then
-            call c2d_build%spproj_field%partition_eo
-            call c2d_build%spproj%write_segment_inside(c2d_params%oritype, c2d_params%projfile)
-        endif
-        c2d_params%which_iter = c2d_params%startit - 1
-        if( c2d_cline%defined('extr_iter') )then
-            c2d_params%extr_iter = c2d_params%extr_iter - 1
-        else
-            c2d_params%extr_iter = c2d_params%startit - 1
-        endif
-        do iter = 1,nlocal_maxits
-            c2d_params%which_iter = c2d_params%which_iter + 1
-            c2d_params%extr_iter  = c2d_params%extr_iter  + 1
-            call c2d_cline%set('which_iter', c2d_params%which_iter)
-            call c2d_cline%set('extr_iter',  c2d_params%extr_iter)
-            call c2d_cline%set('outfile', ALGN_FBODY//int2str_pad(c2d_params%part,c2d_params%numlen)//METADATA_EXT)
-            c2d_params%outfile = ALGN_FBODY//int2str_pad(c2d_params%part,c2d_params%numlen)//METADATA_EXT
-            call cluster2D_exec(c2d_params, c2d_build, c2d_cline, c2d_params%which_iter, converged)
-        end do
-        do i = 1,n
-            gauge%angle(i) = c2d_build%spproj%os_ptcl2D%e3get(i)
-            if( c2d_build%spproj%os_ptcl2D%isthere('x') ) gauge%shift_x(i) = c2d_build%spproj%os_ptcl2D%get(i, 'x')
-            if( c2d_build%spproj%os_ptcl2D%isthere('y') ) gauge%shift_y(i) = c2d_build%spproj%os_ptcl2D%get(i, 'y')
-        end do
-        call local_proj%kill
-        call local_os%kill
-        if( allocated(ref_imgs) ) call dealloc_imgarr(ref_imgs)
-        call c2d_build%kill_general_tbox()
-        call c2d_build%kill_strategy2D_tbox()
-        call c2d_cline%kill()
-        call simple_chdir(cwd_before, status=istat)
-        if( istat /= 0 ) THROW_HARD('failed to restore cwd after diffusion-map gauge cluster2D')
-        call simple_getcwd(cwd_now)
-        CWD_GLOB = cwd_now%to_char()
-    end subroutine run_single_class_cluster2d_gauge
 
     real function estimate_graph_shift_scale( graph ) result(scale)
         type(diffmap_graph), intent(in) :: graph

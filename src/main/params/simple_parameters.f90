@@ -268,7 +268,7 @@ type :: parameters
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
-    character(len=STDLEN)     :: graph='auto'         !< class split graph metric(auto|euc|ori){auto}
+    character(len=STDLEN)     :: graph='euc'          !< class split graph metric(euc|ori){euc}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
