@@ -2,9 +2,7 @@
 module simple_diffusion_maps
 use simple_core_module_api
 use simple_diff_map_graphs,  only: diffmap_graph, build_euclidean_knn_graph, graph_matvec, estimate_graph_shift_scale
-use simple_image,            only: image
 use simple_linalg,           only: sparse_eigh
-use simple_parameters,       only: parameters
 use simple_stat,             only: pearsn
 implicit none
 #include "simple_local_flags.inc"
@@ -84,45 +82,44 @@ contains
         self%nmodes = max(0, nmodes)
     end subroutine steerable_set_params
 
-    subroutine steerable_embed(self, params, imgs, coords, eigvals, graph, algninfo)
+    subroutine steerable_embed(self, graph, coords, eigvals, shift_scale)
         class(steerable_diffusion_map_embedder), intent(inout) :: self
-        type(parameters),                        intent(in)    :: params
-        type(image),                             intent(inout) :: imgs(:)
+        type(diffmap_graph), target,             intent(in)    :: graph
         real, allocatable,                       intent(out)   :: coords(:,:)
         real, allocatable, optional,             intent(out)   :: eigvals(:)
-        type(diffmap_graph), optional, target,   intent(out)   :: graph
-        type(inpl_struct), optional,             intent(in)    :: algninfo(:)
-        type(diffmap_graph), target :: local_graph
-        real, allocatable :: pcavecs(:,:), avg(:), eigs(:)
-        integer :: nptcls, npix, i
-        nptcls = size(imgs)
-        if( nptcls < 3 )then
-            allocate(coords(1,nptcls), source=0.)
-            if( present(eigvals) ) allocate(eigvals(1), source=0.)
-            return
-        endif
-        if( .not. present(algninfo) ) THROW_HARD('steerable diffusion map embedding requires alignment info')
-        if( size(algninfo) /= nptcls ) THROW_HARD('alignment info size mismatch in steerable diffusion map embedding')
-        npix = size(imgs(1)%serialize())
-        allocate(pcavecs(npix,nptcls), avg(npix), source=0.)
-        do i = 1,nptcls
-            pcavecs(:,i) = imgs(i)%serialize()
-        end do
-        avg = sum(pcavecs, dim=2) / real(nptcls)
-        do i = 1,nptcls
-            pcavecs(:,i) = pcavecs(:,i) - avg
-        end do
-        if( present(graph) )then
-            call build_euclidean_knn_graph(pcavecs, min(max(2,self%k_nn), nptcls-1), 'so2', graph, algninfo)
-            call embed_so2_graph(graph, self%ndiff, self%nmodes, coords, eigs)
-        else
-            call build_euclidean_knn_graph(pcavecs, min(max(2,self%k_nn), nptcls-1), 'so2', local_graph, algninfo)
-            call embed_so2_graph(local_graph, self%ndiff, self%nmodes, coords, eigs)
-            call local_graph%kill()
-        endif
+        real, optional,                          intent(in)    :: shift_scale
+        real, allocatable :: eigs(:)
+        real :: se2_shift_scale
+        if( graph%n < 1 ) THROW_HARD('steerable diffusion map embedding requires a prebuilt graph')
+        select case(lowercase(trim(graph%steering)))
+            case('so2')
+                if( .not. graph%has_theta() ) THROW_HARD('SO2 steerable embedding requires theta payloads')
+                if( graph%n < 3 )then
+                    allocate(coords(1,graph%n), source=0.)
+                    if( present(eigvals) ) allocate(eigvals(1), source=0.)
+                    return
+                endif
+                call embed_so2_graph(graph, self%ndiff, self%nmodes, coords, eigs)
+            case('se2')
+                if( .not. graph%has_theta() .or. .not. graph%has_shift() )then
+                    THROW_HARD('SE2 steerable embedding requires theta/shift payloads')
+                endif
+                if( graph%n < 3 )then
+                    allocate(coords(1,graph%n), source=0.)
+                    if( present(eigvals) ) allocate(eigvals(1), source=0.)
+                    return
+                endif
+                if( present(shift_scale) )then
+                    se2_shift_scale = shift_scale
+                else
+                    se2_shift_scale = estimate_graph_shift_scale(graph)
+                endif
+                call embed_se2_graph(graph, self%ndiff, self%nmodes, se2_shift_scale, coords, eigs)
+            case DEFAULT
+                THROW_HARD('steerable diffusion map embedding requires graph%steering=so2|se2')
+        end select
         if( present(eigvals) ) allocate(eigvals(size(eigs)), source=eigs)
         if( allocated(eigs) ) deallocate(eigs)
-        deallocate(pcavecs, avg)
     end subroutine steerable_embed
 
     subroutine embed_graph( graph, ndiff_req, coords, eigvals )
