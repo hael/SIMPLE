@@ -72,7 +72,6 @@ contains
         call reg%add_char('dynreslim', self%dynreslim)
         call reg%add_char('dw', self%dw)
         call reg%add_char('element', self%element)
-        call reg%add_char('empty3Dcavgs', self%empty3Dcavgs)
         call reg%add_char('envfsc', self%envfsc)
         call reg%add_char('eo_stage', self%eo_stage)
         call reg%add_char('even', self%even)

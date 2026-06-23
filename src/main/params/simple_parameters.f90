@@ -74,7 +74,6 @@ type :: parameters
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
-    character(len=3)          :: empty3Dcavgs='yes'   !< whether 3D empty cavgs are okay(yes|no){yes}
     character(len=3)          :: envfsc='no'          !< envelope mask even/odd pairs for FSC calculation(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of abinitio2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}

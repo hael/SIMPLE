@@ -314,7 +314,7 @@ contains
             shift_seed_loc = 0.
             if( prev_state_loc >= 1 .and. prev_state_loc <= self%p_ptr%nstates .and.&
                 &prev_proj_loc >= 1 .and. prev_proj_loc <= self%p_ptr%nspace )then
-                if( self%state_exists(prev_state_loc) .and. self%proj_exists(prev_proj_loc,prev_state_loc) )then
+                if( self%state_exists(prev_state_loc) )then
                     iref_start_loc = (prev_state_loc-1)*self%p_ptr%nspace
                     call grad_shsrch_obj(ithr_loc)%set_indices(iref_start_loc + prev_proj_loc, iptcl_loc)
                     shift_seed_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
@@ -437,7 +437,6 @@ contains
                 if( .not. self%state_exists(istate_loc) ) cycle
                 do isub_loc = 1, nsubs
                     coarse_proj_loc = self%b_ptr%subspace_inds(isub_loc)
-                    if( .not. self%proj_exists(coarse_proj_loc, istate_loc) ) cycle
                     full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
                     call score_subspace_ref(full_ref_subspace_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
                         &l_with_shift, dist_loc, irot_loc)
@@ -476,10 +475,6 @@ contains
                 do si_loc = 1, self%nstates
                     istate_loc = self%ssinds(si_loc)
                     if( .not. self%state_exists(istate_loc) ) cycle
-                    if( .not. self%proj_exists(coarse_proj_loc, istate_loc) )then
-                        nvalid_loc = -1
-                        exit
-                    endif
                     full_ref_subspace_loc = (istate_loc-1)*self%p_ptr%nspace + coarse_proj_loc
                     call score_subspace_ref(full_ref_subspace_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
                         &l_with_shift, dist_loc, irot_loc)
@@ -588,7 +583,7 @@ contains
 
         subroutine build_pooled_neighborhood(ithr_loc, prev_proj_loc)
             integer, intent(in) :: ithr_loc, prev_proj_loc
-            integer :: si_loc, istate_loc, npeak_found_loc, coarse_proj_loc, iproj_loc
+            integer :: si_loc, istate_loc, npeak_found_loc
             integer :: prev_isub_loc, k_loc, slot_loc
             logical :: already_in_pool_loc
             coarse_ws%pooled_sub_count(:,ithr_loc) = 0
@@ -602,19 +597,7 @@ contains
                 endif
                 ! Always include the neighborhood corresponding to the previous best
                 ! identified orientation for all non-stochastic, non-geom modes.
-                ! Resolve the previous projection to a valid one for this state.
-                coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
-                if( .not. self%proj_exists(coarse_proj_loc,istate_loc) )then
-                    coarse_proj_loc = 0
-                    do iproj_loc = 1, self%p_ptr%nspace
-                        if( self%proj_exists(iproj_loc,istate_loc) )then
-                            coarse_proj_loc = iproj_loc
-                            exit
-                        endif
-                    enddo
-                endif
-                if( coarse_proj_loc < 1 ) cycle
-                prev_isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
+                prev_isub_loc = self%b_ptr%subspace_full2sub_map(max(1, min(self%p_ptr%nspace, prev_proj_loc)))
                 if( prev_isub_loc < 1 .or. prev_isub_loc > nsubs ) prev_isub_loc = 1
                 ! Skip if already in pool to avoid duplicate evaluation
                 already_in_pool_loc = .false.

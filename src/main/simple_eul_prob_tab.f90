@@ -72,10 +72,8 @@ contains
         integer, parameter :: MIN_POP = 5   ! ignoring cavgs with less than 5 particles
         integer :: i, iproj, iptcl, istate, si, ri
         real    :: x
-        logical :: l_empty, l_state_only
+        logical :: l_state_only
         call self%kill
-        l_empty = (trim(params%empty3Dcavgs) .eq. 'yes')
-        if( present(empty_okay) ) l_empty = empty_okay
         l_state_only = .false.
         if( present(state_only) ) l_state_only = state_only
         self%p_ptr => params
@@ -83,17 +81,12 @@ contains
         self%nptcls       = size(pinds)
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
         self%nstates      = count(self%state_exists .eqv. .true.)
-        if( l_empty )then
-            allocate(self%proj_exists(self%p_ptr%nspace,self%p_ptr%nstates), source=.false.)
-            do istate = 1,self%p_ptr%nstates
-                if( self%state_exists(istate) ) self%proj_exists(:,istate) = .true.
-            enddo
-        else
-            self%proj_exists = self%b_ptr%spproj_field%projs_exist(self%p_ptr%nstates,self%p_ptr%nspace, thres=MIN_POP)
-            do istate = 1,self%p_ptr%nstates
-                if( .not. self%state_exists(istate) ) self%proj_exists(:,istate) = .false.
-            enddo
-        endif
+        ! In 3D, projection directions are defined by volume reprojections and
+        ! should always be considered available for states that exist.
+        allocate(self%proj_exists(self%p_ptr%nspace,self%p_ptr%nstates), source=.false.)
+        do istate = 1,self%p_ptr%nstates
+            if( self%state_exists(istate) ) self%proj_exists(:,istate) = .true.
+        enddo
         self%nrefs = count(self%proj_exists .eqv. .true.)
         allocate(self%ssinds(self%nstates),self%jinds(self%nrefs),self%sinds(self%nrefs))
         si = 0
@@ -103,7 +96,6 @@ contains
             si              = si + 1
             self%ssinds(si) = istate
             do iproj = 1,self%p_ptr%nspace
-                if( .not. self%proj_exists(iproj,istate) )cycle
                 ri             = ri + 1
                 self%jinds(ri) = iproj
                 self%sinds(ri) = istate
@@ -234,7 +226,7 @@ contains
                 cxy = 0.
                 if( l_sh_first .and. istate >= 1 .and. istate <= self%p_ptr%nstates .and.&
                     &iproj >= 1 .and. iproj <= self%p_ptr%nspace )then
-                    if( self%state_exists(istate) .and. self%proj_exists(iproj,istate) )then
+                    if( self%state_exists(istate) )then
                         iref_start = (istate-1)*self%p_ptr%nspace
                         ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)

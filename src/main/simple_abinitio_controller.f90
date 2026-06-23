@@ -12,6 +12,7 @@ integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,17,17,15,15,30]
 integer,          parameter :: NSPACE(8)               = [1000,1000,1000,1000,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_SUB              = 126
+integer,          parameter :: NSPACE_SUB_BASE         = 2500
 
 ! Stage transition policy
 integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
@@ -385,7 +386,9 @@ contains
                     case('shc','snhc')
                         cfg%inspace_sub = 0
                     case DEFAULT
-                        cfg%inspace_sub = NSPACE_SUB
+                        ! Keep neighborhood granularity roughly constant when
+                        ! late stages increase nspace (e.g. 2500 -> 5000).
+                        cfg%inspace_sub = max(1, nint(real(NSPACE_SUB) * real(cfg%inspace) / real(NSPACE_SUB_BASE)))
                 end select
         end select
     end subroutine apply_refine3D_search_overrides
