@@ -6,9 +6,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
-    <script src={% static 'nice_stream/panelsieveparticles.js' %}></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='sieve particles' %}
@@ -125,5 +122,160 @@
             </div>
         {% endif %}
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+        let currentMenuContainer = null;
+
+        const getNumber = (el, key) => {
+            if (!el) return 0;
+            if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+            if (el.workspace && el.workspace[key] !== undefined) return Number(el.workspace[key]);
+            return 0;
+        };
+
+        const toggleSievecls = (element) => {
+            if (element.classList.contains("sieveclsselected")) {
+                for (const xmark of element.querySelectorAll(".xmark")) {
+                    xmark.classList.remove("hidden");
+                }
+            } else {
+                for (const xmark of element.querySelectorAll(".xmark")) {
+                    xmark.classList.add("hidden");
+                }
+            }
+            element.classList.toggle("sieveclsselected");
+            lastinteraction = Date.now();
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            currentMenuContainer = element.closest("#accepted_cls2D_slider");
+            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            if (!selectmenu) return;
+
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            const sortpop = selectmenu.querySelector("#sortpop");
+            const sortres = selectmenu.querySelector("#sortres");
+            const selectabove = selectmenu.querySelector("#selectabove");
+            const selectbelow = selectmenu.querySelector("#selectbelow");
+
+            selectmenubox.style.top = event.pageY + "px";
+            selectmenubox.style.left = event.pageX + "px";
+            selectmenu.style.display = "flex";
+            if (sortpop) sortpop.onclick = sortPop;
+            if (sortres) sortres.onclick = sortRes;
+            if (selectabove) selectabove.onclick = () => selectAbove(element);
+            if (selectbelow) selectbelow.onclick = () => selectBelow(element);
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                const sortpop = selectmenu.querySelector("#sortpop");
+                const sortres = selectmenu.querySelector("#sortres");
+                const selectabove = selectmenu.querySelector("#selectabove");
+                const selectbelow = selectmenu.querySelector("#selectbelow");
+                selectmenu.style.display = "none";
+                if (sortpop) sortpop.onclick = null;
+                if (sortres) sortres.onclick = null;
+                if (selectabove) selectabove.onclick = null;
+                if (selectbelow) selectbelow.onclick = null;
+            }
+            lastinteraction = Date.now();
+        };
+
+        const sortPop = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".sieveclscontainer"));
+            templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const sortRes = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".sieveclscontainer"));
+            templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const selectAbove = (element) => {
+            const acceptedSlider = document.querySelector("#accepted_cls2D_slider");
+            if (!acceptedSlider || !element?.parentElement) return;
+
+            let threshold = true;
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".sieveclscontainer")) {
+                if (threshold) {
+                    acceptedSlider.appendChild(clscontainer);
+                }
+                if (clscontainer === element.parentElement) {
+                    threshold = false;
+                }
+            }
+            hideMenu();
+        };
+
+        const selectBelow = (element) => {
+            const acceptedSlider = document.querySelector("#accepted_cls2D_slider");
+            if (!acceptedSlider || !element?.parentElement) return;
+
+            let threshold = false;
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".sieveclscontainer")) {
+                if (clscontainer === element.parentElement) {
+                    threshold = true;
+                }
+                if (threshold) {
+                    acceptedSlider.appendChild(clscontainer);
+                }
+            }
+            hideMenu();
+        };
+
+        const updateBrightness = (element) => {
+            document.querySelector(":root").style.setProperty("--sieve-brightness", element.value / 100);
+        };
+
+        const updateContrast = (element) => {
+            document.querySelector(":root").style.setProperty("--sieve-contrast", element.value / 100);
+        };
+
+        const updateScale = (element) => {
+            const scale = element.value;
+            for (const cls2D of document.querySelectorAll(".sievecls")) {
+                cls2D.style.width = scale + "px";
+                cls2D.style.height = scale + "px";
+            }
+            for (const cls2Dimg of document.querySelectorAll(".sieveclsimg")) {
+                cls2Dimg.style.width = scale + "px";
+                cls2Dimg.style.height = scale + "px";
+            }
+        };
+
+        window.addEventListener("load", () => {
+            const root = document.querySelector(":root");
+            root.style.setProperty("--sieve-contrast", 1.0);
+            root.style.setProperty("--sieve-brightness", 1.0);
+
+            const logtext = document.querySelector(".logtext");
+            if (logtext) {
+                logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 </body>
 </html>

@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
-    <script src={% static 'nice_stream/panelpreprocess.js' %}></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='preprocessing' %}
@@ -94,5 +93,242 @@
             {% endif %}
         </div>
     </div>
+    <script>
+        let lastinteraction = Date.now();
+        const autoscrolls = new Map();
+
+        const stopAutoscroll = (slider) => {
+            if (autoscrolls.has(slider)) {
+                clearInterval(autoscrolls.get(slider));
+                autoscrolls.delete(slider);
+            }
+        };
+
+        const startAutoscroll = (slider) => {
+            const id = setInterval(() => {
+                const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+                slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + slider.clientWidth;
+                updateLabel(slider);
+            }, 5000);
+            autoscrolls.set(slider, id);
+        };
+
+        const updateLabel = (slider) => {
+            const label = slider.closest(".flex-col")?.querySelector("[id$='_label']");
+            if (!label) return;
+            const idx = Math.round(slider.scrollLeft / slider.clientWidth);
+            const slide = slider.children[idx];
+            if (!slide) return;
+            const newText = slide.dataset.label || "";
+            if (label.textContent === newText) return;
+            label.style.opacity = "0";
+            setTimeout(() => {
+                label.textContent = newText;
+                label.style.opacity = "1";
+            }, 150);
+        };
+
+        const scrlRight = (element, event) => {
+            event.preventDefault();
+            const slider = element.previousElementSibling;
+            const count = slider.children.length;
+            if (!count) return;
+            const w = slider.scrollWidth / count;
+            const idx = Math.round(slider.scrollLeft / w);
+            slider.scrollLeft = ((idx + 1) % count) * w;
+            lastinteraction = Date.now();
+            stopAutoscroll(slider);
+        };
+
+        const scrlLeft = (element, event) => {
+            event.preventDefault();
+            const slider = element.nextElementSibling;
+            const count = slider.children.length;
+            if (!count) return;
+            const w = slider.scrollWidth / count;
+            const idx = Math.round(slider.scrollLeft / w);
+            slider.scrollLeft = ((idx - 1 + count) % count) * w;
+            lastinteraction = Date.now();
+            stopAutoscroll(slider);
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            selectmenu.style.display = "flex";
+            const selectmenurect = selectmenu.getBoundingClientRect();
+            const selectmenuboxrect = selectmenubox.getBoundingClientRect();
+            selectmenubox.style.left = (event.pageX + selectmenuboxrect.width > selectmenurect.width)
+                ? (selectmenurect.width - selectmenuboxrect.width) + "px"
+                : event.pageX + "px";
+            selectmenubox.style.top = (event.pageY + selectmenuboxrect.height > selectmenurect.height)
+                ? (selectmenurect.height - selectmenuboxrect.height) + "px"
+                : event.pageY + "px";
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                selectmenu.style.display = "none";
+            }
+            lastinteraction = Date.now();
+        };
+
+        const updateBrightness = (element) => {
+            document.querySelector(":root").style.setProperty("--preprocess-brightness", element.value / 100);
+        };
+
+        const updateContrast = (element) => {
+            document.querySelector(":root").style.setProperty("--preprocess-contrast", element.value / 100);
+        };
+
+        const updateScale = (element) => {
+            for (const container of document.getElementsByClassName("miccontainer")) {
+                container.style.width = element.value + "px";
+            }
+        };
+
+        const buildDraggerHistogram = (canvas, formId, fieldName, labelFn) => {
+            const style = getComputedStyle(document.body);
+            const labels = JSON.parse((canvas.dataset.labels || "[]").replaceAll("'", '"'));
+            const data = JSON.parse((canvas.dataset.values || "[]").replaceAll("'", '"'));
+
+            let savedval = Number(canvas.dataset.savedval);
+            let savedidx = labels.indexOf(savedval);
+            let dragactive = false;
+
+            const dragger = {
+                id: "dragger",
+                beforeEvent(chart, args) {
+                    switch (args.event.type) {
+                        case "mousemove":
+                            if (dragactive) {
+                                const xelements = chart.getElementsAtEventForMode(
+                                    args.event.native, "x", { intersect: false }, true
+                                );
+                                if (xelements.length > 0) {
+                                    const idx = xelements[0].index;
+                                    if (chart.config.options.plugins.annotation.annotations.cutoff.value !== idx) {
+                                        chart.config.options.plugins.annotation.annotations.cutoff.value = idx;
+                                        chart.config.options.plugins.annotation.annotations.cutoff.label.content = labelFn(labels[idx]);
+                                        chart.config.options.plugins.annotation.annotations.cutoffshadow.xMin = idx;
+                                        savedval = labels[idx];
+                                        chart.update("none");
+                                    }
+                                }
+                            }
+                            break;
+                        case "mouseup":
+                            dragactive = false;
+                            const field = document.getElementsByName(fieldName)[0];
+                            const form = document.getElementById(formId);
+                            if (field && form) {
+                                field.value = savedval;
+                                form.submit();
+                            }
+                            lastinteraction = Date.now();
+                            break;
+                        case "mousedown":
+                            dragactive = true;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            };
+
+            new Chart(canvas.getContext("2d"), {
+                type: "bar",
+                plugins: [dragger],
+                options: {
+                    responsive: false,
+                    events: ["mousedown", "mouseup", "mousemove", "mouseout"],
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            display: true,
+                            ticks: { font: { size: 8 }, maxTicksLimit: 3 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {
+                                cutoff: {
+                                    type: "line",
+                                    borderWidth: 0,
+                                    label: {
+                                        display: true,
+                                        content: labelFn(savedval),
+                                        position: "start",
+                                        backgroundColor: style.getPropertyValue("--color-streamline").trim(),
+                                        color: style.getPropertyValue("--color-streamtext").trim(),
+                                        font: { size: 8 },
+                                        padding: 2
+                                    },
+                                    scaleID: "x",
+                                    value: savedidx,
+                                    z: 10,
+                                    enter() { canvas.style.cursor = "grab"; return true; },
+                                    leave() { canvas.style.cursor = "default"; return true; }
+                                },
+                                cutoffshadow: {
+                                    type: "box",
+                                    backgroundColor: "rgba(211, 211, 211, 0.2)",
+                                    borderWidth: 0,
+                                    xMin: savedidx,
+                                    xMax: labels.length - 1
+                                }
+                            }
+                        }
+                    }
+                },
+                data: {
+                    labels,
+                    datasets: [{
+                        data,
+                        backgroundColor: style.getPropertyValue("--color-streamring").trim() + "33",
+                        borderColor: style.getPropertyValue("--color-streambar").trim(),
+                        hoverOffset: 4
+                    }]
+                }
+            });
+        };
+
+        window.addEventListener("load", () => {
+            const root = document.querySelector(":root");
+            root.style.setProperty("--preprocess-contrast", 1.0);
+            root.style.setProperty("--preprocess-brightness", 1.0);
+
+            for (const canvas of document.getElementsByClassName("ctfres_histogram")) {
+                buildDraggerHistogram(canvas, "update_preprocess_ctfres", "ctfres", (v) => v + "Å");
+            }
+            for (const canvas of document.getElementsByClassName("astig_histogram")) {
+                buildDraggerHistogram(canvas, "update_preprocess_astig", "astigmatism", (v) => v + "%");
+            }
+            for (const canvas of document.getElementsByClassName("icescore_histogram")) {
+                buildDraggerHistogram(canvas, "update_preprocess_icescore", "icescore", (v) => Number(v).toFixed(2));
+            }
+
+            const histSlider = document.getElementById("histogram_slider");
+            if (histSlider) {
+                updateLabel(histSlider);
+                histSlider.addEventListener("scroll", () => updateLabel(histSlider), { passive: true });
+                if (histSlider.scrollWidth > histSlider.clientWidth) startAutoscroll(histSlider);
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") location.reload();
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 </body>
 </html>

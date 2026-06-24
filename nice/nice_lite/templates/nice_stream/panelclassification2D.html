@@ -25,9 +25,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
-            crossorigin="anonymous" defer></script>
-    <script src="{% static 'nice_stream/panelclassification2D.js' %}" defer></script>
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
@@ -105,6 +102,118 @@
         {% endif %}
     {% endif %}
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+        let currentMenuContainer = null;
+
+        const restartProcess = (element) => {
+            const confirmed = confirm("Please confirm that you wish to restart this process");
+            if (confirmed) {
+                element.form.submit();
+            }
+        };
+
+        const stopProcess = (element) => {
+            const confirmed = confirm("Please confirm that you wish to stop this process");
+            if (confirmed) {
+                element.form.submit();
+            }
+        };
+
+        const getNumber = (el, key) => {
+            if (!el) return 0;
+            if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+            if (el.workspace && el.workspace[key] !== undefined) return Number(el.workspace[key]);
+            return 0;
+        };
+
+        const scrlRight = (element, event) => {
+            if (event) event.preventDefault();
+            const slider = document.getElementById("accepted_cls2D_slider")?.parentElement;
+            if (!slider) return;
+            const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+            slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 77;
+            lastinteraction = Date.now();
+        };
+
+        const scrlLeft = (element, event) => {
+            if (event) event.preventDefault();
+            const slider = document.getElementById("accepted_cls2D_slider")?.parentElement;
+            if (!slider) return;
+            const atStart = slider.scrollLeft <= 0;
+            slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 77;
+            lastinteraction = Date.now();
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            currentMenuContainer = element.closest("#accepted_cls2D_slider");
+            const selectmenu = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']");
+            if (!selectmenu) return;
+
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            const sortpop = selectmenu.querySelector("#sortpop");
+            const sortres = selectmenu.querySelector("#sortres");
+
+            selectmenubox.style.top = event.pageY + "px";
+            selectmenubox.style.left = event.pageX + "px";
+            selectmenu.style.display = "flex";
+            if (sortpop) sortpop.onclick = sortPop;
+            if (sortres) sortres.onclick = sortRes;
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                const sortpop = selectmenu.querySelector("#sortpop");
+                const sortres = selectmenu.querySelector("#sortres");
+                selectmenu.style.display = "none";
+                if (sortpop) sortpop.onclick = null;
+                if (sortres) sortres.onclick = null;
+            }
+            lastinteraction = Date.now();
+        };
+
+        const sortPop = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+            templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const sortRes = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+            templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        window.addEventListener("load", () => {
+            const gauze = document.getElementById("loadinggauze");
+            if (gauze) {
+                gauze.style.opacity = "0";
+                setTimeout(() => {
+                    gauze.classList.add("hidden");
+                }, 600);
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 
 </body>
 </html>

@@ -1,100 +1,204 @@
 {% comment %}
-  stream.html — outer shell for the SIMPLE Stream interface.
+  workspace.html — stream grid and workspace details footer, loaded inside the
+  workspace iframe by stream.html.
 
   Structure:
-    - Fixed header bar: logo, project/workspace selectors, classic/logout actions.
-    - Full-height iframe: loads the workspace view (stream list and details) at
-      iframeurl, or remains blank until a project and workspace are selected.
-    - messages.html: renders any Django flash messages.
+    - Sub-bar : new-stream button and live stream count.
+    - Grid    : responsive column grid of stream cards (see _stream_card.html).
+    - Footer  : editable workspace metadata and delete-workspace button.
 
   Context variables:
-    projects           — queryset of all projects available to this user
-    workspaces           — queryset of workspaces for the selected project
-    current_project_id — id of the currently selected project (0 = none)
-    current_workspace_id — id of the currently selected workspace (0 = none)
-    iframeurl          — URL to load inside the content iframe, or None
-
-  Selecting a project or workspace submits a GET form, reloading the page with
-  the new selection reflected in the URL query string.
+    current_workspace_id   — 0 when no workspace is selected
+    current_workspace_name — display name of the selected workspace
+    jobs                 — queryset of StreamJob view-objects for this workspace
+    created, modified    — formatted date strings
+    user                 — username of workspace creator
+    folder               — absolute path to the workspace directory
+    description          — workspace description string
 {% endcomment %}
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/svg+xml" href="{% static 'images/simple_stream_favicon.svg' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="{% static 'nice_stream/stream.js' %}"></script>
-    <title>SIMPLE Stream</title>
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans">
 
-    <!-- Header -->
-    <header class="bg-streambar border-b border-streamline h-13 flex items-center px-5 gap-5 flex-shrink-0">
+{% if current_workspace_id == 0 %}
 
-        <!-- Logo -->
-        <div class="flex items-center gap-2 flex-shrink-0">
-            <div class="w-6 h-6 rounded-md bg-streamaccent flex items-center justify-center flex-shrink-0">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
-                </svg>
-            </div>
-            <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Simple Stream</span>
-        </div>
-
-        <!-- Selectors -->
-        <div class="flex items-center gap-4">
-
-            <!-- Project -->
-            <div class="flex items-center gap-1.5">
-                <span class="text-xs text-streamlabel">project</span>
-                <form method="GET">
-                    <select name="selected_project_id" onchange="this.form.submit()"
-                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                        {% if current_project_id == 0 %}
-                            <option disabled selected value="">select</option>
-                        {% endif %}
-                        <option value="-1">✚ create new</option>
-                        {% for project in projects %}
-                            <option value="{{ project.id }}" {% if project.id == current_project_id %}selected{% endif %}>{{ project.name }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-            </div>
-
-            <!-- Workspace -->
-            <div class="flex items-center gap-1.5">
-                <span class="text-xs text-streamlabel">workspace</span>
-                <form method="GET">
-                    <select name="selected_workspace_id" onchange="this.form.submit()"
-                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                        {% if current_workspace_id == 0 %}
-                            <option disabled selected value="">select</option>
-                        {% endif %}
-                        <option value="-1">✚ create new</option>
-                        {% for workspace in workspaces %}
-                            <option value="{{ workspace.id }}" {% if workspace.id == current_workspace_id %}selected{% endif %}>{{ workspace.name }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-            </div>
-
-        </div>
-
-        <!-- Right actions -->
-        <div class="flex items-center gap-2 ml-auto">
-            <a href="{% url 'nice_lite:logout' %}"
-               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</a>
-        </div>
-
-    </header>
-
-    <!-- Content -->
-    <div class="flex-1 min-h-0">
-        <iframe id="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
+    <div class="flex-1 flex items-center justify-center text-streamlabel text-sm">
+        select a workspace to continue
     </div>
 
-    {% include 'messages.html' %}
+{% else %}
+    <!-- Scrollable stream grid (flex-1 so it fills space between sub-bar and footer) -->
+    <div class="flex-1 min-h-0 flex flex-row">
+        <div class="relative flex-1 min-h-0">
+            <iframe id="jobs_iframe" name="jobs_iframe" src="{% url 'nice_lite:workspace_jobs' %}" class="w-full h-full border-0" onload="toggleJobsIframeLoading(false)"></iframe>
+            <div id="jobs_iframe_loading" class="hidden absolute inset-0 z-40 bg-streambg/70 backdrop-blur-[1px] flex items-center justify-center">
+                <span class="text-xs text-streamtext bg-streambar border border-streamline rounded-lg px-3 py-1.5">loading...</span>
+            </div>
+        </div>
+        <iframe id="job_builder_iframe" name="job_builder_iframe" src="" height="100%" class="w-[600px] z-2 hidden"></iframe>
+    </div>
+
+    <!-- Workspace details footer (natural flow — no fixed positioning) -->
+    <div class="bg-streambar border-t border-streamline px-6 py-3 flex-shrink-0">
+        <div class="flex items-start justify-between gap-8">
+
+            <!-- Left: name, modified, location -->
+            <div>
+                <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">Workspace details</p>
+                <div class="flex gap-10">
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">name</p>
+                        <div class="flex items-center gap-1">
+                            <form method="POST" action="{% url 'nice_lite:update_workspace_name' %}" target="_parent" class="flex">
+                                {% csrf_token %}
+                                <input id="workspacerename" name="new_workspace_name" value="{{ current_workspace_name }}"
+                                       onblur="this.form.submit()" onkeydown="submitUpdate(this, event)" disabled
+                                       class="text-xs text-streaminput font-medium bg-transparent border-none outline-none disabled:cursor-default">
+                            </form>
+                            <button onclick="enableWorkspaceRename()"
+                                    class="text-streamicon hover:text-streamsubtle transition-colors">
+                                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
+                                    <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9A.75.75 0 0 1 14 9v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">modified</p>
+                        <p class="text-xs text-streaminput">{{ modified }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">location</p>
+                        <p class="text-xs text-streamsubtle font-mono">{{ folder }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: created, user, description -->
+            <div>
+                <p class="text-[10px] text-streamlabel uppercase tracking-wide font-medium mb-2">&nbsp;</p>
+                <div class="flex gap-10">
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">created</p>
+                        <p class="text-xs text-streaminput">{{ created }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">created by</p>
+                        <p class="text-xs text-streaminput">{{ user }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-streamlabel mb-0.5">description</p>
+                        <div class="flex items-center gap-1">
+                            <form method="POST" action="{% url 'nice_lite:update_workspace_description' %}" target="_parent">
+                                {% csrf_token %}
+                                <input id="workspacedescription" name="new_workspace_description" value="{{ description }}"
+                                       onblur="this.form.submit()" disabled
+                                       class="text-xs text-streamsubtle italic bg-transparent border-none outline-none disabled:cursor-default">
+                            </form>
+                            <button onclick="enableWorkspaceDescription()"
+                                    class="text-streamicon hover:text-streamsubtle transition-colors">
+                                <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.262a1.75 1.75 0 0 0 0-2.474Z"/>
+                                    <path d="M4.75 3.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V9A.75.75 0 0 1 14 9v2.25A2.75 2.75 0 0 1 11.25 14h-6.5A2.75 2.75 0 0 1 2 11.25v-6.5A2.75 2.75 0 0 1 4.75 2H7a.75.75 0 0 1 0 1.5H4.75Z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete workspace -->
+            <form method="POST" action="{% url 'nice_lite:delete_workspace' %}" target="_parent" class="self-end">
+                {% csrf_token %}
+                <input name="delete_workspace_id" value="{{ current_workspace_id }}" type="hidden">
+                <button onclick="return confirm('please confirm that you wish to delete workspace {{ current_workspace_name|escapejs }}')"
+                        type="submit" title="delete workspace"
+                        class="text-streamicon hover:text-streamerror transition-colors">
+                    <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <polyline points="2,4 14,4"/>
+                        <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                    </svg>
+                </button>
+            </form>
+
+        </div>
+    </div>
+
+    {% url 'nice_lite:new_stream' as new_stream_action %}
+    <form method="GET" action="{{ new_stream_action }}" target="job_builder_iframe" class="fixed bottom-26 right-4 z-1">
+        {% csrf_token %}
+        <button type="submit" title="open job builder" aria-label="open job builder"
+                class="w-12 h-12 rounded-full bg-streamring text-white shadow-lg hover:opacity-90 transition-opacity inline-flex items-center justify-center">
+            <svg class="w-5 h-5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3.25v9.5"/>
+                <path d="M3.25 8h9.5"/>
+            </svg>
+        </button>
+    </form>
+
+{% endif %}
+
+{% include 'messages.html' %}
+
+<script>
+    function toggleJobsIframeLoading(show) {
+        const loading = document.getElementById("jobs_iframe_loading");
+        if (!loading) return;
+        loading.classList.toggle("hidden", !show);
+    }
+</script>
+
+<script>
+    let lastinteraction = Date.now();
+
+    const isJobBuilderVisible = () => {
+        const iframe = document.getElementById("job_builder_iframe");
+        if (!iframe) return false;
+        if (iframe.classList.contains("hidden")) return false;
+        return getComputedStyle(iframe).display !== "none";
+    };
+
+    const submitUpdate = (element, event) => {
+        if (event.key === "Enter") element.form.submit();
+        lastinteraction = Date.now();
+    };
+
+    const enableWorkspaceRename = () => {
+        const el = document.querySelector("#workspacerename");
+        if (!el) return;
+        el.disabled = false;
+        el.focus();
+        lastinteraction = Date.now();
+    };
+
+    const enableWorkspaceDescription = () => {
+        const el = document.querySelector("#workspacedescription");
+        if (!el) return;
+        el.disabled = false;
+        el.focus();
+        lastinteraction = Date.now();
+    };
+
+    window.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "hidden" && !isJobBuilderVisible()) location.reload();
+    });
+
+    setInterval(() => {
+        if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden" && !isJobBuilderVisible()) {
+            lastinteraction = Date.now();
+            
+            location.reload();
+        }
+    }, 1000);
+</script>
+
 </body>
 </html>

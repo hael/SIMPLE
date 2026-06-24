@@ -26,8 +26,8 @@
             var target = getExpandTarget(panel);
             if (!target) return;
 
-            panel.workspace.expanded = '1';
-            panel.workspace.expandTargetOriginalStyle = target.getAttribute('style') || '';
+            panel.dataset.expanded = '1';
+            panel.dataset.expandTargetOriginalStyle = target.getAttribute('style') || '';
 
             target.style.position = 'fixed';
             target.style.inset = '0';
@@ -48,8 +48,8 @@
             var target = getExpandTarget(panel);
             if (!target) return;
 
-            panel.workspace.expanded = '0';
-            target.setAttribute('style', panel.workspace.expandTargetOriginalStyle || '');
+            panel.dataset.expanded = '0';
+            target.setAttribute('style', panel.dataset.expandTargetOriginalStyle || '');
 
             panel.classList.remove('cursor-zoom-out');
             panel.classList.add('cursor-zoom-in');
@@ -58,16 +58,16 @@
         }
 
         panels.forEach(function (panel) {
-            if (panel.workspace.expandBound === '1') return;
-            panel.workspace.expandBound = '1';
-            panel.workspace.expanded = '0';
+            if (panel.dataset.expandBound === '1') return;
+            panel.dataset.expandBound = '1';
+            panel.dataset.expanded = '0';
 
             panel.addEventListener('click', function () {
-                if (panel.workspace.expanded === '1') {
+                if (panel.dataset.expanded === '1') {
                     collapsePanel(panel);
                 } else {
                     panels.forEach(function (otherPanel) {
-                        if (otherPanel !== panel && otherPanel.workspace.expanded === '1') {
+                        if (otherPanel !== panel && otherPanel.dataset.expanded === '1') {
                             collapsePanel(otherPanel);
                         }
                     });

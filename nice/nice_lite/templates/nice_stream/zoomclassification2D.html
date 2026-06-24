@@ -6,9 +6,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
-    <script src={% static 'nice_stream/panelclassification2D.js' %}></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='2D classification' %}
@@ -209,5 +206,339 @@
             </div>
         </div>
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+        let currentMenuContainer = null;
+
+        const getNumber = (el, key) => {
+            if (!el) return 0;
+            if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+            if (el.workspace && el.workspace[key] !== undefined) return Number(el.workspace[key]);
+            return 0;
+        };
+
+        const toggleCls = (element) => {
+            element.classList.toggle("disabledbutton");
+            const mskcanvas = element.querySelector(".mskcanvas");
+            const xmark = element.querySelector(".xmark");
+
+            if (element.classList.contains("disabledbutton")) {
+                if (mskcanvas) mskcanvas.classList.add("hidden");
+                if (xmark) xmark.classList.remove("hidden");
+            } else {
+                if (xmark) xmark.classList.add("hidden");
+                if (mskcanvas) mskcanvas.classList.remove("hidden");
+            }
+
+            lastinteraction = Date.now();
+            updateCounts();
+        };
+
+        const selectCls = (element) => {
+            const selected = [];
+            for (const cls2D of document.getElementsByClassName("cls2D")) {
+                const idx = getNumber(cls2D, "idx");
+                if (!cls2D.classList.contains("disabledbutton")) {
+                    selected.push(idx);
+                }
+            }
+
+            const selectionField = document.getElementById("snapshot_selection");
+            if (selectionField) selectionField.value = selected;
+
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (loadinggauze) {
+                loadinggauze.innerHTML = "generating snapshot ...";
+                loadinggauze.classList.remove("hidden");
+                loadinggauze.style.opacity = "1";
+            }
+
+            element.form.submit();
+            setTimeout(() => {
+                const psetsIframe = window.parent?.document?.querySelector("#psets_iframe");
+                if (psetsIframe) psetsIframe.src = psetsIframe.src;
+            }, 1500);
+        };
+
+        const selectClsFinal = (element) => {
+            const deselected = [];
+            for (const cls2D of document.getElementsByClassName("cls2D")) {
+                const idx = getNumber(cls2D, "idx");
+                if (cls2D.classList.contains("disabledbutton")) {
+                    deselected.push(idx);
+                }
+            }
+
+            const deselectionField = document.getElementById("final_deselection");
+            if (deselectionField) deselectionField.value = deselected;
+
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (loadinggauze) {
+                loadinggauze.innerHTML = "generating final selection ...";
+                loadinggauze.classList.remove("hidden");
+                loadinggauze.style.opacity = "1";
+            }
+
+            element.form.submit();
+            setTimeout(() => {
+                const psetsIframe = window.parent?.document?.querySelector("#psets_iframe");
+                if (psetsIframe) psetsIframe.src = psetsIframe.src;
+            }, 1500);
+        };
+
+        const drawMask = () => {
+            const selectedMskdiam = document.getElementById("selected_mskdiam");
+            if (!selectedMskdiam || selectedMskdiam.value === "") return;
+
+            for (const cls2D of document.getElementsByClassName("cls2D")) {
+                const canvas = cls2D.getElementsByClassName("mskcanvas")[0];
+                if (!canvas) continue;
+
+                const mskscale = getNumber(canvas, "mskscale");
+                const ctx = canvas.getContext("2d");
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, Number(selectedMskdiam.value) * canvas.width / (mskscale * 2), 0, 2 * Math.PI);
+                ctx.stroke();
+                lastinteraction = Date.now();
+            }
+        };
+
+        const updateMskdiam = (element) => {
+            const currentMskdiam = document.getElementById("current_mskdiam");
+            const selectedMskdiam = document.getElementById("selected_mskdiam");
+            const mskdiam = element.value * 2;
+            if (!currentMskdiam || !selectedMskdiam) return;
+
+            currentMskdiam.innerHTML = mskdiam + "Å";
+            selectedMskdiam.value = mskdiam;
+            drawMask();
+        };
+
+        const updateMskdiamSubmit = (element) => {
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (loadinggauze) {
+                loadinggauze.innerHTML = "updating mask diameter ...";
+                loadinggauze.classList.remove("hidden");
+                loadinggauze.style.opacity = "1";
+            }
+            element.form.submit();
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            currentMenuContainer = element.closest("#accepted_cls2D_slider");
+            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            if (!selectmenu) return;
+
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            const sortpop = selectmenu.querySelector("#sortpop");
+            const sortres = selectmenu.querySelector("#sortres");
+            const selectabove = selectmenu.querySelector("#selectabove");
+            const selectbelow = selectmenu.querySelector("#selectbelow");
+
+            selectmenubox.style.top = event.pageY + "px";
+            selectmenubox.style.left = event.pageX + "px";
+            selectmenu.style.display = "flex";
+            if (sortpop) sortpop.onclick = sortPop;
+            if (sortres) sortres.onclick = sortRes;
+            if (selectabove) selectabove.onclick = () => selectAbove(element);
+            if (selectbelow) selectbelow.onclick = () => selectBelow(element);
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                const sortpop = selectmenu.querySelector("#sortpop");
+                const sortres = selectmenu.querySelector("#sortres");
+                const selectabove = selectmenu.querySelector("#selectabove");
+                const selectbelow = selectmenu.querySelector("#selectbelow");
+                selectmenu.style.display = "none";
+                if (sortpop) sortpop.onclick = null;
+                if (sortres) sortres.onclick = null;
+                if (selectabove) selectabove.onclick = null;
+                if (selectbelow) selectbelow.onclick = null;
+            }
+            lastinteraction = Date.now();
+        };
+
+        const sortPop = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+            templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const sortRes = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".cls2dcontainer"));
+            templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const selectAbove = (element) => {
+            let threshold = true;
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+                const mskcanvas = clscontainer.querySelector(".mskcanvas");
+                const xmark = clscontainer.querySelector(".xmark");
+                if (threshold) {
+                    clscontainer.classList.remove("disabledbutton");
+                } else {
+                    clscontainer.classList.add("disabledbutton");
+                }
+
+                if (clscontainer.classList.contains("disabledbutton")) {
+                    if (mskcanvas) mskcanvas.classList.add("hidden");
+                    if (xmark) xmark.classList.remove("hidden");
+                } else {
+                    if (xmark) xmark.classList.add("hidden");
+                    if (mskcanvas) mskcanvas.classList.remove("hidden");
+                }
+
+                if (clscontainer === element) {
+                    threshold = false;
+                }
+            }
+            updateCounts();
+            hideMenu();
+        };
+
+        const selectBelow = (element) => {
+            let threshold = false;
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+                const mskcanvas = clscontainer.querySelector(".mskcanvas");
+                const xmark = clscontainer.querySelector(".xmark");
+                if (clscontainer === element) {
+                    threshold = true;
+                }
+
+                if (threshold) {
+                    clscontainer.classList.remove("disabledbutton");
+                } else {
+                    clscontainer.classList.add("disabledbutton");
+                }
+
+                if (clscontainer.classList.contains("disabledbutton")) {
+                    if (mskcanvas) mskcanvas.classList.add("hidden");
+                    if (xmark) xmark.classList.remove("hidden");
+                } else {
+                    if (xmark) xmark.classList.add("hidden");
+                    if (mskcanvas) mskcanvas.classList.remove("hidden");
+                }
+            }
+            updateCounts();
+            hideMenu();
+        };
+
+        const updateCounts = () => {
+            const clustercount = document.querySelector("#clustercount");
+            const particlecount = document.querySelector("#particlecount");
+            const finalSelectionPtcls = document.querySelector("#final_selection_ptcls");
+            const cls2dcontainers = document.querySelectorAll(".cls2dcontainer");
+
+            let ncls = 0;
+            let nptcls = 0;
+            let nptclsTot = 0;
+
+            for (const cls2dcontainer of cls2dcontainers) {
+                const deselected = cls2dcontainer.querySelector(".disabledbutton");
+                const pop = getNumber(cls2dcontainer, "pop");
+                nptclsTot += pop;
+                if (!deselected) {
+                    nptcls += pop;
+                    ncls += 1;
+                }
+            }
+
+            if (clustercount) clustercount.innerHTML = ncls.toLocaleString() + " / " + cls2dcontainers.length.toLocaleString();
+            if (particlecount) particlecount.innerHTML = nptcls.toLocaleString() + " / " + nptclsTot.toLocaleString();
+            if (finalSelectionPtcls) finalSelectionPtcls.value = nptcls;
+        };
+
+        const updateBrightness = (element) => {
+            document.querySelector(":root").style.setProperty("--classification2D-brightness", element.value / 100);
+        };
+
+        const updateContrast = (element) => {
+            document.querySelector(":root").style.setProperty("--classification2D-contrast", element.value / 100);
+        };
+
+        const updateScale = (element) => {
+            const scale = element.value;
+            for (const cls2D of document.querySelectorAll(".cls2D")) {
+                cls2D.style.width = scale + "px";
+                cls2D.style.height = scale + "px";
+            }
+            for (const cls2Dimg of document.querySelectorAll(".cls2Dimg")) {
+                cls2Dimg.style.width = scale + "px";
+                cls2Dimg.style.height = scale + "px";
+            }
+            for (const mskcanvas of document.querySelectorAll(".mskcanvas")) {
+                mskcanvas.style.width = scale + "px";
+                mskcanvas.style.height = scale + "px";
+            }
+        };
+
+        window.addEventListener("load", () => {
+            const root = document.querySelector(":root");
+            root.style.setProperty("--classification2D-contrast", 1.0);
+            root.style.setProperty("--classification2D-brightness", 1.0);
+        });
+
+        window.addEventListener("load", () => {
+            const logtext = document.querySelector(".logtext");
+            if (logtext) logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
+        });
+
+        window.addEventListener("load", () => {
+            const currentMskdiam = document.getElementById("current_mskdiam");
+            const selectedMskdiam = document.getElementById("selected_mskdiam");
+            const mskdiamSelector = document.getElementById("mskdiam_selector");
+            if (!currentMskdiam || !selectedMskdiam || !mskdiamSelector) {
+                updateCounts();
+                return;
+            }
+
+            for (const cls2D of document.getElementsByClassName("cls2D")) {
+                const canvas = cls2D.getElementsByClassName("mskcanvas")[0];
+                if (!canvas) continue;
+                const mskdiam = getNumber(canvas, "mskdiam");
+                currentMskdiam.innerHTML = mskdiam + "Å";
+                selectedMskdiam.value = mskdiam;
+                mskdiamSelector.value = Math.round(mskdiam / 2);
+                break;
+            }
+
+            updateCounts();
+            drawMask();
+        }, false);
+
+        window.addEventListener("load", () => {
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (!loadinggauze) return;
+            loadinggauze.style.opacity = "0";
+            setTimeout(() => {
+                loadinggauze.classList.add("hidden");
+            }, 600);
+        });
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 </body>
 </html>

@@ -1,0 +1,85 @@
+{% comment %}
+  workspace.html — stream grid and workspace details footer, loaded inside the
+  workspace iframe by stream.html.
+
+  Structure:
+    - Sub-bar : new-stream button and live stream count.
+    - Grid    : responsive column grid of stream cards (see _stream_card.html).
+    - Footer  : editable workspace metadata and delete-workspace button.
+
+  Context variables:
+    current_workspace_id   — 0 when no workspace is selected
+    current_workspace_name — display name of the selected workspace
+    jobs                 — queryset of StreamJob view-objects for this workspace
+    created, modified    — formatted date strings
+    user                 — username of workspace creator
+    folder               — absolute path to the workspace directory
+    description          — workspace description string
+{% endcomment %}
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="bg-streambg h-screen flex flex-col font-sans">
+  <div class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto px-5 py-4 ">
+      {% for job in jobs %}
+          {% include 'nice_stream/includes/_stream_card.html' %}
+      {% empty %}
+          <div class="col-span-full flex items-center justify-center py-24 text-streamlabel text-sm">
+              no streams yet — click new stream to create one
+          </div>
+      {% endfor %}
+  </div>
+
+        <script>
+          let lastinteraction = Date.now();
+
+          const getValue = (el, key, fallback = "") => {
+            if (!el) return fallback;
+            if (el.dataset && el.dataset[key] !== undefined) return el.dataset[key];
+            if (el.workspace && el.workspace[key] !== undefined) return el.workspace[key];
+            return fallback;
+          };
+
+          const enableStreamDescription = (button) => {
+            const input = button.parentElement.querySelector("input[name='new_stream_description']");
+            if (!input) return;
+            input.disabled = false;
+            input.focus();
+            lastinteraction = Date.now();
+          };
+
+          const deleteStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to delete stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const terminateStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to terminate all processes in stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") location.reload();
+          });
+
+          setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+              lastinteraction = Date.now();
+              location.reload();
+            }
+          }, 1000);
+        </script>
+</body>
+</html>

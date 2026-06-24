@@ -21,7 +21,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="{% static 'nice_stream/panelparticlesets.js' %}" defer></script>
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
@@ -100,7 +99,7 @@
                                     <!-- Copy path to clipboard -->
                                     <button type="button"
                                             data-path="{{ particle_set.filename }}"
-                                            onclick="navigator.clipboard.writeText(this.workspace.path)"
+                                            onclick="navigator.clipboard.writeText(this.dataset.path || '')"
                                             class="text-streamaccent hover:text-streamtext transition-colors">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-3.5 h-3.5">
                                             <path fill-rule="evenodd" d="M10.986 3H12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h1.014A2.25 2.25 0 0 1 7.25 1h1.5a2.25 2.25 0 0 1 2.236 2ZM9.5 4v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75V4h3Z" clip-rule="evenodd" />
@@ -117,6 +116,49 @@
         {% endif %}
 
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+
+        const linkParticleSet = (element) => {
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (!loadinggauze) {
+                element.form.submit();
+                return false;
+            }
+
+            loadinggauze.innerHTML = "creating snapshot ...";
+            loadinggauze.style.display = "flex";
+            loadinggauze.style.opacity = "1";
+            setTimeout(() => {
+                loadinggauze.style.display = "none";
+                element.form.submit();
+            }, 2000);
+            return false;
+        };
+
+        window.addEventListener("load", () => {
+            const loadinggauze = document.getElementById("loadinggauze");
+            if (!loadinggauze) return;
+            loadinggauze.style.opacity = "0";
+            setTimeout(() => {
+                loadinggauze.style.display = "none";
+            }, 600);
+        });
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 
 </body>
 </html>

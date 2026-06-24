@@ -78,7 +78,7 @@
     <div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2">
 
         <!-- View -->
-        <form method="POST" action="{% url 'nice_lite:view_stream' job.id %}">
+        <form method="GET" action="{% url 'nice_lite:view_stream' job.id %}" target="_parent">
             {% csrf_token %}
             <button type="submit" title="view stream"
                     class="text-streamicon hover:text-streamsubtle transition-colors p-1">
@@ -90,7 +90,7 @@
         </form>
 
         <!-- Restart -->
-        <form method="POST" action="{% url 'nice_lite:new_stream' %}">
+        <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="_parent">
             {% csrf_token %}
             <input type="hidden" name="selected_job_id" value="{{ job.id }}">
             <button type="submit" title="restart stream"
@@ -104,7 +104,7 @@
 
         <!-- Delete (finished/failed/stopped) -->
         {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
-            <form method="POST" action="{% url 'nice_lite:delete_stream' %}">
+            <form method="POST" action="{% url 'nice_lite:delete_stream' %}" target="_parent">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                 <button type="button" data-job-id="{{ job.id }}" onclick="deleteStream(this)"
@@ -118,7 +118,7 @@
             </form>
         <!-- Terminate (running/alarm) -->
         {% elif job.status == "running" or job.status == "alarm" %}
-            <form method="POST" action="{% url 'nice_lite:terminate_stream' %}">
+            <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                 <button type="button" data-job-id="{{ job.id }}" onclick="terminateStream(this)"

@@ -24,9 +24,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
-            crossorigin="anonymous" defer></script>
-    <script src="{% static 'nice_stream/panelgeneratepickrefs.js' %}" defer></script>
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
@@ -143,6 +140,125 @@
         {% endif %}
         {% endif %}
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+        let currentMenuContainer = null;
+
+        const getNumber = (el, key) => {
+            if (!el) return 0;
+            if (el.dataset && el.dataset[key] !== undefined) return Number(el.dataset[key]);
+            if (el.workspace && el.workspace[key] !== undefined) return Number(el.workspace[key]);
+            return 0;
+        };
+
+        const scrlRight = (element, event) => {
+            event.preventDefault();
+            const slider = element.previousElementSibling;
+            if (!slider) return;
+            const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+            slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + 215;
+            lastinteraction = Date.now();
+        };
+
+        const scrlLeft = (element, event) => {
+            event.preventDefault();
+            const slider = element.nextElementSibling;
+            if (!slider) return;
+            const atStart = slider.scrollLeft <= 0;
+            slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - 215;
+            lastinteraction = Date.now();
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            currentMenuContainer = element.closest("#picking_references_final, #picking_references_available");
+            const selectmenu = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']");
+            if (!selectmenu) return;
+
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            const sortpop = selectmenu.querySelector("#sortpop");
+            const sortres = selectmenu.querySelector("#sortres");
+
+            selectmenubox.style.top = event.pageY + "px";
+            selectmenubox.style.left = event.pageX + "px";
+            selectmenu.style.display = "flex";
+
+            if (sortpop) sortpop.onclick = sortPop;
+            if (sortres) sortres.onclick = sortRes;
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                const sortpop = selectmenu.querySelector("#sortpop");
+                const sortres = selectmenu.querySelector("#sortres");
+                selectmenu.style.display = "none";
+                if (sortpop) sortpop.onclick = null;
+                if (sortres) sortres.onclick = null;
+            }
+            lastinteraction = Date.now();
+        };
+
+        const sortPop = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".picktemplatecontainer"));
+            templates.sort((a, b) => getNumber(b, "pop") - getNumber(a, "pop"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const sortRes = () => {
+            if (!currentMenuContainer) return;
+            const templates = Array.from(currentMenuContainer.querySelectorAll(".picktemplatecontainer"));
+            templates.sort((a, b) => getNumber(a, "res") - getNumber(b, "res"));
+            templates.forEach((item) => currentMenuContainer.appendChild(item));
+            hideMenu();
+        };
+
+        const drawMask = () => {
+            for (const mskcanvas of document.getElementsByClassName("mskcanvas")) {
+                const mskscale = getNumber(mskcanvas, "mskscale");
+                const mskdiam = getNumber(mskcanvas, "mskdiam");
+                if (!mskscale || !mskdiam) continue;
+
+                const ctx = mskcanvas.getContext("2d");
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
+                ctx.clearRect(0, 0, mskcanvas.width, mskcanvas.height);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(mskcanvas.width / 2, mskcanvas.height / 2, mskdiam * mskcanvas.width / (mskscale * 2), 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        };
+
+        window.addEventListener("load", () => {
+            const root = document.querySelector(":root");
+            root.style.setProperty("--genpickrefs-contrast", 1.0);
+            root.style.setProperty("--genpickrefs-brightness", 1.0);
+
+            drawMask();
+
+            const gauze = document.getElementById("loadinggauze");
+            if (gauze) {
+                gauze.style.opacity = "0";
+                setTimeout(() => {
+                    gauze.style.display = "none";
+                }, 600);
+            }
+        });
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") location.reload();
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 30000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 
 </body>
 </html>

@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src={% static 'filebrowser.js' %}></script>
 </head>
 <body class="bg-streambg min-h-screen font-sans">
     <div class="px-5 pt-4">
@@ -100,6 +99,105 @@
             </div>
         </div>
     </div>
+
+    <script>
+        let watchDouble = 0;
+
+        const getHostIframe = () => {
+            const byName = parent.document.getElementsByName(window.name)[0];
+            if (byName) return byName;
+            return parent.document.getElementById(window.name);
+        };
+
+        const restoreJobsIframe = (iframe) => {
+            if (typeof parent.toggleJobsIframeLoading === "function") {
+                parent.toggleJobsIframeLoading(true);
+            }
+
+            iframe.dataset.pickerMode = "";
+            iframe.dataset.browserTarget = "";
+
+            if (iframe.dataset.originalClass) {
+                iframe.className = iframe.dataset.originalClass;
+            }
+            if (iframe.dataset.originalStyle !== undefined) {
+                iframe.setAttribute("style", iframe.dataset.originalStyle);
+            }
+            if (iframe.dataset.originalSrc !== undefined) {
+                iframe.setAttribute("src", iframe.dataset.originalSrc);
+            }
+        };
+
+        const selectFile = (element, path, file, type) => {
+            for (const button of document.querySelectorAll("button")) {
+                button.classList.remove("bg-nice4success");
+            }
+            element.classList.add("bg-nice4success");
+            watchDouble += 1;
+            setTimeout(() => {
+                if (watchDouble === 2) {
+                    element.form.submit();
+                } else if (watchDouble === 1) {
+                    document.querySelector("#selectedpath").value = path + "/" + file;
+                }
+                watchDouble = 0;
+            }, 200);
+        };
+
+        const selectDir = (element, path, dir, type) => {
+            if (type === "dir") {
+                for (const button of document.querySelectorAll("button")) {
+                    button.classList.remove("bg-nice4success");
+                }
+                element.classList.add("bg-nice4success");
+            }
+            watchDouble += 1;
+            setTimeout(() => {
+                if (watchDouble === 2) {
+                    element.form.submit();
+                } else if (watchDouble === 1) {
+                    if (type === "dir") {
+                        document.querySelector("#selectedpath").value = path + "/" + dir;
+                    }
+                }
+                watchDouble = 0;
+            }, 200);
+        };
+
+        const hideWindow = () => {
+            const iframe = getHostIframe();
+            if (!iframe) return;
+
+            if (iframe.id === "jobs_iframe" && iframe.dataset.pickerMode === "jobbuilder") {
+                restoreJobsIframe(iframe);
+                return;
+            }
+
+            iframe.classList.add("hidden");
+        };
+
+        const select = () => {
+            const selectedpath = document.querySelector("#selectedpath");
+            const iframe = getHostIframe();
+            if (!iframe) return;
+
+            if (iframe.id === "jobs_iframe" && iframe.dataset.pickerMode === "jobbuilder") {
+                const targetId = iframe.dataset.browserTarget;
+                const builderIframe = parent.document.getElementById("job_builder_iframe");
+                const builderDoc = builderIframe && builderIframe.contentWindow ? builderIframe.contentWindow.document : null;
+                const targetInput = builderDoc ? builderDoc.getElementById(targetId) : null;
+                if (targetInput) {
+                    targetInput.value = selectedpath.value;
+                }
+                restoreJobsIframe(iframe);
+                return;
+            }
+
+            const iframeParent = iframe.parentElement;
+            iframeParent.querySelector("input").value = selectedpath.value;
+            hideWindow();
+        };
+    </script>
 </body>
 </html>
 

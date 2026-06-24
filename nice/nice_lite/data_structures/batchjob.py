@@ -1,11 +1,13 @@
 # global imports
 import os
+
+# django imports
 from django.utils import timezone
 
 # local imports
 from ..helpers import directory_exists, ensure_directory, print_error
 from ..models import WorkspaceModel
-from .simple import SIMPLE, SIMPLEProjFile
+from .simple import SIMPLEBatch, SIMPLEProjFile
 from .job import Job
 
 
@@ -203,7 +205,7 @@ class BatchJob(Job):
         self.status = "queued"
         self.absdir = self.get_absdir()
 
-        simple = SIMPLE(pckg=self.pckg)
+        simple = SIMPLEBatch(pckg=self.pckg)
         return simple.start(
             self.args,
             os.path.join(workspace_dir, self.dirc),

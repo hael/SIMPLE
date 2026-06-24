@@ -1,20 +1,99 @@
+{% comment %}
+  stream.html — outer shell for the SIMPLE Stream interface.
+
+  Structure:
+    - Fixed header bar: logo, project/workspace selectors, classic/logout actions.
+    - Full-height iframe: loads the workspace view (stream list and details) at
+      iframeurl, or remains blank until a project and workspace are selected.
+    - messages.html: renders any Django flash messages.
+
+  Context variables:
+    projects           — queryset of all projects available to this user
+    workspaces           — queryset of workspaces for the selected project
+    current_project_id — id of the currently selected project (0 = none)
+    current_workspace_id — id of the currently selected workspace (0 = none)
+    iframeurl          — URL to load inside the content iframe, or None
+
+  Selecting a project or workspace submits a GET form, reloading the page with
+  the new selection reflected in the URL query string.
+{% endcomment %}
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="{% static 'images/simple_stream_favicon.svg' %}">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <title>SIMPLE Stream</title>
 </head>
-<body class="w-full h-screen bg-white flex flex-col justify-center items-center">
-    <div class="flex flex-col m-[5px] bg-nice4bubble rounded-xl p-[5px] text-nice4dark border-[2px] border-nice4header justify-center items-center">
-        <a class="m-[20px] cursor-pointer rounded hover:bg-nice4bg hover:border-nice4header border-[1px] border-nice4bubble" href={% url 'nice_lite:stream'%}>
-            <img src={% static 'images/simple_stream.png' %} class="h-[40px] m-[20px]"/>
-        </a>
-        <a class="m-[20px] cursor-pointer rounded hover:bg-nice4bg hover:border-nice4header border-[1px] border-nice4bubble" href={% url 'nice_lite:classic'%}>
-            <img src={% static 'images/simple_logo_simple.png' %} class="h-[30px] m-[20px]"/>
-        </a>
+<body class="bg-streambg h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="bg-streambar border-b border-streamline h-13 flex items-center px-5 gap-5 flex-shrink-0">
+
+        <!-- Logo -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <div class="w-6 h-6 rounded-md bg-streamaccent flex items-center justify-center flex-shrink-0">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
+                </svg>
+            </div>
+            <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Simple Stream</span>
+        </div>
+
+        <!-- Selectors -->
+        <div class="flex items-center gap-4">
+
+            <!-- Project -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs text-streamlabel">project</span>
+                <form method="GET">
+                    <select name="selected_project_id" onchange="this.form.submit()"
+                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                        {% if current_project_id == 0 %}
+                            <option disabled selected value="">select</option>
+                        {% endif %}
+                        <option value="-1">✚ create new</option>
+                        {% for project in projects %}
+                            <option value="{{ project.id }}" {% if project.id == current_project_id %}selected{% endif %}>{{ project.name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+
+            <!-- Workspace -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs text-streamlabel">workspace</span>
+                <form method="GET">
+                    <select name="selected_workspace_id" onchange="this.form.submit()"
+                            class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                        {% if current_workspace_id == 0 %}
+                            <option disabled selected value="">select</option>
+                        {% endif %}
+                        <option value="-1">✚ create new</option>
+                        {% for workspace in workspaces %}
+                            <option value="{{ workspace.id }}" {% if workspace.id == current_workspace_id %}selected{% endif %}>{{ workspace.name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+
+        </div>
+
+        <!-- Right actions -->
+        <div class="flex items-center gap-2 ml-auto">
+            <a href="{% url 'nice_lite:logout' %}"
+               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</a>
+        </div>
+
+    </header>
+
+    <!-- Content -->
+    <div class="flex-1 min-h-0 flex flex-row">
+        <iframe id="workspace_iframe" name="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
     </div>
+
+    {% include 'messages.html' %}
 </body>
 </html>

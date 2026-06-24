@@ -1,0 +1,589 @@
+{% comment %}
+    jobbuilder.html — "new stream" configuration form, loaded inside the
+  workspace iframe by stream.html.
+
+  Structure:
+    - Back link to the workspace view.
+    - Centred card with an overlapping logo circle.
+    - Dynamic parameter grid driven by the `user_inputs` context list.
+    - Submit button that POSTs to nice_lite:create_stream.
+
+  Input types supported (via user_inputs[].keytype):
+    hidden — not rendered; value or descr_placeholder submitted silently.
+    int    — number spinner, step 1.
+    float  — number spinner, step 0.0001.
+    multi  — <select> dropdown; option marked selected via value or
+             descr_placeholder flag.
+    dir    — text input + folder-picker icon that opens the workspace jobs iframe
+             as a temporary full-screen directory selector.
+    file   — text input + file-picker icon, same temporary full-screen
+             selector flow.
+    *      — plain text input for any other keytype.
+
+  Context variables:
+    user_inputs — list of input descriptor dicts (key, keytype, descr_short,
+                  required, value?, descr_placeholder?, options?)
+{% endcomment %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="bg-streambar min-h-screen font-sans">
+
+    <!-- Tabbed cards -->
+    <div class="flex justify-center h-screen">
+        <div class="w-full flex flex-col">
+            <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest p-4">job builder</div>
+            <div class="mb-4 flex items-center justify-center gap-2 border-t border-b border-streamline py-4">
+                <button id="tab_stream"
+                        type="button"
+                        onclick="selectBuilderTab('stream')"
+                        class="text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamaccent text-white">
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <div class="w-6 h-6 rounded-md bg-streamaccent flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
+                            </svg>
+                        </div>
+                        <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Simple Stream</span>
+                    </div>
+                </button>
+                <button id="tab_simple_batch"
+                        type="button"
+                        onclick="selectBuilderTab('simple_batch')"
+                        class="text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamsurface text-streaminput">
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <div class="w-6 h-6 rounded-md bg-streamsurface flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
+                            </svg>
+                        </div>
+                        <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Simple Batch</span>
+                    </div>
+                </button>
+                <button id="tab_single_batch"
+                        type="button"
+                        onclick="selectBuilderTab('single_batch')"
+                        class="text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamsurface text-streaminput">
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <div class="w-6 h-6 rounded-md bg-streamsurface flex items-center justify-center flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
+                            </svg>
+                        </div>
+                        <span class="text-xs font-medium tracking-widest text-streamtext uppercase">Single Batch</span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Stream Card -->
+            <div id="panel_stream" class="flex-1 w-full flex flex-col">
+
+                <h1 class="text-xs font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest">
+                    new SIMPLE stream job
+                </h1>
+
+                <form method="POST" action="{% url 'nice_lite:create_stream' %}" class="flex flex-col flex-1" target="workspace_iframe">
+                    {% csrf_token %}
+
+                    <div class="flex-1 grid grid-cols-[auto_2fr] gap-x-6 gap-y-3 items-center content-baseline mx-4">
+                        {% for input in stream_user_inputs %}
+
+                            {% if input.keytype == "hidden" %}
+                                {# Hidden: submitted but not shown. Value falls back to descr_placeholder. #}
+                                <input name="{{ input.key }}" type="hidden"
+                                    {% if input.required %}required{% endif %}
+                                    {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+
+                            {% else %}
+                                {# Visible label aligned with its control #}
+                                <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                                    for="field_{{ input.key }}">{{ input.descr_short }}</label>
+
+                                <div class="relative flex items-center">
+
+                                    {% if input.keytype == "int" %}
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                            type="number" min="0" step="1"
+                                            {% if input.required %}required{% endif %}
+                                            {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+
+                                    {% elif input.keytype == "float" %}
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                            type="number" min="0" step="0.0001"
+                                            {% if input.required %}required{% endif %}
+                                            {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+
+                                    {% elif input.keytype == "multi" %}
+                                        <select id="field_{{ input.key }}" name="{{ input.key }}"
+                                                {% if input.required %}required{% endif %}
+                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            {% for option in input.options %}
+                                                <option value="{{ option.val }}"
+                                                    {% if "value" in input and option.val == input.value %}selected
+                                                    {% elif "descr_placeholder" in option and option.descr_placeholder %}selected
+                                                    {% endif %}>{{ option.key }}</option>
+                                            {% endfor %}
+                                        </select>
+
+                                    {% elif input.keytype == "dir" %}
+                                        {# Directory picker: text input + folder icon + full-screen iframe browser #}
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                            {% if input.required %}required{% endif %}
+                                            {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                        <button type="button" title="browse for directory"
+                                            onclick="openWorkspaceBrowser('dir', 'field_{{ input.key }}')"
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
+                                            </svg>
+                                        </button>
+
+                                    {% elif input.keytype == "file" %}
+                                        {# File picker: same pattern, file icon, file browser URL #}
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                            {% if input.required %}required{% endif %}
+                                            {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                            class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                        <button type="button" title="browse for file"
+                                            onclick="openWorkspaceBrowser('file', 'field_{{ input.key }}')"
+                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </button>
+
+                                    {% else %}
+                                        {# Plain text fallback for any unrecognised keytype #}
+                                        <input id="field_{{ input.key }}" name="{{ input.key }}"
+                                            {% if input.required %}required{% endif %}
+                                            {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                            class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                    {% endif %}
+
+                                </div>
+                            {% endif %}
+
+                        {% endfor %}
+                    </div>
+                    <div class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2">
+                        <button type="submit"
+                                class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
+                            start
+                        </button>
+                        <button type="button" onclick="closeJobBuilder()"
+                                class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
+                            cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="panel_batch" class="flex-1 w-full flex flex-col hidden overflow-hidden">
+
+            <!-- Batch Card (simple_exec) -->
+            <div id="card_simple_batch" class="flex-1 w-full flex flex-col overflow-hidden">
+
+                <h1 class="text-sm font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest">
+                    new SIMPLE batch job
+                </h1>
+
+                <div id="simple_selector_panel" class="flex-1 flex flex-col mx-4 overflow-hidden">
+                    {% if simple_programs %}
+                    <div class="mb-3 text-xs text-streamsubtle text-left">select a simple program</div>
+                    <div class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
+                        {% for program in simple_programs %}
+                        <div class="flex items-start gap-2 p-2 rounded-lg border border-streamline bg-streamsurface cursor-pointer hover:border-streamring transition-colors"
+                             role="button"
+                             tabindex="0"
+                             data-simple-program-key="{{ program.prg }}"
+                             onclick="showSimpleProgramConfig('{{ program.prg }}')"
+                             onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSimpleProgramConfig('{{ program.prg }}'); }">
+                            <span class="min-w-0">
+                                <span class="block text-xs font-medium text-streamtext">{{ program.disp }}</span>
+                                <span class="block text-[11px] text-streamsubtle">{{ program.desc }}</span>
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-xs text-streamsubtle mb-1">
+                        no batch programs available
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div id="simple_config_panel" class="hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <button type="button"
+                                onclick="showSimpleProgramSelector()"
+                                class="inline-flex items-center gap-1 text-xs text-streamsubtle hover:text-streamtext transition-colors">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 3L5 8l5 5"/>
+                            </svg>
+                            back
+                        </button>
+                        <p id="simple_program_title" class="text-xs font-medium text-streamtext"></p>
+                    </div>
+
+                    {% if simple_program_inputs %}
+                        {% for program in simple_program_inputs %}
+                        <div id="simple_program_{{ program.prg }}" class="hidden simple-program-config">
+                            <div class="space-y-4 overflow-y-auto pr-1">
+                                {% for section in program.sections %}
+                                <div>
+                                    <p class="text-[11px] uppercase tracking-wide text-streamlabel mb-2">{{ section.name|cut:"_" }}</p>
+                                    <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
+                                        {% for input in section.inputs %}
+                                            {% if input.keytype == "hidden" %}
+                                                <input name="batch_{{ program.prg }}_{{ input.key }}" type="hidden"
+                                                       {% if input.required %}required{% endif %}
+                                                       {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+                                            {% else %}
+                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
+                                                <div class="relative flex items-center">
+                                                    {% if input.keytype == "int" %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "float" %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="0.0001"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "multi" %}
+                                                        <select id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                                {% if input.required %}required{% endif %}
+                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                            {% for option in input.options %}
+                                                                <option value="{{ option.val }}"
+                                                                    {% if "value" in input and option.val == input.value %}selected
+                                                                    {% elif "descr_placeholder" in option and option.descr_placeholder %}selected
+                                                                    {% endif %}>{{ option.key }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    {% elif input.keytype == "dir" %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                        <button type="button" title="browse for directory"
+                                                            onclick="openWorkspaceBrowser('dir', 'batch_{{ program.prg }}_{{ input.key }}')"
+                                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
+                                                            </svg>
+                                                        </button>
+                                                    {% elif input.keytype == "file" %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                        <button type="button" title="browse for file"
+                                                            onclick="openWorkspaceBrowser('file', 'batch_{{ program.prg }}_{{ input.key }}')"
+                                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                                <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
+                                                            </svg>
+                                                        </button>
+                                                    {% else %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Batch Card (single_exec) -->
+            <div id="card_single_batch" class="flex-1 w-full flex flex-col overflow-hidden">
+
+                <h1 class="text-sm font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest">
+                    new SINGLE batch job
+                </h1>
+
+                <div id="single_selector_panel" class="flex-1 flex flex-col mx-4 overflow-hidden">
+                    {% if single_programs %}
+                    <div class="mb-3 text-xs text-streamsubtle text-left">select a single program</div>
+                    <div class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
+                        {% for program in single_programs %}
+                        <div class="flex items-start gap-2 p-2 rounded-lg border border-streamline bg-streamsurface cursor-pointer hover:border-streamring transition-colors"
+                             role="button"
+                             tabindex="0"
+                             data-single-program-key="{{ program.prg }}"
+                             onclick="showSingleProgramConfig('{{ program.prg }}')"
+                             onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSingleProgramConfig('{{ program.prg }}'); }">
+                            <span class="min-w-0">
+                                <span class="block text-xs font-medium text-streamtext">{{ program.disp }}</span>
+                                <span class="block text-[11px] text-streamsubtle">{{ program.desc }}</span>
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-xs text-streamsubtle mb-1">
+                        no single programs available
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div id="single_config_panel" class="hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <button type="button"
+                                onclick="showSingleProgramSelector()"
+                                class="inline-flex items-center gap-1 text-xs text-streamsubtle hover:text-streamtext transition-colors">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 3L5 8l5 5"/>
+                            </svg>
+                            back
+                        </button>
+                        <p id="single_program_title" class="text-xs font-medium text-streamtext"></p>
+                    </div>
+
+                    {% if single_program_inputs %}
+                        {% for program in single_program_inputs %}
+                        <div id="single_program_{{ program.prg }}" class="hidden single-program-config">
+                            <div class="space-y-4 overflow-y-auto pr-1">
+                                {% for section in program.sections %}
+                                <div>
+                                    <p class="text-[11px] uppercase tracking-wide text-streamlabel mb-2">{{ section.name|cut:"_" }}</p>
+                                    <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
+                                        {% for input in section.inputs %}
+                                            {% if input.keytype == "hidden" %}
+                                                <input name="single_{{ program.prg }}_{{ input.key }}" type="hidden"
+                                                       {% if input.required %}required{% endif %}
+                                                       {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+                                            {% else %}
+                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
+                                                <div class="relative flex items-center">
+                                                    {% if input.keytype == "int" %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "float" %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="0.0001"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "multi" %}
+                                                        <select id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                                {% if input.required %}required{% endif %}
+                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                            {% for option in input.options %}
+                                                                <option value="{{ option.val }}"
+                                                                    {% if "value" in input and option.val == input.value %}selected
+                                                                    {% elif "descr_placeholder" in option and option.descr_placeholder %}selected
+                                                                    {% endif %}>{{ option.key }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    {% elif input.keytype == "dir" %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                        <button type="button" title="browse for directory"
+                                                            onclick="openWorkspaceBrowser('dir', 'single_{{ program.prg }}_{{ input.key }}')"
+                                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z"/>
+                                                            </svg>
+                                                        </button>
+                                                    {% elif input.keytype == "file" %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                        <button type="button" title="browse for file"
+                                                            onclick="openWorkspaceBrowser('file', 'single_{{ program.prg }}_{{ input.key }}')"
+                                                                class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                                                <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
+                                                            </svg>
+                                                        </button>
+                                                    {% else %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function ensureParentIframeVisible() {
+            const iframe = window.frameElement || (window.parent && window.parent.document && window.parent.document.getElementById("job_builder_iframe"));
+            if (!iframe) return;
+            iframe.removeAttribute("hidden");
+            iframe.classList.remove("hidden");
+        }
+
+        ensureParentIframeVisible();
+        window.addEventListener("load", ensureParentIframeVisible);
+
+        function closeJobBuilder() {
+            const iframe = window.frameElement || (window.parent && window.parent.document && window.parent.document.getElementById("job_builder_iframe"));
+            if (!iframe) return;
+            iframe.setAttribute("src", "");
+            iframe.setAttribute("hidden", "hidden");
+            iframe.classList.add("hidden");
+        }
+
+        function openWorkspaceBrowser(kind, targetInputId) {
+            const workspaceDoc = window.parent && window.parent.document;
+            if (!workspaceDoc) return;
+
+            if (window.parent && typeof window.parent.toggleJobsIframeLoading === "function") {
+                window.parent.toggleJobsIframeLoading(true);
+            }
+
+            const jobsIframe = workspaceDoc.getElementById("jobs_iframe");
+            if (!jobsIframe) return;
+
+            if (!jobsIframe.dataset.originalSrc) {
+                jobsIframe.dataset.originalSrc = jobsIframe.getAttribute("src") || "";
+                jobsIframe.dataset.originalClass = jobsIframe.className || "";
+                jobsIframe.dataset.originalStyle = jobsIframe.getAttribute("style") || "";
+            }
+
+            jobsIframe.dataset.pickerMode = "jobbuilder";
+            jobsIframe.dataset.browserTarget = targetInputId;
+            jobsIframe.className = "inset-0 w-full h-full z-50 bg-streambg border-0";
+            jobsIframe.setAttribute("style", "");
+            jobsIframe.setAttribute("src", "{% url 'nice_lite:file_browser' '__kind__' %}".replace("__kind__", kind));
+        }
+
+        const ACTIVE_TAB_CLASS = "text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamaccent text-white";
+        const INACTIVE_TAB_CLASS = "text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamsurface text-streaminput";
+
+        function setBuilderTabStyles(activeTabName) {
+            const streamTab = document.getElementById("tab_stream");
+            const simpleBatchTab = document.getElementById("tab_simple_batch");
+            const singleBatchTab = document.getElementById("tab_single_batch");
+
+            streamTab.className = activeTabName === "stream" ? ACTIVE_TAB_CLASS : INACTIVE_TAB_CLASS;
+            simpleBatchTab.className = activeTabName === "simple_batch" ? ACTIVE_TAB_CLASS : INACTIVE_TAB_CLASS;
+            singleBatchTab.className = activeTabName === "single_batch" ? ACTIVE_TAB_CLASS : INACTIVE_TAB_CLASS;
+        }
+
+        function selectBuilderTab(tabName) {
+            const streamPanel = document.getElementById("panel_stream");
+            const batchPanel = document.getElementById("panel_batch");
+            const simpleBatchCard = document.getElementById("card_simple_batch");
+            const singleBatchCard = document.getElementById("card_single_batch");
+
+            if (tabName === "simple_batch") {
+                streamPanel.classList.add("hidden");
+                batchPanel.classList.remove("hidden");
+                simpleBatchCard.classList.remove("hidden");
+                singleBatchCard.classList.add("hidden");
+                showSimpleProgramSelector();
+                setBuilderTabStyles("simple_batch");
+            } else if (tabName === "single_batch") {
+                streamPanel.classList.add("hidden");
+                batchPanel.classList.remove("hidden");
+                simpleBatchCard.classList.add("hidden");
+                singleBatchCard.classList.remove("hidden");
+                showSingleProgramSelector();
+                setBuilderTabStyles("single_batch");
+            } else {
+                batchPanel.classList.add("hidden");
+                streamPanel.classList.remove("hidden");
+                simpleBatchCard.classList.remove("hidden");
+                singleBatchCard.classList.remove("hidden");
+                setBuilderTabStyles("stream");
+            }
+        }
+
+        function showSimpleProgramSelector() {
+            const selectorPanel = document.getElementById("simple_selector_panel");
+            const configPanel = document.getElementById("simple_config_panel");
+            const title = document.getElementById("simple_program_title");
+            if (selectorPanel) selectorPanel.classList.remove("hidden");
+            if (configPanel) configPanel.classList.add("hidden");
+            if (title) title.textContent = "";
+            const configs = document.querySelectorAll(".simple-program-config");
+            configs.forEach((el) => el.classList.add("hidden"));
+        }
+
+        function showSimpleProgramConfig(programKey) {
+            const selectorPanel = document.getElementById("simple_selector_panel");
+            const configPanel = document.getElementById("simple_config_panel");
+            const title = document.getElementById("simple_program_title");
+            const selectedItem = document.querySelector("[data-simple-program-key='" + programKey + "']");
+            if (selectorPanel) selectorPanel.classList.add("hidden");
+            if (configPanel) configPanel.classList.remove("hidden");
+            if (title && selectedItem) {
+                const text = selectedItem.querySelector(".text-streamtext");
+                title.textContent = text ? text.textContent : programKey;
+            }
+            const configs = document.querySelectorAll(".simple-program-config");
+            configs.forEach((el) => el.classList.add("hidden"));
+            const active = document.getElementById("simple_program_" + programKey);
+            if (active) active.classList.remove("hidden");
+        }
+
+        function showSingleProgramSelector() {
+            const selectorPanel = document.getElementById("single_selector_panel");
+            const configPanel = document.getElementById("single_config_panel");
+            const title = document.getElementById("single_program_title");
+            if (selectorPanel) selectorPanel.classList.remove("hidden");
+            if (configPanel) configPanel.classList.add("hidden");
+            if (title) title.textContent = "";
+            const configs = document.querySelectorAll(".single-program-config");
+            configs.forEach((el) => el.classList.add("hidden"));
+        }
+
+        function showSingleProgramConfig(programKey) {
+            const selectorPanel = document.getElementById("single_selector_panel");
+            const configPanel = document.getElementById("single_config_panel");
+            const title = document.getElementById("single_program_title");
+            const selectedItem = document.querySelector("[data-single-program-key='" + programKey + "']");
+            if (selectorPanel) selectorPanel.classList.add("hidden");
+            if (configPanel) configPanel.classList.remove("hidden");
+            if (title && selectedItem) {
+                const text = selectedItem.querySelector(".text-streamtext");
+                title.textContent = text ? text.textContent : programKey;
+            }
+            const configs = document.querySelectorAll(".single-program-config");
+            configs.forEach((el) => el.classList.add("hidden"));
+            const active = document.getElementById("single_program_" + programKey);
+            if (active) active.classList.remove("hidden");
+        }
+    </script>
+
+    {% include 'messages.html' %}
+</body>
+</html>

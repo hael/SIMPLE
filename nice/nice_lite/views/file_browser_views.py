@@ -1,56 +1,103 @@
+"""Project-scoped file browser view.
+
+This module renders ``filebrowser.html`` for authenticated users and lists
+directories/files under the selected project root.
+"""
+
+# global imports
 import os
 
-from django.shortcuts               import render
+# django imports
 from django.contrib.auth.decorators import login_required
+from django.shortcuts               import render
 
+# local imports
 from ..data_structures.project   import Project
+from ..helpers                   import get_project_id
+from ..models                    import ProjectModel
 
 
-@login_required(login_url="/login")
+# ------------------------------------------------------------------
+# Views
+# ------------------------------------------------------------------
+
+
+@login_required(login_url="/login/")
 def view_file_browser(request, type, path=None):
     """
     Render the file browser page.
 
-    Path resolution order:
+    Path resolution order (project-scoped):
       1. URL path segment (passed directly as an argument)
       2. 'selectedpath' GET parameter
-      3. Root directory of the currently selected project (from cookie)
-      4. Filesystem root '/'
-    """
-    template              = "filebrowser.html"
-    known_file_extensions = [ ".spi", ".mrc", ".mrcs", ".dm3", ".bin", ".gain", ".eer", ".tiff", ".tif", ".jpeg", 
-                              ".jpg", ".txt", ".simple", ".dat", ".img", ".map", ".head", ".ctf", ".raw", ".sbin",
-                              ".dbin", ".asc", ".box", ".dat", ".pdb", ".star", ".hdf", ".pdf", ".ps"]
-    path_isdir  = None
-    parentdir   = None
-    error       = False
-    errortext   = ""
-    files       = []
-    dirs        = []
+      3. Root directory of the currently selected project
 
-    if path is None:
-        if "selectedpath" in request.GET:
-            path = request.GET['selectedpath']
-        elif request.COOKIES.get('selected_project_id', 'none') != 'none':
-            project = Project(id=int(request.COOKIES['selected_project_id']))
-            path = project.absdir or "/"
+    Browsing is restricted to the selected project root for the current user.
+    """
+    template = "filebrowser.html"
+    known_file_extensions = {
+        ".spi", ".mrc", ".mrcs", ".dm3", ".bin", ".gain", ".eer", ".tiff", ".tif", ".jpeg",
+        ".jpg", ".txt", ".simple", ".dat", ".img", ".map", ".head", ".ctf", ".raw", ".sbin",
+        ".dbin", ".asc", ".box", ".pdb", ".star", ".hdf", ".pdf", ".ps",
+    }
+    path_isdir = None
+    parentdir = None
+    error = False
+    errortext = ""
+    files = []
+    dirs = []
+
+    username = request.user.username
+    selected_project_id = get_project_id(request)
+    accessible_project_ids = set(
+        ProjectModel.objects.filter(workspacemodel__user=username).distinct().values_list("id", flat=True)
+    )
+
+    if selected_project_id is None or selected_project_id not in accessible_project_ids:
+        error = True
+        errortext = "invalid project selection"
+        path = ""
+    else:
+        project = Project(id=selected_project_id)
+        if not project.absdir:
+            error = True
+            errortext = "project root is unavailable"
+            path = ""
         else:
-            path = "/"
-    
-    path = path.replace('//', '/') # deal with multiple / in path
-    if path[0] != '/':
-        path = '/' + path # fix missing leading / when using proxy
+            base_dir = os.path.realpath(project.absdir)
+
+            if path is None:
+                path = request.GET.get("selectedpath", base_dir)
+
+            path = (path or "").strip()
+            if path == "":
+                path = base_dir
+            elif not os.path.isabs(path):
+                path = os.path.join(base_dir, path)
+
+            path = os.path.realpath(path)
+            # Keep browsing constrained to the selected project root.
+            if os.path.commonpath([path, base_dir]) != base_dir:
+                error = True
+                errortext = "path outside project"
+                path = base_dir
+
     try:
         if not os.path.exists(path):
-            error     = True
+            error = True
             errortext = "path does not exist"
         if os.path.isdir(path):
             path_isdir = True
-            parentdir  = os.path.dirname(path)
+            parentdir = os.path.dirname(path)
+            if selected_project_id is not None and selected_project_id in accessible_project_ids and not error:
+                project = Project(id=selected_project_id)
+                base_dir = os.path.realpath(project.absdir) if project.absdir else ""
+                if base_dir and os.path.commonpath([parentdir, base_dir]) != base_dir:
+                    parentdir = base_dir
         else:
             path_isdir = False
     except OSError:
-        error     = True
+        error = True
         errortext = "error"
 
     if not error and path_isdir:
@@ -58,7 +105,7 @@ def view_file_browser(request, type, path=None):
             contents = os.listdir(path)
             for entry in contents:
                 # ignore hidden files/folders
-                if entry[0] == '.':
+                if not entry or entry.startswith('.'):
                     continue
                 ext = os.path.splitext(entry)[1].lower()
                 if ext in known_file_extensions:
@@ -68,19 +115,19 @@ def view_file_browser(request, type, path=None):
                 else:
                     files.append(entry)
         except OSError:
-            error     = True
+            error = True
             errortext = "permission denied"
-        
+
     files.sort()
     dirs.sort()
     context = {
-        "type"      : type,
-        "path"      : path,
-        "parentdir" : parentdir,
-        "error"     : error,
-        "errortext" : errortext,
-        "files"     : files,
-        "dirs"      : dirs
+        "type": type,
+        "path": path,
+        "parentdir": parentdir,
+        "error": error,
+        "errortext": errortext,
+        "files": files,
+        "dirs": dirs,
     }
     response = render(request, template, context)
     return response

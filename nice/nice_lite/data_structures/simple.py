@@ -247,7 +247,7 @@ class SIMPLEStream:
 # Classic (non-stream) job launcher
 # ------------------------------------------------------------------
 
-class SIMPLE:
+class SIMPLEBatch:
     """
     Manages the launch of a single classic SIMPLE job (simple_exec or single_exec).
 
@@ -256,7 +256,7 @@ class SIMPLE:
     directory, runs update_project, then executes the program.
 
     Typical usage:
-        simple = SIMPLE(pckg="simple")
+        simple = SIMPLEBatch(pckg="simple")
         simple.start(args, base_dir, parent_dir, jobtype, jobid)
     """
 
@@ -286,20 +286,32 @@ class SIMPLE:
     def loadUIJSON(self):
         """
         Populate self.ui by running simple_private_exec and parsing its JSON output.
-        Falls back to an empty dict on failure so callers can still inspect the object.
+
+        The JSON is expected to contain a "master" key whose sections (excluding
+        "program") are flattened into a single user_inputs list.
+        Returns True on success, False on any failure.
         """
         try:
-            result = subprocess.run(
+            result  = subprocess.run(
                 self.ui_cmd,
                 capture_output=True,
                 check=True,
                 text=True
             )
-            self.ui = json.loads(result.stdout)
+            ui_json = json.loads(result.stdout)
+
+            self.ui = ui_json
         except subprocess.CalledProcessError as cpe:
             print_error(cpe.stderr)
-            self.ui = {}
-
+            print_error("Failed to call ui json")
+            self.ui = None
+            return False
+        except Exception:
+            print_error("Failed to load ui json")
+            self.ui = None
+            return False
+        return True
+    
     # ------------------------------------------------------------------
     # Launch
     # ------------------------------------------------------------------
@@ -378,6 +390,13 @@ class SIMPLE:
             print_error(str(e))
             return False
         return True
+    
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    def get_ui(self):
+        return self.ui
 
 
 # ------------------------------------------------------------------

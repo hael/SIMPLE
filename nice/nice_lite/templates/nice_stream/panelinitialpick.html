@@ -21,9 +21,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
-            crossorigin="anonymous" defer></script>
-    <script src="{% static 'nice_stream/panelinitialpick.js' %}" defer></script>
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
@@ -115,6 +112,165 @@
         {% endif %}
 
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+
+        const restartProcess = (element) => {
+            const confirmed = confirm("Please confirm that you wish to restart this process");
+            if (confirmed) {
+                element.form.submit();
+            }
+        };
+
+        const stopProcess = (element) => {
+            const confirmed = confirm("Please confirm that you wish to stop this process");
+            if (confirmed) {
+                element.form.submit();
+            }
+        };
+
+        const parseAttr = (raw, fallback = "[]") => JSON.parse((raw || fallback).replaceAll("'", '"'));
+
+        const scrlRight = (element, event) => {
+            event.preventDefault();
+            const slider = document.getElementById("micrographs_slider");
+            if (!slider) return;
+            const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
+            slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + slider.clientWidth;
+            lastinteraction = Date.now();
+        };
+
+        const scrlLeft = (element, event) => {
+            event.preventDefault();
+            const slider = document.getElementById("micrographs_slider");
+            if (!slider) return;
+            const atStart = slider.scrollLeft <= 0;
+            slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - slider.clientWidth;
+            lastinteraction = Date.now();
+        };
+
+        const overlayState = {
+            xdim: 0,
+            ydim: 0,
+            boxes: []
+        };
+
+        const drawOverlayCoordinates = () => {
+            const boxesOverlay = document.getElementById("boxes_overlay");
+            if (!boxesOverlay || !overlayState.xdim || !overlayState.ydim) return;
+
+            const xdim = Number(overlayState.xdim);
+            const ydim = Number(overlayState.ydim);
+            let scale = 1;
+            if (xdim > ydim) {
+                scale = boxesOverlay.width / xdim;
+            } else {
+                scale = boxesOverlay.height / ydim;
+            }
+
+            const yoffset = (boxesOverlay.height - (scale * ydim)) / 2;
+            const xoffset = (boxesOverlay.width - (scale * xdim)) / 2;
+            const ctx = boxesOverlay.getContext("2d");
+            ctx.clearRect(0, 0, boxesOverlay.width, boxesOverlay.height);
+
+            for (const box of overlayState.boxes) {
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
+                ctx.beginPath();
+                ctx.arc((box.x * scale) + xoffset, (box.y * scale) + yoffset, 1, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            lastinteraction = Date.now();
+        };
+
+        const setOverlayFromSlide = (slide) => {
+            if (!slide) return;
+            overlayState.xdim = Number(slide.dataset.xdim || 0);
+            overlayState.ydim = Number(slide.dataset.ydim || 0);
+            overlayState.boxes = parseAttr(slide.dataset.boxes, "[]");
+            drawOverlayCoordinates();
+        };
+
+        const showMenu = (element, event) => {
+            event.preventDefault();
+            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
+            selectmenu.style.display = "flex";
+
+            const selectmenurect = selectmenu.getBoundingClientRect();
+            const selectmenuboxrect = selectmenubox.getBoundingClientRect();
+            selectmenubox.style.left = (event.pageX + selectmenuboxrect.width > selectmenurect.width)
+                ? (selectmenurect.width - selectmenuboxrect.width) + "px"
+                : event.pageX + "px";
+            selectmenubox.style.top = (event.pageY + selectmenuboxrect.height > selectmenurect.height)
+                ? (selectmenurect.height - selectmenuboxrect.height) + "px"
+                : event.pageY + "px";
+            lastinteraction = Date.now();
+        };
+
+        const hideMenu = () => {
+            for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
+                selectmenu.style.display = "none";
+            }
+            lastinteraction = Date.now();
+        };
+
+        const updateBrightness = (element) => {
+            document.querySelector(":root").style.setProperty("--preprocess-brightness", element.value / 100);
+        };
+
+        const updateContrast = (element) => {
+            document.querySelector(":root").style.setProperty("--preprocess-contrast", element.value / 100);
+        };
+
+        window.addEventListener("load", () => {
+            const root = document.querySelector(":root");
+            root.style.setProperty("--preprocess-contrast", 1.0);
+            root.style.setProperty("--preprocess-brightness", 1.0);
+
+            const slider = document.getElementById("micrographs_slider");
+            if (slider) {
+                const observer = new IntersectionObserver(
+                    (entries) => {
+                        for (const entry of entries) {
+                            if (entry.intersectionRatio > 0.5) {
+                                setOverlayFromSlide(entry.target);
+                            }
+                        }
+                    },
+                    { root: slider, threshold: 0.5 }
+                );
+                for (const slide of document.getElementsByClassName("slider_micrograph")) {
+                    observer.observe(slide);
+                }
+
+                const firstSlide = slider.querySelector(".slider_micrograph");
+                if (firstSlide) setOverlayFromSlide(firstSlide);
+            }
+
+            const gauze = document.getElementById("loadinggauze");
+            if (gauze) {
+                gauze.style.opacity = "0";
+                setTimeout(() => {
+                    gauze.style.display = "none";
+                }, 600);
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 
 </body>
 </html>

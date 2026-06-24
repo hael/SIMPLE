@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
-    <script src={% static 'nice_stream/paneloptics.js' %}></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
     {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='optics assignment' %}
@@ -55,5 +54,104 @@
             {% endif %}
         </div>
     </div>
+
+    <script>
+        let lastinteraction = Date.now();
+
+        const parseAssignments = (raw) => JSON.parse((raw || "[]").replaceAll("'", '"'));
+
+        const buildScatter = (canvas) => {
+            const ctx = canvas.getContext("2d");
+            const assignments = parseAssignments(canvas.dataset.assignments);
+
+            const workspaces = [];
+            const points = [];
+            for (const group of assignments) {
+                const workspace = {
+                    label: group.id,
+                    data: group.coordinates
+                };
+                workspaces.push(workspace);
+                for (const coordinate of group.coordinates) {
+                    points.push(coordinate);
+                }
+            }
+
+            const xs = points.map((point) => point.x);
+            const ys = points.map((point) => point.y);
+            const minX = xs.length > 0 ? Math.min(...xs) : 0;
+            const maxX = xs.length > 0 ? Math.max(...xs) : 1;
+            const minY = ys.length > 0 ? Math.min(...ys) : 0;
+            const maxY = ys.length > 0 ? Math.max(...ys) : 1;
+            const globalMin = Math.floor(Math.min(minX, minY) * 10) / 10;
+            const globalMax = Math.ceil(Math.max(maxX, maxY) * 10) / 10;
+
+            const maxAxis = Math.max(Math.abs(globalMin), Math.abs(globalMax));
+            const minAxis = -maxAxis;
+
+            new Chart(ctx, {
+                type: "scatter",
+                options: {
+                    scales: {
+                        x: {
+                            type: "linear",
+                            position: "bottom",
+                            min: minAxis,
+                            max: maxAxis,
+                            ticks: {
+                                stepSize: 1,
+                                font: { size: 8 },
+                                maxTicksLimit: 3
+                            }
+                        },
+                        y: {
+                            type: "linear",
+                            position: "bottom",
+                            min: minAxis,
+                            max: maxAxis,
+                            ticks: {
+                                stepSize: 1,
+                                font: { size: 8 },
+                                maxTicksLimit: 3
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    responsive: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1
+                },
+                data: {
+                    workspaces
+                }
+            });
+        };
+
+        window.addEventListener("load", () => {
+            for (const opticsScatterChart of document.getElementsByClassName("optics_scatter_chart")) {
+                buildScatter(opticsScatterChart);
+            }
+
+            const logtext = document.querySelector(".logtext");
+            if (logtext) {
+                logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
+            }
+        }, false);
+
+        window.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") {
+                location.reload();
+            }
+        });
+
+        setInterval(() => {
+            if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden") {
+                lastinteraction = Date.now();
+                location.reload();
+            }
+        }, 1000);
+    </script>
 </body>
 </html>
