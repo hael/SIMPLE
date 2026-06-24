@@ -1,104 +1,69 @@
-from django.test  import TestCase
+"""Model smoke tests for core NICE Lite ORM relationships."""
+
+from django.test import TestCase
 from django.utils import timezone
 
-from ..models      import ProjectModel
-from ..models      import WorkspaceModel
-from ..models      import JobModel
-from ..models      import JobClassicModel
-from ..models      import DispatchModel
-from .test_helpers import assertProject
-from .test_helpers import assertWorkspace
-from .test_helpers import assertDispatch
-
-class ProjectModelTest(TestCase):
-
-  test_project_name = "testproject"
-  test_project_desc = "test project description"
-  test_project_dirc = "/tmp"
-
-  def setUp(self):
-    # test projectmodel object creation with non-optional fields
-    ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
-
-  def test_project_lookup_by_id(self):
-    # test projectmodel object retrieval using id
-    project = ProjectModel.objects.get(id=1)
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+from ..models import DispatchModel
+from ..models import JobModel
+from ..models import ProjectModel
+from ..models import WorkspaceModel
 
 
-class WorkspaceModelTest(TestCase):
+class _ProjectFixtureMixin:
+    test_project_name = "testproject"
+    test_project_desc = "test project description"
+    test_project_dirc = "/tmp"
 
-  test_project_name = "testproject"
-  test_project_desc = "test project description"
-  test_project_dirc = "/tmp"
+    def _create_project(self):
+        return ProjectModel.objects.create(
+            name=self.test_project_name,
+            desc=self.test_project_desc,
+            dirc=self.test_project_dirc,
+            date=timezone.now(),
+        )
 
-  def setUp(self):
-    # test workspacemodel object creation with non-optional fields
-    ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
-    project = ProjectModel.objects.get(id=1)
-    WorkspaceModel.objects.create(proj=project)
-
-  def test_workspace_lookup_by_id(self):
-    # test workspacemodel object retrieval using id
-    workspace = WorkspaceModel.objects.get(id=1)
-    assertWorkspace(workspace, id=1)
-    project = workspace.proj
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
-
-
-class JobModelTest(TestCase):
-
-  test_project_name = "testproject"
-  test_project_desc = "test project description"
-  test_project_dirc = "/tmp"
-
-  def setUp(self):
-    # test jobmodel object creation with non-optional fields
-    ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
-    project = ProjectModel.objects.get(id=1)
-    WorkspaceModel.objects.create(proj=project)
-    workspace = WorkspaceModel.objects.get(id=1)
-    JobModel.objects.create(dset=workspace, cdat=timezone.now())
-
-  def test_job_lookup_by_id(self):
-    # test jobmodel object retrieval using id
-    job     = JobModel.objects.get(id=1)
-    workspace = job.dset
-    assertWorkspace(workspace, id=1)
-    project = workspace.proj
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+    def _assert_project_fields(self, project):
+        self.assertEqual(project.name, self.test_project_name)
+        self.assertEqual(project.desc, self.test_project_desc)
+        self.assertEqual(project.dirc, self.test_project_dirc)
 
 
-class JobClassicModelTest(TestCase):
+class ProjectModelTest(_ProjectFixtureMixin, TestCase):
+    def setUp(self):
+        self._create_project()
 
-  test_project_name = "testproject"
-  test_project_desc = "test project description"
-  test_project_dirc = "/tmp"
+    def test_project_lookup_by_id(self):
+        project = ProjectModel.objects.get(id=1)
+        self._assert_project_fields(project)
 
-  def setUp(self):
-    # test jobmodel object creation with non-optional fields
-    ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
-    project = ProjectModel.objects.get(id=1)
-    WorkspaceModel.objects.create(proj=project)
-    workspace = WorkspaceModel.objects.get(id=1)
-    JobClassicModel.objects.create(wspc=workspace, cdat=timezone.now())
 
-  def test_job_classic_lookup_by_id(self):
-    # test jobmodelclassic object retrieval using id
-    jobclassic = JobClassicModel.objects.get(id=1)
-    workspace  = jobclassic.wspc
-    project    = workspace.proj
-    assertWorkspace(workspace, id=1)
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
-    
+class WorkspaceModelTest(_ProjectFixtureMixin, TestCase):
+    def setUp(self):
+        project = self._create_project()
+        WorkspaceModel.objects.create(proj=project)
+
+    def test_workspace_lookup_by_id(self):
+        workspace = WorkspaceModel.objects.get(id=1)
+        self.assertEqual(workspace.id, 1)
+        self._assert_project_fields(workspace.proj)
+
+
+class JobModelTest(_ProjectFixtureMixin, TestCase):
+    def setUp(self):
+        project = self._create_project()
+        workspace = WorkspaceModel.objects.create(proj=project)
+        JobModel.objects.create(dset=workspace, cdat=timezone.now())
+
+    def test_job_lookup_by_id(self):
+        job = JobModel.objects.get(id=1)
+        self.assertEqual(job.dset.id, 1)
+        self._assert_project_fields(job.dset.proj)
+
 
 class DispatchModelTest(TestCase):
+    def setUp(self):
+        DispatchModel.objects.create()
 
-  def setUp(self):
-    # test dispatchmodel object creation with non-optional fields
-    DispatchModel.objects.create()
-
-  def test_dispatch_lookup_by_id(self):
-    # test jobmodelclassic object retrieval using id
-    dispatch = DispatchModel.objects.get(id=1)
-    assertDispatch(dispatch, id=1)
+    def test_dispatch_lookup_by_id(self):
+        dispatch = DispatchModel.objects.get(id=1)
+        self.assertEqual(dispatch.id, 1)

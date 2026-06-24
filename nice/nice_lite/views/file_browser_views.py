@@ -83,22 +83,24 @@ def view_file_browser(request, type, path=None):
                 path = base_dir
 
     try:
-        if not os.path.exists(path):
-            error = True
-            errortext = "path does not exist"
-        if os.path.isdir(path):
-            path_isdir = True
-            parentdir = os.path.dirname(path)
-            if selected_project_id is not None and selected_project_id in accessible_project_ids and not error:
-                project = Project(id=selected_project_id)
-                base_dir = os.path.realpath(project.absdir) if project.absdir else ""
-                if base_dir and os.path.commonpath([parentdir, base_dir]) != base_dir:
-                    parentdir = base_dir
-        else:
-            path_isdir = False
+        if not error:
+            if not os.path.exists(path):
+                error = True
+                errortext = "path does not exist"
+            if os.path.isdir(path):
+                path_isdir = True
+                parentdir = os.path.dirname(path)
+                if selected_project_id is not None and selected_project_id in accessible_project_ids and not error:
+                    project = Project(id=selected_project_id)
+                    base_dir = os.path.realpath(project.absdir) if project.absdir else ""
+                    if base_dir and os.path.commonpath([parentdir, base_dir]) != base_dir:
+                        parentdir = base_dir
+            else:
+                path_isdir = False
     except OSError:
-        error = True
-        errortext = "error"
+        if not error:
+            error = True
+            errortext = "error"
 
     if not error and path_isdir:
         try:

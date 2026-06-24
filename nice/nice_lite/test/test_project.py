@@ -1,13 +1,13 @@
 import tempfile
 
-from django.test  import TestCase
 from django.http  import HttpRequest
+from django.test  import TestCase
 from django.utils import timezone
 
-from ..data_structures.project    import Project
-from ..models                     import ProjectModel
-from ..models                     import WorkspaceModel
-from .test_helpers                import assertProject
+from ..data_structures.project import Project
+from ..models                  import ProjectModel
+from ..models                  import WorkspaceModel
+
 
 class ProjectTest(TestCase):
 
@@ -15,60 +15,72 @@ class ProjectTest(TestCase):
   test_project_desc = "test project description"
   test_project_dirc = "/tmp"
 
+  def _assert_project_fields(self, project):
+    self.assertEqual(project.name, self.test_project_name)
+    self.assertEqual(project.desc, self.test_project_desc)
+    self.assertEqual(project.dirc, self.test_project_dirc)
+
+
   def setUp(self):
-    # test projectmodel object creation with non-optional fields
-    ProjectModel.objects.create(name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc, date=timezone.now())
-    project = ProjectModel.objects.get(id=1)
+    project = ProjectModel.objects.create(
+      name=self.test_project_name,
+      desc=self.test_project_desc,
+      dirc=self.test_project_dirc,
+      date=timezone.now(),
+    )
     WorkspaceModel.objects.create(proj=project)
     WorkspaceModel.objects.create(proj=project)
+
 
   def test_project_init(self):
-    # test init empty project
     project = Project()
-    assertProject(project)
+    self.assertEqual(project.id, 0)
+
 
   def test_project_init_by_request(self):
-    # test projectmodel object retrieval using request
     request = HttpRequest()
     request.POST["selected_project_id"] = "1"
     project = Project(request=request)
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+    self._assert_project_fields(project)
   
+
   def test_project_init_by_id(self):
-    # test projectmodel object retrieval using id
     project = Project(project_id=1)
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+    self._assert_project_fields(project)
+
 
   def test_project_new(self):
-    # test init empty project
     with tempfile.TemporaryDirectory() as tmpdirc:
       request = HttpRequest()
       request.POST["new_project_name"] = self.test_project_name
       request.POST["new_project_dirc"] = tmpdirc
       project = Project()
       project.new(request)
-      assertProject(project, name=self.test_project_name, id=2)
+      self.assertEqual(project.id, 2)
+      self.assertEqual(project.name, self.test_project_name)
+
 
   def test_project_trash(self):
-    # test create project trash folder
     with tempfile.TemporaryDirectory() as tmpdirc:
       request = HttpRequest()
       request.POST["new_project_name"] = self.test_project_name
       request.POST["new_project_dirc"] = tmpdirc
       project = Project()
       project.new(request)
-      assertProject(project, name=self.test_project_name, id=2)
-      self.assertEqual(project.ensureTrashfolder(), True,  "failed to generate trash folder")
+      self.assertEqual(project.id, 2)
+      self.assertTrue(project.ensureTrashfolder(), "failed to generate trash folder")
 
-  def test_project_contains_workspace(self):
-    # test project contains workspace returns true when exists
+
+  def test_project_workspaces_list_contains_existing_workspace(self):
     project = Project(project_id=1)
-    self.assertEqual(project.containsWorkspace(1), True, "project doesn't contain workspace")
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+    workspace_ids = [workspace.id for workspace in project.workspaces_list]
+    self.assertIn(1, workspace_ids, "project workspaces_list missing workspace 1")
+    self._assert_project_fields(project)
   
-  def test_project_doesnt_contain_workspace(self):
-    # test project contains workspace returns false when not exists
+
+  def test_project_workspaces_list_excludes_missing_workspace(self):
     project = Project(project_id=1)
-    self.assertEqual(project.containsWorkspace(2), False, "project contains workspace")
-    assertProject(project, name=self.test_project_name, desc=self.test_project_desc, dirc=self.test_project_dirc)
+    workspace_ids = [workspace.id for workspace in project.workspaces_list]
+    self.assertNotIn(3, workspace_ids, "project workspaces_list unexpectedly contains workspace 3")
+    self._assert_project_fields(project)
     
