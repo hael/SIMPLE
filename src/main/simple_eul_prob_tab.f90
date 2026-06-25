@@ -180,11 +180,10 @@ contains
         integer,             intent(in)    :: i_first, i_last
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
-        type(ori)              :: o_prev
-        integer :: i, si, ri, j, iproj, iptcl, n, projs_ns, ithr, irot, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob),&
-                  &istate, iref_start
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), inpl_athres(self%p_ptr%nstates)
-        real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
+        integer :: i, si, iptcl, n, projs_ns, ithr, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), istate
+        real    :: lims(2,2), lims_init(2,2), inpl_athres(self%p_ptr%nstates)
+        real    :: dists_inpl(self%b_ptr%pftc%get_nrots(),nthr_glob),&
+            &dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         logical :: l_prob_objfun, l_sh_first
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
             THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_range')
@@ -213,101 +212,140 @@ contains
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             end do
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,istate,irot,iproj,iref_start,cxy,ri,j,cxy_prob)&
-            !$omp proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(static)
             do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
-                ! (1) identify shifts using the previously assigned best reference
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)        ! previous ori
-                istate     = o_prev%get_state()
-                irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-                iproj      = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
-                cxy = 0.
-                if( l_sh_first .and. istate >= 1 .and. istate <= self%p_ptr%nstates .and.&
-                    &iproj >= 1 .and. iproj <= self%p_ptr%nspace )then
-                    if( self%state_exists(istate) )then
-                        iref_start = (istate-1)*self%p_ptr%nspace
-                        ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
-                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
-                        if( irot == 0 ) cxy(2:3) = 0.
-                    endif
-                endif
-                self%seed_shifts(:,i) = cxy(2:3)
-                self%seed_has_sh(i)   = l_sh_first
-                ! (2) search projection directions using those shifts for all references
-                do ri = 1, self%nrefs
-                    istate = self%sinds(ri)
-                    iproj  = self%jinds(ri)
-                    if( l_prob_objfun )then
-                        call self%b_ptr%pftc%gen_prob_objfun_val((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3),&
-                            &inpl_athres(istate), self%p_ptr%prob_athres, self%loc_tab(ri,i)%dist, irot,&
-                            &dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
-                    else
-                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, cxy(2:3), dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
-                            &inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                    endif
-                    dists_refs(ri,ithr)     = self%loc_tab(ri,i)%dist
-                    self%loc_tab(ri,i)%inpl = irot
-                enddo
-                ! (3) see if we can refine the shifts by re-searching them for individual references in the 
-                !     identified probabilistic neighborhood
-                locn(:,ithr) = minnloc(dists_refs(:,ithr), projs_ns)
-                do j = 1,projs_ns
-                    ri     = locn(j,ithr)
-                    istate = self%sinds(ri)
-                    iproj  = self%jinds(ri)
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
-                    irot     = self%loc_tab(ri,i)%inpl
-                    if( l_sh_first )then
-                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
-                    else
-                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
-                    endif
-                    if( irot > 0 )then
-                        self%loc_tab(ri,i)%inpl   = irot
-                        self%loc_tab(ri,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
-                        self%loc_tab(ri,i)%x      = cxy_prob(2)
-                        self%loc_tab(ri,i)%y      = cxy_prob(3)
-                        self%loc_tab(ri,i)%has_sh = .true.
-                    endif
-                end do
+                call process_particle_with_shift(i, iptcl, ithr)
             enddo
             !$omp end parallel do
         else
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,ri,istate,iproj,irot) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(static)
             do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
-                do ri = 1, self%nrefs
-                    istate = self%sinds(ri)
-                    iproj  = self%jinds(ri)
-                    if( l_prob_objfun )then
-                        call self%b_ptr%pftc%gen_prob_objfun_val((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.],&
-                            &inpl_athres(istate), self%p_ptr%prob_athres, self%loc_tab(ri,i)%dist, irot,&
-                            &dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
-                    else
-                        call self%b_ptr%pftc%gen_objfun_vals((istate-1)*self%p_ptr%nspace + iproj, iptcl, [0.,0.], dists_inpl(:,ithr))
-                        dists_inpl(:,ithr)      = eulprob_dist_switch(dists_inpl(:,ithr), self%p_ptr%cc_objfun)
-                        irot                    = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr),&
-                            &inpl_athres(istate), self%p_ptr%prob_athres)
-                        self%loc_tab(ri,i)%dist = dists_inpl(irot,ithr)
-                    endif
-                    self%loc_tab(ri,i)%inpl = irot
-                enddo
+                call process_particle_without_shift(i, iptcl, ithr)
             enddo
             !$omp end parallel do
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
-        call o_prev%kill
+
+    contains
+
+        subroutine process_particle_with_shift( i_loc, iptcl_loc, ithr_loc )
+            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+            type(ori) :: o_prev_loc
+            integer   :: prev_state, prev_proj, ri_loc, irot_loc
+            real      :: shift_seed(3), dist_loc
+            call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
+            call estimate_shift_seed(iptcl_loc, ithr_loc, prev_state, prev_proj, o_prev_loc, shift_seed)
+            self%seed_shifts(:,i_loc) = shift_seed(2:3)
+            self%seed_has_sh(i_loc)   = l_sh_first
+            do ri_loc = 1,self%nrefs
+                call score_ref(ri_loc, iptcl_loc, shift_seed(2:3), ithr_loc, dist_loc, irot_loc)
+                call record_ref_eval(i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
+                dists_refs(ri_loc,ithr_loc) = dist_loc
+            enddo
+            call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
+            call o_prev_loc%kill
+        end subroutine process_particle_with_shift
+
+        subroutine process_particle_without_shift( i_loc, iptcl_loc, ithr_loc )
+            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+            integer :: ri_loc, irot_loc
+            real    :: dist_loc
+            do ri_loc = 1,self%nrefs
+                call score_ref(ri_loc, iptcl_loc, [0.,0.], ithr_loc, dist_loc, irot_loc)
+                call record_ref_eval(i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
+            enddo
+        end subroutine process_particle_without_shift
+
+        subroutine get_particle_context( iptcl_loc, o_prev_loc, prev_state, prev_proj )
+            integer,   intent(in)    :: iptcl_loc
+            type(ori), intent(inout) :: o_prev_loc
+            integer,   intent(out)   :: prev_state, prev_proj
+            call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev_loc)
+            prev_state = o_prev_loc%get_state()
+            prev_proj  = self%b_ptr%eulspace%find_closest_proj(o_prev_loc)
+        end subroutine get_particle_context
+
+        subroutine estimate_shift_seed( iptcl_loc, ithr_loc, prev_state, prev_proj, o_prev_loc, shift_seed )
+            integer,   intent(in)    :: iptcl_loc, ithr_loc, prev_state, prev_proj
+            type(ori), intent(inout) :: o_prev_loc
+            real,      intent(out)   :: shift_seed(3)
+            integer :: irot_loc, iref_start
+            shift_seed = 0.
+            if( .not. l_sh_first ) return
+            if( prev_state < 1 .or. prev_state > self%p_ptr%nstates ) return
+            if( prev_proj  < 1 .or. prev_proj  > self%p_ptr%nspace  ) return
+            if( .not. self%state_exists(prev_state) ) return
+            iref_start = (prev_state-1)*self%p_ptr%nspace
+            irot_loc   = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+            call grad_shsrch_obj(ithr_loc)%set_indices(iref_start + prev_proj, iptcl_loc)
+            shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
+            if( irot_loc == 0 ) shift_seed(2:3) = 0.
+        end subroutine estimate_shift_seed
+
+        subroutine score_ref( ri_loc, iptcl_loc, shift_xy, ithr_loc, dist_loc, irot_loc )
+            integer, intent(in)  :: ri_loc, iptcl_loc, ithr_loc
+            real,    intent(in)  :: shift_xy(2)
+            real,    intent(out) :: dist_loc
+            integer, intent(out) :: irot_loc
+            integer :: istate_loc, iproj_loc, full_ref
+            istate_loc = self%sinds(ri_loc)
+            iproj_loc  = self%jinds(ri_loc)
+            full_ref   = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
+            if( l_prob_objfun )then
+                call self%b_ptr%pftc%gen_prob_objfun_val(full_ref, iptcl_loc, shift_xy,&
+                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            else
+                call self%b_ptr%pftc%gen_objfun_vals(full_ref, iptcl_loc, shift_xy, dists_inpl(:,ithr_loc))
+                dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
+                irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc),&
+                    &inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
+                dist_loc = dists_inpl(irot_loc,ithr_loc)
+            endif
+        end subroutine score_ref
+
+        subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
+            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+            real,    intent(in) :: shift_seed(3)
+            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc
+            real    :: refined_shift(3)
+            locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns)
+            do j_loc = 1,projs_ns
+                ri_loc     = locn(j_loc,ithr_loc)
+                istate_loc = self%sinds(ri_loc)
+                iproj_loc  = self%jinds(ri_loc)
+                call grad_shsrch_obj(ithr_loc)%set_indices((istate_loc-1)*self%p_ptr%nspace + iproj_loc, iptcl_loc)
+                irot_loc = self%loc_tab(ri_loc,i_loc)%inpl
+                if( l_sh_first )then
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=shift_seed(2:3))
+                else
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
+                endif
+                if( irot_loc > 0 )then
+                    call record_ref_eval(i_loc, ri_loc, eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun),&
+                        &irot_loc, refined_shift(2), refined_shift(3), .true.)
+                endif
+            enddo
+        end subroutine refine_best_refs
+
+        subroutine record_ref_eval( i_loc, ri_loc, dist_loc, irot_loc, x_loc, y_loc, has_sh_loc )
+            integer, intent(in) :: i_loc, ri_loc, irot_loc
+            real,    intent(in) :: dist_loc, x_loc, y_loc
+            logical, intent(in) :: has_sh_loc
+            self%loc_tab(ri_loc,i_loc)%dist   = dist_loc
+            self%loc_tab(ri_loc,i_loc)%inpl   = irot_loc
+            self%loc_tab(ri_loc,i_loc)%x      = x_loc
+            self%loc_tab(ri_loc,i_loc)%y      = y_loc
+            self%loc_tab(ri_loc,i_loc)%has_sh = has_sh_loc
+        end subroutine record_ref_eval
+
     end subroutine fill_tab_range
 
     subroutine fill_tab_state_only( self )
