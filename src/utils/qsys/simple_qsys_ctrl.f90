@@ -29,6 +29,7 @@ type qsys_ctrl
     ! --- job scripts and sentinel files ---
     type(string)                  :: exec_binary                   !< executable launched by every generated script
     type(string),     allocatable :: script_names(:)               !< per-partition script file paths
+    type(string),     allocatable :: coarray_job_args(:)           !< direct per-partition command arguments for coarray dispatch
     type(string),     allocatable :: jobs_done_fnames(:)           !< per-partition completion sentinel file paths
     type(string),     allocatable :: jobs_exit_code_fnames(:)      !< per-partition exit-code file paths (streaming only)
     ! --- scheduler state ---
@@ -154,6 +155,7 @@ contains
         allocate( self%jobs_done(fromto_part(1):fromto_part(2)),          &
                   self%jobs_submitted(fromto_part(1):fromto_part(2)),      &
                   self%script_names(fromto_part(1):fromto_part(2)),        &
+                  self%coarray_job_args(fromto_part(1):fromto_part(2)),    &
                   self%jobs_done_fnames(fromto_part(1):fromto_part(2)),    &
                   self%jobs_exit_code_fnames(fromto_part(1):fromto_part(2)) )
         if( self%stream ) then
@@ -335,6 +337,11 @@ contains
         type(string) :: outfile_body_local, key, val
         integer      :: ipart, iadd
         logical      :: part_params_present
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_coarray)
+                call stage_coarray_jobs(self, job_descr, q_descr, outfile_body, part_params, extra_params)
+                return
+        end select
         if( present(outfile_body) ) outfile_body_local = outfile_body
         part_params_present = present(part_params)
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -372,6 +379,59 @@ contains
         ! when we generate the scripts we also reset the number of available computing units
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
+
+    !> Stage one direct command-line argument string per partition for the coarray
+    !! backend.  This mirrors generate_scripts() argument augmentation, but keeps
+    !! the work in memory instead of writing distr_simple_script_* files.
+    subroutine stage_coarray_jobs( self, job_descr, q_descr, outfile_body, part_params, extra_params )
+        class(qsys_ctrl),           intent(inout) :: self
+        class(chash),               intent(inout) :: job_descr
+        class(chash),               intent(inout) :: q_descr
+        class(string),    optional, intent(in)    :: outfile_body
+        class(chash),     optional, intent(in)    :: part_params(:)
+        type(parameters), optional, intent(in)    :: extra_params
+        type(string) :: outfile_body_local, key, val, job_str
+        integer      :: ipart, iadd
+        logical      :: part_params_present
+        if( present(outfile_body) ) outfile_body_local = outfile_body
+        part_params_present = present(part_params)
+        do ipart = self%fromto_part(1), self%fromto_part(2)
+            call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
+            call job_descr%set('top',    int2str(self%parts(ipart,2)))
+            call job_descr%set('part',   int2str(ipart))
+            call job_descr%set('nparts', int2str(self%nparts_tot))
+            if( outfile_body_local%is_allocated() )then
+                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
+            endif
+            if( part_params_present )then
+                do iadd = 1, part_params(ipart)%size_of()
+                    key = part_params(ipart)%get_key(iadd)
+                    val = part_params(ipart)%get(iadd)
+                    call job_descr%set(key%to_char(), val)
+                end do
+            endif
+            if( L_USE_AUTO_MEM ) call estimate_mem_usage(job_descr, q_descr, extra_params)
+            job_str = job_descr%chash2str()
+            self%coarray_job_args(ipart) = job_str
+            self%jobs_done(ipart)        = .false.
+            self%jobs_submitted(ipart)   = .false.
+        end do
+        call job_descr%delete('fromp')
+        call job_descr%delete('top')
+        call job_descr%delete('part')
+        call job_descr%delete('nparts')
+        if( outfile_body_local%is_allocated() )then
+            call job_descr%delete('outfile')
+            call outfile_body_local%kill
+        endif
+        if( part_params_present )then
+            do iadd = 1, part_params(1)%size_of()
+                key = part_params(1)%get_key(iadd)
+                call job_descr%delete(key%to_char())
+            end do
+        endif
+        if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
+    end subroutine stage_coarray_jobs
 
     !> Generate a single SLURM/LSF array-job script covering all partitions.
     !! Each partition command is stored as one element of a bash array; the scheduler
@@ -677,52 +737,52 @@ contains
 
     ! SUBMISSION TO QSYS
 
-    !> Derive the coarray driver path from SIMPLE_COARRAY_EXEC when set, otherwise
-    !! from the directory containing the normal private executor.
-    function coarray_exec_path( exec_binary ) result( coarray_exec )
-        class(string), intent(in) :: exec_binary
-        type(string)              :: coarray_exec
-        character(len=XLONGSTRLEN) :: env_exec
-        character(len=:), allocatable :: exec_path
-        integer :: envlen, envstat, pos
-        call get_environment_variable('SIMPLE_COARRAY_EXEC', value=env_exec, length=envlen, status=envstat)
-        if( envstat == 0 .and. envlen > 0 )then
-            coarray_exec = trim(adjustl(env_exec(:envlen)))
-            return
-        endif
-        exec_path = exec_binary%to_char()
-        pos = scan(exec_path, '/\', back=.true.)
-        if( pos > 0 )then
-            coarray_exec = trim(exec_path(:pos))//'simple_coarray_exec'
-        else
-            coarray_exec = 'simple_coarray_exec'
-        endif
-    end function coarray_exec_path
+    function shell_quote( raw ) result( quoted )
+        character(len=*), intent(in) :: raw
+        type(string) :: quoted
+        character(len=:), allocatable :: buf
+        integer :: i
+        buf = achar(39)
+        do i = 1, len_trim(raw)
+            if( raw(i:i) == achar(39) )then
+                buf = buf//achar(39)//achar(92)//achar(39)//achar(39)
+            else
+                buf = buf//raw(i:i)
+            endif
+        end do
+        buf = buf//achar(39)
+        quoted = buf
+    end function shell_quote
 
     !> Submit the whole partition range through one multi-image coarray run.
-    !! Each image executes part numbers image, image+nimages, ... by invoking
-    !! the already-generated per-partition shell scripts.
-    subroutine submit_coarray_scripts( self )
+    !! Each image executes part numbers image, image+nimages, ... using the
+    !! staged command-line arguments, without generating per-partition scripts.
+    subroutine submit_coarray_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
-        type(string) :: qsys_cmd, coarray_exec, script_prefix
+        type(string) :: qsys_cmd
         integer      :: nimages, nparts_here, submission_exitstat
+        integer      :: ipart
         if( all(self%jobs_submitted) ) return
         if( self%ncomputing_units_avail <= 0 ) return
         nparts_here = self%fromto_part(2) - self%fromto_part(1) + 1
         nimages     = max(1, min(self%ncomputing_units, nparts_here))
-        coarray_exec = coarray_exec_path(self%exec_binary)
-        if( .not. file_exists(coarray_exec) ) &
-            write(logfhandle,'(A,A)') 'FILE DOES NOT EXIST: ', coarray_exec%to_char()
-        script_prefix = filepath(string(CWD_GLOB), string('distr_simple_script_'))
-        qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//coarray_exec%to_char()//' '//&
-            &script_prefix%to_char()//' '//int2str(self%fromto_part(1))//' '//int2str(self%fromto_part(2))//' '//&
-            &int2str(self%numlen)
+        qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//shell_quote(self%exec_binary%to_char())//&
+            &' --coarray '//int2str(self%fromto_part(1))//' '//&
+            &int2str(self%fromto_part(2))//' '//int2str(self%numlen)
+        do ipart = self%fromto_part(1), self%fromto_part(2)
+            if( .not. self%coarray_job_args(ipart)%is_allocated() )then
+                THROW_HARD('coarray job arguments were not staged for part '//int2str(ipart))
+            endif
+            qsys_cmd = qsys_cmd//' '//shell_quote(self%coarray_job_args(ipart)%to_char())
+        end do
         self%jobs_submitted(:)        = .true.
         self%ncomputing_units_avail   = 0
         submission_exitstat = -1
         call exec_cmdline(qsys_cmd, exitstat=submission_exitstat)
-        if( submission_exitstat /= 0 ) THROW_HARD('coarray execution failed; see SIMPLE_SUBPROC_OUTPUT and stderrout logs')
-    end subroutine submit_coarray_scripts
+        if( submission_exitstat /= 0 ) THROW_HARD('coarray execution failed; see SIMPLE_SUBPROC_OUTPUT and simple_private_exec_coarray_part_*.out logs')
+        self%jobs_done(:)             = .true.
+        self%ncomputing_units_avail   = self%ncomputing_units
+    end subroutine submit_coarray_jobs
 
     !> Submit all unsubmitted scripts in the partition range, up to ncomputing_units_avail
     !! concurrency.  For the persistent worker backend each script is enqueued via
@@ -736,7 +796,7 @@ contains
         logical                          :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         select type( pmyqsys => self%myqsys )
             class is(qsys_coarray)
-                call submit_coarray_scripts(self)
+                call submit_coarray_jobs(self)
                 return
         end select
         ! Build a submission mask: mark each unsubmitted job that fits in available slots.
@@ -796,8 +856,7 @@ contains
             class is (qsys_local)
                 cmd = self%myqsys%submit_cmd()//' '//filepath(string(CWD_GLOB),script_name)//' '//SUPPRESS_MSG//'&'
             class is (qsys_coarray)
-                ! Single ad-hoc scripts have no partition range; run them directly.
-                cmd = string('bash ')//filepath(string(CWD_GLOB),script_name)
+                THROW_HARD('coarray backend does not submit script files; use simple_private_exec --coarray dispatch')
             class is (qsys_persistent_worker)
                 call self%dispatch_task_to_persistent_worker(filepath(string(CWD_GLOB),script_name), self%nthr_worker)
                 return
@@ -1120,7 +1179,7 @@ contains
         self%cline_stacksz          = 0
         ! Deallocate tracking arrays.
         deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
-                   self%jobs_exit_code_fnames, self%jobs_submitted)
+                   self%jobs_exit_code_fnames, self%jobs_submitted, self%coarray_job_args)
         ! Deallocate streaming stacks (kill cmdlines before dealloc where required).
         if( allocated(self%stream_cline_stack) )      deallocate(self%stream_cline_stack)
         if( allocated(self%stream_cline_submitted) ) then

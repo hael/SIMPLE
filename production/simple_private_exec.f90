@@ -90,6 +90,11 @@ logical                 :: l_silent
 t0 = tic()
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
+if( cmdstat /= 0 ) call cmdline_err( cmdstat, cmdlen, xarg, 0 )
+if( trim(xarg) == '--coarray' )then
+    call run_coarray_direct
+    stop
+endif
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
@@ -248,4 +253,104 @@ rt_exec = toc(t0)
 if( .not. l_silent ) call simple_print_timer(rt_exec)
 ! cleanup
 call cline%kill
+
+contains
+
+    !> Coarray backend entry point.  The parent invocation is:
+    !!   cafrun -np <nimages> simple_private_exec --coarray <first> <last> <numlen> <job_args...>
+    !! Each image runs the same simple_private_exec payload used by script-based
+    !! backends for its assigned partitions, but no distr_simple_script_* files
+    !! are written.
+    subroutine run_coarray_direct
+#ifdef USE_COARRAYS
+        character(len=*), parameter :: UNSET_MPI_ENV_LOCAL = 'env -u OMPI_COMM_WORLD_SIZE -u OMPI_COMM_WORLD_RANK '//&
+            &'-u OMPI_COMM_WORLD_LOCAL_SIZE -u OMPI_COMM_WORLD_LOCAL_RANK -u OMPI_COMM_WORLD_NODE_RANK '//&
+            &'-u PMIX_NAMESPACE -u PMIX_RANK -u PMIX_SERVER_URI2 -u PMIX_SERVER_URI3 '//&
+            &'-u PMI_RANK -u PMI_SIZE -u PMI_FD -u PMI_PORT -u PMI_ID -u PMI_KVSNAME -u PMI_PROCESS_MAPPING '//&
+            &'-u PMI_APPNUM -u PMI_SPAWNED -u PMI_CONTROL_PORT -u PMI_CONTROL_FD '//&
+            &'-u HYDRA_PROXY_ID -u HYDRA_PROXY_PORT -u HYDRA_CONTROL_FD -u HYDI_CONTROL_FD '//&
+            &'-u MPI_LOCALRANKID -u MPI_LOCALNRANKS '//&
+            &'-u MV2_COMM_WORLD_RANK -u MV2_COMM_WORLD_SIZE -u MV2_COMM_WORLD_LOCAL_RANK -u MV2_COMM_WORLD_LOCAL_SIZE'
+        character(len=XLONGSTRLEN)              :: exec_binary, cmdmsg, job_log
+        character(len=XLONGSTRLEN), allocatable :: job_args(:)
+        character(len=:), allocatable           :: cmd, errmsg
+        integer :: nargs, njobs, first_part, last_part, numlen_local
+        integer :: iarg, ipart, job_ind, cmdstat_local, exitstat, syncstat, argstat, arglen
+        nargs = command_argument_count()
+        if( nargs < 5 )then
+            THROW_HARD('Usage: simple_private_exec --coarray <first_part> <last_part> <numlen> <job_args...>')
+        endif
+        call parse_coarray_int_arg(2, first_part, 'first_part')
+        call parse_coarray_int_arg(3, last_part,  'last_part')
+        call parse_coarray_int_arg(4, numlen_local, 'numlen')
+        if( first_part < 1 .or. last_part < first_part .or. numlen_local < 1 )then
+            THROW_HARD('Invalid coarray partition range or numlen')
+        endif
+        njobs = last_part - first_part + 1
+        if( nargs /= 4 + njobs )then
+            THROW_HARD('simple_private_exec --coarray received wrong number of job arguments')
+        endif
+        allocate(job_args(njobs))
+        do iarg = 1, njobs
+            call get_command_argument(4 + iarg, job_args(iarg), arglen, argstat)
+            if( argstat /= 0 ) THROW_HARD('could not read coarray job argument for part '//int2str(first_part + iarg - 1))
+            if( len_trim(job_args(iarg)) == 0 ) THROW_HARD('empty coarray job argument for part '//int2str(first_part + iarg - 1))
+        end do
+        call get_command_argument(0, exec_binary)
+        if( len_trim(exec_binary) == 0 ) exec_binary = 'simple_private_exec'
+        do ipart = first_part + this_image() - 1, last_part, num_images()
+            job_ind  = ipart - first_part + 1
+            job_log  = 'simple_private_exec_coarray_part_'//int2str_pad(ipart, numlen_local)//'.out'
+            cmd      = UNSET_MPI_ENV_LOCAL//' SIMPLE_COARRAY_IMAGE='//int2str(this_image())//' SIMPLE_COARRAY_IMAGES='//&
+                &int2str(num_images())//' '//shell_quote(trim(exec_binary))//' '//trim(job_args(job_ind))//' >> '//&
+                &shell_quote(trim(job_log))//' 2>&1'
+            cmdstat_local = 0
+            exitstat      = 0
+            cmdmsg        = ''
+            call execute_command_line(trim(cmd), wait=.true., exitstat=exitstat, cmdstat=cmdstat_local, cmdmsg=cmdmsg)
+            if( cmdstat_local /= 0 .or. exitstat /= 0 )then
+                if( len_trim(cmdmsg) > 0 ) THROW_WARN(trim(cmdmsg))
+                errmsg = 'simple_private_exec coarray image '//int2str(this_image())//' failed part '//int2str(ipart)
+                errmsg = errmsg//' exitstat='//int2str(exitstat)//' cmdstat='//int2str(cmdstat_local)
+                errmsg = errmsg//' log='//trim(job_log)
+                THROW_HARD(errmsg)
+            endif
+        end do
+        sync all(stat=syncstat)
+        if( syncstat /= 0 ) THROW_HARD('simple_private_exec coarray sync failed with stat='//int2str(syncstat))
+#else
+        THROW_HARD('simple_private_exec --coarray requires a USE_COARRAYS build')
+#endif
+    end subroutine run_coarray_direct
+
+#ifdef USE_COARRAYS
+    subroutine parse_coarray_int_arg( iarg, val, name )
+        integer,          intent(in)  :: iarg
+        integer,          intent(out) :: val
+        character(len=*), intent(in)  :: name
+        character(len=XLONGSTRLEN)    :: raw
+        integer                       :: parse_stat
+        call get_command_argument(iarg, raw)
+        read(raw,*,iostat=parse_stat) val
+        if( parse_stat /= 0 )then
+            THROW_HARD('Invalid coarray '//trim(name)//' argument: '//trim(raw))
+        endif
+    end subroutine parse_coarray_int_arg
+
+    function shell_quote( raw ) result( quoted )
+        character(len=*), intent(in) :: raw
+        character(len=:), allocatable :: quoted
+        integer :: i
+        quoted = achar(39)
+        do i = 1, len_trim(raw)
+            if( raw(i:i) == achar(39) )then
+                quoted = quoted//achar(39)//achar(92)//achar(39)//achar(39)
+            else
+                quoted = quoted//raw(i:i)
+            endif
+        end do
+        quoted = quoted//achar(39)
+    end function shell_quote
+#endif
+
 end program simple_private_exec

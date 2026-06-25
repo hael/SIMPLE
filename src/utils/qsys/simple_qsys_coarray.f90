@@ -39,38 +39,29 @@ contains
     end subroutine new_coarray_env
 
     !> Return launcher prefix.  qsys_ctrl appends the image count and the
-    !! simple_coarray_exec driver invocation.
+    !! simple_private_exec --coarray invocation.
     function get_coarray_submit_cmd( self ) result( cmd )
         class(qsys_coarray), intent(in) :: self
         type(string) :: cmd
         cmd = self%env%get('qsys_submit_cmd')
     end function get_coarray_submit_cmd
 
-    !> Coarray jobs do not need scheduler script directives.  Keep a marker in
-    !! generated scripts so their execution path is visible when debugging.
+    !> Coarray jobs are launched directly through simple_private_exec.  Generating
+    !! scheduler script headers for this backend indicates a wrong execution path.
     subroutine write_coarray_header( self, q_descr, fhandle )
         class(qsys_coarray), intent(in) :: self
         class(chash),        intent(in) :: q_descr
         integer, optional,   intent(in) :: fhandle
-        if( present(fhandle) )then
-            write(fhandle,'(a)') '#WRITTEN FOR EXECUTION BY SIMPLE_COARRAY'
-        else
-            write(logfhandle,'(a)') '#WRITTEN FOR EXECUTION BY SIMPLE_COARRAY'
-        endif
+        THROW_HARD('coarray backend does not write scheduler scripts; use simple_private_exec --coarray dispatch')
     end subroutine write_coarray_header
 
-    !> Array scripts are not used by the coarray backend; the normal per-part
-    !! scripts are launched by simple_coarray_exec images.
+    !> Array scripts are not used by the coarray backend.
     subroutine write_coarray_array_header( self, q_descr, parts_fromto, fhandle, nactive )
         class(qsys_coarray), intent(in) :: self
         class(chash),        intent(in) :: q_descr
         integer,             intent(in) :: parts_fromto(2)
         integer, optional,   intent(in) :: fhandle, nactive
-        if( present(fhandle) )then
-            write(fhandle,'(a)') '#WRITTEN FOR EXECUTION BY SIMPLE_COARRAY'
-        else
-            write(logfhandle,'(a)') '#WRITTEN FOR EXECUTION BY SIMPLE_COARRAY'
-        endif
+        THROW_HARD('coarray backend does not write array scripts; use simple_private_exec --coarray dispatch')
     end subroutine write_coarray_array_header
 
     !> Destructor.

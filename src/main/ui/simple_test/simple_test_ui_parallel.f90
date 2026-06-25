@@ -4,7 +4,6 @@ use simple_ui_modules
 implicit none
 
 type(ui_program), target :: coarrays
-type(ui_program), target :: coarray_matrix_sum
 type(ui_program), target :: openacc
 type(ui_program), target :: openmp
 type(ui_program), target :: simd
@@ -14,7 +13,6 @@ contains
     subroutine construct_test_parallel_programs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         call new_coarrays(tsttab)
-        call new_coarray_matrix_sum(tsttab)
         call new_openacc(tsttab)
         call new_openmp(tsttab)
         call new_simd(tsttab)
@@ -24,7 +22,6 @@ contains
         integer, intent(in) :: logfhandle
         write(logfhandle,'(A)') format_str('PARALLEL:', C_UNDERLINED)
         write(logfhandle,'(A)') coarrays%name%to_char()
-        write(logfhandle,'(A)') coarray_matrix_sum%name%to_char()
         write(logfhandle,'(A)') openacc%name%to_char()
         write(logfhandle,'(A)') openmp%name%to_char()
         write(logfhandle,'(A)') simd%name%to_char()
@@ -58,24 +55,6 @@ contains
         ! add to ui_hash
         call add_ui_program('coarrays', coarrays, tsttab)
     end subroutine new_coarrays
-
-    subroutine new_coarray_matrix_sum( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call coarray_matrix_sum%new(&
-        &'coarray_matrix_sum',&               ! name
-        &'coarray matrix sum ',&              ! descr_short
-        &'is a coarray matrix-sum parallelization strategy test',&
-        &'simple_test_exec',&                 ! executable
-        &.false.)                             ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        call coarray_matrix_sum%add_input(UI_PARM, 'box', 'num', 'Matrix size', &
-        &'N for the N by N coarray matrix sum test', 'N matrix dimension{4}', .false., 4.)
-        call coarray_matrix_sum%add_input(UI_COMP, 'nparts', 'num', 'Number of partitions', &
-        &'Number of partition scripts to run through the coarray backend', '# partitions{4}', .false., 4.)
-        ! add to ui_hash
-        call add_ui_program('coarray_matrix_sum', coarray_matrix_sum, tsttab)
-    end subroutine new_coarray_matrix_sum
 
     subroutine new_openacc( tsttab )
         class(ui_hash), intent(inout) :: tsttab

@@ -59,6 +59,7 @@ contains
         class(string),     intent(in) :: source
         logical :: l_stream
         l_stream = trim(params%stream) .eq. 'yes'
+        if( trim(params%qsys_name) == 'coarray' ) return
         if( params%l_distr_worker .or. l_stream )then
             call simple_touch(JOB_FINISHED_FBODY//int2str_pad(params%part,params%numlen))
         endif
