@@ -373,7 +373,7 @@ contains
     end subroutine exec_prob_tab2D
 
     subroutine exec_prob_align2D( self, cline )
-        use simple_eul_prob_tab2D,          only: eul_prob_tab2D
+        use simple_eul_prob_tab2D,          only: eul_prob_tab2D, PRIOR2D_STAGE5_FNAME
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
         use simple_builder,                 only: builder
@@ -438,6 +438,14 @@ contains
         call eulprob_obj_glob%write_assignment(fname)
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: assignment written'
         call flush(logfhandle)
+        ! write per-particle prior ranking only when the controller has flagged this as the
+        ! prior-production stage (stage PROB_PRIOR_STAGE-1, i.e. stage 5 by default)
+        if( cline%defined('write_prior') )then
+            fname = string(PRIOR2D_STAGE5_FNAME)
+            call eulprob_obj_glob%write_prior_topk(fname)
+            write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: prior ranking written ', fname%to_char()
+            call flush(logfhandle)
+        endif
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
