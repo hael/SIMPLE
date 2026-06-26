@@ -7,7 +7,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 integer, parameter :: DEFAULT_TILE = 112, DEFAULT_STRIDE = 56
-integer, parameter :: DEFAULT_KNN = 6
+integer, parameter :: DEFAULT_KNN = 5
 type(string) :: movie_dir
 type(string) :: den_movie
 type(string), allocatable :: movie_files(:)
@@ -90,7 +90,7 @@ contains
 
     subroutine print_usage()
         write(logfhandle,'(A)') 'Usage: simple_test_frame_tile_diffmap_denoise ' // &
-            'dir=/path/to/mrc_movie_stacks [tile=112] [stride=56] [k_nn=6]'
+            'dir=/path/to/mrc_movie_stacks [tile=112] [stride=56] [k_nn=5]'
         write(logfhandle,'(A)') 'Aliases: folder= and movie_dir= are accepted instead of dir=.'
         write(logfhandle,'(A)') 'Writes each output stack next to the input movie as original_name_den.mrc.'
     end subroutine print_usage

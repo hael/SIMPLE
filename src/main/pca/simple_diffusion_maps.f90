@@ -20,7 +20,7 @@ integer, parameter :: SE2_NTRANS_MODES = 2
 
 type :: diffusion_map_embedder
     integer :: ndiff = 4
-    integer :: k_nn  = 10
+    integer :: k_nn  = 5
 contains
     procedure :: set_params
     procedure :: embed
@@ -28,7 +28,7 @@ end type diffusion_map_embedder
 
 type :: steerable_diffusion_map_embedder
     integer :: ndiff  = 4
-    integer :: k_nn   = 10
+    integer :: k_nn   = 5
     integer :: nmodes = 4
 contains
     procedure :: set_params => steerable_set_params

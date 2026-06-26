@@ -560,7 +560,7 @@ contains
 
     integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
         integer, intent(in) :: nptcls
-        neigs_scan = min(24, max(1, nptcls - 2))
+        neigs_scan = min(50, max(1, nptcls - 2))
         if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
     end function diffmap_denoise_auto_neigs_scan
 

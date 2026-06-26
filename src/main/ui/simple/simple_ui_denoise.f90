@@ -121,7 +121,7 @@ contains
         ! filter controls
         call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
         call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}', .false., 'ppca')
-        call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 10.0)
+        call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
@@ -229,7 +229,7 @@ contains
         call cls_split%add_input(UI_PARM, 'nsubcls_min', 'num', 'Minimum subclasses per parent class in auto mode (default 3)', 'Used only when ncls=0: lower bound for the automatically selected number of subclasses per parent class', '# min subclasses', .false., 3.0)
         call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class in auto mode (default 10)', 'Used only when ncls=0: upper bound for the automatically selected number of subclasses per parent class', '# max subclasses', .false., 10.0)
         call cls_split%add_input(UI_PARM, 'nptcls_per_subcls', 'num', 'Target particles/subclass in auto mode (default 300)', 'Used only when ncls=0: auto mode chooses about one subclass per 300 particles, bounded by nsubcls_min and nsubcls_max', '# particles/subclass', .false., 300.0)
-        call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used only for diffusion-map modes; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 10.0)
+        call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used only for diffusion-map modes; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 5.0)
         call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for steerable diffusion modes', '# modes', .false., 4.0)
         call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
         call cls_split%add_input(UI_FILT, 'graph', 'multi', 'Class split graph', 'Class split graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
@@ -253,9 +253,9 @@ contains
             'Number of retained eigencomponents for diffusion-map denoising; this is a scan upper bound when auto', &
             '# eigenvecs', .false., 0.0)
         call denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
-            'Diffusion graph neighbors (default 10; try 10-30)', &
+            'Diffusion graph neighbors (default 5; try 5-30)', &
             'Local nearest neighbors used for diffusion-map graph construction', &
-            '# neighbors', .false., 10.0)
+            '# neighbors', .false., 5.0)
         call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
             'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
         call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
