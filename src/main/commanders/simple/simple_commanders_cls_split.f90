@@ -54,13 +54,13 @@ contains
     end subroutine exec_cls_split
 
     subroutine exec_denoise_project( self, cline )
-        use simple_diffmap_denoise_project_strategy
+        use simple_denoise_project_strategy
         class(commander_denoise_project), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        class(diffmap_denoise_project_strategy), allocatable :: strategy
+        class(denoise_project_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        strategy = create_diffmap_denoise_project_strategy(cline)
+        strategy = create_denoise_project_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
         call strategy%finalize_run(params, build, cline)

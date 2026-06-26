@@ -1,4 +1,4 @@
-module simple_diffmap_denoise_project_strategy
+module simple_denoise_project_strategy
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,            only: builder
@@ -16,11 +16,11 @@ use simple_imgfile,            only: imgfile
 use simple_srch_sort_loc,      only: hpsort
 implicit none
 
-public :: diffmap_denoise_project_strategy
-public :: diffmap_denoise_project_shmem_strategy
-public :: diffmap_denoise_project_worker_strategy
-public :: diffmap_denoise_project_master_strategy
-public :: create_diffmap_denoise_project_strategy
+public :: denoise_project_strategy
+public :: denoise_project_shmem_strategy
+public :: denoise_project_worker_strategy
+public :: denoise_project_master_strategy
+public :: create_denoise_project_strategy
 
 private
 #include "simple_local_flags.inc"
@@ -30,31 +30,31 @@ real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC = 0.35
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC = 0.10
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_LOWER_SEED_FRAC = 0.50
 
-type, abstract :: diffmap_denoise_project_strategy
+type, abstract :: denoise_project_strategy
 contains
     procedure(init_interface),     deferred :: initialize
     procedure(exec_interface),     deferred :: execute
     procedure(finalize_interface), deferred :: finalize_run
     procedure(cleanup_interface),  deferred :: cleanup
-end type diffmap_denoise_project_strategy
+end type denoise_project_strategy
 
-type, extends(diffmap_denoise_project_strategy) :: diffmap_denoise_project_shmem_strategy
+type, extends(denoise_project_strategy) :: denoise_project_shmem_strategy
 contains
     procedure :: initialize   => shmem_initialize
     procedure :: execute      => shmem_execute
     procedure :: finalize_run => shmem_finalize_run
     procedure :: cleanup      => shmem_cleanup
-end type diffmap_denoise_project_shmem_strategy
+end type denoise_project_shmem_strategy
 
-type, extends(diffmap_denoise_project_strategy) :: diffmap_denoise_project_worker_strategy
+type, extends(denoise_project_strategy) :: denoise_project_worker_strategy
 contains
     procedure :: initialize   => worker_initialize
     procedure :: execute      => worker_execute
     procedure :: finalize_run => worker_finalize_run
     procedure :: cleanup      => worker_cleanup
-end type diffmap_denoise_project_worker_strategy
+end type denoise_project_worker_strategy
 
-type, extends(diffmap_denoise_project_strategy) :: diffmap_denoise_project_master_strategy
+type, extends(denoise_project_strategy) :: denoise_project_master_strategy
     type(qsys_env)           :: qenv
     type(chash)              :: job_descr
     type(chash), allocatable :: part_params(:)
@@ -65,45 +65,45 @@ contains
     procedure :: execute      => master_execute
     procedure :: finalize_run => master_finalize_run
     procedure :: cleanup      => master_cleanup
-end type diffmap_denoise_project_master_strategy
+end type denoise_project_master_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
-        import :: diffmap_denoise_project_strategy, parameters, builder, cmdline
-        class(diffmap_denoise_project_strategy), intent(inout) :: self
+        import :: denoise_project_strategy, parameters, builder, cmdline
+        class(denoise_project_strategy), intent(inout) :: self
         type(parameters),                        intent(inout) :: params
         type(builder),                           intent(inout) :: build
         class(cmdline),                          intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, build, cline)
-        import :: diffmap_denoise_project_strategy, parameters, builder, cmdline
-        class(diffmap_denoise_project_strategy), intent(inout) :: self
+        import :: denoise_project_strategy, parameters, builder, cmdline
+        class(denoise_project_strategy), intent(inout) :: self
         type(parameters),                        intent(inout) :: params
         type(builder),                           intent(inout) :: build
         class(cmdline),                          intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, build, cline)
-        import :: diffmap_denoise_project_strategy, parameters, builder, cmdline
-        class(diffmap_denoise_project_strategy), intent(inout) :: self
+        import :: denoise_project_strategy, parameters, builder, cmdline
+        class(denoise_project_strategy), intent(inout) :: self
         type(parameters),                        intent(in)    :: params
         type(builder),                           intent(inout) :: build
         class(cmdline),                          intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params)
-        import :: diffmap_denoise_project_strategy, parameters
-        class(diffmap_denoise_project_strategy), intent(inout) :: self
+        import :: denoise_project_strategy, parameters
+        class(denoise_project_strategy), intent(inout) :: self
         type(parameters),                        intent(in)    :: params
     end subroutine cleanup_interface
 end interface
 
 contains
 
-    function create_diffmap_denoise_project_strategy(cline) result(strategy)
+    function create_denoise_project_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
-        class(diffmap_denoise_project_strategy), allocatable :: strategy
+        class(denoise_project_strategy), allocatable :: strategy
         integer :: nparts
         logical :: is_worker, is_master
         nparts = 1
@@ -111,16 +111,16 @@ contains
         is_worker = cline%defined('part')
         is_master = (nparts > 1) .and. (.not. is_worker)
         if( is_master )then
-            allocate(diffmap_denoise_project_master_strategy :: strategy)
+            allocate(denoise_project_master_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED DENOISE_PROJECT (MASTER)'
         else if( is_worker )then
-            allocate(diffmap_denoise_project_worker_strategy :: strategy)
+            allocate(denoise_project_worker_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DENOISE_PROJECT (WORKER)'
         else
-            allocate(diffmap_denoise_project_shmem_strategy :: strategy)
+            allocate(denoise_project_shmem_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DENOISE_PROJECT (SHARED-MEMORY)'
         endif
-    end function create_diffmap_denoise_project_strategy
+    end function create_denoise_project_strategy
 
     subroutine apply_defaults(cline)
         use simple_default_clines, only: set_automask2D_defaults
@@ -131,11 +131,6 @@ contains
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
         if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',     10)
-        if( .not. cline%defined('kpca_ker') ) call cline%set('kpca_ker', 'rbf')
-        if( .not. cline%defined('kpca_backend') ) call cline%set('kpca_backend', 'nystrom')
-        if( .not. cline%defined('kpca_rbf_gamma') ) call cline%set('kpca_rbf_gamma', 0.)
-        if( .not. cline%defined('kpca_nystrom_npts') ) call cline%set('kpca_nystrom_npts', 512)
-        if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
         if( .not. cline%defined('neigs') ) call cline%set('neigs', 0)
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
@@ -149,7 +144,7 @@ contains
     end subroutine init_common
 
     subroutine shmem_initialize(self, params, build, cline)
-        class(diffmap_denoise_project_shmem_strategy), intent(inout) :: self
+        class(denoise_project_shmem_strategy), intent(inout) :: self
         type(parameters),                              intent(inout) :: params
         type(builder),                                 intent(inout) :: build
         class(cmdline),                                intent(inout) :: cline
@@ -157,30 +152,30 @@ contains
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
-        class(diffmap_denoise_project_shmem_strategy), intent(inout) :: self
+        class(denoise_project_shmem_strategy), intent(inout) :: self
         type(parameters),                              intent(inout) :: params
         type(builder),                                 intent(inout) :: build
         class(cmdline),                                intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
-        call run_diffmap_denoise_project(params, build, cline, spproj, 0, .true.)
+        call run_denoise_project(params, build, cline, spproj, 0, .true.)
         call spproj%kill
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run(self, params, build, cline)
-        class(diffmap_denoise_project_shmem_strategy), intent(inout) :: self
+        class(denoise_project_shmem_strategy), intent(inout) :: self
         type(parameters),                              intent(in)    :: params
         type(builder),                                 intent(inout) :: build
         class(cmdline),                                intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup(self, params)
-        class(diffmap_denoise_project_shmem_strategy), intent(inout) :: self
+        class(denoise_project_shmem_strategy), intent(inout) :: self
         type(parameters),                              intent(in)    :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize(self, params, build, cline)
-        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        class(denoise_project_worker_strategy), intent(inout) :: self
         type(parameters),                               intent(inout) :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
@@ -193,32 +188,32 @@ contains
 
     subroutine worker_execute(self, params, build, cline)
         use simple_qsys_funs, only: qsys_job_finished
-        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        class(denoise_project_worker_strategy), intent(inout) :: self
         type(parameters),                               intent(inout) :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
-        call run_diffmap_denoise_project(params, build, cline, spproj, params%part, .false.)
+        call run_denoise_project(params, build, cline, spproj, params%part, .false.)
         call qsys_job_finished(params, string('simple_denoise_project_strategy :: worker_execute'))
         call spproj%kill
     end subroutine worker_execute
 
     subroutine worker_finalize_run(self, params, build, cline)
-        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        class(denoise_project_worker_strategy), intent(inout) :: self
         type(parameters),                               intent(in)    :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)
-        class(diffmap_denoise_project_worker_strategy), intent(inout) :: self
+        class(denoise_project_worker_strategy), intent(inout) :: self
         type(parameters),                               intent(in)    :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
-        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        class(denoise_project_master_strategy), intent(inout) :: self
         type(parameters),                               intent(inout) :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
@@ -227,7 +222,7 @@ contains
         logical :: l_phflip
         call init_common(params, build, cline)
         call spproj%read(params%projfile)
-        call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         if( trim(lowercase(params%graph)) == 'ori' )then
             self%nparts_run = 1
         else
@@ -254,7 +249,7 @@ contains
     end subroutine master_initialize
 
     subroutine master_execute(self, params, build, cline)
-        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        class(denoise_project_master_strategy), intent(inout) :: self
         type(parameters),                               intent(inout) :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
@@ -264,7 +259,7 @@ contains
     end subroutine master_execute
 
     subroutine master_finalize_run(self, params, build, cline)
-        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        class(denoise_project_master_strategy), intent(inout) :: self
         type(parameters),                               intent(in)    :: params
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
@@ -272,7 +267,7 @@ contains
 
     subroutine master_cleanup(self, params)
         use simple_qsys_funs, only: qsys_cleanup
-        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        class(denoise_project_master_strategy), intent(inout) :: self
         type(parameters),                               intent(in)    :: params
         integer :: ipart
         call self%qenv%kill
@@ -287,7 +282,7 @@ contains
     end subroutine master_cleanup
 
     subroutine prepare_class_partitions(self, params, cls_inds, cls_pops)
-        class(diffmap_denoise_project_master_strategy), intent(inout) :: self
+        class(denoise_project_master_strategy), intent(inout) :: self
         type(parameters),                               intent(in)    :: params
         integer,                                        intent(in)    :: cls_inds(:), cls_pops(:)
         integer :: order(size(cls_inds))
@@ -321,7 +316,7 @@ contains
         deallocate(part_counts, part_cls, part_weights)
     end subroutine prepare_class_partitions
 
-    subroutine run_diffmap_denoise_project(params, build, cline, spproj, part, l_write_project)
+    subroutine run_denoise_project(params, build, cline, spproj, part, l_write_project)
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
@@ -336,7 +331,7 @@ contains
         logical, allocatable :: processed(:)
         logical :: l_phflip, l_img_blank_init, l_mskdiam_override
         integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
-        call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
         if( trim(params%pca_mode) == 'diffusion_maps' .and. trim(lowercase(params%graph)) == 'ori' )then
             call run_diffmap_so3_mixture_graphs(params, build, spproj, cls_inds)
@@ -400,9 +395,9 @@ contains
         if( allocated(processed) ) deallocate(processed)
         if( l_img_blank_init ) call img_blank%kill
         if( map_fname%is_allocated() ) call map_fname%kill
-    end subroutine run_diffmap_denoise_project
+    end subroutine run_denoise_project
 
-    subroutine validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+    subroutine validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         type(parameters), intent(in)    :: params
         type(sp_project), intent(inout) :: spproj
         integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
@@ -414,28 +409,16 @@ contains
         if( trim(params%oritype) /= 'ptcl2D' )then
             THROW_HARD('denoise_project supports oritype=ptcl2D input only')
         endif
-        select case(trim(params%pca_mode))
-            case('diffusion_maps','kpca')
+        if( trim(params%pca_mode) /= 'diffusion_maps' )then
+            THROW_HARD('denoise_project supports pca_mode=diffusion_maps only')
+        endif
+        select case(trim(lowercase(params%graph)))
+            case('euc','ori')
             case DEFAULT
-                THROW_HARD('denoise_project supports pca_mode=diffusion_maps|kpca')
+                THROW_HARD('denoise_project supports graph=euc|ori for pca_mode=diffusion_maps')
         end select
-        if( trim(params%pca_mode) == 'diffusion_maps' )then
-            select case(trim(lowercase(params%graph)))
-                case('euc','ori')
-                case DEFAULT
-                    THROW_HARD('denoise_project supports graph=euc|ori for pca_mode=diffusion_maps')
-            end select
-            if( trim(params%steering) /= 'none' )then
-                THROW_HARD('denoise_project supports non-steerable diffusion maps only; use steering=none')
-            endif
-        else
-            if( trim(lowercase(params%graph)) /= 'euc' )then
-                THROW_HARD('denoise_project pca_mode=kpca requires graph=euc')
-            endif
-            if( trim(params%steering) /= 'none' )then
-                THROW_HARD('denoise_project pca_mode=kpca requires steering=none')
-            endif
-            if( params%neigs < 0 ) THROW_HARD('denoise_project pca_mode=kpca requires neigs >= 0 (0 => auto)')
+        if( trim(params%steering) /= 'none' )then
+            THROW_HARD('denoise_project supports non-steerable diffusion maps only; use steering=none')
         endif
         if( trim(params%pca_mode) == 'diffusion_maps' )then
             if( trim(lowercase(params%graph)) == 'ori' )then
@@ -523,7 +506,7 @@ contains
         if( allocated(stk_nptcls) ) deallocate(stk_nptcls)
         if( allocated(stk_offsets) ) deallocate(stk_offsets)
         call ctfstr%kill
-    end subroutine validate_diffmap_denoise_project
+    end subroutine validate_denoise_project
 
     integer function get_diffmap_stack_nptcls(spproj, istk) result(nptcls_stk)
         type(sp_project), intent(in) :: spproj
@@ -576,7 +559,6 @@ contains
         use simple_diff_map_graphs,  only: diffmap_graph, build_cls_split_graph
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
-        use simple_kpca_svd,         only: kpca_svd
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         type(sp_project), intent(inout) :: spproj
@@ -593,10 +575,10 @@ contains
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:), den_ptcls(:)
         type(image) :: cavg_raw
         type(diffmap_graph) :: graph
-        real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:)
+        real, allocatable :: avg(:), pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: pinds(:)
-        character(len=STDLEN) :: denoise_mode, recon_mode
+        character(len=STDLEN) :: recon_mode
         integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters, k_nn_eff
         real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise, recon_rmse, recon_rel_rmse, icm_score
         real :: resid_ratio
@@ -629,35 +611,21 @@ contains
             class_mskdiam = class_moldiam * MSK_EXP_FAC
         endif
         class_mskrad  = min(real(class_ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * class_mskdiam / params_mask%smpd)
-        denoise_mode = trim(params%pca_mode)
         do j = 1, nptcls
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
-            if( denoise_mode /= 'kpca' ) call imgs_ppca(j)%mask2D_softavg(class_mskrad)
+            call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        avg_ptcls = cavg_raw%serialize()
-        k_nn_eff = 0
-        recon_mode = 'n/a'
-        select case(denoise_mode)
-            case('diffusion_maps')
-                call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
-                if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; denoise_project')
-                if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
-                    THROW_HARD('denoise_project expected a non-steerable Euclidean graph')
-                endif
-                k_nn_eff = graph%k_nn
-                call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
-                call graph_nystrom_residual_preimage(imgs, cavg_raw, graph, den_ptcls, den_rank)
-                recon_mode = 'nystrom'
-                if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map denoising failed; denoise_project')
-            case('kpca')
-                k_nn_eff = 0
-                call estimate_kpca_denoise_rank(params, pcavecs, cls_id, nptcls, npix, den_rank, icm_converged, icm_iters, icm_score)
-                call kpca_reconstruct_particles(params, pcavecs, avg_ptcls, cavg_raw, nptcls, npix, den_rank, den_ptcls)
-                recon_mode = 'kpca'
-            case DEFAULT
-                THROW_HARD('unsupported pca_mode='//trim(params%pca_mode)//'; expected diffusion_maps|kpca')
-        end select
+        call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
+        if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; denoise_project')
+        if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
+            THROW_HARD('denoise_project expected a non-steerable Euclidean graph')
+        endif
+        k_nn_eff = graph%k_nn
+        call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
+        call graph_nystrom_residual_preimage(imgs, cavg_raw, graph, den_ptcls, den_rank)
+        recon_mode = 'nystrom'
+        if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map denoising failed; denoise_project')
         call calc_diffmap_reconstruction_error(imgs, den_ptcls, recon_rmse, recon_rel_rmse)
         call calc_diffmap_residual_energy_ratio(imgs, den_ptcls, cavg_raw, resid_ratio)
         icm_more_iters = (.not. icm_converged) .and. icm_iters > 0
@@ -696,7 +664,6 @@ contains
         if( allocated(den_ptcls) ) call dealloc_imgarr(den_ptcls)
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(avg) ) deallocate(avg)
-        if( allocated(avg_ptcls) ) deallocate(avg_ptcls)
         if( allocated(pcavecs) ) deallocate(pcavecs)
         if( allocated(class_diams) ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
@@ -870,74 +837,6 @@ contains
         if( allocated(coords) ) deallocate(coords)
         if( allocated(eigvals) ) deallocate(eigvals)
     end subroutine estimate_diffmap_denoise_rank
-
-    subroutine estimate_kpca_denoise_rank(params, pcavecs, cls_id, nptcls, npix, den_rank, icm_converged, icm_iters, icm_score)
-        use simple_kpca_svd, only: kpca_svd
-        type(parameters), intent(in)  :: params
-        real,             intent(in)  :: pcavecs(npix,nptcls)
-        integer,          intent(in)  :: cls_id, nptcls, npix
-        integer,          intent(out) :: den_rank, icm_iters
-        logical,          intent(out) :: icm_converged
-        real,             intent(out) :: icm_score
-        type(kpca_svd) :: kpca_model
-        real, allocatable :: eigvals(:)
-        integer :: rank_scan
-        if( params%neigs > 0 )then
-            rank_scan = min(max(1, params%neigs), max(1, nptcls - 1))
-        else
-            rank_scan = min(diffmap_denoise_auto_neigs_scan(nptcls), max(1, nptcls - 1))
-        endif
-        call kpca_model%new(nptcls, npix, rank_scan)
-        call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
-            params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
-        call kpca_model%master(pcavecs, 15)
-        eigvals = kpca_model%get_eigvals()
-        call kpca_model%kill
-        if( allocated(eigvals) .and. size(eigvals) > 0 )then
-            call select_diffmap_denoise_rank_icm(eigvals, size(eigvals), cls_id, den_rank, &
-                                                 icm_converged, icm_iters, icm_score)
-        else
-            den_rank      = rank_scan
-            icm_converged = .false.
-            icm_iters     = 0
-            icm_score     = huge(icm_score)
-            write(logfhandle,'(A,I8,A,I8)') 'kPCA rank warning: no eigenspectrum; class=', cls_id, &
-                ' fallback_features=', den_rank
-            call flush(logfhandle)
-        endif
-        den_rank = min(max(1, den_rank), max(1, nptcls - 1))
-        if( allocated(eigvals) ) deallocate(eigvals)
-    end subroutine estimate_kpca_denoise_rank
-
-    subroutine kpca_reconstruct_particles(params, pcavecs, avg_vec, avg_img, nptcls, npix, rank_keep, den_imgs)
-        use simple_kpca_svd, only: kpca_svd
-        type(parameters),            intent(in)  :: params
-        real,                        intent(in)  :: pcavecs(npix,nptcls)
-        real,                        intent(in)  :: avg_vec(npix)
-        type(image),                 intent(inout) :: avg_img
-        integer,                     intent(in)  :: nptcls, npix, rank_keep
-        type(image), allocatable,    intent(out) :: den_imgs(:)
-        type(kpca_svd) :: kpca_model
-        real, allocatable :: tmpvec(:)
-        real :: smpd
-        integer :: i, ldim(3)
-        if( rank_keep < 1 ) THROW_HARD('kpca_reconstruct_particles requires rank_keep >= 1')
-        ldim = avg_img%get_ldim()
-        smpd = avg_img%get_smpd()
-        call kpca_model%new(nptcls, npix, min(rank_keep, max(1, nptcls - 1)))
-        call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
-            params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
-        call kpca_model%master(pcavecs, 15)
-        allocate(den_imgs(nptcls))
-        allocate(tmpvec(npix), source=0.)
-        do i = 1, nptcls
-            call den_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            call kpca_model%generate(i, avg_vec, tmpvec)
-            call den_imgs(i)%unserialize(tmpvec)
-        end do
-        call kpca_model%kill
-        deallocate(tmpvec)
-    end subroutine kpca_reconstruct_particles
 
     integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
         integer, intent(in) :: nptcls
@@ -1487,7 +1386,7 @@ contains
         logical :: l_phflip
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call spproj%read(params%projfile)
-        call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         nptcls = spproj%os_ptcl2D%get_noris()
         nptcls_active = get_n_active_ptcl2D(spproj)
         nstks  = spproj%os_stk%get_noris()
@@ -1668,4 +1567,4 @@ contains
         end do
     end subroutine sort_order_by_weight_desc
 
-end module simple_diffmap_denoise_project_strategy
+end module simple_denoise_project_strategy
