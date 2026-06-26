@@ -46,7 +46,7 @@ contains
         ! set constants
         dir        = dir_in
         fbody      = fbody_in
-        fbody_raw  = fbody_in//'_frames'
+        fbody_raw  = fbody_in%to_char()//'_frames'
         l_neg      = .false.
         track_freq = max(1,nint(real(p_ptr%nframesgrp/2)))
         if( trim(p_ptr%neg) .eq. 'yes' ) l_neg = .true.
