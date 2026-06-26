@@ -885,7 +885,7 @@ contains
         if( params%neigs > 0 )then
             rank_scan = min(max(1, params%neigs), max(1, nptcls - 1))
         else
-            rank_scan = min(160, max(1, nptcls - 1))
+            rank_scan = min(diffmap_denoise_auto_neigs_scan(nptcls), max(1, nptcls - 1))
         endif
         call kpca_model%new(nptcls, npix, rank_scan)
         call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
