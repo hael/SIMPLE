@@ -125,7 +125,7 @@ type :: parameters
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
-    character(len=STDLEN)     :: preimage_mode='spectral' !< Diffusion-map denoise pre-image mode(spectral|local){spectral}
+    character(len=STDLEN)     :: preimage_mode='spectral' !< Diffusion-map denoise pre-image mode(spectral|local|nystrom){spectral}
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'

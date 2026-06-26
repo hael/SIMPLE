@@ -8,7 +8,8 @@ use simple_qsys_env,           only: qsys_env
 use simple_sp_project,         only: sp_project
 use simple_image,              only: image
 use simple_image_msk,          only: automask2D
-use simple_diff_map_graphs,    only: diffmap_graph
+use simple_diff_map_graphs,    only: diffmap_graph, graph_matvec
+use simple_linalg,             only: sparse_eigh
 use simple_eulspace_neigh_map, only: eulspace_neigh_map
 use simple_classaverager,      only: transform_ptcls
 use simple_imgfile,            only: imgfile
@@ -634,7 +635,7 @@ contains
             case('local')
                 call graph_local_residual_preimage(imgs, cavg_raw, graph, den_ptcls)
             case('nystrom')
-                call graph_nystrom_residual_preimage(imgs, cavg_raw, graph, den_ptcls)
+                call graph_nystrom_residual_preimage(imgs, cavg_raw, graph, den_ptcls, den_rank)
             case DEFAULT
                 THROW_HARD('unsupported preimage_mode='//trim(params%preimage_mode)//'; expected spectral|local|nystrom')
         end select
@@ -1091,84 +1092,85 @@ contains
         end do
     end function score_diffmap_denoise_icm_rank_solution
 
-    subroutine graph_nystrom_residual_preimage(raw_imgs, avg_img, graph, den_imgs)
+    subroutine graph_nystrom_residual_preimage(raw_imgs, avg_img, graph, den_imgs, rank_keep)
         type(image),       intent(inout) :: raw_imgs(:)
         type(image),       intent(inout) :: avg_img
         type(diffmap_graph), intent(in)  :: graph
         type(image), allocatable, intent(out) :: den_imgs(:)
-        type(image), allocatable :: resid_heap(:)
-        real :: w, wsum
+        integer,            intent(in)  :: rank_keep
+        type(image), allocatable :: mode_imgs(:)
+        type(image) :: resid_img
+        real, allocatable :: evals(:), evecs(:,:), phi_ext(:,:)
+        real :: coeff, op_w
         real :: smpd
-        integer :: i, j, p, n, ithr, ldim(3)
-        integer, allocatable :: landmark_inds(:)
-        integer :: nlands
+        integer :: i, j, p, k, n, ldim(3), rank_used, nev, eig_idx, eig_info, max_basis
         n = size(raw_imgs)
         if( graph%n /= n ) THROW_HARD('nystrom preimage graph/image count mismatch; diffmap_denoise_project')
+        if( n < 3 ) THROW_HARD('nystrom preimage requires at least three graph nodes; diffmap_denoise_project')
         ldim = avg_img%get_ldim()
         smpd = avg_img%get_smpd()
+        rank_used = min(max(1, rank_keep), max(1, n - 2))
+        nev = rank_used + 1
+        allocate(evals(nev), evecs(n,nev), phi_ext(n,rank_used), source=0.)
+        max_basis = min(n, max(160, 8 * nev + 80))
+        call sparse_eigh(graph_matvec, graph, n, nev, evals, evecs, tol=1.e-5, max_basis=max_basis, info=eig_info)
+        if( eig_info /= 0 ) THROW_HARD('sparse eigensolve failed in nystrom preimage; diffmap_denoise_project')
+        do k = 1, rank_used
+            eig_idx = nev - k
+            if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
+            do i = 1, n
+                coeff = 0.
+                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                    j = graph%colind(p)
+                    if( j < 1 .or. j > n ) cycle
+                    if( allocated(graph%wnorm) )then
+                        op_w = graph%wnorm(p)
+                    else
+                        op_w = graph%w(p)
+                    endif
+                    coeff = coeff + op_w * evecs(j,eig_idx)
+                end do
+                phi_ext(i,k) = coeff / evals(eig_idx)
+            end do
+        end do
         allocate(den_imgs(n))
-        allocate(resid_heap(nthr_glob))
+        allocate(mode_imgs(rank_used))
         do i = 1, n
             call den_imgs(i)%new(ldim, smpd, wthreads=.false.)
         end do
-        do ithr = 1, nthr_glob
-            call resid_heap(ithr)%new(ldim, smpd, wthreads=.false.)
+        do k = 1, rank_used
+            call mode_imgs(k)%new(ldim, smpd, wthreads=.false.)
+            call mode_imgs(k)%zero()
         end do
-        ! Select landmarks: evenly spaced across particles
-        nlands = max(2, min(max(1, n/3), 20))
-        allocate(landmark_inds(nlands))
-        do i = 1, nlands
-            landmark_inds(i) = 1 + ((i-1) * (n-1)) / max(1, nlands-1)
+        call resid_img%new(ldim, smpd, wthreads=.false.)
+        do k = 1, rank_used
+            eig_idx = nev - k
+            do i = 1, n
+                coeff = evecs(i,eig_idx)
+                if( abs(coeff) <= real(DTINY) ) cycle
+                call resid_img%copy_fast(raw_imgs(i))
+                call resid_img%subtr(avg_img)
+                call mode_imgs(k)%add(resid_img, coeff)
+            end do
         end do
-        ! Reconstruction: landmarks provide backbone + k_nn neighbors for detail
-        !$omp parallel do default(shared) private(i,j,p,w,wsum,ithr) schedule(dynamic) proc_bind(close)
+        !$omp parallel do default(shared) private(i,k,coeff) schedule(dynamic) proc_bind(close)
         do i = 1, n
-            ithr = omp_get_thread_num() + 1
             call den_imgs(i)%copy_fast(avg_img)
-            wsum = 0.d0
-            ! Contribute from landmarks with higher weight
-            do j = 1, nlands
-                if( landmark_inds(j) == i ) cycle
-                w = 0.d0
-                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                    if( graph%colind(p) == landmark_inds(j) )then
-                        w = graph%w(p)
-                        exit
-                    endif
-                end do
-                if( w > real(DTINY) )then
-                    call resid_heap(ithr)%copy_fast(raw_imgs(landmark_inds(j)))
-                    call resid_heap(ithr)%subtr(avg_img)
-                    call den_imgs(i)%add(resid_heap(ithr), w)
-                    wsum = wsum + w
-                endif
+            do k = 1, rank_used
+                coeff = phi_ext(i,k)
+                if( abs(coeff) <= real(DTINY) ) cycle
+                call den_imgs(i)%add(mode_imgs(k), coeff)
             end do
-            ! Contribute from k_nn neighbors (already excluding self)
-            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                j = graph%colind(p)
-                if( j < 1 .or. j > n ) cycle
-                w = graph%w(p)
-                if( w > real(DTINY) )then
-                    call resid_heap(ithr)%copy_fast(raw_imgs(j))
-                    call resid_heap(ithr)%subtr(avg_img)
-                    call den_imgs(i)%add(resid_heap(ithr), w)
-                    wsum = wsum + w
-                endif
-            end do
-            ! Normalize: den_imgs = avg_img + weighted_avg(residuals)
-            if( wsum > real(DTINY) )then
-                call den_imgs(i)%subtr(avg_img)
-                call den_imgs(i)%mul(1. / wsum)
-                call den_imgs(i)%add(avg_img)
-            else
-                call den_imgs(i)%copy_fast(raw_imgs(i))
-            endif
         end do
         !$omp end parallel do
-        do ithr = 1, nthr_glob
-            if( resid_heap(ithr)%exists() ) call resid_heap(ithr)%kill
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,F8.4)') 'Diffmap Nyström preimage: n=', n, ' rank=', rank_used, &
+            ' nnz=', graph%nnz, ' lambda_min=', minval(evals(max(1,nev-rank_used):nev-1))
+        call flush(logfhandle)
+        do k = 1, rank_used
+            if( mode_imgs(k)%exists() ) call mode_imgs(k)%kill
         end do
-        deallocate(resid_heap, landmark_inds)
+        if( resid_img%exists() ) call resid_img%kill
+        deallocate(mode_imgs, evals, evecs, phi_ext)
     end subroutine graph_nystrom_residual_preimage
 
     subroutine graph_local_residual_preimage(raw_imgs, avg_img, graph, den_imgs)
