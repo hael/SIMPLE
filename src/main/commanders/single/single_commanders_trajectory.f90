@@ -368,11 +368,17 @@ contains
         class(commander_trajectory_denoise), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
-        if( .not. cline%defined('neigs')                   ) call cline%set('neigs', 160)
+        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode', 'diffusion_maps')
+        if( .not. cline%defined('neigs') )then
+            if( cline%get_carg('pca_mode') == 'diffusion_maps' )then
+                call cline%set('neigs', 0)
+            else
+                call cline%set('neigs', 160)
+            endif
+        endif
         if( .not. cline%defined('kpca_nystrom_npts')       ) call cline%set('kpca_nystrom_npts', 512)
         if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
         if( .not. cline%defined('kpca_ker')                ) call cline%set('kpca_ker', 'rbf')
-        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode', 'ppca')
         if( .not. cline%defined('k_nn')                    ) call cline%set('k_nn', 10)
         if( .not. cline%defined('steerable_nmodes')        ) call cline%set('steerable_nmodes', 4)
         call xkpca_den%execute(cline)

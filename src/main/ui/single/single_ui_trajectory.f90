@@ -132,8 +132,8 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_denoise%new(&
         &'trajectory_denoise',&                                       ! name
-        &'kPCA-based denoising',&                                     ! descr_short
-        &'is a program for kPCA-based denoising of an image stack',&  ! descr_long
+        &'diffusion-map trajectory denoising',&                       ! descr_short
+        &'is a program for diffusion-map denoising of an image stack',& ! descr_long
         &'single_exec',&                                              ! executable
         &.false., gui_advanced=.false.)                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -147,10 +147,9 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, diffusion maps, or steerable diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map){ppca}', .false., 'ppca')
-        call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Steerable graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=steerable_diff_map', '# neighbors', .false., 10.0)
-        call trajectory_denoise%add_input(UI_FILT, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used for pca_mode=steerable_diff_map', '# modes', .false., 4.0)
+        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of diffusion-map components (0 => auto; default 0)', 'Number of diffusion-map components (0 => auto; default 0)', '# eigenvecs', .false., 0.0)
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, or kernel PCA', 'PCA methods', '(diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){diffusion_maps}', .false., 'diffusion_maps')
+        call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 10; try 10-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 10.0)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
