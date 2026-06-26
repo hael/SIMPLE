@@ -963,12 +963,8 @@ contains
             call init_frontier()
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                ! Multi-state state-bucket assignment is deterministic to preserve
-                ! split-state separation and avoid stochastic cross-state drift.
-                ! Legacy stochastic option kept here for quick A/B testing:
-                ! assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                !     &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
-                assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
+                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                    &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_for_state
