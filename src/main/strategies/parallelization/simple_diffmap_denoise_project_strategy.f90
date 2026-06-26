@@ -629,13 +629,13 @@ contains
             class_mskdiam = class_moldiam * MSK_EXP_FAC
         endif
         class_mskrad  = min(real(class_ldim(1) / 2) - COSMSKHALFWIDTH - 1., 0.5 * class_mskdiam / params_mask%smpd)
+        denoise_mode = trim(params%pca_mode)
         do j = 1, nptcls
             call imgs_ppca(j)%norm_noise(build%lmsk, sdev_noise)
-            call imgs_ppca(j)%mask2D_softavg(class_mskrad)
+            if( denoise_mode /= 'kpca' ) call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         avg_ptcls = cavg_raw%serialize()
-        denoise_mode = trim(params%pca_mode)
         k_nn_eff = 0
         recon_mode = 'n/a'
         select case(denoise_mode)
