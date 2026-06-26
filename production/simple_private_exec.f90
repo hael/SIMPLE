@@ -24,7 +24,7 @@ type(commander_cavgassemble)            :: xcavgassemble
 type(commander_rank_cavgs)              :: xrank_cavgs
 type(commander_export_cavgs)            :: xexport_cavgs
 type(commander_cls_split)               :: xcls_split
-type(commander_diffmap_denoise_project) :: xdiffmap_denoise_project
+type(commander_denoise_project)         :: xdenoise_project
 
 ! REFINE3D PROGRAMS
 type(commander_refine3D_distr_worker)   :: xrefine3D_worker
@@ -39,7 +39,7 @@ type(commander_prob_tab2D)              :: xprob_tab2D
 type(commander_prob_align2D)            :: xprob_align2D
 
 ! RECONSTRUCTION PROGRAMS
-type(commander_volassemble)   :: xvolassemble
+type(commander_volassemble)             :: xvolassemble
 type(commander_rec3D_worker)            :: xrec3D
 
 ! CHECKER PROGRAMS
@@ -69,7 +69,7 @@ type(commander_print_project_vals)      :: xprint_project_vals
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(commander_prune_project)           :: xprune_project
-type(commander_scale_project)     :: xscale_project
+type(commander_scale_project)           :: xscale_project
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(commander_track_particles)         :: xtrack_particles
@@ -157,8 +157,8 @@ select case(prg)
         call xexport_cavgs%execute(cline)
     case( 'cls_split' )
         call xcls_split%execute(cline)
-    case( 'diffmap_denoise_project' )
-        call xdiffmap_denoise_project%execute(cline)
+    case( 'denoise_project' )
+        call xdenoise_project%execute(cline)
 
     ! REFINE3D PROGRAMS
     case( 'refine3D' )

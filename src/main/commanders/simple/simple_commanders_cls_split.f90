@@ -10,10 +10,10 @@ type, extends(commander_base) :: commander_cls_split
     procedure :: execute => exec_cls_split
 end type commander_cls_split
 
-type, extends(commander_base) :: commander_diffmap_denoise_project
+type, extends(commander_base) :: commander_denoise_project
   contains
-    procedure :: execute => exec_diffmap_denoise_project
-end type commander_diffmap_denoise_project
+        procedure :: execute => exec_denoise_project
+end type commander_denoise_project
 
 contains
 
@@ -53,10 +53,10 @@ contains
         call simple_end('**** SIMPLE_CLS_SPLIT NORMAL STOP ****')
     end subroutine exec_cls_split
 
-    subroutine exec_diffmap_denoise_project( self, cline )
+    subroutine exec_denoise_project( self, cline )
         use simple_diffmap_denoise_project_strategy
-        class(commander_diffmap_denoise_project), intent(inout) :: self
-        class(cmdline),                            intent(inout) :: cline
+        class(commander_denoise_project), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
         class(diffmap_denoise_project_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
@@ -67,7 +67,7 @@ contains
         call strategy%cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)
         call build%kill_general_tbox
-        call simple_end('**** SIMPLE_DIFFMAP_DENOISE_PROJECT NORMAL STOP ****')
-    end subroutine exec_diffmap_denoise_project
+        call simple_end('**** SIMPLE_DENOISE_PROJECT NORMAL STOP ****')
+    end subroutine exec_denoise_project
 
 end module simple_commanders_cls_split

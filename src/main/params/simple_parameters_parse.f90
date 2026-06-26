@@ -152,7 +152,6 @@ contains
         call reg%add_char('plot_key', self%plot_key)
         call reg%add_char('postprocess', self%postprocess)
         call reg%add_char('pre_norm', self%pre_norm)
-        call reg%add_char('preimage_mode', self%preimage_mode)
         call reg%add_char('prg', self%prg)
         call reg%add_char('print_states', self%print_states)
         call reg%add_char('prob_inpl', self%prob_inpl)

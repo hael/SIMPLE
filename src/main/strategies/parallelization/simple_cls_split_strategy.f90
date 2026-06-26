@@ -402,7 +402,7 @@ contains
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         l_mskdiam_override = cline%defined('mskdiam')
         if( trim(params%gen_model) == 'yes' )then
-            THROW_WARN('gen_model is ignored by cls_split; use diffmap_denoise_project for generated/denoised particles')
+            THROW_WARN('gen_model is ignored by cls_split; use denoise_project for generated/denoised particles')
         endif
         call determine_phase_flip(spproj, params, l_phflip)
         if( l_write_project )then

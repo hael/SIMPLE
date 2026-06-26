@@ -112,13 +112,13 @@ contains
         is_master = (nparts > 1) .and. (.not. is_worker)
         if( is_master )then
             allocate(diffmap_denoise_project_master_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED DIFFMAP_DENOISE_PROJECT (MASTER)'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED DENOISE_PROJECT (MASTER)'
         else if( is_worker )then
             allocate(diffmap_denoise_project_worker_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DIFFMAP_DENOISE_PROJECT (WORKER)'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DENOISE_PROJECT (WORKER)'
         else
             allocate(diffmap_denoise_project_shmem_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DIFFMAP_DENOISE_PROJECT (SHARED-MEMORY)'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DENOISE_PROJECT (SHARED-MEMORY)'
         endif
     end function create_diffmap_denoise_project_strategy
 
@@ -131,7 +131,12 @@ contains
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
         if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',     10)
-        if( .not. cline%defined('preimage_mode') ) call cline%set('preimage_mode', 'local')
+        if( .not. cline%defined('kpca_ker') ) call cline%set('kpca_ker', 'rbf')
+        if( .not. cline%defined('kpca_backend') ) call cline%set('kpca_backend', 'nystrom')
+        if( .not. cline%defined('kpca_rbf_gamma') ) call cline%set('kpca_rbf_gamma', 0.)
+        if( .not. cline%defined('kpca_nystrom_npts') ) call cline%set('kpca_nystrom_npts', 512)
+        if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
+        if( .not. cline%defined('neigs') ) call cline%set('neigs', 0)
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -180,9 +185,9 @@ contains
         type(builder),                                  intent(inout) :: build
         class(cmdline),                                 intent(inout) :: cline
         call init_common(params, build, cline)
-        if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for diffmap_denoise_project worker execution')
+        if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for denoise_project worker execution')
         if( .not. cline%defined('class_assignment') )then
-            THROW_HARD('CLASS_ASSIGNMENT must be defined for diffmap_denoise_project worker execution')
+            THROW_HARD('CLASS_ASSIGNMENT must be defined for denoise_project worker execution')
         endif
     end subroutine worker_initialize
 
@@ -195,7 +200,7 @@ contains
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_diffmap_denoise_project(params, build, cline, spproj, params%part, .false.)
-        call qsys_job_finished(params, string('simple_diffmap_denoise_project_strategy :: worker_execute'))
+        call qsys_job_finished(params, string('simple_denoise_project_strategy :: worker_execute'))
         call spproj%kill
     end subroutine worker_execute
 
@@ -228,14 +233,14 @@ contains
         else
             self%nparts_run = min(max(1, params%nparts), size(cls_inds))
         endif
-        write(logfhandle,'(A,I8,A,I8,A,I8)') 'Diffmap denoise worker planning: requested_nparts=', params%nparts, &
+        write(logfhandle,'(A,I8,A,I8,A,I8)') 'Denoise worker planning: requested_nparts=', params%nparts, &
             ' eligible_classes=', size(cls_inds), ' effective_nparts=', self%nparts_run
         call flush(logfhandle)
         if( self%nparts_run < params%nparts )then
-            write(logfhandle,'(A)') 'Diffmap denoise note: reducing worker count because classes are the scheduling unit.'
+            write(logfhandle,'(A)') 'Denoise note: reducing worker count because classes are the scheduling unit.'
             call flush(logfhandle)
         endif
-        call set_master_num_threads(self%nthr_master, string('DIFFMAP_DENOISE_PROJECT'))
+        call set_master_num_threads(self%nthr_master, string('DENOISE_PROJECT'))
         call prepare_class_partitions(self, params, cls_inds, cls_pops)
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
         call cline%set('mkdir', 'no')
@@ -307,7 +312,7 @@ contains
         allocate(self%part_params(self%nparts_run))
         do ipart = 1, self%nparts_run
             if( part_counts(ipart) > 1 ) call hpsort(part_cls(1:part_counts(ipart), ipart))
-            fname = string('diffmap_denoise_classes_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            fname = string('denoise_classes_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call arr2txtfile(part_cls(1:part_counts(ipart), ipart), fname)
             call self%part_params(ipart)%new(1)
             call self%part_params(ipart)%set('class_assignment', fname%to_char())
@@ -333,7 +338,7 @@ contains
         integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
         call validate_diffmap_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
-        if( trim(lowercase(params%graph)) == 'ori' )then
+        if( trim(params%pca_mode) == 'diffusion_maps' .and. trim(lowercase(params%graph)) == 'ori' )then
             call run_diffmap_so3_mixture_graphs(params, build, spproj, cls_inds)
             if( allocated(cls_inds) ) deallocate(cls_inds)
             if( allocated(cls_pops) ) deallocate(cls_pops)
@@ -346,13 +351,13 @@ contains
         funit_map = -1
         allocate(raw_stks(1), den_stks(1))
         if( l_write_project )then
-            raw_stks(1) = string('diffmap_raw_particles.mrcs')
-            den_stks(1) = string('diffmap_denoised_particles.mrcs')
-            map_fname   = string('diffmap_particle_map.txt')
+            raw_stks(1) = string('denoise_raw_particles.mrcs')
+            den_stks(1) = string('denoise_particles.mrcs')
+            map_fname   = string('denoise_particle_map.txt')
         else
-            raw_stks(1) = string('diffmap_raw_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            den_stks(1) = string('diffmap_denoised_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
-            map_fname = string('diffmap_particle_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
+            raw_stks(1) = string('denoise_raw_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            den_stks(1) = string('denoise_particles_part')//int2str_pad(part, params%numlen)//'.mrcs'
+            map_fname = string('denoise_particle_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
         endif
         call del_file(raw_stks(1))
         call del_file(den_stks(1))
@@ -379,13 +384,13 @@ contains
         close(funit_map)
         if( l_write_project .and. any(.not. processed) )then
             write(logfhandle,'(A,I10)') 'unprocessed particles: ', count(.not. processed)
-            THROW_HARD('diffmap_denoise_project requires every active ptcl2D particle to have a valid class assignment')
+            THROW_HARD('denoise_project requires every active ptcl2D particle to have a valid class assignment')
         endif
         if( l_write_project )then
             call write_diffmap_project(params, spproj, raw_stks(1), den_stks(1), outproj)
-            write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
+            write(logfhandle,'(A,A)') 'Denoise project written: ', params%projfile%to_char()
         endif
-        write(logfhandle,'(A,I10)') 'Diffmap denoise project particles: ', nprocessed
+        write(logfhandle,'(A,I10)') 'Denoise project particles: ', nprocessed
         call flush(logfhandle)
         call outproj%kill
         if( allocated(raw_stks) ) deallocate(raw_stks)
@@ -407,42 +412,51 @@ contains
         logical, allocatable :: seen_slots(:)
         integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode, nptcls_slots, nptcls_active
         if( trim(params%oritype) /= 'ptcl2D' )then
-            THROW_HARD('diffmap_denoise_project supports oritype=ptcl2D input only')
+            THROW_HARD('denoise_project supports oritype=ptcl2D input only')
         endif
-        if( trim(params%pca_mode) /= 'diffusion_maps' )then
-            THROW_HARD('diffmap_denoise_project supports pca_mode=diffusion_maps only')
-        endif
-        select case(trim(lowercase(params%graph)))
-            case('euc','ori')
+        select case(trim(params%pca_mode))
+            case('diffusion_maps','kpca')
             case DEFAULT
-                THROW_HARD('diffmap_denoise_project supports graph=euc|ori')
+                THROW_HARD('denoise_project supports pca_mode=diffusion_maps|kpca')
         end select
-        if( trim(params%steering) /= 'none' )then
-            THROW_HARD('diffmap_denoise_project supports non-steerable diffusion maps only; use steering=none')
-        endif
-        if( trim(lowercase(params%graph)) == 'ori' )then
-            if( params%nspace < 2 ) THROW_HARD('diffmap_denoise_project graph=ori requires nspace >= 2')
-            if( params%nspace_sub < 1 ) THROW_HARD('diffmap_denoise_project graph=ori requires nspace_sub >= 1')
-            if( params%nspace_sub > params%nspace )then
-                THROW_HARD('diffmap_denoise_project graph=ori requires nspace_sub <= nspace')
+        if( trim(params%pca_mode) == 'diffusion_maps' )then
+            select case(trim(lowercase(params%graph)))
+                case('euc','ori')
+                case DEFAULT
+                    THROW_HARD('denoise_project supports graph=euc|ori for pca_mode=diffusion_maps')
+            end select
+            if( trim(params%steering) /= 'none' )then
+                THROW_HARD('denoise_project supports non-steerable diffusion maps only; use steering=none')
             endif
-            if( mod(params%nspace, 2) /= 0 .or. mod(params%nspace_sub, 2) /= 0 )then
-                THROW_HARD('diffmap_denoise_project graph=ori requires even nspace and nspace_sub')
+        else
+            if( trim(lowercase(params%graph)) /= 'euc' )then
+                THROW_HARD('denoise_project pca_mode=kpca requires graph=euc')
+            endif
+            if( trim(params%steering) /= 'none' )then
+                THROW_HARD('denoise_project pca_mode=kpca requires steering=none')
+            endif
+            if( params%neigs < 0 ) THROW_HARD('denoise_project pca_mode=kpca requires neigs >= 0 (0 => auto)')
+        endif
+        if( trim(params%pca_mode) == 'diffusion_maps' )then
+            if( trim(lowercase(params%graph)) == 'ori' )then
+                if( params%nspace < 2 ) THROW_HARD('denoise_project graph=ori requires nspace >= 2')
+                if( params%nspace_sub < 1 ) THROW_HARD('denoise_project graph=ori requires nspace_sub >= 1')
+                if( params%nspace_sub > params%nspace )then
+                    THROW_HARD('denoise_project graph=ori requires nspace_sub <= nspace')
+                endif
+                if( mod(params%nspace, 2) /= 0 .or. mod(params%nspace_sub, 2) /= 0 )then
+                    THROW_HARD('denoise_project graph=ori requires even nspace and nspace_sub')
+                endif
             endif
         endif
-        select case(trim(lowercase(params%preimage_mode)))
-            case('spectral','local','nystrom')
-            case DEFAULT
-                THROW_HARD('diffmap_denoise_project preimage_mode must be spectral|local|nystrom')
-        end select
-        if( params%k_nn < 1 ) THROW_HARD('diffmap_denoise_project requires k_nn >= 1')
+        if( params%k_nn < 1 ) THROW_HARD('denoise_project requires k_nn >= 1')
         nptcls = spproj%os_ptcl2D%get_noris()
-        if( nptcls < 1 ) THROW_HARD('empty ptcl2D field; diffmap_denoise_project')
+        if( nptcls < 1 ) THROW_HARD('empty ptcl2D field; denoise_project')
         if( spproj%os_ptcl3D%get_noris() /= nptcls )then
-            THROW_HARD('ptcl2D/ptcl3D particle counts differ; diffmap_denoise_project')
+            THROW_HARD('ptcl2D/ptcl3D particle counts differ; denoise_project')
         endif
         nstks = spproj%os_stk%get_noris()
-        if( nstks < 1 ) THROW_HARD('empty stack field; diffmap_denoise_project')
+        if( nstks < 1 ) THROW_HARD('empty stack field; denoise_project')
         allocate(stk_offsets(nstks), stk_nptcls(nstks), source=0)
         nptcls_slots = 0
         ctf_mode = 0
@@ -450,17 +464,17 @@ contains
             stk_offsets(istk) = nptcls_slots
             stk_nptcls(istk) = get_diffmap_stack_nptcls(spproj, istk)
             nptcls_slots = nptcls_slots + stk_nptcls(istk)
-            if( .not. spproj%os_stk%isthere(istk, 'ctf') ) THROW_HARD('stack ctf key missing; diffmap_denoise_project')
+            if( .not. spproj%os_stk%isthere(istk, 'ctf') ) THROW_HARD('stack ctf key missing; denoise_project')
             call spproj%os_stk%getter(istk, 'ctf', ctfstr)
             select case(trim(ctfstr%to_char()))
                 case('yes')
                     if( ctf_mode == 0 ) ctf_mode = CTFFLAG_YES
-                    if( ctf_mode /= CTFFLAG_YES ) THROW_HARD('mixed ctf=yes/ctf=flip stacks are not supported; diffmap_denoise_project')
+                    if( ctf_mode /= CTFFLAG_YES ) THROW_HARD('mixed ctf=yes/ctf=flip stacks are not supported; denoise_project')
                 case('flip')
                     if( ctf_mode == 0 ) ctf_mode = CTFFLAG_FLIP
-                    if( ctf_mode /= CTFFLAG_FLIP ) THROW_HARD('mixed ctf=yes/ctf=flip stacks are not supported; diffmap_denoise_project')
+                    if( ctf_mode /= CTFFLAG_FLIP ) THROW_HARD('mixed ctf=yes/ctf=flip stacks are not supported; denoise_project')
                 case DEFAULT
-                    THROW_HARD('diffmap_denoise_project requires ctf=yes or ctf=flip input stacks')
+                    THROW_HARD('denoise_project requires ctf=yes or ctf=flip input stacks')
             end select
         enddo
         l_phflip = ctf_mode == CTFFLAG_YES
@@ -470,24 +484,24 @@ contains
             if( spproj%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
             nptcls_active = nptcls_active + 1
             if( .not. spproj%os_ptcl2D%isthere(iptcl, 'class') )then
-                THROW_HARD('ptcl2D class assignment missing; diffmap_denoise_project')
+                THROW_HARD('ptcl2D class assignment missing; denoise_project')
             endif
             cls = spproj%os_ptcl2D%get_int(iptcl, 'class')
-            if( cls <= 0 ) THROW_HARD('ptcl2D class assignment must be positive; diffmap_denoise_project')
+            if( cls <= 0 ) THROW_HARD('ptcl2D class assignment must be positive; denoise_project')
             call spproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
-            if( stkind < 1 .or. stkind > nstks ) THROW_HARD('invalid particle stkind; diffmap_denoise_project')
+            if( stkind < 1 .or. stkind > nstks ) THROW_HARD('invalid particle stkind; denoise_project')
             if( indstk < 1 .or. indstk > stk_nptcls(stkind) )then
-                THROW_HARD('invalid particle indstk; diffmap_denoise_project')
+                THROW_HARD('invalid particle indstk; denoise_project')
             endif
             slot = stk_offsets(stkind) + indstk
-            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid particle stack slot; diffmap_denoise_project')
-            if( seen_slots(slot) ) THROW_HARD('duplicate particle stack slot; diffmap_denoise_project')
+            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid particle stack slot; denoise_project')
+            if( seen_slots(slot) ) THROW_HARD('duplicate particle stack slot; denoise_project')
             seen_slots(slot) = .true.
         enddo
-        if( nptcls_active < 1 ) THROW_HARD('No active ptcl2D particles found; diffmap_denoise_project')
+        if( nptcls_active < 1 ) THROW_HARD('No active ptcl2D particles found; denoise_project')
         cls_inds = spproj%os_ptcl2D%get_label_inds('class')
         cls_inds = pack(cls_inds, mask=cls_inds > 0)
-        if( size(cls_inds) < 1 ) THROW_HARD('No positive ptcl2D classes found; diffmap_denoise_project')
+        if( size(cls_inds) < 1 ) THROW_HARD('No positive ptcl2D classes found; denoise_project')
         allocate(cls_pops(size(cls_inds)), source=0)
         do icls = 1, size(cls_inds)
             call spproj%os_ptcl2D%get_pinds(cls_inds(icls), 'class', pinds)
@@ -498,13 +512,13 @@ contains
             if( cls_pops(icls) == 0 ) cycle
             if( cls_pops(icls) < 3 )then
                 write(logfhandle,'(A,I8,A,I8)') 'class=', cls_inds(icls), ' pop=', cls_pops(icls)
-                THROW_HARD('diffmap_denoise_project requires at least 3 particles per class')
+                THROW_HARD('denoise_project requires at least 3 particles per class')
             endif
         end do
         cls_inds = pack(cls_inds, mask=cls_pops > 0)
         cls_pops = pack(cls_pops, mask=cls_pops > 0)
-        if( size(cls_inds) < 1 ) THROW_HARD('No active ptcl2D classes found; diffmap_denoise_project')
-        if( sum(cls_pops) /= nptcls_active ) THROW_HARD('class populations do not cover all active particles; diffmap_denoise_project')
+        if( size(cls_inds) < 1 ) THROW_HARD('No active ptcl2D classes found; denoise_project')
+        if( sum(cls_pops) /= nptcls_active ) THROW_HARD('class populations do not cover all active particles; denoise_project')
         if( allocated(seen_slots) ) deallocate(seen_slots)
         if( allocated(stk_nptcls) ) deallocate(stk_nptcls)
         if( allocated(stk_offsets) ) deallocate(stk_offsets)
@@ -525,7 +539,7 @@ contains
         endif
         if( nptcls_stk < 1 )then
             write(logfhandle,'(A,I8)') 'invalid stack particle count at stkind=', istk
-            THROW_HARD('diffmap_denoise_project requires stack nptcls_stk or valid fromp/top range')
+            THROW_HARD('denoise_project requires stack nptcls_stk or valid fromp/top range')
         endif
     end function get_diffmap_stack_nptcls
 
@@ -554,15 +568,15 @@ contains
         cls_pops = pack(cls_pops, mask=keep_mask)
         deallocate(keep_mask)
         if( allocated(assigned_classes) ) deallocate(assigned_classes)
-        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for diffmap_denoise_project')
+        if( size(cls_inds) < 1 ) THROW_HARD('No classes selected for denoise_project')
     end subroutine filter_classes_by_assignment
 
     subroutine write_diffmap_denoised_class(params, build, spproj, cls_id, l_phflip, l_mskdiam_override, raw_stks, den_stks, &
                                             processed, nprocessed, l_dense_output, map_unit, l_index_by_pind, class_index)
         use simple_diff_map_graphs,  only: diffmap_graph, build_cls_split_graph
-        use simple_diff_map_denoise, only: graph_coeffproj_denoise
         use simple_imgarr_utils,     only: dealloc_imgarr, copy_imgarr
         use simple_imgproc,          only: make_pcavecs
+        use simple_kpca_svd,         only: kpca_svd
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         type(sp_project), intent(inout) :: spproj
@@ -582,15 +596,15 @@ contains
         real, allocatable :: avg(:), avg_ptcls(:), pcavecs(:,:)
         real, allocatable :: class_diams(:), class_shifts(:,:)
         integer, allocatable :: pinds(:)
-        character(len=STDLEN) :: preimage_mode
-        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters
+        character(len=STDLEN) :: denoise_mode, recon_mode
+        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters, k_nn_eff
         real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise, recon_rmse, recon_rel_rmse, icm_score
         real :: resid_ratio
         logical :: icm_converged, icm_more_iters
         call transform_ptcls(params, build, spproj, 'ptcl2D', cls_id, imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
-        if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; diffmap_denoise_project')
+        if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; denoise_project')
         nptcls = size(imgs)
-        if( nptcls < 3 ) THROW_HARD('at least 3 particles per class required; diffmap_denoise_project')
+        if( nptcls < 3 ) THROW_HARD('at least 3 particles per class required; denoise_project')
         imgs_ppca = copy_imgarr(imgs)
         call imgs_ppca(1)%memoize_mask_coords()
         allocate(class_mask(1))
@@ -620,38 +634,42 @@ contains
             call imgs_ppca(j)%mask2D_softavg(class_mskrad)
         end do
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
-        call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
-        if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; diffmap_denoise_project')
-        if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
-            THROW_HARD('diffmap_denoise_project expected a non-steerable Euclidean graph')
-        endif
-        call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
         avg_ptcls = cavg_raw%serialize()
-        preimage_mode = lowercase(trim(params%preimage_mode))
-        select case(trim(preimage_mode))
-            case('spectral')
-                call graph_coeffproj_denoise(params, imgs, avg_ptcls, graph, den_ptcls, &
-                    rank_keep_override=den_rank, verbose=.false.)
-            case('local')
-                call graph_local_residual_preimage(imgs, cavg_raw, graph, den_ptcls)
-            case('nystrom')
+        denoise_mode = trim(params%pca_mode)
+        k_nn_eff = 0
+        recon_mode = 'n/a'
+        select case(denoise_mode)
+            case('diffusion_maps')
+                call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
+                if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; denoise_project')
+                if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
+                    THROW_HARD('denoise_project expected a non-steerable Euclidean graph')
+                endif
+                k_nn_eff = graph%k_nn
+                call estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
                 call graph_nystrom_residual_preimage(imgs, cavg_raw, graph, den_ptcls, den_rank)
+                recon_mode = 'nystrom'
+                if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map denoising failed; denoise_project')
+            case('kpca')
+                k_nn_eff = 0
+                call estimate_kpca_denoise_rank(params, pcavecs, cls_id, nptcls, npix, den_rank, icm_converged, icm_iters, icm_score)
+                call kpca_reconstruct_particles(params, pcavecs, avg_ptcls, cavg_raw, nptcls, npix, den_rank, den_ptcls)
+                recon_mode = 'kpca'
             case DEFAULT
-                THROW_HARD('unsupported preimage_mode='//trim(params%preimage_mode)//'; expected spectral|local|nystrom')
+                THROW_HARD('unsupported pca_mode='//trim(params%pca_mode)//'; expected diffusion_maps|kpca')
         end select
-        if( .not. allocated(den_ptcls) ) THROW_HARD('diffusion-map generative denoising failed; diffmap_denoise_project')
         call calc_diffmap_reconstruction_error(imgs, den_ptcls, recon_rmse, recon_rel_rmse)
         call calc_diffmap_residual_energy_ratio(imgs, den_ptcls, cavg_raw, resid_ratio)
         icm_more_iters = (.not. icm_converged) .and. icm_iters > 0
         write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,A,A,ES12.4,A,ES12.4,A,ES12.4,A,I8,A,A,A,A)') &
             '>>> CLASS class=', cls_id, ' index=', class_index, ' nptcls=', nptcls, ' features=', den_rank, &
-            ' k_nn=', graph%k_nn, ' preimage=', trim(preimage_mode), &
+            ' k_nn=', k_nn_eff, ' recon=', trim(recon_mode), &
             ' recon_rmse=', recon_rmse, ' recon_rel_rmse=', recon_rel_rmse, &
             ' resid_energy=', resid_ratio, ' icm_iters=', icm_iters, &
             ' icm_converged=', merge('yes','no ',icm_converged), ' icm_more_iters=', merge('yes','no ',icm_more_iters)
         call flush(logfhandle)
         do j = 1, nptcls
-            if( processed(pinds(j)) ) THROW_HARD('particle was processed twice; diffmap_denoise_project')
+            if( processed(pinds(j)) ) THROW_HARD('particle was processed twice; denoise_project')
             call spproj%map_ptcl_ind2stk_ind('ptcl2D', pinds(j), stkind, indstk)
             if( l_dense_output )then
                 if( l_index_by_pind )then
@@ -663,7 +681,7 @@ contains
                 call write_diffmap_stack_image(den_stks(1), local_ind, den_ptcls(j))
                 write(map_unit,'(I10,1X,I8,1X,I8,1X,I10)') pinds(j), stkind, indstk, local_ind
             else
-                if( stkind < 1 .or. stkind > size(raw_stks) ) THROW_HARD('invalid output stack index; diffmap_denoise_project')
+                if( stkind < 1 .or. stkind > size(raw_stks) ) THROW_HARD('invalid output stack index; denoise_project')
                 call write_diffmap_stack_image(raw_stks(stkind), indstk, imgs(j))
                 call write_diffmap_stack_image(den_stks(stkind), indstk, den_ptcls(j))
             endif
@@ -721,11 +739,11 @@ contains
             call spproj%os_ptcl3D%get_ori(iptcl, o)
             full_proj = build%pgrpsyms%find_closest_proj(eulspace, o)
             if( full_proj < 1 .or. full_proj > size(full2sub) )then
-                THROW_HARD('SO3 closest projection outside mixture map; diffmap_denoise_project')
+                THROW_HARD('SO3 closest projection outside mixture map; denoise_project')
             endif
             isub = full2sub(full_proj)
             if( isub < 1 .or. isub > size(mix_counts) )then
-                THROW_HARD('SO3 mixture id outside subspace range; diffmap_denoise_project')
+                THROW_HARD('SO3 mixture id outside subspace range; denoise_project')
             endif
             particle_mix(iptcl) = isub
             mix_counts(isub) = mix_counts(isub) + 1
@@ -753,14 +771,14 @@ contains
             if( isub < 1 .or. isub > nsub ) THROW_HARD('missing global SO3 mixture assignment')
             pos = cursor(isub)
             if( pos < mix_rowptr(isub) .or. pos >= mix_rowptr(isub + 1) )then
-                THROW_HARD('SO3 mixture particle list overflow; diffmap_denoise_project')
+                THROW_HARD('SO3 mixture particle list overflow; denoise_project')
             endif
             mix_pinds(pos) = iptcl
             cursor(isub) = pos + 1
         end do
         do isub = 1, nsub
             if( cursor(isub) /= mix_rowptr(isub + 1) )then
-                THROW_HARD('SO3 mixture particle list population mismatch; diffmap_denoise_project')
+                THROW_HARD('SO3 mixture particle list population mismatch; denoise_project')
             endif
         end do
         deallocate(cursor)
@@ -774,7 +792,7 @@ contains
         type(diffmap_graph) :: graph
         integer :: isub, nptcls, fromp, top
         if( size(mix_rowptr) /= size(mix_counts) + 1 )then
-            THROW_HARD('SO3 mixture row pointer/count size mismatch; diffmap_denoise_project')
+            THROW_HARD('SO3 mixture row pointer/count size mismatch; denoise_project')
         endif
         do isub = 1, size(mix_counts)
             nptcls = mix_counts(isub)
@@ -782,12 +800,12 @@ contains
             fromp = mix_rowptr(isub)
             top   = mix_rowptr(isub + 1) - 1
             if( fromp < 1 .or. top > size(mix_pinds) .or. top - fromp + 1 /= nptcls )then
-                THROW_HARD('SO3 mixture particle list range mismatch; diffmap_denoise_project')
+                THROW_HARD('SO3 mixture particle list range mismatch; denoise_project')
             endif
             call build_cls_split_graph(params=params, spproj=spproj, pinds=mix_pinds(fromp:top), graph=graph)
-            if( graph%n /= nptcls ) THROW_HARD('SO3 mixture graph size mismatch; diffmap_denoise_project')
+            if( graph%n /= nptcls ) THROW_HARD('SO3 mixture graph size mismatch; denoise_project')
             if( trim(graph%metric) /= 'ori' .or. trim(graph%steering) /= 'none' )then
-                THROW_HARD('diffmap_denoise_project expected a non-steerable orientation graph')
+                THROW_HARD('denoise_project expected a non-steerable orientation graph')
             endif
             write(logfhandle,'(A,I8,A,I10,A,A,A,I8,A,I10)') &
                 '>>> SO3_MIXTURE mixture=', isub, ' nptcls=', nptcls, ' graph=', trim(graph%metric), &
@@ -852,6 +870,74 @@ contains
         if( allocated(coords) ) deallocate(coords)
         if( allocated(eigvals) ) deallocate(eigvals)
     end subroutine estimate_diffmap_denoise_rank
+
+    subroutine estimate_kpca_denoise_rank(params, pcavecs, cls_id, nptcls, npix, den_rank, icm_converged, icm_iters, icm_score)
+        use simple_kpca_svd, only: kpca_svd
+        type(parameters), intent(in)  :: params
+        real,             intent(in)  :: pcavecs(npix,nptcls)
+        integer,          intent(in)  :: cls_id, nptcls, npix
+        integer,          intent(out) :: den_rank, icm_iters
+        logical,          intent(out) :: icm_converged
+        real,             intent(out) :: icm_score
+        type(kpca_svd) :: kpca_model
+        real, allocatable :: eigvals(:)
+        integer :: rank_scan
+        if( params%neigs > 0 )then
+            rank_scan = min(max(1, params%neigs), max(1, nptcls - 1))
+        else
+            rank_scan = min(160, max(1, nptcls - 1))
+        endif
+        call kpca_model%new(nptcls, npix, rank_scan)
+        call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
+            params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
+        call kpca_model%master(pcavecs, 15)
+        eigvals = kpca_model%get_eigvals()
+        call kpca_model%kill
+        if( allocated(eigvals) .and. size(eigvals) > 0 )then
+            call select_diffmap_denoise_rank_icm(eigvals, size(eigvals), cls_id, den_rank, &
+                                                 icm_converged, icm_iters, icm_score)
+        else
+            den_rank      = rank_scan
+            icm_converged = .false.
+            icm_iters     = 0
+            icm_score     = huge(icm_score)
+            write(logfhandle,'(A,I8,A,I8)') 'kPCA rank warning: no eigenspectrum; class=', cls_id, &
+                ' fallback_features=', den_rank
+            call flush(logfhandle)
+        endif
+        den_rank = min(max(1, den_rank), max(1, nptcls - 1))
+        if( allocated(eigvals) ) deallocate(eigvals)
+    end subroutine estimate_kpca_denoise_rank
+
+    subroutine kpca_reconstruct_particles(params, pcavecs, avg_vec, avg_img, nptcls, npix, rank_keep, den_imgs)
+        use simple_kpca_svd, only: kpca_svd
+        type(parameters),            intent(in)  :: params
+        real,                        intent(in)  :: pcavecs(npix,nptcls)
+        real,                        intent(in)  :: avg_vec(npix)
+        type(image),                 intent(inout) :: avg_img
+        integer,                     intent(in)  :: nptcls, npix, rank_keep
+        type(image), allocatable,    intent(out) :: den_imgs(:)
+        type(kpca_svd) :: kpca_model
+        real, allocatable :: tmpvec(:)
+        real :: smpd
+        integer :: i, ldim(3)
+        if( rank_keep < 1 ) THROW_HARD('kpca_reconstruct_particles requires rank_keep >= 1')
+        ldim = avg_img%get_ldim()
+        smpd = avg_img%get_smpd()
+        call kpca_model%new(nptcls, npix, min(rank_keep, max(1, nptcls - 1)))
+        call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
+            params%kpca_rbf_gamma, params%kpca_nystrom_local_nbrs, params%kpca_cosine_weight_power)
+        call kpca_model%master(pcavecs, 15)
+        allocate(den_imgs(nptcls))
+        allocate(tmpvec(npix), source=0.)
+        do i = 1, nptcls
+            call den_imgs(i)%new(ldim, smpd, wthreads=.false.)
+            call kpca_model%generate(i, avg_vec, tmpvec)
+            call den_imgs(i)%unserialize(tmpvec)
+        end do
+        call kpca_model%kill
+        deallocate(tmpvec)
+    end subroutine kpca_reconstruct_particles
 
     integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
         integer, intent(in) :: nptcls
@@ -1105,8 +1191,8 @@ contains
         real :: smpd
         integer :: i, j, p, k, n, ldim(3), rank_used, nev, eig_idx, eig_info, max_basis
         n = size(raw_imgs)
-        if( graph%n /= n ) THROW_HARD('nystrom preimage graph/image count mismatch; diffmap_denoise_project')
-        if( n < 3 ) THROW_HARD('nystrom preimage requires at least three graph nodes; diffmap_denoise_project')
+        if( graph%n /= n ) THROW_HARD('nystrom preimage graph/image count mismatch; denoise_project')
+        if( n < 3 ) THROW_HARD('nystrom preimage requires at least three graph nodes; denoise_project')
         ldim = avg_img%get_ldim()
         smpd = avg_img%get_smpd()
         rank_used = min(max(1, rank_keep), max(1, n - 2))
@@ -1114,7 +1200,7 @@ contains
         allocate(evals(nev), evecs(n,nev), phi_ext(n,rank_used), source=0.)
         max_basis = min(n, max(160, 8 * nev + 80))
         call sparse_eigh(graph_matvec, graph, n, nev, evals, evecs, tol=1.e-5, max_basis=max_basis, info=eig_info)
-        if( eig_info /= 0 ) THROW_HARD('sparse eigensolve failed in nystrom preimage; diffmap_denoise_project')
+        if( eig_info /= 0 ) THROW_HARD('sparse eigensolve failed in nystrom preimage; denoise_project')
         do k = 1, rank_used
             eig_idx = nev - k
             if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
@@ -1173,64 +1259,13 @@ contains
         deallocate(mode_imgs, evals, evecs, phi_ext)
     end subroutine graph_nystrom_residual_preimage
 
-    subroutine graph_local_residual_preimage(raw_imgs, avg_img, graph, den_imgs)
-        type(image),       intent(inout) :: raw_imgs(:)
-        type(image),       intent(inout) :: avg_img
-        type(diffmap_graph), intent(in)  :: graph
-        type(image), allocatable, intent(out) :: den_imgs(:)
-        type(image), allocatable :: resid_heap(:)
-        real :: w, wsum
-        real :: smpd
-        integer :: i, j, p, n, ithr, ldim(3)
-        n = size(raw_imgs)
-        if( graph%n /= n ) THROW_HARD('local preimage graph/image count mismatch; diffmap_denoise_project')
-        ldim = avg_img%get_ldim()
-        smpd = avg_img%get_smpd()
-        allocate(den_imgs(n))
-        allocate(resid_heap(nthr_glob))
-        do i = 1,n
-            call den_imgs(i)%new(ldim, smpd, wthreads=.false.)
-        end do
-        do ithr = 1,nthr_glob
-            call resid_heap(ithr)%new(ldim, smpd, wthreads=.false.)
-        end do
-        !$omp parallel do default(shared) private(i,j,p,w,wsum,ithr) schedule(dynamic) proc_bind(close)
-        do i = 1, n
-            ithr = omp_get_thread_num() + 1
-            call den_imgs(i)%copy_fast(avg_img)
-            wsum = 0.
-            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                j = graph%colind(p)
-                if( j < 1 .or. j > n ) cycle
-                w = graph%w(p)
-                if( w <= real(DTINY) ) cycle
-                call resid_heap(ithr)%copy_fast(raw_imgs(j))
-                call resid_heap(ithr)%subtr(avg_img)
-                call den_imgs(i)%add(resid_heap(ithr), w)
-                wsum = wsum + w
-            end do
-            if( wsum > real(DTINY) )then
-                call den_imgs(i)%subtr(avg_img)
-                call den_imgs(i)%mul(1. / wsum)
-                call den_imgs(i)%add(avg_img)
-            else
-                call den_imgs(i)%copy_fast(raw_imgs(i))
-            endif
-        end do
-        !$omp end parallel do
-        do ithr = 1,nthr_glob
-            if( resid_heap(ithr)%exists() ) call resid_heap(ithr)%kill
-        end do
-        deallocate(resid_heap)
-    end subroutine graph_local_residual_preimage
-
     subroutine calc_diffmap_residual_energy_ratio(raw_imgs, den_imgs, avg_img, ratio)
         type(image), intent(inout) :: raw_imgs(:), den_imgs(:), avg_img
         real,        intent(out)   :: ratio
         real, allocatable :: raw_vec(:), den_vec(:), avg_vec(:)
         real(kind=8) :: raw_ssq, den_ssq
         integer :: i
-        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('residual energy image count mismatch; diffmap_denoise_project')
+        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('residual energy image count mismatch; denoise_project')
         avg_vec = avg_img%serialize()
         raw_ssq = 0.d0
         den_ssq = 0.d0
@@ -1240,7 +1275,7 @@ contains
             raw_vec = raw_imgs(i)%serialize()
             den_vec = den_imgs(i)%serialize()
             if( size(raw_vec) /= size(avg_vec) .or. size(den_vec) /= size(avg_vec) )then
-                THROW_HARD('residual energy image size mismatch; diffmap_denoise_project')
+                THROW_HARD('residual energy image size mismatch; denoise_project')
             endif
             raw_ssq = raw_ssq + sum(real(raw_vec - avg_vec, kind=8) * real(raw_vec - avg_vec, kind=8))
             den_ssq = den_ssq + sum(real(den_vec - avg_vec, kind=8) * real(den_vec - avg_vec, kind=8))
@@ -1258,7 +1293,7 @@ contains
         real(kind=8) :: ssq, raw_ssq
         integer(kind=8) :: npix_total
         integer :: i
-        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('reconstruction error image count mismatch; diffmap_denoise_project')
+        if( size(raw_imgs) /= size(den_imgs) ) THROW_HARD('reconstruction error image count mismatch; denoise_project')
         ssq        = 0.d0
         raw_ssq    = 0.d0
         npix_total = 0_8
@@ -1267,7 +1302,7 @@ contains
         do i = 1, size(raw_imgs)
             raw_vec = raw_imgs(i)%serialize()
             den_vec = den_imgs(i)%serialize()
-            if( size(raw_vec) /= size(den_vec) ) THROW_HARD('reconstruction error image size mismatch; diffmap_denoise_project')
+            if( size(raw_vec) /= size(den_vec) ) THROW_HARD('reconstruction error image size mismatch; denoise_project')
             ssq        = ssq + sum(real(raw_vec - den_vec, kind=8) * real(raw_vec - den_vec, kind=8))
             raw_ssq    = raw_ssq + sum(real(raw_vec, kind=8) * real(raw_vec, kind=8))
             npix_total = npix_total + int(size(raw_vec), kind=8)
@@ -1289,8 +1324,8 @@ contains
         type(imgfile) :: ioimg
         real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
         integer :: ldim(3)
-        if( indstk < 1 ) THROW_HARD('invalid stack-local output index; diffmap_denoise_project')
-        if( .not. img%is_2d() ) THROW_HARD('2D particle image expected; diffmap_denoise_project')
+        if( indstk < 1 ) THROW_HARD('invalid stack-local output index; denoise_project')
+        if( .not. img%is_2d() ) THROW_HARD('2D particle image expected; denoise_project')
         ldim = img%get_ldim()
         ldim(3) = 1
         call ioimg%open(fname, ldim, img%get_smpd(), formatchar='M', readhead=file_exists(fname))
@@ -1309,9 +1344,9 @@ contains
         nptcls = spproj%os_ptcl2D%get_noris()
         call find_ldim_nptcls(raw_stk, ldim_raw, nraw)
         call find_ldim_nptcls(den_stk, ldim_den, nden)
-        if( nraw /= nptcls .or. nden /= nptcls ) THROW_HARD('compact output stack count mismatch; diffmap_denoise_project')
+        if( nraw /= nptcls .or. nden /= nptcls ) THROW_HARD('compact output stack count mismatch; denoise_project')
         if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
-            THROW_HARD('raw/denoised output stack dimensions differ; diffmap_denoise_project')
+            THROW_HARD('raw/denoised output stack dimensions differ; denoise_project')
         endif
         call outproj%copy(spproj)
         call outproj%update_projinfo(params%projfile)
@@ -1361,15 +1396,15 @@ contains
         call outproj%os_stk%new(nparts_run, is_ptcl=.false.)
         fromp = 1
         do ipart = 1, nparts_run
-            raw_part = string('diffmap_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            den_part = string('diffmap_denoised_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            raw_part = string('denoise_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            den_part = string('denoise_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
             call find_ldim_nptcls(raw_part, ldim_raw, nraw)
             call find_ldim_nptcls(den_part, ldim_den, nden)
             if( nraw /= part_counts(ipart) .or. nden /= part_counts(ipart) )then
-                THROW_HARD('diffmap partial project stack count mismatch')
+                THROW_HARD('denoise partial project stack count mismatch')
             endif
             if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
-                THROW_HARD('diffmap partial project stack dimensions differ')
+                THROW_HARD('denoise partial project stack dimensions differ')
             endif
             top = fromp + part_counts(ipart) - 1
             call outproj%os_stk%set(ipart, 'stk',        simple_abspath(raw_part))
@@ -1395,10 +1430,10 @@ contains
         do iptcl = 1, nptcls
             if( spproj%os_ptcl2D%get_state(iptcl) > 0 )then
                 if( row_part(iptcl) < 1 .or. row_part(iptcl) > nparts_run )then
-                    THROW_HARD('invalid particle part while writing diffmap partial project')
+                    THROW_HARD('invalid particle part while writing denoise partial project')
                 endif
                 if( row_local(iptcl) < 1 .or. row_local(iptcl) > part_counts(row_part(iptcl)) )then
-                    THROW_HARD('invalid particle local stack index while writing diffmap partial project')
+                    THROW_HARD('invalid particle local stack index while writing denoise partial project')
                 endif
                 call outproj%os_ptcl2D%set(iptcl, 'stkind', row_part(iptcl))
                 call outproj%os_ptcl3D%set(iptcl, 'stkind', row_part(iptcl))
@@ -1415,11 +1450,11 @@ contains
             if( spproj%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
             call outproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
             if( stkind /= row_part(iptcl) .or. indstk /= row_local(iptcl) )then
-                THROW_HARD('ptcl2D stack mapping mismatch in diffmap partial project')
+                THROW_HARD('ptcl2D stack mapping mismatch in denoise partial project')
             endif
             call outproj%map_ptcl_ind2stk_ind('ptcl3D', iptcl, stkind, indstk)
             if( stkind /= row_part(iptcl) .or. indstk /= row_local(iptcl) )then
-                THROW_HARD('ptcl3D stack mapping mismatch in diffmap partial project')
+                THROW_HARD('ptcl3D stack mapping mismatch in denoise partial project')
             endif
         end do
         call outproj%os_ptcl2D%zero_inpl()
@@ -1427,7 +1462,7 @@ contains
         if( outproj%os_out%get_noris() > 0 ) call outproj%os_out%kill()
         call preserve_diffmap_frc2D(spproj, outproj)
         call outproj%write(params%projfile)
-        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise partial project stacks: ', nparts_run, ' particles=', nptcls
+        write(logfhandle,'(A,I8,A,I10)') 'Denoise partial project stacks: ', nparts_run, ' particles=', nptcls
         call flush(logfhandle)
     end subroutine write_diffmap_partial_project
 
@@ -1468,43 +1503,43 @@ contains
         allocate(slot_pind(nptcls_slots), source=0)
         call read_diffmap_worker_maps(params, nparts_run, row_part, row_local, row_stkind, row_indstk, total_count)
         if( total_count /= nptcls_active )then
-            write(logfhandle,'(A,I10,A,I10)') 'Diffmap denoise merge: mapped particles=', total_count, ' expected_active=', nptcls_active
-            THROW_HARD('distributed diffmap_denoise_project did not produce exactly one row per active particle')
+            write(logfhandle,'(A,I10,A,I10)') 'Denoise merge: mapped particles=', total_count, ' expected_active=', nptcls_active
+            THROW_HARD('distributed denoise_project did not produce exactly one row per active particle')
         endif
         do pind = 1, nptcls
             if( spproj%os_ptcl2D%get_state(pind) <= 0 ) cycle
-            if( row_part(pind) < 1 .or. row_local(pind) < 1 ) THROW_HARD('missing particle in diffmap denoise worker maps')
-            if( row_stkind(pind) < 1 .or. row_stkind(pind) > nstks ) THROW_HARD('invalid stack index in diffmap denoise worker maps')
+            if( row_part(pind) < 1 .or. row_local(pind) < 1 ) THROW_HARD('missing particle in denoise worker maps')
+            if( row_stkind(pind) < 1 .or. row_stkind(pind) > nstks ) THROW_HARD('invalid stack index in denoise worker maps')
             if( row_indstk(pind) < 1 .or. row_indstk(pind) > stk_nptcls(row_stkind(pind)) )then
-                THROW_HARD('invalid stack-local index in diffmap denoise worker maps')
+                THROW_HARD('invalid stack-local index in denoise worker maps')
             endif
             slot = stk_offsets(row_stkind(pind)) + row_indstk(pind)
-            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid stack slot in diffmap denoise worker maps')
-            if( slot_pind(slot) /= 0 ) THROW_HARD('duplicate stack slot in diffmap denoise worker maps')
+            if( slot < 1 .or. slot > nptcls_slots ) THROW_HARD('invalid stack slot in denoise worker maps')
+            if( slot_pind(slot) /= 0 ) THROW_HARD('duplicate stack slot in denoise worker maps')
             slot_pind(slot) = pind
-            if( row_part(pind) > nparts_run ) THROW_HARD('invalid part index in diffmap denoise worker maps')
+            if( row_part(pind) > nparts_run ) THROW_HARD('invalid part index in denoise worker maps')
             part_counts(row_part(pind)) = part_counts(row_part(pind)) + 1
         end do
-        write(logfhandle,'(A,I8,A,I10)') 'Diffmap denoise finalize: partial stacks=', nparts_run, ' particles=', nptcls
+        write(logfhandle,'(A,I8,A,I10)') 'Denoise finalize: partial stacks=', nparts_run, ' particles=', nptcls
         call flush(logfhandle)
         do ipart = 1, nparts_run
-            if( part_counts(ipart) < 1 ) THROW_HARD('empty diffmap denoise worker part')
-            raw_part = string('diffmap_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            den_part = string('diffmap_denoised_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
-            if( .not. file_exists(raw_part%to_char()) ) THROW_HARD('missing diffmap denoise worker raw stack')
-            if( .not. file_exists(den_part%to_char()) ) THROW_HARD('missing diffmap denoise worker denoised stack')
+            if( part_counts(ipart) < 1 ) THROW_HARD('empty denoise worker part')
+            raw_part = string('denoise_raw_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            den_part = string('denoise_particles_part')//int2str_pad(ipart, params%numlen)//'.mrcs'
+            if( .not. file_exists(raw_part%to_char()) ) THROW_HARD('missing denoise worker raw stack')
+            if( .not. file_exists(den_part%to_char()) ) THROW_HARD('missing denoise worker denoised stack')
             call find_ldim_nptcls(raw_part, ldim_raw, nraw)
             call find_ldim_nptcls(den_part, ldim_den, nden)
             if( nraw /= part_counts(ipart) .or. nden /= part_counts(ipart) )then
-                write(logfhandle,'(A,I8,A,I10,A,I10,A,I10)') 'Diffmap denoise part count mismatch: part=', ipart, &
+                write(logfhandle,'(A,I8,A,I10,A,I10,A,I10)') 'Denoise part count mismatch: part=', ipart, &
                     ' map_count=', part_counts(ipart), ' raw=', nraw, ' denoised=', nden
-                THROW_HARD('diffmap denoise partial stack count mismatch')
+                THROW_HARD('denoise partial stack count mismatch')
             endif
             if( .not. all(ldim_raw(1:2) == ldim_den(1:2)) )then
-                THROW_HARD('raw/denoised partial stack dimensions differ; diffmap_denoise_project')
+                THROW_HARD('raw/denoised partial stack dimensions differ; denoise_project')
             endif
             if( ldim_raw(1) /= params%box_crop .or. ldim_raw(2) /= params%box_crop )then
-                THROW_HARD('unexpected diffmap denoise partial stack dimensions')
+                THROW_HARD('unexpected denoise partial stack dimensions')
             endif
             part_nimgs(ipart) = nraw
             call raw_part%kill
@@ -1518,17 +1553,17 @@ contains
                 if( row_part(pind) /= ipart ) cycle
                 local_slot = row_local(pind)
                 if( local_slot < 1 .or. local_slot > part_nimgs(ipart) )then
-                    THROW_HARD('particle local index out of partial stack range; diffmap_denoise_project')
+                    THROW_HARD('particle local index out of partial stack range; denoise_project')
                 endif
                 if( part_seen(local_slot) /= 0 ) THROW_HARD('duplicate particle local index in partial stack')
                 part_seen(local_slot) = pind
             end do
             if( count(part_seen(1:part_nimgs(ipart)) > 0) /= part_nimgs(ipart) )then
-                THROW_HARD('partial stack local index coverage is incomplete; diffmap_denoise_project')
+                THROW_HARD('partial stack local index coverage is incomplete; denoise_project')
             endif
         end do
         call write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, outproj)
-        write(logfhandle,'(A,A)') 'Diffmap denoise project written: ', params%projfile%to_char()
+        write(logfhandle,'(A,A)') 'Denoise project written: ', params%projfile%to_char()
         call flush(logfhandle)
         call outproj%kill
         call spproj%kill
@@ -1551,7 +1586,7 @@ contains
         nptcls = size(row_part)
         total_count = 0
         do ipart = 1, nparts_run
-            map_fname = string('diffmap_particle_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
+            map_fname = string('denoise_particle_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             open(newunit=funit, file=map_fname%to_char(), status='old', action='read', iostat=ios)
             call fileiochk('read_diffmap_worker_maps opening '//map_fname%to_char(), ios)
             do
@@ -1560,8 +1595,8 @@ contains
                 if( len_trim(line) == 0 ) cycle
                 if( line(1:1) == '#' ) cycle
                 read(line,*) pind, stkind, indstk, local_ind
-                if( pind < 1 .or. pind > nptcls ) THROW_HARD('invalid particle index in diffmap denoise worker map')
-                if( row_part(pind) /= 0 ) THROW_HARD('duplicate particle index in diffmap denoise worker maps')
+                if( pind < 1 .or. pind > nptcls ) THROW_HARD('invalid particle index in denoise worker map')
+                if( row_part(pind) /= 0 ) THROW_HARD('duplicate particle index in denoise worker maps')
                 row_part(pind)   = ipart
                 row_local(pind)  = local_ind
                 row_stkind(pind) = stkind

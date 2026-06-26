@@ -9,7 +9,7 @@ type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_polarft_lines
 type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
-type(ui_program), target :: diffmap_denoise_project
+type(ui_program), target :: denoise_project
 type(ui_program), target :: ppca_volvar
 
 contains
@@ -22,7 +22,7 @@ contains
         call new_ppca_denoise_polarft_lines(prgtab)
         call new_ppca_denoise_classes(prgtab)
         call new_cls_split(prgtab)
-        call new_diffmap_denoise_project(prgtab)
+        call new_denoise_project(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
@@ -35,7 +35,7 @@ contains
         write(logfhandle,'(A)') ppca_denoise_polarft_lines%name%to_char()
         write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
         write(logfhandle,'(A)') cls_split%name%to_char()
-        write(logfhandle,'(A)') diffmap_denoise_project%name%to_char()
+        write(logfhandle,'(A)') denoise_project%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_denoise_programs
@@ -240,33 +240,49 @@ contains
         call add_ui_program('cls_split', cls_split, prgtab)
     end subroutine new_cls_split
 
-    subroutine new_diffmap_denoise_project( prgtab )
+    subroutine new_denoise_project( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call diffmap_denoise_project%new(&
-        &'diffmap_denoise_project',&
+        call denoise_project%new(&
+        &'denoise_project',&
         &'Create dual denoised project',&
-        &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and non-steerable diffusion-map generative particle samples',&
+        &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps or kPCA',&
         &'all',&
         &.true.)
-        call diffmap_denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
+        call denoise_project%add_input(UI_FILT, 'pca_mode', 'multi', &
+            'Denoising algorithm', &
+            'Denoising method(diffusion_maps|kpca){diffusion_maps}', '(diffusion_maps|kpca){diffusion_maps}', .false., 'diffusion_maps')
+        call denoise_project%add_input(UI_FILT, 'neigs', 'num', &
+            'Number of eigencomponents (0 => auto ICM; default 0)', &
+            'Number of retained eigencomponents for denoising; for diffusion maps this is a scan upper bound when auto', &
+            '# eigenvecs', .false., 0.0)
+        call denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 10-30)', &
-            'Local nearest neighbors used for non-steerable diffusion maps', &
+            'Local nearest neighbors used for diffusion-map graph construction', &
             '# neighbors', .false., 10.0)
-        call diffmap_denoise_project%add_input(UI_FILT, 'graph', 'multi', &
+        call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
             'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
-        call diffmap_denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
-        call diffmap_denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
+        call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
+        call denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
             'SO3 mixture subspace size', 'SO3 mixture subspace size', &
             '# subspace directions', .false., 500.0)
-        call diffmap_denoise_project%add_input(UI_FILT, 'preimage_mode', 'multi', &
-            'Diffusion-map pre-image mode', &
-            'Pre-image reconstruction mode(spectral|local|nystrom){local}', '(spectral|local|nystrom){local}', .false., 'local')
-        call diffmap_denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
+        call denoise_project%add_input(UI_FILT, 'kpca_ker', 'multi', &
+            'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
+        call denoise_project%add_input(UI_FILT, 'kpca_backend', 'multi', &
+            'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
+        call denoise_project%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', &
+            'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
+        call denoise_project%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', &
+            'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', &
+            'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
+        call denoise_project%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', &
+            'Nyström max local support neighbors (default 96; try 96, 128)', &
+            'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
+        call denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
-        call diffmap_denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
+        call denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
             gui_submenu="compute", gui_advanced=.false.)
-        call diffmap_denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('diffmap_denoise_project', diffmap_denoise_project, prgtab)
-    end subroutine new_diffmap_denoise_project
+        call denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('denoise_project', denoise_project, prgtab)
+    end subroutine new_denoise_project
 
 end module simple_ui_denoise
