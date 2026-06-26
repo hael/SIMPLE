@@ -353,7 +353,9 @@ contains
         l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
         l_sum_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'sum')
-        l_seed_sh_first = self%p_ptr%l_doshift
+        ! Keep shift-first seeding single-state only. In multi-state runs this
+        ! can bias all states toward the same previous-state shift basin.
+        l_seed_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
@@ -801,7 +803,8 @@ contains
         logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift
         huge_val = huge(1.0)
         l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
-        l_seed_fallback_shift = self%p_ptr%l_doshift .and. trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
+        l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
+            &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots()), dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
         do i = 1, self%nptcls
             ! Seed particle with no evaluated candidate with previous orientation
@@ -960,8 +963,12 @@ contains
             call init_frontier()
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                    &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
+                ! Multi-state state-bucket assignment is deterministic to preserve
+                ! split-state separation and avoid stochastic cross-state drift.
+                ! Legacy stochastic option kept here for quick A/B testing:
+                ! assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
+                !     &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
+                assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_for_state
