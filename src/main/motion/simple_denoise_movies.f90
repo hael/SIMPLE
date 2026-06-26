@@ -1,10 +1,10 @@
 !@descr: diffusion-map denoising helpers for motion-correction movie stacks
 module simple_denoise_movies
 use simple_core_module_api
-use simple_diff_map_graphs, only: diffmap_graph, build_euclidean_knn_graph, graph_matvec
+use simple_diff_map_graphs, only: diffmap_graph, build_euclidean_knn_graph
+use simple_diff_map_denoise, only: graph_nystrom_residual_preimage
 use simple_diffusion_maps,  only: embed_graph, auto_ndiff_from_eigengap
 use simple_image,           only: image
-use simple_linalg,          only: sparse_eigh
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -58,7 +58,7 @@ contains
     end subroutine diffmap_denoise_movie_tiles
 
     subroutine diffmap_denoise_movie_stack(frames, den_imgs, k_nn)
-        type(image), intent(in) :: frames(:)
+        type(image), intent(inout) :: frames(:)
         type(image), allocatable, intent(out) :: den_imgs(:)
         integer, optional, intent(in) :: k_nn
         type(diffmap_graph) :: graph
@@ -248,78 +248,6 @@ contains
         rank_min = 1
         if( max_neigs >= 2 ) rank_min = 2
     end function frame_diffmap_min_rank
-
-    subroutine graph_nystrom_residual_preimage(raw_imgs, avg_img, graph, den_imgs, rank_keep)
-        type(image), intent(in) :: raw_imgs(:)
-        type(image), intent(in) :: avg_img
-        type(diffmap_graph), intent(in) :: graph
-        type(image), allocatable, intent(out) :: den_imgs(:)
-        integer, intent(in) :: rank_keep
-        type(image), allocatable :: mode_imgs(:)
-        type(image) :: resid_img
-        real, allocatable :: evals(:), evecs(:,:), phi_ext(:,:)
-        real :: coeff, op_w
-        real :: smpd
-        integer :: i, j, p, k, n, ldim(3), rank_used, nev, eig_idx, eig_info, max_basis
-        n = size(raw_imgs)
-        if( graph%n /= n ) THROW_HARD('diffusion preimage frame count mismatch')
-        if( n < 3 ) THROW_HARD('nystrom preimage requires at least three graph nodes')
-        ldim = avg_img%get_ldim()
-        smpd = avg_img%get_smpd()
-        rank_used = min(max(1, rank_keep), max(1, n - 2))
-        nev = rank_used + 1
-        allocate(evals(nev), evecs(n,nev), phi_ext(n,rank_used), source=0.0)
-        max_basis = min(n, max(160, 8 * nev + 80))
-        call sparse_eigh(graph_matvec, graph, n, nev, evals, evecs, tol=1.e-5, max_basis=max_basis, info=eig_info)
-        if( eig_info /= 0 ) THROW_HARD('sparse eigensolve failed in nystrom preimage')
-        do k = 1,rank_used
-            eig_idx = nev - k
-            if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
-            do i = 1,n
-                coeff = 0.0
-                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                    j = graph%colind(p)
-                    if( j < 1 .or. j > n ) cycle
-                    if( allocated(graph%wnorm) )then
-                        op_w = graph%wnorm(p)
-                    else
-                        op_w = graph%w(p)
-                    endif
-                    coeff = coeff + op_w * evecs(j,eig_idx)
-                end do
-                phi_ext(i,k) = coeff / evals(eig_idx)
-            end do
-        end do
-        call init_image_stack(den_imgs, n, ldim, smpd)
-        call init_image_stack(mode_imgs, rank_used, ldim, smpd)
-        call resid_img%new(ldim, smpd, wthreads=.false.)
-        do k = 1,rank_used
-            eig_idx = nev - k
-            do i = 1,n
-                coeff = evecs(i,eig_idx)
-                if( abs(coeff) <= real(DTINY) ) cycle
-                call resid_img%copy_fast(raw_imgs(i))
-                call resid_img%subtr(avg_img)
-                call mode_imgs(k)%add(resid_img, coeff)
-            end do
-        end do
-        !$omp parallel do default(shared) private(i,k,coeff) schedule(dynamic) proc_bind(close)
-        do i = 1,n
-            call den_imgs(i)%copy_fast(avg_img)
-            do k = 1,rank_used
-                coeff = phi_ext(i,k)
-                if( abs(coeff) <= real(DTINY) ) cycle
-                call den_imgs(i)%add(mode_imgs(k), coeff)
-            end do
-        end do
-        !$omp end parallel do
-        write(logfhandle,'(A,I8,A,I8,A,I8,A,F8.4)') 'Movie diffmap Nystrom preimage: n=', n, &
-            ' rank=', rank_used, ' nnz=', graph%nnz, ' lambda_min=', minval(evals(max(1,nev-rank_used):nev-1))
-        call flush(logfhandle)
-        call kill_image_stack(mode_imgs)
-        if( resid_img%exists() ) call resid_img%kill()
-        deallocate(evals, evecs, phi_ext)
-    end subroutine graph_nystrom_residual_preimage
 
     subroutine normalize_by_weights(frames, weights)
         type(image), intent(inout) :: frames(:)
