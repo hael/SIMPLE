@@ -63,7 +63,7 @@ contains
             THROW_HARD('FRC file: '//frcs_fname%to_char()//' does not exist!')
         endif
         if( allocated(l_non_junk) ) deallocate(l_non_junk)
-        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk)
+        call flag_non_junk_cavgs(cavg_imgs, LP_BIN, mskrad, l_non_junk, spproj%os_cls2D)
         if( DEBUG )then
             cnt = 0
             do i = 1, ncls
