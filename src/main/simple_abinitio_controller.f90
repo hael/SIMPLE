@@ -439,6 +439,7 @@ contains
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
+        call cline_refine3D%set('ptcl_src',               stage_ptcl_src(cfg, params))
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
@@ -493,5 +494,17 @@ contains
         lp = lpinfo(istage)%lp
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
+
+    character(len=STDLEN) function stage_ptcl_src( cfg, params ) result( ptcl_src )
+        type(refine3D_stage_cfg), intent(in) :: cfg
+        class(parameters),        intent(in) :: params
+        ptcl_src = trim(params%ptcl_src)
+        if( ptcl_src == 'den' )then
+            select case(cfg%filt_mode%to_char())
+                case('nonuniform','nonuniform_lpset')
+                    ptcl_src = 'raw'
+            end select
+        endif
+    end function stage_ptcl_src
 
 end submodule simple_abinitio_controller
