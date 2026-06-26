@@ -399,8 +399,14 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
+        character(len=STDLEN) :: ptcl_src_eff
+        real :: lp_eff
+        logical :: l_den_src
         logical :: l_full_update_stage
         l_full_update_stage = docked_split_stage(params, istage)
+        ptcl_src_eff = stage_ptcl_src(cfg, params)
+        l_den_src    = trim(ptcl_src_eff) == 'den'
+        lp_eff       = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
             call cline_refine3D%set('envfsc',              'no')
@@ -439,7 +445,7 @@ contains
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
-        call cline_refine3D%set('ptcl_src',               stage_ptcl_src(cfg, params))
+        call cline_refine3D%set('ptcl_src',               ptcl_src_eff)
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
@@ -449,7 +455,7 @@ contains
             ! bandwidth; the controller no longer injects schedule LP.
             call cline_refine3D%delete('lp')
         else
-            call cline_refine3D%set('lp',                 stage_matching_lp(cfg, params, istage, l_cmdline_lp_override))
+            call cline_refine3D%set('lp',                 lp_eff)
         endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
@@ -459,7 +465,11 @@ contains
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
-        call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
+        if( l_den_src )then
+            call cline_refine3D%set('ml_reg',             'no')
+        else
+            call cline_refine3D%set('ml_reg',             cfg%ml_reg)
+        endif
         call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
@@ -471,7 +481,10 @@ contains
         else
             call cline_refine3D%delete('snr_noise_reg')
         endif
-        if( cfg%gaufreq > 0. )then
+        if( l_den_src )then
+            call cline_refine3D%set('gauref',             'yes')
+            call cline_refine3D%set('gaufreq',            lp_eff)
+        else if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
             call cline_refine3D%set('gaufreq',            cfg%gaufreq)
         else

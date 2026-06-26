@@ -810,7 +810,7 @@ contains
         type(image), allocatable :: mode_imgs(:)
         type(image) :: resid_img
         real, allocatable :: evals(:), evecs(:,:), phi_ext(:,:)
-        real :: coeff, op_w
+        real :: coeff
         real :: smpd
         integer :: i, j, p, k, n, ldim(3), rank_used, nev, eig_idx, eig_info, max_basis
         n = size(raw_imgs)
@@ -824,24 +824,39 @@ contains
         max_basis = min(n, max(160, 8 * nev + 80))
         call sparse_eigh(graph_matvec, graph, n, nev, evals, evecs, tol=1.e-5, max_basis=max_basis, info=eig_info)
         if( eig_info /= 0 ) THROW_HARD('sparse eigensolve failed in nystrom preimage; diffusion-map denoise')
-        do k = 1, rank_used
-            eig_idx = nev - k
-            if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
-            do i = 1, n
-                coeff = 0.
-                do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                    j = graph%colind(p)
-                    if( j < 1 .or. j > n ) cycle
-                    if( allocated(graph%wnorm) )then
-                        op_w = graph%wnorm(p)
-                    else
-                        op_w = graph%w(p)
-                    endif
-                    coeff = coeff + op_w * evecs(j,eig_idx)
+        if( allocated(graph%wnorm) )then
+            do k = 1, rank_used
+                eig_idx = nev - k
+                if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
+                !$omp parallel do default(shared) private(i,p,j,coeff) schedule(static) proc_bind(close)
+                do i = 1, n
+                    coeff = 0.
+                    do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                        j = graph%colind(p)
+                        if( j < 1 .or. j > n ) cycle
+                        coeff = coeff + graph%wnorm(p) * evecs(j,eig_idx)
+                    end do
+                    phi_ext(i,k) = coeff / evals(eig_idx)
                 end do
-                phi_ext(i,k) = coeff / evals(eig_idx)
+                !$omp end parallel do
             end do
-        end do
+        else
+            do k = 1, rank_used
+                eig_idx = nev - k
+                if( abs(evals(eig_idx)) <= real(DTINY) ) cycle
+                !$omp parallel do default(shared) private(i,p,j,coeff) schedule(static) proc_bind(close)
+                do i = 1, n
+                    coeff = 0.
+                    do p = graph%rowptr(i), graph%rowptr(i+1) - 1
+                        j = graph%colind(p)
+                        if( j < 1 .or. j > n ) cycle
+                        coeff = coeff + graph%w(p) * evecs(j,eig_idx)
+                    end do
+                    phi_ext(i,k) = coeff / evals(eig_idx)
+                end do
+                !$omp end parallel do
+            end do
+        endif
         allocate(den_imgs(n))
         allocate(mode_imgs(rank_used))
         do i = 1, n
@@ -852,13 +867,13 @@ contains
             call mode_imgs(k)%zero()
         end do
         call resid_img%new(ldim, smpd, wthreads=.false.)
-        do k = 1, rank_used
-            eig_idx = nev - k
-            do i = 1, n
+        do i = 1, n
+            call resid_img%copy_fast(raw_imgs(i))
+            call resid_img%subtr(avg_img)
+            do k = 1, rank_used
+                eig_idx = nev - k
                 coeff = evecs(i,eig_idx)
                 if( abs(coeff) <= real(DTINY) ) cycle
-                call resid_img%copy_fast(raw_imgs(i))
-                call resid_img%subtr(avg_img)
                 call mode_imgs(k)%add(resid_img, coeff)
             end do
         end do
