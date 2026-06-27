@@ -1,0 +1,6 @@
+interface:
+  display_name: "SIMPLE CAVG Quality"
+  short_description: "Analyze SIMPLE class-average quality runs"
+  default_prompt: "Use $simple-cluster-cavgs-quality to analyze cluster_cavgs_quality quality_mode=analyze outputs."
+policy:
+  allow_implicit_invocation: true
