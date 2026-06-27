@@ -257,7 +257,7 @@ contains
                 power_loc   = merge(EXTR_POWER, POST_EXTR_POWER, self%p_ptr%extr_iter <= self%p_ptr%extr_lim)
             endif
             prev_corr_loc = -huge(1.0)
-            if( l_shc_neigh .and. (.not. l_greedy_first) )then
+            if( (l_shc_neigh .and. (.not. l_greedy_first)) .or. l_snhc_neigh )then
                 call calc_previous_corr(ithr_loc, iptcl_loc, prev_full_ref_loc, prev_corr_loc)
             endif
             do isample = 1,nfull_refs
@@ -273,6 +273,7 @@ contains
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
                 eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
                 if( l_shc_neigh .and. (.not. l_greedy_first) .and. corr_loc > prev_corr_loc ) exit
+                if( l_snhc_neigh .and. corr_loc > prev_corr_loc ) exit
             enddo
         end subroutine evaluate_direct_stochastic_refs
 
