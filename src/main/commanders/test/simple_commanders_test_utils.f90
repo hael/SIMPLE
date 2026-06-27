@@ -49,6 +49,11 @@ type, extends(commander_base) :: commander_test_pdb2mrc
     procedure :: execute      => exec_test_pdb2mrc
 end type commander_test_pdb2mrc
 
+type, extends(commander_base) :: commander_test_peak_thres_fdr
+    contains
+        procedure :: execute      => exec_test_peak_thres_fdr
+end type commander_test_peak_thres_fdr
+
 type, extends(commander_base) :: commander_test_serialize
   contains
     procedure :: execute      => exec_test_serialize
@@ -396,6 +401,35 @@ subroutine exec_test_pdb2mrc( self, cline )
         THROW_HARD('TEST_PDB2MRC FAILED')
     endif
 end subroutine exec_test_pdb2mrc
+
+subroutine exec_test_peak_thres_fdr( self, cline )
+    use simple_segmentation, only: detect_peak_thres_fdr
+    use simple_test_utils,   only: assert_true, assert_int
+    class(commander_test_peak_thres_fdr), intent(inout) :: self
+    class(cmdline),                       intent(inout) :: cline
+    integer, parameter :: N = 20
+    real    :: x_up(N), x_low(N), t
+    integer :: npeaks
+    ! Upper-tail synthetic scores: three clear high outliers
+    x_up = [ -0.35, -0.25, -0.20, -0.12, -0.08, -0.03, 0.00, 0.01, 0.02, 0.03, &
+              0.04,  0.05,  0.06,  0.07,  0.09,  0.11, 0.14, 0.18, 5.00, 6.00 ]
+    call detect_peak_thres_fdr(N, x_up, 0.25, 0, N, t, npeaks)
+    call assert_true(npeaks >= 1, 'FDR upper-tail detects at least one peak')
+    call assert_int(count(x_up >= t), npeaks, 'FDR upper-tail threshold/count consistency')
+    ! Enforce an exact cap on selected peaks (unique top values avoid ties)
+    call detect_peak_thres_fdr(N, x_up, 0.25, 0, 1, t, npeaks)
+    call assert_int(1, npeaks, 'FDR upper-tail max_peaks cap is respected')
+    ! Lower-tail synthetic distances: three clear low outliers
+    x_low = [ -6.00, -5.00, -4.00, -0.20, -0.14, -0.09, -0.05, -0.02, 0.00, 0.01, &
+               0.02,  0.03,  0.04,  0.05,  0.07,  0.10,  0.13,  0.16, 0.22, 0.30 ]
+    call detect_peak_thres_fdr(N, x_low, 0.25, 0, N, t, npeaks, lower_tail=.true.)
+    call assert_true(npeaks >= 1, 'FDR lower-tail detects at least one peak')
+    call assert_int(count(x_low <= t), npeaks, 'FDR lower-tail threshold/count consistency')
+    ! Enforce exact lower-tail selection size
+    call detect_peak_thres_fdr(N, x_low, 0.25, 3, 3, t, npeaks, lower_tail=.true.)
+    call assert_int(3, npeaks, 'FDR lower-tail min/max peak bounds are respected')
+    call simple_end('**** SIMPLE_TEST_PEAK_THRES_FDR_WORKFLOW NORMAL STOP ****')
+end subroutine exec_test_peak_thres_fdr
 
 subroutine exec_test_serialize( self, cline )
     use simple_image

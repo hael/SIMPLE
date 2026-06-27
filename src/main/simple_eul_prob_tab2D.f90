@@ -7,6 +7,7 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table
 use simple_rnd,                only: greedy_sampling
+use simple_segmentation,       only: detect_peak_thres_fdr
 use simple_type_defs,          only: OBJFUN_EUCLID
 implicit none
 
@@ -16,6 +17,7 @@ private
 
 real,             parameter :: NHOOD_FRAC           = 0.1
 real,             parameter :: PRIOR2D_TOPK_FRAC    = 0.3  !< fraction of nclasses stored per particle as prior top-K
+real,             parameter :: PRIOR2D_FDR_Q        = 0.25 !< FDR q for dynamic prob_prior neighborhoods
 character(len=*), parameter :: PRIOR2D_STAGE5_FNAME = 'posterior_topk_stage05.dat'
 
 type :: eul_prob_tab2D
@@ -129,6 +131,7 @@ contains
             self%assgn_map(i)%y      = 0.
             self%assgn_map(i)%has_sh = .false.
             self%assgn_map(i)%frac   = 100.
+            self%assgn_map(i)%npeaks = 0
             do icls = 1, self%nclasses
                 self%loc_tab(icls,i)%pind   = iptcl
                 self%loc_tab(icls,i)%icls   = icls
@@ -138,6 +141,7 @@ contains
                 self%loc_tab(icls,i)%y      = 0.
                 self%loc_tab(icls,i)%has_sh = .false.
                 self%loc_tab(icls,i)%frac   = 100.
+                self%loc_tab(icls,i)%npeaks = 0
             end do
         end do
         !$omp end parallel do
@@ -944,6 +948,7 @@ contains
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
+            self%assgn_map(assigned_ptcl)%npeaks = search_npeaks(assigned_ptcl)
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
 
@@ -969,6 +974,7 @@ contains
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 self%assgn_map(i)%frac = search_frac(i)
+                self%assgn_map(i)%npeaks = search_npeaks(i)
                 frontier%ptcl_avail(i) = .false.
                 nassigned = nassigned + 1
             enddo
@@ -1011,6 +1017,12 @@ contains
             endif
             frac = 100. * real(self%eval_touched_counts(iptcl_loc)) / real(self%nclasses)
         end function search_frac
+
+        integer function search_npeaks( iptcl_loc ) result(npeaks)
+            integer, intent(in) :: iptcl_loc
+            npeaks = 0
+            if( allocated(self%eval_touched_counts) ) npeaks = self%eval_touched_counts(iptcl_loc)
+        end function search_npeaks
 
         subroutine advance_class_head( icls_loc )
             integer, intent(in) :: icls_loc
@@ -1444,8 +1456,9 @@ contains
         integer, allocatable :: rec_ints(:)
         integer, allocatable :: cand_cls(:), top_ind(:)
         real,    allocatable :: cand_dist(:)
+        real    :: dist_thres
         integer :: funit, io_stat, reclen
-        integer :: i, k, icls, ncand, pick, k_use, k_this
+        integer :: i, k, icls, ncand, pick, k_use, k_this, npeaks_detected
         if( self%nptcls < 1 .or. self%nclasses < 1 ) return
         k_use = max(1, nint(PRIOR2D_TOPK_FRAC * real(self%nclasses)))
         if( present(kmax_in) ) k_use = max(1, min(self%nclasses, kmax_in))
@@ -1476,7 +1489,13 @@ contains
                     cand_dist(ncand) = self%loc_tab(icls,i)%dist
                 enddo
             endif
-            k_this = min(k_use, ncand)
+            ! Fixed-width direct-access records are retained for simplicity:
+            ! k_use is the 0.3*ncls upper bound, while the FDR threshold selects
+            ! a dynamic lower-tail objective neighborhood per particle.  Unused
+            ! record slots stay zero and are ignored by apply_prior_order.
+            call detect_peak_thres_fdr(ncand, cand_dist(1:ncand), PRIOR2D_FDR_Q, 1, min(k_use,ncand),&
+                &dist_thres, npeaks_detected, lower_tail=.true.)
+            k_this = min(k_use, ncand, max(1, npeaks_detected))
             rec_ints = 0
             do k = 1, k_this
                 pick = minloc(cand_dist(1:ncand), dim=1)

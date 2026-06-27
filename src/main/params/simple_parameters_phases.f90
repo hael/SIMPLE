@@ -776,7 +776,7 @@ contains
         endif
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhc_smpl','snhc_smpl_many','prob_snhc','prob_prior')
+                case('snhc','snhc_smpl','snhc_smpl_many')
                     self%trs = 0.
                 case DEFAULT
                     if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'snhc' )then

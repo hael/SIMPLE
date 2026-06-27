@@ -77,6 +77,129 @@ contains
         t   = tmp(ind)
     end subroutine detect_peak_thres_for_npeaks
 
+    ! Peak thresholding by robust one-sided p-values followed by
+    ! Benjamini-Hochberg false discovery rate control.
+    !
+    ! References:
+    ! Benjamini Y, Hochberg Y. 1995. Controlling the false discovery rate:
+    ! a practical and powerful approach to multiple testing. JRSS B 57:289-300.
+    ! Storey JD, Tibshirani R. 2003. Statistical significance for genomewide
+    ! studies. PNAS 100:9440-9445.
+    ! Efron B. 2004. Large-scale simultaneous hypothesis testing: the choice of
+    ! a null hypothesis. JASA 99:96-104.
+    !
+    ! This is intended for score landscapes after local peak/minimum detection.
+    ! Set lower_tail=.true. when lower values are better, e.g. distances.
+    subroutine detect_peak_thres_fdr( n, x, q, min_peaks, max_peaks, t, npeaks, lower_tail )
+        integer,          intent(in)    :: n, min_peaks, max_peaks
+        real,             intent(in)    :: x(n), q
+        real,             intent(inout) :: t
+        integer,          intent(out)   :: npeaks
+        logical, optional, intent(in)   :: lower_tail
+        real,    allocatable :: work(:), pvals(:), evidence(:)
+        integer, allocatable :: order(:)
+        real    :: med, sigma, qcrit, sqrttwo, eps
+        integer :: i, k_bh, nsel, nfloor, ncap
+        logical :: l_lower
+        if( q <= 0. .or. q >= 1. )then
+            call simple_exception('FDR q must be in (0,1)', 'simple_segmentation.f90', __LINE__, l_stop=.true.)
+        endif
+        if( min_peaks < 0 .or. max_peaks < 0 )then
+            call simple_exception('invalid peak bounds for FDR thresholding', 'simple_segmentation.f90', __LINE__, l_stop=.true.)
+        endif
+        npeaks = 0
+        if( n < 1 .or. max_peaks == 0 )then
+            t = 0.
+            return
+        endif
+        l_lower = .false.
+        if( present(lower_tail) ) l_lower = lower_tail
+        ncap   = min(n, max_peaks)
+        nfloor = min(ncap, min_peaks)
+        allocate(work(n), source=x)
+        med   = median_nocopy(work)
+        sigma = mad_gau(x, med)
+        if( sigma <= TINY )then
+            if( nfloor > 0 )then
+                call threshold_for_npeaks(nfloor, l_lower)
+            else
+                call threshold_for_no_peaks(l_lower)
+            endif
+            return
+        endif
+        allocate(evidence(n), pvals(n), order(n))
+        if( l_lower )then
+            evidence = (med - x) / sigma
+        else
+            evidence = (x - med) / sigma
+        endif
+        sqrttwo = sqrt(2.0)
+        do i = 1,n
+            pvals(i) = 0.5 * erfc(evidence(i) / sqrttwo)
+            pvals(i) = max(0., min(1., pvals(i)))
+            order(i) = i
+        enddo
+        call hpsort(pvals, order)
+        k_bh = 0
+        do i = 1,n
+            qcrit = q * real(i) / real(n)
+            if( pvals(i) <= qcrit ) k_bh = i
+        enddo
+        nsel = min(k_bh, ncap)
+        if( nsel < nfloor ) nsel = nfloor
+        if( nsel > 0 )then
+            if( l_lower )then
+                t      = maxval(x(order(1:nsel)))
+                npeaks = count(x <= t)
+            else
+                t      = minval(x(order(1:nsel)))
+                npeaks = count(x >= t)
+            endif
+        else
+            if( l_lower )then
+                eps = max(TINY, spacing(minval(x)))
+                t   = minval(x) - eps
+            else
+                eps = max(TINY, spacing(maxval(x)))
+                t   = maxval(x) + eps
+            endif
+            npeaks = 0
+        endif
+
+        contains
+
+            subroutine threshold_for_npeaks( npeaks_target, lower )
+                integer, intent(in) :: npeaks_target
+                logical, intent(in) :: lower
+                integer :: ind
+                if( allocated(work) ) deallocate(work)
+                allocate(work(n), source=x)
+                call hpsort(work)
+                if( lower )then
+                    ind    = min(n, max(1, npeaks_target))
+                    t      = work(ind)
+                    npeaks = count(x <= t)
+                else
+                    ind    = max(1, n - max(1, npeaks_target) + 1)
+                    t      = work(ind)
+                    npeaks = count(x >= t)
+                endif
+            end subroutine threshold_for_npeaks
+
+            subroutine threshold_for_no_peaks( lower )
+                logical, intent(in) :: lower
+                if( lower )then
+                    eps = max(TINY, spacing(minval(x)))
+                    t   = minval(x) - eps
+                else
+                    eps = max(TINY, spacing(maxval(x)))
+                    t   = maxval(x) + eps
+                endif
+                npeaks = 0
+            end subroutine threshold_for_no_peaks
+
+    end subroutine detect_peak_thres_fdr
+
     subroutine refine_peak_thres_sortmeans( n, level, x, t )
         integer, intent(in)    :: n, level
         real,    intent(in)    :: x(n)

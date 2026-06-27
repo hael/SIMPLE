@@ -14,6 +14,7 @@ type convergence
     type(stats_struct) :: dist       !< angular distance stats
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
+    type(stats_struct) :: npeaks     !< probabilistic prior neighborhood size stats
     type(stats_struct) :: shincarg   !< shift increment
     type(stats_struct) :: lp         !< low-pass limit
     type(stats_struct) :: lp_est     !< low-pass limit, estimated
@@ -52,6 +53,7 @@ contains
             self%dist%avg      = ostats%get(1,'DIST_BTW_BEST_ORIS')
             self%dist_inpl%avg = ostats%get(1,'IN-PLANE_DIST')
             self%shincarg%avg  = ostats%get(1,'SHIFT_INCR_ARG')
+            if( ostats%isthere('NPEAKS') ) self%npeaks%avg = ostats%get(1,'NPEAKS')
         else
             l_err = .true.
         endif
@@ -82,7 +84,7 @@ contains
         integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        logical :: converged, chk4conv
+        logical :: converged, chk4conv, l_report_npeaks
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -107,6 +109,8 @@ contains
         call os%stats('corr',      self%score,     mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
+        l_report_npeaks = trim(params%refine) == 'prob_prior'
+        if( l_report_npeaks ) call os%stats('npeaks', self%npeaks, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
         call os%stats('lp',        self%lp,        mask=mask)
         call os%stats('lp_est',    self%lp_est,    mask=mask)
@@ -122,6 +126,9 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        if( l_report_npeaks )&
+            &write(logfhandle,604) '>>> PRIOR NEIGH NPEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg,&
+            &self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
@@ -232,6 +239,7 @@ contains
         endif
         call ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
         call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
+        if( l_report_npeaks ) call ostats%set(1,'NPEAKS', self%npeaks%avg)
         call ostats%set(1,'SCORE',                    self%score%avg)
         call ostats%write(string(STATS_FILE))
         ! destruct
@@ -665,6 +673,8 @@ contains
                 get = self%dist_inpl%avg
             case('frac_srch')
                 get = self%frac_srch%avg
+            case('npeaks')
+                get = self%npeaks%avg
             case('mi_class')
                 get = self%mi_class
             case('mi_proj')

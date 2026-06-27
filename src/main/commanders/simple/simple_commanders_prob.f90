@@ -440,7 +440,7 @@ contains
         call flush(logfhandle)
         ! write per-particle prior ranking only when the controller has flagged this as the
         ! prior-production stage (stage PROB_PRIOR_STAGE-1, i.e. stage 5 by default)
-        if( cline%defined('write_prior') )then
+        if( trim(params%write_prior) == 'yes' )then
             fname = string(PRIOR2D_STAGE5_FNAME)
             call eulprob_obj_glob%write_prior_topk(fname)
             write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: prior ranking written ', fname%to_char()

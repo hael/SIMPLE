@@ -492,6 +492,7 @@ contains
         call cmd_dict%push('which_iter',    'iteration nr')
         call cmd_dict%push('width',         'falloff of inner mask or filter(in pixels){10}')
         call cmd_dict%push('winsz',         'half-width of window for real-space filter(in pixels)')
+        call cmd_dict%push('write_prior',   'write prob_prior neighborhood artifact(yes|no){no}')
         call cmd_dict%push('wtype',         'type of orientation weights (factorial|flat){factorial}')
         call cmd_dict%push('xcoord',        'x coordinate{0}')
         call cmd_dict%push('xdim',          'x dimension(in pixles)')
