@@ -219,10 +219,10 @@ contains
         class(cmdline),                                 intent(inout) :: cline
         type(sp_project) :: spproj
         integer, allocatable :: cls_inds(:), cls_pops(:)
-        logical :: l_phflip
+        logical :: l_phflip, l_ctf_no
         call init_common(params, build, cline)
         call spproj%read(params%projfile)
-        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
         if( trim(lowercase(params%graph)) == 'ori' )then
             self%nparts_run = 1
         else
@@ -329,9 +329,9 @@ contains
         type(image)  :: img_blank
         integer, allocatable :: cls_inds(:), cls_pops(:)
         logical, allocatable :: processed(:)
-        logical :: l_phflip, l_img_blank_init, l_mskdiam_override
+        logical :: l_phflip, l_ctf_no, l_img_blank_init, l_mskdiam_override
         integer :: icls, iptcl, nptcls, nprocessed, funit_map, ldim_blank(3)
-        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
         call filter_classes_by_assignment(cline, cls_inds, cls_pops)
         if( trim(params%pca_mode) == 'diffusion_maps' .and. trim(lowercase(params%graph)) == 'ori' )then
             call run_diffmap_so3_mixture_graphs(params, build, spproj, cls_inds)
@@ -382,7 +382,7 @@ contains
             THROW_HARD('denoise_project requires every active ptcl2D particle to have a valid class assignment')
         endif
         if( l_write_project )then
-            call write_diffmap_project(params, spproj, raw_stks(1), den_stks(1), outproj)
+            call write_diffmap_project(params, spproj, raw_stks(1), den_stks(1), l_ctf_no, outproj)
             write(logfhandle,'(A,A)') 'Denoise project written: ', params%projfile%to_char()
         endif
         write(logfhandle,'(A,I10)') 'Denoise project particles: ', nprocessed
@@ -397,11 +397,11 @@ contains
         if( map_fname%is_allocated() ) call map_fname%kill
     end subroutine run_denoise_project
 
-    subroutine validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+    subroutine validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
         type(parameters), intent(in)    :: params
         type(sp_project), intent(inout) :: spproj
         integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
-        logical, intent(out) :: l_phflip
+        logical, intent(out) :: l_phflip, l_ctf_no
         type(string) :: ctfstr
         integer, allocatable :: pinds(:), stk_offsets(:), stk_nptcls(:)
         logical, allocatable :: seen_slots(:)
@@ -456,11 +456,15 @@ contains
                 case('flip')
                     if( ctf_mode == 0 ) ctf_mode = CTFFLAG_FLIP
                     if( ctf_mode /= CTFFLAG_FLIP ) THROW_HARD('mixed ctf=yes/ctf=flip stacks are not supported; denoise_project')
+                case('no')
+                    if( ctf_mode == 0 ) ctf_mode = CTFFLAG_NO
+                    if( ctf_mode /= CTFFLAG_NO ) THROW_HARD('mixed ctf=no with ctf=yes/ctf=flip stacks are not supported; denoise_project')
                 case DEFAULT
-                    THROW_HARD('denoise_project requires ctf=yes or ctf=flip input stacks')
+                    THROW_HARD('denoise_project requires ctf=yes, ctf=flip, or ctf=no input stacks')
             end select
         enddo
         l_phflip = ctf_mode == CTFFLAG_YES
+        l_ctf_no = ctf_mode == CTFFLAG_NO
         allocate(seen_slots(nptcls_slots), source=.false.)
         nptcls_active = 0
         do iptcl = 1, nptcls
@@ -1234,10 +1238,11 @@ contains
         rmat_ptr => null()
     end subroutine write_diffmap_stack_image
 
-    subroutine write_diffmap_project(params, spproj, raw_stk, den_stk, outproj)
+    subroutine write_diffmap_project(params, spproj, raw_stk, den_stk, l_ctf_no, outproj)
         type(parameters), intent(in)    :: params
         type(sp_project), intent(inout) :: spproj
         type(string),     intent(in)    :: raw_stk, den_stk
+        logical,          intent(in)    :: l_ctf_no
         type(sp_project), intent(inout) :: outproj
         integer :: iptcl, nptcls, nraw, nden, ldim_raw(3), ldim_den(3)
         nptcls = spproj%os_ptcl2D%get_noris()
@@ -1264,7 +1269,11 @@ contains
         call outproj%os_stk%set(1, 'kv',         params%kv)
         call outproj%os_stk%set(1, 'cs',         params%cs)
         call outproj%os_stk%set(1, 'fraca',      params%fraca)
-        call outproj%os_stk%set(1, 'ctf',        'flip')
+        if( l_ctf_no )then
+            call outproj%os_stk%set(1, 'ctf',    'no')
+        else
+            call outproj%os_stk%set(1, 'ctf',    'flip')
+        endif
         call outproj%os_stk%set(1, 'phaseplate', 'no')
         call outproj%os_stk%set(1, 'state',      1)
         do iptcl = 1, nptcls
@@ -1280,11 +1289,12 @@ contains
         call outproj%write(params%projfile)
     end subroutine write_diffmap_project
 
-    subroutine write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, outproj)
+    subroutine write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, l_ctf_no, outproj)
         type(parameters), intent(in)    :: params
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: nparts_run
         integer,          intent(in)    :: part_counts(nparts_run), row_part(:), row_local(:)
+        logical,          intent(in)    :: l_ctf_no
         type(sp_project), intent(inout) :: outproj
         type(string) :: raw_part, den_part
         integer :: ipart, iptcl, nptcls, nraw, nden, ldim_raw(3), ldim_den(3), fromp, top, stkind, indstk
@@ -1319,7 +1329,11 @@ contains
             call outproj%os_stk%set(ipart, 'kv',         params%kv)
             call outproj%os_stk%set(ipart, 'cs',         params%cs)
             call outproj%os_stk%set(ipart, 'fraca',      params%fraca)
-            call outproj%os_stk%set(ipart, 'ctf',        'flip')
+            if( l_ctf_no )then
+                call outproj%os_stk%set(ipart, 'ctf',    'no')
+            else
+                call outproj%os_stk%set(ipart, 'ctf',    'flip')
+            endif
             call outproj%os_stk%set(ipart, 'phaseplate', 'no')
             call outproj%os_stk%set(ipart, 'state',      1)
             fromp = top + 1
@@ -1383,10 +1397,10 @@ contains
         integer, allocatable :: part_counts(:), part_nimgs(:), part_seen(:)
         integer :: nptcls, nptcls_active, nstks, istk, pind, ipart, total_count, ldim_raw(3), ldim_den(3), nraw, nden
         integer :: nptcls_slots, slot, local_slot
-        logical :: l_phflip
+        logical :: l_phflip, l_ctf_no
         integer, allocatable :: cls_inds(:), cls_pops(:)
         call spproj%read(params%projfile)
-        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip)
+        call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
         nptcls = spproj%os_ptcl2D%get_noris()
         nptcls_active = get_n_active_ptcl2D(spproj)
         nstks  = spproj%os_stk%get_noris()
@@ -1461,7 +1475,7 @@ contains
                 THROW_HARD('partial stack local index coverage is incomplete; denoise_project')
             endif
         end do
-        call write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, outproj)
+        call write_diffmap_partial_project(params, spproj, nparts_run, part_counts, row_part, row_local, l_ctf_no, outproj)
         write(logfhandle,'(A,A)') 'Denoise project written: ', params%projfile%to_char()
         call flush(logfhandle)
         call outproj%kill
