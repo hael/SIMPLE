@@ -1,0 +1,4 @@
+interface:
+  display_name: "SIMPLE Nonuniform Regularization"
+  short_description: "nonuniform filtering and volume regularization"
+  default_prompt: "Use $simple-nonuniform-regularization to explain, review, or modify SIMPLE's nonuniform filtering / regularization workflow."

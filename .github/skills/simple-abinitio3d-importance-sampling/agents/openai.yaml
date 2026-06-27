@@ -1,0 +1,4 @@
+interface:
+  display_name: "SIMPLE Abinitio3D Sampling"
+  short_description: "abinitio3D sampling, update coupling, and matcher I/O"
+  default_prompt: "Use $simple-abinitio3d-importance-sampling to explain or modify how abinitio3D couples importance sampling, fractional updates, online reconstruction I/O, and trailing reconstruction."

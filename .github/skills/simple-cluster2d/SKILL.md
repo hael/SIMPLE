@@ -34,6 +34,13 @@ description: Use when working on SIMPLE's cluster2D subsystem, including CLI/UI 
 - `project/` for particle/class metadata persistence
 - `stream/` for online/mini-stream cluster2D paths
 
+## Focused Companion Skill
+
+For probabilistic 2D sampling, online class-average restoration, distributed
+partial class-average sums, `sampled`/`updatecnt`, or even/odd consumption from
+prior 2D workflows, read
+`.github/skills/simple-2d-classification-restoration/SKILL.md`.
+
 ## Common Traps
 
 - `cluster2D` logic is spread across many `simple_strategy2D_*` modules.

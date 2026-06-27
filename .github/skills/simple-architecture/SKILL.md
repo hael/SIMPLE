@@ -26,7 +26,7 @@ Read these first for end-to-end flow:
 2. `src/main/apis/simple_exec_api.f90`
 3. `src/main/simple_cmdline.f90`
 4. `src/main/ui/simple_ui.f90`
-5. `src/main/simple_parameters.f90`
+5. `src/main/params/simple_parameters.f90`
 6. `src/main/simple_builder.f90`
 
 The common pattern is:
@@ -44,7 +44,8 @@ The common pattern is:
 - Treat `src/main/exec` as routing/orchestration.
 - Treat `src/main/commanders` as command objects and high-level workflow owners.
 - Treat `src/main/strategies` as algorithm/policy execution layers.
-- Treat `src/main/image`, `project`, `ori`, `pftc`, `volume`, `ctf`, `motion`, `opt` as core scientific subsystems.
+- Treat `src/main/image`, `project`, `ori`, `pftc`, `volume`, `nu_filt`,
+  `params`, `ctf`, `motion`, and `opt` as core scientific subsystems.
 - Expect modern Fortran patterns: modules, abstract types, type-bound procedures, generics, allocatables, submodules, OpenMP, and C interop.
 
 ## Cross-Cutting Hotspots

@@ -16,11 +16,11 @@ This is a cross-folder workflow. Read code and policy together.
 5. `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
 6. `src/main/strategies/search/simple_strategy3D_matcher.f90`
 7. `src/main/commanders/simple/simple_commanders_rec_distr.f90`
-8. `src/main/volume/simple_volume_postprocess_policy.f90`
+8. `src/main/volume/simple_vol_pproc_policy.f90`
 
 ## Ownership Map
 
-- UI/CLI contract: `ui`, `exec`, `simple_cmdline`, `simple_parameters`
+- UI/CLI contract: `ui`, `exec`, `simple_cmdline`, `src/main/params/simple_parameters.f90`
 - Top-level command ownership: `simple_commanders_refine3D.f90`
 - Iteration/execution mode policy: `simple_refine3D_strategy.f90`
 - Particle-domain update/search: `simple_strategy3D_matcher.f90` and neighboring `search/` modules
@@ -39,9 +39,26 @@ Preserve that split when refactoring.
 - `doc/policies/automasking_policy.md`
 - `doc/policies/nonuniform_filtering_policy.md`
 - `src/main/volume/simple_reconstructor_eo.f90`
+- `src/main/volume/simple_vol_pproc_policy.f90`
+- `src/main/nu_filt/*`
 - `src/main/pftc/*`
 - `src/main/ori/*`
 - `src/main/project/*`
+
+## Focused Companion Skills
+
+- For the default probabilistic/Bayesian-style 3D refinement mental model,
+  matcher particle I/O, assembly handoffs, automasking, or multi-state 3D
+  behavior, read `.github/skills/simple-bayesian-3d-refinement/SKILL.md`.
+- For abinitio3D `update_frac`, `nsample*`, `sampled`/`updatecnt`,
+  `prob_align`/`prob_tab` sampling reuse, or trailing-reconstruction weighting,
+  read `.github/skills/simple-abinitio3d-importance-sampling/SKILL.md`.
+- For the stable `polar=no` Cartesian fractional-update contract, current
+  partial reconstruction handoffs, previous even/odd/rho compatibility, or
+  obsfield mirrors, read `.github/skills/simple-cartesian-frac-update-trailing/SKILL.md`.
+- For `filt_mode=nonuniform`, `_nu_filt` reference products, automask/mask
+  precedence, or `simple_nu_filter` changes, read
+  `.github/skills/simple-nonuniform-regularization/SKILL.md`.
 
 ## Common Traps
 

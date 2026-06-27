@@ -31,6 +31,20 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Keep orchestration in commanders/strategies and numerical work in domain modules.
 - Reuse `parameters`, `cmdline`, and `builder` instead of inventing parallel configuration plumbing.
 - In commanders, normalize and validate `cmdline` before the single `params%new(cline)` call; never construct a `parameters` object twice in one commander execution path.
+- After `params%new(cline)` or a builder parameter initializer, treat the typed
+  `parameters` object as authoritative. Use `params%...` fields in workflow
+  logic instead of re-reading parsed values with `cmdline%get_iarg`,
+  `get_rarg`, or `get_carg`.
+- New SIMPLE command-line arguments must be represented in
+  `src/main/params/simple_parameters.f90` and registered through the normal
+  parsing/checking path before downstream code consumes them.
+- For project-file workflows, do not pass native `box`/`smpd` through child
+  command lines. Project metadata is the native sampling authority; pass
+  `box_crop` only when a deliberate crop is requested and let parsing derive
+  `smpd_crop`.
+- Keep child command lines sparse. Set only values that change behavior or
+  preserve execution mode rather than restating defaults already supplied by the
+  child commander or `parameters`.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
 - Watch for generated sources from `scripts/simple_args_generator.pl` and git-hash insertion during builds.
 
@@ -45,3 +59,4 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Match the existing folder ownership before adding files.
 - If a large module already uses submodules, extend the submodule structure instead of inflating the parent interface file.
 - If a workflow already has `ui -> exec -> commander -> strategy`, add the feature in the narrowest layer that owns it.
+- For parameter parsing changes, read `.github/skills/simple-main-params/SKILL.md`.

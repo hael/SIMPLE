@@ -1,0 +1,4 @@
+interface:
+  display_name: "SIMPLE Bayesian 3D"
+  short_description: "refine3D/probabilistic workflows and matcher I/O"
+  default_prompt: "Use $simple-bayesian-3d-refinement to analyze, explain, or modify SIMPLE's probabilistic/Bayesian-style 3D refinement, matcher I/O, and reconstruction workflows."

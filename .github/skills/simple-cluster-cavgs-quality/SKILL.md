@@ -13,7 +13,7 @@ Use this skill for the class-average quality application and for analysis of `qu
 
 Flow:
 
-`simple_ui_cavgproc -> simple_exec_cavgproc -> commander_cluster_cavgs_quality -> simple_cavg_quality`
+`simple_ui_cavgproc -> simple_exec_cavgproc -> commander_cluster_cavgs_quality -> simple_cavg_quality_*`
 
 The application reads class averages from an input SIMPLE project, evaluates feature-space quality, writes selected/rejected class-average stacks, and either updates the project (`quality_mode=apply`) or compares against the current manual `cls2D` state without modifying the project (`quality_mode=analyze`).
 
@@ -23,7 +23,11 @@ The application reads class averages from an input SIMPLE project, evaluates fea
 - `src/main/ui/simple_ui_params_common.f90`: `quality_mode` and `rejection_type` parameter definitions.
 - `src/main/exec/simple_exec_cavgproc.f90`: routes `cluster_cavgs_quality` to the commander.
 - `src/main/commanders/simple/simple_commanders_cavgs.f90`: `exec_cluster_cavgs_quality`, output writing, and project annotation.
-- `src/main/strategies/search/simple_cavg_quality.f90`: feature extraction, normalization, clustering, thresholding, and reference analysis.
+- `src/main/cavg_quality/simple_cavg_quality_feats.f90`: feature extraction and normalization.
+- `src/main/cavg_quality/simple_cavg_quality_model.f90`: built-in decision models, classification, cached decisions, and model promotion helpers.
+- `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: analyze-mode reporting, feature tables, threshold scans, and reference summaries.
+- `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate mode model fitting and reporting.
+- `src/main/cavg_quality/simple_cavg_quality_types.f90`: shared result/model data structures.
 - `doc/for_developers/class_average_quality_metric_inventory.md`: metric inventory and design rationale.
 - `doc/refactoring_notes/microchunk_quality_refactor_notes.md`: chunk-branch integration notes.
 
@@ -31,6 +35,9 @@ The application reads class averages from an input SIMPLE project, evaluates fea
 
 - `quality_mode=apply`: writes `cavgs_quality_features.txt`, selected/rejected stacks, annotates `cls2D` and `cls3D` with `quality`, `quality_cluster`, and `accept`, maps selection into particles, optionally prunes, and writes the project.
 - `quality_mode=analyze`: treats the existing `cls2D` state as the manual reference, writes diagnostic outputs, and leaves the project selection unchanged.
+- `quality_mode=learn`: learns a model from analysis files listed in `filetab`.
+- `quality_mode=evaluate`: evaluates a selected model against analysis files.
+- `quality_mode=promote`: emits Fortran snippets for promoting a model into built-in presets.
 - `rejection_type=chunk`: stricter stream-partition operating point for high-junk chunks.
 - `rejection_type=pool`: more recall-preserving operating point for larger pooled or batch sets.
 
@@ -46,13 +53,13 @@ Expected files from `quality_mode=analyze`:
 When analyzing a run directory, first run:
 
 ```bash
-python3 /Users/elmlundho/.codex/skills/simple-cluster-cavgs-quality/scripts/analyze_quality_run.py /path/to/run
+python3 .github/skills/simple-cluster-cavgs-quality/scripts/analyze_quality_run.py /path/to/run
 ```
 
 Use `--recursive` on a parent directory to summarize many run folders:
 
 ```bash
-python3 /Users/elmlundho/.codex/skills/simple-cluster-cavgs-quality/scripts/analyze_quality_run.py --recursive /path/to/test-data
+python3 .github/skills/simple-cluster-cavgs-quality/scripts/analyze_quality_run.py --recursive /path/to/test-data
 ```
 
 Then inspect the reported false positives, false negatives, best thresholds, weak/inverted features, and hard-rejected manual-good classes. For chunk-branch tuning, pay special attention to whether `chunk` mode loses manual-good classes through hard rejection or through the stricter effective threshold.
@@ -77,4 +84,3 @@ Prefer small local changes:
 - keep `simple_cluster2D_rejector` temporarily as a comparison backend;
 - avoid exposing calibration margins as casual CLI knobs;
 - introduce stage-aware quality profiles only if validation data clearly requires pass/ref/match-specific behavior.
-

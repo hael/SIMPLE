@@ -1,6 +1,6 @@
 ---
 name: simple-main-root
-description: Use when working with the root modules directly under SIMPLE's src/main directory, especially orchestration modules like builder, parameters, command line parsing, convergence, ab initio controllers, probability tables, simulation, symmetry, and other cross-subsystem foundation code.
+description: Use when working with the root modules directly under SIMPLE's src/main directory, especially orchestration modules like builder, command-line parsing, convergence, ab initio controllers, probability tables, simulation, symmetry, and other cross-subsystem foundation code.
 ---
 
 # SIMPLE Main Root
@@ -11,7 +11,6 @@ This skill covers files directly in `src/main/`, not the subfolders.
 
 - `simple_builder.f90`
 - `simple_cmdline.f90`
-- `simple_parameters.f90`
 - `simple_convergence.f90`
 - `simple_eul_prob_tab.f90`
 - `simple_eul_prob_tab2D.f90`
@@ -24,7 +23,7 @@ This skill covers files directly in `src/main/`, not the subfolders.
 
 - Cross-cutting orchestration state
 - CLI parsing and validation
-- Global parameter materialization
+- Command-line object handling before typed parameter materialization
 - Probability-table infrastructure for search workflows
 - Builder/toolbox construction
 - Shared controllers for major workflows
@@ -32,4 +31,6 @@ This skill covers files directly in `src/main/`, not the subfolders.
 ## When Editing
 
 - Check whether the behavior really belongs at the root or should live in a subsystem folder.
+- For typed parameter fields, parsing, derived flags, or validation, use
+  `.github/skills/simple-main-params/SKILL.md` instead.
 - Be careful with changes here because these modules often affect many executables and workflows.

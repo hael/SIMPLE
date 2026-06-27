@@ -11,7 +11,7 @@ This folder owns reconstruction and postprocessing objects.
 
 - `simple_reconstructor.f90`
 - `simple_reconstructor_eo.f90`
-- `simple_volume_postprocess_policy.f90`
+- `simple_vol_pproc_policy.f90`
 - `simple_volanalyzer.f90`
 - `simple_dock_vols.f90`
 
@@ -19,6 +19,7 @@ This folder owns reconstruction and postprocessing objects.
 
 - Very closely tied to `refine3D`, `rec3D`, `interp/`, `image/`, and `project/`
 - Policy docs in `doc/policies/` are especially relevant here
+- Nonuniform filter implementation details live in `src/main/nu_filt`
 
 ## Working Rule
 

@@ -1,6 +1,6 @@
 ---
 name: simple-main-pca
-description: Use when working in SIMPLE's src/main/pca subsystem, including PCA, PPCA, MPPCA, kernel PCA, and SVD-backed dimensionality-reduction code used in analysis and denoising workflows.
+description: Use when working in SIMPLE's src/main/pca subsystem, including PCA, PPCA, complex PPCA, kernel PCA, diffusion maps, and SVD-backed dimensionality-reduction code used in analysis and denoising workflows.
 ---
 
 # SIMPLE `src/main/pca`
@@ -12,8 +12,10 @@ This folder owns PCA-family methods.
 - `simple_pca.f90`
 - `simple_pca_svd.f90`
 - `simple_ppca.f90`
-- `simple_mppca.f90`
+- `simple_complex_ppca.f90`
 - `simple_kpca_svd.f90`
+- `simple_diffusion_maps.f90`
+- `simple_diff_map_denoise.f90`
 
 ## Connections
 
