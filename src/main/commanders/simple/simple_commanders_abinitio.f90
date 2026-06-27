@@ -1132,7 +1132,11 @@ contains
         integer :: nstates_in_project, split_stage, last_stage
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
+        logical :: l_force_full_sampling
+        real    :: sampled_active_frac
         l_state_continue = cline%defined('state')
+        l_force_full_sampling = .false.
+        sampled_active_frac   = 0.
         l_state_continue_mode = .false.
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
@@ -1331,26 +1335,35 @@ contains
             if( nptcls_eff < 1 ) THROW_HARD('No active particles selected in ptcl2D for abinitio3D')
             if( .not. cline%defined('nsample') ) params%nsample = abinitio_nsample_default()
             if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for abinitio3D sampled update')
-            update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
-            update_frac = min(abinitio_update_frac_max(), update_frac) ! to ensure fractional update is always on
-            ! generate a data structure for class sampling on disk
-            rstates = spproj%os_cls2D%get_all('state')
-            if( trim(params%partition).eq.'yes' )then
-                tmpinds = nint(spproj%os_cls2D%get_all('cluster'))
-                where( rstates < 0.5 ) tmpinds = 0
-                clsinds = (/(icls,icls=1,maxval(tmpinds))/)
-                do icls = 1,size(clsinds)
-                    if(count(tmpinds==icls) == 0) clsinds(icls) = 0
-                enddo
-                clsinds = pack(clsinds, mask=clsinds>0)
-                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
-                deallocate(tmpinds)
+            sampled_active_frac   = real(params%nsample) / real(nptcls_eff)
+            l_force_full_sampling = sampled_active_frac > abinitio_full_sample_switch_frac()
+            if( l_force_full_sampling )then
+                update_frac = 1.0
+                write(logfhandle,'(A,F8.4,A,F8.4,A)') &
+                    &'>>> ABINITIO3D NSAMPLE/ACTIVE FRACTION ', sampled_active_frac, ' > ', &
+                    &abinitio_full_sample_switch_frac(), ' -> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
             else
-                clsinds = spproj%get_selected_clsinds()
-                call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+                update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
+                update_frac = min(abinitio_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
+                ! generate a data structure for class sampling on disk
+                rstates = spproj%os_cls2D%get_all('state')
+                if( trim(params%partition).eq.'yes' )then
+                    tmpinds = nint(spproj%os_cls2D%get_all('cluster'))
+                    where( rstates < 0.5 ) tmpinds = 0
+                    clsinds = (/(icls,icls=1,maxval(tmpinds))/)
+                    do icls = 1,size(clsinds)
+                        if(count(tmpinds==icls) == 0) clsinds(icls) = 0
+                    enddo
+                    clsinds = pack(clsinds, mask=clsinds>0)
+                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+                    deallocate(tmpinds)
+                else
+                    clsinds = spproj%get_selected_clsinds()
+                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+                endif
+                call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
+                deallocate(rstates, clsinds)
             endif
-            call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-            deallocate(rstates, clsinds)
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
                 call spproj%os_ptcl3D%clean_entry('sampled')
@@ -1413,10 +1426,14 @@ contains
             endif
             ! create an initial balanced greedy sampling
             noris = spproj%os_ptcl3D%get_noris()
-            call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true., .true.)
+            if( l_force_full_sampling )then
+                call spproj%os_ptcl3D%sample4update_all([1,noris], nptcls2update, pinds, .true.)
+            else
+                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true., .true.)
+            endif
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds)                             ! these are not needed
-            call deallocate_class_samples(clssmp)         ! done with this one
+            if( allocated(clssmp) ) call deallocate_class_samples(clssmp) ! done with this one
             ! write updated project file
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! create starting volume(s)
@@ -1454,8 +1471,12 @@ contains
             ! At the splitting stage of docked mode: reset the nstates in params
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
                 params%nstates = nstates_glob
-                update_frac    = real(params%nsample * params%nstates) / real(nptcls_eff)
-                update_frac    = min(abinitio_update_frac_max(), update_frac)
+                if( l_force_full_sampling )then
+                    update_frac = 1.0
+                else
+                    update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
+                    update_frac = min(abinitio_update_frac_max(), update_frac)
+                endif
                 write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
                     &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
                     &split_stage, '/', params%nstates, '/', update_frac

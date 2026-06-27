@@ -45,6 +45,7 @@ real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative def
 
 ! Sampling and update defaults
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
+real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-active sampling once nsample/active reaches this fraction
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
@@ -86,6 +87,11 @@ contains
         real :: frac
         frac = UPDATE_FRAC_MAX
     end function abinitio_update_frac_max
+
+    module function abinitio_full_sample_switch_frac() result(frac)
+        real :: frac
+        frac = FULL_SAMPLE_SWITCH_FRAC
+    end function abinitio_full_sample_switch_frac
 
     module function abinitio_lpstart_ini3D() result(lp)
         real :: lp
@@ -190,7 +196,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         real :: update_frac_stage
-        if( docked_split_stage(params, istage) )then
+        if( docked_split_stage(params, istage) .or. force_full_sampling_mode(params) )then
             cfg%fillin          = 'no'
             cfg%update_frac_dyn = 1.0
             return
@@ -273,6 +279,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         cfg%trail_rec = 'no'
+        if( force_full_sampling_mode(params) ) return
         select case(trim(params%multivol_mode))
             case('single')
                 if( istage >= TRAILREC_STAGE_SINGLE ) cfg%trail_rec = 'yes'
@@ -403,7 +410,7 @@ contains
         real :: lp_eff
         logical :: l_den_src
         logical :: l_full_update_stage
-        l_full_update_stage = docked_split_stage(params, istage)
+        l_full_update_stage = docked_split_stage(params, istage) .or. force_full_sampling_mode(params)
         ptcl_src_eff = stage_ptcl_src(cfg, params)
         l_den_src    = trim(ptcl_src_eff) == 'den'
         lp_eff       = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
@@ -498,6 +505,16 @@ contains
         integer,           intent(in) :: istage
         l_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
     end function docked_split_stage
+
+    logical function force_full_sampling_mode( params ) result( l_force_full )
+        class(parameters), intent(in) :: params
+        real :: sample_frac
+        l_force_full = .false.
+        if( nptcls_eff <= 0 ) return
+        if( params%nsample <= 0 ) return
+        sample_frac  = real(params%nsample) / real(nptcls_eff)
+        l_force_full = sample_frac > abinitio_full_sample_switch_frac()
+    end function force_full_sampling_mode
 
     real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
         type(refine3D_stage_cfg), intent(in) :: cfg

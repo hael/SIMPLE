@@ -56,6 +56,10 @@ interface
         real :: frac
     end function abinitio_update_frac_max
 
+    module function abinitio_full_sample_switch_frac() result(frac)
+        real :: frac
+    end function abinitio_full_sample_switch_frac
+
     module function abinitio_lpstart_ini3D() result(lp)
         real :: lp
     end function abinitio_lpstart_ini3D
