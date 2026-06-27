@@ -31,6 +31,14 @@ subsystem skill. Do not guess ownership from filenames alone; follow the establi
 - Do not run expensive builds or broad test suites unless requested. Prefer targeted
   checks and tell the user what was not run.
 
+## Instruction And Skill Maintenance
+
+- Propose small, incremental updates to `.github/instructions/` and `.github/skills/`
+  after significant tasks when patterns or guardrails should be captured.
+- Only apply edits to instruction or skill files when explicitly requested or approved.
+- Keep instruction and skill updates concise, specific, and aligned with observed
+  repository practice.
+
 ## SIMPLE Structure
 
 - `production/`: thin executable entrypoints.

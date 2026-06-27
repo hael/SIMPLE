@@ -61,8 +61,9 @@ Stage policy includes:
 - cropped box and sampling from the low-pass plan
 - stages 1 and 2 use the same `nspace=1000`
 - stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
-- staged search mode: stage 1 `snhc_smpl`, stage 2 `shc_smpl`,
-  middle `prob`, late `prob_neigh`
+- staged search mode: stage 1 `prob_neigh` with `prob_neigh_mode=snhc`,
+  stage 2 `prob_neigh` with `prob_neigh_mode=shc`, middle `prob`,
+  late `prob_neigh`
 - `nspace_sub` for `prob_neigh`
 - staged point-group policy between `pgrp_start` and `pgrp`
 - staged translation limits

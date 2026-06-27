@@ -34,8 +34,8 @@ previous class averages.
 
 `simple_commanders_abinitio.f90` and `simple_abinitio_controller.f90` own 3D
 stage scheduling: dynamic `update_frac`, `fillin`, `frac_best`, `balance`,
-`trail_rec`, and transitions between `snhc_smpl`, `shc_smpl`, `prob`, and
-`prob_neigh`.
+`trail_rec`, and transitions between early `prob_neigh` modes, `prob`, and
+late `prob_neigh`.
 
 `simple_matcher_smpl_and_lplims.f90` owns the shared outer subset-selection
 helpers for 2D and 3D. This is where full update, random sampling,
@@ -143,9 +143,9 @@ The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
 
 Current high-level ab initio stage policy:
 
-- stage 1 uses `snhc_smpl`
-- stage 2 uses `shc_smpl`
-- later stages use `prob`
+- stage 1 uses `prob_neigh` with `prob_neigh_mode=snhc`
+- stage 2 uses `prob_neigh` with `prob_neigh_mode=shc`
+- stages 3-5 use `prob`
 - final neighborhood stages use `prob_neigh`
 - stages 1 and 2 use the same `nspace=1000`
 - stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`

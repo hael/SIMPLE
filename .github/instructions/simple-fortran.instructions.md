@@ -14,3 +14,7 @@ For command-line or UI-visible behavior, update the owning parameter, parser, UI
 commander, execution-router, and project/reporting paths consistently. Check for generated
 argument sources before assuming a handwritten file is authoritative.
 
+When recurring Fortran patterns or safeguards emerge during work, propose concise updates
+to `.github/instructions/` or `.github/skills/` to capture them. Apply those edits only
+when explicitly requested or approved.
+
