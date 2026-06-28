@@ -282,6 +282,8 @@ contains
 
     logical function cluster2D_requires_full_assignment( params ) result( l_required )
         class(parameters), intent(in) :: params
+        ! In cluster2D, fillin is currently a coverage/convergence guard. It does
+        ! not change particle sampling to missing-only selection.
         l_required = params%l_fillin
     end function cluster2D_requires_full_assignment
 

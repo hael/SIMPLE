@@ -258,7 +258,7 @@ contains
         type(string)         :: s_ratio
         type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
-        real,    allocatable :: res_state_avg(:)
+        real,    allocatable :: res_state_avg(:), state_update_fracs(:)
         logical, allocatable :: mask(:), state_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
@@ -267,6 +267,7 @@ contains
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
+        integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -288,6 +289,11 @@ contains
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
+        trail_rec_ufrac = 1.0
+        if( params%l_update_frac .and. count(updatecnts > 0.5 .and. states > 0.5) > 0 )then
+            trail_rec_ufrac = real(count(sampled > sampled_lb .and. updatecnts > 0.5 .and. states > 0.5)) / &
+                &real(count(updatecnts > 0.5 .and. states > 0.5))
+        endif
         call os%stats('corr',       self%score,      mask=mask)
         call os%stats('dist',       self%dist,       mask=mask)
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
@@ -297,6 +303,15 @@ contains
         call os%stats('lp_est',     self%lp_est,     mask=mask)
         call os%stats('res',        self%res,        mask=mask)
         allocate(res_state_avg(params%nstates), source=0.)
+        allocate(state_update_fracs(params%nstates), source=0.)
+        if( params%l_update_frac )then
+            do istate = 1, params%nstates
+                nupdated_state = count(nint(states) == istate .and. updatecnts > 0.5)
+                if( nupdated_state < 1 ) cycle
+                nsampled_state = count(nint(states) == istate .and. updatecnts > 0.5 .and. sampled > sampled_lb)
+                state_update_fracs(istate) = real(nsampled_state) / real(nupdated_state)
+            enddo
+        endif
         self%mi_proj     = os%get_avg('mi_proj',     mask=mask)
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
@@ -367,18 +382,32 @@ contains
         endif
         write(logfhandle,609) '>>> | FILTER MODE                   | '//trim(params%filt_mode)
         if( params%l_update_frac )then
-        if( cline%defined('ufrac_trec') )then
-        numstr = string(params%ufrac_trec)
-        write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | '//numstr%to_char()
+        if( params%l_ufrac_trec_defined )then
+        if( params%nstates == 1 )then
+        trail_rec_ufrac = params%ufrac_trec
+        numstr = string(trail_rec_ufrac)
+        write(logfhandle,609) '>>> | TRAILING REC UFRAC_TREC       | '//numstr%to_char()
         else
-        trail_rec_ufrac = real(count(mask)) / real(count(updatecnts > 0.5 .and. states > 0.5))
+        write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | per-state realized'
+        endif
+        else
+        if( params%nstates == 1 )then
         numstr = string(trail_rec_ufrac)
         write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | '//numstr%to_char()
+        else
+        write(logfhandle,609) '>>> | TRAILING REC UPDATE FRACTION  | per-state realized'
+        endif
+        endif
+        if( params%nstates > 1 )then
+        do istate = 1, params%nstates
+        write(logfhandle,'(A,I3,A,F8.4)') '>>> | TRAILING REC UPDATE FRACTION  | state ', &
+            &istate, ': ', state_update_fracs(istate)
+        enddo
         endif
         if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-        write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | on'
+        write(logfhandle,609) '>>> | FULL-ASSIGNMENT COVERAGE      | on'
         else
-        write(logfhandle,609) '>>> | FILLIN PARTICLE SAMPLING      | off'
+        write(logfhandle,609) '>>> | FULL-ASSIGNMENT COVERAGE      | off'
         endif
         endif
         write(logfhandle,609) '>>> --------------------------------------------------'
@@ -469,6 +498,12 @@ contains
             write(res_key,'(A,I2.2)') 'RESOLUTION_STATE', istate
             call ostats%set(1, trim(res_key),            res_state_avg(istate))
         end do
+        if( params%l_update_frac .and. params%nstates > 1 )then
+            do istate = 1, params%nstates
+                write(res_key,'(A,I2.2)') 'TRAIL_REC_UPDATE_FRAC_STATE', istate
+                call ostats%set(1, trim(res_key), state_update_fracs(istate))
+            end do
+        endif
         call ostats%set(1,'SCORE',                       self%score%avg)
         if( params%l_ml_reg )then
             call ostats%set(1,'ML_REGULARIZATION',                    1.0)
@@ -487,9 +522,10 @@ contains
         call self%append_stats(params, ostats)
         call self%plot_projdirs(params, os, mask)
         ! destruct
-        if( allocated(state_mi_joint) ) deallocate(state_mi_joint)
-        if( allocated(statepops)      ) deallocate(statepops)
-        if( allocated(res_state_avg)  ) deallocate(res_state_avg)
+        if( allocated(state_mi_joint)     ) deallocate(state_mi_joint)
+        if( allocated(statepops)          ) deallocate(statepops)
+        if( allocated(res_state_avg)      ) deallocate(res_state_avg)
+        if( allocated(state_update_fracs) ) deallocate(state_update_fracs)
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D

@@ -283,7 +283,8 @@ contains
         integer, allocatable          :: state_pops(:)
         real, allocatable             :: res0143s(:)
         real, allocatable             :: nu_align_lps(:)
-        real                          :: update_frac_trail_rec, res05
+        real, allocatable             :: update_frac_trail_recs(:)
+        real                          :: res05
         integer                       :: state, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_automask3D, t_nonuniform_filter, t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
@@ -343,6 +344,8 @@ contains
             res0143s = 0.
             allocate(nu_align_lps(params%nstates))
             nu_align_lps = 0.
+            allocate(update_frac_trail_recs(params%nstates))
+            update_frac_trail_recs = 1.0
             allocate(state_pops(params%nstates))
             state_pops = 0
             call eorecvol_read%new(params, build%spproj, expand=.false.)
@@ -357,13 +360,21 @@ contains
         end subroutine refresh_state_populations
 
         subroutine determine_trailing_update_fraction()
-            update_frac_trail_rec = 1.0
+            update_frac_trail_recs = 1.0
             if( .not. params%l_trail_rec ) return
-            if( cline%defined('ufrac_trec') )then
-                update_frac_trail_rec = params%ufrac_trec
+            if( params%l_ufrac_trec_defined )then
+                if( params%nstates == 1 )then
+                    update_frac_trail_recs(1) = params%ufrac_trec
+                    write(logfhandle,'(A,F8.4)') &
+                        '>>> VOLASSEMBLE: USING EXPLICIT SINGLE-STATE UFRAC_TREC = ', params%ufrac_trec
+                else
+                    THROW_WARN('ufrac_trec is ignored for multi-state trailing reconstruction; using realized per-state update fractions')
+                    call build%spproj%read_segment(params%oritype, params%projfile)
+                    call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, update_frac_trail_recs)
+                endif
             else
                 call build%spproj%read_segment(params%oritype, params%projfile)
-                update_frac_trail_rec = build%spproj%os_ptcl3D%get_update_frac()
+                call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, update_frac_trail_recs)
             endif
         end subroutine determine_trailing_update_fraction
 
@@ -375,7 +386,7 @@ contains
 
         subroutine assemble_state()
             call restore_state_from_parts(params, build, cline, eorecvol_read, state, numlen_part, &
-                &update_frac_trail_rec, gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
+                &update_frac_trail_recs(state), gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
                 &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                 &volname, eonames, res05, res0143s(state), restore_timings)
             params%vols(state)      = volname
@@ -727,11 +738,12 @@ contains
             call vol_odd_nu%kill
             call vol_msk%kill
             call cleanup_nu_aux_images()
-            if( allocated(l_mask) ) deallocate(l_mask)
-            if( allocated(imat) ) deallocate(imat)
-            if( allocated(state_pops) ) deallocate(state_pops)
-            if( allocated(res0143s) ) deallocate(res0143s)
-            if( allocated(nu_align_lps) ) deallocate(nu_align_lps)
+            if( allocated(l_mask)                 ) deallocate(l_mask)
+            if( allocated(imat)                   ) deallocate(imat)
+            if( allocated(state_pops)             ) deallocate(state_pops)
+            if( allocated(res0143s)               ) deallocate(res0143s)
+            if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
+            if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             call cleanup_nu_filter()
             call state_mask_bin%kill_bimg
             call mskvol%kill_bimg

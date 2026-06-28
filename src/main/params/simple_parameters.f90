@@ -554,7 +554,7 @@ type :: parameters
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
-    real    :: ufrac_trec  = 1.    !< update frac trailing rec
+    real    :: ufrac_trec  = 1.    !< explicit single-state trailing rec update-fraction override
     real    :: width=10.           !< falloff of mask(in pixels){10}
     real    :: winsz=KBWINSZ
     real    :: xsh=0.              !< x shift(in pixels){0}
@@ -592,6 +592,7 @@ type :: parameters
     logical :: l_prob_align_mode = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.
+    logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_update_missing  = .false.
     logical :: l_remap_cls       = .false.
     logical :: sp_required       = .false.

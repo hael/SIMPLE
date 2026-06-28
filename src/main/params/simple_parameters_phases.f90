@@ -490,6 +490,7 @@ contains
     module subroutine derive_sampling_settings(self, cline)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
+        self%l_ufrac_trec_defined = cline%defined('ufrac_trec')
         if( self%update_frac <= .99 )then
             self%l_update_frac = .true.
             self%l_trail_rec   = trim(self%trail_rec).eq.'yes'

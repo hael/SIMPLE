@@ -87,7 +87,7 @@ explicitly supplied `maxits`.
 After startup, `refine3D_auto` runs base `refine3D` with:
 
 - `prg=refine3D`
-- `ufrac_trec` set from the current update fraction
+- trailing reconstruction weighted from realized sampled-update bookkeeping
 - the planned `maxits`
 - the selected starting `vol1`
 

@@ -202,7 +202,6 @@ contains
         call seed_refine3D_auto_nonuniform_lpset()
         ! 3D refinement iterations
         call cline%set('prg',                   'refine3D')
-        call cline%set('ufrac_trec',    params%update_frac)
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
         ! re-reconstruct from all particle images
@@ -625,7 +624,6 @@ contains
         call set_refine3D_multi_downscaling()
         call initialize_state_volumes()
         call cline%set('prg', 'refine3D')
-        call cline%set('ufrac_trec', params%update_frac)
         maxits_glob_multi = 0
         if( l_run_init_stage      ) maxits_glob_multi = maxits_glob_multi + init_stage_cap
         if( l_run_shc_stage       ) maxits_glob_multi = maxits_glob_multi + stage_cap

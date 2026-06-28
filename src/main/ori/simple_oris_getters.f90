@@ -903,6 +903,31 @@ contains
         update_frac = real(count(sampled == sampled_max .and. states > 0)) / real(count(updatecnts > 0 .and. states > 0))
     end function get_update_frac
 
+    module subroutine get_state_update_fracs( self, nstates, rho )
+        class(oris),                     intent(inout) :: self
+        integer,                         intent(in)    :: nstates
+        real, allocatable,               intent(inout) :: rho(:)
+        integer, allocatable :: updatecnts(:), sampled(:), states(:)
+        integer :: sampled_max, updatecnt_max, istate
+        integer :: nactive_state, nsampled_state
+        if( allocated(rho) ) deallocate(rho)
+        allocate(rho(nstates), source=0.0)
+        allocate(updatecnts(self%n), sampled(self%n), states(self%n))
+        updatecnts = self%get_all_asint('updatecnt')
+        sampled    = self%get_all_asint('sampled')
+        states     = nint(self%get_all('state'))
+        sampled_max   = maxval(sampled)
+        updatecnt_max = maxval(updatecnts)
+        if( sampled_max   == 0 ) THROW_HARD('requires previous sampling')
+        if( updatecnt_max == 0 ) THROW_HARD('requires previous update')
+        do istate = 1, nstates
+            nactive_state  = count(states == istate .and. updatecnts > 0)
+            nsampled_state = count(states == istate .and. updatecnts > 0 .and. sampled == sampled_max)
+            if( nactive_state > 0 ) rho(istate) = real(nsampled_state) / real(nactive_state)
+        enddo
+        deallocate(updatecnts, sampled, states)
+    end subroutine get_state_update_fracs
+
     module subroutine get_class_update_fracs( self, ncls, rho )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: ncls

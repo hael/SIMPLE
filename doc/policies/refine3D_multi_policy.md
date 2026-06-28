@@ -292,9 +292,8 @@ writes the same class-sampling sidecar consumed by base `refine3D`. If the
 project lacks selected `cls2D` entries, the run fails early with an explicit
 class-balanced sampling error.
 
-The wrapper sets `ufrac_trec` to the effective update fraction before it calls
-base `refine3D`. This keeps trailing-reconstruction weighting tied to the
-actual staged sample size.
+The wrapper does not set `ufrac_trec`; trailing reconstruction consumes the
+realized per-state update fractions recorded in `sampled` and `updatecnt`.
 
 Automatic stage budget planning targets roughly four updates per active
 particle:

@@ -77,9 +77,10 @@ it to prefer under-updated or never-updated active particles.
 probabilistic subset. A probability-table worker or downstream matcher must not
 silently resample when a probabilistic pre-step has already sampled the subset.
 
-`get_update_frac` returns the global realized update fraction for 3D trailing
-from the current `sampled` round, active particles, and particles with
-`updatecnt > 0`.
+`get_state_update_fracs` returns state-local realized update fractions for 3D
+trailing from the current `sampled` round, state labels, and particles with
+`updatecnt > 0`. `get_update_frac` remains available for callers that need the
+legacy global summary.
 
 `get_class_update_fracs` returns per-class realized update fractions for 2D
 class-average carry-over. It uses active particles, current class assignments,
@@ -115,8 +116,9 @@ Current stage policy:
   stochastic but biased toward particles with lower `updatecnt`
 - probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
   `cluster2D_exec` reproduce the same subset
-- final fill-in is assignment-only for active particles with `updatecnt == 0`;
-  it uses existing class averages and does not restore new class-average sums
+- staged `fillin=yes` currently acts as a full-assignment coverage guard. It
+  requires active particles to have assignments before convergence, while
+  particle selection still follows the normal sampled-update path
 - staged `abinitio2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
   stages 1-4, then sparse probabilistic SNHC (`refine=prob_snhc`) for stage 5
   and later staged `cluster2D` invocations, including staged fill-in targets
@@ -195,9 +197,13 @@ balanced or count-biased exploration distribution.
 
 The 3D matcher writes partial reconstructions from the active subset. Volume
 assembly then restores volumes, calculates FSCs, postprocesses references, and
-applies trailing reconstruction when requested. Trailing uses explicit
-`ufrac_trec` if provided; otherwise it consumes the realized fraction from
-`get_update_frac`.
+applies trailing reconstruction when requested. Trailing uses an explicit
+`ufrac_trec` only when the parsed `params%l_ufrac_trec_defined` flag is true
+and the run is single-state; otherwise it consumes realized per-state fractions
+from `get_state_update_fracs`. The numeric `params%ufrac_trec` field has a
+default value and must not be interpreted as an active override by itself.
+Multi-state convergence reporting records those effective state-local fractions
+as `TRAIL_REC_UPDATE_FRAC_STATE01`, `TRAIL_REC_UPDATE_FRAC_STATE02`, and so on.
 
 ## 6. Probabilistic Pre-Alignment
 
@@ -228,10 +234,10 @@ particle set is already fixed before they run.
 Classes with no active updated particles keep a zero realized fraction. Classes
 with full sampled participation replace previous sums.
 
-3D volume assembly consumes the global realized update fraction for trailing:
+3D volume assembly consumes realized state-local update fractions for trailing:
 
-- previous volume contribution: `1 - update_frac_trail_rec`
-- current volume contribution: `update_frac_trail_rec`
+- previous state-volume contribution: `1 - update_frac_trail_rec(state)`
+- current state-volume contribution: `update_frac_trail_rec(state)`
 
 Neither class-average restoration nor volume assembly should make new particle
 sampling decisions. If a restoration or assembly change requires a different
@@ -265,8 +271,8 @@ are separate workflow stages and may perform their own reads.
 - Docked split-stage refinement must not use trailing volume averaging; later
   post-split stages restore trailing inside the new multi-state epoch.
 - 2D fractional class-average restoration remains class-local.
-- Final `abinitio2D` fill-in remains assignment-only unless the policy is
-  explicitly changed.
+- Staged `abinitio2D` `fillin=yes` remains a full-assignment coverage guard
+  unless the implementation is deliberately changed to missing-only assignment.
 - Sampled `abinitio2D` runs a terminal dense probabilistic all-particle refresh before final
   class-average generation.
 - `volassemble` and the classaverager remain consumers of sampled-update state,

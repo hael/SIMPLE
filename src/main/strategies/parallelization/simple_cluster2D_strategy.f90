@@ -310,7 +310,8 @@ contains
         if( cluster2D_requires_full_assignment(params) )then
             l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
             if( .not. l_full_assignment )then
-                write(logfhandle,'(A,I8)') '>>> CLUSTER2D FILL-IN COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+                write(logfhandle,'(A,I8)') &
+                    '>>> CLUSTER2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
             endif
             converged = converged .and. l_full_assignment
         endif

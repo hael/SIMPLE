@@ -268,13 +268,13 @@ contains
         cfg%l_write_prior = (trim(params%refine) == 'prob_prior') .and. (istage == PROB_PRIOR_STAGE - 1)
     end subroutine set_cluster2D_stage_search_policy
 
-    logical function cluster2D_stage_is_fillin( cfg, stage_parms, istage ) result( l_fillin_stage )
+    logical function cluster2D_stage_requires_full_assignment( cfg, stage_parms, istage ) result( l_required )
         type(cluster2D_stage_cfg), intent(in) :: cfg
         type(stage_params),        intent(in) :: stage_parms(:)
         integer,                   intent(in) :: istage
-        l_fillin_stage = stage_parms(istage)%l_update_frac .and.&
+        l_required = stage_parms(istage)%l_update_frac .and.&
             &(cfg%iphase == size(PHASES) .or. istage == size(stage_parms))
-    end function cluster2D_stage_is_fillin
+    end function cluster2D_stage_requires_full_assignment
 
     subroutine emit_cluster2D_stage_cfg( cline_cluster2D, cfg, stage_parms, istage )
         use simple_cmdline, only: cmdline
@@ -282,8 +282,8 @@ contains
         type(cluster2D_stage_cfg), intent(in)    :: cfg
         type(stage_params),        intent(in)    :: stage_parms(:)
         integer,                   intent(in)    :: istage
-        logical :: l_fillin_stage
-        l_fillin_stage = cluster2D_stage_is_fillin(cfg, stage_parms, istage)
+        logical :: l_require_full_assignment
+        l_require_full_assignment = cluster2D_stage_requires_full_assignment(cfg, stage_parms, istage)
         call cline_cluster2D%delete('which_iter')
         if( stage_parms(istage)%l_lpset )then
             call cline_cluster2D%set('lp', stage_parms(istage)%lp)
@@ -319,7 +319,9 @@ contains
         else
             call cline_cluster2D%delete('update_frac')
         endif
-        if( l_fillin_stage )then
+        ! Legacy cluster2D fillin=yes currently requests full-assignment coverage;
+        ! particle selection still follows the normal sampled-update path.
+        if( l_require_full_assignment )then
             call cline_cluster2D%set('fillin', 'yes')
         else
             call cline_cluster2D%delete('fillin')

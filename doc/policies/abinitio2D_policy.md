@@ -129,7 +129,9 @@ Stage policy:
 - stage 1 uses a random sampled subset but disables fractional carry-over of previous class-average sums
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
-- final fill-in is an assignment-only pass for active particles that still have `updatecnt == 0`
+- staged `fillin=yes` currently acts as a full-assignment coverage guard: it
+  keeps iterating until active particles have assignments, while particle
+  selection still follows the normal sampled-update path
 - if any staged update used `update_frac`, `abinitio2D` runs a terminal
   dense `refine=prob` all-particle `cluster2D` pass with `update_frac` and
   `fillin` disabled, refreshing class, in-plane, and shift parameters before
@@ -176,7 +178,8 @@ For any `abinitio2D` or `cluster2D` change, check:
   of introducing a second particle-stack read?
 - Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
-- Does fill-in remain assignment-only unless the policy is explicitly changed?
+- Is `fillin=yes` treated as a full-assignment coverage guard unless the
+  implementation is deliberately changed to missing-only assignment?
 - When staged updates are sampled, does terminal dense probabilistic assignment refresh all active
   particles before final class-average generation?
 - Does the change preserve Cartesian-only `abinitio2D`?
@@ -187,7 +190,8 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not bury stage-policy tables in the matcher.
 - Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
-- Do not treat final fill-in as a normal class-average restoration stage.
+- Do not describe `fillin=yes` as missing-only assignment while it still uses
+  the normal sampled-update path.
 - Do not use final fill-in as a substitute for the terminal dense probabilistic all-particle
   refresh when sampled abinitio2D updates were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.

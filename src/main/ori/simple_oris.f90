@@ -91,6 +91,7 @@ type :: oris
     procedure          :: any_state_zero
     procedure          :: is_first_update
     procedure          :: get_update_frac
+    procedure          :: get_state_update_fracs
     procedure          :: get_class_update_fracs
     procedure          :: get_class_sample_stats
     procedure          :: get_proj_sample_stats
@@ -756,6 +757,12 @@ interface
         class(oris), intent(inout) :: self
         real :: update_frac
     end function get_update_frac
+
+    module subroutine get_state_update_fracs( self, nstates, rho )
+        class(oris),                     intent(inout) :: self
+        integer,                         intent(in)    :: nstates
+        real, allocatable,               intent(inout) :: rho(:)
+    end subroutine get_state_update_fracs
 
     module subroutine get_class_update_fracs( self, ncls, rho )
         class(oris),                     intent(inout) :: self
