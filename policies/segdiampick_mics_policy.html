@@ -1,0 +1,2649 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/segdiampick_mics_policy.html">
+      
+      
+        <link rel="prev" href="refine3D_policy.html">
+      
+      
+        <link rel="next" href="sigma_calculation_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>segdiampick_mics Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#segdiampick_mics-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              segdiampick_mics Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="segdiampick_mics_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Purpose and Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Algorithm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Algorithm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-diameter-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 1 — Diameter collection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-global-diameter-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2 — Global diameter statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-clustering-and-outlier-rejection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3 — Clustering and outlier rejection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 3 — Clustering and outlier rejection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#3a-k-means-path-default-l_hac-absent-or-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3a. k-means path (default, l_hac absent or .false.)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3b-hac-path-l_hac-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3b. HAC path (l_hac = .true.)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3c-cluster-filtering-both-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3c. Cluster filtering (both paths)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-box-size-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4 — Box size derivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-mask-diameter-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5 — Mask diameter derivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-6-re-picking-with-diameter-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 6 — Re-picking with diameter constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Do Not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Purpose and Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Algorithm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Algorithm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-diameter-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 1 — Diameter collection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-global-diameter-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2 — Global diameter statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-clustering-and-outlier-rejection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3 — Clustering and outlier rejection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 3 — Clustering and outlier rejection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#3a-k-means-path-default-l_hac-absent-or-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3a. k-means path (default, l_hac absent or .false.)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3b-hac-path-l_hac-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3b. HAC path (l_hac = .true.)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3c-cluster-filtering-both-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3c. Cluster filtering (both paths)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-box-size-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4 — Box size derivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-mask-diameter-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5 — Mask diameter derivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-6-re-picking-with-diameter-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 6 — Re-picking with diameter constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Do Not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="segdiampick_mics-policy">segdiampick_mics Policy<a class="headerlink" href="#segdiampick_mics-policy" title="Permanent link">&para;</a></h1>
+<h2 id="1-purpose-and-scope">1. Purpose and Scope<a class="headerlink" href="#1-purpose-and-scope" title="Permanent link">&para;</a></h2>
+<p>This document defines the algorithmic and implementation policy for
+<code>segdiampick_mics</code> in <code>simple_mini_stream_utils.f90</code>.</p>
+<p><code>segdiampick_mics</code> estimates particle diameter from a mini-batch of
+micrographs, returns a box size in pixels and a mask diameter in Ångströms
+for downstream picking and refinement, and writes particle box positions to
+the project. It is the diameter-estimation entry point for the mini-batch
+stream pipeline.</p>
+<p>This document covers:</p>
+<ul>
+<li>the diameter collection stage</li>
+<li>the statistical filtering stage (clustering and outlier rejection)</li>
+<li>the box-size and mask-diameter derivation rules</li>
+<li>the re-picking stage</li>
+<li>parameters and their roles</li>
+<li>the two clustering backends (k-means and HAC)</li>
+</ul>
+<h2 id="2-algorithm">2. Algorithm<a class="headerlink" href="#2-algorithm" title="Permanent link">&para;</a></h2>
+<h3 id="stage-1-diameter-collection">Stage 1 — Diameter collection<a class="headerlink" href="#stage-1-diameter-collection" title="Permanent link">&para;</a></h3>
+<p>For each micrograph in <code>1 .. mic_to</code>:</p>
+<ol>
+<li>If the project already records <code>mic_den</code>, <code>mic_topo</code>, and <code>mic_bin</code> for a
+   micrograph (written by <code>segdiampick_preprocess</code>), import diameters from the
+   corresponding <code>mic_diam</code> text file. Delete the <code>mic_den</code>, <code>mic_topo</code>,
+   <code>mic_bin</code>, and <code>mic_diam</code> entries from the project after import so they are
+   not reused on a subsequent call.</li>
+<li>Otherwise, run <code>picksegdiam%pick</code> against the raw micrograph. Retrieve
+   diameters via <code>picksegdiam%get_diameters</code>. Micrographs that yield zero
+   boxes are skipped silently.</li>
+</ol>
+<p>All per-micrograph diameter vectors are concatenated into a single flat array
+<code>diams_arr</code>.</p>
+<p>A correction of <code>2 × SMPD_SHRINK1</code> Ångströms is added to every collected
+diameter to compensate for the two-pixel erosion step performed during binary
+mask generation in the segmentation picker.</p>
+<h3 id="stage-2-global-diameter-statistics">Stage 2 — Global diameter statistics<a class="headerlink" href="#stage-2-global-diameter-statistics" title="Permanent link">&para;</a></h3>
+<p><code>calc_stats</code> is called on <code>diams_arr</code> to populate a <code>stats_struct</code> containing
+mean, median, standard deviation, minimum, and maximum. The global
+robust-scale estimate <code>mad</code> is computed via <code>mad_gau(diams_arr, median)</code>,
+which returns <code>1.4826 × MAD</code>.</p>
+<h3 id="stage-3-clustering-and-outlier-rejection">Stage 3 — Clustering and outlier rejection<a class="headerlink" href="#stage-3-clustering-and-outlier-rejection" title="Permanent link">&para;</a></h3>
+<p>Diameters are clustered to identify and discard outlier size populations.
+Two backends are available, selected by the optional <code>l_hac</code> argument.</p>
+<h4 id="3a-k-means-path-default-l_hac-absent-or-false">3a. k-means path (default, <code>l_hac</code> absent or <code>.false.</code>)<a class="headerlink" href="#3a-k-means-path-default-l_hac-absent-or-false" title="Permanent link">&para;</a></h4>
+<p><code>sortmeans</code> partitions <code>diams_arr</code> into exactly <code>NQ_DIAMS = 10</code> clusters.
+The first and last quantile (indices 1 and <code>NQ_DIAMS</code>) are always excluded
+from the accepted set regardless of their Z-scores; they represent the
+extreme-size tail populations.</p>
+<h4 id="3b-hac-path-l_hac-true">3b. HAC path (<code>l_hac = .true.</code>)<a class="headerlink" href="#3b-hac-path-l_hac-true" title="Permanent link">&para;</a></h4>
+<p><code>hac_1d_fast</code> performs threshold-based hierarchical agglomerative clustering
+on <code>diams_arr</code> with a linkage threshold equal to the global standard deviation
+<code>diam_stats%sdev</code>. The number of clusters is adaptive and determined by the
+data. All clusters are eligible for acceptance; there is no mandatory exclusion
+of edge clusters.</p>
+<h4 id="3c-cluster-filtering-both-paths">3c. Cluster filtering (both paths)<a class="headerlink" href="#3c-cluster-filtering-both-paths" title="Permanent link">&para;</a></h4>
+<p>Two independent Z-score criteria are evaluated per cluster, both must pass for
+a cluster to be accepted:</p>
+<p><strong>Mean Z-score</strong> — the absolute Z-score of the cluster centroid with respect
+to the global median and MAD:</p>
+<p>$$|z_i| = \frac{|\mu_i - \text{med}(\text{diams})|}{1.4826 \cdot \text{MAD}(\text{diams})}$$</p>
+<p>Clusters with $|z_i| \geq \sigma_{\text{crit}}$ are rejected. These represent
+populations whose mean diameter is a statistical outlier from the bulk.</p>
+<p><strong>Population MAD Z-score</strong> — the Z-score of the cluster population count with
+respect to the median and MAD of the population-count vector across all
+clusters:</p>
+<p>$$z_{\text{pop},i} = \frac{\text{med}(\text{pops}) - \text{pop}_i}{1.4826 \cdot \text{MAD}(\text{pops})}$$</p>
+<p>The sign convention is positive = below-median population = sparse cluster.
+Clusters with $z_{\text{pop},i} \geq \sigma_{\text{crit}}$ are rejected. This
+discards anomalously small clusters that are likely artefacts or contaminants
+rather than the target particle population.</p>
+<p>If the population MAD is zero (all cluster populations are equal), the
+population Z-score criterion is suppressed (all clusters pass the population
+test). The mean Z-score criterion still applies.</p>
+<p>The threshold for both criteria is <code>SIGMA_CRIT = 2.0</code>.</p>
+<p>Diameters belonging to accepted clusters are collected into <code>diams_arr_ts</code>
+(threshold-selected). Post-filtering statistics are printed for diagnostic
+purposes.</p>
+<h3 id="stage-4-box-size-derivation">Stage 4 — Box size derivation<a class="headerlink" href="#stage-4-box-size-derivation" title="Permanent link">&para;</a></h3>
+<p>The box size in pixels is:</p>
+<pre><code>box_in_pix = find_magic_box( nint( 1.5 × diam_stats%maxv / smpd ) )
+</code></pre>
+<p>where <code>diam_stats%maxv</code> is the <strong>maximum</strong> diameter in the threshold-selected
+set and <code>smpd</code> is the pixel size in Ångströms. <code>find_magic_box</code> rounds up to
+the nearest FFT-friendly size. The 1.5× factor provides clearance around the
+largest accepted particle.</p>
+<h3 id="stage-5-mask-diameter-derivation">Stage 5 — Mask diameter derivation<a class="headerlink" href="#stage-5-mask-diameter-derivation" title="Permanent link">&para;</a></h3>
+<pre><code>mskdiam = min( (box_in_pix - COSMSKHALFWIDTH) × smpd,
+               diam_stats%maxv × 1.2 )
+</code></pre>
+<p><code>COSMSKHALFWIDTH</code> is a global constant that reserves a cosine-edge half-width
+at the box boundary. The mask diameter is capped at 1.2× the maximum accepted
+diameter. The stricter of the two bounds is taken.</p>
+<h3 id="stage-6-re-picking-with-diameter-constraints">Stage 6 — Re-picking with diameter constraints<a class="headerlink" href="#stage-6-re-picking-with-diameter-constraints" title="Permanent link">&para;</a></h3>
+<p>After diameter estimation, all micrographs in <code>1 .. mic_to</code> are re-picked
+with <code>picksegdiam%pick</code> using the diameter range
+<code>[diam_stats%minv, diam_stats%maxv]</code> from the threshold-selected set as an
+acceptance gate. Box positions and diameters are written to per-micrograph
+<code>.box</code> files and registered in the project via <code>spproj%set_boxfile</code>.</p>
+<p>Density thumbnails (<code>.jpg</code>) are generated for micrographs whose density image
+(<code>*_DEN.mrc</code>) exists on disk and are stored in the project mic segment.</p>
+<p>The mic segment is written to disk at the end of the subroutine.</p>
+<h2 id="3-parameters">3. Parameters<a class="headerlink" href="#3-parameters" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Value</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SMPD_SHRINK1</code></td>
+<td>4.0 Å</td>
+<td>Shrinkage factor used in segmentation picking; applied as erosion correction</td>
+</tr>
+<tr>
+<td><code>NQ_DIAMS</code></td>
+<td>10</td>
+<td>Number of k-means clusters in the default path</td>
+</tr>
+<tr>
+<td><code>SIGMA_CRIT</code></td>
+<td>2.0</td>
+<td>Z-score rejection threshold for both mean and population criteria</td>
+</tr>
+<tr>
+<td><code>SIGMA_CRIT_MSK</code></td>
+<td>2.5</td>
+<td>Reserved for alternative mask-diameter clipping rule; currently inactive</td>
+</tr>
+<tr>
+<td><code>BOXFAC</code></td>
+<td>3</td>
+<td>Reserved for alternative box-size rule; currently inactive</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-invariants">4. Invariants<a class="headerlink" href="#4-invariants" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>diams_arr</code> must be non-empty before the clustering stage is reached. No
+  guard is currently applied; callers must ensure <code>mic_to</code> covers at least one
+  micrograph with detectable particles.</li>
+<li>The erosion correction (<code>+2 × SMPD_SHRINK1</code>) is applied exactly once, before
+  any statistics are computed.</li>
+<li>The clustering stage operates on the corrected diameters. Box-size and
+  mask-diameter derivation operate on the <strong>post-filtering</strong> statistics
+  (<code>diams_arr_ts</code>), not the pre-filtering full array.</li>
+<li>Re-picking uses the diameter bounds from the threshold-selected statistics,
+  not the pre-filtering bounds.</li>
+<li>Pre-picked <code>mic_den</code>/<code>mic_topo</code>/<code>mic_bin</code>/<code>mic_diam</code> project entries are
+  deleted after import and must not be reused.</li>
+</ul>
+<h2 id="5-ownership">5. Ownership<a class="headerlink" href="#5-ownership" title="Permanent link">&para;</a></h2>
+<p><code>segdiampick_mics</code> owns the full estimation-to-picking pipeline for a
+mini-batch: diameter collection, filtering, box/mask derivation, re-picking,
+and project output.</p>
+<p><code>picksegdiam</code> owns the segmentation-based picking and the per-micrograph
+diameter file I/O.</p>
+<p><code>hac_1d_fast</code> (in <code>simple_math.f90</code>) owns the 1D HAC clustering algorithm.
+<code>sortmeans</code> (in <code>simple_math.f90</code>) owns the k-means quantization. Neither
+clustering routine owns the filtering logic; the Z-score thresholding lives
+entirely in <code>segdiampick_mics</code>.</p>
+<p><code>find_magic_box</code> owns FFT-friendly box-size rounding.</p>
+<p><code>calc_stats</code> and <code>mad_gau</code> own the statistical summaries. <code>median_nocopy</code>
+owns non-destructive median computation for the population-count vector.</p>
+<h2 id="6-do-not">6. Do Not<a class="headerlink" href="#6-do-not" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Do not change the erosion correction factor without updating the segmentation
+  picker's binarization step correspondingly.</li>
+<li>Do not apply the diameter bounds from the pre-filtering <code>diam_stats</code> to the
+  re-picking stage; always use post-filtering bounds.</li>
+<li>Do not add a mandatory edge-cluster exclusion to the HAC path; the adaptive
+  cluster count makes fixed-index exclusion meaningless.</li>
+<li>Do not suppress the population Z-score when MAD is nonzero; only suppress it
+  when MAD is exactly zero (all populations equal).</li>
+<li>Do not collapse the two clustering paths into a single code path that
+  post-processes <code>sortmeans</code> output with HAC; they are independent policies.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

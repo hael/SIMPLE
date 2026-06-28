@@ -1,0 +1,3108 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/refine3D_multi_policy.html">
+      
+      
+        <link rel="prev" href="refine3D_denoised_rec_source_policy.html">
+      
+      
+        <link rel="next" href="refine3D_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Refine3D Multi Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#refine3d-multi-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Refine3D Multi Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="refine3D_multi_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-entry-points-and-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Entry Points and Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-public-command-and-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Public Command and Defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mode-and-state-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mode and State Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-starting-state-volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Starting State Volumes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-sampling-and-update-fraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Sampling and Update Fraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-autoscaling-and-matching-bandwidth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Autoscaling and Matching Bandwidth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-stage-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Stage Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-stage-stop-criterion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Stage Stop Criterion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-delegation-to-base-refine3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Delegation to Base Refine3D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-filtering-masking-and-volume-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Filtering, Masking, and Volume Assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-final-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Final Reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-continue-restarts-and-execution-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Continue, Restarts, and Execution Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-future-implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Future Implementation Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-reviewer-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Reviewer Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-refactor-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Refactor Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-entry-points-and-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Entry Points and Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-public-command-and-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Public Command and Defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mode-and-state-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mode and State Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-starting-state-volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Starting State Volumes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-sampling-and-update-fraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Sampling and Update Fraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-autoscaling-and-matching-bandwidth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Autoscaling and Matching Bandwidth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-stage-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Stage Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-stage-stop-criterion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Stage Stop Criterion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-delegation-to-base-refine3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Delegation to Base Refine3D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-filtering-masking-and-volume-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Filtering, Masking, and Volume Assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-final-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Final Reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-continue-restarts-and-execution-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Continue, Restarts, and Execution Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-future-implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Future Implementation Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-reviewer-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Reviewer Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-refactor-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Refactor Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="refine3d-multi-policy">Refine3D Multi Policy<a class="headerlink" href="#refine3d-multi-policy" title="Permanent link">&para;</a></h1>
+<p>This document records the current policy for <code>refine3D_multi</code>. It describes
+the automated multi-state wrapper around base <code>refine3D</code>; the low-level
+projection-matching, probabilistic pre-step, partial reconstruction, volume
+assembly, automasking, and nonuniform-filtering contracts remain in the
+related policy documents.</p>
+<p>Related workflow policies:</p>
+<ul>
+<li><a href="refine3D_policy.html">refine3D_policy.md</a></li>
+<li><a href="refine3D_auto_policy.html">refine3D_auto_policy.md</a></li>
+<li><a href="automasking_policy.html">automasking_policy.md</a></li>
+<li><a href="nonuniform_filtering_policy.html">nonuniform_filtering_policy.md</a></li>
+<li><a href="sigma_calculation_policy.html">sigma_calculation_policy.md</a></li>
+</ul>
+<p>Primary implementation files:</p>
+<ul>
+<li><code>src/main/ui/simple/simple_ui_refine3D.f90</code></li>
+<li><code>src/main/exec/simple_exec_refine3D.f90</code></li>
+<li><code>src/main/commanders/simple/simple_commanders_refine3D.f90</code></li>
+<li><code>src/main/strategies/parallelization/simple_refine3D_strategy.f90</code></li>
+<li><code>src/main/strategies/search/simple_strategy3D_matcher.f90</code></li>
+<li><code>src/main/commanders/simple/simple_commanders_rec_distr.f90</code></li>
+</ul>
+<h2 id="1-scope">1. Scope<a class="headerlink" href="#1-scope" title="Permanent link">&para;</a></h2>
+<p><code>refine3D_multi</code> is an automated multi-state refinement workflow for projects
+with existing input orientations. It chooses multi-state defaults, establishes
+the number of states by inquiring either the command line or the project state
+labels, prepares or validates state volumes, maps <code>multivol_mode</code> onto a staged
+base-<code>refine3D</code> workflow, and then runs a final all-particle <code>reconstruct3D</code>
+pass at native project sampling.</p>
+<p>It is not a separate matcher implementation. Once the wrapper has prepared the
+command line for a stage, all particle-domain and volume-domain iteration work
+is delegated to <code>commander_refine3D</code>.</p>
+<p>Its durable contract is:</p>
+<ol>
+<li>establish <code>nstates</code> from project labels or command-line input</li>
+<li>apply multi-state defaults</li>
+<li>derive sampling, update fraction, and per-stage iteration caps</li>
+<li>derive default autoscaling and translation limits, unless <code>autoscale=no</code></li>
+<li>validate or initialize per-state starting volumes</li>
+<li>run the <code>multivol_mode</code> stage plan</li>
+<li>verify that every active particle has been updated at least once</li>
+<li>reconstruct and postprocess final maps from all particles at native sampling</li>
+<li>write final reconstruction products</li>
+</ol>
+<p><code>refine3D_multi</code> should be reviewed as a staged policy wrapper. Changes to
+the base matcher, probability tables, volume assembly, automasking, or NU
+filtering should be checked against their own policy documents as well.</p>
+<p>The old <code>multivol_assign</code> public application has been removed from the
+library. Multi-volume assignment and refinement policy lives in
+<code>refine3D_multi</code> through <code>multivol_mode</code>.</p>
+<h2 id="2-entry-points-and-ownership">2. Entry Points and Ownership<a class="headerlink" href="#2-entry-points-and-ownership" title="Permanent link">&para;</a></h2>
+<p>The public command is <code>refine3D_multi</code>, registered in
+<code>simple_ui_refine3D.f90</code> and routed by <code>simple_exec_refine3D.f90</code>.</p>
+<p><code>simple_exec_refine3D.f90</code> owns command dispatch:</p>
+<ul>
+<li>ordinary runs call <code>commander_refine3D_multi%execute</code></li>
+<li>runs with <code>nrestarts</code> are delegated to <code>restarted_exec</code></li>
+</ul>
+<p><code>simple_commanders_refine3D.f90</code> owns the wrapper policy:</p>
+<ul>
+<li>multi-state default selection</li>
+<li>project-label versus command-line <code>nstates</code> policy</li>
+<li>stage planning and stage-level <code>refine</code> mode selection</li>
+<li>final <code>reconstruct3D</code> command-line preparation</li>
+<li>final output copying through <code>write_final_rec_outputs</code></li>
+</ul>
+<p>Base <code>refine3D</code> owns each iteration after the wrapper calls it. The wrapper
+must not duplicate or bypass:</p>
+<ul>
+<li>reprojection-model materialization</li>
+<li>probabilistic alignment execution</li>
+<li>hard-assignment matcher execution</li>
+<li>partial reconstruction writing</li>
+<li><code>volassemble</code></li>
+<li>FSC/resolution registration</li>
+<li>per-state automask and NU filtering decisions</li>
+</ul>
+<h2 id="3-public-command-and-defaults">3. Public Command and Defaults<a class="headerlink" href="#3-public-command-and-defaults" title="Permanent link">&para;</a></h2>
+<p>The UI describes <code>refine3D_multi</code> as an automated multi-state 3D refinement
+workflow that requires an <code>sp_project</code>. It exposes search, filter, mask, and
+compute controls:</p>
+<ul>
+<li>search: <code>maxits</code>, <code>nstates</code>, <code>pgrp</code>, <code>autoscale</code>, <code>continue</code></li>
+<li>mode: <code>multivol_mode</code></li>
+<li>filter: <code>filt_mode</code>, <code>lpstop</code>, <code>ml_reg</code></li>
+<li>mask: <code>mskdiam</code>, <code>automsk</code></li>
+<li>compute: <code>nparts</code>, <code>nthr</code></li>
+</ul>
+<p>The commander sets these hard workflow defaults:</p>
+<ul>
+<li><code>balance=yes</code></li>
+<li><code>greedy_sampling=no</code></li>
+<li><code>frac_best=1.0</code></li>
+<li><code>trail_rec=yes</code>, except <code>input_oris_fixed</code> sets <code>trail_rec=no</code></li>
+<li><code>objfun=euclid</code></li>
+<li><code>envfsc=no</code></li>
+<li><code>lplim_crit=0.5</code></li>
+<li><code>incrreslim=no</code></li>
+<li><code>nu_refine=no</code></li>
+<li><code>combine_eo=no</code></li>
+</ul>
+<p>The commander also sets these defaults only when the user did not provide a
+value:</p>
+<ul>
+<li><code>mkdir=yes</code></li>
+<li><code>center=no</code></li>
+<li><code>sigma_est=global</code></li>
+<li><code>prob_inpl=yes</code></li>
+<li><code>prob_neigh_mode=sum</code></li>
+<li><code>nsample=min(100000, 10000 * nstates)</code></li>
+<li><code>autoscale=yes</code></li>
+<li><code>multivol_mode=input_oris_start</code></li>
+<li><code>ml_reg=yes</code></li>
+<li><code>filt_mode=nonuniform_lpset</code></li>
+<li><code>lpstop=6.0</code></li>
+<li><code>automsk=no</code></li>
+<li><code>overlap=0.99</code> for the <code>prob_neigh</code> phase</li>
+<li><code>keepvol=no</code></li>
+</ul>
+<p>The public <code>filt_mode</code> values are <code>fsc</code>, <code>nonuniform_lpset</code>, and <code>none</code>;
+<code>nonuniform_lpset</code> is the default. Plain <code>nonuniform</code> is not a
+<code>refine3D_multi</code> mode because the workflow is LP-set driven, and <code>uniform</code> is
+disabled for multi-state search.</p>
+<p><code>nu_refine</code> is not a public <code>refine3D_multi</code> option. The UI does not expose it,
+and the commander forces <code>nu_refine=no</code> even if a command line attempts to pass
+another value.</p>
+<p><code>combine_eo</code> is not a public <code>refine3D_multi</code> option. The UI does not expose it,
+and the commander forces <code>combine_eo=no</code>; <code>combine_eo=yes</code> is rejected because
+combined even/odd terminal alignment is gold-standard-style base <code>refine3D</code>
+policy, not multi-state LP-set refinement policy.</p>
+<p>The UI defaults should stay aligned with those commander defaults. If a UI
+default changes without a commander default change, batch and GUI behavior can
+diverge.</p>
+<h2 id="4-mode-and-state-model">4. Mode and State Model<a class="headerlink" href="#4-mode-and-state-model" title="Permanent link">&para;</a></h2>
+<p><code>refine3D_multi</code> is always multi-state. The effective <code>nstates</code> is established
+before the wrapper parses the full parameter object, and <code>multivol_mode</code>
+decides how project state labels are interpreted.</p>
+<p>Supported <code>multivol_mode</code> values are:</p>
+<ul>
+<li><code>input_oris_start</code></li>
+<li><code>input_oris_refine</code></li>
+<li><code>input_oris_fixed</code></li>
+</ul>
+<p><code>input_oris_start</code> is the default. It is the full workflow:</p>
+<ul>
+<li>state 0/1 input with command-line <code>nstates</code>: run <code>prob_state</code>, then
+  <code>shc_smpl</code>, then <code>prob_neigh</code></li>
+<li>existing project state labels greater than one with no command-line
+  <code>nstates</code>: reuse those labels and skip <code>prob_state</code></li>
+<li>existing project state labels greater than one with command-line <code>nstates</code>:
+  fail, because command-line <code>nstates</code> means the caller expects a state 0/1
+  project and a fresh state split</li>
+</ul>
+<p><code>input_oris_refine</code> is the refinement-from-input-orientations route:</p>
+<ul>
+<li>state 0/1 input requires command-line <code>nstates</code></li>
+<li>state 0/1 input runs <code>prob_state</code>, then goes directly to <code>prob_neigh</code></li>
+<li>existing project state labels greater than one are reused as the starting
+  point for <code>prob_neigh</code>, with no <code>prob_state</code> initialization</li>
+<li>command-line <code>nstates</code>, when supplied for an already multi-state project,
+  must match the existing project state count</li>
+</ul>
+<p><code>input_oris_fixed</code> is the fixed-orientation state-separation route:</p>
+<ul>
+<li>input is expected to contain only <code>state=0</code> and <code>state=1</code> particles</li>
+<li>command-line <code>nstates</code> is required and must be greater than one</li>
+<li>existing project state labels greater than one are rejected; the command
+  fails before refinement because <code>input_oris_fixed</code> is only valid for state
+  0/1 input</li>
+<li>the only refinement stage is <code>prob_state</code></li>
+<li>the assignment path updates state/correlation/accounting fields but does not
+  update Euler angles, projection direction, in-plane angle, or shifts</li>
+</ul>
+<p>For all modes, every accepted populated project state from <code>1..nstates</code> must
+have at least one active particle. <code>state=0</code> remains inactive. Active-particle
+counts use <code>state &gt; 0</code> when labels exist. In state 0/1 initialization mode, the
+active count honors existing selection state when possible and otherwise falls
+back to all <code>ptcl3D</code> rows.</p>
+<h2 id="5-starting-state-volumes">5. Starting State Volumes<a class="headerlink" href="#5-starting-state-volumes" title="Permanent link">&para;</a></h2>
+<p>State volume policy is all-or-none.</p>
+<p>If <code>vol1..volN</code> are all supplied:</p>
+<ul>
+<li>every referenced file must exist</li>
+<li>every volume must match the native project particle box</li>
+<li>every volume must match the native project particle sampling</li>
+<li>those volumes are used as state starting references</li>
+</ul>
+<p>If some, but not all, <code>vol1..volN</code> keys are supplied, the wrapper fails. Partial
+state-volume input is ambiguous and must not be accepted.</p>
+<p>If no complete command-line volume set is supplied, compatible project output
+volumes are preferred:</p>
+<ul>
+<li><code>os_out</code> must contain a <code>vol</code> entry for every state</li>
+<li>every referenced file must exist</li>
+<li>every output volume must match the native project box</li>
+<li>every output volume must have positive sampling matching the native project
+  sampling</li>
+<li>compatible project volumes are injected back as <code>vol1..volN</code></li>
+</ul>
+<p>If no compatible volume source is available and the project already has
+multi-state labels, the wrapper runs a startup <code>reconstruct3D</code> pass with
+<code>postprocess=no</code>, <code>nu_refine=no</code>, <code>objfun=cc</code>, and no crop overrides. The
+resulting <code>vol_stateNN.mrc</code> products become the starting <code>volN</code> references.</p>
+<p>Startup volume selection does not silently re-filter user or project volumes.
+Compatible <code>os_out</code> volumes are accepted as-is and then become the references
+for the first staged base-<code>refine3D</code> call. If startup volumes are generated
+from pre-existing project labels, the startup reconstruction is native,
+unpostprocessed, and non-NU. The first real refinement stage is where
+<code>volassemble</code> may apply the normal multi-state reference policy:
+<code>ml_reg=yes</code>, <code>filt_mode=nonuniform_lpset</code>, <code>nu_refine=no</code>, and any selected
+LP-set handoff owned by volume assembly.</p>
+<p>When no compatible volume source is available for state 0/1 initialization and
+distributed execution is requested with <code>nparts</code>, the wrapper leaves
+<code>vol1..volN</code> absent and delegates startup reference preparation to base
+<code>refine3D</code>. The first <code>prob_state</code> stage seeds fresh state labels in the base
+strategy and reconstructs state-specific <code>startvol_stateNN.mrc</code> references
+from those random state groups before particle-domain probability-table work
+begins. This path requires previous objective-function values when no complete
+state-volume source is supplied, following the base <code>refine3D</code> startup guard.</p>
+<p>Shared-memory base <code>refine3D</code> still requires explicit starting volumes. Until
+that path gains the same internal startup reconstruction parity, state 0/1
+initialization without <code>vol1..volN</code> must run distributed by setting <code>nparts</code>.</p>
+<h2 id="6-sampling-and-update-fraction">6. Sampling and Update Fraction<a class="headerlink" href="#6-sampling-and-update-fraction" title="Permanent link">&para;</a></h2>
+<p>The default sample target is <code>10000</code> active particles per state, capped at
+<code>100000</code> active particles per iteration:</p>
+<pre><code class="language-text">nsample = min(100000, 10000 * nstates)
+</code></pre>
+<p><code>nsample</code> must be at least one.</p>
+<p>When active particles do not exceed the sample target:</p>
+<ul>
+<li><code>update_frac</code> is removed from the command line</li>
+<li>effective update fraction is <code>1.0</code></li>
+<li>fractional-update mode is disabled</li>
+<li>trailing reconstruction is disabled in the effective parameter state</li>
+</ul>
+<p>When active particles exceed the sample target:</p>
+<ul>
+<li><code>update_frac = nsample / active_particles</code></li>
+<li>fractional-update mode is enabled only if the fraction is at most <code>0.99</code></li>
+<li>trailing reconstruction follows the <code>trail_rec</code> setting only when
+  fractional-update mode is enabled</li>
+<li>near-full fractions above <code>0.99</code> are treated as full updates</li>
+</ul>
+<p><code>input_oris_fixed</code> always runs full updates. The wrapper removes
+<code>update_frac</code>, disables fractional-update mode, and disables trailing
+reconstruction for this mode even when the active particle count exceeds the
+ordinary sample target.</p>
+<p>Fractional multi-state sampling is class-balanced by default:</p>
+<ul>
+<li><code>balance=yes</code></li>
+<li><code>greedy_sampling=no</code></li>
+<li><code>frac_best=1.0</code></li>
+</ul>
+<p>This uses the prior 2D class analysis only to define class-biased sampling
+quotas. It does not sample greedily with respect to 2D objective-function
+values, and <code>frac_best=1.0</code> leaves all particles in each selected class eligible
+for balanced coverage sampling. Within each class quota, the sampler prefers
+the lowest <code>updatecnt</code> tier first and randomizes only among particles tied at
+the same update count. When fractional balanced updates are active, the wrapper
+writes the same class-sampling sidecar consumed by base <code>refine3D</code>. If the
+project lacks selected <code>cls2D</code> entries, the run fails early with an explicit
+class-balanced sampling error.</p>
+<p>The wrapper does not set <code>ufrac_trec</code>; trailing reconstruction consumes the
+realized per-state update fractions recorded in <code>sampled</code> and <code>updatecnt</code>.</p>
+<p>Automatic stage budget planning targets roughly four updates per active
+particle:</p>
+<pre><code class="language-text">ceil(4.0 * active_particles / particles_per_iteration)
+</code></pre>
+<p>The automatically planned stage cap is clamped to:</p>
+<ul>
+<li>at least <code>10</code> iterations</li>
+<li>at least the stage-2 minimum of <code>5</code> iterations</li>
+<li>at most <code>50</code> iterations</li>
+</ul>
+<p>If the user supplies <code>maxits</code>, that value is interpreted as a stage cap for
+<code>refine3D_multi</code>, not as the total wrapper iteration count.
+<code>input_oris_fixed</code> accepts <code>maxits &gt;= 1</code> because it has no <code>prob_neigh</code> stage.
+The other modes require <code>maxits &gt;= 5</code> because <code>prob_neigh</code> has a minimum of
+five iterations. In <code>input_oris_start</code> and <code>input_oris_refine</code>, the
+state-initialization <code>prob_state</code> phase remains capped at five iterations.</p>
+<p>After all stages finish, the wrapper reads <code>ptcl3D</code> and verifies update
+coverage. The run is not allowed to continue to final reconstruction unless
+every active particle has <code>updatecnt &gt; 0</code>, meaning every active particle has
+seen the multi-state model and had its state assignment and, for non-fixed
+modes, orientation-accounting path updated at least once.</p>
+<h2 id="7-autoscaling-and-matching-bandwidth">7. Autoscaling and Matching Bandwidth<a class="headerlink" href="#7-autoscaling-and-matching-bandwidth" title="Permanent link">&para;</a></h2>
+<p><code>autoscale=yes</code> is the default. It uses a two-stage low-pass planning helper
+with:</p>
+<ul>
+<li>low-pass start: <code>10.0 A</code></li>
+<li>low-pass stop: <code>lpstop</code>, default <code>6.0 A</code></li>
+</ul>
+<p>The second planned stage controls the active translation limit and any crop:</p>
+<ul>
+<li><code>trs</code> is set from the stage-2 planning result</li>
+<li>if autoscaling is selected, <code>box_crop</code> and <code>smpd_crop</code> are set from the
+  stage-2 crop</li>
+<li>if autoscaling is not selected, crop overrides are removed</li>
+</ul>
+<p>The wrapper leaves final reconstruction uncropped by deleting <code>box_crop</code> and
+<code>smpd_crop</code> before the final all-particle <code>reconstruct3D</code> pass, and it writes
+final output snapshots with native project box and sampling.</p>
+<p>The default <code>filt_mode=nonuniform_lpset</code> means volume assembly may run ordinary
+NU filtering and may promote the selected NU bandwidth into LP-set matching.
+<code>nu_refine</code> is always <code>no</code>, so high-resolution NU shell expansion is not part
+of multi-state refinement.</p>
+<h2 id="8-stage-plan">8. Stage Plan<a class="headerlink" href="#8-stage-plan" title="Permanent link">&para;</a></h2>
+<p>After startup, the wrapper changes <code>prg</code> from <code>refine3D_multi</code> to <code>refine3D</code>
+and invokes the base commander once per enabled stage. Each call uses base
+<code>refine3D</code>'s normal staged iteration policy: <code>maxits</code> is the run length for
+that stage, <code>minits</code> is the stage minimum, and the base strategy reports the
+actual final iteration through <code>endit</code>.</p>
+<p>The possible stages are:</p>
+<ol>
+<li>state initialization</li>
+<li><code>refine=prob_state</code></li>
+<li><code>nspace=2500</code></li>
+<li>minimum iterations: <code>1</code></li>
+<li>maximum iterations: <code>5</code> for initialization, or the stage cap when
+     <code>input_oris_fixed</code> makes this the only stage</li>
+<li>stochastic orientation refinement</li>
+<li><code>refine=shc_smpl</code></li>
+<li><code>nspace=2500</code></li>
+<li>minimum iterations: <code>1</code></li>
+<li>maximum iterations: the planned or user-supplied stage cap</li>
+<li>probabilistic neighborhood refinement</li>
+<li><code>refine=prob_neigh</code></li>
+<li><code>nspace=5000</code></li>
+<li><code>nspace_sub=500</code></li>
+<li><code>prob_neigh_mode=sum</code></li>
+<li>minimum iterations: <code>5</code></li>
+<li>maximum iterations: the planned or user-supplied stage cap</li>
+</ol>
+<p>The <code>multivol_mode</code> stage map is:</p>
+<ul>
+<li><code>input_oris_start</code> with state 0/1 input: <code>prob_state</code>, <code>shc_smpl</code>,
+  <code>prob_neigh</code></li>
+<li><code>input_oris_start</code> with existing multi-state labels: <code>shc_smpl</code>,
+  <code>prob_neigh</code></li>
+<li><code>input_oris_refine</code> with state 0/1 input: <code>prob_state</code>, <code>prob_neigh</code></li>
+<li><code>input_oris_refine</code> with existing multi-state labels: <code>prob_neigh</code></li>
+<li><code>input_oris_fixed</code>: <code>prob_state</code></li>
+</ul>
+<p>For every stage-level base-<code>refine3D</code> call, the wrapper sets:</p>
+<ul>
+<li><code>maxits</code> to the stage cap</li>
+<li><code>minits</code> to the stage minimum</li>
+<li><code>startit</code> to the next global wrapper iteration number</li>
+<li><code>which_iter</code> to the same stage-start global iteration number</li>
+<li><code>extr_iter</code> to the same stage-start global iteration number</li>
+<li><code>refine</code> to the stage mode</li>
+<li><code>nspace</code> to the stage projection count</li>
+<li><code>nspace_sub=500</code> for <code>prob_neigh</code>, and no <code>nspace_sub</code> for other stages</li>
+<li><code>prob_neigh_mode=sum</code> by default, unless explicitly overridden</li>
+<li><code>overlap</code> to the stage state-overlap target</li>
+</ul>
+<p>The wrapper deletes stale <code>endit</code> before each staged call and reads the new
+<code>endit</code> afterward to keep global wrapper iteration numbers monotonic across the
+whole run. Iteration numbering does not reset per stage.</p>
+<p><code>maxits_glob</code> is set before the stages so annealing and regularization logic
+can see the intended global wrapper horizon. It is the sum of the caps for the
+stages that will actually run.</p>
+<h2 id="9-stage-stop-criterion">9. Stage Stop Criterion<a class="headerlink" href="#9-stage-stop-criterion" title="Permanent link">&para;</a></h2>
+<p>For <code>input_oris_*</code> multi-state modes, the base convergence signal is
+state-label overlap (<code>mi_state</code>). Other multi-state base <code>refine3D</code> workflows
+keep their existing joint-orientation-overlap convergence.</p>
+<p>Each stage passes an overlap target to base <code>refine3D</code>. After the stage call
+returns, the wrapper also reads the project <code>ptcl3D</code> segment and reports the
+final mean <code>mi_state</code> over active particles:</p>
+<ul>
+<li>if <code>mi_state</code> is absent, overlap is <code>0</code></li>
+<li>if <code>sampled</code> exists, only the latest sampled subset is counted</li>
+<li>otherwise all active state-labelled particles are counted</li>
+<li>particles with state less than or equal to zero are excluded</li>
+</ul>
+<p>The stage targets are:</p>
+<ul>
+<li><code>prob_state</code>: <code>0.95</code></li>
+<li><code>shc_smpl</code>: <code>0.95</code></li>
+<li><code>prob_neigh</code>: <code>overlap</code>, default <code>0.99</code></li>
+</ul>
+<p>A stage may stop only after its minimum iteration count has been reached and
+the measured state overlap is greater than or equal to the stage target.</p>
+<p>If the stage reaches its cap before the target, the wrapper logs that the cap
+was reached and continues to the next stage.</p>
+<p>State overlap measures state-label stability. It is not a substitute for FSC,
+map quality, pose overlap, or resolution convergence, and final workflow exit
+still requires the active-particle update coverage guard described above.</p>
+<h2 id="10-delegation-to-base-refine3d">10. Delegation to Base Refine3D<a class="headerlink" href="#10-delegation-to-base-refine3d" title="Permanent link">&para;</a></h2>
+<p>Every stage is a normal base <code>refine3D</code> invocation after the wrapper has set
+the per-stage command-line values. The base command then selects shared-memory
+or distributed execution:</p>
+<ul>
+<li><code>nparts</code> without <code>part</code> selects the distributed master strategy</li>
+<li>otherwise the shared-memory strategy is used</li>
+<li>distributed workers run through the private worker route with <code>part</code> and
+  <code>outfile</code></li>
+</ul>
+<p>Base <code>refine3D</code> owns:</p>
+<ul>
+<li>reference section materialization from current state volumes</li>
+<li>probability-table generation for <code>prob_state</code> and <code>prob_neigh</code></li>
+<li>particle sampling for each update</li>
+<li>hard-assignment search and state updates</li>
+<li><code>mi_state</code>, <code>mi_proj</code>, <code>corr</code>, shift, and orientation metadata updates</li>
+<li>Euclidean sigma updates when <code>objfun=euclid</code></li>
+<li>partition-local partial reconstruction output</li>
+<li><code>volassemble</code></li>
+<li>per-state FSC and resolution metadata</li>
+<li>state volume registration in <code>os_out</code></li>
+</ul>
+<p>All multi-state base calls run with shift-first candidate scoring disabled.
+Shifts may still be refined after the candidate/state choice, but a shift seed
+estimated from a particle's previous state must not be used to rank another
+state.</p>
+<p>The wrapper must preserve the base <code>refine3D</code> particle-domain versus
+volume-domain boundary. It should not call matcher internals or volume
+postprocessing helpers directly.</p>
+<h2 id="11-filtering-masking-and-volume-assembly">11. Filtering, Masking, and Volume Assembly<a class="headerlink" href="#11-filtering-masking-and-volume-assembly" title="Permanent link">&para;</a></h2>
+<p>The default filtering policy is optimized for multi-state refinement
+references:</p>
+<ul>
+<li><code>filt_mode=nonuniform_lpset</code></li>
+<li><code>nu_refine=no</code>, forced and not exposed as a <code>refine3D_multi</code> option</li>
+<li><code>ml_reg=yes</code></li>
+<li><code>automsk=no</code></li>
+<li><code>envfsc=no</code></li>
+<li><code>lplim_crit=0.5</code></li>
+</ul>
+<p><code>volassemble</code> remains the execution site for volume-domain work. In a default
+run it may restore per-state half maps, calculate FSCs, run ML regularization,
+run ordinary NU filtering, write NU-derived reference products, and hand an
+LP-set matching bandwidth back through the project. It must not perform
+<code>nu_refine</code> shell expansion for <code>refine3D_multi</code>.</p>
+<p><code>automsk=no</code> means the wrapper does not request automatic state-mask
+generation by default. If the user enables <code>automsk=yes</code> or <code>automsk=tight</code>,
+state-specific mask production and compatibility rules follow
+<a href="automasking_policy.html">automasking_policy.md</a>.</p>
+<p>When NU filtering is active, support-mask selection and matching-bandwidth
+handoff follow <a href="nonuniform_filtering_policy.html">nonuniform_filtering_policy.md</a>.
+<code>refine3D_multi</code> must not add a second source of NU handoff state.</p>
+<p>The workflow is LP-set multi-state refinement, not gold-standard-style terminal
+alignment. <code>combine_eo</code> is therefore not exposed and <code>combine_eo=yes</code> is
+rejected before the wrapper calls base <code>refine3D</code>.</p>
+<h2 id="12-final-reconstruction">12. Final Reconstruction<a class="headerlink" href="#12-final-reconstruction" title="Permanent link">&para;</a></h2>
+<p>After all staged refinement iterations complete, the wrapper runs
+<code>reconstruct3D</code> from all particle images. This pass is always at native project
+box and sampling, mirroring the final native reconstruction policy used by
+<code>refine3D_auto</code>.</p>
+<p>The final reconstruction command line:</p>
+<ul>
+<li>sets <code>prg=reconstruct3D</code></li>
+<li>sets <code>outfile=RESOLUTION_FINAL.txt</code></li>
+<li>sets <code>postprocess=yes</code></li>
+<li>deletes <code>trail_rec</code></li>
+<li>deletes <code>refine</code></li>
+<li>deletes <code>sigma_est</code></li>
+<li>deletes <code>update_frac</code></li>
+<li>deletes <code>ufrac_trec</code></li>
+<li>deletes the internal stage handoff key <code>endit</code></li>
+<li>deletes <code>box_crop</code></li>
+<li>deletes <code>smpd_crop</code></li>
+<li>sets <code>objfun=cc</code></li>
+<li>sets <code>nu_refine=no</code></li>
+<li>sets <code>filt_mode=none</code> when the staged refinement used NU filtering</li>
+<li>sets final-output bookkeeping to the native project <code>box</code> and <code>smpd</code></li>
+</ul>
+<p>This final pass is an ordinary global final reconstruction/postprocess route.
+NU filtering is a refinement-reference feature here, not a separate final-map
+postprocessing path.</p>
+<p>Before this final pass, the wrapper verifies that every active particle has
+<code>updatecnt &gt; 0</code>. After final reconstruction, <code>write_final_rec_outputs</code> copies
+each populated state's <code>vol_stateNN.mrc</code> to the final reconstruction naming
+convention, writes a low-pass snapshot using <code>lpstop</code> at native sampling, and
+copies available postprocessed and mirrored products.</p>
+<h2 id="13-continue-restarts-and-execution-mode">13. Continue, Restarts, and Execution Mode<a class="headerlink" href="#13-continue-restarts-and-execution-mode" title="Permanent link">&para;</a></h2>
+<p>The UI exposes <code>continue</code>, and the router supports <code>nrestarts</code> through the
+same restarted-execution mechanism used by <code>refine3D</code> and <code>refine3D_auto</code>.</p>
+<p>The wrapper has no independent resume implementation. It passes the staged
+command line into base <code>refine3D</code>, so resume behavior is constrained by the
+selected base strategy:</p>
+<ul>
+<li>shared-memory base <code>refine3D</code> rejects <code>continue=yes</code></li>
+<li>distributed base <code>refine3D</code> owns continue checks for previous volumes, FSCs,
+  partition counts, and sigma files</li>
+</ul>
+<p>A reviewer should treat <code>continue=yes</code> as a base-<code>refine3D</code> contract that the
+wrapper must not weaken. Wrapper startup volume selection should not hide
+missing or incompatible resume artifacts that the base distributed strategy is
+supposed to validate.</p>
+<h2 id="14-artifacts">14. Artifacts<a class="headerlink" href="#14-artifacts" title="Permanent link">&para;</a></h2>
+<p>The staged refinement uses the ordinary <code>refine3D</code> artifact names:</p>
+<ul>
+<li>state volumes: <code>vol_stateNN.mrc</code></li>
+<li>half maps: <code>vol_stateNN_even.mrc</code>, <code>vol_stateNN_odd.mrc</code></li>
+<li>unfiltered half maps: <code>vol_stateNN_even_unfil.mrc</code>,
+  <code>vol_stateNN_odd_unfil.mrc</code></li>
+<li>FSCs: <code>fsc_stateNN.bin</code></li>
+<li>per-iteration FSC plots: <code>fsc_stateNN_iterIII.*</code></li>
+<li>partial reconstructions: <code>vol_stateNN_partPP_even.mrc</code>,
+  <code>vol_stateNN_partPP_odd.mrc</code></li>
+<li>partial density weights: <code>rho_vol_stateNN_partPP_even.mrc</code>,
+  <code>rho_vol_stateNN_partPP_odd.mrc</code></li>
+<li>reprojection models: <code>reprojection_model_even.bin</code>,
+  <code>reprojection_model_odd.bin</code></li>
+<li>matcher benchmarks: <code>REFINE3D_BENCH_ITERIII.txt</code></li>
+<li>strategy benchmarks: <code>REFINE3D_STRATEGY_BENCH_ITERIII.txt</code></li>
+<li>assembly benchmarks: <code>VOLASSEMBLE_BENCH_ITERIII.txt</code></li>
+</ul>
+<p>The final reconstruction writes ordinary reconstruct3D products and
+<code>RESOLUTION_FINAL.txt</code>, then <code>write_final_rec_outputs</code> writes final state-map
+copies and low-pass snapshots for populated states.</p>
+<p>The wrapper's <code>cleanup_init_vols</code> releases local string objects only. It does
+not delete user-supplied or project-derived starting volumes.</p>
+<h2 id="15-future-implementation-plan">15. Future Implementation Plan<a class="headerlink" href="#15-future-implementation-plan" title="Permanent link">&para;</a></h2>
+<p><code>input_oris_fixed</code> currently performs full reconstruction updates and never
+uses fractional updates. A future optimization should make fixed-orientation
+state separation faster without changing the scientific contract:</p>
+<ul>
+<li>keep unnormalized per-state Fourier volumes resident in memory</li>
+<li>cache each particle representative in the same Fourier/gridding convention
+  used for reconstruction</li>
+<li>when a particle changes state, subtract its cached representative from the
+  old state accumulator and add it to the new state accumulator</li>
+<li>update density weights and even/odd accumulators consistently with the
+  existing reconstruction path</li>
+<li>preserve the final native all-particle <code>reconstruct3D</code> pass as the
+  authoritative final map generation step</li>
+</ul>
+<p>This optimization should be implemented behind the same <code>input_oris_fixed</code>
+workflow contract: state assignment may change, orientations must remain
+fixed, and the run must still verify that every active particle was updated.</p>
+<h2 id="16-reviewer-checklist">16. Reviewer Checklist<a class="headerlink" href="#16-reviewer-checklist" title="Permanent link">&para;</a></h2>
+<p>When reviewing <code>refine3D_multi</code>, check these policy points first:</p>
+<ul>
+<li>UI defaults and commander defaults still match.</li>
+<li><code>multivol_mode</code> accepts only <code>input_oris_start</code>, <code>input_oris_refine</code>, and
+  <code>input_oris_fixed</code>.</li>
+<li><code>nstates</code> is established before full parameter parsing.</li>
+<li><code>input_oris_start</code> with command-line <code>nstates</code> rejects existing project
+  multi-state labels.</li>
+<li><code>input_oris_start</code> without command-line <code>nstates</code> reuses existing
+  multi-state labels.</li>
+<li><code>input_oris_refine</code> skips <code>prob_state</code> when project multi-state labels
+  already exist.</li>
+<li><code>input_oris_fixed</code> rejects existing project multi-state labels.</li>
+<li>state 0/1 initialization modes require command-line <code>nstates &gt; 1</code>.</li>
+<li>state 0/1 initialization modes use complete <code>vol1..volN</code> inputs, compatible
+  project state volumes, or distributed base-<code>refine3D</code> startup reconstruction
+  from freshly seeded state labels.</li>
+<li>volume-free state 0/1 initialization requires distributed execution
+  (<code>nparts</code>) because shared-memory base <code>refine3D</code> still requires starting
+  volume input.</li>
+<li>fixed-orientation assignment updates state/correlation/accounting fields
+  without changing Euler angles, projection direction, in-plane angle, or
+  shifts.</li>
+<li>partial <code>vol1..volN</code> input is rejected.</li>
+<li>input and project state volumes are checked against native box and sampling.</li>
+<li>default <code>nsample</code> is <code>10000 * nstates</code> capped at <code>100000</code>.</li>
+<li>public <code>filt_mode</code> values are <code>fsc</code>, <code>nonuniform_lpset</code>, and <code>none</code>, with
+  <code>nonuniform_lpset</code> as the default.</li>
+<li>fractional updates use <code>balance=yes</code>, <code>greedy_sampling=no</code>, and
+  <code>frac_best=1.0</code>.</li>
+<li>class-balanced fractional updates prefer the lowest <code>updatecnt</code> tier within
+  each class quota.</li>
+<li><code>input_oris_fixed</code> disables fractional updates and trailing reconstruction.</li>
+<li><code>nsample</code>, <code>update_frac</code>, and trailing reconstruction behave consistently
+  for full-update versus fractional-update runs.</li>
+<li>user <code>maxits</code> is treated as a stage cap, not a total wrapper cap.</li>
+<li><code>prob_state</code> initialization remains capped at five iterations except in
+  <code>input_oris_fixed</code>, where it is the only stage and uses the stage cap.</li>
+<li><code>startit</code>, <code>which_iter</code>, and <code>extr_iter</code> remain monotonic global wrapper
+  counters.</li>
+<li>stale <code>endit</code> is deleted before each stage-level base call, and the returned
+  <code>endit</code> is used to advance the wrapper counter.</li>
+<li><code>prob_neigh</code> sets <code>nspace_sub=500</code> and uses <code>prob_neigh_mode=sum</code>
+  unless the caller overrides it.</li>
+<li>stage stop logic uses <code>mi_state</code> over the latest sampled subset when
+  available.</li>
+<li><code>prob_state</code> and <code>shc_smpl</code> use state-overlap target <code>0.95</code>.</li>
+<li><code>prob_neigh</code> uses state-overlap target <code>0.99</code> by default.</li>
+<li>stage stop logic does not claim FSC or pose convergence.</li>
+<li>every active particle must have <code>updatecnt &gt; 0</code> before final reconstruction.</li>
+<li>final reconstruction deletes crop and fractional-update controls.</li>
+<li>final reconstruction is at native project box and sampling.</li>
+<li>final reconstruction disables NU filtering and <code>nu_refine</code>.</li>
+<li><code>nu_refine</code> remains forced to <code>no</code> and absent from the <code>refine3D_multi</code> UI.</li>
+<li><code>combine_eo</code> remains absent from the <code>refine3D_multi</code> UI and
+  <code>combine_eo=yes</code> is rejected.</li>
+<li><code>lplim_crit=0.5</code> remains the multi-state default.</li>
+<li>wrapper code does not bypass base <code>refine3D</code> strategy ownership.</li>
+<li>NU handoff remains project/volume-assembly owned.</li>
+<li>per-state masks remain <code>volassemble</code> artifacts, not wrapper artifacts.</li>
+<li><code>continue=yes</code> remains governed by base strategy support.</li>
+</ul>
+<h2 id="17-refactor-rules">17. Refactor Rules<a class="headerlink" href="#17-refactor-rules" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Keep <code>refine3D_multi</code> as a wrapper around base <code>refine3D</code>.</li>
+<li>Do not move matcher behavior into <code>exec_refine3D_multi</code>.</li>
+<li>Do not move volume assembly or NU filtering into <code>exec_refine3D_multi</code>.</li>
+<li>Preserve all-or-none state-volume input.</li>
+<li>Preserve mode-specific project-label authority:
+  <code>input_oris_start</code> reuses labels only when <code>nstates</code> is omitted,
+  <code>input_oris_refine</code> reuses labels as the neighborhood-refinement start, and
+  <code>input_oris_fixed</code> rejects labels greater than one.</li>
+<li>Preserve explicit state 0/1 initialization mode for projects without
+  multi-state labels or for <code>input_oris_start</code> calls that supply <code>nstates</code>.</li>
+<li>Keep stage counters global and monotonic.</li>
+<li>Keep <code>maxits</code> semantics documented if changing them; total-wrapper and
+  per-stage budgets are easy to confuse.</li>
+<li>Keep final reconstruction independent of fractional-update and crop state.</li>
+<li>Keep <code>nu_refine</code> out of <code>refine3D_multi</code>; ordinary NU filtering is only
+  available through <code>filt_mode=nonuniform_lpset</code>, and NU shell expansion is not
+  part of multi-state analysis.</li>
+<li>Preserve the active-particle update coverage guard.</li>
+<li>Treat state volumes, half maps, FSCs, NU products, automasks, partial
+  reconstructions, and final maps as explicit workflow contracts.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

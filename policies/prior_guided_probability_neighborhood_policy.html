@@ -1,0 +1,3158 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/prior_guided_probability_neighborhood_policy.html">
+      
+      
+        <link rel="prev" href="persistent_worker_policy.html">
+      
+      
+        <link rel="next" href="project_stack_indexing_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Prior-Guided Probability Neighborhood Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#prior-guided-probability-neighborhood-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Prior-Guided Probability Neighborhood Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-artifact-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Artifact Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-top-k-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Top-K Extraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-2d-implementation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 2D Implementation Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. 2D Implementation Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-2d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current 2D Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-2d-rank-prior-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented 2D Rank-Prior Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Consumption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-stage-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Stage Scheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-refine-mode-contract-refineprob_prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Refine Mode Contract: refine=prob_prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-binary-artifact-policy-fast-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Binary Artifact Policy (Fast I/O)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-3d-implementation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 3D Implementation Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. 3D Implementation Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current 3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-3d-top-k-posterior-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed 3D Top-K Posterior Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3d-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Consumption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3d-stage-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Stage Scheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-staleness-and-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Staleness and Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-posterior-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Posterior Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-implementation-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Implementation Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Review Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-artifact-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Artifact Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-top-k-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Top-K Extraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-2d-implementation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 2D Implementation Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. 2D Implementation Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-2d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current 2D Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-2d-rank-prior-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented 2D Rank-Prior Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Consumption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-stage-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Stage Scheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-refine-mode-contract-refineprob_prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Refine Mode Contract: refine=prob_prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d-binary-artifact-policy-fast-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D Binary Artifact Policy (Fast I/O)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-3d-implementation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 3D Implementation Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. 3D Implementation Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current 3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-3d-top-k-posterior-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed 3D Top-K Posterior Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3d-consumption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Consumption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3d-stage-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Stage Scheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-staleness-and-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Staleness and Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-posterior-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Posterior Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-implementation-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Implementation Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Review Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="prior-guided-probability-neighborhood-policy">Prior-Guided Probability Neighborhood Policy<a class="headerlink" href="#prior-guided-probability-neighborhood-policy" title="Permanent link">&para;</a></h1>
+<p>This document records the policy for prior-guided probability neighborhoods in
+late 2D and 3D refinement stages. The current 2D implementation is deliberately
+small: it writes and consumes a per-particle ranked class list. That rank-list
+mode is a testable stepping stone toward the richer per-particle top-K posterior
+model that should be implemented for 3D.</p>
+<p>The goal is to preserve useful probability-table information that is currently
+collapsed into one sampled hard assignment. The preserved information should
+act as a prior-guided neighborhood model for later search. It should accelerate
+late-stage refinement when the posterior is concentrated and improve
+robustness when the posterior identifies plausible alternative classes or
+projection directions.</p>
+<p>The primary near-term objective is to condense probabilistic registration
+evidence from mature pre-neighborhood stages into a per-particle ranked
+candidate model. With the prior-guided 2D schedule, stage 5 produces
+<code>posterior_topk_stage05.dat</code> and stage 6 consumes it. In 2D this artifact is a
+rank prior over classes, not yet a full posterior. In 3D the target artifact
+should carry probabilities or scores, in-plane/shift support, and concentration
+diagnostics so the neighborhood size can become adaptive per particle.</p>
+<p>Related policies:</p>
+<ul>
+<li><a href="abinitio2D_policy.html">abinitio2D_policy.md</a></li>
+<li><a href="abinitio3D_policy.html">abinitio3D_policy.md</a></li>
+<li><a href="refine3D_policy.html">refine3D_policy.md</a></li>
+<li><a href="importance_sampling_fractional_update_policy.html">importance_sampling_fractional_update_policy.md</a></li>
+<li><a href="sigma_calculation_policy.html">sigma_calculation_policy.md</a></li>
+</ul>
+<h2 id="1-core-model">1. Core Model<a class="headerlink" href="#1-core-model" title="Permanent link">&para;</a></h2>
+<p>Probabilistic pre-alignment remains a particle-domain pre-step followed by a
+hard-assignment matcher update. The new model does not turn SIMPLE into a
+soft-assignment volume-integrated EM workflow.</p>
+<p>The general target artifact is a per-particle top-K posterior list:</p>
+<pre><code class="language-text">particle i:
+    candidate 1, score/probability, in-plane, shift, rank, diagnostics
+    candidate 2, score/probability, in-plane, shift, rank, diagnostics
+    ...
+    candidate K, score/probability, in-plane, shift, rank, diagnostics
+</code></pre>
+<p>For staged workflows, this artifact is treated as a condensed evidence model,
+not only a single-stage snapshot. The preferred long-term policy is to
+aggregate ranking evidence from designated late probabilistic stages while
+allowing early basin-finding stages to be excluded.</p>
+<p>The existing hard assignment remains authoritative for updating project
+orientation records:</p>
+<pre><code class="language-text">assignment.dat -&gt; matcher -&gt; ptcl2D/ptcl3D hard update
+</code></pre>
+<p>The prior artifact is an auxiliary search-prior handoff:</p>
+<pre><code class="language-text">prior artifact -&gt; next probabilistic/neighborhood stage -&gt; candidate
+ordering, neighborhood selection, and in-plane/shift refinement seeding
+</code></pre>
+<p>Because SIMPLE's existing probability-table values are score-derived and
+workflow-normalized, this document uses "posterior" as a practical model term.
+The current 2D implementation is more modest: it stores only per-particle
+ranked class ids. The full posterior artifact, especially for 3D, should record
+enough scores, weights, and diagnostics to distinguish a concentrated posterior
+from a broad or unreliable one.</p>
+<p>Condensation model for selected source stages:</p>
+<pre><code class="language-text">choose source stages S (2D rank-prior implementation: S = {5})
+aggregate_score_i(c) = reducer({score_i(c, s) for s in S when available})
+rank_i = order candidates by aggregate_score_i (or aggregate_weight_i)
+</code></pre>
+<p>The 2D rank-prior implementation uses a single source stage, so no cross-stage
+reducer is needed. The 3D posterior implementation can later use a weighted
+mean, robust mean, or best-stage score and record the reducer in artifact
+metadata.</p>
+<h2 id="2-ownership">2. Ownership<a class="headerlink" href="#2-ownership" title="Permanent link">&para;</a></h2>
+<p><code>simple_commanders_prob.f90</code> owns orchestration:</p>
+<ul>
+<li>choose and record the outer sampled particle subset</li>
+<li>dispatch probability-table workers</li>
+<li>aggregate table outputs</li>
+<li>write <code>assignment.dat</code></li>
+<li>write the optional prior artifact</li>
+</ul>
+<p><code>simple_eul_prob_tab.f90</code>, <code>simple_eul_prob_tab_neigh.f90</code>, and
+<code>simple_eul_prob_tab2D.f90</code> own candidate-level scoring and top-K extraction
+from dense or sparse probability tables.</p>
+<p><code>simple_strategy2D_matcher.f90</code> and <code>simple_strategy3D_matcher.f90</code> own
+consuming hard assignment and, in prior-guided modes, consuming the
+prior artifact as a candidate ordering or restricted neighborhood. The matcher
+still owns final class/projection/state/in-plane/shift updates and Euclidean
+sigma updates after assignment.</p>
+<p>Class-average restoration, explicit class-average assembly, partial
+reconstruction writing, <code>volassemble</code>, FSC calculation, automasking, and
+nonuniform filtering do not own the prior-guided posterior model. They consume the
+same hard updated project state and sampled-update bookkeeping as before.</p>
+<h2 id="3-artifact-contract">3. Artifact Contract<a class="headerlink" href="#3-artifact-contract" title="Permanent link">&para;</a></h2>
+<p>The prior artifact should be separate from <code>assignment.dat</code>.</p>
+<p>Reasons:</p>
+<ul>
+<li><code>assignment.dat</code> is the existing single-assignment handoff consumed by
+  <code>strategy2D_prob</code> and <code>strategy3D_prob</code>.</li>
+<li>Existing workflows and tests can ignore the new artifact.</li>
+<li>Fallback behavior is simple when the top-K artifact is absent or invalid.</li>
+<li>The artifact can evolve from the current 2D rank-list format into a richer
+  posterior format without changing the hard-assignment binary format.</li>
+</ul>
+<p>Suggested file families:</p>
+<pre><code class="language-text">posterior_topk_stage05.dat
+posterior_topk.dat
+posterior_topk_part*.dat
+posterior_topk_neigh.dat
+posterior_topk_neigh_part*.dat
+</code></pre>
+<p>The exact names should follow the local constants and file-body conventions
+used for <code>ASSIGNMENT_FBODY</code> and <code>DIST_FBODY</code>.</p>
+<p>The current 2D rank-prior artifact is intentionally compact:</p>
+<pre><code class="language-text">header:
+    magic
+    version
+    nparticles represented
+    nclasses
+    K
+    source iteration
+    start iteration
+body:
+    pinds(nparticles)
+    counts(nparticles)
+    class_ids(K, nparticles)
+</code></pre>
+<p>This format is enough to test whether a learned class-rank neighborhood can
+accelerate or stabilize the final 2D probabilistic stage.</p>
+<p>The full top-K posterior row model, targeted first for 3D, is:</p>
+<pre><code class="language-text">pind
+rank
+candidate id
+raw distance or objective score
+normalized weight
+in-plane index
+x shift
+y shift
+has_shift flag
+search fraction or touched fraction
+entropy or effective candidate count
+source mode/version
+source stage window
+</code></pre>
+<p>For 2D, the candidate id is <code>class</code>.</p>
+<p>For 3D, the candidate id is either:</p>
+<ul>
+<li>full reference id, equivalent to <code>(state - 1) * nspace + proj</code></li>
+<li>explicit <code>(state, proj)</code> pair</li>
+<li>optional coarse subspace id when the artifact is used only as a subspace
+  neighborhood prior</li>
+</ul>
+<p>The preferred 3D implementation is explicit <code>(state, proj)</code> rows. This keeps
+the artifact readable and avoids encoding assumptions when <code>nspace</code> changes
+between stages.</p>
+<h2 id="4-top-k-extraction">4. Top-K Extraction<a class="headerlink" href="#4-top-k-extraction" title="Permanent link">&para;</a></h2>
+<p>Top-K extraction should happen after partition tables have been merged into the
+global probability object and before the object is destroyed.</p>
+<p>The existing flow is:</p>
+<pre><code class="language-text">prob_align*:
+    sample particles
+    run prob_tab* workers
+    read/merge partition dist tables
+    ref_assign/state_assign
+    write assignment.dat
+</code></pre>
+<p>The prior-guided flow is:</p>
+<pre><code class="language-text">prob_align*:
+    sample particles
+    run prob_tab* workers
+    read/merge partition dist tables
+    extract prior rows
+    ref_assign/state_assign
+    write assignment.dat
+    write posterior_topk*.dat
+</code></pre>
+<p>Prior extraction must use only the sampled particle subset already selected by
+the probabilistic pre-step. It must not resample particles.</p>
+<p>The current 2D implementation selects top ranked classes from the sparse
+evaluated candidates in stage 5 and stores class ids only. It uses a fixed
+fraction of classes as the retained rank list. If no sparse candidates are
+available for a particle, it falls back to the available dense class table for
+that particle.</p>
+<p>The future full posterior implementation should select top-K from all valid
+candidates for dense tables. Sparse tables should select top-K only from
+evaluated candidates and should record the touched fraction. If sparse coverage
+is too small or no valid candidate exists for a particle, the top-K artifact
+should either omit that particle or include a clearly marked fallback row.</p>
+<p>In the full posterior model, weight normalization should be local to each
+particle:</p>
+<pre><code class="language-text">w_i(c) = normalize(score_i(c) over retained candidate set)
+</code></pre>
+<p>The retained set may be all candidates for dense tables or all evaluated
+candidates for sparse tables. The full posterior artifact should record whether
+the weights come from dense or sparse coverage.</p>
+<p>When rows are condensed from multiple source stages, metadata should also
+record stage support (for example contributing stage count) so consumers can
+downweight weakly supported rankings.</p>
+<h2 id="5-2d-implementation-policy">5. 2D Implementation Policy<a class="headerlink" href="#5-2d-implementation-policy" title="Permanent link">&para;</a></h2>
+<h3 id="current-2d-flow">Current 2D Flow<a class="headerlink" href="#current-2d-flow" title="Permanent link">&para;</a></h3>
+<p><code>abinitio2D</code> uses staged <code>cluster2D</code> invocations. The default late stages switch
+from sampled SNHC to probabilistic assignment:</p>
+<ul>
+<li>stages 1-3: <code>refine=snhc_smpl</code></li>
+<li>stages 4-5: <code>refine=prob_snhc</code></li>
+<li>stage 6, only when prior-guided refinement is requested: <code>refine=prob_prior</code></li>
+<li>terminal all-particle refresh after sampled staged updates: dense
+  <code>refine=prob</code></li>
+</ul>
+<p><code>prob_align2D</code> owns outer subset sampling and writes the existing hard
+assignment artifact. <code>prob_tab2D</code> reproduces the sampled subset and fills
+<code>eul_prob_tab2D%loc_tab(class, particle)</code>. <code>cluster2D_exec</code> later reproduces
+the same subset and consumes <code>assignment.dat</code> through <code>strategy2D_prob</code>.</p>
+<h3 id="implemented-2d-rank-prior-model">Implemented 2D Rank-Prior Model<a class="headerlink" href="#implemented-2d-rank-prior-model" title="Permanent link">&para;</a></h3>
+<p>For every sampled particle represented in stage 5, store:</p>
+<pre><code class="language-text">top K class ids ranked by stage-5 sparse probabilistic score
+</code></pre>
+<p>This defines a prior-guided class neighborhood for the final 2D search pass:</p>
+<pre><code class="language-text">N_i = ranked class ids from posterior_topk_stage05.dat
+</code></pre>
+<p>The 2D implementation intentionally does not yet store normalized weights,
+in-plane rows, shifts, entropy, effective K, margins, or touched-fraction
+diagnostics. It is a simplified, testable <code>refine=prob_prior</code> mode for asking a
+narrow question: does a late per-particle class-rank prior improve or accelerate
+the final 2D probabilistic stage?</p>
+<p>Implemented mode:</p>
+<pre><code class="language-text">refine=prob_prior
+</code></pre>
+<p>The implementation routes through the existing <code>prob_align2D</code> and
+<code>cluster2D_exec</code> ownership split.</p>
+<h3 id="2d-consumption">2D Consumption<a class="headerlink" href="#2d-consumption" title="Permanent link">&para;</a></h3>
+<p>The prior-guided 2D consumer should:</p>
+<ol>
+<li>read <code>assignment.dat</code> exactly as today for the hard update</li>
+<li>read <code>posterior_topk_stage05.dat</code></li>
+<li>for each particle with a valid prior row, move the ranked class list to the
+   front of the sparse search order</li>
+<li>evaluate exactly the stored prior classes for particles with a prior row</li>
+<li>refine in-plane/shift using the existing sparse 2D helpers</li>
+<li>fall back to existing <code>prob_snhc</code>-compatible stochastic sparse behavior for
+   particles without a valid prior row or when the artifact is missing or
+   dimension-incompatible</li>
+</ol>
+<p>The current 2D neighborhood size is fixed by the stored rank-list length. A
+later 2D extension may use concentration diagnostics from objective/probability
+statistics to set <code>K_i</code> between configured bounds:</p>
+<pre><code class="language-text">concentrated posterior -&gt; small K_i
+broad posterior -&gt; larger K_i
+low sparse coverage -&gt; broaden further or fallback
+</code></pre>
+<p>The top-K artifact should not directly restore class averages. Class-average
+restoration continues to consume the hard assignment after the matcher update.</p>
+<h3 id="2d-stage-scheduling">2D Stage Scheduling<a class="headerlink" href="#2d-stage-scheduling" title="Permanent link">&para;</a></h3>
+<p>For the prior-guided 2D schedule, the first practical implementation schedule is:</p>
+<ul>
+<li>stages 1-3: basin-establishment and stabilization stages; do not require
+  prior construction</li>
+<li>stage 4: turn on <code>refine=prob_snhc</code></li>
+<li>stage 5: write <code>posterior_topk_stage05.dat</code> from probabilistic registration
+  when the user requested prior-guided refinement</li>
+<li>stage 6: consume that prior through new <code>refine=prob_prior</code>
+  using the stored per-particle class rank lists</li>
+<li>terminal dense all-particle refresh: optionally produce diagnostics, but do
+  not require prior-guided consumption</li>
+</ul>
+<p>This schedule keeps prior construction late and targeted, while giving the
+consumer one final refinement stage to exploit the learned per-particle class
+neighborhoods. The controller should expose <code>PROB_PRIOR_STAGE = 6</code> so the
+consumer stage is named explicitly instead of inferred from the probabilistic
+start stage.</p>
+<h3 id="2d-refine-mode-contract-refineprob_prior">2D Refine Mode Contract: <code>refine=prob_prior</code><a class="headerlink" href="#2d-refine-mode-contract-refineprob_prior" title="Permanent link">&para;</a></h3>
+<p><code>refine=prob_prior</code> is a new opt-in 2D refine mode intended to be orthogonal to
+existing <code>prob_snhc</code> and <code>prob</code> behavior.</p>
+<p>Mode intent:</p>
+<ul>
+<li>keep the probabilistic pre-alignment ownership split (<code>prob_align2D</code> pre-step,
+  <code>cluster2D_exec</code> matcher/update)</li>
+<li>consume a prior artifact written by stage-5 probabilistic registration</li>
+<li>evaluate stored class rank lists rather than stochastic class proposals for
+  particles with a valid prior row</li>
+</ul>
+<p>Fallback in <code>refine=prob_prior</code>:</p>
+<ul>
+<li>if the prior artifact is missing or incompatible, continue with existing
+  <code>prob_snhc</code>-compatible behavior</li>
+<li>if a particle is not represented by a valid prior row, use the usual sparse
+  stochastic class order for that particle</li>
+<li>flatness, posterior concentration, and sparse-coverage diagnostics are not
+  available in the current 2D rank-list artifact</li>
+</ul>
+<p>Orthogonality requirements:</p>
+<ul>
+<li>no behavior change for existing refine values (<code>prob_snhc</code>, <code>prob</code>,
+  <code>snhc_smpl</code>, ...)</li>
+<li>no format change to <code>assignment.dat</code></li>
+<li>no mandatory new command-line flags for existing workflows</li>
+<li>activation only when <code>refine=prob_prior</code> is explicitly requested</li>
+</ul>
+<h3 id="2d-binary-artifact-policy-fast-io">2D Binary Artifact Policy (Fast I/O)<a class="headerlink" href="#2d-binary-artifact-policy-fast-io" title="Permanent link">&para;</a></h3>
+<p>The 2D prior artifact should use binary handling patterns equivalent to
+<code>assignment.dat</code> handling in the probabilistic pipeline.</p>
+<p>Suggested files:</p>
+<pre><code class="language-text">posterior_topk_stage05.dat
+posterior_topk_stage05_part*.dat
+</code></pre>
+<p>I/O behavior:</p>
+<ul>
+<li>the 2D rank-prior implementation writes <code>posterior_topk_stage05.dat</code> after partition
+  rows have been merged into the global probability table</li>
+<li>a future distributed extension can add <code>posterior_topk_stage05_part*.dat</code>
+  writers if global merge memory or wall-time becomes limiting</li>
+<li>writer/reader use the same compact binary stream I/O style as
+  <code>assignment.dat</code>/<code>DIST_FBODY</code> flows</li>
+<li>include compact header with magic/version and basic run metadata; future
+  richer posterior artifacts should extend this enough to reject stale or
+  incompatible priors quickly</li>
+</ul>
+<p>Performance notes:</p>
+<ul>
+<li>single-pass write, single-pass read, row-major particle grouping</li>
+<li>avoid text parsing and per-row dynamic allocation in hot paths</li>
+<li>preserve partition-local write path to keep distributed scaling behavior</li>
+</ul>
+<h2 id="6-3d-implementation-policy">6. 3D Implementation Policy<a class="headerlink" href="#6-3d-implementation-policy" title="Permanent link">&para;</a></h2>
+<h3 id="current-3d-flow">Current 3D Flow<a class="headerlink" href="#current-3d-flow" title="Permanent link">&para;</a></h3>
+<p><code>abinitio3D</code> stages are configured by <code>simple_abinitio_controller.f90</code>.
+Middle stages use <code>refine=prob</code>; late stages use <code>refine=prob_neigh</code>.</p>
+<p><code>prob_align</code> and <code>prob_align_neigh</code> own 3D probability pre-alignment. They
+merge partition tables into either <code>eul_prob_tab</code> or <code>eul_prob_tab_neigh</code>,
+perform hard assignment, and write <code>assignment.dat</code>. <code>refine3D_exec</code> then
+consumes the hard assignment with <code>strategy3D_prob</code>.</p>
+<p><code>prob_neigh</code> currently chooses sparse neighborhoods using mode-specific local
+rules:</p>
+<ul>
+<li><code>state</code>: score coarse subspace representatives independently per state</li>
+<li><code>sum</code>: score coarse subspace representatives by summed distance across states</li>
+<li><code>geom</code>: use the coarse subspace containing the previous projection</li>
+<li><code>shc</code> or <code>snhc</code>: direct stochastic sparse search</li>
+</ul>
+<h3 id="proposed-3d-top-k-posterior-model">Proposed 3D Top-K Posterior Model<a class="headerlink" href="#proposed-3d-top-k-posterior-model" title="Permanent link">&para;</a></h3>
+<p>The 3D implementation should not merely copy the simplified 2D rank-list
+artifact. The 2D mode is useful because it is small and testable, but 3D needs
+the richer posterior form: scores or weights, pose support, compatibility
+metadata, and concentration diagnostics.</p>
+<p>For every sampled particle, store:</p>
+<pre><code class="language-text">q_i(state, projection), top K state/projection candidates
+best sampled/refined in-plane index for each candidate
+shift for candidates whose shift was refined
+posterior concentration diagnostics
+optional coarse subspace id
+</code></pre>
+<p>This defines a prior-guided projection/state neighborhood:</p>
+<pre><code class="language-text">N_i = top-K (state, projection) candidates from q_i(state, projection)
+</code></pre>
+<p>The first consumer should be a new <code>prob_neigh_mode</code>:</p>
+<pre><code class="language-text">prob_neigh_mode=prior
+</code></pre>
+<p><code>prob_neigh_mode=prior</code> should be implemented as a prior-guided variant of the
+existing <code>prob_neigh_mode=snhc</code> sparse search: keep the same sparse-scoring
+execution pattern, but replace random/stochastic reference selection with
+selection from saved ranked candidates produced by earlier probabilistic
+refinement. Unlike the current 2D rank-prior artifact, the 3D artifact should
+retain enough posterior evidence to tune the neighborhood width per particle.</p>
+<p>The prior rows consumed by <code>prob_neigh_mode=prior</code> should come from earlier
+probabilistic refinement stages (default condensation window: stages 4-5 with
+<code>refine=prob</code>), not from <code>prob_neigh</code> geometry-driven sparse modes.</p>
+<p>In this mode, <code>simple_eul_prob_tab_neigh</code> should build the sparse evaluated
+candidate set from saved ranked rows. If the saved rows contain fine
+projection ids, the implementation can either:</p>
+<ul>
+<li>evaluate exactly those fine <code>(state, proj)</code> candidates and refine the best
+  in-plane/shift candidates</li>
+<li>map the fine projections to coarse subspaces and evaluate all references in
+  those subspaces</li>
+<li>use a hybrid policy: always include top-K fine candidates and also include
+  their neighboring coarse subspaces</li>
+</ul>
+<p>The hybrid policy is the safest first <code>prior</code> mode. It preserves local
+robustness around each prior-ranked candidate while keeping the candidate set
+smaller than a dense probability table.</p>
+<h3 id="3d-consumption">3D Consumption<a class="headerlink" href="#3d-consumption" title="Permanent link">&para;</a></h3>
+<p>The prior-guided 3D consumer should:</p>
+<ol>
+<li>read <code>assignment.dat</code> exactly as today for the hard update</li>
+<li>read <code>posterior_topk*.dat</code> when <code>prob_neigh_mode=prior</code></li>
+<li>map retained rows to <code>(state, proj)</code> and optionally coarse subspaces</li>
+<li>evaluate the prior-ranked candidate set through the existing PFTC sparse
+  scoring path used by <code>prob_neigh</code>, replacing stochastic <code>snhc</code> candidate
+  selection with prior-ranked selection</li>
+<li>refine in-plane and shift for the best candidates according to existing
+   <code>npeaks_inpl</code> and shift-search policy</li>
+<li>fall back to <code>prob_neigh_mode=snhc</code> (or user-requested non-prior mode) when
+  the artifact is absent, stale, incompatible with the current <code>nspace</code>, or
+  too flat</li>
+</ol>
+<p>Neighborhood size in <code>prior</code> mode should be adaptive per particle using
+objective/probability diagnostics from condensed rows. Concentrated rankings
+can use smaller candidate sets; broad or unreliable rankings should increase
+candidate count or trigger fallback.</p>
+<p>The fallback default should match the stage policy:</p>
+<ul>
+<li>single-state late <code>abinitio3D</code>: fallback to <code>snhc</code></li>
+<li>docked or multi-state late <code>abinitio3D</code>: fallback to <code>sum</code> or <code>snhc</code></li>
+<li>explicit user override: respect the requested non-prior mode</li>
+</ul>
+<h3 id="3d-stage-scheduling">3D Stage Scheduling<a class="headerlink" href="#3d-stage-scheduling" title="Permanent link">&para;</a></h3>
+<p>For ordinary <code>abinitio3D</code>, the first practical schedule is:</p>
+<ul>
+<li>stages 1-3: warmup basin-establishment stages; optional to exclude from
+  condensation</li>
+<li>stages 4-5: produce ranked state/projection evidence and write condensed rows
+  (default condensation window: stages 4-5)</li>
+<li>stage 6 and later: consume condensed rows through <code>prob_neigh_mode=prior</code>
+  with adaptive per-particle neighborhood size</li>
+</ul>
+<p>For <code>multivol_mode=independent</code>, the default schedule stops at stage 5, before
+late <code>prob_neigh</code>. That mode can still write top-K diagnostics from stage 5,
+but prior-guided neighborhood consumption only applies when the user extends
+the run past the default independent schedule.</p>
+<p>For <code>multivol_mode=docked</code>, the split starts a new multi-state update epoch.
+Do not carry pre-split top-K state/projection rows into the post-split epoch.
+The first post-split stage should either produce a fresh top-K artifact or use
+the existing full-update <code>prob_neigh_mode=sum</code> stabilization behavior. Later
+post-split stages can consume prior rows produced within the post-split epoch
+through <code>prob_neigh_mode=prior</code>.</p>
+<h2 id="7-staleness-and-compatibility">7. Staleness and Compatibility<a class="headerlink" href="#7-staleness-and-compatibility" title="Permanent link">&para;</a></h2>
+<p>A prior artifact is valid only for a compatible search context. The current 2D
+rank-prior file records a compact header with magic, version, particle count,
+class count, retained K, source iteration, and start iteration. That is enough
+for the first 2D test mode, but it is not the full compatibility contract.</p>
+<p>The full 3D posterior file header should record:</p>
+<pre><code class="language-text">format version
+workflow kind: 2D or 3D
+source program and refine mode
+source iteration/stage
+nparticles represented
+nclasses for 2D
+nstates and nspace for 3D
+box/smpd/crop metadata if needed
+objective kind
+prob_athres
+K
+whether rows came from dense or sparse tables
+</code></pre>
+<p>The full posterior consumer must reject or ignore an artifact when:</p>
+<ul>
+<li>particle ids do not match the current sampled subset</li>
+<li>class count differs in 2D</li>
+<li>state count differs in 3D</li>
+<li>3D <code>nspace</code> differs and no reliable projection/subspace remapping exists</li>
+<li>the artifact was written before a docked split or other explicit update-epoch
+  reset</li>
+<li>the artifact is too sparse for the requested mode</li>
+</ul>
+<p>For 3D schedules that change <code>nspace</code> between stages, the first 3D implementation
+should either store enough angular metadata to remap projections or treat the
+artifact as invalid across <code>nspace</code> changes. The conservative path is to
+consume prior rows only when <code>nspace</code> is unchanged, then later add a
+projection-remapping helper through the Euler-space APIs.</p>
+<h2 id="8-posterior-diagnostics">8. Posterior Diagnostics<a class="headerlink" href="#8-posterior-diagnostics" title="Permanent link">&para;</a></h2>
+<p>The current 2D rank-prior artifact does not carry posterior diagnostics; it only
+stores ranked class ids. This keeps the first implementation easy to validate
+but means 2D <code>prob_prior</code> cannot distinguish a sharp rank list from a flat or
+under-sampled one except through missing/incompatible-row fallback.</p>
+<p>Every particle-level top-K group in the full posterior artifact should carry
+concentration diagnostics:</p>
+<ul>
+<li>entropy over retained candidates</li>
+<li>effective candidate count</li>
+<li>top-1 minus top-2 margin</li>
+<li>retained probability mass if known</li>
+<li>sparse touched fraction when applicable</li>
+</ul>
+<p>Full posterior consumers should use these diagnostics to decide whether to
+narrow or broaden search:</p>
+<ul>
+<li>concentrated posterior: evaluate a small prior-guided neighborhood</li>
+<li>broad posterior: increase K or fall back to existing broader search</li>
+<li>low touched fraction: treat weights as a sparse prior, not a complete
+  posterior</li>
+<li>invalid or empty posterior: ignore the artifact for that particle</li>
+</ul>
+<p>This prevents the prior-guided model from becoming an overconfident trap in
+ambiguous or under-sampled regions.</p>
+<p>Adaptive neighborhood policy can be implemented with threshold rules over
+entropy, top-1/top-2 margin, effective candidate count, and touched fraction.
+The first 3D implementation should use simple thresholds and log realized <code>K_i</code>
+statistics to support later tuning.</p>
+<h2 id="9-implementation-steps">9. Implementation Steps<a class="headerlink" href="#9-implementation-steps" title="Permanent link">&para;</a></h2>
+<p>Implementation status and next steps:</p>
+<ol>
+<li>Implemented for 2D: write a compact class-rank prior from
+   <code>eul_prob_tab2D</code> during the stage-5 <code>prob_snhc</code> pass.</li>
+<li>Implemented for 2D: consume <code>posterior_topk_stage05.dat</code> in stage 6 when
+   <code>refine=prob_prior</code> is requested.</li>
+<li>Implemented for 2D: preserve <code>assignment.dat</code> as the hard-assignment
+   handoff and use the prior artifact only as search-order/neighborhood input.</li>
+<li>Next for 2D: add tests that confirm stage 5 writes the artifact, stage 6
+   consumes it, missing/incompatible artifacts fall back, and existing refine
+   modes remain unchanged.</li>
+<li>Next for 3D: add a full top-K posterior data model and binary reader/writer
+   near the existing probability-table code.</li>
+<li>Next for 3D: add dense top-K extraction for <code>eul_prob_tab</code>, including scores
+   or weights, in-plane/shift support, and concentration diagnostics.</li>
+<li>Next for 3D: write 3D <code>posterior_topk.dat</code> from <code>prob_align</code>.</li>
+<li>Next for 3D: add <code>prob_neigh_mode=prior</code> to consume 3D top-K rows when
+   compatible, with adaptive per-particle neighborhood sizing.</li>
+<li>Later: extend sparse top-K extraction for <code>eul_prob_tab_neigh</code>, recording
+   touched fraction explicitly.</li>
+<li>Later: add integration tests that compare shared-memory and distributed
+   artifact equivalence and validate adaptive neighborhood-size decisions for
+   concentrated versus broad posteriors.</li>
+</ol>
+<p>2D first implementation detail:</p>
+<ul>
+<li>stage 4 turns on <code>refine=prob_snhc</code></li>
+<li>stage 5 writes <code>posterior_topk_stage05.dat</code></li>
+<li>stage 6 with <code>refine=prob_prior</code> reads and consumes that file</li>
+<li>if file validation fails, execution continues with <code>refine=prob_snhc</code></li>
+</ul>
+<p>The 2D path is the lower-risk first target because class ids are stable across
+late stages and do not require projection remapping. It should be treated as a
+rank-prior prototype, not as the final posterior artifact contract.</p>
+<h2 id="10-invariants">10. Invariants<a class="headerlink" href="#10-invariants" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The outer sampled particle subset is selected once by <code>prob_align*</code>.</li>
+<li>Probability-table workers and matchers reproduce the recorded subset.</li>
+<li>Prior extraction does not resample particles.</li>
+<li><code>assignment.dat</code> remains the hard-assignment handoff.</li>
+<li>The prior artifact is optional and must have a safe fallback path.</li>
+<li>Matchers remain responsible for final particle/class/projection/state,
+  in-plane, shift, and sigma updates.</li>
+<li>Class-average restoration and volume assembly do not consume prior rows.</li>
+<li>Prior-guided neighborhoods must not cross an explicit update-epoch reset,
+  such as the docked multi-state split.</li>
+<li>Sparse full-posterior rows must record sparse coverage diagnostics.</li>
+<li>3D full-posterior consumption must validate <code>nstates</code> and <code>nspace</code>
+  compatibility.</li>
+<li>Existing <code>prob</code>, <code>prob_snhc</code>, and <code>prob_neigh</code> behavior must remain
+  available without <code>prob_neigh_mode=prior</code> artifacts.</li>
+<li>Existing 2D modes must remain unchanged unless <code>refine=prob_prior</code> is set.</li>
+</ul>
+<h2 id="11-review-checklist">11. Review Checklist<a class="headerlink" href="#11-review-checklist" title="Permanent link">&para;</a></h2>
+<p>For any implementation of this policy, check:</p>
+<ul>
+<li>Does the new artifact remain separate from <code>assignment.dat</code>?</li>
+<li>Is the artifact written after probability-table aggregation and before the
+  global probability object is destroyed?</li>
+<li>Does the matcher reproduce the same outer sampled subset before consuming
+  prior rows?</li>
+<li>For the 2D rank-prior mode, are missing, incompatible, and unrepresented
+  particle rows handled by fallback behavior?</li>
+<li>For the full posterior mode, are absent, stale, flat, sparse, and
+  incompatible artifacts handled by fallback behavior?</li>
+<li>Does 2D keep class-average restoration tied to the hard assignment only?</li>
+<li>Does 3D keep volume assembly tied to hard updated project state only?</li>
+<li>Are shared-memory and distributed paths writing equivalent prior artifacts?</li>
+<li>For the full posterior mode, are entropy, margin, effective candidate count,
+  and sparse touched fraction available for diagnostics?</li>
+<li>Does docked multi-state refinement avoid carrying pre-split prior
+  neighborhoods into the post-split epoch?</li>
+<li>Does <code>refine=prob_prior</code> remain orthogonal (no behavior change) for existing
+  2D refine modes when the new mode is not selected?</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2926 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/refine3D_denoised_rec_source_policy.html">
+      
+      
+        <link rel="prev" href="refine3D_auto_policy.html">
+      
+      
+        <link rel="next" href="refine3D_multi_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Dual Particle Representative Source Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#dual-particle-representative-source-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Dual Particle Representative Source Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scientific-objective" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scientific Objective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-required-project-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Required Project Metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-import-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Import Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-public-source-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Public Source Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-v1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. V1 Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-ctf-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. CTF Convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sigma-and-ml-regularization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Sigma And ML Regularization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validation Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-execution-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Execution Ownership
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Execution Ownership">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commanders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commanders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matcher-batch-io-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matcher / Batch I/O Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconstruction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconstruction Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-assembly-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume Assembly Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-refine3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Refine3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-reconstruct3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Reconstruct3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Distributed Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-implementation-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Implementation Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-error-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Error Messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-testing-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Testing Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-open-future-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Open Future Extensions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scientific-objective" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scientific Objective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-required-project-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Required Project Metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-import-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Import Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-public-source-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Public Source Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-v1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. V1 Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-ctf-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. CTF Convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sigma-and-ml-regularization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Sigma And ML Regularization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validation Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-execution-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Execution Ownership
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Execution Ownership">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commanders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commanders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matcher-batch-io-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matcher / Batch I/O Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconstruction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconstruction Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-assembly-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume Assembly Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-refine3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Refine3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-reconstruct3d-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Reconstruct3D Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Distributed Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-implementation-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Implementation Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-error-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Error Messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-testing-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Testing Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-open-future-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Open Future Extensions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="dual-particle-representative-source-policy">Dual Particle Representative Source Policy<a class="headerlink" href="#dual-particle-representative-source-policy" title="Permanent link">&para;</a></h1>
+<p>This document defines the policy for projects that carry paired raw and
+denoised particle representatives.</p>
+<p>The current implementation uses one active particle image source at a time.
+Matching/alignment, state assignment, sigma estimation, and reconstruction must
+all consume the same representative images. Independent matching and
+reconstruction source selectors are not supported.</p>
+<p>Related policy documents:</p>
+<ul>
+<li><a href="refine3D_policy.html">refine3D_policy.md</a></li>
+<li><a href="refine3D_auto_policy.html">refine3D_auto_policy.md</a></li>
+<li><a href="refine3D_multi_policy.html">refine3D_multi_policy.md</a></li>
+<li><a href="project_stack_indexing_policy.html">project_stack_indexing_policy.md</a></li>
+<li><a href="sigma_calculation_policy.html">sigma_calculation_policy.md</a></li>
+<li><a href="nonuniform_filtering_policy.html">nonuniform_filtering_policy.md</a></li>
+</ul>
+<h2 id="1-scientific-objective">1. Scientific Objective<a class="headerlink" href="#1-scientific-objective" title="Permanent link">&para;</a></h2>
+<p>The workflow supports projects with two stored image representations per
+logical particle:</p>
+<ol>
+<li>a raw representative image</li>
+<li>a denoised representative image</li>
+</ol>
+<p>At execution time, a command selects exactly one representation:</p>
+<pre><code class="language-text">ptcl_src = raw | den
+</code></pre>
+<p>The selected source is used consistently for:</p>
+<ul>
+<li>particle matching and alignment</li>
+<li>state assignment</li>
+<li>shift and in-plane updates</li>
+<li>matcher-owned sigma estimation</li>
+<li>Cartesian reconstruction image input</li>
+</ul>
+<p>This replaces the earlier split-role model. A run must not align using raw
+particles while reconstructing from denoised particles, or align using denoised
+particles while reconstructing from raw particles.</p>
+<h2 id="2-required-project-metadata">2. Required Project Metadata<a class="headerlink" href="#2-required-project-metadata" title="Permanent link">&para;</a></h2>
+<p>Dual representative projects store the denoised stack path as metadata on the
+same <code>os_stk</code> row as the raw stack.</p>
+<p>Required fields:</p>
+<pre><code class="language-text">os_stk%stk       raw stack path
+os_stk%stk_den   denoised stack path
+</code></pre>
+<p>Example:</p>
+<pre><code class="language-text">os_stk row 1:
+  stk        = raw_particles_001.mrcs
+  stk_den    = my_arbitrary_denoised_reps_for_001.mrcs
+  nptcls_stk = 10000
+  ctf        = flip
+</code></pre>
+<p><code>stk_den</code> is intentionally not derived from <code>stk</code> by suffix. Arbitrary denoised
+stack names are valid.</p>
+<p><code>stk_den</code> is also intentionally not a separate counted stack row. Adding
+denoised stacks as ordinary extra <code>os_stk</code> entries would change stack counts and
+break existing particle-to-stack indexing assumptions.</p>
+<p>The same particle row and physical image index identify the raw and denoised
+representatives:</p>
+<pre><code class="language-text">ptcl3D row -&gt; stkind -&gt; os_stk row -&gt; stk     -&gt; raw image path
+ptcl3D row -&gt; stkind -&gt; os_stk row -&gt; stk_den -&gt; denoised image path
+ptcl3D row -&gt; indstk -&gt; physical image number in either paired stack
+</code></pre>
+<p>The denoised stack must have the same physical image order as the raw stack.
+The same <code>indstk</code> value must identify paired raw and denoised images.</p>
+<h2 id="3-import-contract">3. Import Contract<a class="headerlink" href="#3-import-contract" title="Permanent link">&para;</a></h2>
+<p>Import commands must be able to attach denoised representative paths to
+<code>os_stk%stk_den</code>.</p>
+<p>Supported import parameters:</p>
+<pre><code class="language-text">stk_den       denoised stack paired with stk
+stktab_den    denoised stack table paired row-by-row with stktab
+</code></pre>
+<p>For a single stack:</p>
+<pre><code class="language-text">simple_exec prg=import_particles \
+  stk=raw_particles.mrcs \
+  stk_den=denoised_particles_any_name.mrcs \
+  ctf=flip \
+  ...
+</code></pre>
+<p>For multiple stacks:</p>
+<pre><code class="language-text">simple_exec prg=import_particles \
+  stktab=raw_stacks.txt \
+  stktab_den=denoised_stacks.txt \
+  ctf=flip \
+  ...
+</code></pre>
+<p>For <code>stktab_den</code>, row <code>i</code> must be the denoised stack corresponding to raw
+<code>stktab</code> row <code>i</code>.</p>
+<h2 id="4-public-source-selection">4. Public Source Selection<a class="headerlink" href="#4-public-source-selection" title="Permanent link">&para;</a></h2>
+<p>Projects with <code>stk_den</code> metadata must be able to switch between raw and
+denoised representatives for debugging and testing.</p>
+<p>The public selector is:</p>
+<pre><code class="language-text">ptcl_src = raw | den
+</code></pre>
+<p>Default:</p>
+<pre><code class="language-text">ptcl_src = raw
+</code></pre>
+<p>Defaulting to raw preserves existing behavior for projects that do not carry
+denoised representatives.</p>
+<p>If <code>ptcl_src=raw</code>, commands read <code>os_stk%stk</code>.</p>
+<p>If <code>ptcl_src=den</code>, commands read <code>os_stk%stk_den</code>.</p>
+<p>No command should silently substitute raw images for denoised images, or
+denoised images for raw images. If a requested source is unavailable, the
+workflow must fail early.</p>
+<h2 id="5-v1-scope">5. V1 Scope<a class="headerlink" href="#5-v1-scope" title="Permanent link">&para;</a></h2>
+<p>V1 support applies to <code>ptcl3D</code> particle representatives used by
+<code>reconstruct3D</code>, <code>refine3D</code>, <code>refine3D_auto</code>, and <code>refine3D_multi</code>.</p>
+<p><code>ptcl_src=den</code> is not supported for <code>ptcl2D</code> or other 2D applications.
+2D workflows must continue to read raw particle stacks.</p>
+<p>V1 supports:</p>
+<ul>
+<li>raw/denoised representative pairs</li>
+<li>arbitrary denoised stack names stored in <code>os_stk%stk_den</code></li>
+<li><code>reconstruct3D</code> source switching through <code>ptcl_src</code></li>
+<li><code>refine3D</code> source switching through <code>ptcl_src</code></li>
+<li><code>refine3D_auto</code> source parameter pass-through</li>
+<li><code>refine3D_multi</code> source parameter pass-through</li>
+<li>raw and denoised stacks interpreted as <code>ctf=flip</code></li>
+</ul>
+<p>V1 does not support:</p>
+<ul>
+<li>suffix-derived denoised stack paths</li>
+<li>denoised stacks as counted extra <code>os_stk</code> rows</li>
+<li>independent denoised orientation tables</li>
+<li>separate denoised CTF metadata</li>
+<li>separate matching and reconstruction image sources in one run</li>
+</ul>
+<h2 id="6-ctf-convention">6. CTF Convention<a class="headerlink" href="#6-ctf-convention" title="Permanent link">&para;</a></h2>
+<p>V1 requires raw and denoised representatives to be in <code>ctf=flip</code> status when
+<code>ptcl_src=den</code>.</p>
+<p>This means:</p>
+<ul>
+<li>raw <code>os_stk%ctf</code> must be <code>flip</code></li>
+<li>denoised images are interpreted as already matching the same <code>ctf=flip</code>
+  convention</li>
+<li><code>stk_den</code> does not provide independent CTF parameters</li>
+</ul>
+<p>If a raw stack is <code>ctf=yes</code> or <code>ctf=no</code>, denoised-source execution must hard
+fail in V1.</p>
+<p>This restriction can be relaxed only after a separate policy defines how
+denoised representatives and CTF correction interact.</p>
+<h2 id="7-sigma-and-ml-regularization">7. Sigma And ML Regularization<a class="headerlink" href="#7-sigma-and-ml-regularization" title="Permanent link">&para;</a></h2>
+<p>Sigma calculation follows <code>ptcl_src</code>.</p>
+<p>When <code>objfun=euclid</code>, the matcher calculates residual sigma from the same image
+source used for matching and reconstruction.</p>
+<pre><code class="language-text">ptcl_src=raw  -&gt; raw images supply matching, sigma estimation, and reconstruction
+ptcl_src=den  -&gt; denoised images supply matching, sigma estimation, and reconstruction
+</code></pre>
+<p><code>ml_reg=yes</code> may still consume grouped sigma spectra through the existing
+<code>builder%esig</code> path, but those spectra must be consistent with the selected
+particle source for the run.</p>
+<p>The previous mixed-source mode, where raw sigma estimates were combined with
+denoised reconstruction images inside one refinement execution, is not part of
+the current policy.</p>
+<h2 id="8-validation-rules">8. Validation Rules<a class="headerlink" href="#8-validation-rules" title="Permanent link">&para;</a></h2>
+<p>Validation should happen as early as the relevant source information is
+available.</p>
+<p>When <code>ptcl_src=den</code>, fail unless all of the following are true:</p>
+<ul>
+<li>the workflow uses <code>ptcl3D</code> particle representatives</li>
+<li>every active particle has a valid <code>stkind</code></li>
+<li>every active particle has or can derive a valid physical <code>indstk</code></li>
+<li>every referenced raw <code>os_stk</code> row has <code>ctf=flip</code></li>
+<li>every referenced raw <code>os_stk</code> row has a non-empty <code>stk_den</code></li>
+<li>every referenced <code>stk_den</code> path exists</li>
+<li>raw and denoised stack dimensions match in X and Y at import or read time</li>
+<li>raw and denoised physical image counts match at import time</li>
+<li>every active particle's <code>indstk</code> is within the denoised physical image count</li>
+</ul>
+<p>Validation must use the same stack-indexing contract as ordinary particle
+reads:</p>
+<pre><code class="language-text">stkind identifies the os_stk row
+indstk identifies the physical image number
+fromp/top describe project row ranges, not physical image indices
+</code></pre>
+<h2 id="9-execution-ownership">9. Execution Ownership<a class="headerlink" href="#9-execution-ownership" title="Permanent link">&para;</a></h2>
+<h3 id="commanders">Commanders<a class="headerlink" href="#commanders" title="Permanent link">&para;</a></h3>
+<p>Commanders own command shape, defaults, and early validation. They should not
+own low-level image-read loops or assembled-volume postprocessing.</p>
+<p><code>reconstruct3D</code>, <code>refine3D</code>, <code>refine3D_auto</code>, and <code>refine3D_multi</code> must expose
+or preserve <code>ptcl_src</code>.</p>
+<p>Wrapper commands must pass <code>ptcl_src</code> through to their child <code>refine3D</code> or
+<code>reconstruct3D</code> invocations.</p>
+<h3 id="strategy-layer">Strategy Layer<a class="headerlink" href="#strategy-layer" title="Permanent link">&para;</a></h3>
+<p><code>simple_refine3D_strategy.f90</code> must preserve shared-memory and distributed
+parity. <code>ptcl_src</code> must be present in worker command lines and must resolve the
+same <code>stk_den</code> paths on workers as on the master.</p>
+<p>The strategy may dispatch validation before scheduling workers. It should not
+take over batch image I/O.</p>
+<h3 id="project-layer">Project Layer<a class="headerlink" href="#project-layer" title="Permanent link">&para;</a></h3>
+<p>The project layer owns paired-source resolution. The source resolver maps:</p>
+<pre><code class="language-text">ptcl3D particle index + ptcl_src -&gt; stack path + physical image index
+</code></pre>
+<p>The helper chooses:</p>
+<pre><code class="language-text">ptcl_src=raw -&gt; os_stk%stk
+ptcl_src=den -&gt; os_stk%stk_den
+</code></pre>
+<p>This keeps <code>stk_den</code> metadata policy out of matcher and reconstruction loops.</p>
+<h3 id="matcher-batch-io-layer">Matcher / Batch I/O Layer<a class="headerlink" href="#matcher-batch-io-layer" title="Permanent link">&para;</a></h3>
+<p>The matcher owns per-batch particle image loading.</p>
+<p>For online matching with Cartesian reconstruction enabled, the matcher must read
+the selected particle batch from disk exactly once. Reconstruction buffers must
+be copied from the already-loaded matcher batch, not filled by a second read
+from either the same or a different stack source.</p>
+<h3 id="reconstruction-layer">Reconstruction Layer<a class="headerlink" href="#reconstruction-layer" title="Permanent link">&para;</a></h3>
+<p><code>simple_matcher_3Drec.f90</code> should continue to prepare Fourier planes and grid
+particles using the current <code>ptcl3D</code> orientation, state, shift, CTF metadata,
+and sigma state. It should use <code>ptcl_src</code> only to select which stack path the
+single reconstruction read consumes.</p>
+<h3 id="volume-assembly-layer">Volume Assembly Layer<a class="headerlink" href="#volume-assembly-layer" title="Permanent link">&para;</a></h3>
+<p><code>volassemble</code> remains unchanged. It reduces partial reconstructions, restores
+even/odd volumes, computes FSCs, runs automasking and nonuniform filtering, and
+writes project output metadata from whatever partial reconstruction inputs the
+matcher or <code>reconstruct3D</code> produced.</p>
+<h2 id="10-refine3d-flow">10. Refine3D Flow<a class="headerlink" href="#10-refine3d-flow" title="Permanent link">&para;</a></h2>
+<p>For one matcher batch:</p>
+<pre><code class="language-text">1. sample or receive ptcl3D particle indices for update
+2. read selected ptcl_src images through the source-aware stack resolver
+3. copy the in-memory batch to reconstruction buffers if reconstruction is active
+4. preprocess and polarize the selected images for matching
+5. run the selected search strategy or consume ASSIGNMENT.dat
+6. update orientation, state, shift, and sigma from the selected-source matcher pass
+7. prepare reconstruction Fourier planes from the copied selected-source images
+8. grid reconstruction planes using updated ptcl3D metadata
+9. write partition-local Cartesian partials
+</code></pre>
+<p>There is no second particle-stack read between steps 2 and 7.</p>
+<h2 id="11-reconstruct3d-flow">11. Reconstruct3D Flow<a class="headerlink" href="#11-reconstruct3d-flow" title="Permanent link">&para;</a></h2>
+<p><code>reconstruct3D</code> uses <code>ptcl_src</code> to select the image source for the entire
+reconstruction.</p>
+<pre><code class="language-text">ptcl_src=raw -&gt; read os_stk%stk
+ptcl_src=den -&gt; read os_stk%stk_den
+</code></pre>
+<p>It still uses the same <code>ptcl3D</code> orientation, state, shift, CTF, and even/odd
+metadata. Only the physical image source changes.</p>
+<h2 id="12-distributed-execution">12. Distributed Execution<a class="headerlink" href="#12-distributed-execution" title="Permanent link">&para;</a></h2>
+<p>Distributed and shared-memory runs must have the same scientific behavior.</p>
+<p>For distributed workflows:</p>
+<ul>
+<li>master-side validation should check all referenced <code>stk_den</code> paths before
+  scheduling workers when <code>ptcl_src=den</code></li>
+<li>worker command lines must include <code>ptcl_src</code></li>
+<li>workers must resolve <code>stk_den</code> paths with the same project/current
+  working-directory rules used for <code>stk</code></li>
+<li>partition-local partials have the same filenames and downstream contracts as
+  ordinary partials</li>
+<li><code>volassemble</code> should not need to know whether partials came from raw or
+  denoised images</li>
+</ul>
+<p>If a worker cannot access a <code>stk_den</code> path that passed master validation, the
+worker should fail hard with the raw stack path, <code>stk_den</code> path, and partition
+information in the diagnostic.</p>
+<h2 id="13-implementation-shape">13. Implementation Shape<a class="headerlink" href="#13-implementation-shape" title="Permanent link">&para;</a></h2>
+<p>The implementation prefers narrow helper APIs over spreading source-selection
+conditionals through search code.</p>
+<p>Implemented project helper:</p>
+<pre><code class="language-fortran">call spproj%get_ptcl_source_stkname_and_ind(oritype, iptcl, source, &amp;
+    stkname, ind_in_stk)
+</code></pre>
+<p><code>source</code> accepts:</p>
+<pre><code class="language-text">raw
+den
+</code></pre>
+<p>Implemented batch I/O helper:</p>
+<pre><code class="language-fortran">call discrete_read_imgbatch_source(params, build, source, nptcls, pinds, &amp;
+    batchlims, imgs)
+</code></pre>
+<p>The raw default path may use the existing optimized <code>discrete_read_imgbatch</code>
+helper. Denoised source reads use <code>discrete_read_imgbatch_source</code> with
+<code>source='den'</code>.</p>
+<h2 id="14-error-messages">14. Error Messages<a class="headerlink" href="#14-error-messages" title="Permanent link">&para;</a></h2>
+<p>Errors should name the selected source and both stack paths where possible.</p>
+<p>Examples:</p>
+<pre><code class="language-text">ptcl_src=den requires oritype=ptcl3D
+os_stk row 17 has no stk_den entry
+denoised source requires raw stack ctf=flip
+missing denoised stack for raw stack raw_particles.mrcs: stk_den=my_denoised_particles.mrcs
+raw/denoised stack image counts differ: raw_particles.mrcs has 120000, my_denoised_particles.mrcs has 119998
+raw/denoised stack dimensions differ: raw_particles.mrcs is 256x256, my_denoised_particles.mrcs is 384x384
+particle indstk is outside denoised stack range
+refine3D_auto did not propagate ptcl_src to child refine3D command
+</code></pre>
+<h2 id="15-testing-requirements">15. Testing Requirements<a class="headerlink" href="#15-testing-requirements" title="Permanent link">&para;</a></h2>
+<p>Minimum tests:</p>
+<ul>
+<li>import stores <code>stk_den</code> on the correct <code>os_stk</code> row</li>
+<li><code>stktab_den</code> maps row-by-row to <code>stktab</code></li>
+<li>validation passes for matching raw/denoised dimensions and counts</li>
+<li>validation fails when <code>stk_den</code> is missing</li>
+<li>validation fails when a <code>stk_den</code> file is missing</li>
+<li>validation fails when dimensions differ</li>
+<li>validation fails when image counts differ</li>
+<li>validation fails for non-<code>ptcl3D</code> denoised-source use</li>
+<li>validation fails when raw stack CTF is not <code>flip</code></li>
+<li><code>ptcl_src=raw</code> preserves existing <code>reconstruct3D</code> and <code>refine3D</code> behavior</li>
+<li><code>ptcl_src=den</code> makes <code>reconstruct3D</code> read <code>stk_den</code></li>
+<li><code>ptcl_src=den</code> makes <code>refine3D</code> use denoised images for matching and
+  reconstruction</li>
+<li><code>refine3D</code> online Cartesian reconstruction copies reconstruction buffers from
+  the already-loaded matcher batch rather than reading particle stacks twice</li>
+<li><code>refine3D_auto</code> propagates <code>ptcl_src</code> to child commands</li>
+<li><code>refine3D_multi</code> propagates <code>ptcl_src</code> to child commands</li>
+<li>users can switch between <code>ptcl_src=raw</code> and <code>ptcl_src=den</code> from the same
+  dual-representative project without rewriting stack metadata</li>
+</ul>
+<p>Distributed tests should verify that worker command lines preserve <code>ptcl_src</code>.</p>
+<h2 id="16-open-future-extensions">16. Open Future Extensions<a class="headerlink" href="#16-open-future-extensions" title="Permanent link">&para;</a></h2>
+<p>Future versions may consider:</p>
+<ul>
+<li>support for CTF conventions other than <code>flip</code></li>
+<li>source-provenance labels in output volumes and FSC reports</li>
+<li>side-by-side raw and denoised reconstruction diagnostics</li>
+</ul>
+<p>Those extensions should be policy-gated separately. The first implementation
+should stay narrow enough that the single-source particle-domain and
+volume-domain contracts remain easy to audit.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

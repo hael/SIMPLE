@@ -1,0 +1,2713 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/project_stack_indexing_policy.html">
+      
+      
+        <link rel="prev" href="prior_guided_probability_neighborhood_policy.html">
+      
+      
+        <link rel="next" href="refine3D_auto_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Project Stack Indexing Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#project-stack-indexing-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Project Stack Indexing Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="project_stack_indexing_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index Domains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Semantics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Semantics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#os_stkfromp-os_stktop-and-os_stknptcls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_stk%fromp, os_stk%top, and os_stk%nptcls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_stknptcls_stk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_stk%nptcls_stk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_ptcl2dos_ptcl3dstkind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_ptcl2D/os_ptcl3D%stkind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_ptcl2dos_ptcl3dindstk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_ptcl2D/os_ptcl3D%indstk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selection-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selection State
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#merge-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Merge Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prune-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prune Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prune Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metadata-only-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata-only prune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#materializing-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Materializing prune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#invalid-prune-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invalid prune state
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reader-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reader Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index Domains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Semantics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Semantics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#os_stkfromp-os_stktop-and-os_stknptcls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_stk%fromp, os_stk%top, and os_stk%nptcls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_stknptcls_stk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_stk%nptcls_stk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_ptcl2dos_ptcl3dstkind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_ptcl2D/os_ptcl3D%stkind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#os_ptcl2dos_ptcl3dindstk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        os_ptcl2D/os_ptcl3D%indstk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selection-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selection State
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#merge-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Merge Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prune-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prune Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prune Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metadata-only-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata-only prune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#materializing-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Materializing prune
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#invalid-prune-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invalid prune state
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reader-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reader Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="project-stack-indexing-policy">Project Stack Indexing Policy<a class="headerlink" href="#project-stack-indexing-policy" title="Permanent link">&para;</a></h1>
+<p>This policy defines the indexing contract between SIMPLE project metadata,
+particle rows, and physical particle stack files. It is intended to remove
+ambiguity around <code>merge_projects</code>, <code>prune_project</code>, and downstream stack readers
+such as 2D and 3D analysis.</p>
+<h2 id="core-rule">Core Rule<a class="headerlink" href="#core-rule" title="Permanent link">&para;</a></h2>
+<p><code>fromp</code>, <code>top</code>, and <code>nptcls</code> in the <code>os_stk</code> field refer to the project, not
+to the physical stack file.</p>
+<p><code>indstk</code> refers to the physical stack file, not to the project.</p>
+<p>These are separate index domains and must not be interchanged.</p>
+<h2 id="index-domains">Index Domains<a class="headerlink" href="#index-domains" title="Permanent link">&para;</a></h2>
+<p>For projects with particle rows and stack rows:</p>
+<pre><code class="language-text">ptcl row index        row in os_ptcl2D or os_ptcl3D
+stkind                row in os_stk for the particle's stack
+fromp/top/nptcls      current project particle range/count for an os_stk row
+indstk                physical 1-based image index inside the stack file
+nptcls_stk            physical image count in the stack file
+</code></pre>
+<p>The stack path stored on an <code>os_stk</code> row identifies the physical stack file. A
+particle image is read by resolving:</p>
+<pre><code class="language-text">particle row -&gt; stkind -&gt; os_stk row -&gt; stack path
+particle row -&gt; indstk -&gt; physical image number in that stack
+</code></pre>
+<h2 id="field-semantics">Field Semantics<a class="headerlink" href="#field-semantics" title="Permanent link">&para;</a></h2>
+<h3 id="os_stkfromp-os_stktop-and-os_stknptcls"><code>os_stk%fromp</code>, <code>os_stk%top</code>, and <code>os_stk%nptcls</code><a class="headerlink" href="#os_stkfromp-os_stktop-and-os_stknptcls" title="Permanent link">&para;</a></h3>
+<p>These fields describe the particle rows currently present in the project for a
+stack row.</p>
+<p>They do not describe physical image positions in the backing stack file.</p>
+<p>They do not inherently mean "active particles" or "<code>state &gt; 0</code> particles." They
+count project particle rows assigned to that stack row. If a project still
+contains rows with <code>state = 0</code>, those rows are part of the project and
+therefore are included in <code>fromp/top/nptcls</code>.</p>
+<p>If a pruning operation removes rows from the project, then removed rows are no
+longer counted. In that case <code>fromp/top/nptcls</code> describe the post-prune project,
+not the original project and not the physical stack file.</p>
+<p>Required invariants when particle rows are present:</p>
+<pre><code class="language-text">top - fromp + 1 == nptcls
+stack ranges are contiguous in project-row space
+stack ranges cover the particle rows in the project segment
+particle rows in a stack range have the matching stkind
+</code></pre>
+<h3 id="os_stknptcls_stk"><code>os_stk%nptcls_stk</code><a class="headerlink" href="#os_stknptcls_stk" title="Permanent link">&para;</a></h3>
+<p><code>nptcls_stk</code> describes the number of physical images in the backing stack file.</p>
+<p>It may be larger than <code>nptcls</code> after pruning or selection if the project
+metadata points to the original stack file.</p>
+<p>It should equal <code>nptcls</code> only when the backing stack file itself contains
+exactly the particle rows present in the project, for example after writing a
+new stack file from those rows.</p>
+<h3 id="os_ptcl2dos_ptcl3dstkind"><code>os_ptcl2D/os_ptcl3D%stkind</code><a class="headerlink" href="#os_ptcl2dos_ptcl3dstkind" title="Permanent link">&para;</a></h3>
+<p><code>stkind</code> identifies the <code>os_stk</code> row associated with a particle. Because stack
+rows are project metadata, <code>stkind</code> is a project-local index and may be remapped
+when projects are merged or stack rows are renumbered.</p>
+<h3 id="os_ptcl2dos_ptcl3dindstk"><code>os_ptcl2D/os_ptcl3D%indstk</code><a class="headerlink" href="#os_ptcl2dos_ptcl3dindstk" title="Permanent link">&para;</a></h3>
+<p><code>indstk</code> identifies the particle's physical image number inside the stack file
+referenced by its <code>stkind</code>.</p>
+<p>Modern project outputs should write positive <code>indstk</code> values for particle rows.
+Missing or non-positive <code>indstk</code> values are legacy compatibility cases.
+For old stream projects, even a positive <code>indstk</code> may be unreliable when the
+stack row does not carry <code>nptcls_stk</code>.</p>
+<p>When a legacy fallback is needed, or when a project-rewriting operation cannot
+trust the input <code>indstk</code>, <code>fromp/top</code> define the project rows belonging to the
+stack row, while the stack file itself is 1-based. Therefore the fallback
+physical stack index is:</p>
+<pre><code class="language-text">indstk = particle_project_row - fromp + 1
+</code></pre>
+<p>The fallback must never use the raw project particle row as the stack image
+index unless <code>fromp == 1</code>. If <code>state = 0</code> rows exist, they still occupy project
+rows and therefore still occupy positions in this fallback mapping.</p>
+<p>Required invariant:</p>
+<pre><code class="language-text">1 &lt;= indstk &lt;= nptcls_stk
+</code></pre>
+<p>When <code>nptcls_stk</code> is absent in a legacy project and no physical stack inspection
+has been done, the fallback physical stack count is:</p>
+<pre><code class="language-text">nptcls_stk = top - fromp + 1
+</code></pre>
+<h2 id="selection-state">Selection State<a class="headerlink" href="#selection-state" title="Permanent link">&para;</a></h2>
+<p>Particle <code>state</code> is not part of the stack-index definition. It is a selection
+or activity flag on a project particle row.</p>
+<p>Use <code>state &gt; 0</code> when a workflow needs the number of active particles. Use
+<code>fromp/top/nptcls</code> when a workflow needs the number of particle rows currently
+present in the project for a stack.</p>
+<p>Do not infer active-particle counts from <code>nptcls</code> unless the project operation
+has explicitly removed all inactive rows.</p>
+<h2 id="merge-policy">Merge Policy<a class="headerlink" href="#merge-policy" title="Permanent link">&para;</a></h2>
+<p><code>merge_projects</code> concatenates project metadata. It must preserve physical stack
+indices when they are credible and repair legacy old-stream indexing when they
+are not.</p>
+<p>When merging particle projects:</p>
+<ul>
+<li>Remap <code>stkind</code>, because stack rows are renumbered in the merged project.</li>
+<li>Remap <code>fromp</code> and <code>top</code>, because project particle rows are concatenated.</li>
+<li>Preserve <code>nptcls</code> for each stack row.</li>
+<li>Treat input <code>indstk</code> as a candidate, not as automatically correct.</li>
+<li>If the source stack row has <code>nptcls_stk</code>, preserve positive <code>indstk</code> values
+  that are within <code>1..nptcls_stk</code>.</li>
+<li>If the source stack row lacks <code>nptcls_stk</code>, treat the source as legacy and
+  derive <code>indstk</code> from <code>source_particle_project_row - source_fromp + 1</code>, even
+  when an <code>indstk</code> value is present.</li>
+<li>If <code>indstk</code> is missing, non-positive, or out of range, derive it from
+  <code>source_particle_project_row - source_fromp + 1</code>.</li>
+<li>Preserve <code>nptcls_stk</code> when present, because the physical stack files are not
+  rewritten.</li>
+<li>Preserve stack paths and row-level stack metadata, including CTF-model fields.</li>
+<li>Remap row-level <code>ogid</code> values as project metadata.</li>
+<li>Drop analysis products such as <code>cls2D</code>, <code>cls3D</code>, and <code>out</code> unless a future
+  policy explicitly defines how to merge them.</li>
+</ul>
+<p>The important merge invariant is:</p>
+<pre><code class="language-text">project row indices may change
+stack row indices may change
+physical image indices must not change
+</code></pre>
+<p>The fallback formula is applied in the source project's project-row domain
+before the output <code>fromp/top</code> remapping. This prevents the merged global
+particle row from being used as a stack index.</p>
+<h2 id="prune-policy">Prune Policy<a class="headerlink" href="#prune-policy" title="Permanent link">&para;</a></h2>
+<p>Pruning must distinguish between metadata-only pruning and materializing
+pruning.</p>
+<h3 id="metadata-only-prune">Metadata-only prune<a class="headerlink" href="#metadata-only-prune" title="Permanent link">&para;</a></h3>
+<p>If pruning removes particle rows from the project but keeps the original stack
+files:</p>
+<ul>
+<li>Remove deleted rows from <code>os_ptcl2D</code> and <code>os_ptcl3D</code>.</li>
+<li>Update <code>os_stk%fromp</code>, <code>os_stk%top</code>, and <code>os_stk%nptcls</code> to describe the
+  post-prune project.</li>
+<li>Remap <code>stkind</code> if stack rows are renumbered.</li>
+<li>Treat input <code>indstk</code> as a candidate, not as automatically correct.</li>
+<li>If the source stack row has <code>nptcls_stk</code>, preserve positive <code>indstk</code> values
+  that are within <code>1..nptcls_stk</code>, because the physical image positions in the
+  original stack files have not changed.</li>
+<li>If the source stack row lacks <code>nptcls_stk</code>, treat the source as legacy and
+  derive <code>indstk</code> from <code>old_particle_project_row - old_fromp + 1</code>, even when an
+  <code>indstk</code> value is present.</li>
+<li>If <code>indstk</code> is missing, non-positive, or out of range, derive it from the
+  legacy fallback <code>old_particle_project_row - old_fromp + 1</code>.</li>
+<li>Preserve <code>nptcls_stk</code> when present, because the physical stack files have not
+  changed.</li>
+<li>Preserve stack paths.</li>
+</ul>
+<p>This is the common case that protects downstream readers from using project row
+numbers as stack slice numbers.</p>
+<h3 id="materializing-prune">Materializing prune<a class="headerlink" href="#materializing-prune" title="Permanent link">&para;</a></h3>
+<p>If pruning writes new physical stack files containing only the retained
+particles:</p>
+<ul>
+<li>Update stack paths to the new physical files.</li>
+<li>Rewrite <code>indstk</code> to the physical image positions in the new stack files,
+  normally <code>1..nptcls</code>.</li>
+<li>Set <code>nptcls_stk</code> to the physical image count in the new stack file.</li>
+<li>Set <code>fromp/top/nptcls</code> to the project row ranges.</li>
+<li>The number of particle rows is the same as the physical image count:
+  <code>nptcls = nptcls_stk</code></li>
+</ul>
+<p>This is the only case where pruning should rewrite <code>indstk</code> based on the new
+stack-file order.</p>
+<h3 id="invalid-prune-state">Invalid prune state<a class="headerlink" href="#invalid-prune-state" title="Permanent link">&para;</a></h3>
+<p>The following state is invalid:</p>
+<pre><code class="language-text">stack path still points to the original physical stack file
+indstk has been recomputed from project-row order
+</code></pre>
+<p>That state corrupts the particle-to-image mapping and can make distributed
+workers request image indices that do not correspond to the intended particles.</p>
+<h2 id="reader-policy">Reader Policy<a class="headerlink" href="#reader-policy" title="Permanent link">&para;</a></h2>
+<p>Any code that reads particle images from a stack file must use <code>indstk</code> as the
+physical image index when the stack row has <code>nptcls_stk</code> and <code>indstk</code> is
+present, positive, and within range.</p>
+<p>If <code>nptcls_stk</code> is absent, or if <code>indstk</code> is missing, non-positive, or out of
+range, readers may use the legacy fallback:</p>
+<pre><code class="language-text">indstk = particle_project_row - fromp + 1
+</code></pre>
+<p>The reader must first resolve the particle's <code>stkind</code>, read <code>fromp/top</code> from
+that stack row, and verify that the particle row lies inside that range. Readers
+must not use the raw particle row index as the physical stack-file image index
+except in the special case where <code>fromp == 1</code>.</p>
+<h2 id="validation-policy">Validation Policy<a class="headerlink" href="#validation-policy" title="Permanent link">&para;</a></h2>
+<p>Project validation should check:</p>
+<ul>
+<li>Stack project ranges are contiguous and cover the particle rows.</li>
+<li><code>top - fromp + 1 == nptcls</code>.</li>
+<li>Particle <code>stkind</code> values identify valid stack rows.</li>
+<li>New project-writing code should write <code>nptcls_stk</code> on stack rows when
+  particle rows are present.</li>
+<li>When <code>nptcls_stk</code> is missing in a legacy project, validation may inspect the
+  physical stack file or use <code>top - fromp + 1</code> as the fallback stack count.</li>
+<li>New project-writing code should write positive particle <code>indstk</code> values.</li>
+<li>Missing, non-positive, or untrusted particle <code>indstk</code> values may be accepted
+  through the <code>particle_project_row - fromp + 1</code> fallback.</li>
+<li>Particle <code>indstk</code> values are not larger than <code>nptcls_stk</code> when
+  <code>nptcls_stk</code> is present.</li>
+<li>If <code>nptcls_stk</code> is absent, validation must not assume existing <code>indstk</code>
+  values are correct; merge/prune-style repair should derive them from
+  <code>fromp/top</code>.</li>
+</ul>
+<p>Validation must not silently convert physical <code>indstk</code> values into project-row
+indices.</p>
+<p>The <code>validate_projfile</code> program applies this policy to an input project and
+writes <code>input_name_validated.simple</code>. It reports warnings, errors, and repairs
+encountered during validation, but writes a best-effort repaired project so that
+legacy stream outputs can be normalized before downstream 2D or 3D analysis.</p>
+<h2 id="test-policy">Test Policy<a class="headerlink" href="#test-policy" title="Permanent link">&para;</a></h2>
+<p>Tests for merge, prune, and stack readers should include pruned-style projects
+where:</p>
+<pre><code class="language-text">nptcls &lt;= nptcls_stk
+fromp/top describe current project rows
+indstk contains non-contiguous physical image indices
+</code></pre>
+<p>For example, a project stack row may have:</p>
+<pre><code class="language-text">fromp = 1
+top = 3
+nptcls = 3
+nptcls_stk = 6
+particle indstk values = [1, 4, 6]
+</code></pre>
+<p>After merging this project with another, the second project's <code>fromp/top</code> and
+<code>stkind</code> values may be remapped, but its <code>indstk</code> values must remain physical
+indices into its original stack file unless new physical stack files are
+written.</p>
+<p>Tests should also include old-stream-style projects where <code>nptcls_stk</code> is
+absent and <code>indstk</code> is missing, zero, or wrong. Merge and prune should repair
+those rows with:</p>
+<pre><code class="language-text">indstk = source_particle_project_row - source_fromp + 1
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

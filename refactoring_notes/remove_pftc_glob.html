@@ -1,0 +1,3161 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/remove_pftc_glob.html">
+      
+      
+        <link rel="prev" href="remove_params_glob.html">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Refactoring Document: Global pftc_glob Removal - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#refactoring-document-global-pftc_glob-removal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Refactoring Document: Global pftc_glob Removal
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="remove_pftc_glob.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#affected-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Affected Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Affected Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-framework-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Framework Changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Framework Changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-strategy-interface-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Strategy Interface Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-strategy2d-implementation-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy2D Implementation Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-strategy3d-implementation-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Strategy3D Implementation Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-level-strategy-matchers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-Level Strategy Matchers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High-Level Strategy Matchers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-simple_strategy2d_matcherf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. simple_strategy2D_matcher.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-simple_strategy3d_matcherf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. simple_strategy3D_matcher.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-simple_matcher_2dprepf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. simple_matcher_2Dprep.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-simple_strategy2d_allocf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. simple_strategy2D_alloc.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#utility-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Utility Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Utility Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-simple_strategy2d_utilsf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. simple_strategy2D_utils.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-simple_corrmatf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. simple_corrmat.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shift-search-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shift Search Objects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Shift Search Objects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#10-simple_strategy2d_srchf90-pftc_shsrch_grad-interface-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. simple_strategy2D_srch.f90 (pftc_shsrch_grad interface changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-simple_strategy3d_srchf90-pftc_shsrch_grad-interface-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. simple_strategy3D_srch.f90 (pftc_shsrch_grad interface changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time Initialization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="One-Time Initialization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#12-simple_strategy2d_matcherf90-prep_strategy2d_glob-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. simple_strategy2D_matcher.f90 - prep_strategy2D_glob signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-simple_strategy3d_allocf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. simple_strategy3D_alloc.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-architectural-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Architectural Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Architectural Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-builder-based-injection-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Builder-Based Injection Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-gradient-search-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Gradient Search Objects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-removal-of-module-level-pftc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Removal of Module-Level pftc
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#function-signature-changes-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function Signature Changes Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-path-for-new-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Path for New Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-modified-complete-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Modified: Complete List
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#affected-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Affected Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Affected Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-framework-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Framework Changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Framework Changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-strategy-interface-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Strategy Interface Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-strategy2d-implementation-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy2D Implementation Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-strategy3d-implementation-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Strategy3D Implementation Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-level-strategy-matchers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-Level Strategy Matchers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High-Level Strategy Matchers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-simple_strategy2d_matcherf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. simple_strategy2D_matcher.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-simple_strategy3d_matcherf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. simple_strategy3D_matcher.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-simple_matcher_2dprepf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. simple_matcher_2Dprep.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-simple_strategy2d_allocf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. simple_strategy2D_alloc.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#utility-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Utility Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Utility Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-simple_strategy2d_utilsf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. simple_strategy2D_utils.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-simple_corrmatf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. simple_corrmat.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shift-search-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shift Search Objects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Shift Search Objects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#10-simple_strategy2d_srchf90-pftc_shsrch_grad-interface-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. simple_strategy2D_srch.f90 (pftc_shsrch_grad interface changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-simple_strategy3d_srchf90-pftc_shsrch_grad-interface-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. simple_strategy3D_srch.f90 (pftc_shsrch_grad interface changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-time-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Time Initialization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="One-Time Initialization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#12-simple_strategy2d_matcherf90-prep_strategy2d_glob-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. simple_strategy2D_matcher.f90 - prep_strategy2D_glob signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-simple_strategy3d_allocf90" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. simple_strategy3D_alloc.f90
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-architectural-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Architectural Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Architectural Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-builder-based-injection-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Builder-Based Injection Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-gradient-search-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Gradient Search Objects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-removal-of-module-level-pftc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Removal of Module-Level pftc
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#function-signature-changes-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function Signature Changes Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-path-for-new-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Path for New Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-modified-complete-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Modified: Complete List
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="refactoring-document-global-pftc_glob-removal">Refactoring Document: Global <code>pftc_glob</code> Removal<a class="headerlink" href="#refactoring-document-global-pftc_glob-removal" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This refactoring eliminates the global <code>pftc_glob</code> variable from the SIMPLE codebase and replaces it with instance-based access through the <code>builder</code> object. This change improves object lifecycle management, particularly for distributed execution where <code>pftc</code> may be reinitialized during 3D refinement.</p>
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Object Lifecycle Management</strong>: <code>pftc</code> (polarft_calc) is reinitialized during 3D refinement workflows when switching from initial setup to actual refinement phases</li>
+<li><strong>Dependency Injection</strong>: Centralizes pftc instance management through the builder pattern</li>
+</ul>
+<h2 id="affected-modules">Affected Modules<a class="headerlink" href="#affected-modules" title="Permanent link">&para;</a></h2>
+<h3 id="core-framework-changes">Core Framework Changes<a class="headerlink" href="#core-framework-changes" title="Permanent link">&para;</a></h3>
+<h4 id="1-strategy-interface-updates">1. Strategy Interface Updates<a class="headerlink" href="#1-strategy-interface-updates" title="Permanent link">&para;</a></h4>
+<p><strong>Files Modified:</strong>
+- <code>simple_strategy2D.f90</code>
+- <code>simple_strategy2D_srch.f90</code>
+- <code>simple_strategy3D_srch.f90</code></p>
+<p><strong>Changes:</strong>
+- Added <code>import :: builder</code> to abstract interfaces
+- Updated abstract <code>generic_new</code> interface to include <code>build</code> parameter:
+  <code>fortran
+  subroutine generic_new( self, params, spec, build )
+      import :: builder
+      class(builder), intent(in) :: build
+  end subroutine generic_new</code>
+- Added <code>b_ptr</code> (builder pointer) to both <code>strategy2D_srch</code> and <code>strategy3D_srch</code> types
+- Constructor now stores builder reference for accessing <code>b_ptr%pftc</code></p>
+<p><strong>Impact:</strong>
+- All concrete strategy implementations must pass <code>build</code> to parent constructor
+- Enables access to builder-managed pftc instance</p>
+<h4 id="2-strategy2d-implementation-updates">2. Strategy2D Implementation Updates<a class="headerlink" href="#2-strategy2d-implementation-updates" title="Permanent link">&para;</a></h4>
+<p><strong>Files Modified:</strong>
+- <code>simple_strategy2D_eval.f90</code>
+- <code>simple_strategy2D_greedy.f90</code>
+- <code>simple_strategy2D_greedy_smpl.f90</code>
+- <code>simple_strategy2D_inpl.f90</code>
+- <code>simple_strategy2D_inpl_smpl.f90</code>
+- <code>simple_strategy2D_snhc.f90</code>
+- <code>simple_strategy2D_snhc_smpl.f90</code>
+- <code>simple_strategy2D_tseries.f90</code></p>
+<p><strong>Changes:</strong>
+- Updated all <code>new_*</code> constructors to accept <code>build</code> parameter
+- Updated abstract interface calls from <code>self%s%new(params, spec)</code> to <code>self%s%new(params, spec, build)</code>
+- Replaced all <code>pftc_glob%gen_objfun_vals(...)</code> calls with <code>self%s%b_ptr%pftc%gen_objfun_vals(...)</code>
+- Replaced all <code>pftc_glob%gen_corr_for_rot_8(...)</code> calls with <code>self%s%b_ptr%pftc%gen_corr_for_rot_8(...)</code>
+- Replaced all <code>pftc_glob%get_rot(...)</code> calls with <code>self%s%b_ptr%pftc%get_rot(...)</code>
+- Replaced all <code>pftc_glob%get_roind(...)</code> calls with <code>self%s%b_ptr%pftc%get_roind(...)</code></p>
+<p><strong>Example Migration:</strong></p>
+<pre><code class="language-fortran">! Before
+call pftc_glob%gen_objfun_vals(iref, self%s%iptcl, [0.,0.], corrs)
+
+! After
+call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.], corrs)
+</code></pre>
+<h4 id="3-strategy3d-implementation-updates">3. Strategy3D Implementation Updates<a class="headerlink" href="#3-strategy3d-implementation-updates" title="Permanent link">&para;</a></h4>
+<p><strong>Files Modified:</strong>
+- <code>simple_strategy3D_greedy.f90</code>
+- <code>simple_strategy3D_greedy_smpl.f90</code>
+- <code>simple_strategy3D_greedy_sub.f90</code>
+- <code>simple_strategy3D_shc.f90</code>
+- <code>simple_strategy3D_shc_smpl.f90</code>
+- <code>simple_strategy3D_snhc_smpl.f90</code>
+- <code>simple_strategy3D_utils.f90</code></p>
+<p><strong>Changes:</strong>
+- Removed <code>use simple_polarft_calc, only: pftc_glob</code> imports
+- Updated constructors to accept and use <code>build</code> parameter
+- Replaced all <code>pftc_glob</code> references with <code>self%s%b_ptr%pftc</code> or <code>s%b_ptr%pftc</code>
+- Added builder pointer to <code>strategy3D_srch</code> type for accessing pftc</p>
+<p><strong>Key Updates in <code>simple_strategy3D_srch.f90</code>:</strong></p>
+<pre><code class="language-fortran">! New member variable
+class(builder), pointer :: b_ptr =&gt; null()
+
+! Constructor now captures builder reference
+subroutine new( self, params, spec, build )
+    self%b_ptr =&gt; build
+    self%nrots = self%b_ptr%pftc%get_nrots()
+end subroutine new
+</code></pre>
+<h3 id="high-level-strategy-matchers">High-Level Strategy Matchers<a class="headerlink" href="#high-level-strategy-matchers" title="Permanent link">&para;</a></h3>
+<h4 id="4-simple_strategy2d_matcherf90">4. <code>simple_strategy2D_matcher.f90</code><a class="headerlink" href="#4-simple_strategy2d_matcherf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Removed module-level <code>type(polarft_calc) :: pftc</code> declaration
+- Updated public subroutine signatures:
+  - <code>prep_strategy2D_glob(p_ptr, spproj, nrots, neigh_frac)</code> - added <code>nrots</code> parameter
+  - <code>prep_strategy2D_batch(p_ptr, spproj, which_iter, ...)</code> - removed <code>pftc</code> parameter
+  - <code>build_batch_particles2D(nptcls_here, pinds_here, ...)</code> - removed <code>pftc</code> parameter
+  - <code>prep_pftc4align2D(batchsz_max, which_iter, l_stream)</code> - removed <code>pftc</code> parameter</p>
+<p><strong>Method Implementations:</strong>
+- All <code>pftc%method_name()</code> calls replaced with <code>b_ptr%pftc%method_name()</code>
+- Strategy constructor calls updated: <code>call strategy2Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy2Dspec, b_ptr)</code>
+- Sigma2 calculation now passes pftc: <code>call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'class')</code></p>
+<h4 id="5-simple_strategy3d_matcherf90">5. <code>simple_strategy3D_matcher.f90</code><a class="headerlink" href="#5-simple_strategy3d_matcherf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Removed module-level <code>type(polarft_calc) :: pftc</code> declaration
+- Updated <code>prepare_refs_sigmas_ptcls</code> call to remove <code>pftc</code> parameter
+- Updated <code>build_batch_particles</code> call to remove <code>pftc</code> parameter
+- All <code>pftc%polar_cavger_*()</code> calls replaced with <code>b_ptr%pftc%polar_cavger_*()</code>
+- Sigma2 calculation now passes pftc: <code>call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')</code></p>
+<h4 id="6-simple_matcher_2dprepf90">6. <code>simple_matcher_2Dprep.f90</code><a class="headerlink" href="#6-simple_matcher_2dprepf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- <code>prepare_refs_sigmas_ptcls</code> signature: removed <code>pftc</code> parameter, now uses <code>build%pftc</code> internally
+- <code>prepare_polar_references</code> signature: removed <code>pftc</code> parameter, now uses <code>build%pftc</code> internally
+- <code>build_batch_particles</code> signature: removed <code>pftc</code> parameter, now uses <code>build%pftc</code> internally
+- All function bodies updated to use <code>build%pftc</code> instead of passed <code>pftc</code>:
+  ```fortran
+  ! Before
+  subroutine prepare_refs_sigmas_ptcls( params, build, pftc, cline, ... )
+      call pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+  end subroutine</p>
+<p>! After
+  subroutine prepare_refs_sigmas_ptcls( params, build, cline, ... )
+      call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+  end subroutine
+  <code>``
+- Updated</code>read_groups<code>call:</code>call build%esig%read_groups(build%pftc, build%spproj_field)<code>- Updated</code>new<code>call:</code>call build%esig%new(params, build%pftc, fname, params%box)`</p>
+<h4 id="7-simple_strategy2d_allocf90">7. <code>simple_strategy2D_alloc.f90</code><a class="headerlink" href="#7-simple_strategy2d_allocf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- <code>prep_strategy2D_glob</code> now takes <code>nrots</code> parameter instead of accessing <code>pftc_glob%get_nrots()</code>
+- <code>prep_strategy2D_batch</code> no longer takes <code>pftc</code> parameter
+- Replaced <code>pftc_glob%get_nrots()</code> with parameter <code>nrots</code></p>
+<h3 id="utility-modules">Utility Modules<a class="headerlink" href="#utility-modules" title="Permanent link">&para;</a></h3>
+<h4 id="8-simple_strategy2d_utilsf90">8. <code>simple_strategy2D_utils.f90</code><a class="headerlink" href="#8-simple_strategy2d_utilsf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Added <code>use simple_builder, only: builder</code> import
+- Functions <code>match_imgs2ref</code> and <code>match_imgs</code> now use local <code>type(builder) :: build</code> instead of <code>type(polarft_calc) :: pftc</code>
+- All method calls on pftc now use <code>build%pftc%</code>
+- Constructor calls updated: <code>call grad_shsrch_obj(ithr)%new(build, lims, ...)</code></p>
+<h4 id="9-simple_corrmatf90">9. <code>simple_corrmat.f90</code><a class="headerlink" href="#9-simple_corrmatf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Updated <code>calc_inpl_invariant_cc_nomirr</code> to use <code>type(builder) :: build</code> instead of <code>type(polarft_calc) :: pftc</code>
+- Constructor calls updated: <code>call grad_shsrch_obj(ithr)%new(build, lims, ...)</code>
+- All method references use <code>build%pftc%</code></p>
+<h3 id="shift-search-objects">Shift Search Objects<a class="headerlink" href="#shift-search-objects" title="Permanent link">&para;</a></h3>
+<h4 id="10-simple_strategy2d_srchf90-pftc_shsrch_grad-interface-changes">10. <code>simple_strategy2D_srch.f90</code> (pftc_shsrch_grad interface changes)<a class="headerlink" href="#10-simple_strategy2d_srchf90-pftc_shsrch_grad-interface-changes" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Gradient search object constructors now require <code>build</code> as first parameter:
+  ```fortran
+  ! Before
+  call self%grad_shsrch_obj%new(lims, lims_init=lims_init, ...)</p>
+<p>! After<br />
+  call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, ...)
+  <code>``
+- All</code>pftc_glob<code>references replaced with</code>self%b_ptr%pftc`
+- Constructor stores builder reference in strategy search object</p>
+<h4 id="11-simple_strategy3d_srchf90-pftc_shsrch_grad-interface-changes">11. <code>simple_strategy3D_srch.f90</code> (pftc_shsrch_grad interface changes)<a class="headerlink" href="#11-simple_strategy3d_srchf90-pftc_shsrch_grad-interface-changes" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- Same pattern as strategy2D_srch.f90
+- All shift search constructor calls updated to pass <code>self%b_ptr</code> as first parameter
+- All pftc method calls use <code>self%b_ptr%pftc%</code></p>
+<h3 id="one-time-initialization">One-Time Initialization<a class="headerlink" href="#one-time-initialization" title="Permanent link">&para;</a></h3>
+<h4 id="12-simple_strategy2d_matcherf90-prep_strategy2d_glob-signature">12. <code>simple_strategy2D_matcher.f90</code> - <code>prep_strategy2D_glob</code> signature<a class="headerlink" href="#12-simple_strategy2d_matcherf90-prep_strategy2d_glob-signature" title="Permanent link">&para;</a></h4>
+<p><strong>Before:</strong></p>
+<pre><code class="language-fortran">subroutine prep_strategy2D_glob( params, spproj, neigh_frac )
+    ...
+    s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, pftc_glob%get_nrots())
+</code></pre>
+<p><strong>After:</strong></p>
+<pre><code class="language-fortran">subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
+    ...
+    s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, nrots)
+</code></pre>
+<p><strong>Call Sites Updated:</strong>
+- <code>simple_strategy2D_matcher.f90</code> line ~196: <code>call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)</code></p>
+<h4 id="13-simple_strategy3d_allocf90">13. <code>simple_strategy3D_alloc.f90</code><a class="headerlink" href="#13-simple_strategy3d_allocf90" title="Permanent link">&para;</a></h4>
+<p><strong>Changes:</strong>
+- <code>prep_strategy3D</code> allocation replaced <code>pftc_glob%get_nrots()</code> with <code>build%pftc%get_nrots()</code>
+- Added <code>use simple_builder, only: builder</code> import</p>
+<h2 id="key-architectural-patterns">Key Architectural Patterns<a class="headerlink" href="#key-architectural-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="1-builder-based-injection-pattern">1. Builder-Based Injection Pattern<a class="headerlink" href="#1-builder-based-injection-pattern" title="Permanent link">&para;</a></h3>
+<p>All code now follows this pattern:</p>
+<pre><code class="language-fortran">! Strategy objects store builder pointer
+type strategy2D_srch
+    class(builder), pointer :: b_ptr =&gt; null()
+end type
+
+! Constructor captures builder
+subroutine new(self, params, spec, build)
+    self%b_ptr =&gt; build
+end subroutine
+
+! Methods access pftc through builder
+call self%b_ptr%pftc%gen_objfun_vals(...)
+</code></pre>
+<h3 id="2-gradient-search-objects">2. Gradient Search Objects<a class="headerlink" href="#2-gradient-search-objects" title="Permanent link">&para;</a></h3>
+<p>Shift search objects now require builder for initialization:</p>
+<pre><code class="language-fortran">subroutine new(self, build, lims, lims_init, ...)
+    class(builder), intent(in) :: build
+    ! Store builder reference internally or use it for initialization
+end subroutine
+</code></pre>
+<h3 id="3-removal-of-module-level-pftc">3. Removal of Module-Level pftc<a class="headerlink" href="#3-removal-of-module-level-pftc" title="Permanent link">&para;</a></h3>
+<p>Pattern eliminated:</p>
+<pre><code class="language-fortran">! REMOVED - module-level declarations
+type(polarft_calc) :: pftc  ! NO LONGER USED
+class(builder), pointer :: b_ptr =&gt; null()  ! NOW USED
+</code></pre>
+<h2 id="dependency-flow">Dependency Flow<a class="headerlink" href="#dependency-flow" title="Permanent link">&para;</a></h2>
+<pre><code>builder (contains pftc)
+    ↓
+strategy_srch (stores b_ptr)
+    ↓
+concrete_strategy (uses self%s%b_ptr)
+    ↓
+pftc methods (accessed via self%s%b_ptr%pftc)
+</code></pre>
+<h2 id="function-signature-changes-summary">Function Signature Changes Summary<a class="headerlink" href="#function-signature-changes-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Old Signature</th>
+<th>New Signature</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>new(self, params, spec)</code></td>
+<td><code>new(self, params, spec, build)</code></td>
+<td>Pass builder reference for pftc access</td>
+</tr>
+<tr>
+<td><code>prep_strategy2D_glob(params, spproj, neigh_frac)</code></td>
+<td><code>prep_strategy2D_glob(params, spproj, nrots, neigh_frac)</code></td>
+<td>Eliminate pftc_glob dependency</td>
+</tr>
+<tr>
+<td><code>prep_strategy2D_batch(params, spproj, pftc, ...)</code></td>
+<td><code>prep_strategy2D_batch(params, spproj, ...)</code></td>
+<td>Remove pftc parameter</td>
+</tr>
+<tr>
+<td><code>prepare_refs_sigmas_ptcls(params, build, pftc, ...)</code></td>
+<td><code>prepare_refs_sigmas_ptcls(params, build, ...)</code></td>
+<td>Use build%pftc instead</td>
+</tr>
+<tr>
+<td><code>build_batch_particles(params, build, pftc, ...)</code></td>
+<td><code>build_batch_particles(params, build, ...)</code></td>
+<td>Use build%pftc instead</td>
+</tr>
+</tbody>
+</table>
+<h2 id="migration-path-for-new-code">Migration Path for New Code<a class="headerlink" href="#migration-path-for-new-code" title="Permanent link">&para;</a></h2>
+<p>When adding new strategy implementations:</p>
+<ol>
+<li>
+<p><strong>Accept builder in constructor:</strong>
+   <code>fortran
+   subroutine new_mystrat( self, params, spec, build )
+       class(builder), intent(in) :: build
+       call self%s%new(params, spec, build)
+   end subroutine</code></p>
+</li>
+<li>
+<p><strong>Access pftc through builder pointer:</strong>
+   <code>fortran
+   call self%s%b_ptr%pftc%gen_objfun_vals(...)
+   call self%s%b_ptr%pftc%get_nrots()</code></p>
+</li>
+<li>
+<p><strong>Initialize shift search objects with builder:</strong>
+   <code>fortran
+   call grad_shsrch_obj%new(self%b_ptr, lims, lims_init, ...)</code></p>
+</li>
+</ol>
+<h2 id="files-modified-complete-list">Files Modified: Complete List<a class="headerlink" href="#files-modified-complete-list" title="Permanent link">&para;</a></h2>
+<p><strong>Strategy Core:</strong>
+- simple_strategy2D.f90
+- simple_strategy2D_srch.f90
+- simple_strategy3D_srch.f90</p>
+<p><strong>Strategy2D Implementations (15 files):</strong>
+- simple_strategy2D_eval.f90
+- simple_strategy2D_greedy.f90
+- simple_strategy2D_greedy_smpl.f90
+- simple_strategy2D_inpl.f90
+- simple_strategy2D_inpl_smpl.f90
+- simple_strategy2D_snhc.f90
+- simple_strategy2D_snhc_smpl.f90
+- simple_strategy2D_tseries.f90
+- simple_strategy2D_matcher.f90
+- simple_strategy2D_alloc.f90
+- simple_strategy2D_utils.f90</p>
+<p><strong>Strategy3D Implementations (9 files):</strong>
+- simple_strategy3D_greedy.f90
+- simple_strategy3D_greedy_smpl.f90
+- simple_strategy3D_greedy_sub.f90
+- simple_strategy3D_shc.f90
+- simple_strategy3D_shc_smpl.f90
+- simple_strategy3D_snhc_smpl.f90
+- simple_strategy3D_utils.f90
+- simple_strategy3D_matcher.f90
+- simple_strategy3D_alloc.f90</p>
+<p><strong>Common Utilities:</strong>
+- simple_matcher_2Dprep.f90
+- simple_corrmat.f90</p>
+<p><strong>Total files modified: 36</strong></p>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>This refactoring systematically eliminates the global <code>pftc_glob</code> variable by:</p>
+<ol>
+<li><strong>Injecting builder references</strong> into all strategy objects</li>
+<li><strong>Updating constructors</strong> to accept and propagate builder references</li>
+<li><strong>Modifying function signatures</strong> to eliminate pftc parameter passing</li>
+<li><strong>Centralizing pftc access</strong> through <code>build%pftc</code> pattern</li>
+<li><strong>Enabling safe reinitialization</strong> of pftc during distributed 3D refinement</li>
+</ol>
+<p>The changes maintain backward compatibility for external interfaces while internally restructuring object lifetime management for improved robustness.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2717 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/abinitio3D_cavgs_reject_policy.html">
+      
+      
+        <link rel="prev" href="abinitio3D_cavgs_policy.html">
+      
+      
+        <link rel="next" href="abinitio3D_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Abinitio3D Cavgs Reject Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#abinitio3d-cavgs-reject-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Abinitio3D Cavgs Reject Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-public-inputs-and-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Public Inputs and Defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-quality-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Quality Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-restart-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Restart Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-restart-label-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Restart Label Collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-state-label-correspondence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. State-Label Correspondence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-consensus-voting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Consensus Voting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-goodbad-state-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Good/Bad State Assignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-project-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Project Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-consensus-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Consensus Volume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Output Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-failure-conditions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Failure Conditions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-current-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Current Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_denoised_rec_source_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Particle Representative Source Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-public-inputs-and-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Public Inputs and Defaults
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-quality-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Quality Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-restart-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Restart Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-restart-label-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Restart Label Collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-state-label-correspondence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. State-Label Correspondence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-consensus-voting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Consensus Voting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-goodbad-state-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Good/Bad State Assignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-project-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Project Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-consensus-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Consensus Volume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Output Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-failure-conditions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Failure Conditions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-current-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Current Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="abinitio3d-cavgs-reject-policy">Abinitio3D Cavgs Reject Policy<a class="headerlink" href="#abinitio3d-cavgs-reject-policy" title="Permanent link">&para;</a></h1>
+<p>This document records the current policy for <code>abinitio3D_cavgs_reject</code>, the
+class-average rejection workflow based on restarted multi-state
+<code>abinitio3D_cavgs</code> runs. It should be read alongside
+<a href="abinitio3D_cavgs_policy.html">abinitio3D_cavgs_policy.md</a> and
+<a href="../microchunk_and_rejection/model_cavgs_rejection.html">../microchunk_and_rejection/model_cavgs_rejection.md</a>.</p>
+<p>The implementation lives in <code>exec_abinitio3D_cavgs_reject</code> in
+<code>src/main/commanders/simple/simple_commanders_abinitio.f90</code>. The executable
+entry point is registered in <code>src/main/exec/simple_exec_abinitio3D.f90</code>, and
+the UI definition is in <code>src/main/ui/simple/simple_ui_abinitio3D.f90</code>.</p>
+<h2 id="1-scope">1. Scope<a class="headerlink" href="#1-scope" title="Permanent link">&para;</a></h2>
+<p><code>abinitio3D_cavgs_reject</code> selects one good consensus class-average state and
+rejects all other class averages. It does this by:</p>
+<ol>
+<li>evaluating class-average quality with the shared cavg-quality model backend;</li>
+<li>launching <code>nrestarts</code> independent short <code>abinitio3D_cavgs</code> runs;</li>
+<li>reading the restart state labels after stage 3;</li>
+<li>mapping randomized state labels into one common label space;</li>
+<li>voting a consensus state label for each class average;</li>
+<li>choosing the quality-best populated consensus state as good;</li>
+<li>selecting the corresponding best-state volume from every restart;</li>
+<li>docking those restart volumes to the best-scoring selected restart volume;</li>
+<li>averaging the docked volumes into a consensus volume;</li>
+<li>mapping the resulting binary selection back into the project.</li>
+</ol>
+<p>The restart runs may use two or three ab initio states, but the final project
+selection is always binary:</p>
+<ul>
+<li><code>state=1</code> means selected or good;</li>
+<li><code>state=0</code> means rejected or bad.</li>
+</ul>
+<p>Internally, <code>final_state=2</code> is used in the consensus report for active
+consensus states that are not selected.</p>
+<p>The workflow also writes a docked consensus 3D volume:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_consensus_vol.mrc
+</code></pre>
+<h2 id="2-public-inputs-and-defaults">2. Public Inputs and Defaults<a class="headerlink" href="#2-public-inputs-and-defaults" title="Permanent link">&para;</a></h2>
+<p>The route is master-only. Supplying <code>part</code> is an error.</p>
+<p>The route accepts <code>nstates=2</code> or <code>nstates=3</code>; values outside that range are an
+error. When unset, <code>nstates=2</code>.</p>
+<p>The route always runs the restart children through the first three
+<code>abinitio3D_cavgs</code> stages. If the user supplies <code>nstages</code> with any value other
+than <code>3</code>, the command stops. The command then sets <code>nstages=3</code> before parsing
+parameters.</p>
+<p>Point-group symmetry is not a public input to this route. The command sets
+<code>pgrp=c1</code> and deletes <code>pgrp_start</code> before parameter parsing because this reject
+workflow intentionally keeps the short restart runs in C1.</p>
+<p>When unset, the route supplies:</p>
+<ul>
+<li><code>nrestarts=3</code></li>
+<li><code>mkdir=yes</code></li>
+<li><code>quality_model=chunk_default_v2</code></li>
+<li><code>prune=no</code></li>
+</ul>
+<p><code>nrestarts</code> must be at least 1. In the UI, <code>nrestarts</code> is grouped with
+<code>nthr</code> under compute controls because it controls the number of independent
+restart jobs, analogous to the number of parts used by other SIMPLE workflows.</p>
+<h2 id="3-quality-evaluation">3. Quality Evaluation<a class="headerlink" href="#3-quality-evaluation" title="Permanent link">&para;</a></h2>
+<p>The command reads the input project and uses the number of <code>cls2D</code> rows as the
+class-average count. A project with no <code>cls2D</code> entries is an error.</p>
+<p>The original <code>cls2D</code> <code>state</code> array is saved before any restart labels are
+processed. Original states less than or equal to zero are treated as inactive
+class averages during restart-label sanitization and consensus voting.</p>
+<p>Class-average images are read through the shared class-average stack reader.
+The stack size must match the <code>cls2D</code> count. The command then calls
+<code>evaluate_cavg_quality</code> with the selected <code>quality_model</code> and <code>mskdiam</code>.</p>
+<p>The quality model is initialized from the built-in preset named by
+<code>quality_model</code>. If <code>infile</code> is supplied, the model file is read after preset
+initialization and overrides the built-in model specification.</p>
+<p>The quality backend produces:</p>
+<ul>
+<li>scalar <code>quality_scores</code>, where higher is better;</li>
+<li>automatic model states in <code>quality_auto_states</code>;</li>
+<li>quality-cluster labels in <code>quality%labels</code>;</li>
+<li>hard-reject and feature diagnostics used later by the feature table.</li>
+</ul>
+<p>The automatic model states are diagnostic only in this workflow. The final
+accept/reject decision is made from consensus state labels plus mean quality
+score per consensus state.</p>
+<h2 id="4-restart-execution">4. Restart Execution<a class="headerlink" href="#4-restart-execution" title="Permanent link">&para;</a></h2>
+<p>Each restart runs in its own folder:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_restart_001
+abinitio3D_cavgs_reject_restart_002
+...
+</code></pre>
+<p>The completion marker is:</p>
+<pre><code class="language-text">ABINITIO3D_CAVGS_REJECT_FINISHED
+</code></pre>
+<p>The command copies the original project file into each restart folder and
+removes any existing completion marker before submission. Absolute paths to the
+restart project files and marker files are constructed from the original
+working directory, restart folder, and project basename.</p>
+<p>Each child command line is a sparse copy of the wrapper command line with these
+restart-specific settings:</p>
+<ul>
+<li><code>prg=abinitio3D_cavgs</code></li>
+<li><code>projfile=&lt;project basename&gt;</code></li>
+<li><code>mkdir=no</code></li>
+<li><code>nstates=&lt;2 or 3&gt;</code></li>
+<li><code>nstages=3</code></li>
+<li><code>verbose_exit=yes</code></li>
+<li><code>verbose_exit_fname=ABINITIO3D_CAVGS_REJECT_FINISHED</code></li>
+</ul>
+<p>The wrapper-only and output-routing arguments are removed from the child
+command line:</p>
+<ul>
+<li><code>nrestarts</code></li>
+<li><code>nparts</code></li>
+<li><code>numlen</code></li>
+<li><code>dir_exec</code></li>
+<li><code>outdir</code></li>
+<li><code>quality_mode</code></li>
+<li><code>quality_model</code></li>
+<li><code>filetab</code></li>
+<li><code>fname</code></li>
+<li><code>infile</code></li>
+</ul>
+<p>The command submits each restart asynchronously through the queue environment.
+The child keeps shared-memory parallelization through the parsed <code>nthr</code> value,
+while the wrapper controls parallelism across restarts by launching multiple
+asynchronous jobs.</p>
+<p>After all submissions, the command watches the absolute marker-file paths. If
+any marker is missing after the watcher returns, the workflow stops.</p>
+<h2 id="5-restart-label-collection">5. Restart Label Collection<a class="headerlink" href="#5-restart-label-collection" title="Permanent link">&para;</a></h2>
+<p>For each finished restart, the command reads only the <code>cls3D</code> segment from the
+restart project. The restart <code>cls3D</code> count must match the original <code>cls2D</code>
+count.</p>
+<p>Restart labels are read from <code>cls3D%state</code> and sanitized per class:</p>
+<ul>
+<li>if the original <code>cls2D</code> state was less than or equal to zero, the restart
+  label is set to <code>0</code>;</li>
+<li>if the restart label is outside <code>1:nstates</code>, it is set to <code>0</code>;</li>
+<li>otherwise, the restart label is kept.</li>
+</ul>
+<p>The sanitized raw labels are retained in <code>restart_labels</code> and written to the
+consensus report.</p>
+<h2 id="6-state-label-correspondence">6. State-Label Correspondence<a class="headerlink" href="#6-state-label-correspondence" title="Permanent link">&para;</a></h2>
+<p>Restart 1 defines the reference label space. Its sanitized labels are copied
+directly into <code>mapped_labels(1,:)</code>.</p>
+<p>For every later restart, the command enumerates all state-label permutations
+and chooses the mapping with the highest agreement to restart 1. For restart
+<code>r</code> and candidate permutation <code>P</code>, the score is:</p>
+<pre><code class="language-text">score(P, r) =
+    count over class averages i where
+        restart_labels(1,i) &gt; 0
+        restart_labels(r,i) &gt; 0
+        restart_labels(1,i) == P(restart_labels(r,i))
+</code></pre>
+<p>For <code>nstates=2</code>, the two permutations are tested. For <code>nstates=3</code>, all six
+permutations are tested. The selected permutation maps raw restart labels into
+the restart-1 consensus label space. Label <code>0</code> remains <code>0</code>.</p>
+<p>If two permutations have the same score, the first permutation encountered by
+the ascending enumeration wins.</p>
+<h2 id="7-consensus-voting">7. Consensus Voting<a class="headerlink" href="#7-consensus-voting" title="Permanent link">&para;</a></h2>
+<p>For each active original class average, the command counts mapped restart
+labels:</p>
+<pre><code class="language-text">votes(label, class) =
+    number of restarts whose mapped label for class is label
+</code></pre>
+<p>Labels outside <code>1:nstates</code> do not vote. Original classes with state less than
+or equal to zero are skipped and keep consensus state <code>0</code>.</p>
+<p>The consensus state is the label with the largest vote count. Ties are broken
+in favor of the mapped label from restart 1 when that label has the same vote
+count as the current best count. If an active class has no valid votes, the
+current implementation falls through to the first consensus label because all
+vote counts are zero.</p>
+<p>The full vote vector is retained. The project annotation stores only the
+maximum vote count as <code>cavgs_reject_votes</code>; the per-state vote counts are
+written in the consensus report.</p>
+<h2 id="8-goodbad-state-assignment">8. Good/Bad State Assignment<a class="headerlink" href="#8-goodbad-state-assignment" title="Permanent link">&para;</a></h2>
+<p>After consensus voting, the command chooses one consensus state as good using
+the cavg-quality scores.</p>
+<p>For each consensus label, it computes:</p>
+<pre><code class="language-text">mean_quality(label) =
+    average quality_score over class averages where
+        original_state &gt; 0
+        consensus_state == label
+</code></pre>
+<p>Only populated consensus labels are eligible. The populated label with the
+highest mean quality is selected as the good consensus state. If two populated
+labels have identical mean quality, the lower-numbered label wins because the
+implementation updates the winner only on a strict improvement.</p>
+<p>Final internal states are assigned as:</p>
+<ul>
+<li><code>0</code> for inactive classes with consensus state <code>0</code>;</li>
+<li><code>1</code> for classes in the good consensus state;</li>
+<li><code>2</code> for classes in every other active consensus state.</li>
+</ul>
+<p>The project-facing binary selection is:</p>
+<pre><code class="language-text">selection_state = 1 if final_state == 1
+selection_state = 0 otherwise
+</code></pre>
+<p>For <code>nstates=3</code>, this means one consensus state is selected and both remaining
+active consensus states are rejected.</p>
+<h2 id="9-project-mapping">9. Project Mapping<a class="headerlink" href="#9-project-mapping" title="Permanent link">&para;</a></h2>
+<p>The command calls <code>spproj%map_cavgs_selection(selection_states)</code>.</p>
+<p>That project method:</p>
+<ul>
+<li>requires the selection array length to match the <code>cls2D</code> row count;</li>
+<li>sets each <code>cls2D</code> <code>state</code> to the corresponding selection value;</li>
+<li>creates or resizes <code>cls3D</code> to match <code>cls2D</code> when needed;</li>
+<li>sets each <code>cls3D</code> <code>state</code> to the corresponding selection value;</li>
+<li>when both <code>ptcl2D</code> and <code>ptcl3D</code> are present, maps each class state to all
+  particles whose <code>ptcl2D%class</code> equals that class index.</li>
+</ul>
+<p>After mapping, <code>abinitio3D_cavgs_reject</code> annotates <code>cls2D</code> with:</p>
+<ul>
+<li><code>quality</code></li>
+<li><code>accept</code></li>
+<li><code>quality_cluster</code></li>
+<li><code>cavgs_reject_consensus</code></li>
+<li><code>cavgs_reject_votes</code></li>
+</ul>
+<p>If <code>cls3D</code> has the same row count as <code>cls2D</code>, the same annotations are written
+to <code>cls3D</code>.</p>
+<p>If <code>prune=yes</code>, <code>spproj%prune_particles</code> is called after selection mapping and
+annotation. The project is then written back to <code>projfile</code>.</p>
+<p>The consensus volume is registered in <code>os_out</code> as a <code>vol_cavg</code> entry with
+<code>state=1</code> before the project is written.</p>
+<h2 id="10-consensus-volume">10. Consensus Volume<a class="headerlink" href="#10-consensus-volume" title="Permanent link">&para;</a></h2>
+<p>After the good consensus state is known, the command identifies one restart
+state volume per restart. The raw state selected for restart <code>r</code> is the raw
+state whose mapped label equals the good consensus state.</p>
+<p>For each restart, the command computes the mean cavg-quality score over active
+class averages whose mapped restart label equals the good consensus state. The
+restart with the highest such mean is used as the reference volume. Restarts
+with no active class averages in the good mapped state cannot become the
+reference.</p>
+<p>The selected restart volume path is:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_restart_NNN/vol_stateXX.mrc
+</code></pre>
+<p>where <code>XX</code> is the raw restart state corresponding to the good consensus state.</p>
+<p>Every non-reference selected restart volume is docked to the reference with an
+asynchronous <code>dock_volpair</code> child job. Docking jobs run in folders named:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_dock_NNN
+</code></pre>
+<p>and signal completion with:</p>
+<pre><code class="language-text">ABINITIO3D_CAVGS_REJECT_DOCK_FINISHED
+</code></pre>
+<p>The docking child receives the selected reference volume as <code>vol1</code>, the
+selected target restart volume as <code>vol2</code>, the stage-volume sampling read from
+the reference volume header as <code>smpd</code>, the default docking band-pass range
+<code>hp=100</code> and <code>lp=10</code>, the parsed <code>mskdiam</code>, the parsed <code>nthr</code>, and <code>mkdir=no</code>.</p>
+<p>The reference volume is used as-is. Docked target volumes are written as:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_dock_NNN/consensus_docked_restart_NNN.mrc
+</code></pre>
+<p>After all docking markers appear, the command reads the reference and docked
+target volumes, requires matching dimensions and sampling, averages them with
+equal weight, and writes:</p>
+<pre><code class="language-text">abinitio3D_cavgs_reject_consensus_vol.mrc
+</code></pre>
+<p>The volume report <code>abinitio3D_cavgs_reject_consensus_volume.txt</code> records the
+reference restart, selected raw state per restart, per-restart state quality
+mean and population, selected volume path, docked volume path, docking LP/HP,
+and per-dock report path.</p>
+<h2 id="11-output-files">11. Output Files<a class="headerlink" href="#11-output-files" title="Permanent link">&para;</a></h2>
+<p>The command writes the same selected/rejected stack style used by
+<code>model_cavgs_rejection</code> apply mode:</p>
+<ul>
+<li><code>quality_selected_cavgs.mrc</code></li>
+<li><code>quality_rejected_cavgs.mrc</code></li>
+</ul>
+<p>It also writes:</p>
+<ul>
+<li><code>cavgs_quality_features.txt</code></li>
+<li><code>abinitio3D_cavgs_reject_consensus.txt</code></li>
+<li><code>abinitio3D_cavgs_reject_consensus_volume.txt</code></li>
+<li><code>abinitio3D_cavgs_reject_consensus_vol.mrc</code></li>
+</ul>
+<p>The feature table is written through <code>write_cavg_quality_feature_table</code> with
+<code>manual_states=selection_states</code>, so the accepted/rejected states in the table
+are the final consensus-derived binary selection.</p>
+<p>The consensus report records:</p>
+<ul>
+<li>class index;</li>
+<li>original state;</li>
+<li>consensus state;</li>
+<li>internal final state;</li>
+<li>binary selection state;</li>
+<li>one vote count column per restart state;</li>
+<li>quality score;</li>
+<li>quality-model automatic state;</li>
+<li>raw restart label for every restart;</li>
+<li>mapped restart label for every restart.</li>
+</ul>
+<h2 id="12-failure-conditions">12. Failure Conditions<a class="headerlink" href="#12-failure-conditions" title="Permanent link">&para;</a></h2>
+<p>The workflow stops when:</p>
+<ul>
+<li><code>part</code> is supplied;</li>
+<li><code>nstates</code> is not <code>2</code> or <code>3</code>;</li>
+<li><code>nstages</code> is supplied with a value other than <code>3</code>;</li>
+<li><code>nrestarts &lt; 1</code>;</li>
+<li>the input project has no <code>cls2D</code> rows;</li>
+<li>the saved original-state array does not match the <code>cls2D</code> row count;</li>
+<li>the class-average stack size does not match the <code>cls2D</code> row count;</li>
+<li>any restart completion marker is missing after the watcher returns;</li>
+<li>any restart <code>cls3D</code> row count differs from the original <code>cls2D</code> count;</li>
+<li>no populated consensus class can be chosen as good;</li>
+<li>no raw restart state can be mapped to the good consensus state;</li>
+<li>a selected restart state volume is missing;</li>
+<li>any asynchronous docking completion marker is missing;</li>
+<li>any docked consensus volume is missing;</li>
+<li>docked volumes have inconsistent dimensions or sampling.</li>
+</ul>
+<h2 id="13-current-limits">13. Current Limits<a class="headerlink" href="#13-current-limits" title="Permanent link">&para;</a></h2>
+<p>State-label correspondence is based on label agreement with restart 1. It does
+not compare maps, class-average projections, or inter-state volumes. Volume
+docking is applied only after the good consensus state has been chosen.</p>
+<p>The cavg-quality model selects which consensus state is good by mean class
+quality. It does not directly override individual class votes except through
+that state-level good/bad assignment. The same class-average quality scores are
+used to choose the reference restart volume for docking.</p>
+<p>The workflow supports at most three restart states. The final project state is
+binary regardless of the restart state count.</p>
+<p>The route is fixed to C1 because the wrapper forces <code>pgrp=c1</code> for the short
+restart runs.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
