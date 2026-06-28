@@ -42,9 +42,6 @@ The relevant existing implementation is concentrated in:
   - streaming sufficient-statistics accumulation
   - MMSE shrinkage in a complex eigenbasis
   - currently assumes fixed feature coordinates across observations
-- `src/main/strategies/search/simple_polarft_lines_ppca_stream.f90`
-  - streams prepared particle polar Fourier lines into `complex_ppca`
-  - useful scaling pattern, but line indices are not global 3D coordinates
 - `src/main/pftc/simple_polarft_access.f90`
   - `get_ptcl_pft`
   - `get_ptcl_line`

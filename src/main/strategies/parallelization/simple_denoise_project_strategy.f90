@@ -130,8 +130,8 @@ contains
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
-        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',     5)
-        if( .not. cline%defined('neigs') ) call cline%set('neigs', 0)
+        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      10)
+        if( .not. cline%defined('neigs')    ) call cline%set('neigs',     200)
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -575,17 +575,18 @@ contains
         integer,          intent(in)    :: map_unit
         logical,          intent(in)    :: l_index_by_pind
         integer,          intent(in)    :: class_index
-        type(parameters) :: params_mask
+        type(parameters)         :: params_mask
         type(image), allocatable :: imgs(:), imgs_ppca(:), class_mask(:), den_ptcls(:)
-        type(image) :: cavg_raw
-        type(diffmap_graph) :: graph
-        real, allocatable :: avg(:), pcavecs(:,:)
-        real, allocatable :: class_diams(:), class_shifts(:,:)
-        integer, allocatable :: pinds(:)
-        character(len=STDLEN) :: recon_mode
-        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind, den_rank, icm_iters, k_nn_eff
-        real :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise, recon_rmse, recon_rel_rmse, icm_score
-        real :: resid_ratio
+        real,        allocatable :: avg(:), pcavecs(:,:)
+        real,        allocatable :: class_diams(:), class_shifts(:,:)
+        integer,     allocatable :: pinds(:)
+        type(image)              :: cavg_raw
+        type(diffmap_graph)      :: graph
+        character(len=STDLEN)    :: recon_mode
+        integer :: nptcls, npix, j, class_ldim(3), stkind, indstk, local_ind
+        integer :: den_rank, icm_iters, k_nn_eff
+        real    :: class_moldiam, class_mskdiam, class_mskrad, sdev_noise
+        real    :: recon_rmse, recon_rel_rmse, icm_score, resid_ratio
         logical :: icm_converged, icm_more_iters
         call transform_ptcls(params, build, spproj, 'ptcl2D', cls_id, imgs, pinds, phflip=l_phflip, cavg=cavg_raw)
         if( .not. allocated(imgs) ) THROW_HARD('transform_ptcls returned no images; denoise_project')
@@ -662,14 +663,14 @@ contains
         end do
         call cavg_raw%kill
         call graph%kill()
-        if( allocated(imgs) ) call dealloc_imgarr(imgs)
-        if( allocated(imgs_ppca) ) call dealloc_imgarr(imgs_ppca)
-        if( allocated(class_mask) ) call dealloc_imgarr(class_mask)
-        if( allocated(den_ptcls) ) call dealloc_imgarr(den_ptcls)
-        if( allocated(pinds) ) deallocate(pinds)
-        if( allocated(avg) ) deallocate(avg)
-        if( allocated(pcavecs) ) deallocate(pcavecs)
-        if( allocated(class_diams) ) deallocate(class_diams)
+        if( allocated(imgs)         ) call dealloc_imgarr(imgs)
+        if( allocated(imgs_ppca)    ) call dealloc_imgarr(imgs_ppca)
+        if( allocated(class_mask)   ) call dealloc_imgarr(class_mask)
+        if( allocated(den_ptcls)    ) call dealloc_imgarr(den_ptcls)
+        if( allocated(pinds)        ) deallocate(pinds)
+        if( allocated(avg)          ) deallocate(avg)
+        if( allocated(pcavecs)      ) deallocate(pcavecs)
+        if( allocated(class_diams)  ) deallocate(class_diams)
         if( allocated(class_shifts) ) deallocate(class_shifts)
     end subroutine write_diffmap_denoised_class
 
@@ -1391,14 +1392,16 @@ contains
     subroutine finalize_diffmap_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
-        type(sp_project) :: spproj, outproj
-        type(string) :: raw_part, den_part
-        integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:), stk_offsets(:), slot_pind(:), stk_nptcls(:)
+        type(sp_project)     :: spproj, outproj
+        type(string)         :: raw_part, den_part
+        integer, allocatable :: row_part(:), row_local(:), row_stkind(:), row_indstk(:)
+        integer, allocatable :: stk_offsets(:), slot_pind(:), stk_nptcls(:)
         integer, allocatable :: part_counts(:), part_nimgs(:), part_seen(:)
-        integer :: nptcls, nptcls_active, nstks, istk, pind, ipart, total_count, ldim_raw(3), ldim_den(3), nraw, nden
+        integer, allocatable :: cls_inds(:), cls_pops(:)
+        integer :: nptcls, nptcls_active, nstks, istk, pind, ipart, total_count
+        integer :: ldim_raw(3), ldim_den(3), nraw, nden
         integer :: nptcls_slots, slot, local_slot
         logical :: l_phflip, l_ctf_no
-        integer, allocatable :: cls_inds(:), cls_pops(:)
         call spproj%read(params%projfile)
         call validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
         nptcls = spproj%os_ptcl2D%get_noris()

@@ -411,9 +411,9 @@ contains
         logical :: l_den_src
         logical :: l_full_update_stage
         l_full_update_stage = docked_split_stage(params, istage) .or. force_full_sampling_mode(params)
-        ptcl_src_eff = stage_ptcl_src(cfg, params)
-        l_den_src    = trim(ptcl_src_eff) == 'den'
-        lp_eff       = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
+        ptcl_src_eff        = stage_ptcl_src(cfg, params)
+        l_den_src           = trim(ptcl_src_eff) == 'den'
+        lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
             call cline_refine3D%set('envfsc',              'no')
@@ -472,11 +472,11 @@ contains
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
-        if( l_den_src )then
-            call cline_refine3D%set('ml_reg',             'no')
-        else
+        ! if( l_den_src )then
+        !     call cline_refine3D%set('ml_reg',             'no')
+        ! else
             call cline_refine3D%set('ml_reg',             cfg%ml_reg)
-        endif
+        ! endif
         call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)
@@ -488,10 +488,11 @@ contains
         else
             call cline_refine3D%delete('snr_noise_reg')
         endif
-        if( l_den_src )then
-            call cline_refine3D%set('gauref',             'yes')
-            call cline_refine3D%set('gaufreq',            lp_eff)
-        else if( cfg%gaufreq > 0. )then
+        ! if( l_den_src )then
+        !     call cline_refine3D%set('gauref',             'yes')
+        !     call cline_refine3D%set('gaufreq',            lp_eff)
+        ! else 
+        if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
             call cline_refine3D%set('gaufreq',            cfg%gaufreq)
         else
@@ -529,12 +530,12 @@ contains
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         ptcl_src = trim(params%ptcl_src)
-        if( ptcl_src == 'den' )then
-            select case(cfg%filt_mode%to_char())
-                case('nonuniform','nonuniform_lpset')
-                    ptcl_src = 'raw'
-            end select
-        endif
+        ! if( ptcl_src == 'den' )then
+        !     select case(cfg%filt_mode%to_char())
+        !         case('nonuniform','nonuniform_lpset')
+        !             ptcl_src = 'raw'
+        !     end select
+        ! endif
     end function stage_ptcl_src
 
 end submodule simple_abinitio_controller
