@@ -1,4 +1,4 @@
-# Cartesian Fractional Update Contract
+# Fractional Update Contract
 
 ## Stage Policy
 
@@ -37,13 +37,13 @@ non-probabilistic refinement:
 
 `simple_strategy3D_matcher.f90` writes partition-local current updates:
 
-- Cartesian `polar=no`: partial even/odd reconstructions and rho files.
+- The current volume reconstruction path: partial even/odd reconstructions and rho files.
 - Polar/obsfield alternatives must write their own equivalent current-update artifact.
 
 This is not a final reference yet. It is the current fractional update,
 partitioned for assembly.
 
-In the online Cartesian path, those current updates are produced from the same
+In the online reconstruction path, those current updates are produced from the same
 particle batch read used for matching. Batch construction keeps the raw images
 needed by reconstruction; after assignment, reconstruction preparation consumes
 those images. Do not replace this with a later full particle pass that re-reads
@@ -51,7 +51,7 @@ the stack to lower peak memory unless the performance policy explicitly changes.
 
 ## Assembly and Trailing Reconstruction
 
-`simple_commanders_rec_distr.f90::exec_cartesian_assembly` owns Cartesian assembly:
+`simple_commanders_rec_distr.f90::exec_cartesian_assembly` owns the current volume assembly path:
 
 - It reduces partial reconstructions.
 - It computes FSC and sampling-density correction.
@@ -68,7 +68,7 @@ The output halfmaps become the previous artifact for the next iteration or stage
 
 ## Downsampling Compatibility
 
-`simple_reconstructor_eo%read_eos_parallel_io` is the Cartesian compatibility mechanism:
+`simple_reconstructor_eo%read_eos_parallel_io` is the current previous-halfmap compatibility mechanism:
 
 - It requires previous MRC and rho files for both even and odd halves.
 - When `l_update_frac` is active and previous dimensions are smaller than current

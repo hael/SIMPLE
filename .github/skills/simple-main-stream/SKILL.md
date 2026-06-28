@@ -23,6 +23,10 @@ This folder owns the streaming pipeline.
 - Many `_new` variants exist; compare carefully before changing shared behavior
 - Chunking, watchers, microchunking, and cluster2D-specific helpers are important supporting layers
 
+## Microchunk Rejection
+
+For `simple_microchunked2D` rejection, read `.github/skills/simple-microchunk-rejection/SKILL.md` and `doc/microchunk_and_rejection/microchunk_rejection_policy.md` before editing. Preserve sentinel-driven restart behavior and the `skip_pass_2` direct pass-1-to-ref/match path.
+
 ## Working Rule
 
 Do not assume batch semantics apply unchanged to stream code; stage boundaries and artifact cadence matter here.

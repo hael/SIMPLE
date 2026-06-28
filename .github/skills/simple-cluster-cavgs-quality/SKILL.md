@@ -1,35 +1,35 @@
 ---
 name: simple-cluster-cavgs-quality
-description: Use when working on SIMPLE's cluster_cavgs_quality application, simple_cavg_quality feature-space selector, class-average quality selection, quality_mode=analyze outputs, cavgs_quality feature/reference tables, chunk vs pool rejection tuning, or microchunk quality-vector integration.
+description: Use when working on SIMPLE's model_cavgs_rejection application, simple_cavg_quality feature-space selector, class-average quality selection, quality_mode=analyze outputs, cavgs_quality feature/reference tables, chunk vs pool rejection tuning, or microchunk quality-vector integration.
 ---
 
-# SIMPLE `cluster_cavgs_quality`
+# SIMPLE `model_cavgs_rejection`
 
 Use this skill for the class-average quality application and for analysis of `quality_mode=analyze` test outputs.
 
 ## Mental Model
 
-`cluster_cavgs_quality` is a `simple_exec` class-average processing program. It is not routed through `simple_exec_cluster2D`.
+`model_cavgs_rejection` is a `simple_exec` class-average processing program. It is not routed through `simple_exec_cluster2D`.
 
 Flow:
 
-`simple_ui_cavgproc -> simple_exec_cavgproc -> commander_cluster_cavgs_quality -> simple_cavg_quality_*`
+`simple_ui_cavgproc -> simple_exec_cavgproc -> commander_model_cavgs_rejection -> simple_cavg_quality_*`
 
 The application reads class averages from an input SIMPLE project, evaluates feature-space quality, writes selected/rejected class-average stacks, and either updates the project (`quality_mode=apply`) or compares against the current manual `cls2D` state without modifying the project (`quality_mode=analyze`).
 
 ## Key Files
 
-- `src/main/ui/simple/simple_ui_cavgproc.f90`: UI registration for `cluster_cavgs_quality`.
+- `src/main/ui/simple/simple_ui_cavgproc.f90`: UI registration for `model_cavgs_rejection`.
 - `src/main/ui/simple_ui_params_common.f90`: `quality_mode` and `rejection_type` parameter definitions.
-- `src/main/exec/simple_exec_cavgproc.f90`: routes `cluster_cavgs_quality` to the commander.
-- `src/main/commanders/simple/simple_commanders_cavgs.f90`: `exec_cluster_cavgs_quality`, output writing, and project annotation.
+- `src/main/exec/simple_exec_cavgproc.f90`: routes `model_cavgs_rejection` to the commander.
+- `src/main/commanders/simple/simple_commanders_cavgs.f90`: `exec_model_cavgs_rejection`, output writing, and project annotation.
 - `src/main/cavg_quality/simple_cavg_quality_feats.f90`: feature extraction and normalization.
 - `src/main/cavg_quality/simple_cavg_quality_model.f90`: built-in decision models, classification, cached decisions, and model promotion helpers.
 - `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: analyze-mode reporting, feature tables, threshold scans, and reference summaries.
 - `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate mode model fitting and reporting.
 - `src/main/cavg_quality/simple_cavg_quality_types.f90`: shared result/model data structures.
-- `doc/for_developers/class_average_quality_metric_inventory.md`: metric inventory and design rationale.
-- `doc/refactoring_notes/microchunk_quality_refactor_notes.md`: chunk-branch integration notes.
+- `doc/microchunk_and_rejection/model_cavgs_rejection.md`: current model behavior, feature bank, built-ins, reports, learning, and promotion.
+- `doc/microchunk_and_rejection/microchunk_rejection_model_integration.md`: current stream/model boundary.
 
 ## Parameters
 
@@ -40,6 +40,7 @@ The application reads class averages from an input SIMPLE project, evaluates fea
 - `quality_mode=promote`: emits Fortran snippets for promoting a model into built-in presets.
 - `rejection_type=chunk`: stricter stream-partition operating point for high-junk chunks.
 - `rejection_type=pool`: more recall-preserving operating point for larger pooled or batch sets.
+- `quality_model`: built-ins currently include `chunk_default_v2`, `chunk_lp4`, `pool_default_v2`, `microchunk_p1`, and `microchunk_p2`.
 
 ## Analyze Outputs
 
@@ -76,7 +77,7 @@ Then inspect the reported false positives, false negatives, best thresholds, wea
 
 ## Chunk-Branch Guidance
 
-For `cluster2D_microchunked`, preserve Joe's chunk lifecycle and sentinel behavior. The likely low-risk integration path is to replace only the class-average rejection decision source with `simple_cavg_quality`, while keeping project state propagation, selected/rejected stacks, and completion flags equivalent to the old scalar rejector.
+For `cluster2D_microchunked`, preserve the chunk lifecycle and sentinel behavior described in `.github/skills/simple-microchunk-rejection/SKILL.md`. The live stream path still uses `simple_cluster2D_rejector`; `model_cavgs_rejection` is a separate backend unless an integration task explicitly changes that boundary.
 
 Prefer small local changes:
 

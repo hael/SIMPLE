@@ -14,13 +14,14 @@ and promotion.
 
 ## Current SIMPLE Context
 
-`model_cavgs_rejection` currently extracts a 9-feature bank:
+`model_cavgs_rejection` currently extracts a 12-feature bank:
 
 - class population and resolution metadata;
 - Otsu foreground centering and connected-component geometry;
 - foreground/background local variance;
 - optional stored class score evidence;
-- center/edge signal and presence evidence.
+- center/edge signal and presence evidence;
+- medium-frequency interior/boundary texture evidence.
 
 The existing foreground path already performs the most important preprocessing
 for distance-transform shape features:

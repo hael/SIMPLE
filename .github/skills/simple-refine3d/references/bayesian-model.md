@@ -1,4 +1,4 @@
-# Bayesian-Style 3D Refinement Model
+# Probabilistic 3D Refinement Model
 
 ## Scope
 
@@ -13,11 +13,11 @@ SIMPLE's 3D refinement is a fixed-point workflow that alternates between:
 - writing particle-derived Cartesian partial reconstructions or polar partial sums from those assignments
 - assembling and postprocessing Cartesian state volumes or state-major polar references through explicit assembly pathways
 
-The implementation is "Bayesian-style" in the sense that it uses
-probability-like candidate generation, thresholded sampling, regularization,
-even/odd cross-validation, and likelihood-related objectives. In the main
-`refine3D` path, however, the update that finally lands in the orientation table
-is a hard assignment, not a full soft responsibility vector.
+The implementation uses probability-like candidate generation, thresholded
+sampling, regularization, even/odd cross-validation, and likelihood-related
+objectives. In the main `refine3D` path, however, the update that finally lands
+in the orientation table is a hard assignment, not a full soft responsibility
+vector.
 
 ## Probabilistic Alignment Split
 

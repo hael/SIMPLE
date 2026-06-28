@@ -11,11 +11,12 @@ Select the narrowest applicable skill before editing code:
 
 - `simple-architecture`: broad repository orientation and cross-cutting workflows.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated-source, and module guidance.
-- `simple-cluster2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
-- `simple-2d-classification-restoration`: 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
-- `simple-bayesian-3d-refinement`: probabilistic/Bayesian-style 3D refinement, matcher I/O, assembly handoffs, automasking, and multi-state 3D behavior.
+- `simple-abinitio2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
+- `simple-microchunk-rejection`: streaming microchunk class-average rejection, lifecycle sentinels, pass-2 skipping, and model-backend boundaries.
+- `simple-abinitio2d`: abinitio2D orchestration, cluster2D stages, 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
+- `simple-refine3d`: probabilistic 3D refinement, matcher I/O, assembly handoffs, automasking, nonuniform filtering, and multi-state 3D behavior.
 - `simple-abinitio3d-importance-sampling`: abinitio3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
-- `simple-cartesian-frac-update-trailing`: reference contract for Cartesian fractional updates, online reconstruction I/O, previous halfmap/rho handoffs, and obsfield mirrors.
+- `simple-frac-update-trailing`: reference contract for fractional updates, online reconstruction I/O, previous halfmap/rho handoffs, and obsfield mirrors.
 - `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `nu_refine`, `_nu_filt`/`_nu_locres` products, automask/mask precedence, and `simple_nu_filter` lifecycle.
 - `simple-main-*`: subsystem guidance for `src/main` areas such as `ui`, `root`,
   `commanders`, `strategies`, `project`, `ori`, `pftc`, `image`, `params`,
@@ -26,10 +27,12 @@ subsystem skill. Do not guess ownership from filenames alone; follow the establi
 `ui -> exec -> commander -> strategy/domain object` flow.
 
 For refine3D or abinitio3D sampling/reconstruction questions, prefer
-`simple-bayesian-3d-refinement` and then the narrower sampling,
-fractional-update, or nonuniform skill when the task touches those contracts.
-For 2D class-average restoration, read `simple-2d-classification-restoration`
-after `simple-cluster2d`.
+`simple-refine3d` and then the narrower sampling, fractional-update, or
+nonuniform skill when the task touches those contracts.
+For 2D workflow or class-average restoration work, read `simple-abinitio2d`.
+For streaming microchunk rejection or `model_cavgs_rejection` integration questions,
+read `simple-microchunk-rejection` before changing stream lifecycle or particle-state
+cleanup behavior.
 
 ## Engineering Defaults
 

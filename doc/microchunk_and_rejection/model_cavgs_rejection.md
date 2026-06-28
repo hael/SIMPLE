@@ -135,6 +135,8 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 - `chunk_default_v2`: default chunk/stream-style model.
 - `chunk_lp4`: learned chunk model trained from the `chunk_new_train2` lp4-style class-average selection references, including the `*_2*` additions.
 - `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
+- `microchunk_p1`: pass-1-oriented chunk model using the `microchunk_plus_score_signal` feature policy.
+- `microchunk_p2`: pass-2-oriented chunk model using the `microchunk_plus_score_signal_texture` feature policy.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -315,6 +317,8 @@ use_cluster_rescue      true
 enforce_min_accept_frac true
 ```
 
+`microchunk_p1` and `microchunk_p2` are chunk-context built-ins intended for stage-specific validation and comparison against streaming microchunk behavior. They do not replace the live `simple_microchunked2D` rejector in this tree; the stream path still calls `simple_cluster2D_rejector`.
+
 All model weights are clipped to non-negative values and normalized to sum to one when a model is initialized or read.
 
 ## Classification
@@ -370,7 +374,7 @@ Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `inv
 - `dataset_id`
 - `hard_reject`
 - `manual_state`
-- all `z_*` feature columns for the 9-feature bank
+- all `z_*` feature columns for the 12-feature bank
 
 Hard-rejected rows are kept in reports but excluded from feature-weight estimation, candidate scoring, feature-signal diagnostics, feature-drop diagnostics, and feature-policy diagnostics.
 

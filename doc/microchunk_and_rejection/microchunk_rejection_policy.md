@@ -33,6 +33,7 @@ Policy invariants:
 - a deselected particle has `os_ptcl2D%class=0` and `os_ptcl2D%class_match=0`.
 - a chunk is not consumed by the next tier until rejection is complete.
 - lifecycle flags only advance: `abinitio2D_complete`, `rejection_complete`, `complete`, or `failed`.
+- when `microchunked2D%new(..., skip_pass_2=.true.)` is used, the same rejection and sentinel contract applies, but pass-2 import and generation are skipped.
 
 ## Lifecycle Sentinels
 
@@ -166,7 +167,7 @@ When `DEBUG=.true.`, `reject_cavgs` also writes a `_deselected` project snapshot
 
 ## Inter-Tier Consumption
 
-Pass-1 chunks are eligible for pass-2 generation only when:
+In the normal full ladder, pass-1 chunks are eligible for pass-2 generation only when:
 
 ```text
 rejection_complete and not complete and not failed
@@ -179,6 +180,8 @@ Pass-2 chunks are eligible for reference generation under the same gate. Referen
 Match chunks are generated only after the reference stack and box are available. Each eligible pass-2 chunk is copied into one match chunk, then the source pass-2 chunk is marked `complete` and receives `COMPLETE`.
 
 After `LAST_IMPORT_TIMEOUT`, if all pass-2 chunks are complete or failed and the reference chunk is complete, remaining rejection-complete pass-1 chunks can be merged into one final match chunk. Those pass-1 chunks are then marked `complete` and receive `COMPLETE`.
+
+When `skip_pass_2` is active, pass-1 chunks feed the reference chunk directly. Match generation then creates one match chunk per remaining rejection-complete pass-1 chunk, and those source pass-1 chunks are marked `complete` only after the match projects are written.
 
 ## Match Finalization
 
@@ -212,7 +215,7 @@ The combined output:
 The workflow is finished only when:
 
 - at least one pass-1 chunk exists and all pass-1 chunks are complete or failed;
-- at least one pass-2 chunk exists and all pass-2 chunks are complete or failed;
+- unless `skip_pass_2` is active, at least one pass-2 chunk exists and all pass-2 chunks are complete or failed;
 - the reference chunk is complete and not failed;
 - at least one match chunk exists and all match chunks are complete or failed.
 

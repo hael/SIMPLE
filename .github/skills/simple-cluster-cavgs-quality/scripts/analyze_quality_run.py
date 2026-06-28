@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize cluster_cavgs_quality quality_mode=analyze outputs."""
+"""Summarize model_cavgs_rejection quality_mode=analyze outputs."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ THRESHOLDS = "cavgs_quality_reference_threshold_scan.txt"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Summarize SIMPLE cluster_cavgs_quality analyze-mode diagnostics."
+        description="Summarize SIMPLE model_cavgs_rejection analyze-mode diagnostics."
     )
     parser.add_argument(
         "paths",

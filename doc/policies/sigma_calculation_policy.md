@@ -38,7 +38,7 @@ The effective reconstruction gate is `params%l_ml_reg`, which is only true when:
 - `ml_reg='yes'`
 - `cc_objfun == OBJFUN_EUCLID`
 
-This is enforced in [src/main/simple_parameters.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_parameters.f90:1761).
+This is enforced in `src/main/params/simple_parameters_phases.f90` during derived-parameter validation.
 
 ## Ownership and persistence
 
@@ -72,7 +72,7 @@ but ownership of durable sigma update remains with:
 - `group`: group by particle `stkind`
 - `global`: use one shared group per even/odd half-set
 
-This is normalized into `params%l_sigma_glob` in [src/main/simple_parameters.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_parameters.f90:1726).
+This is normalized into `params%l_sigma_glob` in `src/main/params/simple_parameters_phases.f90`.
 
 When group STAR files are loaded, the selected group spectrum is expanded back onto each active particle according to:
 
