@@ -202,6 +202,7 @@ contains
         class(cavg_compatibility_analysis), intent(inout) :: self
         logical, allocatable :: allowed(:), compatible(:)
         real,    allocatable :: min_dim(:), max_dim(:)
+        real, parameter :: RESCUE_EDGE_FRAC = 0.03
         integer :: n, ii, nallowed, ncomp, nrejected_here
         integer :: ldim(3)
         real    :: dmax, dmin, axis_c, axis_b, axis_a, used_relax, used_qlo, used_qhi
@@ -254,6 +255,15 @@ contains
 
         nrejected_here = 0
         do ii = 1, n
+            if( allowed(ii) .and. .not. compatible(ii) )then
+                if( axis_b >= min_dim(ii) * (1.0 - used_relax) .and. axis_b <= max_dim(ii) * (1.0 + used_relax) .and. &
+                    min_dim(ii) >= axis_c * (1.0 - used_relax - RESCUE_EDGE_FRAC) .and. &
+                    max_dim(ii) <= axis_a * (1.0 + used_relax + RESCUE_EDGE_FRAC) )then
+                    compatible(ii) = .true.
+                    write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rescued idx=', ii, ' reason=near_size_boundary'
+                end if
+            end if
+
             self%pointsets(ii)%is_compatible = allowed(ii) .and. compatible(ii)
             if( allowed(ii) .and. .not. compatible(ii) )then
                 self%pointsets(ii)%is_rejected = .true.
@@ -263,6 +273,7 @@ contains
                 write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rejecting idx=', ii, ' reason=size_incompatible_subset'
             end if
         end do
+        ncomp = count(compatible)
         write(logfhandle,'(A,I0,A,I0)') 'infer_compatible_size_subset: compatible count=', ncomp, ' newly_rejected=', nrejected_here
 
         deallocate(allowed, compatible, min_dim, max_dim)
@@ -371,6 +382,7 @@ contains
             logical,            intent(in)  :: autotune
             real,               intent(out) :: relax_out, qlo_out, qhi_out
             integer, parameter :: NRELAX = 5, NQ = 3
+            real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.03
             real, parameter :: RELAX_GRID(NRELAX) = [0.05, 0.07, 0.10, 0.13, 0.18]
             real, parameter :: QLOW_GRID(NQ) = [0.03, 0.08, 0.12]
             real, parameter :: QHIGH_GRID(NQ) = [0.88, 0.93, 0.97]
@@ -380,8 +392,9 @@ contains
             real    :: b_cand, left, right
             real    :: spread, best_spread, score, best_score
             real    :: relax_cur, qlo_cur, qhi_cur
-            real    :: c_cur, b_cur, a_cur
+            real    :: c_cur, b_cur, a_cur, c_soft, a_soft
             real    :: c_best, b_best, a_best
+            logical :: in_b, in_c, in_a
             logical, allocatable :: tmp_support(:), support_cur(:), best_support(:)
 
             nn = size(mins)
@@ -501,7 +514,12 @@ contains
                             if( .not. allowed_mask(i) ) cycle
                             left = mins(i) * (1.0 - relax_cur)
                             right = maxs(i) * (1.0 + relax_cur)
-                            if( b_cur >= left .and. b_cur <= right .and. mins(i) >= c_cur * (1.0 - relax_cur) .and. maxs(i) <= a_cur * (1.0 + relax_cur) )then
+                            c_soft = c_cur * (1.0 - relax_cur - SUPPORT_EDGE_SOFT_FRAC)
+                            a_soft = a_cur * (1.0 + relax_cur + SUPPORT_EDGE_SOFT_FRAC)
+                            in_b = (b_cur >= left .and. b_cur <= right)
+                            in_c = (mins(i) >= c_cur * (1.0 - relax_cur))
+                            in_a = (maxs(i) <= a_cur * (1.0 + relax_cur))
+                            if( in_b .and. ( (in_c .and. in_a) .or. (mins(i) >= c_soft .and. in_a) .or. (in_c .and. maxs(i) <= a_soft) ) )then
                                 final_count = final_count + 1
                                 tmp_support(i) = .true.
                                 spread = spread + abs(b_cur - 0.5 * (mins(i) + maxs(i))) / max(maxs(i)-mins(i), 1.0e-6)
