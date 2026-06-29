@@ -9,7 +9,7 @@ character(len=*), parameter :: REC_FBODY               = 'rec_final_state'
 integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
-integer,          parameter :: MAXITS(8)               = [20,20,17,17,17,15,15,30]
+integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [1000,1000,1000,1000,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
