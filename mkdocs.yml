@@ -4,8 +4,6 @@ site_url: https://hael.github.io/SIMPLE/
 repo_url: https://github.com/hael/SIMPLE
 repo_name: hael/SIMPLE
 docs_dir: doc
-site_dir: docs 
-remote_branch: docs
 use_directory_urls: false
 
 exclude_docs: |
