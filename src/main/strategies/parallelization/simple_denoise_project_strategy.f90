@@ -145,17 +145,17 @@ contains
 
     subroutine shmem_initialize(self, params, build, cline)
         class(denoise_project_shmem_strategy), intent(inout) :: self
-        type(parameters),                              intent(inout) :: params
-        type(builder),                                 intent(inout) :: build
-        class(cmdline),                                intent(inout) :: cline
+        type(parameters),                      intent(inout) :: params
+        type(builder),                         intent(inout) :: build
+        class(cmdline),                        intent(inout) :: cline
         call init_common(params, build, cline)
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
         class(denoise_project_shmem_strategy), intent(inout) :: self
-        type(parameters),                              intent(inout) :: params
-        type(builder),                                 intent(inout) :: build
-        class(cmdline),                                intent(inout) :: cline
+        type(parameters),                      intent(inout) :: params
+        type(builder),                         intent(inout) :: build
+        class(cmdline),                        intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_denoise_project(params, build, cline, spproj, 0, .true.)
@@ -164,21 +164,21 @@ contains
 
     subroutine shmem_finalize_run(self, params, build, cline)
         class(denoise_project_shmem_strategy), intent(inout) :: self
-        type(parameters),                              intent(in)    :: params
-        type(builder),                                 intent(inout) :: build
-        class(cmdline),                                intent(inout) :: cline
+        type(parameters),                      intent(in)    :: params
+        type(builder),                         intent(inout) :: build
+        class(cmdline),                        intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup(self, params)
         class(denoise_project_shmem_strategy), intent(inout) :: self
-        type(parameters),                              intent(in)    :: params
+        type(parameters),                      intent(in)    :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize(self, params, build, cline)
         class(denoise_project_worker_strategy), intent(inout) :: self
-        type(parameters),                               intent(inout) :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         call init_common(params, build, cline)
         if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for denoise_project worker execution')
         if( .not. cline%defined('class_assignment') )then
@@ -189,9 +189,9 @@ contains
     subroutine worker_execute(self, params, build, cline)
         use simple_qsys_funs, only: qsys_job_finished
         class(denoise_project_worker_strategy), intent(inout) :: self
-        type(parameters),                               intent(inout) :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_denoise_project(params, build, cline, spproj, params%part, .false.)
@@ -201,22 +201,22 @@ contains
 
     subroutine worker_finalize_run(self, params, build, cline)
         class(denoise_project_worker_strategy), intent(inout) :: self
-        type(parameters),                               intent(in)    :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(in)    :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)
         class(denoise_project_worker_strategy), intent(inout) :: self
-        type(parameters),                               intent(in)    :: params
+        type(parameters),                       intent(in)    :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
         class(denoise_project_master_strategy), intent(inout) :: self
-        type(parameters),                               intent(inout) :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         type(sp_project) :: spproj
         integer, allocatable :: cls_inds(:), cls_pops(:)
         logical :: l_phflip, l_ctf_no
@@ -250,9 +250,9 @@ contains
 
     subroutine master_execute(self, params, build, cline)
         class(denoise_project_master_strategy), intent(inout) :: self
-        type(parameters),                               intent(inout) :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
                                                      array=L_USE_SLURM_ARR, extra_params=params)
         call finalize_diffmap_worker_outputs(params, self%nparts_run)
@@ -260,15 +260,15 @@ contains
 
     subroutine master_finalize_run(self, params, build, cline)
         class(denoise_project_master_strategy), intent(inout) :: self
-        type(parameters),                               intent(in)    :: params
-        type(builder),                                  intent(inout) :: build
-        class(cmdline),                                 intent(inout) :: cline
+        type(parameters),                       intent(in)    :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
     end subroutine master_finalize_run
 
     subroutine master_cleanup(self, params)
         use simple_qsys_funs, only: qsys_cleanup
         class(denoise_project_master_strategy), intent(inout) :: self
-        type(parameters),                               intent(in)    :: params
+        type(parameters),                       intent(in)    :: params
         integer :: ipart
         call self%qenv%kill
         call qsys_cleanup(params)
@@ -283,8 +283,8 @@ contains
 
     subroutine prepare_class_partitions(self, params, cls_inds, cls_pops)
         class(denoise_project_master_strategy), intent(inout) :: self
-        type(parameters),                               intent(in)    :: params
-        integer,                                        intent(in)    :: cls_inds(:), cls_pops(:)
+        type(parameters),                       intent(in)    :: params
+        integer,                                intent(in)    :: cls_inds(:), cls_pops(:)
         integer :: order(size(cls_inds))
         integer, allocatable :: part_counts(:), part_cls(:,:)
         integer(kind=8), allocatable :: part_weights(:)
@@ -398,10 +398,10 @@ contains
     end subroutine run_denoise_project
 
     subroutine validate_denoise_project(params, spproj, cls_inds, cls_pops, l_phflip, l_ctf_no)
-        type(parameters), intent(in)    :: params
-        type(sp_project), intent(inout) :: spproj
-        integer, allocatable, intent(out) :: cls_inds(:), cls_pops(:)
-        logical, intent(out) :: l_phflip, l_ctf_no
+        type(parameters),     intent(in)    :: params
+        type(sp_project),     intent(inout) :: spproj
+        integer, allocatable, intent(out)   :: cls_inds(:), cls_pops(:)
+        logical,              intent(out)   :: l_phflip, l_ctf_no
         type(string) :: ctfstr
         integer, allocatable :: pinds(:), stk_offsets(:), stk_nptcls(:)
         logical, allocatable :: seen_slots(:)
@@ -540,8 +540,8 @@ contains
     end function get_n_active_ptcl2D
 
     subroutine filter_classes_by_assignment(cline, cls_inds, cls_pops)
-        class(cmdline),                 intent(inout) :: cline
-        integer, allocatable,           intent(inout) :: cls_inds(:), cls_pops(:)
+        class(cmdline),       intent(inout) :: cline
+        integer, allocatable, intent(inout) :: cls_inds(:), cls_pops(:)
         integer, allocatable :: assigned_classes(:)
         logical, allocatable :: keep_mask(:)
         integer :: i
@@ -810,12 +810,12 @@ contains
     subroutine estimate_diffmap_denoise_rank(params, graph, cls_id, nptcls, den_rank, icm_converged, icm_iters, icm_score)
         use simple_diff_map_graphs, only: diffmap_graph
         use simple_diffusion_maps,  only: embed_graph
-        type(parameters),   intent(in)  :: params
-        type(diffmap_graph), intent(in) :: graph
-        integer,            intent(in)  :: cls_id, nptcls
-        integer,            intent(out) :: den_rank, icm_iters
-        logical,            intent(out) :: icm_converged
-        real,               intent(out) :: icm_score
+        type(parameters),    intent(in)  :: params
+        type(diffmap_graph), intent(in)  :: graph
+        integer,             intent(in)  :: cls_id, nptcls
+        integer,             intent(out) :: den_rank, icm_iters
+        logical,             intent(out) :: icm_converged
+        real,                intent(out) :: icm_score
         real, allocatable :: coords(:,:), eigvals(:)
         integer :: rank_scan, max_rank
         max_rank = max(1, nptcls - 2)
