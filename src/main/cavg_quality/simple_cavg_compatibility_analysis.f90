@@ -29,7 +29,6 @@ private
 integer, parameter :: ANALYSIS_BOXSIZE    = 128
 integer, parameter :: ANALYSIS_MORPH_SIZE = 5
 logical, parameter :: ANALYSIS_AUTOTUNE_SIZE_MODEL = .true.
-logical, parameter :: ANALYSIS_LOCALVAR_ENABLE_PASS2 = .false.
 
 type :: image_pointset
     type(image)          :: img
@@ -60,11 +59,7 @@ type :: cavg_compatibility_analysis
     procedure :: analyse
     procedure :: print_rejection_reasons
     procedure :: generate_pointset
-    procedure :: reject_sum_in_mask_outliers
-    procedure :: reject_high_hausdorff_outliers
-    procedure :: calculate_hausdorff_table
     procedure :: infer_compatible_size_subset
-    procedure :: infer_compatible_subset
     procedure :: write_selected_rejected_stacks
     procedure :: run_cluster_overfitting_rejection
     
@@ -134,16 +129,6 @@ contains
 
         write(logfhandle,'(A,I0)') 'cavg_compatibility analyse: npointsets=', self%npointsets
 
-        call self%calculate_hausdorff_table()
-        write(logfhandle,'(A)') 'after calculate_hausdorff_table: wrote hausdorff_tbl.txt and mean_hausdorff_tbl.txt'
-
-        call self%reject_high_hausdorff_outliers()
-        nrej = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_rejected ) nrej = nrej + 1
-        end do
-        write(logfhandle,'(A,I0)') 'after reject_high_hausdorff_outliers: nrejected=', nrej
-
         call self%run_cluster_overfitting_rejection(5000.0)
         nrej = 0
         do i = 1, self%npointsets
@@ -151,29 +136,12 @@ contains
         end do
         write(logfhandle,'(A,I0)') 'after cluster overfitting rejection: nrejected=', nrej
 
-
         call self%infer_compatible_size_subset()
         nrej = 0
         do i = 1, self%npointsets
             if( self%pointsets(i)%is_rejected ) nrej = nrej + 1
         end do
         write(logfhandle,'(A,I0)') 'after infer_compatible_size_subset: nrejected=', nrej
- 
-        call self%infer_compatible_subset()
-        ncomp = 0
-        nrej  = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_compatible ) ncomp = ncomp + 1
-            if( self%pointsets(i)%is_rejected ) nrej = nrej + 1
-        end do
-        write(logfhandle,'(A,I0,A,I0)') 'after infer_compatible_subset: ncompatible=', ncomp, ' nrejected=', nrej
-
-        ! call self%reject_sum_in_mask_outliers()
-        ! nrej = 0
-        ! do i = 1, self%npointsets
-        !     if( self%pointsets(i)%is_rejected ) nrej = nrej + 1
-        ! end do
-        ! write(logfhandle,'(A,I0)') 'after sum in mask outliers rejection: nrejected=', nrej
 
         call self%write_selected_rejected_stacks()
 
@@ -243,6 +211,10 @@ contains
         n = self%npointsets
         if( n < 1 ) return
 
+        do ii = 1, n
+            self%pointsets(ii)%is_compatible = .false.
+        end do
+
         allocate(allowed(n), source=.false.)
         allocate(min_dim(n), max_dim(n), source=0.0)
         nallowed = 0
@@ -251,10 +223,10 @@ contains
             if( .not. allowed(ii) ) cycle
             nallowed = nallowed + 1
 
-            call self%pointsets(ii)%mask%diameter_bin(dmax)
             ldim = self%pointsets(ii)%mask%get_ldim()
             call self%pointsets(ii)%mask%get_rmat_ptr(rmat_mask)
 
+            dmax = estimate_max_feret(rmat_mask, ldim, self%pointsets(ii)%mask%get_smpd())
             dmin = estimate_min_feret(rmat_mask, ldim, self%pointsets(ii)%mask%get_smpd())
             nullify(rmat_mask)
 
@@ -266,6 +238,9 @@ contains
         write(logfhandle,'(A,I0)') 'infer_compatible_size_subset: allowed candidates=', nallowed
 
         if( nallowed <= 2 )then
+            do ii = 1, n
+                self%pointsets(ii)%is_compatible = allowed(ii)
+            end do
             deallocate(allowed, min_dim, max_dim)
             return
         end if
@@ -279,9 +254,11 @@ contains
 
         nrejected_here = 0
         do ii = 1, n
+            self%pointsets(ii)%is_compatible = allowed(ii) .and. compatible(ii)
             if( allowed(ii) .and. .not. compatible(ii) )then
                 self%pointsets(ii)%is_rejected = .true.
                 self%pointsets(ii)%rejection_reason = 11
+                self%pointsets(ii)%is_compatible = .false.
                 nrejected_here = nrejected_here + 1
                 write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rejecting idx=', ii, ' reason=size_incompatible_subset'
             end if
@@ -291,6 +268,53 @@ contains
         deallocate(allowed, compatible, min_dim, max_dim)
 
     contains
+
+        real function estimate_max_feret(mask_rmat, ldim_local, smpd_local) result(max_feret)
+            real(kind=c_float), intent(in) :: mask_rmat(:,:,:)
+            integer,            intent(in) :: ldim_local(3)
+            real,               intent(in) :: smpd_local
+            integer, parameter :: NFERET = 180
+            integer :: npix, x, y, ip, itheta
+            real, allocatable :: xpts(:), ypts(:)
+            real :: theta, cth, sth, proj, pmin, pmax, width, pi_v
+
+            npix = count(mask_rmat(1:ldim_local(1), 1:ldim_local(2), 1) > 0.5_c_float)
+            if( npix <= 0 )then
+                max_feret = 0.0
+                return
+            end if
+
+            allocate(xpts(npix), ypts(npix))
+            ip = 0
+            do y = 1, ldim_local(2)
+                do x = 1, ldim_local(1)
+                    if( mask_rmat(x,y,1) > 0.5_c_float )then
+                        ip = ip + 1
+                        xpts(ip) = real(x) * smpd_local
+                        ypts(ip) = real(y) * smpd_local
+                    end if
+                end do
+            end do
+
+            pi_v = acos(-1.0)
+            max_feret = 0.0
+            do itheta = 0, NFERET - 1
+                theta = pi_v * real(itheta) / real(NFERET)
+                cth = cos(theta)
+                sth = sin(theta)
+                pmin = huge(1.0)
+                pmax = -huge(1.0)
+                do ip = 1, npix
+                    proj = xpts(ip) * cth + ypts(ip) * sth
+                    if( proj < pmin ) pmin = proj
+                    if( proj > pmax ) pmax = proj
+                end do
+                width = (pmax - pmin) + smpd_local
+                if( width > max_feret ) max_feret = width
+            end do
+
+            deallocate(xpts, ypts)
+        end function estimate_max_feret
 
         real function estimate_min_feret(mask_rmat, ldim_local, smpd_local) result(min_feret)
             real(kind=c_float), intent(in) :: mask_rmat(:,:,:)
@@ -347,9 +371,9 @@ contains
             logical,            intent(in)  :: autotune
             real,               intent(out) :: relax_out, qlo_out, qhi_out
             integer, parameter :: NRELAX = 5, NQ = 3
-            real, parameter :: RELAX_GRID(NRELAX) = [0.03, 0.05, 0.07, 0.10, 0.15]
-            real, parameter :: QLOW_GRID(NQ) = [0.05, 0.10, 0.15]
-            real, parameter :: QHIGH_GRID(NQ) = [0.85, 0.90, 0.95]
+            real, parameter :: RELAX_GRID(NRELAX) = [0.05, 0.07, 0.10, 0.13, 0.18]
+            real, parameter :: QLOW_GRID(NQ) = [0.03, 0.08, 0.12]
+            real, parameter :: QHIGH_GRID(NQ) = [0.88, 0.93, 0.97]
             integer :: nn, i, j, k, nvalid, best_count
             integer :: ir, iq, jq, final_count, best_final_count
             real, allocatable :: cands(:), mins_sup(:), maxs_sup(:)
@@ -368,9 +392,9 @@ contains
             c_out = 0.0
             b_out = 0.0
             a_out = 0.0
-            relax_out = 0.05
-            qlo_out = 0.10
-            qhi_out = 0.90
+            relax_out = 0.07
+            qlo_out = 0.08
+            qhi_out = 0.93
 
             nvalid = 0
             do i = 1, nn
@@ -404,7 +428,7 @@ contains
                     relax_cur = RELAX_GRID(ir)
                 else
                     if( ir > 1 ) cycle
-                    relax_cur = 0.05
+                    relax_cur = 0.07
                 end if
 
                 do iq = 1, NQ
@@ -412,7 +436,7 @@ contains
                         qlo_cur = QLOW_GRID(iq)
                     else
                         if( iq > 1 ) cycle
-                        qlo_cur = 0.10
+                        qlo_cur = 0.08
                     end if
 
                     do jq = 1, NQ
@@ -420,7 +444,7 @@ contains
                             qhi_cur = QHIGH_GRID(jq)
                         else
                             if( jq > 1 ) cycle
-                            qhi_cur = 0.90
+                            qhi_cur = 0.93
                         end if
                         if( qhi_cur <= qlo_cur ) cycle
 
@@ -484,7 +508,7 @@ contains
                             end if
                         end do
 
-                        score = real(final_count) - 0.01 * spread - 0.20 * relax_cur
+                        score = real(final_count) - 0.01 * spread - 0.10 * relax_cur
                         if( score > best_score .or. (abs(score - best_score) <= 1.0e-6 .and. final_count > best_final_count) )then
                             best_score = score
                             best_final_count = final_count
@@ -539,161 +563,6 @@ contains
 
     end subroutine infer_compatible_size_subset
 
-    subroutine infer_compatible_subset( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        logical, allocatable :: adj(:,:), allowed(:), compatible(:)
-        integer :: n, ii, jj, infv
-        integer :: nallowed, ncomp, nrejected_here
-        real    :: local_cut
-
-        n = self%npointsets
-        do ii = 1, n
-            self%pointsets(ii)%is_compatible = .false.
-        end do
-
-        if( n < 1 ) return
-        if( .not. allocated(self%hausdorff_tbl) ) return
-
-        allocate(allowed(n), source=.false.)
-        nallowed = 0
-        do ii = 1, n
-            allowed(ii) = .not. self%pointsets(ii)%is_rejected
-            if( allowed(ii) ) nallowed = nallowed + 1
-        end do
-        write(logfhandle,'(A,I0)') 'infer_compatible_subset: allowed candidates=', nallowed
-
-        local_cut = estimate_compatibility_cut(self%hausdorff_tbl, allowed)
-        write(logfhandle,'(A,ES14.6)') 'infer_compatible_subset: compatibility cut=', local_cut
-
-        infv = huge(1)
-        allocate(adj(n,n), source=.false.)
-        do ii = 1, n
-            if( .not. allowed(ii) ) cycle
-            adj(ii,ii) = .true.
-            do jj = ii + 1, n
-                if( .not. allowed(jj) ) cycle
-                if( self%hausdorff_tbl(ii,jj) < infv .and. real(self%hausdorff_tbl(ii,jj)) <= local_cut )then
-                    adj(ii,jj) = .true.
-                    adj(jj,ii) = .true.
-                end if
-            end do
-        end do
-
-        call largest_connected_component(adj, compatible, allowed)
-        ncomp = 0
-        nrejected_here = 0
-        do ii = 1, n
-            self%pointsets(ii)%is_compatible = compatible(ii)
-            if( compatible(ii) ) ncomp = ncomp + 1
-            if( allowed(ii) .and. .not. compatible(ii) )then
-                self%pointsets(ii)%is_rejected = .true.
-                self%pointsets(ii)%rejection_reason = 6
-                nrejected_here = nrejected_here + 1
-                write(logfhandle,'(A,I0,A)') 'infer_compatible_subset: rejecting idx=', ii, ' reason=not_in_compatible_subset'
-            end if
-        end do
-        write(logfhandle,'(A,I0,A,I0)') 'infer_compatible_subset: compatible count=', ncomp, ' newly_rejected=', nrejected_here
-
-        deallocate(adj, allowed, compatible)
-
-    contains
-
-        real function estimate_compatibility_cut(tbl, allowed_mask) result(cut_local)
-            integer, intent(in) :: tbl(:,:)
-            logical, intent(in) :: allowed_mask(:)
-            integer, allocatable :: vals(:)
-            real,    allocatable :: sorted(:)
-            integer :: nn, i1, i2, k, nvals, idx, inf_local
-
-            nn = size(tbl, dim=1)
-            inf_local = huge(1)
-            nvals = nn * (nn - 1) / 2
-            if( nvals <= 0 )then
-                cut_local = 0.0
-                return
-            end if
-
-            allocate(vals(nvals), source=0)
-            k = 0
-            do i1 = 1, nn
-                if( .not. allowed_mask(i1) ) cycle
-                do i2 = i1 + 1, nn
-                    if( .not. allowed_mask(i2) ) cycle
-                    if( tbl(i1,i2) < inf_local )then
-                        k = k + 1
-                        vals(k) = tbl(i1,i2)
-                    end if
-                end do
-            end do
-
-            if( k == 0 )then
-                cut_local = real(inf_local)
-                deallocate(vals)
-                return
-            end if
-
-            allocate(sorted(k))
-            sorted = real(vals(1:k))
-            call hpsort(sorted)
-
-            idx = (k + 1) / 2
-            cut_local = sorted(idx)
-
-            deallocate(sorted, vals)
-        end function estimate_compatibility_cut
-
-        subroutine largest_connected_component(adj_in, mask_out, allowed_mask)
-            logical,              intent(in)  :: adj_in(:,:)
-            logical, allocatable, intent(out) :: mask_out(:)
-            logical,              intent(in)  :: allowed_mask(:)
-            logical, allocatable :: visited(:), component(:), best_component(:)
-            integer, allocatable :: queue(:)
-            integer :: nn, start, head, tail, node, nb, best_sz, cur_sz
-
-            nn = size(adj_in, dim=1)
-            allocate(mask_out(nn), visited(nn), component(nn), best_component(nn), queue(nn))
-            mask_out = .false.
-            visited = .not. allowed_mask
-            best_component = .false.
-            best_sz = 0
-
-            do start = 1, nn
-                if( visited(start) ) cycle
-
-                component = .false.
-                head = 1
-                tail = 1
-                queue(1) = start
-                visited(start) = .true.
-                component(start) = .true.
-
-                do while( head <= tail )
-                    node = queue(head)
-                    head = head + 1
-                    do nb = 1, nn
-                        if( .not. allowed_mask(nb) ) cycle
-                        if( .not. adj_in(node,nb) ) cycle
-                        if( visited(nb) ) cycle
-                        tail = tail + 1
-                        queue(tail) = nb
-                        visited(nb) = .true.
-                        component(nb) = .true.
-                    end do
-                end do
-
-                cur_sz = count(component)
-                if( cur_sz > best_sz )then
-                    best_sz = cur_sz
-                    best_component = component
-                end if
-            end do
-
-            mask_out = best_component
-            deallocate(visited, component, best_component, queue)
-        end subroutine largest_connected_component
-
-    end subroutine infer_compatible_subset
-
     subroutine print_rejection_reasons( self )
         class(cavg_compatibility_analysis), intent(inout) :: self
         integer :: i, funit
@@ -741,170 +610,6 @@ contains
 
         close(funit)
     end subroutine print_rejection_reasons
-
-    subroutine reject_sum_in_mask_outliers( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        real, parameter :: SUM_SNR_EXTRA_MARGIN = 0.10
-        real, allocatable :: vals(:), vals_neg(:), absdev(:)
-        integer, allocatable :: idx_map(:)
-        integer :: i, k, npix_in
-        integer :: nrej_here
-        real :: low_cut, high_cut, low_otsu, high_otsu, low_mad, high_mad
-        real :: med_all, mad_all, sigma_rob, margin
-
-        ! Build a working set from currently non-rejected pointsets.
-        k = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_rejected ) cycle
-            k = k + 1
-        end do
-        if( k <= 1 ) return
-
-        allocate(vals(k), idx_map(k))
-        k = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_rejected ) cycle
-            k = k + 1
-
-            npix_in = max(self%pointsets(i)%npts, 1)
-            ! Normalize integrated mask signal by mask size to reduce segmentation-size bias.
-            vals(k) = self%pointsets(i)%sum_in_mask / real(npix_in)
-
-            write(logfhandle,'(A,I0,A,ES14.6,A,I0,A,ES14.6)') 'sum_in_mask normalized score: idx=', i, &
-                ' sum_in_mask=', self%pointsets(i)%sum_in_mask, ' npix_in=', npix_in, ' score=', vals(k)
-
-            idx_map(k) = i
-        end do
-
-        if( maxval(vals) - minval(vals) <= epsilon(maxval(vals)) )then
-            low_otsu = minval(vals)
-        else
-            call otsu(size(vals), vals, low_otsu)
-        end if
-
-        allocate(vals_neg(size(vals)))
-        vals_neg = -vals
-        if( maxval(vals_neg) - minval(vals_neg) <= epsilon(maxval(vals_neg)) )then
-            high_otsu = maxval(vals)
-        else
-            call otsu(size(vals_neg), vals_neg, high_otsu)
-            high_otsu = -high_otsu
-        end if
-        deallocate(vals_neg)
-
-        allocate(absdev(size(vals)))
-        med_all = median_real(vals)
-        absdev = abs(vals - med_all)
-        mad_all = median_real(absdev)
-        deallocate(absdev)
-
-        ! Conservative robust bounds: keep borderline cases.
-        sigma_rob = 1.4826 * max(mad_all, 1.0e-6)
-        low_mad = med_all - 3.5 * sigma_rob
-        high_mad = med_all + 3.5 * sigma_rob
-
-        margin = (0.35 + SUM_SNR_EXTRA_MARGIN) * max(mad_all, 1.0e-3)
-        low_cut = min(low_mad, low_otsu - margin)
-        high_cut = max(high_mad, high_otsu + margin)
-
-        if( low_cut >= high_cut )then
-            low_cut = med_all - 4.0 * sigma_rob
-            high_cut = med_all + 4.0 * sigma_rob
-        end if
-
-        nrej_here = 0
-        do i = 1, size(vals)
-            write(logfhandle,'(A,I0,A,ES14.6,A,ES14.6,A,ES14.6)') 'sum_in_mask one-pass check: idx=', idx_map(i), &
-                ' score=', vals(i), ' low_cut=', low_cut, ' high_cut=', high_cut
-            if( vals(i) < low_cut )then
-                self%pointsets(idx_map(i))%rejection_reason = 1
-                self%pointsets(idx_map(i))%is_rejected = .true.
-                nrej_here = nrej_here + 1
-            else if( vals(i) > high_cut )then
-                self%pointsets(idx_map(i))%rejection_reason = 2
-                self%pointsets(idx_map(i))%is_rejected = .true.
-                nrej_here = nrej_here + 1
-            end if
-        end do
-        write(logfhandle,'(A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,ES14.6,A,I0)') 'sum_in_mask one-pass cuts: med=', med_all, &
-            ' mad=', mad_all, ' low_otsu=', low_otsu, ' high_otsu=', high_otsu, ' low_cut=', low_cut, ' high_cut=', high_cut, ' newly_rejected=', nrej_here
-
-        deallocate(vals, idx_map)
-
-    contains
-
-        function median_real(arr) result(med_val)
-            real, intent(in) :: arr(:)
-            real :: med_val
-            real, allocatable :: sorted(:)
-            integer :: n, mid
-
-            if( size(arr) == 0 )then
-                med_val = 0.0
-                return
-            end if
-
-            n = size(arr)
-            mid = (n + 1) / 2
-            allocate(sorted(n))
-            sorted = arr
-            call hpsort(sorted)
-            if( mod(n,2) == 1 )then
-                med_val = sorted(mid)
-            else
-                med_val = 0.5 * (sorted(mid) + sorted(mid+1))
-            end if
-            deallocate(sorted)
-        end function median_real
-
-    end subroutine reject_sum_in_mask_outliers
-
-    subroutine reject_high_hausdorff_outliers( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        real, allocatable :: vals(:)
-        integer, allocatable :: idx_map(:)
-        integer :: i, k
-        real :: high_cut
-
-        ! Build a working set from currently non-rejected pointsets with valid mean Hausdorff.
-        k = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_rejected ) cycle
-            if( self%pointsets(i)%mean_hausdorff <= 0.0 ) cycle
-            k = k + 1
-        end do
-        write(logfhandle,'(A,I0)') 'reject_high_hausdorff_outliers: candidates=', k
-        if( k <= 1 ) return
-
-        allocate(vals(k), idx_map(k))
-        k = 0
-        do i = 1, self%npointsets
-            if( self%pointsets(i)%is_rejected ) cycle
-            if( self%pointsets(i)%mean_hausdorff <= 0.0 ) cycle
-            k = k + 1
-            vals(k) = self%pointsets(i)%mean_hausdorff
-            idx_map(k) = i
-        end do
-
-        if( maxval(vals) - minval(vals) <= epsilon(maxval(vals)) )then
-            high_cut = minval(vals)
-        else
-            call otsu(size(vals), vals, high_cut)
-        end if
-        write(logfhandle,'(A,ES14.6)') 'reject_high_hausdorff_outliers: high_cut=', high_cut
-
-        do i = 1, size(vals)
-            write(logfhandle,'(A,I0,A,ES14.6,A,ES14.6)') 'high_hausdorff outlier check: idx=', idx_map(i), ' mean=', vals(i), ' high_cut=', high_cut
-            if( vals(i) > high_cut )then
-                self%pointsets(idx_map(i))%rejection_reason = 5
-                self%pointsets(idx_map(i))%is_rejected = .true.
-                write(logfhandle,'(A,I0,A)') 'reject_high_hausdorff_outliers: rejecting idx=', idx_map(i), ' reason=high_hausdorff_outlier'
-            end if
-        end do
-
-        deallocate(vals, idx_map)
-
-    end subroutine reject_high_hausdorff_outliers
 
     subroutine generate_pointset( self, i, img )
         class(cavg_compatibility_analysis), intent(inout) :: self
@@ -1012,130 +717,6 @@ contains
         nullify(rmat_src)
         
     end subroutine generate_pointset
-
-    subroutine calculate_hausdorff_table( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        integer :: i, j
-        integer :: cnt
-        real    :: acc
-        ! Pairwise Hausdorff requires at least two pointsets.
-        if( self%npointsets < 2 ) THROW_HARD('simple_test_hausdorff: not enough pointsets to compute pairwise Hausdorff distances')
-        ! Allocate and initialize full symmetric distance table.
-        if( allocated(self%hausdorff_tbl) ) deallocate(self%hausdorff_tbl)
-        allocate(self%hausdorff_tbl(self%npointsets, self%npointsets), source=0)
-        do i = 1, self%npointsets
-            self%pointsets(i)%mean_hausdorff = 0.0
-        end do
-        ! Fill upper triangle in parallel and mirror to lower triangle.
-        !$omp parallel do default(shared) private(i,j) schedule(dynamic)
-        do i = 1, self%npointsets
-            self%hausdorff_tbl(i,i) = 0
-            do j = i + 1, self%npointsets
-                self%hausdorff_tbl(i,j) = pairwise_hausdorff_int(self%pointsets(i), self%pointsets(j))
-                self%hausdorff_tbl(j,i) = self%hausdorff_tbl(i,j)
-            end do
-        end do
-        !$omp end parallel do
-
-        ! Mean Hausdorff for each class average, ignoring zero entries.
-        do i = 1, self%npointsets
-            acc = 0.0
-            cnt = 0
-            do j = 1, self%npointsets
-                if( self%hausdorff_tbl(i,j) == 0 ) cycle
-                acc = acc + real(self%hausdorff_tbl(i,j))
-                cnt = cnt + 1
-            end do
-            if( cnt > 0 ) self%pointsets(i)%mean_hausdorff = acc / real(cnt)
-        end do
-
-        call write_table('hausdorff_tbl.txt', self%hausdorff_tbl)
-        call write_mean_table('mean_hausdorff_tbl.txt', self%pointsets)
-        call write_local_variance_table('local_variance_tbl.txt', self%pointsets)
-
-    contains
-
-        subroutine write_table(fname, tbl)
-            character(len=*), intent(in) :: fname
-            integer,          intent(in) :: tbl(:,:)
-            integer :: ii, jj, n, funit
-            real :: t0
-            n = size(tbl, dim=1)
-            open(newunit=funit, file=trim(fname), status='replace', action='write')
-            write(funit,'(A)', advance='no') '# i/j'
-            do jj = 1, n
-                write(funit,'(1X,I0)', advance='no') jj
-            end do
-            write(funit,*)
-
-            do ii = 1, n
-                write(funit,'(I0)', advance='no') ii
-                do jj = 1, n
-                    write(funit,'(1X,I0)', advance='no') tbl(ii,jj)
-                end do
-                write(funit,*)
-            end do
-            close(funit)
-        end subroutine write_table
-
-        subroutine write_mean_table(fname, psets)
-            character(len=*), intent(in) :: fname
-            type(image_pointset), intent(in) :: psets(:)
-            integer :: ii, funit
-            open(newunit=funit, file=trim(fname), status='replace', action='write')
-            write(funit,'(A)') '# class_index mean_hausdorff'
-            do ii = 1, size(psets)
-                write(funit,'(I0,1X,ES14.6)') ii, psets(ii)%mean_hausdorff
-            end do
-            close(funit)
-        end subroutine write_mean_table
-
-        subroutine write_local_variance_table(fname, psets)
-            character(len=*), intent(in) :: fname
-            type(image_pointset), intent(in) :: psets(:)
-            integer :: ii, funit
-            open(newunit=funit, file=trim(fname), status='replace', action='write')
-            write(funit,'(A)') '# class_index local_var_in_mask local_var_out_mask'
-            do ii = 1, size(psets)
-                write(funit,'(I0,1X,ES14.6,1X,ES14.6)') ii, psets(ii)%local_var_in_mask, psets(ii)%local_var_out_mask
-            end do
-            close(funit)
-        end subroutine write_local_variance_table
-
-        integer function pairwise_hausdorff_int(ps1, ps2) result(hdist)
-            type(image_pointset), intent(in) :: ps1, ps2
-            integer                          :: d12, d21
-            if( ps1%npts == 0 .or. ps2%npts == 0 .or. ps1%is_rejected .or. ps2%is_rejected )then
-                hdist = 0
-            else
-                d12 = directed_hausdorff_int(ps1%pts, ps1%npts, ps2%pts, ps2%npts)
-                d21 = directed_hausdorff_int(ps2%pts, ps2%npts, ps1%pts, ps1%npts)
-                hdist = max(d12, d21)
-            end if
-        end function pairwise_hausdorff_int
-
-        integer function directed_hausdorff_int(pts_a, na, pts_b, nb) result(dmax)
-            integer, intent(in) :: pts_a(2,*), pts_b(2,*), na, nb
-            integer             :: ia, ib, ax, ay, dx, dy, d2, d2min
-            dmax = 0
-            do ia = 1, na
-                ax = pts_a(1,ia)
-                ay = pts_a(2,ia)
-                d2min = huge(1)
-                do ib = 1, nb
-                    dx = ax - pts_b(1,ib)
-                    dy = ay - pts_b(2,ib)
-                    d2 = dx*dx + dy*dy
-                    if( d2 < d2min )then
-                        d2min = d2
-                        if( d2min <= dmax ) exit
-                    end if
-                end do
-                if( d2min > dmax ) dmax = d2min
-            end do
-        end function directed_hausdorff_int
-    
-    end subroutine calculate_hausdorff_table
 
     subroutine run_cluster_overfitting_rejection( self, mskdiam, nclust_in )
         class(cavg_compatibility_analysis), intent(inout) :: self
