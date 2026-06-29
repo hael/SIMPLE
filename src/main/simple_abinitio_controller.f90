@@ -32,6 +32,7 @@ integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split aft
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
 character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'sum'
+character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -243,14 +244,18 @@ contains
         else
             cfg%refine           = 'prob_neigh'
             if( params%nstates > 1 )then
-                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
+                if( trim(params%multivol_mode).eq.'docked' )then
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_DOCKED
+                else
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
+                endif
             else
                 cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
             endif
         endif
         if( docked_split_stage(params, istage) )then
-            cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
+            cfg%refine           = 'prob_state'
+            cfg%prob_neigh_mode  = ''
         endif
     end subroutine set_refine3D_mode_policy
 
@@ -285,10 +290,6 @@ contains
                 if( istage >= TRAILREC_STAGE_SINGLE .and. istage /= params%split_stage )then
                     cfg%trail_rec = 'yes'
                 endif
-            case('input_oris_fixed')
-                cfg%trail_rec = 'no'
-            case('input_oris_start')
-                cfg%trail_rec = 'no'
             case default
                 cfg%trail_rec = 'no'
         end select
@@ -497,10 +498,10 @@ contains
         endif
     end subroutine emit_refine3D_stage_cfg
 
-    logical function docked_split_stage( params, istage ) result( l_split_stage )
+    logical function docked_split_stage( params, istage )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
-        l_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
+        docked_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
     end function docked_split_stage
 
     logical function force_full_sampling_mode( params ) result( l_force_full )

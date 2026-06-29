@@ -276,17 +276,17 @@ contains
             integer,   intent(in)    :: iptcl_loc, ithr_loc, prev_state, prev_proj
             type(ori), intent(inout) :: o_prev_loc
             real,      intent(out)   :: shift_seed(3)
-            integer :: irot_loc, iref_start
+            integer :: irot, iref
             shift_seed = 0.
             if( .not. l_sh_first ) return
             if( prev_state < 1 .or. prev_state > self%p_ptr%nstates ) return
             if( prev_proj  < 1 .or. prev_proj  > self%p_ptr%nspace  ) return
             if( .not. self%state_exists(prev_state) ) return
-            iref_start = (prev_state-1)*self%p_ptr%nspace
-            irot_loc   = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
-            call grad_shsrch_obj(ithr_loc)%set_indices(iref_start + prev_proj, iptcl_loc)
-            shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
-            if( irot_loc == 0 ) shift_seed(2:3) = 0.
+            iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
+            irot = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+            call grad_shsrch_obj(ithr_loc)%set_indices(iref, iptcl_loc)
+            shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot, sh_rot=.false.)
+            if( irot == 0 ) shift_seed(2:3) = 0.
         end subroutine estimate_shift_seed
 
         subroutine score_ref( ri_loc, iptcl_loc, shift_xy, ithr_loc, dist_loc, irot_loc )
@@ -358,7 +358,7 @@ contains
         integer,             intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< origin shift search object, L-BFGS with gradient
         type(ori)               :: o_prev
-        integer :: i, iproj, iptcl, ithr, irot, istate, iref_start, is
+        integer :: i, iproj, iptcl, ithr, irot, istate, iref, is
         real    :: lims(2,2), lims_init(2,2), cxy(3)
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
             THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_state_only_range')
@@ -375,24 +375,24 @@ contains
                     &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
             end do
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,is,istate,irot,iref_start,cxy)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,is,istate,irot,iref,cxy)&
             !$omp proc_bind(close) schedule(static)
             do i = i_first, i_last
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! identify shifts using the previously assigned best reference
-                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)   ! previous ori
-                iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
+                call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)     ! previous ori
+                irot   = self%b_ptr%pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
+                iproj = self%b_ptr%eulspace%find_closest_proj(o_prev)   ! previous projection direction
                 do is = 1, self%nstates
-                    istate     = self%ssinds(is)
-                    irot       = self%b_ptr%pftc%get_roind(360.-o_prev%e3get()) ! in-plane angle index
-                    iref_start = (istate-1)*self%p_ptr%nspace
+                    istate = self%ssinds(is)
+                    iref   = (istate-1)*self%p_ptr%nspace + iproj
                     ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(iref_start + iproj, iptcl)
+                    call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
                         irot     = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
-                        cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot))
+                        cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, iptcl, irot))
                         cxy(2:3) = 0.
                     endif
                     self%state_tab(is,i)%dist   = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
@@ -406,7 +406,7 @@ contains
             !$omp end parallel do
         else
             ! fill the table
-            !$omp parallel do default(shared) private(i,iptcl,o_prev,irot,iproj,is,istate,iref_start)&
+            !$omp parallel do default(shared) private(i,iptcl,o_prev,irot,iproj,is,istate,iref)&
             !$omp proc_bind(close) schedule(static)
             do i = i_first, i_last
                 iptcl = self%pinds(i)
@@ -415,10 +415,10 @@ contains
                 irot  = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
                 iproj = self%b_ptr%eulspace%find_closest_proj(o_prev) ! previous projection direction
                 do is = 1, self%nstates
-                    istate      = self%ssinds(is)
-                    iref_start  = (istate-1)*self%p_ptr%nspace
+                    istate = self%ssinds(is)
+                    iref   = (istate-1)*self%p_ptr%nspace + iproj
                     self%state_tab(is,i)%dist   = eulprob_dist_switch(&
-                        &real(self%b_ptr%pftc%gen_corr_for_rot_8(iref_start+iproj, iptcl, irot)), self%p_ptr%cc_objfun)
+                        &real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, iptcl, irot)), self%p_ptr%cc_objfun)
                     self%state_tab(is,i)%iproj  = iproj
                     self%state_tab(is,i)%inpl   = irot
                     self%state_tab(is,i)%x      = 0.

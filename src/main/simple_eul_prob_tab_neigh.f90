@@ -1374,15 +1374,15 @@ contains
         type(ori),                 intent(inout) :: o_prev
         logical,                   intent(in)    :: l_with_shift
         real,                      intent(inout) :: shift_seed(3)
-        integer :: irot, iref_start
+        integer :: irot, iref
         shift_seed = 0.
         if( .not. l_with_shift ) return
-        irot = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
         if( prev_state >= 1 .and. prev_state <= self%p_ptr%nstates .and.&
             &prev_proj >= 1 .and. prev_proj <= self%p_ptr%nspace )then
             if( self%state_exists(prev_state) )then
-                iref_start = (prev_state-1)*self%p_ptr%nspace
-                call grad_obj(ithr)%set_indices(iref_start + prev_proj, iptcl)
+                irot = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
+                iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
+                call grad_obj(ithr)%set_indices(iref, iptcl)
                 shift_seed = grad_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                 if( irot == 0 ) shift_seed(2:3) = 0.
             endif

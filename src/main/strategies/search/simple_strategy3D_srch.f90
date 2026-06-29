@@ -152,7 +152,7 @@ contains
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
         ! map previous projection direction (always use full-space ref index)
         self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj
-        call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        call self%b_ptr%spproj_field%set(self%iptcl, 'proj', self%prev_proj)
         ! copy self%o_prev to opeaks to transfer paticle-dependent parameters
         do ipeak = 1, self%npeaks
             call self%opeaks%set_ori(ipeak, self%o_prev)

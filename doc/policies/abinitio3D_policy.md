@@ -189,14 +189,15 @@ The docked split starts a new multi-state update epoch:
   volume averaging
 
 The first post-split stage is a stabilization stage. It uses
-`refine=prob_neigh` with `prob_neigh_mode=sum`, and it removes fractional
-particle updates entirely: `update_frac`, `nsample`, and `fillin` are not
-emitted, so all active particles are processed. Fractional volume averaging is
+`refine=prob_state`, and it removes fractional particle updates entirely:
+`update_frac`, `nsample`, and `fillin` are not emitted, such that all active
+particles are processed. Fractional volume averaging is also disabled for
 also disabled for this stage. The remaining post-split docked stages use
-`refine=prob_neigh`; they restore the fixed `nsample`-derived fractional target
-plus trailing reconstruction only while `nsample/active_particles <= 0.9`.
-When `nsample/active_particles > 0.9`, the full-sampling switch remains active
-for those stages as well, so fractional and trailing behavior stays disabled.
+`refine=prob_neigh` with `prob_neigh_mode=geom`; they restore the fixed
+`nsample`-derived fractional target plus trailing reconstruction only while
+`nsample/active_particles <= 0.9`. When `nsample/active_particles > 0.9`,
+the full-sampling switch remains active for those stages as well, so fractional
+and trailing behavior stays disabled.
 
 For docked mode, trailing reconstruction is allowed before the split and after
 the first post-split stage. The split stage itself must not blend current state

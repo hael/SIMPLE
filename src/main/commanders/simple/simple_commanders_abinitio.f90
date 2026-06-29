@@ -1218,8 +1218,6 @@ contains
                 if( nstates_glob /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
             case('independent', 'docked')
                 if( nstates_glob == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
-            case('input_oris_start', 'input_oris_fixed')
-                THROW_HARD('multivol_mode='//trim(params%multivol_mode)//' is no longer supported for abinitio3D')
             case DEFAULT
                 THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
         end select
@@ -1468,8 +1466,11 @@ contains
             nice_comm%stat_root%stage = "running workflow"
             call nice_comm%update_ini3D(stage=istage, number_states=nstates_glob, lp=lpinfo(istage)%lp) 
             call nice_comm%cycle()
-            ! At the splitting stage of docked mode: reset the nstates in params
+            ! Splitting stage of docked mode
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
+                ! map all particles to a projection direction
+                call ensure_docked_multistate_particle_assignments
+                ! reset the nstates in params, update sampling
                 params%nstates = nstates_glob
                 if( l_force_full_sampling )then
                     update_frac = 1.0
@@ -1480,8 +1481,6 @@ contains
                 write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
                     &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
                     &split_stage, '/', params%nstates, '/', update_frac
-                write(logfhandle,'(A)') &
-                    &'>>> ABINITIO3D DOCKED SPLIT STAGE RUNS ALL ACTIVE PARTICLES WITH REFINE=PROB_NEIGH PROB_NEIGH_MODE=SUM'
             endif
             ! Preparation of command line for refinement
             call set_cline_refine3D(params, istage, l_cavgs=.false.)
@@ -1627,6 +1626,48 @@ contains
                 endif
             endif
         end subroutine ensure_multistate_particle_assignments
+
+        subroutine ensure_docked_multistate_particle_assignments
+            type(cmdline) :: cline_missing
+            integer       :: nactive, nupdated, nmissing, iter_missing
+            call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+            if( nactive < 1 )then
+                THROW_HARD('multistate abinitio3D has no active particles after staged refinement')
+            endif
+            if( nmissing > 0 )then
+                iter_missing = next_refine3D_iteration()
+                write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
+                &'>>> ABINITIO3D DOCKED MULTISTATE MISSING-UPDATE ASSIGNMENT', &
+                &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
+                call flush(logfhandle)
+                cline_missing = cline_refine3D
+                call cline_missing%set('prg',          'refine3D')
+                call cline_missing%set('mkdir',              'no')
+                call cline_missing%set('refine',           'prob')
+                call cline_missing%set('balance',            'no')
+                call cline_missing%set('frac_best',           1.0)
+                call cline_missing%set('fillin',             'no')
+                call cline_missing%set('update_frac',         1.0)
+                call cline_missing%set('trail_rec',          'no')
+                call cline_missing%set('volrec',             'no')
+                call cline_missing%set('maxits',                1)
+                call cline_missing%set('startit',    iter_missing)
+                call cline_missing%set('which_iter', iter_missing)
+                call cline_missing%set('extr_iter',  iter_missing)
+                call cline_missing%delete('endit')
+                call cline_missing%delete('greedy_sampling')
+                call xrefine3D%execute(cline_missing)
+                call del_files(DIST_FBODY,      params%nparts, ext='.dat')
+                call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
+                call del_file(DIST_FBODY//'.dat')
+                call del_file(ASSIGNMENT_FBODY//'.dat')
+                call cline_missing%kill
+                call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+                if( nmissing > 0 )then
+                    THROW_HARD('multistate abinitio3D final missing-update pass failed to update every active particle')
+                endif
+            endif
+        end subroutine ensure_docked_multistate_particle_assignments
 
         subroutine read_multistate_assignment_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing

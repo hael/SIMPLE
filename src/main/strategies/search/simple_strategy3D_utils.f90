@@ -50,10 +50,10 @@ contains
         mi_state = 0.
         if( s%prev_state == state ) mi_state = 1.
         if( l_multistates )then
-            call s%b_ptr%spproj_field%set(s%iptcl, 'state',  real(state))
+            call s%b_ptr%spproj_field%set(s%iptcl, 'state',       state)
             call s%b_ptr%spproj_field%set(s%iptcl, 'mi_state', mi_state)
         else
-            call s%b_ptr%spproj_field%set(s%iptcl, 'state',    1.)
+            call s%b_ptr%spproj_field%set(s%iptcl, 'state',    1)
             call s%b_ptr%spproj_field%set(s%iptcl, 'mi_state', 1.)
         endif
         ! correlation

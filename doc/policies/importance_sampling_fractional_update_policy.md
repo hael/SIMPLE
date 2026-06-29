@@ -173,13 +173,12 @@ split occurs after stage 5. At the split, the commander restores the requested
 state count, clears `ptcl3D%sampled` and `ptcl3D%updatecnt`, randomizes active
 particles into state labels, and reconstructs split state volumes.
 
-The first post-split stage uses `refine=prob_neigh` with
-`prob_neigh_mode=sum`, removes `update_frac`, `nsample`, and `fillin`, and
-therefore processes all active particles without fractional particle sampling.
-It also keeps trailing reconstruction off, preventing pre-split mixed-volume
-memory from being blended into the split-stage volumes. Later post-split stages
-restore the fixed `nsample`-derived fractional particle target and trailing
-reconstruction inside the new multi-state epoch.
+The first post-split stage uses `refine=prob_state`, removes `update_frac`,
+`nsample`, and `fillin`, and therefore processes all active particles without
+fractional particle sampling. It also keeps trailing reconstruction off,
+preventing pre-split mixed-volume memory from being blended into the split-stage
+volumes. Later post-split stages restore the fixed `nsample`-derived fractional
+particle target and trailing reconstruction inside the new multi-state epoch.
 
 Because the split clears the counters, `updatecnt` after the split is
 post-split multi-state update history, not single-state history. Final docked
