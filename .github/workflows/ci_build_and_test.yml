@@ -51,7 +51,7 @@ jobs:
         run: |
              ./compile_gui.sh
 
-  Build:
+  Build_coarray:
     name: Build SIMPLE with coarrays
     runs-on: ${{ matrix.os }}
     strategy:
@@ -92,7 +92,7 @@ jobs:
       - name: Test SIMPLE (Linux/MacOS)
         run: |
              export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="local"
+             export SIMPLE_QSYS="coarray"
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
              export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
              echo "-------------------- TEST COARRAYS -------------------------"
