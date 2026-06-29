@@ -87,7 +87,7 @@ jobs:
 
       - name: Build SIMPLE with coarrays (Linux/MacOS)
         run: |
-             ./compile_coarray.sh
+             ./compile_coarrays.sh
 
       - name: Test SIMPLE (Linux/MacOS)
         run: |
