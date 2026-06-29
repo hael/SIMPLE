@@ -21,7 +21,8 @@ add_executable(${SINGLE_EXE}
 add_executable(${STREAM_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream.f90")
 add_executable(${SIMPLE_PRIVATE_EXE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec_driver.f90")
 add_executable(${SIMPLE_WORKER_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_persistent_worker.f90")
 

@@ -65,16 +65,18 @@ type qsys_ctrl
     procedure          :: free_all_cunits
     procedure          :: set_jobs_status
     procedure          :: clear_stack
-    ! SCRIPT GENERATORS
-    procedure          :: generate_scripts
+    ! JOB PREPARATION AND SCRIPT GENERATORS
+    procedure          :: prep_part_jobs
     procedure          :: generate_scripts_subprojects
     procedure          :: generate_array_script
+    procedure, private :: augment_partition_job_descr, clear_partition_job_descr
     procedure, private :: generate_script_1, generate_script_2, generate_script_3, generate_script_4
     generic            :: generate_script => generate_script_2, generate_script_3, generate_script_4
     ! SUBMISSION TO QSYS
     procedure          :: submit_scripts
     procedure          :: submit_script
     procedure          :: dispatch_task_to_persistent_worker
+    procedure, private :: declare_coarray_jobs_finished
     ! QUERIES
     procedure, private :: update_queue
     ! THE MASTER SCHEDULERS
@@ -322,11 +324,60 @@ contains
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts_subprojects
 
-    !> Generate one script per partition in the fromto_part range via generate_script_1().
-    !! Augments job_descr with fromp/top/part/nparts keys for each partition before
-    !! generating the script, then deletes those keys afterwards.  Resets
+    subroutine augment_partition_job_descr( self, job_descr, ipart, outfile_body, part_params )
+        class(qsys_ctrl),           intent(in)    :: self
+        class(chash),               intent(inout) :: job_descr
+        integer,                    intent(in)    :: ipart
+        type(string),               intent(in)    :: outfile_body
+        class(chash),     optional, intent(in)    :: part_params(:)
+        type(string) :: key, val
+        integer      :: iadd
+        call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
+        call job_descr%set('top',    int2str(self%parts(ipart,2)))
+        call job_descr%set('part',   int2str(ipart))
+        call job_descr%set('nparts', int2str(self%nparts_tot))
+        if( outfile_body%is_allocated() )then
+            call job_descr%set('outfile', outfile_body%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
+        endif
+        if( present(part_params) )then
+            do iadd=1,part_params(ipart)%size_of()
+                key = part_params(ipart)%get_key(iadd)
+                val = part_params(ipart)%get(iadd)
+                call job_descr%set(key%to_char(), val)
+            end do
+        endif
+    end subroutine augment_partition_job_descr
+
+    subroutine clear_partition_job_descr( self, job_descr, outfile_body, part_params )
+        class(qsys_ctrl),           intent(in)    :: self
+        class(chash),               intent(inout) :: job_descr
+        type(string),               intent(inout) :: outfile_body
+        class(chash),     optional, intent(in)    :: part_params(:)
+        type(string) :: key
+        integer      :: ipart, iadd
+        call job_descr%delete('fromp')
+        call job_descr%delete('top')
+        call job_descr%delete('part')
+        call job_descr%delete('nparts')
+        if( outfile_body%is_allocated() )then
+            call job_descr%delete('outfile')
+            call outfile_body%kill
+        endif
+        if( present(part_params) )then
+            do ipart = self%fromto_part(1), self%fromto_part(2)
+                do iadd=1,part_params(ipart)%size_of()
+                    key = part_params(ipart)%get_key(iadd)
+                    call job_descr%delete(key%to_char())
+                end do
+            end do
+        endif
+    end subroutine clear_partition_job_descr
+
+    !> Prepare one backend-specific job per partition in the fromto_part range.
+    !! Script backends write one script per partition; coarray stages one direct
+    !! command string per partition.  Resets
     !! ncomputing_units_avail when not in streaming mode.
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
+    subroutine prep_part_jobs( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr         !< base job description (modified in-place, restored on return)
         class(string),              intent(in)    :: ext               !< output file extension written into outfile keys
@@ -334,54 +385,26 @@ contains
         class(string),    optional, intent(in)    :: outfile_body      !< base name for per-partition output files
         class(chash),     optional, intent(in)    :: part_params(:)    !< per-partition extra key/value pairs
         type(parameters), optional, intent(in)    :: extra_params      !< extra parameters passed to memory estimator
-        type(string) :: outfile_body_local, key, val
-        integer      :: ipart, iadd
-        logical      :: part_params_present
+        type(string) :: outfile_body_local
+        integer      :: ipart
         select type( pmyqsys => self%myqsys )
             class is(qsys_coarray)
                 call stage_coarray_jobs(self, job_descr, q_descr, outfile_body, part_params, extra_params)
                 return
         end select
         if( present(outfile_body) ) outfile_body_local = outfile_body
-        part_params_present = present(part_params)
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
-            call job_descr%set('top',    int2str(self%parts(ipart,2)))
-            call job_descr%set('part',   int2str(ipart))
-            call job_descr%set('nparts', int2str(self%nparts_tot))
-            if( outfile_body_local%is_allocated() )then
-                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
-            endif
-            if( part_params_present  )then
-                do iadd=1,part_params(ipart)%size_of()
-                    key = part_params(ipart)%get_key(iadd)
-                    val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key%to_char(), val)
-                end do
-            endif
+            call self%augment_partition_job_descr(job_descr, ipart, outfile_body_local, part_params)
             if(L_USE_AUTO_MEM) call estimate_mem_usage(job_descr, q_descr, extra_params)
             call self%generate_script_1(job_descr, ipart, q_descr)
         end do
-        call job_descr%delete('fromp')
-        call job_descr%delete('top')
-        call job_descr%delete('part')
-        call job_descr%delete('nparts')
-        if( outfile_body_local%is_allocated() )then
-            call job_descr%delete('outfile')
-            call outfile_body_local%kill
-        endif
-        if( part_params_present )then
-            do iadd=1,part_params(1)%size_of()
-                key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key%to_char())
-            end do
-        endif
-        ! when we generate the scripts we also reset the number of available computing units
+        call self%clear_partition_job_descr(job_descr, outfile_body_local, part_params)
+        ! preparing partition jobs also resets the number of available computing units
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
-    end subroutine generate_scripts
+    end subroutine prep_part_jobs
 
     !> Stage one direct command-line argument string per partition for the coarray
-    !! backend.  This mirrors generate_scripts() argument augmentation, but keeps
+    !! backend.  This mirrors prep_part_jobs() argument augmentation, but keeps
     !! the work in memory instead of writing distr_simple_script_* files.
     subroutine stage_coarray_jobs( self, job_descr, q_descr, outfile_body, part_params, extra_params )
         class(qsys_ctrl),           intent(inout) :: self
@@ -390,46 +413,18 @@ contains
         class(string),    optional, intent(in)    :: outfile_body
         class(chash),     optional, intent(in)    :: part_params(:)
         type(parameters), optional, intent(in)    :: extra_params
-        type(string) :: outfile_body_local, key, val, job_str
-        integer      :: ipart, iadd
-        logical      :: part_params_present
+        type(string) :: outfile_body_local, job_str
+        integer      :: ipart
         if( present(outfile_body) ) outfile_body_local = outfile_body
-        part_params_present = present(part_params)
         do ipart = self%fromto_part(1), self%fromto_part(2)
-            call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
-            call job_descr%set('top',    int2str(self%parts(ipart,2)))
-            call job_descr%set('part',   int2str(ipart))
-            call job_descr%set('nparts', int2str(self%nparts_tot))
-            if( outfile_body_local%is_allocated() )then
-                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
-            endif
-            if( part_params_present )then
-                do iadd = 1, part_params(ipart)%size_of()
-                    key = part_params(ipart)%get_key(iadd)
-                    val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key%to_char(), val)
-                end do
-            endif
+            call self%augment_partition_job_descr(job_descr, ipart, outfile_body_local, part_params)
             if( L_USE_AUTO_MEM ) call estimate_mem_usage(job_descr, q_descr, extra_params)
             job_str = job_descr%chash2str()
             self%coarray_job_args(ipart) = job_str
             self%jobs_done(ipart)        = .false.
             self%jobs_submitted(ipart)   = .false.
         end do
-        call job_descr%delete('fromp')
-        call job_descr%delete('top')
-        call job_descr%delete('part')
-        call job_descr%delete('nparts')
-        if( outfile_body_local%is_allocated() )then
-            call job_descr%delete('outfile')
-            call outfile_body_local%kill
-        endif
-        if( part_params_present )then
-            do iadd = 1, part_params(1)%size_of()
-                key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key%to_char())
-            end do
-        endif
+        call self%clear_partition_job_descr(job_descr, outfile_body_local, part_params)
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine stage_coarray_jobs
 
@@ -444,9 +439,8 @@ contains
         class(chash),               intent(in)    :: q_descr           !< queue-system metadata
         class(string),    optional, intent(in)    :: outfile_body      !< base name for per-partition output files
         class(chash),     optional, intent(in)    :: part_params(:)    !< per-partition extra key/value pairs
-        type(string) :: outfile_body_local, key, val, job_str
-        integer :: ipart, iadd, ios, funit
-        logical :: part_params_present
+        type(string) :: outfile_body_local, job_str
+        integer :: ipart, ios, funit
         character(len=512) :: io_msg
         select type( pmyqsys => self%myqsys )
             class is(qsys_slurm)
@@ -457,7 +451,6 @@ contains
                 THROW_HARD('array submission only supported by SLURM, and LSF')
         end select
         if( present(outfile_body) ) outfile_body_local = outfile_body
-        part_params_present = present(part_params)
         call fopen(funit, file=string(ARRAY_SCRIPT), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_array_script; Error when opening file for writing: '//ARRAY_SCRIPT//' ; '//trim(io_msg), ios)
         ! need to specify shell
@@ -473,20 +466,7 @@ contains
         ! start partsarray definition
         write(funit,'(a)') 'partsarray=('
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
-            call job_descr%set('top',    int2str(self%parts(ipart,2)))
-            call job_descr%set('part',   int2str(ipart))
-            call job_descr%set('nparts', int2str(self%nparts_tot))
-            if( outfile_body_local%is_allocated() )then
-                call job_descr%set('outfile', outfile_body_local%to_char()//int2str_pad(ipart,self%numlen)//METADATA_EXT)
-            endif
-            if( part_params_present  )then
-                do iadd=1,part_params(ipart)%size_of()
-                    key = part_params(ipart)%get_key(iadd)
-                    val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key%to_char(), val)
-                end do
-            endif
+            call self%augment_partition_job_descr(job_descr, ipart, outfile_body_local, part_params)
             ! compose the command line as array element inside partsarray. achar(39) is apostrophe
             job_str = job_descr%chash2str()
             write(funit,'(a)',advance='no') achar(39)//self%exec_binary%to_char()//' '//job_str%to_char()
@@ -503,20 +483,7 @@ contains
         ! exit shell when done
         write(funit,'(a)') 'exit'
         call fclose(funit)
-        call job_descr%delete('fromp')
-        call job_descr%delete('top')
-        call job_descr%delete('part')
-        call job_descr%delete('nparts')
-        if( outfile_body_local%is_allocated() )then
-            call job_descr%delete('outfile')
-            call outfile_body_local%kill
-        endif
-        if( part_params_present )then
-            do iadd=1,part_params(1)%size_of()
-                key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key%to_char())
-            end do
-        endif
+        call self%clear_partition_job_descr(job_descr, outfile_body_local, part_params)
         ! when we have generated the script we also unflag jobs_submitted and jobs_done
         self%jobs_done(:)      = .false.
         self%jobs_submitted(:) = .false.
@@ -526,7 +493,7 @@ contains
     end subroutine generate_array_script
 
     !> Internal helper: write one bash submission script for partition ipart.
-    !! Called in a loop by generate_scripts().  Resets jobs_done(ipart) and
+    !! Called in a loop by prep_part_jobs().  Resets jobs_done(ipart) and
     !! jobs_submitted(ipart) to .false. so the scheduler starts fresh.
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
         class(qsys_ctrl), intent(inout) :: self
@@ -755,8 +722,10 @@ contains
     end function shell_quote
 
     !> Submit the whole partition range through one multi-image coarray run.
-    !! Each image executes part numbers image, image+nimages, ... using the
-    !! staged command-line arguments, without generating per-partition scripts.
+    !! Image k executes parts from_part+k-1, from_part+k-1+nimages, ...
+    !! using the staged command-line arguments, without generating scripts.
+    !! The private-exec protocol after --coarray is:
+    !!   <from_part> <to_part> <part_job_args...>
     subroutine submit_coarray_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
         type(string) :: qsys_cmd
@@ -768,7 +737,7 @@ contains
         nimages     = max(1, min(self%ncomputing_units, nparts_here))
         qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//shell_quote(self%exec_binary%to_char())//&
             &' --coarray '//int2str(self%fromto_part(1))//' '//&
-            &int2str(self%fromto_part(2))//' '//int2str(self%numlen)
+            &int2str(self%fromto_part(2))
         do ipart = self%fromto_part(1), self%fromto_part(2)
             if( .not. self%coarray_job_args(ipart)%is_allocated() )then
                 THROW_HARD('coarray job arguments were not staged for part '//int2str(ipart))
@@ -780,9 +749,18 @@ contains
         submission_exitstat = -1
         call exec_cmdline(qsys_cmd, exitstat=submission_exitstat)
         if( submission_exitstat /= 0 ) THROW_HARD('coarray execution failed; see SIMPLE_SUBPROC_OUTPUT and simple_private_exec_coarray_part_*.out logs')
+        call self%declare_coarray_jobs_finished
+    end subroutine submit_coarray_jobs
+
+    !> Record successful completion of the synchronous coarray submission.
+    !! Coarray workers do not touch JOB_FINISHED_* sentinels; the coarray run's
+    !! internal synchronization and successful return are the controller-side
+    !! completion signal for this partition range.
+    subroutine declare_coarray_jobs_finished( self )
+        class(qsys_ctrl), intent(inout) :: self
         self%jobs_done(:)             = .true.
         self%ncomputing_units_avail   = self%ncomputing_units
-    end subroutine submit_coarray_jobs
+    end subroutine declare_coarray_jobs_finished
 
     !> Submit all unsubmitted scripts in the partition range, up to ncomputing_units_avail
     !! concurrency.  For the persistent worker backend each script is enqueued via
@@ -911,6 +889,10 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         integer :: ipart, njobs_in_queue, exit_code
         logical :: err
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_coarray)
+                return
+        end select
         if( self%stream ) then
             do ipart = self%fromto_part(1), self%fromto_part(2)
                 if( self%jobs_done(ipart) ) cycle

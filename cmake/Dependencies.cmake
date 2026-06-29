@@ -93,6 +93,7 @@ if(USE_COARRAYS)
     REQUIRED)
     list(APPEND SIMPLE_LIBRARIES ${COARRAYS_LIBRARY})
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-fcoarray=lib>)
+    add_link_options($<$<LINK_LANGUAGE:Fortran>:-fcoarray=lib>)
     message(STATUS "Coarray support enabled (multi-image).")
 endif()
 

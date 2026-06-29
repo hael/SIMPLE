@@ -203,6 +203,7 @@ contains
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')
         qsnam_requested = qsnam
+        call validate_requested_qsys(qsnam)
         ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')
         ! opts into the TCP persistent-worker backend.  Strip the suffix so the
         ! underlying qsys factory still resolves the base scheduler (local, slurm, …).
@@ -270,6 +271,15 @@ contains
             call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
                 &str2int(self%qdescr%get('job_cpus_per_task')), 0, 0, .false.)
         end subroutine standard_exec_path
+
+        subroutine validate_requested_qsys( qsys_name_here )
+            class(string), intent(in) :: qsys_name_here
+#ifndef USE_COARRAYS
+            if( trim(qsys_name_here%to_char()) == 'coarray' )then
+                THROW_HARD('qsys=coarray requires a USE_COARRAYS build')
+            endif
+#endif
+        end subroutine validate_requested_qsys
 
     end subroutine new
 
@@ -379,7 +389,7 @@ contains
             call self%qscripts%generate_array_script(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params)
             call self%qscripts%schedule_array_jobs
         else
-            call self%qscripts%generate_scripts(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
+            call self%qscripts%prep_part_jobs(job_descr, string(MRC_EXT), self%qdescr, outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
         end if
     end subroutine gen_scripts_and_schedule_jobs

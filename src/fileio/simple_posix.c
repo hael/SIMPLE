@@ -207,6 +207,9 @@ void noprint(FILE *f,...){}
 #define RMDIRECTORIES rmDirectories_
 #define REMOVE_DIRECTORY remove_directory_
 
+static int saved_stdout_fd = -1;
+static int saved_stderr_fd = -1;
+
 // Protect fortran strings by appending '\0' to end
 char *F90to_cstring(char *str, int len)
 {
@@ -254,6 +257,61 @@ void f2cstr(char* f_str, char* c_str, unsigned length)
         i--;
     }
     /* fprintf (stderr, "f2cstr out '%s'\n", c_str); */
+}
+
+int simple_redirect_output(char *path, int *len)
+{
+#ifdef _WIN32
+    return -1;
+#else
+    char *cpath = NULL;
+    int fd;
+    if(path == NULL || len == NULL || *len < 1) return -1;
+    fflush(NULL);
+    if(saved_stdout_fd >= 0 || saved_stderr_fd >= 0) return -2;
+    cpath = F90to_cstring(path, *len);
+    if(cpath == NULL) return -3;
+    saved_stdout_fd = dup(STDOUT_FILENO);
+    saved_stderr_fd = dup(STDERR_FILENO);
+    if(saved_stdout_fd < 0 || saved_stderr_fd < 0) {
+        free(cpath);
+        return -4;
+    }
+    fd = open(cpath, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    free(cpath);
+    if(fd < 0) return -5;
+    if(dup2(fd, STDOUT_FILENO) < 0) {
+        close(fd);
+        return -6;
+    }
+    if(dup2(fd, STDERR_FILENO) < 0) {
+        close(fd);
+        return -7;
+    }
+    close(fd);
+    return 0;
+#endif
+}
+
+int simple_restore_output(void)
+{
+#ifdef _WIN32
+    return -1;
+#else
+    int status = 0;
+    fflush(NULL);
+    if(saved_stdout_fd >= 0) {
+        if(dup2(saved_stdout_fd, STDOUT_FILENO) < 0) status = -2;
+        close(saved_stdout_fd);
+        saved_stdout_fd = -1;
+    }
+    if(saved_stderr_fd >= 0) {
+        if(dup2(saved_stderr_fd, STDERR_FILENO) < 0) status = -3;
+        close(saved_stderr_fd);
+        saved_stderr_fd = -1;
+    }
+    return status;
+#endif
 }
 
 int isdir(char* pathname, int* len, size_t ivf_pathname)

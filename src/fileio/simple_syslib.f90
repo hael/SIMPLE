@@ -143,6 +143,20 @@ interface
         integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
 
+    function simple_redirect_output_c(filename, len) bind(c,name="simple_redirect_output")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: simple_redirect_output_c
+        character(kind=c_char,len=1),dimension(*),intent(in) :: filename
+        integer(c_int), intent(in) :: len
+    end function simple_redirect_output_c
+
+    function simple_restore_output_c() bind(c,name="simple_restore_output")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: simple_restore_output_c
+    end function simple_restore_output_c
+
     function regexp_match(source,src_len, regex,rgx_len) bind(C,name="regexp_match")
         use, intrinsic :: iso_c_binding
         implicit none
@@ -216,6 +230,44 @@ contains
             end subroutine raise_sys_error
 
     end subroutine exec_cmdline
+
+    subroutine redirect_stdout_stderr( output_file )
+        class(*), intent(in) :: output_file
+        character(kind=c_char,len=XLONGSTRLEN) :: filename_c
+        integer :: filename_len, status
+        select type(output_file)
+            type is(string)
+                filename_len = output_file%strlen_trim()
+                filename_c   = output_file%to_char()//c_null_char
+            type is(character(*))
+                filename_len = len_trim(adjustl(output_file))
+                filename_c   = trim(adjustl(output_file))//c_null_char
+            class default
+                call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
+        end select
+        if( filename_len < 1 ) THROW_ERROR('empty output redirection filename')
+        call safe_flush(output_unit)
+        call safe_flush(error_unit)
+        call safe_flush(logfhandle)
+        status = simple_redirect_output_c(filename_c, filename_len)
+        if( status /= 0 ) THROW_ERROR('failed to redirect stdout/stderr; status='//int2str(status))
+    end subroutine redirect_stdout_stderr
+
+    subroutine restore_stdout_stderr
+        integer :: status
+        call safe_flush(output_unit)
+        call safe_flush(error_unit)
+        call safe_flush(logfhandle)
+        status = simple_restore_output_c()
+        if( status /= 0 ) THROW_ERROR('failed to restore stdout/stderr; status='//int2str(status))
+    end subroutine restore_stdout_stderr
+
+    subroutine safe_flush( unit )
+        integer, intent(in) :: unit
+        logical :: opened
+        inquire(unit=unit, opened=opened)
+        if( opened ) flush(unit)
+    end subroutine safe_flush
 
     function simple_getenv( name , status )  result( envval )
         character(len=*),  intent(in)  :: name

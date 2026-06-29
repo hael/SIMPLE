@@ -51,10 +51,12 @@ contains
         call flush(logfhandle)
     end subroutine qsys_cleanup
 
-    !>  Writes the JOB_FINISHED_* file to mark end of computing unit job
-    subroutine qsys_job_finished( params, source )
-        ! generation of this file marks completion of the partition
-        ! this file is empty 4 now but may contain run stats etc.
+    !> Declare completion of one partition job.
+    !! File-backed qsys backends retain the historical JOB_FINISHED_* sentinel
+    !! contract.  Coarray completion is synchronized by the coarray dispatch
+    !! driver, so this worker-side declaration deliberately avoids filesystem
+    !! completion state for qsys=coarray.
+    subroutine qsys_declare_part_finished( params, source )
         class(parameters), intent(in) :: params
         class(string),     intent(in) :: source
         logical :: l_stream
@@ -63,6 +65,13 @@ contains
         if( params%l_distr_worker .or. l_stream )then
             call simple_touch(JOB_FINISHED_FBODY//int2str_pad(params%part,params%numlen))
         endif
+    end subroutine qsys_declare_part_finished
+
+    !> Backward-compatible spelling for partition completion declaration.
+    subroutine qsys_job_finished( params, source )
+        class(parameters), intent(in) :: params
+        class(string),     intent(in) :: source
+        call qsys_declare_part_finished(params, source)
     end subroutine qsys_job_finished
 
     subroutine qsys_subproject_job_finished( params, source )

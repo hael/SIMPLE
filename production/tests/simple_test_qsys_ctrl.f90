@@ -27,7 +27,7 @@ logical            :: all_passed     = .true.
 call test_constructor_and_exists()
 call test_get_set_jobs_status()
 call test_free_all_cunits()
-call test_generate_scripts()
+call test_prep_part_jobs()
 call test_generate_script_2()
 call test_generate_script_3()
 call test_generate_script_4()
@@ -166,25 +166,25 @@ contains
     end subroutine test_free_all_cunits
 
     ! ----------------------------------------------------------------
-    ! TEST: generate_scripts  (the main bulk script generator)
+    ! TEST: prep_part_jobs  (the main bulk partition-job preparer)
     !
     !  For each partition in [fromto_part(1) .. fromto_part(2)] it:
     !    1.  Injects  fromp, top, part, nparts  into job_descr
     !    2.  Optionally sets outfile = outfile_body // padded_part // '.mrc'
     !    3.  Optionally merges per-part parameters from part_params(:)
-    !    4.  Calls generate_script_1 which writes the bash script
+    !    4.  Calls the backend-specific writer/stager
     !    5.  Resets ncomputing_units_avail (for non-stream mode)
     !
     !  The generated scripts live in the current directory as
     !     distr_simple_script_<padded_part>
     ! ----------------------------------------------------------------
-    subroutine test_generate_scripts()
+    subroutine test_prep_part_jobs()
         type(qsys_local)            :: qsys_obj
         integer, allocatable, target :: parts(:,:)
         type(qsys_ctrl)             :: ctrl
         type(chash)                  :: job_descr, q_descr
         integer                      :: ip
-        write(*,'(/,a)') '--- test_generate_scripts ---'
+        write(*,'(/,a)') '--- test_prep_part_jobs ---'
         call make_ctrl( qsys_obj, parts, ctrl )
         ! Build a minimal job description  (key-value pairs that become
         ! the command line of the launched binary)
@@ -196,7 +196,7 @@ contains
         call q_descr%new(10)
         call q_descr%set('qsys_name', 'local')
         ! Generate one script per partition
-        call ctrl%generate_scripts( job_descr, string('.mrc'), q_descr )
+        call ctrl%prep_part_jobs( job_descr, string('.mrc'), q_descr )
         ! Verify the script files were created on disk
         write(*,'(a)') '  Generated scripts:'
         do ip = 1, NPARTS
@@ -207,7 +207,7 @@ contains
                 all_passed = .false.
             endif
         end do
-        write(*,'(a)') '  PASS: generate_scripts created all script files'
+        write(*,'(a)') '  PASS: prep_part_jobs created all script files'
         ! clean up files
         do ip = 1, NPARTS
             call del_file('distr_simple_script_'//int2str(ip))
@@ -216,7 +216,7 @@ contains
         call q_descr%kill
         call ctrl%kill
         call qsys_obj%kill
-    end subroutine test_generate_scripts
+    end subroutine test_prep_part_jobs
 
     ! ----------------------------------------------------------------
     ! TEST: generate_script_2  (single-job, explicit params overload)

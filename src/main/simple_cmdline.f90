@@ -29,6 +29,7 @@ type cmdline
   contains
     procedure          :: parse
     procedure          :: parse_private
+    procedure          :: parse_private_line
     procedure          :: parse_oldschool
     procedure, private :: parse_command_line_value
     procedure, private :: copy
@@ -268,6 +269,83 @@ contains
         end do
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
+
+    !> \brief parse a serialized simple_private_exec command line.
+    !! Used by in-process coarray workers, where the private command is staged as
+    !! one chash2str() payload instead of being present in the process argv.
+    subroutine parse_private_line( self, line )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: line
+        type(string), allocatable       :: keys_required(:)
+        type(args)                      :: allowed_args
+        character(len=XLONGSTRLEN)      :: arg(MAX_CMDARGS)
+        type(ui_program), pointer       :: ptr2prg => null()
+        integer :: i, ikey, pos, sz_keys_req, nargs_required
+        logical :: skip_required_keys
+        call self%kill
+        self%entire_line = adjustl(trim(line))
+        cmdline_glob     = trim(self%entire_line)
+        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on private command line')
+        call parsestr(self%entire_line, ' ', arg, self%argcnt)
+        if( self%argcnt < 1 ) THROW_HARD('empty private command line')
+        pos = index(arg(1), '=')
+        call cmdline_err(0, len_trim(arg(1)), arg(1), pos)
+        call get_prg_ptr(string(arg(1)(pos+1:)), ptr2prg)
+        select case(trim(arg(1)(pos+1:)))
+            case('write_ui_json','print_ui_json','print_sym_subgroups','print_ui_stream')
+                ! no command line arguments
+                return
+            case DEFAULT
+                if( associated(ptr2prg) )then
+                    skip_required_keys = skip_mode_required_keys(trim(arg(1)(pos+1:)), self%entire_line)
+                    if( skip_required_keys )then
+                        sz_keys_req    = 0
+                        nargs_required = 1
+                    else
+                        sz_keys_req = ptr2prg%get_nrequired_keys()
+                        if( sz_keys_req > 0 )then
+                            keys_required  = ptr2prg%get_required_keys()
+                            nargs_required = sz_keys_req + 1
+                        else
+                            nargs_required = 1
+                        endif
+                    endif
+                    if( self%argcnt < nargs_required )then
+                        call ptr2prg%print_cmdline()
+                        stop
+                    else
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
+                            end do
+                        endif
+                    endif
+                else
+                    sz_keys_req = get_n_private_keys_required(trim(arg(1)(pos+1:)))
+                    if( sz_keys_req > 0 )then
+                        keys_required  = get_private_keys_required(trim(arg(1)(pos+1:)))
+                        nargs_required = sz_keys_req + 1
+                    else
+                        nargs_required = 1
+                    endif
+                    if( self%argcnt < nargs_required .or. (sz_keys_req == 0 .and. self%argcnt == 1) )then
+                        call print_private_cmdline(arg(1)(pos+1:))
+                        stop
+                    else
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( keys_required(ikey)%is_allocated() ) call self%checkvar(keys_required(ikey)%to_char(), ikey)
+                            end do
+                        endif
+                    endif
+                endif
+        end select
+        allowed_args = args()
+        do i=1,self%argcnt
+            call self%parse_command_line_value(i, arg(i), allowed_args)
+        end do
+        if( sz_keys_req > 0 ) call self%check
+    end subroutine parse_private_line
 
     logical function skip_mode_required_keys( prgname, line )
         character(len=*), intent(in) :: prgname, line

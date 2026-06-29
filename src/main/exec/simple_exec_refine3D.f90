@@ -12,13 +12,13 @@ implicit none
 public :: exec_refine3D_commander
 private
 
-type(commander_automask)      :: xautomask
-type(commander_postprocess)   :: xpostprocess
-type(commander_rec3D)         :: xrec3D
+type(commander_automask)        :: xautomask
+type(commander_postprocess)     :: xpostprocess
+type(commander_rec3D)           :: xrec3D
 type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-type(commander_refine3D_auto) :: xrefine3D_auto
-type(commander_refine3D_multi) :: xrefine3D_multi
-type(commander_refine3D)      :: xrefine3D
+type(commander_refine3D_auto)   :: xrefine3D_auto
+type(commander_refine3D_multi)  :: xrefine3D_multi
+type(commander_refine3D)        :: xrefine3D
 
 contains
 
@@ -41,7 +41,7 @@ contains
                 call xbootstrap_rec3D%execute(cline)
             case( 'refine3D' )
                 if( cline%defined('nrestarts') )then
-                call restarted_exec(cline, string('refine3D'), string('simple_exec'))
+                    call restarted_exec(cline, string('refine3D'), string('simple_exec'))
                 else
                     call xrefine3D%execute(cline)
                 endif

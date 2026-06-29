@@ -27,60 +27,28 @@ end type commander_test_simd
 contains
 
 subroutine exec_test_coarrays( self, cline )
-    ! use simple_stream_api   
-    ! use simple_image,   only: image
-    ! use simple_imgfile, only: imgfile
-     class(commander_test_coarrays),    intent(inout) :: self
-     class(cmdline),                    intent(inout) :: cline
-    ! integer     :: ldim(3), i, j
-    ! real        :: smpd
-    ! type(image) :: img
-    ! integer     :: my_rank, num_procs
-    ! integer     :: a[*]
-    ! ! Define a coarray variable
-    ! integer, codimension[*] :: counter
-    ! ! Get the rank (ID) and number of processors
-    ! my_rank   = this_image()
-    ! num_procs = num_images()
-    ! if( this_image() == 1 )then
-    !     ldim = [120,120,1]
-    !     call img%new(ldim, smpd)
-    !     call img%square(20)
-    !     call img%write(string('squares_mrc.mrc'),1)
-    ! endif
-    ! ! Write out a message from each rank
-    ! print *, "Hello from processor    ", my_rank,"out of",num_procs
-    ! ! Synchronize to ensure all 'write' executions are done
-    ! sync all
-    ! ! Increment the counter on the first rank
-    ! if( my_rank == 1 ) counter[1] = counter[1] + 1
-    ! ! Again, ensure all processes are synchronized
-    ! sync all
-    ! ! Print the incremented value from rank 1
-    ! if( my_rank == 1 )then
-    !     print *, "The counter value is now", counter[1]
-    ! endif
-    ! a = 0
-    ! if( this_image() == 1 ) then
-    !     a = 1
-    !     print *, 'Image ', this_image(), 'has a value', a
-    !     print *, 'Image ', this_image(), 'sending new value to image 2.'
-    !     a[2] = 2 * a
-    ! endif
-    ! sync all
-    ! if( this_image() == 2 ) then
-    !     a = 1
-    !     print *, 'Image ', this_image(), 'now has a value', a
-    !     print *, 'Image ', this_image(), 'sending new value to image 1.'
-    !     a[1] = 2 * a
-    ! endif
-    ! sync all
-    ! print *, 'Image ', this_image(), &
-    !   'sees that image 1 now has a value ', a[1]
-    ! sync all
-    ! call sleep(10)
-    ! sync all
+    class(commander_test_coarrays), intent(inout) :: self
+    class(cmdline),                 intent(inout) :: cline
+#ifdef USE_COARRAYS
+    integer       :: my_image, nimages, syncstat
+    my_image = this_image()
+    nimages  = num_images()
+    call check_coarray_sync('initialization')
+    if( my_image == 1 )then
+        write(logfhandle,'(A,I0,A)') 'exec_test_coarrays passed with ', nimages, ' images'
+    endif
+    call check_coarray_sync('finalization')
     call simple_end('**** SIMPLE_TEST_COARRAYS_WORKFLOW NORMAL STOP ****')
+    contains
+
+        subroutine check_coarray_sync( stage )
+            character(len=*), intent(in) :: stage
+            sync all(stat=syncstat)
+            if( syncstat /= 0 ) THROW_HARD('exec_test_coarrays sync failed during '//trim(stage))
+        end subroutine check_coarray_sync
+#else
+    THROW_HARD('exec_test_coarrays requires a USE_COARRAYS build')
+#endif
 end subroutine exec_test_coarrays
 
 subroutine exec_test_openacc( self, cline )
