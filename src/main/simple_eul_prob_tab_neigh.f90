@@ -245,7 +245,10 @@ contains
                 prev_full_ref_loc = (prev_state_loc - 1) * self%p_ptr%nspace + prev_proj_loc
                 call put_last(prev_full_ref_loc, direct_srch_order(:,ithr_loc))
             endif
-            l_greedy_first = l_shc_neigh .and. self%b_ptr%spproj_field%is_first_update(self%p_ptr%which_iter, iptcl_loc)
+            ! Only force a dense first pass when the particle truly has no prior
+            ! search result. Keying this off updatecnt makes iteration 2 behave
+            ! like a full scan for first-time sampled particles.
+            l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
             nrots          = self%b_ptr%pftc%get_nrots()
             nrefs_bound    = nfull_refs
             smpl_ninpl     = nrots
