@@ -48,7 +48,9 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         call consolidate_channel(SIGMA2_FBODY, SIGMA2_GROUP_FBODY)
         if( trim(params%match_src) == 'den' )then
-            call consolidate_channel(SIGMA2_MATCH_FBODY, SIGMA2_MATCH_GROUP_FBODY)
+            if( channel_parts_exist(SIGMA2_MATCH_FBODY) )then
+                call consolidate_channel(SIGMA2_MATCH_FBODY, SIGMA2_MATCH_GROUP_FBODY)
+            endif
         endif
         ! cleanup
         call build%kill_general_tbox
@@ -124,6 +126,22 @@ contains
             call write_groups_starfile(starfile_fname, real(group_pspecs), ngroups)
             deallocate(group_weights, group_pspecs)
         end subroutine consolidate_channel
+
+        logical function channel_parts_exist(part_fbody)
+            character(len=*), intent(in) :: part_fbody
+            type(string) :: fname
+            integer :: ipart, nfound
+            nfound = 0
+            do ipart = 1,params%nparts
+                fname = trim(part_fbody)//int2str_pad(ipart,params%numlen)//'.dat'
+                if( file_exists(fname) ) nfound = nfound + 1
+            enddo
+            call fname%kill
+            if( nfound > 0 .and. nfound /= params%nparts )then
+                THROW_HARD('commander_euclid; exec_calc_group_sigmas; incomplete match sigma2 partition set')
+            endif
+            channel_parts_exist = nfound == params%nparts
+        end function channel_parts_exist
     end subroutine exec_calc_group_sigmas
 
 end module simple_commanders_euclid

@@ -197,15 +197,21 @@ SIMPLE keeps two sigma channels when `match_src=den`:
 
 - `sigma2_noise_part*` and `sigma2_it_*.star` are the legacy raw/reconstruction
   sigma channel.
-- `sigma2_match_part*` and `sigma2_match_it_*.star` are the denoised matching
-  sigma channel.
+- `sigma2_match_part*` and `sigma2_match_it_*.star` are the residual-derived
+  denoised matching sigma channel.
 
-When `objfun=euclid`, bootstrap spectra and matcher residual sigmas follow this
-policy:
+The bootstrap `calc_pspec` pass remains raw-only. Denoised images do not provide
+a reliable noise-mask power prior because denoising suppresses the background
+variance that `calc_pspec` normally measures. Until `sigma2_match_part*` exists,
+denoised matching falls back to the raw group sigma prior. After the first
+denoised matcher pass, `sigma2_match_part*` is written from denoised residuals
+and subsequent iterations consolidate `sigma2_match_it_*.star`.
+
+When `objfun=euclid`, matcher residual sigmas follow this policy:
 
 ```text
 match_src=raw  -> raw images supply matching, matching sigmas, reconstruction sigmas, and reconstruction
-match_src=den  -> denoised images supply matching and matching sigmas;
+match_src=den  -> denoised images supply matching and residual-derived matching sigmas;
                   raw images supply reconstruction sigmas and reconstruction
 ```
 

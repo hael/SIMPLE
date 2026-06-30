@@ -127,7 +127,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
+        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
@@ -155,7 +155,8 @@ contains
         ! the sampled/bootstrap path.
         l_scale_update_frac = .false.
         if( params%l_sigma_glob .and. params%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls_part_sel, pinds, .false. )
+            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, &
+                nptcls_part_sel, pinds, .false. )
             l_scale_update_frac = .true.
             sig2_mul = 1.0 / (2.0 * params%update_frac)
         else if( params%l_sigma_glob .and. params%nsample > 0 )then
@@ -174,10 +175,7 @@ contains
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
         allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1, nthr_glob))
-        call compute_pspec_channel('raw', 'init_pspec_part', 'sum_img_part', 'calc_pspec')
-        if( trim(params%match_src) == 'den' )then
-            call compute_pspec_channel('den', 'init_pspec_match_part', 'sum_img_match_part', 'match calc_pspec')
-        endif
+        call compute_pspec_channel('init_pspec_part', 'sum_img_part', 'calc_pspec')
         ! destruct local objects
         call binfile%kill
         call sum_img%kill
@@ -188,8 +186,8 @@ contains
 
     contains
 
-        subroutine compute_pspec_channel(source, init_fbody, sum_fbody, warning_label)
-            character(len=*), intent(in) :: source, init_fbody, sum_fbody, warning_label
+        subroutine compute_pspec_channel(init_fbody, sum_fbody, warning_label)
+            character(len=*), intent(in) :: init_fbody, sum_fbody, warning_label
             sigma2           = 0.
             ninvalid_sigma2  = 0
             call sum_img%zero_and_flag_ft
@@ -204,12 +202,7 @@ contains
                 do i = 1, nptcls_part_sel, batchsz_max
                     batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                     nbatch    = batchlims(2) - batchlims(1) + 1
-                    if( trim(source) == 'raw' )then
-                        call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
-                    else
-                        call discrete_read_imgbatch_source(params, build, source, nbatch, &
-                            pinds(batchlims(1):batchlims(2)), [1,nbatch], build%imgbatch(:nbatch))
-                    endif
+                    call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
                     ! allocate contigous local sigma2 array for optimal caching in parallell loop
                     cmat_thr_sum = dcmplx(0.d0, 0.d0)
                     !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&

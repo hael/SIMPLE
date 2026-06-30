@@ -36,6 +36,7 @@ contains
             if( trim(params%match_src) == 'den' )then
                 fname        = SIGMA2_MATCH_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
                 fname_groups = sigma2_match_star_from_iter(params%which_iter)
+                if( .not. file_exists(fname_groups) ) fname_groups = sigma2_star_from_iter(params%which_iter)
                 call build%esig_match%new(params, build%pftc, fname, params%box)
                 l_group_only_init = (.not. file_exists(fname)) .and. file_exists(fname_groups)
                 if( l_stream .or. l_group_only_init )then
