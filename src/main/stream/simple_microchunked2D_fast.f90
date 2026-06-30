@@ -75,29 +75,30 @@
 !   simple_cluster2D_rejector
 !==============================================================================
 module simple_microchunked2D_fast
-  use unix,                         only: c_time, c_long
-  use simple_defs,                  only: logfhandle, STDLEN, CWD_GLOB
-  use simple_error,                 only: simple_exception
-  use simple_image,                 only: image
-  use simple_timer,                 only: timer_int_kind, tic, toc
-  use simple_fileio,                only: swap_suffix, simple_copy_file, write_filetable, simple_touch, basename
-  use simple_string,                only: string
-  use simple_syslib,                only: simple_mkdir, simple_abspath, simple_chdir, &
-                                          simple_getcwd, file_exists, del_file, dir_exists
-  use simple_cmdline,               only: cmdline
-  use simple_qsys_env,              only: qsys_env
-  use simple_rec_list,              only: rec_list
-  use simple_gui_utils,             only: mrc2jpeg_tiled
-  use simple_defs_fname,            only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
-  use simple_parameters,            only: parameters
-  use simple_sp_project,            only: sp_project
-  use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
-  use simple_string_utils,          only: int2str
-  use simple_projfile_utils,        only: merge_chunk_projfiles
-  use simple_cluster2D_rejector,    only: cluster2D_rejector
-  use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_MICROCHUNK_P1, CAVG_QUALITY_MODEL_MICROCHUNK_P2
-  use simple_cavg_quality_types,    only: cavg_quality_result
-  use simple_cavg_quality_analysis, only: evaluate_cavg_quality
+  use unix,                               only: c_time, c_long
+  use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB
+  use simple_error,                       only: simple_exception
+  use simple_image,                       only: image
+  use simple_timer,                       only: timer_int_kind, tic, toc
+  use simple_fileio,                      only: swap_suffix, simple_copy_file, write_filetable, simple_touch, basename
+  use simple_string,                      only: string
+  use simple_syslib,                      only: simple_mkdir, simple_abspath, simple_chdir, &
+                                                simple_getcwd, file_exists, del_file, dir_exists
+  use simple_cmdline,                     only: cmdline
+  use simple_qsys_env,                    only: qsys_env
+  use simple_rec_list,                    only: rec_list
+  use simple_gui_utils,                   only: mrc2jpeg_tiled
+  use simple_defs_fname,                  only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
+  use simple_parameters,                  only: parameters
+  use simple_sp_project,                  only: sp_project
+  use simple_imgarr_utils,                only: read_cavgs_into_imgarr, dealloc_imgarr
+  use simple_string_utils,                only: int2str
+  use simple_projfile_utils,              only: merge_chunk_projfiles
+  use simple_cluster2D_rejector,          only: cluster2D_rejector
+  use simple_cavg_quality_model,          only: cavg_quality_model, CAVG_QUALITY_MODEL_MICROCHUNK_P1, CAVG_QUALITY_MODEL_MICROCHUNK_P2
+  use simple_cavg_quality_types,          only: cavg_quality_result
+  use simple_cavg_quality_analysis,       only: evaluate_cavg_quality
+  use simple_cavg_compatibility_analysis, only: cavg_compatibility_analysis
 
   implicit none
   public  :: microchunked2D_fast
@@ -1114,6 +1115,47 @@ contains
     type(image),                allocatable   :: cavg_imgs(:)
     integer,                    allocatable   :: states(:)
     type(sp_project)                          :: spproj
+    type(cavg_compatibility_analysis)         :: compatibility_analysis
+    type(string)                              :: stkname
+    integer(timer_int_kind)                   :: t0
+    integer                                   :: ncls
+    real                                      :: smpd_dummy
+
+    if( .not. chunk%abinitio2D_complete ) return
+    if( chunk%failed )                    return
+    if( chunk%rejection_complete )        return
+
+    t0 = timer_start()
+
+    call spproj%read(chunk%projfile)
+    call compatibility_analysis%new(spproj)
+    call compatibility_analysis%analyse()
+    call compatibility_analysis%get_rejection_states(states)
+    call compatibility_analysis%kill()
+    call spproj%map_cavgs_selection(states)
+    call spproj%write()
+
+    call simple_touch(chunk%folder%to_char() // '/REJECTION_FINISHED')
+    chunk%nptcls_selected    = spproj%os_ptcl2D%count_state_gt_zero()
+    chunk%rejection_complete = .true.
+    write(logfhandle,'(A,A,A,I6,A,I8,A,I8,A)') '>>> COMPLETED REJECTION FOR ', &
+      label%to_char(), ' # ', chunk%id, ' : ', &
+      chunk%nptcls_selected, '/', chunk%nptcls, ' PARTICLES SELECTED'
+
+    call dealloc_imgarr(cavg_imgs)
+    call spproj%kill()
+    if( allocated(states) ) deallocate(states)
+    call timer_stop(t0, string('reject_cavgs'))
+  end subroutine reject_cavgs
+
+  subroutine reject_cavgs_old( self, chunk, label, model_name )
+    class(microchunked2D_fast), intent(inout) :: self
+    type(chunk2D),              intent(inout) :: chunk
+    type(string),               intent(in)    :: label
+    character(len=*),           intent(in)    :: model_name
+    type(image),                allocatable   :: cavg_imgs(:)
+    integer,                    allocatable   :: states(:)
+    type(sp_project)                          :: spproj
     type(cavg_quality_model)                  :: model
     type(cavg_quality_result)                 :: quality
     type(string)                              :: stkname
@@ -1205,9 +1247,7 @@ contains
       write(logfhandle,'(A,A)') '>>> JPEG ', out_jpg%to_char()
     end subroutine write_quality_stack
 
-  end subroutine reject_cavgs
-
-  
+  end subroutine reject_cavgs_old
 
   ! ============================================================================
   ! MODULE-LEVEL HELPERS

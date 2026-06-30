@@ -74,6 +74,7 @@ contains
     procedure :: new
     procedure :: kill
     procedure :: analyse
+    procedure :: get_rejection_states
     procedure :: print_rejection_reasons
     procedure :: preprocess
     procedure :: infer_compatible_size_subset
@@ -163,6 +164,25 @@ contains
         call self%print_rejection_reasons()
         write(logfhandle,'(A)') 'rejection reasons written to rejection_reasons.txt'
     end subroutine analyse
+
+    ! Export selection states as integers (1=accepted, 0=rejected).
+    subroutine get_rejection_states( self, states )
+        class(cavg_compatibility_analysis), intent(in)  :: self
+        integer, allocatable,               intent(out) :: states(:)
+        integer :: i
+
+        if( allocated(states) ) deallocate(states)
+
+        if( self%nimagesets < 1 )then
+            allocate(states(0))
+            return
+        end if
+
+        allocate(states(self%nimagesets), source=1)
+        do i = 1, self%nimagesets
+            if( self%imagesets(i)%is_rejected ) states(i) = 0
+        end do
+    end subroutine get_rejection_states
 
     ! Write selected and rejected class-average stacks.
     subroutine write_selected_rejected_stacks( self )
