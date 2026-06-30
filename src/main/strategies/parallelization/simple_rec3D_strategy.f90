@@ -148,6 +148,8 @@ contains
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', params%nthr)
+        call cline_volassemble%delete('objfun_den')
+        call cline_volassemble%delete('objfun_den_w')
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
             if( cline_volassemble%defined('vol'//int2str(state)) )then
@@ -243,6 +245,8 @@ contains
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', self%nthr_master)
+        call cline_volassemble%delete('objfun_den')
+        call cline_volassemble%delete('objfun_den_w')
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
             if( cline_volassemble%defined('vol'//int2str(state)) )then

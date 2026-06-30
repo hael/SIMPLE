@@ -820,7 +820,9 @@ contains
                 THROW_HARD('objfun_den=yes requires ptcl_src=raw')
             endif
             if( trim(self%oritype) /= 'ptcl3D' )then
-                THROW_HARD('objfun_den=yes is supported only for oritype=ptcl3D')
+                write(logfhandle,'(A,A,A,A)') 'objfun_den ignored for prg=', trim(self%prg%to_char()), &
+                    ' because oritype=', trim(self%oritype)
+                self%objfun_den = 'no'
             endif
             if( self%objfun_den_w < 0. .or. self%objfun_den_w > 1. )then
                 THROW_HARD('objfun_den_w must be in [0,1]')

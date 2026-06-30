@@ -154,6 +154,8 @@ contains
         call cline_assembly%set('which_iter', params%which_iter)
         call cline_assembly%set('nthr',       nthr)
         call cline_assembly%set('combine_eo', params%combine_eo)
+        call cline_assembly%delete('objfun_den')
+        call cline_assembly%delete('objfun_den_w')
         if( params%l_update_frac ) call cline_assembly%set('update_frac', params%update_frac)
         do state = 1, params%nstates
             volname = refine3D_state_vol_fname(state)
