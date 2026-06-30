@@ -324,7 +324,7 @@ contains
             rt_restore_merged_volume     = 0.
             rt_trail_restored_halves     = 0.
             rt_automask3D                = 0.
-            rt_nonuniform_filter       = 0.
+            rt_nonuniform_filter         = 0.
             rt_init_context              = 0.
             rt_trail_frac                = 0.
             rt_gridcorr                  = 0.
@@ -368,9 +368,12 @@ contains
                     write(logfhandle,'(A,F8.4)') &
                         '>>> VOLASSEMBLE: USING EXPLICIT SINGLE-STATE UFRAC_TREC = ', params%ufrac_trec
                 else
-                    THROW_WARN('ufrac_trec is ignored for multi-state trailing reconstruction; using realized per-state update fractions')
-                    call build%spproj%read_segment(params%oritype, params%projfile)
-                    call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, update_frac_trail_recs)
+                    update_frac_trail_recs(:) = params%ufrac_trec
+                    write(logfhandle,'(A,F8.4)') &
+                        '>>> VOLASSEMBLE: USING EXPLICIT MULTI-STATE UFRAC_TREC = ', params%ufrac_trec
+                    ! THROW_WARN('ufrac_trec is ignored for multi-state trailing reconstruction; using realized per-state update fractions')
+                    ! call build%spproj%read_segment(params%oritype, params%projfile)
+                    ! call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, update_frac_trail_recs)
                 endif
             else
                 call build%spproj%read_segment(params%oritype, params%projfile)
