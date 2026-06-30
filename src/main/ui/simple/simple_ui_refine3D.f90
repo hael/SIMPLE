@@ -206,6 +206,8 @@ contains
         call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
+        call refine3D%add_input(UI_SRCH, objfun_den, gui_submenu="search")
+        call refine3D%add_input(UI_SRCH, objfun_den_w, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")

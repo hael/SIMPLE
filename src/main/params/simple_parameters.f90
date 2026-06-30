@@ -274,6 +274,7 @@ type :: parameters
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
+    character(len=4)          :: objfun_den='no'      !< augment raw Euclidean objective with denoised-particle correlation(yes|no){no}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
@@ -526,6 +527,7 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
+    real    :: objfun_den_w=0.5    !< denoised correlation weight in hybrid objective{0.5}
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}

@@ -853,6 +853,8 @@ contains
                 cline_tmp = self%cline_rec3D
                 call cline_tmp%delete('trail_rec')
                 call cline_tmp%delete('objfun')
+                call cline_tmp%delete('objfun_den')
+                call cline_tmp%delete('objfun_den_w')
                 call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
                 call xrec3D%execute( cline_tmp )

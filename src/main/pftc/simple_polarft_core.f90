@@ -114,6 +114,13 @@ contains
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
+        if( trim(self%p_ptr%objfun_den) == 'yes' )then
+            allocate(self%pfts_ptcls_den(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
+                    &self%sqsums_ptcls_den(1:self%nptcls), self%ksqsums_ptcls_den(1:self%nptcls))
+            self%pfts_ptcls_den    = zero
+            self%sqsums_ptcls_den  = 0.d0
+            self%ksqsums_ptcls_den = 0.d0
+        endif
         self%sqsums_ptcls   = 0.d0
         self%ksqsums_ptcls  = 0.d0
         self%wsqsums_ptcls  = 0.d0
@@ -141,6 +148,8 @@ contains
                     self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
             end do
             if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
+            if( allocated(self%pfts_ptcls_den) ) deallocate(self%pfts_ptcls_den)
+            if( allocated(self%sqsums_ptcls_den) ) deallocate(self%sqsums_ptcls_den, self%ksqsums_ptcls_den)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
                 &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
@@ -172,14 +181,25 @@ contains
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
+            if( allocated(self%pfts_ptcls_den) ) deallocate(self%pfts_ptcls_den)
             if( allocated(self%ctfmats) )      deallocate(self%ctfmats)
+            if( allocated(self%sqsums_ptcls_den) ) deallocate(self%sqsums_ptcls_den, self%ksqsums_ptcls_den)
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
                      &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
+            if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                allocate(self%pfts_ptcls_den(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
+                        &self%sqsums_ptcls_den(1:self%nptcls), self%ksqsums_ptcls_den(1:self%nptcls))
+            endif
             call self%alloc_memo_ptcls
         endif
         self%pfts_ptcls    = zero
+        if( allocated(self%pfts_ptcls_den) )then
+            self%pfts_ptcls_den    = zero
+            self%sqsums_ptcls_den  = 0.d0
+            self%ksqsums_ptcls_den = 0.d0
+        endif
         self%ctfmats       = 1.0
         self%sqsums_ptcls  = 0.d0
         self%ksqsums_ptcls = 0.d0
@@ -211,6 +231,15 @@ contains
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
+
+    module subroutine set_ptcl_den_pft(self, iptcl, pft)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particle PFTs not allocated; set_ptcl_den_pft')
+        self%pfts_ptcls_den(:,:,self%pinds(iptcl)) = pft
+        call self%memoize_sqsum_ptcl_den(iptcl)
+    end subroutine set_ptcl_den_pft
 
     module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
         class(polarft_calc), intent(inout) :: self
@@ -249,6 +278,23 @@ contains
         endif
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine polarize_ptcl_pft
+
+    module subroutine polarize_ptcl_den_pft(self, img, iptcl, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iptcl, pdim(3)
+        logical,             intent(in)    :: oversamp
+        call assert_polarize_pdim(self, pdim, 'polarize_ptcl_den_pft')
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particle PFTs not allocated; polarize_ptcl_den_pft')
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) ) THROW_HARD('iptcl out of range; polarize_ptcl_den_pft')
+        if( self%pinds(iptcl) < 1 .or. self%pinds(iptcl) > self%nptcls ) THROW_HARD('particle not indexed; polarize_ptcl_den_pft')
+        if( oversamp )then
+            call img%polarize_oversamp(self%pfts_ptcls_den(:,pdim(2):pdim(3),self%pinds(iptcl)))
+        else
+            call img%polarize(self%pfts_ptcls_den(:,pdim(2):pdim(3),self%pinds(iptcl)))
+        endif
+        call self%memoize_sqsum_ptcl_den(iptcl)
+    end subroutine polarize_ptcl_den_pft
 
     subroutine assert_polarize_pdim(self, pdim, caller)
         class(polarft_calc), intent(in) :: self

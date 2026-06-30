@@ -397,6 +397,8 @@ contains
         call cmd_dict%push('nxpatch',       'Motion correction # of patches along x-axis{5}')
         call cmd_dict%push('nypatch',       'Motion correction # of patches along y-axis{5}')
         call cmd_dict%push('objfun',        'objective function(cc|euclid){cc}')
+        call cmd_dict%push('objfun_den',    'augment raw Euclidean objective with denoised-particle correlation(yes|no){no}')
+        call cmd_dict%push('objfun_den_w',  'denoised correlation weight in hybrid objective(0-1){0.5}')
         call cmd_dict%push('offset',        'pixels offset{10}')
         call cmd_dict%push('opt',           'optimiser (bfgs|simplex){bfgs}')
         call cmd_dict%push('order',         'order ptcls according to correlation(yes|no){no}')

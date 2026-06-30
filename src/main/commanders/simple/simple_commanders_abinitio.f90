@@ -316,6 +316,8 @@ contains
                 ! Distributed rec3D schedules workers from PRG, so do not inherit refine3D here.
                 call local_cline_rec%set('prg',   'reconstruct3D')
                 call local_cline_rec%set('mkdir', 'no') ! to avoid nested dirs
+                call local_cline_rec%delete('objfun_den')
+                call local_cline_rec%delete('objfun_den_w')
                 call local_cline_rec%set('objfun', 'cc')
                 call xrec3D%execute(local_cline_rec)
                 do s = 1,params%nstates

@@ -63,6 +63,8 @@ type :: polarft_calc
     real(dp),    allocatable :: sqsums_ptcls(:)          !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: ksqsums_ptcls(:)         !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: wsqsums_ptcls(:)         !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
+    real(dp),    allocatable :: sqsums_ptcls_den(:)      !< memoized denoised-particle square sums
+    real(dp),    allocatable :: ksqsums_ptcls_den(:)     !< memoized denoised-particle k-weighted square sums
     real(sp),    allocatable :: angtab(:)                !< table of in-plane angles (in degrees)
     real(dp),    allocatable :: argtransf(:,:)           !< argument transfer constants for shifting the references
     real(sp),    allocatable :: polar(:,:,:)             !< table of polar coordinates (2,k,irot): polar(1,k,irot)=h, polar(2,k,irot)=kc
@@ -71,6 +73,7 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_refs_even(:,:,:)    !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
     complex(sp), allocatable :: pfts_refs_odd(:,:,:)     !< -"-, odd
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
+    complex(sp), allocatable :: pfts_ptcls_den(:,:,:)    !< denoised-particle polar sections for hybrid objective
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
     type(c_ptr) :: plan_fwd1_many, plan_bwd1_single, plan_mem_r2c_many
@@ -78,6 +81,7 @@ type :: polarft_calc
     type(c_ptr) :: plan_bwd_many_refs
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
+    complex(kind=c_float_complex), allocatable :: ft_ptcl_den(:,:,:)                      !< Fourier Transform of denoised particles
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
     complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
     complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
@@ -105,8 +109,10 @@ type :: polarft_calc
     procedure          :: reallocate_ptcls
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
+    procedure          :: set_ptcl_den_pft
     procedure          :: polarize_ref_pft
     procedure          :: polarize_ptcl_pft
+    procedure          :: polarize_ptcl_den_pft
     procedure          :: set_ref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
@@ -154,7 +160,9 @@ type :: polarft_calc
     procedure, private :: rotate_ctf
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
+    procedure          :: memoize_sqsum_ptcl_den
     procedure          :: memoize_ptcls, memoize_refs
+    procedure          :: memoize_ptcls_den
     procedure, private :: kill_memo_ptcls, kill_memo_refs
     procedure, private :: allocate_memo_workspace, kill_memo_workspace
     procedure, private :: alloc_memo_ptcls, alloc_memo_refs
@@ -167,16 +175,24 @@ type :: polarft_calc
     procedure          :: gen_prob_power_objfun_val
     procedure, private :: gen_corrs
     procedure, private :: gen_euclids
+    procedure, private :: gen_hybrid_scores
+    procedure, private :: gen_denoised_corrs
     procedure, private :: gen_best_euclid_val
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_power_euclid_val
+    procedure, private :: gen_best_hybrid_val
+    procedure, private :: gen_prob_hybrid_val
+    procedure, private :: gen_prob_power_hybrid_val
     procedure, private :: gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     generic            :: gen_corr_for_rot_8 => gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     procedure, private :: gen_corr_cc_for_rot_8_1, gen_corr_cc_for_rot_8_2
     procedure, private :: gen_euclid_for_rot_8_1, gen_euclid_for_rot_8_2
+    procedure, private :: gen_denoised_corr_for_rot_8_1, gen_denoised_corr_for_rot_8_2
+    procedure, private :: hybrid_dist_from_score
     procedure          :: gen_corr_grad_for_rot_8
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
+    procedure, private :: gen_denoised_corr_grad_for_rot_8
     procedure          :: gen_corr_grad_only_for_rot_8
     procedure          :: gen_sigma_contrib
     procedure          :: gen_objfun_vals_mirr_vals
@@ -227,6 +243,12 @@ interface
         complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine set_ptcl_pft
 
+    module subroutine set_ptcl_den_pft(self, iptcl, pft)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
+    end subroutine set_ptcl_den_pft
+
     module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
         class(polarft_calc), intent(inout) :: self
         class(image),        intent(in)    :: img
@@ -240,6 +262,13 @@ interface
         integer,             intent(in)    :: iptcl, pdim(3)
         logical,             intent(in)    :: oversamp
     end subroutine polarize_ptcl_pft
+
+    module subroutine polarize_ptcl_den_pft(self, img, iptcl, pdim, oversamp)
+        class(polarft_calc), intent(inout) :: self
+        class(image),        intent(in)    :: img
+        integer,             intent(in)    :: iptcl, pdim(3)
+        logical,             intent(in)    :: oversamp
+    end subroutine polarize_ptcl_den_pft
 
     module pure subroutine set_ref_fcomp(self, iref, irot, k, comp, iseven)
         class(polarft_calc), intent(inout) :: self
@@ -514,9 +543,18 @@ interface
         integer,             intent(in) :: iptcl
     end subroutine memoize_sqsum_ptcl
 
+    module subroutine memoize_sqsum_ptcl_den(self, iptcl)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in) :: iptcl
+    end subroutine memoize_sqsum_ptcl_den
+
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
     end subroutine memoize_ptcls
+
+    module subroutine memoize_ptcls_den(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine memoize_ptcls_den
 
     module subroutine memoize_refs( self, eulspace )
         class(polarft_calc),           intent(inout) :: self
@@ -617,6 +655,20 @@ interface
         real(sp),                    intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
 
+    module subroutine gen_hybrid_scores(self, iref, iptcl, shift, scores)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: scores(self%nrots)
+    end subroutine gen_hybrid_scores
+
+    module subroutine gen_denoised_corrs(self, iref, iptcl, shift, cc)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: cc(self%nrots)
+    end subroutine gen_denoised_corrs
+
     module subroutine gen_best_euclid_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -647,6 +699,37 @@ interface
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_prob_power_euclid_val
+
+    module subroutine gen_best_hybrid_val(self, iref, iptcl, shift, dist, irot)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+    end subroutine gen_best_hybrid_val
+
+    module subroutine gen_prob_hybrid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: athres_ub, prob_athres
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_hybrid_val
+
+    module subroutine gen_prob_power_hybrid_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: power
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_power_hybrid_val
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self
@@ -686,6 +769,24 @@ interface
         real(dp),                    intent(in)    :: shvec(2)
     end function gen_euclid_for_rot_8_2
 
+    module real(dp) function gen_denoised_corr_for_rot_8_1( self, pft_ref, iptcl, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)    :: iptcl, irot
+    end function gen_denoised_corr_for_rot_8_1
+
+    module real(dp) function gen_denoised_corr_for_rot_8_2( self, pft_ref, iptcl, shvec, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+    end function gen_denoised_corr_for_rot_8_2
+
+    module real(sp) function hybrid_dist_from_score( self, score )
+        class(polarft_calc), intent(in) :: self
+        real(sp),            intent(in) :: score
+    end function hybrid_dist_from_score
+
     module subroutine gen_corr_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
@@ -708,6 +809,14 @@ interface
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_euclid_grad_for_rot_8
+
+    module subroutine gen_denoised_corr_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp), pointer,        intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2)
+    end subroutine gen_denoised_corr_grad_for_rot_8
 
     module subroutine gen_corr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_calc), target, intent(inout) :: self

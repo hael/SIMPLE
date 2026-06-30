@@ -108,7 +108,11 @@ contains
             case(OBJFUN_CC)
                 call self%gen_corrs(iref, iptcl, shift, vals)
             case(OBJFUN_EUCLID)
-                call self%gen_euclids(iref, iptcl, shift, vals)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    call self%gen_hybrid_scores(iref, iptcl, shift, vals)
+                else
+                    call self%gen_euclids(iref, iptcl, shift, vals)
+                endif
         end select
     end subroutine gen_objfun_vals
 
@@ -122,7 +126,11 @@ contains
             case(OBJFUN_CC)
                 THROW_HARD('gen_best_objfun_val not implemented for OBJFUN_CC')
             case(OBJFUN_EUCLID)
-                call self%gen_best_euclid_val(iref, iptcl, shift, dist, irot)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    call self%gen_best_hybrid_val(iref, iptcl, shift, dist, irot)
+                else
+                    call self%gen_best_euclid_val(iref, iptcl, shift, dist, irot)
+                endif
         end select
     end subroutine gen_best_objfun_val
 
@@ -139,7 +147,11 @@ contains
             case(OBJFUN_CC)
                 THROW_HARD('gen_prob_objfun_val not implemented for OBJFUN_CC')
             case(OBJFUN_EUCLID)
-                call self%gen_prob_euclid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    call self%gen_prob_hybrid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+                else
+                    call self%gen_prob_euclid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
+                endif
         end select
     end subroutine gen_prob_objfun_val
 
@@ -157,7 +169,13 @@ contains
             case(OBJFUN_CC)
                 THROW_HARD('gen_prob_power_objfun_val not implemented for OBJFUN_CC')
             case(OBJFUN_EUCLID)
-                call self%gen_prob_power_euclid_val(iref, iptcl, shift, power, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    call self%gen_prob_power_hybrid_val(iref, iptcl, shift, power, nsample, dist, corr, irot, &
+                        &pvec_sorted, sorted_inds)
+                else
+                    call self%gen_prob_power_euclid_val(iref, iptcl, shift, power, nsample, dist, corr, irot, &
+                        &pvec_sorted, sorted_inds)
+                endif
         end select
     end subroutine gen_prob_power_objfun_val
 
@@ -329,6 +347,90 @@ contains
         end do
     end subroutine gen_euclids
 
+    module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: scores(self%nrots)
+        real(sp) :: den_corrs(self%nrots)
+        real(sp) :: wraw, wden
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particles not available; gen_hybrid_scores')
+        wden = self%p_ptr%objfun_den_w
+        wraw = 1. - wden
+        call self%gen_euclids(iref, iptcl, shift, scores)
+        call self%gen_denoised_corrs(iref, iptcl, shift, den_corrs)
+        den_corrs = max(den_corrs, 0.)
+        scores    = wraw * scores + wden * den_corrs
+    end subroutine gen_hybrid_scores
+
+    module subroutine gen_denoised_corrs( self, iref, iptcl, shift, cc )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: cc(self%nrots)
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
+        real(dp) :: ref_sumsq, denom
+        real(sp) :: shift_mag_sq
+        integer  :: i, ithr, k, kk, k0
+        logical  :: even, needs_shift
+        if( .not. allocated(self%ft_ptcl_den) ) THROW_HARD('denoised particle memo not available; gen_denoised_corrs')
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        k0      = self%kfromto(1)
+        even    = self%iseven(i)
+        shmat   => self%heap_vars(ithr)%shmat
+        ref_sumsq = 0.d0
+        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
+        needs_shift  = shift_mag_sq > SHERRSQ
+        if( needs_shift )then
+            pft_ref => self%heap_vars(ithr)%pft_ref
+            call self%gen_shmat4aln(ithr, shift, shmat)
+            if( even )then
+                do k = self%kfromto(1), self%kfromto(2)
+                    pft_ref(:,k) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                enddo
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    pft_ref(:,k) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                enddo
+            endif
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       pft_ref(:,k)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
+                ref_sumsq = ref_sumsq + sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
+            end do
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+        else
+            if( even )then
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_even(:,self%kfromto(1):self%kfromto(2),iref)
+                do k = self%kfromto(1), self%kfromto(2)
+                    ref_sumsq = ref_sumsq + &
+                        sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)),dp))
+                enddo
+            else
+                self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = self%ft_ref_odd(:,self%kfromto(1):self%kfromto(2),iref)
+                do k = self%kfromto(1), self%kfromto(2)
+                    ref_sumsq = ref_sumsq + &
+                        sum(real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)),dp))
+                enddo
+            endif
+        endif
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
+                self%ft_ptcl_den(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        denom = sqrt(ref_sumsq * self%sqsums_ptcls_den(i) * real(2*self%nrots,dp))
+        if( denom < TINY )then
+            cc = 0.
+        else
+            cc = real(real(self%crvec1(ithr)%r(1:self%nrots),dp) / denom, sp)
+        endif
+    end subroutine gen_denoised_corrs
+
     subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -492,6 +594,83 @@ contains
 
     end subroutine gen_prob_power_euclid_val
 
+    module real(sp) function hybrid_dist_from_score( self, score )
+        class(polarft_calc), intent(in) :: self
+        real(sp),            intent(in) :: score
+        if( score < TINY )then
+            hybrid_dist_from_score = huge(hybrid_dist_from_score)
+        else
+            hybrid_dist_from_score = -log(score)
+        endif
+    end function hybrid_dist_from_score
+
+    module subroutine gen_best_hybrid_val( self, iref, iptcl, shift, dist, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(sp) :: scores(self%nrots), dist_tmp
+        integer  :: p
+        call self%gen_hybrid_scores(iref, iptcl, shift, scores)
+        irot = 1
+        dist = self%hybrid_dist_from_score(scores(1))
+        do p = 2,self%nrots
+            dist_tmp = self%hybrid_dist_from_score(scores(p))
+            if( dist_tmp < dist )then
+                irot = p
+                dist = dist_tmp
+            endif
+        enddo
+    end subroutine gen_best_hybrid_val
+
+    module subroutine gen_prob_hybrid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: athres_ub, prob_athres
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(sp) :: scores(self%nrots)
+        call self%gen_hybrid_scores(iref, iptcl, shift, scores)
+        call sample_bounded_dist(self%nrots, hybrid_dist_at_rot, athres_ub, prob_athres, dist, irot,&
+            &pvec_sorted, sorted_inds)
+
+    contains
+
+        real function hybrid_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = self%hybrid_dist_from_score(scores(p_loc))
+        end function hybrid_dist_at_rot
+
+    end subroutine gen_prob_hybrid_val
+
+    module subroutine gen_prob_power_hybrid_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(in)    :: power
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(sp) :: scores(self%nrots)
+        call self%gen_hybrid_scores(iref, iptcl, shift, scores)
+        call sample_power_dist(self%nrots, hybrid_dist_at_rot, power, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds)
+
+    contains
+
+        real function hybrid_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = self%hybrid_dist_from_score(scores(p_loc))
+        end function hybrid_dist_at_rot
+
+    end subroutine gen_prob_power_hybrid_val
+
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
@@ -510,7 +689,13 @@ contains
             case(OBJFUN_CC)
                 gen_corr_for_rot_8_1 = self%gen_corr_cc_for_rot_8_1(pft_ref_8, i, irot)
             case(OBJFUN_EUCLID)
-                gen_corr_for_rot_8_1 = self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    gen_corr_for_rot_8_1 = (1.d0 - real(self%p_ptr%objfun_den_w,dp)) * &
+                        self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot) + &
+                        real(self%p_ptr%objfun_den_w,dp) * max(0.d0, self%gen_denoised_corr_for_rot_8_1(pft_ref_8, iptcl, irot))
+                else
+                    gen_corr_for_rot_8_1 = self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot)
+                endif
         end select
     end function gen_corr_for_rot_8_1
 
@@ -534,7 +719,14 @@ contains
             case(OBJFUN_CC)
                 gen_corr_for_rot_8_2 = self%gen_corr_cc_for_rot_8_2(pft_ref_8, i, shvec, irot)
             case(OBJFUN_EUCLID)
-                gen_corr_for_rot_8_2 = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    gen_corr_for_rot_8_2 = (1.d0 - real(self%p_ptr%objfun_den_w,dp)) * &
+                        self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot) + &
+                        real(self%p_ptr%objfun_den_w,dp) * &
+                        max(0.d0, self%gen_denoised_corr_for_rot_8_2(pft_ref_8, iptcl, shvec, irot))
+                else
+                    gen_corr_for_rot_8_2 = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
+                endif
         end select
     end function gen_corr_for_rot_8_2
 
@@ -773,6 +965,121 @@ contains
         gen_euclid_for_rot_8_2 = exp(-gen_euclid_for_rot_8_2 / self%wsqsums_ptcls(i))
     end function gen_euclid_for_rot_8_2
 
+    module real(dp) function gen_denoised_corr_for_rot_8_1( self, pft_ref, iptcl, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)    :: iptcl, irot
+        complex(dp) :: cref
+        real(dp)    :: ref_ksqsum, fk, wk
+        integer     :: p, rp, k, i
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particles not available; gen_denoised_corr_for_rot_8_1')
+        i = self%pinds(iptcl)
+        gen_denoised_corr_for_rot_8_1 = 0.d0
+        ref_ksqsum = 0.d0
+        if( irot <= self%pftsz )then
+            do k = self%kfromto(1),self%kfromto(2)
+                wk = real(k, dp)
+                fk = 0.d0
+                do p = 1, irot-1
+                    rp = p + self%pftsz - irot + 1
+                    cref = conjg(pft_ref(rp,k))
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                do p = irot, self%pftsz
+                    rp = p - irot + 1
+                    cref = pft_ref(rp,k)
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                gen_denoised_corr_for_rot_8_1 = gen_denoised_corr_for_rot_8_1 + wk * fk
+            enddo
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                wk = real(k, dp)
+                fk = 0.d0
+                do p = 1, irot-self%pftsz-1
+                    rp = p + self%nrots - irot + 1
+                    cref = pft_ref(rp,k)
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                do p = irot-self%pftsz, self%pftsz
+                    rp = p - irot + self%pftsz + 1
+                    cref = conjg(pft_ref(rp,k))
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                gen_denoised_corr_for_rot_8_1 = gen_denoised_corr_for_rot_8_1 + wk * fk
+            enddo
+        endif
+        if( ref_ksqsum < TINY .or. self%ksqsums_ptcls_den(i) < TINY )then
+            gen_denoised_corr_for_rot_8_1 = 0.d0
+        else
+            gen_denoised_corr_for_rot_8_1 = gen_denoised_corr_for_rot_8_1 / sqrt(ref_ksqsum * self%ksqsums_ptcls_den(i))
+        endif
+    end function gen_denoised_corr_for_rot_8_1
+
+    module real(dp) function gen_denoised_corr_for_rot_8_2( self, pft_ref, iptcl, shvec, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        complex(dp), pointer :: shmat_8(:,:)
+        complex(dp) :: cref
+        real(dp)    :: ref_ksqsum, fk, wk
+        integer     :: p, rp, k, i, ithr
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particles not available; gen_denoised_corr_for_rot_8_2')
+        i       = self%pinds(iptcl)
+        ithr    = omp_get_thread_num() + 1
+        shmat_8 => self%heap_vars(ithr)%shmat_8
+        call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
+        gen_denoised_corr_for_rot_8_2 = 0.d0
+        ref_ksqsum = 0.d0
+        if( irot <= self%pftsz )then
+            do k = self%kfromto(1),self%kfromto(2)
+                wk = real(k, dp)
+                fk = 0.d0
+                do p = 1, irot-1
+                    rp = p + self%pftsz - irot + 1
+                    cref = conjg(pft_ref(rp,k) * shmat_8(rp,k))
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                do p = irot, self%pftsz
+                    rp = p - irot + 1
+                    cref = pft_ref(rp,k) * shmat_8(rp,k)
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                gen_denoised_corr_for_rot_8_2 = gen_denoised_corr_for_rot_8_2 + wk * fk
+            enddo
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                wk = real(k, dp)
+                fk = 0.d0
+                do p = 1, irot-self%pftsz-1
+                    rp = p + self%nrots - irot + 1
+                    cref = pft_ref(rp,k) * shmat_8(rp,k)
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                do p = irot-self%pftsz, self%pftsz
+                    rp = p - irot + self%pftsz + 1
+                    cref = conjg(pft_ref(rp,k) * shmat_8(rp,k))
+                    fk = fk + real(cref * conjg(self%pfts_ptcls_den(p,k,i)), dp)
+                    ref_ksqsum = ref_ksqsum + wk * real(cref * conjg(cref), dp)
+                enddo
+                gen_denoised_corr_for_rot_8_2 = gen_denoised_corr_for_rot_8_2 + wk * fk
+            enddo
+        endif
+        if( ref_ksqsum < TINY .or. self%ksqsums_ptcls_den(i) < TINY )then
+            gen_denoised_corr_for_rot_8_2 = 0.d0
+        else
+            gen_denoised_corr_for_rot_8_2 = gen_denoised_corr_for_rot_8_2 / sqrt(ref_ksqsum * self%ksqsums_ptcls_den(i))
+        endif
+    end function gen_denoised_corr_for_rot_8_2
+
     module subroutine gen_corr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -793,8 +1100,31 @@ contains
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, i, shvec, irot, f, grad)
             case(OBJFUN_EUCLID)
-                call self%gen_euclid_grad_for_rot_8(pft_ref_8, iptcl, shvec, irot, f, grad)
+                if( trim(self%p_ptr%objfun_den) == 'yes' )then
+                    call gen_hybrid_grad_for_rot_8_local(pft_ref_8, f, grad)
+                else
+                    call self%gen_euclid_grad_for_rot_8(pft_ref_8, iptcl, shvec, irot, f, grad)
+                endif
         end select
+
+    contains
+
+        subroutine gen_hybrid_grad_for_rot_8_local(pft_ref, f_hyb, grad_hyb)
+            complex(dp), pointer, intent(inout) :: pft_ref(:,:)
+            real(dp),             intent(out)   :: f_hyb, grad_hyb(2)
+            real(dp) :: f_raw, f_den, grad_raw(2), grad_den(2), wden, wraw
+            call self%gen_euclid_grad_for_rot_8(pft_ref, iptcl, shvec, irot, f_raw, grad_raw)
+            call self%gen_denoised_corr_grad_for_rot_8(pft_ref, iptcl, shvec, irot, f_den, grad_den)
+            if( f_den < 0.d0 )then
+                f_den   = 0.d0
+                grad_den = 0.d0
+            endif
+            wden     = real(self%p_ptr%objfun_den_w,dp)
+            wraw     = 1.d0 - wden
+            f_hyb    = wraw * f_raw + wden * f_den
+            grad_hyb = wraw * grad_raw + wden * grad_den
+        end subroutine gen_hybrid_grad_for_rot_8_local
+
     end subroutine gen_corr_grad_for_rot_8
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad )
@@ -986,6 +1316,101 @@ contains
         grad  = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
 
+    module subroutine gen_denoised_corr_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad )
+        class(polarft_calc),  target, intent(inout) :: self
+        complex(dp),         pointer, intent(inout) :: pft_ref(:,:)
+        integer,                      intent(in)    :: iptcl, irot
+        real(dp),                     intent(in)    :: shvec(2)
+        real(dp),                     intent(out)   :: f, grad(2)
+        real(dp),    pointer :: argtransf(:,:)
+        complex(dp), pointer :: shmat_8(:,:)
+        complex(dp) :: cref, cg, cptcl
+        real(dp)    :: fk, wk, gkx, gky, ref_ksqsum, denom
+        integer     :: k, i, ithr, p, rp
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particles not available; gen_denoised_corr_grad_for_rot_8')
+        ithr      = omp_get_thread_num() + 1
+        i         = self%pinds(iptcl)
+        f         = 0.d0
+        grad      = 0.d0
+        ref_ksqsum = 0.d0
+        shmat_8   => self%heap_vars(ithr)%shmat_8
+        argtransf => self%argtransf
+        call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
+        if( irot <= self%pftsz )then
+            do k = self%kfromto(1),self%kfromto(2)
+                fk  = 0.d0
+                gkx = 0.d0
+                gky = 0.d0
+                do p = 1, irot-1
+                    rp    = p + self%pftsz - irot + 1
+                    cref  = conjg(pft_ref(rp,k) * shmat_8(rp,k))
+                    cptcl = conjg(cmplx(self%pfts_ptcls_den(p,k,i), kind=dp))
+                    fk    = fk + real(cref * cptcl, dp)
+                    ref_ksqsum = ref_ksqsum + real(k,dp) * real(cref * conjg(cref), dp)
+                    cg    = cmplx(0.d0, -argtransf(rp,k), kind=dp) * cref
+                    gkx   = gkx + real(cg * cptcl, dp)
+                    cg    = cmplx(0.d0, -argtransf(self%pftsz+rp,k), kind=dp) * cref
+                    gky   = gky + real(cg * cptcl, dp)
+                enddo
+                do p = irot, self%pftsz
+                    rp    = p - irot + 1
+                    cref  = pft_ref(rp,k) * shmat_8(rp,k)
+                    cptcl = conjg(cmplx(self%pfts_ptcls_den(p,k,i), kind=dp))
+                    fk    = fk + real(cref * cptcl, dp)
+                    ref_ksqsum = ref_ksqsum + real(k,dp) * real(cref * conjg(cref), dp)
+                    cg    = cmplx(0.d0, argtransf(rp,k), kind=dp) * cref
+                    gkx   = gkx + real(cg * cptcl, dp)
+                    cg    = cmplx(0.d0, argtransf(self%pftsz+rp,k), kind=dp) * cref
+                    gky   = gky + real(cg * cptcl, dp)
+                enddo
+                wk      = real(k, dp)
+                f       = f       + wk * fk
+                grad(1) = grad(1) + wk * gkx
+                grad(2) = grad(2) + wk * gky
+            enddo
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                fk  = 0.d0
+                gkx = 0.d0
+                gky = 0.d0
+                do p = 1, irot-self%pftsz-1
+                    rp    = p + self%nrots - irot + 1
+                    cref  = pft_ref(rp,k) * shmat_8(rp,k)
+                    cptcl = conjg(cmplx(self%pfts_ptcls_den(p,k,i), kind=dp))
+                    fk    = fk + real(cref * cptcl, dp)
+                    ref_ksqsum = ref_ksqsum + real(k,dp) * real(cref * conjg(cref), dp)
+                    cg    = cmplx(0.d0, argtransf(rp,k), kind=dp) * cref
+                    gkx   = gkx + real(cg * cptcl, dp)
+                    cg    = cmplx(0.d0, argtransf(self%pftsz+rp,k), kind=dp) * cref
+                    gky   = gky + real(cg * cptcl, dp)
+                enddo
+                do p = irot-self%pftsz, self%pftsz
+                    rp    = p - irot + self%pftsz + 1
+                    cref  = conjg(pft_ref(rp,k) * shmat_8(rp,k))
+                    cptcl = conjg(cmplx(self%pfts_ptcls_den(p,k,i), kind=dp))
+                    fk    = fk + real(cref * cptcl, dp)
+                    ref_ksqsum = ref_ksqsum + real(k,dp) * real(cref * conjg(cref), dp)
+                    cg    = cmplx(0.d0, -argtransf(rp,k), kind=dp) * cref
+                    gkx   = gkx + real(cg * cptcl, dp)
+                    cg    = cmplx(0.d0, -argtransf(self%pftsz+rp,k), kind=dp) * cref
+                    gky   = gky + real(cg * cptcl, dp)
+                enddo
+                wk      = real(k, dp)
+                f       = f       + wk * fk
+                grad(1) = grad(1) + wk * gkx
+                grad(2) = grad(2) + wk * gky
+            enddo
+        endif
+        denom = sqrt(ref_ksqsum * self%ksqsums_ptcls_den(i))
+        if( denom < TINY )then
+            f    = 0.d0
+            grad = 0.d0
+        else
+            f    = f / denom
+            grad = grad / denom
+        endif
+    end subroutine gen_denoised_corr_grad_for_rot_8
+
     module subroutine gen_corr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1007,7 +1432,7 @@ contains
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, i, shvec, irot, f, grad)
             case(OBJFUN_EUCLID)
-                call self%gen_euclid_grad_for_rot_8(pft_ref_8, iptcl, shvec, irot, f, grad)
+                call self%gen_corr_grad_for_rot_8(iref, iptcl, shvec, irot, f, grad)
         end select
     end subroutine gen_corr_grad_only_for_rot_8
 

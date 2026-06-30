@@ -113,6 +113,8 @@ contains
             call cline_rec%delete('refine')
             call cline_rec%delete('update_frac')
             call cline_rec%delete('fillin')
+            call cline_rec%delete('objfun_den')
+            call cline_rec%delete('objfun_den_w')
             call cline_rec%delete('ufrac_trec')
             call cline_rec%delete('endit')
             call cline_rec%delete('vol_even')

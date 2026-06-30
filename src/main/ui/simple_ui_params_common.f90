@@ -95,6 +95,8 @@ type(ui_param) :: nthr
 type(ui_param) :: numlen
 type(ui_param) :: nxpatch
 type(ui_param) :: nypatch
+type(ui_param) :: objfun_den
+type(ui_param) :: objfun_den_w
 type(ui_param) :: objfun
 type(ui_param) :: oritab
 type(ui_param) :: oritab2
@@ -539,6 +541,14 @@ subroutine set_ui_params
     call objfun%set_param(         'objfun',          'multi',  'Objective function', &
                                    'Objective function(euclid|cc|prob){euclid}', &
                                    '(euclid|cc|prob){euclid}', .false., 'euclid')
+
+    call objfun_den%set_param(     'objfun_den',      'binary', 'Denoised objective', &
+                                   'Augment raw Euclidean objective with denoised-particle correlation(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
+
+    call objfun_den_w%set_param(   'objfun_den_w',    'num',    'Denoised objective weight', &
+                                   'Weight for denoised-particle correlation in hybrid objective(0-1){0.5}', &
+                                   '(0-1){0.5}', .false., 0.5)
 
     call oritab%set_param(         'oritab',          'file',   'Orientation and CTF parameter file', &
                                    'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', &

@@ -25,6 +25,22 @@ contains
         enddo
     end subroutine memoize_sqsum_ptcl
 
+    module subroutine memoize_sqsum_ptcl_den(self, iptcl)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(dp) :: sumsqk
+        integer  :: i, ik
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particle PFTs not allocated; memoize_sqsum_ptcl_den')
+        i = self%pinds(iptcl)
+        self%sqsums_ptcls_den(i)  = 0.d0
+        self%ksqsums_ptcls_den(i) = 0.d0
+        do ik = self%kfromto(1),self%kfromto(2)
+            sumsqk                    = sum(real(self%pfts_ptcls_den(:,ik,i)*conjg(self%pfts_ptcls_den(:,ik,i)),dp))
+            self%sqsums_ptcls_den(i)  = self%sqsums_ptcls_den(i) + sumsqk
+            self%ksqsums_ptcls_den(i) = self%ksqsums_ptcls_den(i) + real(ik,dp) * sumsqk
+        enddo
+    end subroutine memoize_sqsum_ptcl_den
+
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         integer :: ithr, i, k, kk, k0
@@ -80,6 +96,32 @@ contains
         enddo
         !$omp end parallel do
     end subroutine memoize_ptcls
+
+    module subroutine memoize_ptcls_den(self)
+        class(polarft_calc), intent(inout) :: self
+        integer :: ithr, i, k, kk, k0
+        if( .not. allocated(self%pfts_ptcls_den) ) THROW_HARD('denoised particle PFTs not allocated; memoize_ptcls_den')
+        if( .not. allocated(self%ft_ptcl_den) ) THROW_HARD('denoised particle memo not allocated; memoize_ptcls_den')
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
+        k0 = self%kfromto(1)
+        !$omp parallel do private(i,k,kk,ithr) default(shared) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            ithr = omp_get_thread_num() + 1
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_ptcls_den(:,k,i)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+            end do
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                self%ft_ptcl_den(:,k,i) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
+            end do
+        enddo
+        !$omp end parallel do
+    end subroutine memoize_ptcls_den
 
     module subroutine memoize_refs(self, eulspace)
         class(polarft_calc),           intent(inout) :: self
@@ -249,6 +291,7 @@ contains
         nelems   = int(self%pftsz+1,kind=longer) * int(self%nk,kind=longer) * int(self%nptcls,kind=longer)
         array_gb = real(nelems,dp) * 8.d0 / (1024.d0**3)
         total_gb = 2.d0 * array_gb
+        if( trim(self%p_ptr%objfun_den) == 'yes' ) total_gb = total_gb + array_gb
         alloc_msg = ''
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &stat=alloc_stat, errmsg=alloc_msg)
@@ -261,6 +304,15 @@ contains
         if( alloc_stat /= 0 )then
             if( allocated(self%ft_ptcl_ctf) ) deallocate(self%ft_ptcl_ctf)
             call memo_ptcls_alloc_error('ft_ctf2', array_gb, total_gb, trim(alloc_msg))
+        endif
+        if( trim(self%p_ptr%objfun_den) == 'yes' )then
+            alloc_msg = ''
+            allocate(self%ft_ptcl_den(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
+                    &stat=alloc_stat, errmsg=alloc_msg)
+            if( alloc_stat /= 0 )then
+                if( allocated(self%ft_ptcl_ctf) ) deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
+                call memo_ptcls_alloc_error('ft_ptcl_den', array_gb, total_gb, trim(alloc_msg))
+            endif
         endif
 
     contains
@@ -394,6 +446,7 @@ contains
     module subroutine kill_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         if( allocated(self%ft_ptcl_ctf) )    deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
+        if( allocated(self%ft_ptcl_den) )    deallocate(self%ft_ptcl_den)
     end subroutine kill_memo_ptcls
 
     module subroutine kill_memo_refs(self)

@@ -185,6 +185,8 @@ contains
         call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
         call cline_rec3D%delete('trail_rec')
         call cline_rec3D%delete('objfun')
+        call cline_rec3D%delete('objfun_den')
+        call cline_rec3D%delete('objfun_den_w')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%delete('box_crop')           ! original image dimensions
@@ -652,6 +654,8 @@ contains
         call cline_rec3D%set('postprocess', 'yes')
         call cline_rec3D%delete('trail_rec')
         call cline_rec3D%delete('refine')
+        call cline_rec3D%delete('objfun_den')
+        call cline_rec3D%delete('objfun_den_w')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%delete('ufrac_trec')
@@ -947,6 +951,8 @@ contains
             call cline_rec3D%set('prg', 'reconstruct3D')
             call cline_rec3D%delete('trail_rec')
             call cline_rec3D%delete('refine')
+            call cline_rec3D%delete('objfun_den')
+            call cline_rec3D%delete('objfun_den_w')
             call cline_rec3D%delete('sigma_est')
             call cline_rec3D%delete('update_frac')
             call cline_rec3D%delete('ufrac_trec')

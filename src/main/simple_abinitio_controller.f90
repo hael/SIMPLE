@@ -452,6 +452,8 @@ contains
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%set('ptcl_src',               ptcl_src_eff)
+        call cline_refine3D%set('objfun_den',             params%objfun_den)
+        call cline_refine3D%set('objfun_den_w',           params%objfun_den_w)
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')

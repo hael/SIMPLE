@@ -77,6 +77,12 @@ contains
             call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
                 tmp_imgs, tmp_imgs_pad)
         endif
+        if( trim(params%objfun_den) == 'yes' )then
+            call discrete_read_imgbatch_source(params, build, 'den', &
+                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
+            call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
+                tmp_imgs, tmp_imgs_pad)
+        endif
     end subroutine build_batch_particles3D
 
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, imgs4rec )
@@ -108,6 +114,30 @@ contains
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         call build%pftc%memoize_ptcls
     end subroutine polarize_batch_particles3D
+
+    subroutine polarize_batch_particles3D_den( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls_here
+        integer,           intent(in)    :: pinds_here(nptcls_here)
+        class(image),      intent(inout) :: src_imgs(nptcls_here)
+        class(image),      intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
+        call tmp_imgs(1)%memoize_mask_coords
+        call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
+        pdim_interp = build%pftc%get_pdim_interp()
+        call tmp_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
+            iptcl = pinds_here(iptcl_batch)
+            call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            call build%pftc%polarize_ptcl_den_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
+        end do
+        !$omp end parallel do
+        call forget_ft_maps
+        call build%pftc%memoize_ptcls_den
+    end subroutine polarize_batch_particles3D_den
 
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
         class(parameters), intent(in)    :: params

@@ -807,6 +807,25 @@ contains
         if( trim(self%ptcl_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
         endif
+        select case(trim(self%objfun_den))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported objfun_den='//trim(self%objfun_den)//'; expected yes|no')
+        end select
+        if( trim(self%objfun_den) == 'yes' )then
+            if( trim(self%objfun) /= 'euclid' )then
+                THROW_HARD('objfun_den=yes requires objfun=euclid')
+            endif
+            if( trim(self%ptcl_src) /= 'raw' )then
+                THROW_HARD('objfun_den=yes requires ptcl_src=raw')
+            endif
+            if( trim(self%oritype) /= 'ptcl3D' )then
+                THROW_HARD('objfun_den=yes is supported only for oritype=ptcl3D')
+            endif
+            if( self%objfun_den_w < 0. .or. self%objfun_den_w > 1. )then
+                THROW_HARD('objfun_den_w must be in [0,1]')
+            endif
+        endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')
             case DEFAULT
