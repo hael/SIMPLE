@@ -100,14 +100,23 @@ contains
     end subroutine build_batch_particles3D
 
     subroutine repolarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls_here
         integer,           intent(in)    :: pinds_here(nptcls_here)
-        class(image),      intent(inout) :: src_imgs(nptcls_here)
+        class(image),      intent(in)    :: src_imgs(nptcls_here)
         class(image),      intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        type(image), allocatable :: src_imgs_work(:)
+        integer :: iptcl_batch
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad)
+        ! prepimg4align mutates its source; preserve raw reconstruction buffers.
+        call alloc_imgarr(nptcls_here, src_imgs(1)%get_ldim(), src_imgs(1)%get_smpd(), src_imgs_work)
+        do iptcl_batch = 1,nptcls_here
+            call src_imgs_work(iptcl_batch)%copy_fast(src_imgs(iptcl_batch))
+        enddo
+        call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, src_imgs_work, tmp_imgs, tmp_imgs_pad)
+        call dealloc_imgarr(src_imgs_work)
     end subroutine repolarize_batch_particles3D
 
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, imgs4rec )
