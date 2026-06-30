@@ -704,6 +704,7 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
         integer :: i, iref, k
+        logical :: any_eval
         ! normalize only over evaluated refs (inpl > 0)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref,sum_dist_all)
         do i = 1, self%nptcls
@@ -728,29 +729,47 @@ contains
             endif
         enddo
         !$omp end parallel do
-        ! Per-particle spread normalization is numerically robust in sparse mode.
-        ! A global min/max can collapse when each particle has only one candidate.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref,min_dist,max_dist)
+        min_dist = huge(1.0)
+        max_dist = -huge(1.0)
+        any_eval = .false.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)&
+        !$omp reduction(min:min_dist) reduction(max:max_dist) reduction(.or.:any_eval)
         do i = 1,self%nptcls
-            min_dist = huge(1.0)
-            max_dist = -huge(1.0)
             do k = 1,self%eval_touched_counts(i)
                 iref = self%eval_touched_refs(k,i)
                 if( iref < 1 .or. iref > self%nrefs ) cycle
                 if( self%loc_tab(iref,i)%inpl <= 0 ) cycle
                 min_dist = min(min_dist, self%loc_tab(iref,i)%dist)
                 max_dist = max(max_dist, self%loc_tab(iref,i)%dist)
-            enddo
-            if( max_dist <= -huge(1.0) ) cycle
-            if( (max_dist - min_dist) < TINY ) cycle
-            do k = 1,self%eval_touched_counts(i)
-                iref = self%eval_touched_refs(k,i)
-                if( iref < 1 .or. iref > self%nrefs ) cycle
-                if( self%loc_tab(iref,i)%inpl <= 0 ) cycle
-                self%loc_tab(iref,i)%dist = (self%loc_tab(iref,i)%dist - min_dist) / (max_dist - min_dist)
+                any_eval = .true.
             enddo
         enddo
         !$omp end parallel do
+        if( .not. any_eval ) return
+        if( (max_dist - min_dist) < TINY )then
+            THROW_WARN('WARNING: numerical unstability in eul_prob_tab_neigh normalize')
+            ! dense-style stochastic tie break over evaluated entries only.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
+                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = ran3()
+                enddo
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    iref = self%eval_touched_refs(k,i)
+                    if( iref < 1 .or. iref > self%nrefs ) cycle
+                    if( self%loc_tab(iref,i)%inpl > 0 )&
+                    &self%loc_tab(iref,i)%dist = (self%loc_tab(iref,i)%dist - min_dist) / (max_dist - min_dist)
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine ref_normalize_neigh
 
     ! Sparse graph traversal on-the-fly for reference assignment

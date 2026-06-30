@@ -359,7 +359,8 @@ contains
         wraw = 1. - wden
         call self%gen_euclids(iref, iptcl, shift, scores)
         call self%gen_denoised_corrs(iref, iptcl, shift, den_corrs)
-        den_corrs = max(den_corrs, 0.)
+        ! Hybrid scores stay on the Euclidean path: likelihood-like score -> -log(score).
+        den_corrs = min(1., max(0., den_corrs))
         scores    = wraw * scores + wden * den_corrs
     end subroutine gen_hybrid_scores
 
@@ -692,7 +693,8 @@ contains
                 if( trim(self%p_ptr%objfun_den) == 'yes' )then
                     gen_corr_for_rot_8_1 = (1.d0 - real(self%p_ptr%objfun_den_w,dp)) * &
                         self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot) + &
-                        real(self%p_ptr%objfun_den_w,dp) * max(0.d0, self%gen_denoised_corr_for_rot_8_1(pft_ref_8, iptcl, irot))
+                        real(self%p_ptr%objfun_den_w,dp) * &
+                        min(1.d0, max(0.d0, self%gen_denoised_corr_for_rot_8_1(pft_ref_8, iptcl, irot)))
                 else
                     gen_corr_for_rot_8_1 = self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot)
                 endif
@@ -723,7 +725,7 @@ contains
                     gen_corr_for_rot_8_2 = (1.d0 - real(self%p_ptr%objfun_den_w,dp)) * &
                         self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot) + &
                         real(self%p_ptr%objfun_den_w,dp) * &
-                        max(0.d0, self%gen_denoised_corr_for_rot_8_2(pft_ref_8, iptcl, shvec, irot))
+                        min(1.d0, max(0.d0, self%gen_denoised_corr_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)))
                 else
                     gen_corr_for_rot_8_2 = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
                 endif
@@ -1117,6 +1119,9 @@ contains
             call self%gen_denoised_corr_grad_for_rot_8(pft_ref, iptcl, shvec, irot, f_den, grad_den)
             if( f_den < 0.d0 )then
                 f_den   = 0.d0
+                grad_den = 0.d0
+            else if( f_den > 1.d0 )then
+                f_den   = 1.d0
                 grad_den = 0.d0
             endif
             wden     = real(self%p_ptr%objfun_den_w,dp)
