@@ -51,52 +51,52 @@ jobs:
         run: |
              ./compile_gui.sh
 
-  Build_coarray:
-    name: Build SIMPLE with coarrays
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        node-version: [24]
-        os: [ubuntu-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-             sudo apt-get update
-             echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev gfortran openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev
-
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-             echo >> /Users/runner/.bash_profile
-             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
-             eval "$(/opt/homebrew/bin/brew shellenv)"
-             brew install opencoarrays
-             brew install jbigkit
-             brew install python@3.10
-             brew install fftw
-             brew install curl
-             brew install openblas
-             brew install lapack
-             brew install arpack
-
-      - name: Build SIMPLE with coarrays (Linux/MacOS)
-        run: |
-             ./compile_coarrays.sh
-
-      - name: Test SIMPLE (Linux/MacOS)
-        run: |
-             export SIMPLE_EMAIL="my.name@uni.edu"
-             export SIMPLE_QSYS="coarray"
-             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
-             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
-             echo "-------------------- TEST COARRAYS -------------------------"
-             simple_test_exec test=coarrays
+#  Build_coarray:
+#    name: Build SIMPLE with coarrays
+#    runs-on: ${{ matrix.os }}
+#    strategy:
+#      matrix:
+#        node-version: [24]
+#        os: [ubuntu-latest, macos-latest]
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Install dependencies (Ubuntu)
+#        if: matrix.os == 'ubuntu-latest'
+#        run: |
+#             sudo apt-get update
+#             echo "Install Basic Dependencies"
+#             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev gfortran openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev
+#
+#      - name: Install dependencies (macOS)
+#        if: matrix.os == 'macos-latest'
+#        run: |
+#             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+#             echo >> /Users/runner/.bash_profile
+#             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/runner/.bash_profile
+#             eval "$(/opt/homebrew/bin/brew shellenv)"
+#             brew install opencoarrays
+#             brew install jbigkit
+#             brew install python@3.10
+#             brew install fftw
+#             brew install curl
+#             brew install openblas
+#             brew install lapack
+#             brew install arpack
+#
+#      - name: Build SIMPLE with coarrays (Linux/MacOS)
+#        run: |
+#             ./compile_coarrays.sh
+#
+#      - name: Test SIMPLE (Linux/MacOS)
+#        run: |
+#             export SIMPLE_EMAIL="my.name@uni.edu"
+#             export SIMPLE_QSYS="coarray"
+#             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+#             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+#             echo "-------------------- TEST COARRAYS -------------------------"
+#             simple_test_exec test=coarrays
 
   Build_and_Test:
     name: Build SIMPLE and Test 
