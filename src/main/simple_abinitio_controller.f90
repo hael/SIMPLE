@@ -489,10 +489,6 @@ contains
         else
             call cline_refine3D%delete('snr_noise_reg')
         endif
-        ! if( l_den_src )then
-        !     call cline_refine3D%set('gauref',             'yes')
-        !     call cline_refine3D%set('gaufreq',            lp_eff)
-        ! else 
         if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
             call cline_refine3D%set('gaufreq',            cfg%gaufreq)
@@ -531,12 +527,6 @@ contains
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         match_src = trim(params%match_src)
-        ! if( match_src == 'den' )then
-        !     select case(cfg%filt_mode%to_char())
-        !         case('nonuniform','nonuniform_lpset')
-        !             match_src = 'raw'
-        !     end select
-        ! endif
     end function stage_match_src
 
 end submodule simple_abinitio_controller

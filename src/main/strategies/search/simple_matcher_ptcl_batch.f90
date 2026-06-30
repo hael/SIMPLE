@@ -2,7 +2,7 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_euclid_sigma2,   only: sigma2_star_from_iter
+use simple_euclid_sigma2,   only: sigma2_star_from_iter, sigma2_match_star_from_iter
 use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
@@ -20,7 +20,7 @@ contains
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         logical,           intent(in)    :: l_stream
-        type(string)      :: fname
+        type(string)      :: fname, fname_groups
         logical           :: l_group_only_init
         if( params%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
@@ -33,7 +33,21 @@ contains
                 call build%esig%read_part(  build%spproj_field)
                 call build%esig%read_groups(build%spproj_field)
             endif
+            if( trim(params%match_src) == 'den' )then
+                fname        = SIGMA2_MATCH_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+                fname_groups = sigma2_match_star_from_iter(params%which_iter)
+                call build%esig_match%new(params, build%pftc, fname, params%box)
+                l_group_only_init = (.not. file_exists(fname)) .and. file_exists(fname_groups)
+                if( l_stream .or. l_group_only_init )then
+                    call build%esig_match%read_groups(build%spproj_field, fname_groups)
+                    call build%esig_match%allocate_ptcls
+                else
+                    call build%esig_match%read_part(  build%spproj_field)
+                    call build%esig_match%read_groups(build%spproj_field, fname_groups)
+                endif
+            endif
             call fname%kill
+            call fname_groups%kill
         end if
     end subroutine prep_sigmas_objfun
 

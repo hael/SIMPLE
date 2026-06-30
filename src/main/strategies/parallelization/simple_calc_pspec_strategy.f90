@@ -127,7 +127,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
@@ -168,62 +168,16 @@ contains
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
             sig2_mul = 0.5
         endif
-        ! Init
         nyq = build%img%get_nyq()
         allocate(sigma2(nyq,params%fromp:params%top), source=0.)
         call sum_img%new([params%box,params%box,1], params%smpd)
         call sum_img%zero_and_flag_ft
         cmat_sum = sum_img%allocate_cmat()
         allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1, nthr_glob))
-        ninvalid_sigma2 = 0
-        if( nptcls_part_sel > 0 )then
-            batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
-            call prepimgbatch(params, build, batchsz_max)
-            allocate(sigma2_batch(nyq,batchsz_max), source=0.)
-            ! mask and radial-shell memoization for the calc_pspec fused kernel
-            call build%imgbatch(1)%memoize_powspec_coords(params%msk)
-            do i = 1, nptcls_part_sel, batchsz_max
-                batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
-                nbatch    = batchlims(2) - batchlims(1) + 1
-                call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
-                ! allocate contigous local sigma2 array for optimal caching in parallell loop
-                cmat_thr_sum = dcmplx(0.d0, 0.d0)
-                !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&
-                !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
-                 do imatch = 1, nbatch
-                    ithr  = omp_get_thread_num() + 1
-                    iptcl = pinds(batchlims(1) + imatch - 1)
-                    call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
-                    sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
-                    l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
-                    if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
-                    ! thread average
-                    if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr))
-                end do
-                !$omp end parallel do
-                ! global average
-                do ithr = 1, nthr_glob
-                    cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:,ithr), kind=sp)
-                end do
-                ! update non-contiguous sigma2 array to provide the correct geometry on disk
-                do imatch = 1, nbatch
-                    iptcl = pinds(batchlims(1) + imatch - 1)
-                    sigma2(:,iptcl) = sigma2_batch(:,imatch)
-                end do
-            end do
-            deallocate(sigma2_batch)
+        call compute_pspec_channel('raw', 'init_pspec_part', 'sum_img_part', 'calc_pspec')
+        if( trim(params%match_src) == 'den' )then
+            call compute_pspec_channel('den', 'init_pspec_match_part', 'sum_img_match_part', 'match calc_pspec')
         endif
-        if( ninvalid_sigma2 > 0 )then
-            write(logfhandle,*) '>>> WARNING: calc_pspec floored invalid computed sigma spectra to 1.0; part/fromp/top/count/selected: ', &
-                params%part, params%fromp, params%top, ninvalid_sigma2, nptcls_part_sel
-        endif
-        call sum_img%set_cmat(cmat_sum)
-        call sum_img%write(string('sum_img_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char())
-        ! write sigma2 to disk
-        kfromto  = [1, nyq]
-        binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
-        call binfile%new(binfname, params%fromp, params%top, kfromto)
-        call binfile%write(sigma2)
         ! destruct local objects
         call binfile%kill
         call sum_img%kill
@@ -233,6 +187,69 @@ contains
         endif
 
     contains
+
+        subroutine compute_pspec_channel(source, init_fbody, sum_fbody, warning_label)
+            character(len=*), intent(in) :: source, init_fbody, sum_fbody, warning_label
+            sigma2           = 0.
+            ninvalid_sigma2  = 0
+            call sum_img%zero_and_flag_ft
+            cmat_sum = cmplx(0., 0.)
+            if( nptcls_part_sel > 0 )then
+                batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
+                call prepimgbatch(params, build, batchsz_max)
+                if( allocated(sigma2_batch) ) deallocate(sigma2_batch)
+                allocate(sigma2_batch(nyq,batchsz_max), source=0.)
+                ! mask and radial-shell memoization for the calc_pspec fused kernel
+                call build%imgbatch(1)%memoize_powspec_coords(params%msk)
+                do i = 1, nptcls_part_sel, batchsz_max
+                    batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
+                    nbatch    = batchlims(2) - batchlims(1) + 1
+                    if( trim(source) == 'raw' )then
+                        call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                    else
+                        call discrete_read_imgbatch_source(params, build, source, nbatch, &
+                            pinds(batchlims(1):batchlims(2)), [1,nbatch], build%imgbatch(:nbatch))
+                    endif
+                    ! allocate contigous local sigma2 array for optimal caching in parallell loop
+                    cmat_thr_sum = dcmplx(0.d0, 0.d0)
+                    !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&
+                    !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
+                     do imatch = 1, nbatch
+                        ithr  = omp_get_thread_num() + 1
+                        iptcl = pinds(batchlims(1) + imatch - 1)
+                        call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
+                        sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
+                        l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
+                        if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
+                        ! thread average
+                        if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr))
+                    end do
+                    !$omp end parallel do
+                    ! global average
+                    do ithr = 1, nthr_glob
+                        cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:,ithr), kind=sp)
+                    end do
+                    ! update non-contiguous sigma2 array to provide the correct geometry on disk
+                    do imatch = 1, nbatch
+                        iptcl = pinds(batchlims(1) + imatch - 1)
+                        sigma2(:,iptcl) = sigma2_batch(:,imatch)
+                    end do
+                end do
+                deallocate(sigma2_batch)
+            endif
+            if( ninvalid_sigma2 > 0 )then
+                write(logfhandle,*) '>>> WARNING: '//trim(warning_label)//&
+                    ' floored invalid computed sigma spectra to 1.0; part/fromp/top/count/selected: ', &
+                    params%part, params%fromp, params%top, ninvalid_sigma2, nptcls_part_sel
+            endif
+            call sum_img%set_cmat(cmat_sum)
+            call sum_img%write(string(sum_fbody)//int2str_pad(params%part,params%numlen)//params%ext%to_char())
+            kfromto  = [1, nyq]
+            binfname = trim(init_fbody)//trim(int2str(params%part))//'.dat'
+            call binfile%new(binfname, params%fromp, params%top, kfromto)
+            call binfile%write(sigma2)
+            call binfile%kill
+        end subroutine compute_pspec_channel
 
         logical function sanitize_computed_sigma2(sigma2_curve)
             real, intent(inout) :: sigma2_curve(:)
@@ -356,6 +373,12 @@ contains
             fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
             call del_file(fname)
             fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+            call del_file(fname)
+            fname = 'init_pspec_match_part'//trim(int2str(ipart))//'.dat'
+            call del_file(fname)
+            fname = 'sum_img_match_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
+            call del_file(fname)
+            fname = SIGMA2_MATCH_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
             call del_file(fname)
         enddo
         call del_file('CALC_PSPEC_FINISHED')

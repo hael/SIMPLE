@@ -156,10 +156,14 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
-                if ( p_ptr%cc_objfun == OBJFUN_EUCLID .and. (.not. ctrl%do_raw_sigma_repolarization) ) then
+                if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
-                    call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
+                    if( ctrl%do_raw_sigma_repolarization )then
+                        call b_ptr%esig_match%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
+                    else
+                        call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
+                    endif
                 endif
             enddo
             !$omp end parallel do
@@ -172,7 +176,10 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
-        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
+            if( ctrl%do_raw_sigma_repolarization ) call b_ptr%esig_match%write_sigma2
+            call b_ptr%esig%write_sigma2
+        endif
         call maybe_write_orientations()
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -192,6 +199,7 @@ contains
         endif
         call b_ptr%pftc%kill
         call b_ptr%esig%kill
+        call b_ptr%esig_match%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
             rt_rec = rt_rec_accum + rt_rec_write

@@ -4,9 +4,10 @@ This document defines the policy for projects that carry paired raw and
 denoised particle representatives.
 
 The current implementation allows denoised representatives to drive 3D
-matching/alignment, but sigma estimation and volume reconstruction remain raw
-particle responsibilities. Independent public matching and reconstruction
-source selectors are not supported.
+matching/alignment while volume reconstruction remains a raw particle
+responsibility. Euclidean matching sigmas follow the matching source, but the
+legacy reconstruction sigma stream remains raw. Independent public matching and
+reconstruction source selectors are not supported.
 
 Related policy documents:
 
@@ -37,9 +38,9 @@ The selected source is used for:
 - state assignment
 - shift and in-plane updates
 
-Sigma estimation and volume reconstruction always use raw particles. When
-`match_src=den`, the matcher performs a raw repolarization pass after the
-denoised assignment/update so residual sigmas are estimated from raw images, and
+Volume reconstruction always uses raw particles. When `match_src=den`,
+denoised images supply matching and matching residual sigmas, while a raw
+repolarization pass updates the legacy raw sigma stream for reconstruction.
 Cartesian partial reconstructions are gridded from raw images.
 
 ## 2. Required Project Metadata
@@ -192,19 +193,26 @@ denoised representatives and CTF correction interact.
 
 ## 7. Sigma And ML Regularization
 
-Sigma calculation always uses raw particle images.
+SIMPLE keeps two sigma channels when `match_src=den`:
 
-When `objfun=euclid`, bootstrap spectra and matcher residual sigmas are
-calculated from `os_stk%stk`, regardless of `match_src`.
+- `sigma2_noise_part*` and `sigma2_it_*.star` are the legacy raw/reconstruction
+  sigma channel.
+- `sigma2_match_part*` and `sigma2_match_it_*.star` are the denoised matching
+  sigma channel.
+
+When `objfun=euclid`, bootstrap spectra and matcher residual sigmas follow this
+policy:
 
 ```text
-match_src=raw  -> raw images supply matching, sigma estimation, and reconstruction
-match_src=den  -> denoised images supply matching; raw images supply sigma estimation and reconstruction
+match_src=raw  -> raw images supply matching, matching sigmas, reconstruction sigmas, and reconstruction
+match_src=den  -> denoised images supply matching and matching sigmas;
+                  raw images supply reconstruction sigmas and reconstruction
 ```
 
 `ml_reg=yes` may still consume grouped sigma spectra through the existing
-`builder%esig` path. Those spectra are raw-image spectra under both
-`match_src=raw` and `match_src=den`.
+`builder%esig` path. Those spectra remain the legacy raw-image spectra under
+both `match_src=raw` and `match_src=den`. Denoised matching uses the separate
+`builder%esig_match` channel.
 
 ## 8. Validation Rules
 
@@ -305,14 +313,15 @@ For one matcher batch:
 4. preprocess and polarize the selected images for matching
 5. run the selected search strategy or consume ASSIGNMENT.dat
 6. update orientation, state, and shift from the selected-source matcher pass
-7. when `objfun=euclid` and `match_src=den`, repolarize raw images and update residual sigma from raw PFTs
-8. prepare reconstruction Fourier planes from raw images
-9. grid reconstruction planes using updated `ptcl3D` metadata
-10. write partition-local Cartesian partials
+7. when `objfun=euclid` and `match_src=den`, update `sigma2_match_part*` from denoised PFT residuals
+8. when `objfun=euclid` and `match_src=den`, repolarize raw images and update `sigma2_noise_part*` from raw PFT residuals
+9. prepare reconstruction Fourier planes from raw images
+10. grid reconstruction planes using updated `ptcl3D` metadata
+11. write partition-local Cartesian partials
 ```
 
 With `match_src=raw`, matching, sigma, and reconstruction continue to share the
-single raw read.
+single raw read and the legacy sigma channel.
 
 ## 11. Reconstruct3D Flow
 
@@ -409,7 +418,8 @@ Minimum tests:
 - `match_src=raw` preserves existing `reconstruct3D` and `refine3D` behavior
 - `match_src=den` is ignored or rejected by offline `reconstruct3D`; reconstruction reads raw images
 - `match_src=den` makes `refine3D` use denoised images for matching
-- `match_src=den` makes `refine3D` estimate residual sigmas from raw images
+- `match_src=den` makes `refine3D` estimate matching residual sigmas from denoised images
+- `match_src=den` makes `refine3D` estimate reconstruction residual sigmas from raw images
 - `match_src=den` makes `refine3D` online Cartesian reconstruction use raw images
 - `refine3D_auto` propagates `match_src` to child commands
 - `refine3D_multi` propagates `match_src` to child commands
