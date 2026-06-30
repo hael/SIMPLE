@@ -198,6 +198,7 @@ contains
         ! parse parameters
         call params%new(cline)
         if( cline%defined('nrots') ) params%nrots = cline%get_iarg('nrots')
+        ! read project and check stream mode
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
         call find_ldim_nptcls(params%pickrefs, ldim, ncavgs)
@@ -264,6 +265,11 @@ contains
                     call ref2D%clip(ref2D_clip)
                     call ref2D_clip%write(string(PICKREFS_FBODY)//params%ext, cnt)
                     rot = rot + ang
+                    if( params%mirr == 'yes' ) then
+                        cnt = cnt + 1
+                        call ref2D_clip%mirror('x')
+                        call ref2D_clip%write(string(PICKREFS_FBODY)//params%ext, cnt)
+                    end if
                 end do
             end do
         else
