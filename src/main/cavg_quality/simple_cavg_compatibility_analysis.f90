@@ -202,7 +202,7 @@ contains
         class(cavg_compatibility_analysis), intent(inout) :: self
         logical, allocatable :: allowed(:), compatible(:)
         real,    allocatable :: min_dim(:), max_dim(:)
-        real, parameter :: RESCUE_EDGE_FRAC = 0.03
+        real, parameter :: RESCUE_EDGE_FRAC = 0.0                    !0.03
         integer :: n, ii, nallowed, ncomp, nrejected_here
         integer :: ldim(3)
         real    :: dmax, dmin, axis_c, axis_b, axis_a, used_relax, used_qlo, used_qhi
@@ -382,10 +382,10 @@ contains
             logical,            intent(in)  :: autotune
             real,               intent(out) :: relax_out, qlo_out, qhi_out
             integer, parameter :: NRELAX = 5, NQ = 3
-            real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.03
-            real, parameter :: RELAX_GRID(NRELAX) = [0.05, 0.07, 0.10, 0.13, 0.18]
-            real, parameter :: QLOW_GRID(NQ) = [0.03, 0.08, 0.12]
-            real, parameter :: QHIGH_GRID(NQ) = [0.88, 0.93, 0.97]
+            real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.0                    !0.03
+            real, parameter :: RELAX_GRID(NRELAX) = [0.03, 0.05, 0.07, 0.1, 0.15] ![0.05, 0.07, 0.10, 0.13, 0.18]
+            real, parameter :: QLOW_GRID(NQ)      = [0.05, 0.1, 0.15]             ![0.03, 0.08, 0.12]
+            real, parameter :: QHIGH_GRID(NQ)     = [0.85, 0.9, 0.95]             ![0.88, 0.93, 0.97]
             integer :: nn, i, j, k, nvalid, best_count
             integer :: ir, iq, jq, final_count, best_final_count
             real, allocatable :: cands(:), mins_sup(:), maxs_sup(:)
@@ -635,7 +635,10 @@ contains
         integer,                            intent(in)    :: i
         logical,                            allocatable   :: l_circ(:,:,:)
         real(kind=c_float),                 pointer       :: rmat_mask(:,:,:) => null(), rmat_src(:,:,:) => null()
-        type(image) :: circ_mask
+        type(image)     :: circ_mask
+        type(image_bin) :: cc_img
+        integer, allocatable :: cc_sizes(:)
+        integer :: largest_cc
         integer     :: ldim(3)
         integer     :: ldim_target(3)
         integer     :: imorph, k, x, y
@@ -685,6 +688,16 @@ contains
         do imorph = 1, ANALYSIS_MORPH_SIZE
             call self%pointsets(i)%mask%erode()
         end do
+        ! Keep only the largest connected foreground component in the mask.
+        call self%pointsets(i)%mask%find_ccs(cc_img)
+        cc_sizes = cc_img%size_ccs()
+        if( size(cc_sizes) > 0 .and. maxval(cc_sizes) > 0 )then
+            largest_cc = maxloc(cc_sizes, dim=1)
+            call cc_img%cc2bin(largest_cc)
+            call self%pointsets(i)%mask%copy_bimg(cc_img)
+        end if
+        if( allocated(cc_sizes) ) deallocate(cc_sizes)
+        call cc_img%kill_bimg()
         ! Build a hard circular support mask with diameter equal to the box size.
         ldim = self%pointsets(i)%mask%get_ldim()
         call circ_mask%disc(ldim, self%pointsets(i)%mask%get_smpd(), 0.5 * real(min(ldim(1), ldim(2))), l_circ)
