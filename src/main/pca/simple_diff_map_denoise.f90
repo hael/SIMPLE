@@ -18,9 +18,9 @@ public :: graph_nystrom_residual_preimage
 public :: calc_diffmap_reconstruction_error
 public :: calc_diffmap_residual_energy_ratio
 
-integer, parameter :: SE2_NTRANS_MODES = 2
-integer, parameter :: DIFFMAP_DENOISE_ICM_RANK_MAXITS = 16
-real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC = 0.35
+integer, parameter :: SE2_NTRANS_MODES                         = 2
+integer, parameter :: DIFFMAP_DENOISE_ICM_RANK_MAXITS          = 16
+real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC       = 0.35
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC = 0.10
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_LOWER_SEED_FRAC = 0.50
 
@@ -560,7 +560,7 @@ contains
 
     integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
         integer, intent(in) :: nptcls
-        neigs_scan = min(50, max(1, nptcls - 2))
+        neigs_scan = min(DIFFMAP_NEIGS_AUTO_SCAN_MAX, max(1, nptcls - 2))
         if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
     end function diffmap_denoise_auto_neigs_scan
 

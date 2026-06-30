@@ -130,8 +130,8 @@ contains
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
-        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      10)
-        if( .not. cline%defined('neigs')    ) call cline%set('neigs',     200)
+        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      DIFFMAP_GRAPH_KNN_DEFAULT)
+        if( .not. cline%defined('neigs')    ) call cline%set('neigs',     DIFFMAP_NEIGS_SCAN_DEFAULT)
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -845,7 +845,7 @@ contains
 
     integer function diffmap_denoise_auto_neigs_scan(nptcls) result(neigs_scan)
         integer, intent(in) :: nptcls
-        neigs_scan = min(50, max(1, nptcls - 2))
+        neigs_scan = min(DIFFMAP_NEIGS_AUTO_SCAN_MAX, max(1, nptcls - 2))
         if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
     end function diffmap_denoise_auto_neigs_scan
 

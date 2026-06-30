@@ -45,23 +45,26 @@ complex(sp), parameter :: CMPLX_ZERO   = cmplx(0.,0.)
 complex(dp), parameter :: DCMPLX_ZERO  = cmplx(0.d0,0.d0, kind=dp)
 ! directory-based execution model
 character(len=:), allocatable :: CWD_GLOB_ORIG, CWD_GLOB
-character(len=*), parameter   :: LOGFNAME   = 'simple.log'     !< log file name
-integer                       :: logfhandle = OUTPUT_UNIT      !< log file handle, default to STDOUT
+character(len=*), parameter   :: LOGFNAME   = 'simple.log'        !< log file name
+integer                       :: logfhandle = OUTPUT_UNIT         !< log file handle, default to STDOUT
 logical, parameter            :: STDOUT2LOG = .false.
 ! other global variables
-integer                       :: nthr_glob = 1                 !< number of threads global variable
-logical                       :: l_distr_worker_glob           !< global distributed worker mode execution flag
-integer                       :: part_glob                     !< global part index
-character(len=:), allocatable :: cmdline_glob                  !< global command line string
-integer,          parameter   :: NTHR_SHMEM_MAX     = 20       !< maximum number of shared-memory threads used by master process
-logical,          parameter   :: L_BENCH_GLOB       = .true.   !< global benchmarking flag
-logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arrays for jobs where we know nparts
-logical,          parameter   :: L_USE_AUTO_MEM     = .false.  !< auto estimate memory usage for parts
-logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
-real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
+integer                       :: nthr_glob = 1                    !< number of threads global variable
+logical                       :: l_distr_worker_glob              !< global distributed worker mode execution flag
+integer                       :: part_glob                        !< global part index
+character(len=:), allocatable :: cmdline_glob                     !< global command line string
+integer,          parameter   :: NTHR_SHMEM_MAX       = 20        !< maximum number of shared-memory threads used by master process
+logical,          parameter   :: L_BENCH_GLOB         = .true.    !< global benchmarking flag
+logical,          parameter   :: L_USE_SLURM_ARR      = .false.   !< use SLURM arrays for jobs where we know nparts
+logical,          parameter   :: L_USE_AUTO_MEM       = .false.   !< auto estimate memory usage for parts
+logical,          parameter   :: L_VERBOSE_GLOB       = .false.   !< verbose output or not
+real,             parameter   :: HPLIM_GUINIER        = 20.       !< high-pass limit for Guinier plot
 ! general parameters
-real,    parameter    :: PRUNE_FRAC                = 0.3       !< fraction of particles after which a project is automatically pruned
-integer, parameter    :: BUFSZ_DEFAULT             = 1024      !< Default stack_io buffer size
+real,    parameter    :: PRUNE_FRAC                   = 0.3       !< fraction of particles after which a project is automatically pruned
+integer, parameter    :: BUFSZ_DEFAULT                = 1024      !< Default stack_io buffer size
+integer, parameter    :: DIFFMAP_GRAPH_KNN_DEFAULT    = 10        !< Default kNN for diffusion-map graph workflows
+integer, parameter    :: DIFFMAP_NEIGS_SCAN_DEFAULT   = 200       !< Default eigenspectrum scan upper bound before ICM rank selection
+integer, parameter    :: DIFFMAP_NEIGS_AUTO_SCAN_MAX  = 50        !< Maximum scan size when neigs=0 asks for auto sizing
 ! power spectrum related stuff
 integer, parameter    :: GUI_PSPECSZ               = 512       !< hard-coded image size for gui
 real,    parameter    :: SMPD4VIZ                  = 1.25      !< default sampling distance for powerspectrum visualisation

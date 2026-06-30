@@ -203,19 +203,43 @@ contains
         call cls_split%new(&
         &'cls_split',&
         &'Split classes with latent clustering',&
-        &'is a program for splitting 2D/3D particle classes into subclasses using PPCA, mPPCA, kPCA, or diffusion-map embeddings and k-medoids clustering',&
+        &'splits 2D/3D particle classes into subclasses using diffusion-map or kPCA embeddings and k-medoids clustering',&
         &'all',&
         &.true.)
-        call cls_split%add_input(UI_PARM, 'class', 'num', 'Optional class index to split', 'Optional 2D class index or 3D projection/class index to split; omit to process all classes', 'e.g. 5', .false., 0.0)
-        call cls_split%add_input(UI_PARM, 'ncls', 'num', 'Fixed number of subclasses (0 => auto)', 'Fixed number of subclasses (0 => auto)', '# subclasses', .false., 0.0)
-        call cls_split%add_input(UI_PARM, 'nsubcls_min', 'num', 'Minimum subclasses per parent class in auto mode (default 3)', 'Used only when ncls=0: lower bound for the automatically selected number of subclasses per parent class', '# min subclasses', .false., 3.0)
-        call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', 'Maximum subclasses per parent class in auto mode (default 10)', 'Used only when ncls=0: upper bound for the automatically selected number of subclasses per parent class', '# max subclasses', .false., 10.0)
-        call cls_split%add_input(UI_PARM, 'nptcls_per_subcls', 'num', 'Target particles/subclass in auto mode (default 300)', 'Used only when ncls=0: auto mode chooses about one subclass per 300 particles, bounded by nsubcls_min and nsubcls_max', '# particles/subclass', .false., 300.0)
-        call cls_split%add_input(UI_PARM, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used only for diffusion-map modes; larger values make the graph smoother, smaller values emphasize local structure', '# neighbors', .false., 5.0)
-        call cls_split%add_input(UI_PARM, 'steerable_nmodes', 'num', 'Steerable angular modes (default 4)', 'Angular Fourier modes used only for steerable diffusion modes', '# modes', .false., 4.0)
-        call cls_split%add_input(UI_ALT,  'oritype', 'multi', 'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
-        call cls_split%add_input(UI_FILT, 'graph', 'multi', 'Class split graph', 'Class split graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
-        call cls_split%add_input(UI_FILT, 'steering', 'multi', 'Orientation graph steering', 'Orientation graph steering for graph=ori(none|so2|se2){none}', '(none|so2|se2){none}', .false., 'none')
+        call cls_split%add_input(UI_PARM, 'class', 'num', &
+            'Optional class index to split', &
+            'Optional 2D class index or 3D projection/class index to split; omit to process all classes', &
+            'e.g. 5', .false., 0.0)
+        call cls_split%add_input(UI_PARM, 'ncls', 'num', &
+            'Fixed number of subclasses (0 => auto)', &
+            'Fixed number of subclasses (0 => auto)', &
+            '# subclasses', .false., 0.0)
+        call cls_split%add_input(UI_PARM, 'nsubcls_min', 'num', &
+            'Minimum subclass trial count in auto mode (default 3)', &
+            'Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max', &
+            '# min trial subclasses', .false., 3.0)
+        call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', &
+            'Maximum subclass trial count in auto mode (default 10)', &
+            'Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max', &
+            '# max trial subclasses', .false., 10.0)
+        call cls_split%add_input(UI_PARM, 'k_nn', 'num', &
+            'Diffusion graph neighbors (default 10; try 5-30)', &
+            'Local nearest neighbors used only for diffusion-map modes; larger values smooth the graph', &
+            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT))
+        call cls_split%add_input(UI_ALT,  'oritype', 'multi', &
+            'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', &
+            '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
+        call cls_split%add_input(UI_FILT, 'neigs', 'num', &
+            'Number of eigencomponents (0 => auto scan; default 200)', &
+            'Number of eigencomponents used as the scan upper bound before ICM dimension selection', &
+            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT))
+        call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', &
+            'Class split embedding method', &
+            'Class split embedding method(diffusion_maps|kpca){diffusion_maps}', &
+            '(diffusion_maps|kpca){diffusion_maps}', .false., 'diffusion_maps')
+        call cls_split%add_input(UI_FILT, 'graph', 'multi', &
+            'Class split graph', 'Class split graph(euc|ori){euc}', &
+            '(euc|ori){euc}', .false., 'euc')
         call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
@@ -231,13 +255,13 @@ contains
         &'all',&
         &.true.)
         call denoise_project%add_input(UI_FILT, 'neigs', 'num', &
-            'Number of eigencomponents (0 => auto ICM; default 200)', &
-            'Number of retained eigencomponents for diffusion-map denoising; this is a scan upper bound when auto', &
-            '# eigenvecs', .false., 200.0)
+            'Number of eigencomponents (0 => auto scan; default 200)', &
+            'Number of eigencomponents used as the scan upper bound before ICM rank selection', &
+            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT))
         call denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 5-30)', &
             'Local nearest neighbors used for diffusion-map graph construction', &
-            '# neighbors', .false., 10.0)
+            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT))
         call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
             'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
         call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)

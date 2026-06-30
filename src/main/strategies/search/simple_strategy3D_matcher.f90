@@ -35,6 +35,7 @@ type :: refine3D_ctrl
     logical :: do_write_partial_recs
     logical :: do_prob_align
     logical :: do_sigma_mode
+    logical :: do_raw_sigma_repolarization
     logical :: do_write_oris
     logical :: do_bench
   contains
@@ -155,7 +156,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
-                if ( p_ptr%cc_objfun == OBJFUN_EUCLID ) then
+                if ( p_ptr%cc_objfun == OBJFUN_EUCLID .and. (.not. ctrl%do_raw_sigma_repolarization) ) then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
@@ -163,6 +164,7 @@ contains
             enddo
             !$omp end parallel do
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
+            call maybe_update_raw_sigmas()
             call maybe_restore_batch()
         enddo
         frac_greedy = 0.0
@@ -230,6 +232,7 @@ contains
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
+            ctrl%do_raw_sigma_repolarization = (p_ptr%cc_objfun == OBJFUN_EUCLID) .and. (trim(p_ptr%match_src) == 'den')
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
             select case(ctrl%refine_mode)
                 case('eval','sigma')
@@ -293,14 +296,15 @@ contains
         end subroutine prepare_refs_sigmas_and_pftc
 
         subroutine maybe_init_reconstruction()
-            if( .not. ctrl%do_write_partial_recs ) return
-            call init_rec(params, build, batchsz_max, fpls)
-            call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            if( ctrl%do_write_partial_recs ) call init_rec(params, build, batchsz_max, fpls)
+            if( ctrl%do_write_partial_recs .or. ctrl%do_raw_sigma_repolarization )then
+                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            endif
         end subroutine maybe_init_reconstruction
 
         subroutine build_batch_particles_local()
             logical :: need_rec_imgs
-            need_rec_imgs = ctrl%do_write_partial_recs
+            need_rec_imgs = ctrl%do_write_partial_recs .or. ctrl%do_raw_sigma_repolarization
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( need_rec_imgs )then
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
@@ -369,6 +373,24 @@ contains
             endif
         end subroutine choose_and_run_strategy
 
+        subroutine maybe_update_raw_sigmas()
+            type(ori) :: orientation_raw
+            integer   :: iptcl_sigma, iptcl_batch_sigma
+            if( .not. ctrl%do_raw_sigma_repolarization ) return
+            call repolarize_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                ptcl_rec_imgs(:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
+            !$omp parallel do default(shared) private(iptcl_sigma,iptcl_batch_sigma,orientation_raw) &
+            !$omp schedule(static) proc_bind(close)
+            do iptcl_batch_sigma = 1, batchsz
+                iptcl_sigma = pinds(batch_start + iptcl_batch_sigma - 1)
+                call b_ptr%spproj_field%get_ori(iptcl_sigma, orientation_raw)
+                call orientation_raw%set_shift(incr_shifts(:,iptcl_batch_sigma))
+                call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl_sigma, orientation_raw, 'proj')
+            enddo
+            !$omp end parallel do
+            call orientation_raw%kill
+        end subroutine maybe_update_raw_sigmas
+
         subroutine maybe_restore_batch()
             if( .not. ctrl%do_write_partial_recs ) return
             if( ctrl%do_bench ) t_rec = tic()
@@ -408,6 +430,7 @@ contains
         write(logfhandle,*) 'do_write_partial_recs : ', ctrl%do_write_partial_recs
         write(logfhandle,*) 'do_prob_align         : ', ctrl%do_prob_align
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
+        write(logfhandle,*) 'do_raw_sigma_repol    : ', ctrl%do_raw_sigma_repolarization
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
     end subroutine print_flags

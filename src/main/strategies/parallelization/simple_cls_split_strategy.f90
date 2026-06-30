@@ -125,8 +125,9 @@ contains
         class(cmdline), intent(inout) :: cline
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('neigs')    ) call cline%set('neigs',    0)
+        if( .not. cline%defined('neigs')    ) call cline%set('neigs',    DIFFMAP_NEIGS_SCAN_DEFAULT)
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
+        if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      DIFFMAP_GRAPH_KNN_DEFAULT)
         if( .not. cline%defined('graph') )then
             if( cline%get_carg('oritype') == 'ptcl3D' )then
                 call cline%set('graph', 'ori')
@@ -147,7 +148,47 @@ contains
         do3d = .false.
         if( cline%defined('oritype') ) do3d = (cline%get_carg('oritype') .eq. 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=do3d)
+        call validate_cls_split(params, cline)
     end subroutine init_common
+
+    subroutine validate_cls_split(params, cline)
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(inout) :: cline
+        logical :: l_fixed_nsubcls
+        l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
+        select case(trim(params%oritype))
+            case('ptcl2D','ptcl3D')
+            case DEFAULT
+                THROW_HARD('cls_split supports oritype=ptcl2D|ptcl3D only')
+        end select
+        select case(trim(params%pca_mode))
+            case('diffusion_maps','kpca')
+            case DEFAULT
+                THROW_HARD('cls_split supports pca_mode=diffusion_maps|kpca only')
+        end select
+        select case(trim(lowercase(params%graph)))
+            case('euc','ori')
+            case DEFAULT
+                THROW_HARD('cls_split supports graph=euc|ori only')
+        end select
+        select case(trim(lowercase(params%steering)))
+            case('none')
+            case('so2','se2')
+                THROW_HARD('cls_split currently requires steering=none')
+            case DEFAULT
+                THROW_HARD('cls_split supports steering=none only')
+        end select
+        if( params%k_nn < 1 ) THROW_HARD('cls_split requires k_nn >= 1')
+        if( params%neigs < 0 ) THROW_HARD('cls_split requires neigs >= 0; use neigs=0 for auto scan')
+        if( cline%defined('ncls') )then
+            if( params%ncls < 0 ) THROW_HARD('cls_split requires ncls >= 0; use ncls=0 for auto')
+            if( params%ncls == 1 ) THROW_HARD('cls_split ncls=1 is invalid; use ncls=0 for auto or ncls>=2')
+        endif
+        if( .not. l_fixed_nsubcls )then
+            if( params%nsubcls_min < 2 ) THROW_HARD('cls_split requires nsubcls_min >= 2')
+            if( params%nsubcls_max < params%nsubcls_min ) THROW_HARD('cls_split requires nsubcls_max >= nsubcls_min')
+        endif
+    end subroutine validate_cls_split
 
     subroutine shmem_initialize(self, params, build, cline)
         class(cls_split_shmem_strategy), intent(inout) :: self
@@ -491,7 +532,7 @@ contains
         real, allocatable :: class_diams(:), class_shifts(:,:)
         type(diffmap_graph) :: split_graph
         integer, allocatable :: i_medoids(:)
-        integer :: nptcls, npix, nsplit_count, j, k, class_ldim(3)
+        integer :: nptcls, npix, j, k, class_ldim(3)
         real    :: class_moldiam, class_mskdiam, class_mskrad, dval, sdev_noise
         nsplit = 0
         if( allocated(pinds) ) deallocate(pinds)
@@ -562,12 +603,11 @@ contains
                 ' selected=', nsplit, ' score=', silhouette_score(labels, dmat)
             call flush(logfhandle)
         else
-            nsplit_count = particle_count_nsplit(nptcls, params%nptcls_per_subcls, params%nsubcls_min, params%nsubcls_max)
             call select_kmedoids_by_silhouette(dmat, cls_id, params%nsubcls_min, params%nsubcls_max, &
                                                nsplit, i_medoids, labels)
-            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
-                ' size=', nptcls, ' count_suggest=', nsplit_count, ' min=', params%nsubcls_min, &
-                ' max=', params%nsubcls_max, ' selected=', nsplit
+            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto ncls: class=', cls_id, &
+                ' size=', nptcls, ' trial_min=', params%nsubcls_min, &
+                ' trial_max=', params%nsubcls_max, ' selected=', nsplit
             call flush(logfhandle)
         endif
         call cavg_raw%kill
@@ -667,13 +707,11 @@ contains
         real, allocatable :: feat(:)
         real :: se2_shift_scale
         integer :: neigs, neigs_scan, neigs_used, i
-        logical :: l_auto_neigs
         call graph%kill()
-        l_auto_neigs = params%neigs <= 0
-        if( l_auto_neigs )then
-            neigs_scan = cls_split_auto_neigs_scan(trim(params%pca_mode), nptcls)
-        else
+        if( params%neigs > 0 )then
             neigs_scan = params%neigs
+        else
+            neigs_scan = cls_split_auto_neigs_scan(trim(params%pca_mode), nptcls)
         endif
         select case(trim(params%pca_mode))
             case('diffusion_maps')
@@ -715,10 +753,10 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported pca_mode for class splitting; use diffusion_maps or kpca')
         end select
-        if( l_auto_neigs .and. allocated(eigvals) )then
+        if( allocated(eigvals) )then
             neigs_used = select_neigs_icm(eigvals, trim(params%pca_mode), size(coords,1), cls_id)
             call trim_split_embedding(coords, eigvals, neigs_used)
-            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split auto neigs: mode=', trim(params%pca_mode), &
+            write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split selected neigs: mode=', trim(params%pca_mode), &
                 ' class=', cls_id, ' size=', nptcls, ' scan=', neigs, ' selected=', size(coords,1)
             call flush(logfhandle)
         endif
@@ -738,10 +776,10 @@ contains
         integer,          intent(in) :: nptcls
         select case(trim(mode))
             case('diffusion_maps')
-                neigs_scan = min(24, max(1, nptcls - 2))
+                neigs_scan = min(DIFFMAP_NEIGS_AUTO_SCAN_MAX, max(1, nptcls - 2))
                 if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
             case DEFAULT
-                neigs_scan = min(24, max(1, nptcls - 1))
+                neigs_scan = min(DIFFMAP_NEIGS_AUTO_SCAN_MAX, max(1, nptcls - 1))
         end select
     end function cls_split_auto_neigs_scan
 
@@ -993,16 +1031,6 @@ contains
             endif
         endif
     end subroutine trim_split_embedding
-
-    integer function particle_count_nsplit(nptcls, target_pop, nmin, nmax) result(nsplit)
-        integer, intent(in) :: nptcls, target_pop, nmin, nmax
-        integer :: nlo, nhi, target
-        nlo    = max(1, nmin)
-        nhi    = max(nlo, nmax)
-        target = max(1, target_pop)
-        nsplit = ceiling(real(nptcls) / real(target))
-        nsplit = max(nlo, min(nhi, nsplit))
-    end function particle_count_nsplit
 
     subroutine sanitize_embedding_coords(mode, cls_id, coords)
         character(len=*), intent(in)    :: mode

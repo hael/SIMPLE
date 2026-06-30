@@ -1,10 +1,10 @@
 !@descr: diffusion-map denoising helpers for motion-correction movie stacks
 module simple_denoise_movies
 use simple_core_module_api
-use simple_diff_map_graphs, only: diffmap_graph, build_euclidean_knn_graph
+use simple_diff_map_graphs,  only: diffmap_graph, build_euclidean_knn_graph
 use simple_diff_map_denoise, only: graph_nystrom_residual_preimage
-use simple_diffusion_maps,  only: embed_graph, auto_ndiff_from_eigengap
-use simple_image,           only: image
+use simple_diffusion_maps,   only: embed_graph, auto_ndiff_from_eigengap
+use simple_image,            only: image
 implicit none
 private
 #include "simple_local_flags.inc"

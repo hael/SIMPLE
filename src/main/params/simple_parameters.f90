@@ -291,7 +291,7 @@ type :: parameters
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|sum|shc|snhc){state}
-    character(len=STDLEN)     :: ptcl_src='raw' !< 3D particle image source for alignment/state assignment and reconstruction(raw|den){raw}
+    character(len=STDLEN)     :: match_src='raw' !< 3D particle image source for matching/state assignment(raw|den){raw}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
@@ -391,7 +391,7 @@ type :: parameters
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
-    integer :: nptcls_per_subcls=300 !< target particle count per subclass for class splitting
+    integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
