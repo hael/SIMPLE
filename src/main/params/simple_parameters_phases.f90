@@ -799,13 +799,13 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
-        select case(trim(self%match_src))
+        select case(trim(self%ptcl_src))
             case('raw','den')
             case DEFAULT
-                THROW_HARD('Unsupported match_src='//trim(self%match_src)//'; expected raw|den')
+                THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        if( trim(self%match_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
-            THROW_HARD('Denoised matching sources are supported only for oritype=ptcl3D')
+        if( trim(self%ptcl_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
+            THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
         endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')

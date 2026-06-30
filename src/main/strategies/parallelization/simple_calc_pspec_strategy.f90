@@ -127,7 +127,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
@@ -202,7 +202,12 @@ contains
                 do i = 1, nptcls_part_sel, batchsz_max
                     batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                     nbatch    = batchlims(2) - batchlims(1) + 1
-                    call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                    if( trim(params%ptcl_src) == 'den' )then
+                        call discrete_read_imgbatch_source(params, build, 'den', nbatch, pinds(batchlims(1):batchlims(2)), &
+                            [1,nbatch], build%imgbatch(:nbatch))
+                    else
+                        call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                    endif
                     ! allocate contigous local sigma2 array for optimal caching in parallell loop
                     cmat_thr_sum = dcmplx(0.d0, 0.d0)
                     !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&
@@ -366,12 +371,6 @@ contains
             fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
             call del_file(fname)
             fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
-            call del_file(fname)
-            fname = 'init_pspec_match_part'//trim(int2str(ipart))//'.dat'
-            call del_file(fname)
-            fname = 'sum_img_match_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
-            call del_file(fname)
-            fname = SIGMA2_MATCH_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
             call del_file(fname)
         enddo
         call del_file('CALC_PSPEC_FINISHED')

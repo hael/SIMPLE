@@ -87,8 +87,6 @@ character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_ca
 ! ML
 character(len=*), parameter :: SIGMA2_FBODY                  = 'sigma2_noise_part'
 character(len=*), parameter :: SIGMA2_GROUP_FBODY            = 'sigma2_it_'
-character(len=*), parameter :: SIGMA2_MATCH_FBODY            = 'sigma2_match_part'
-character(len=*), parameter :: SIGMA2_MATCH_GROUP_FBODY      = 'sigma2_match_it_'
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR                 = 'stderrout/'
 ! NEW DIRECTORIES

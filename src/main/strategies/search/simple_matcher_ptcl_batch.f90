@@ -2,14 +2,13 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_euclid_sigma2,   only: sigma2_star_from_iter, sigma2_match_star_from_iter
+use simple_euclid_sigma2,   only: sigma2_star_from_iter
 use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
 use simple_matcher_2Dprep,  only: prepimg4align
 implicit none
 
 public :: prep_sigmas_objfun, alloc_ptcl_imgs
 public :: build_batch_particles3D, build_batch_particles2D
-public :: repolarize_batch_particles3D
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
@@ -20,7 +19,7 @@ contains
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         logical,           intent(in)    :: l_stream
-        type(string)      :: fname, fname_groups
+        type(string)      :: fname
         logical           :: l_group_only_init
         if( params%cc_objfun == OBJFUN_EUCLID )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
@@ -33,22 +32,7 @@ contains
                 call build%esig%read_part(  build%spproj_field)
                 call build%esig%read_groups(build%spproj_field)
             endif
-            if( trim(params%match_src) == 'den' )then
-                fname        = SIGMA2_MATCH_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-                fname_groups = sigma2_match_star_from_iter(params%which_iter)
-                if( .not. file_exists(fname_groups) ) fname_groups = sigma2_star_from_iter(params%which_iter)
-                call build%esig_match%new(params, build%pftc, fname, params%box)
-                l_group_only_init = (.not. file_exists(fname)) .and. file_exists(fname_groups)
-                if( l_stream .or. l_group_only_init )then
-                    call build%esig_match%read_groups(build%spproj_field, fname_groups)
-                    call build%esig_match%allocate_ptcls
-                else
-                    call build%esig_match%read_part(  build%spproj_field)
-                    call build%esig_match%read_groups(build%spproj_field, fname_groups)
-                endif
-            endif
             call fname%kill
-            call fname_groups%kill
         end if
     end subroutine prep_sigmas_objfun
 
@@ -78,7 +62,7 @@ contains
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
         logical :: l_backup_imgs, l_den_src
         l_backup_imgs = present(imgs4rec)
-        l_den_src     = trim(params%match_src) == 'den'
+        l_den_src     = trim(params%ptcl_src) == 'den'
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         if( .not. l_den_src )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
@@ -86,11 +70,7 @@ contains
             call discrete_read_imgbatch_source(params, build, 'den', &
                 nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
         endif
-        if( l_backup_imgs .and. l_den_src )then
-            call discrete_read_imgbatch_source(params, build, 'raw', &
-                nptcls_here, pinds_here, [1,nptcls_here], imgs4rec(:nptcls_here))
-        endif
-        if( l_backup_imgs .and. (.not. l_den_src) )then
+        if( l_backup_imgs )then
             call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
                 tmp_imgs, tmp_imgs_pad, imgs4rec=imgs4rec(:nptcls_here))
         else
@@ -98,26 +78,6 @@ contains
                 tmp_imgs, tmp_imgs_pad)
         endif
     end subroutine build_batch_particles3D
-
-    subroutine repolarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
-        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls_here
-        integer,           intent(in)    :: pinds_here(nptcls_here)
-        class(image),      intent(in)    :: src_imgs(nptcls_here)
-        class(image),      intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
-        type(image), allocatable :: src_imgs_work(:)
-        integer :: iptcl_batch
-        call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        ! prepimg4align mutates its source; preserve raw reconstruction buffers.
-        call alloc_imgarr(nptcls_here, src_imgs(1)%get_ldim(), src_imgs(1)%get_smpd(), src_imgs_work)
-        do iptcl_batch = 1,nptcls_here
-            call src_imgs_work(iptcl_batch)%copy_fast(src_imgs(iptcl_batch))
-        enddo
-        call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, src_imgs_work, tmp_imgs, tmp_imgs_pad)
-        call dealloc_imgarr(src_imgs_work)
-    end subroutine repolarize_batch_particles3D
 
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, imgs4rec )
         class(parameters),      intent(in)    :: params

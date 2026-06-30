@@ -9,7 +9,7 @@ implicit none
 
 public :: euclid_sigma2, write_groups_starfile
 public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
-public :: sigma2_star_from_iter, sigma2_match_star_from_iter, fill_sigma2_before_nyq, test_unit
+public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
 
@@ -570,12 +570,6 @@ contains
         type(string) :: sigma2_star_from_iter
         sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//trim(STAR_EXT)
     end function sigma2_star_from_iter
-
-    function sigma2_match_star_from_iter( iter )
-        integer, intent(in) :: iter
-        type(string) :: sigma2_match_star_from_iter
-        sigma2_match_star_from_iter = trim(SIGMA2_MATCH_GROUP_FBODY)//trim(int2str(iter))//trim(STAR_EXT)
-    end function sigma2_match_star_from_iter
 
     ! Destructor
 

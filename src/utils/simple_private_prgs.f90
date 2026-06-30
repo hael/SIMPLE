@@ -434,7 +434,7 @@ contains
         call cmd_dict%push('qsys_qos',      'job scheduling priority (SLURM/PBS)')
         call cmd_dict%push('qsys_reservation', 'Name of reserved target partition of distributed computer system (SLURM/PBS)')
         call cmd_dict%push('real_filter',   'real-space filter kind(median|average|bman)')
-        call cmd_dict%push('match_src',      '3D particle image source for matching(raw|den){raw}')
+        call cmd_dict%push('ptcl_src',      'particle source for matching and 3D rec(raw|den){raw}')
         call cmd_dict%push('recvol_sigma',  'noise(sigma)-weighted volume reconstruction strategy(yes|no){no}')
         call cmd_dict%push('refine',        'refinement mode(shc|neigh|cluster|clustersym){shc}')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')

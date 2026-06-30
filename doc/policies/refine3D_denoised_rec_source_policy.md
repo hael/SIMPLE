@@ -1,13 +1,17 @@
-# Dual Particle Representative Source Policy
+# Particle Source Policy
 
 This document defines the policy for projects that carry paired raw and
 denoised particle representatives.
 
-The current implementation allows denoised representatives to drive 3D
-matching/alignment while volume reconstruction remains a raw particle
-responsibility. Euclidean matching sigmas follow the matching source, but the
-legacy reconstruction sigma stream remains raw. Independent public matching and
-reconstruction source selectors are not supported.
+The current implementation exposes one public source selector:
+
+```text
+ptcl_src = raw | den
+```
+
+The selected source is used consistently for 3D matching, Euclidean sigma
+estimation, and volume reconstruction. SIMPLE does not maintain separate
+matching and reconstruction particle sources in this version.
 
 Related policy documents:
 
@@ -26,22 +30,22 @@ logical particle:
 1. a raw representative image
 2. a denoised representative image
 
-At execution time, `refine3D` selects the representation used for matching:
+At execution time, `ptcl_src` selects the representation used by the 3D
+workflow:
 
 ```text
-match_src = raw | den
+ptcl_src=raw  -> raw images supply matching, sigmas, and reconstruction
+ptcl_src=den  -> denoised images supply matching, sigmas, and reconstruction
 ```
 
-The selected source is used for:
+There is one Euclidean sigma stream:
 
-- particle matching and alignment
-- state assignment
-- shift and in-plane updates
+```text
+sigma2_noise_part*
+sigma2_it_*.star
+```
 
-Volume reconstruction always uses raw particles. When `match_src=den`,
-denoised images supply matching and matching residual sigmas, while a raw
-repolarization pass updates the legacy raw sigma stream for reconstruction.
-Cartesian partial reconstructions are gridded from raw images.
+No `sigma2_match_*` channel is produced or consumed.
 
 ## 2. Required Project Metadata
 
@@ -55,22 +59,8 @@ os_stk%stk       raw stack path
 os_stk%stk_den   denoised stack path
 ```
 
-Example:
-
-```text
-os_stk row 1:
-  stk        = raw_particles_001.mrcs
-  stk_den    = my_arbitrary_denoised_reps_for_001.mrcs
-  nptcls_stk = 10000
-  ctf        = flip
-```
-
-`stk_den` is intentionally not derived from `stk` by suffix. Arbitrary denoised
-stack names are valid.
-
-`stk_den` is also intentionally not a separate counted stack row. Adding
-denoised stacks as ordinary extra `os_stk` entries would change stack counts and
-break existing particle-to-stack indexing assumptions.
+`stk_den` is not derived from `stk` by suffix. Arbitrary denoised stack names
+are valid.
 
 The same particle row and physical image index identify the raw and denoised
 representatives:
@@ -82,12 +72,10 @@ ptcl3D row -> indstk -> physical image number in either paired stack
 ```
 
 The denoised stack must have the same physical image order as the raw stack.
-The same `indstk` value must identify paired raw and denoised images.
 
 ## 3. Import Contract
 
-Import commands must be able to attach denoised representative paths to
-`os_stk%stk_den`.
+Import commands attach denoised representative paths to `os_stk%stk_den`.
 
 Supported import parameters:
 
@@ -96,352 +84,43 @@ stk_den       denoised stack paired with stk
 stktab_den    denoised stack table paired row-by-row with stktab
 ```
 
-For a single stack:
-
-```text
-simple_exec prg=import_particles \
-  stk=raw_particles.mrcs \
-  stk_den=denoised_particles_any_name.mrcs \
-  ctf=flip \
-  ...
-```
-
-For multiple stacks:
-
-```text
-simple_exec prg=import_particles \
-  stktab=raw_stacks.txt \
-  stktab_den=denoised_stacks.txt \
-  ctf=flip \
-  ...
-```
-
 For `stktab_den`, row `i` must be the denoised stack corresponding to raw
 `stktab` row `i`.
 
-## 4. Public Source Selection
+## 4. Source Resolution
 
-Projects with `stk_den` metadata must be able to switch between raw and
-denoised representatives for debugging and testing.
-
-The public selector is:
+All 3D commands that read particle images through `ptcl_src` must resolve the
+stack path through project metadata:
 
 ```text
-match_src = raw | den
+ptcl_src=raw -> os_stk%stk
+ptcl_src=den -> os_stk%stk_den
 ```
 
-Default:
+`ptcl_src=den` requires `oritype=ptcl3D`; 2D workflows continue to use the
+historical raw particle path.
 
-```text
-match_src = raw
-```
+## 5. Command Behavior
 
-Defaulting to raw preserves existing behavior for projects that do not carry
-denoised representatives.
+`refine3D`, `refine3D_auto`, and `refine3D_multi` pass `ptcl_src` through to
+their child 3D matching and sigma-calculation commands.
 
-If `match_src=raw`, commands read `os_stk%stk`.
+`calc_pspec` estimates the single sigma stream from the selected particle
+source. `calc_group_sigmas` consolidates only `sigma2_noise_part*` into
+`sigma2_it_*.star`.
 
-If `match_src=den`, commands read `os_stk%stk_den`.
+Online Cartesian reconstruction in `refine3D` grids the selected particle
+source. Offline `reconstruct3D` also honors `ptcl_src` and reads the selected
+source.
 
-No command should silently substitute raw images for denoised images, or
-denoised images for raw images. If a requested source is unavailable, the
-workflow must fail early.
+## 6. Validation Expectations
 
-## 5. V1 Scope
+Tests should verify:
 
-V1 support applies to `ptcl3D` particle representatives used by `refine3D`,
-`refine3D_auto`, and `refine3D_multi`.
-
-`match_src=den` is not supported for `ptcl2D` or other 2D applications.
-2D workflows must continue to read raw particle stacks.
-
-V1 supports:
-
-- raw/denoised representative pairs
-- arbitrary denoised stack names stored in `os_stk%stk_den`
-- `refine3D` source switching through `match_src`
-- `refine3D_auto` source parameter pass-through
-- `refine3D_multi` source parameter pass-through
-- raw and denoised stacks interpreted as `ctf=flip`
-
-V1 does not support:
-
-- suffix-derived denoised stack paths
-- denoised stacks as counted extra `os_stk` rows
-- independent denoised orientation tables
-- separate denoised CTF metadata
-- denoised-source offline `reconstruct3D`
-- denoised-source sigma bootstrap or residual sigma estimation
-
-## 6. CTF Convention
-
-V1 requires raw and denoised representatives to be in `ctf=flip` status when
-`match_src=den`.
-
-This means:
-
-- raw `os_stk%ctf` must be `flip`
-- denoised images are interpreted as already matching the same `ctf=flip`
-  convention
-- `stk_den` does not provide independent CTF parameters
-
-If a raw stack is `ctf=yes` or `ctf=no`, denoised-source execution must hard
-fail in V1.
-
-This restriction can be relaxed only after a separate policy defines how
-denoised representatives and CTF correction interact.
-
-## 7. Sigma And ML Regularization
-
-SIMPLE keeps two sigma channels when `match_src=den`:
-
-- `sigma2_noise_part*` and `sigma2_it_*.star` are the legacy raw/reconstruction
-  sigma channel.
-- `sigma2_match_part*` and `sigma2_match_it_*.star` are the residual-derived
-  denoised matching sigma channel.
-
-The bootstrap `calc_pspec` pass remains raw-only. Denoised images do not provide
-a reliable noise-mask power prior because denoising suppresses the background
-variance that `calc_pspec` normally measures. Until `sigma2_match_part*` exists,
-denoised matching falls back to the raw group sigma prior. After the first
-denoised matcher pass, `sigma2_match_part*` is written from denoised residuals
-and subsequent iterations consolidate `sigma2_match_it_*.star`.
-
-When `objfun=euclid`, matcher residual sigmas follow this policy:
-
-```text
-match_src=raw  -> raw images supply matching, matching sigmas, reconstruction sigmas, and reconstruction
-match_src=den  -> denoised images supply matching and residual-derived matching sigmas;
-                  raw images supply reconstruction sigmas and reconstruction
-```
-
-`ml_reg=yes` may still consume grouped sigma spectra through the existing
-`builder%esig` path. Those spectra remain the legacy raw-image spectra under
-both `match_src=raw` and `match_src=den`. Denoised matching uses the separate
-`builder%esig_match` channel.
-
-## 8. Validation Rules
-
-Validation should happen as early as the relevant source information is
-available.
-
-When `match_src=den`, fail unless all of the following are true:
-
-- the workflow uses `ptcl3D` particle representatives
-- every active particle has a valid `stkind`
-- every active particle has or can derive a valid physical `indstk`
-- every referenced raw `os_stk` row has `ctf=flip`
-- every referenced raw `os_stk` row has a non-empty `stk_den`
-- every referenced `stk_den` path exists
-- raw and denoised stack dimensions match in X and Y at import or read time
-- raw and denoised physical image counts match at import time
-- every active particle's `indstk` is within the denoised physical image count
-
-Validation must use the same stack-indexing contract as ordinary particle
-reads:
-
-```text
-stkind identifies the os_stk row
-indstk identifies the physical image number
-fromp/top describe project row ranges, not physical image indices
-```
-
-## 9. Execution Ownership
-
-### Commanders
-
-Commanders own command shape, defaults, and early validation. They should not
-own low-level image-read loops or assembled-volume postprocessing.
-
-`refine3D`, `refine3D_auto`, and `refine3D_multi` must expose or preserve
-`match_src`.
-
-Wrapper commands must pass `match_src` through to their child `refine3D`
-invocations. Offline `reconstruct3D` ignores/removes `match_src` and always
-reads raw particle images.
-
-### Strategy Layer
-
-`simple_refine3D_strategy.f90` must preserve shared-memory and distributed
-parity. `match_src` must be present in worker command lines and must resolve the
-same `stk_den` paths on workers as on the master.
-
-The strategy may dispatch validation before scheduling workers. It should not
-take over batch image I/O.
-
-### Project Layer
-
-The project layer owns paired-source resolution. The source resolver maps:
-
-```text
-ptcl3D particle index + match_src -> stack path + physical image index
-```
-
-The helper chooses:
-
-```text
-match_src=raw -> os_stk%stk
-match_src=den -> os_stk%stk_den
-```
-
-This keeps `stk_den` metadata policy out of matcher and reconstruction loops.
-
-### Matcher / Batch I/O Layer
-
-The matcher owns per-batch particle image loading.
-
-For online matching with Cartesian reconstruction enabled, `match_src=raw`
-keeps the historical single-read path. With `match_src=den`, the matcher reads
-denoised images for matching and raw images for reconstruction and residual
-sigma repolarization.
-
-### Reconstruction Layer
-
-`simple_matcher_3Drec.f90` should continue to prepare Fourier planes and grid
-particles using the current `ptcl3D` orientation, state, shift, CTF metadata,
-and sigma state. Offline `reconstruct3D` always reads `os_stk%stk`.
-
-### Volume Assembly Layer
-
-`volassemble` remains unchanged. It reduces partial reconstructions, restores
-even/odd volumes, computes FSCs, runs automasking and nonuniform filtering, and
-writes project output metadata from whatever partial reconstruction inputs the
-matcher or `reconstruct3D` produced.
-
-## 10. Refine3D Flow
-
-For one matcher batch:
-
-```text
-1. sample or receive ptcl3D particle indices for update
-2. read selected match_src images through the source-aware stack resolver
-3. read/copy raw images to reconstruction buffers if reconstruction or raw sigma repolarization is active
-4. preprocess and polarize the selected images for matching
-5. run the selected search strategy or consume ASSIGNMENT.dat
-6. update orientation, state, and shift from the selected-source matcher pass
-7. when `objfun=euclid` and `match_src=den`, update `sigma2_match_part*` from denoised PFT residuals
-8. when `objfun=euclid` and `match_src=den`, repolarize raw images and update `sigma2_noise_part*` from raw PFT residuals
-9. prepare reconstruction Fourier planes from raw images
-10. grid reconstruction planes using updated `ptcl3D` metadata
-11. write partition-local Cartesian partials
-```
-
-With `match_src=raw`, matching, sigma, and reconstruction continue to share the
-single raw read and the legacy sigma channel.
-
-## 11. Reconstruct3D Flow
-
-`reconstruct3D` always reads raw particle images.
-
-```text
-read os_stk%stk
-```
-
-It still uses the same `ptcl3D` orientation, state, shift, CTF, and even/odd
-metadata.
-
-## 12. Distributed Execution
-
-Distributed and shared-memory runs must have the same scientific behavior.
-
-For distributed workflows:
-
-- master-side validation should check all referenced `stk_den` paths before
-  scheduling workers when `match_src=den`
-- worker command lines must include `match_src`
-- workers must resolve `stk_den` paths with the same project/current
-  working-directory rules used for `stk`
-- partition-local partials have the same filenames and downstream contracts as
-  ordinary partials
-- `volassemble` should not need to know whether partials came from raw or
-  denoised matching
-
-If a worker cannot access a `stk_den` path that passed master validation, the
-worker should fail hard with the raw stack path, `stk_den` path, and partition
-information in the diagnostic.
-
-## 13. Implementation Shape
-
-The implementation prefers narrow helper APIs over spreading source-selection
-conditionals through search code.
-
-Implemented project helper:
-
-```fortran
-call spproj%get_ptcl_source_stkname_and_ind(oritype, iptcl, source, &
-    stkname, ind_in_stk)
-```
-
-`source` accepts:
-
-```text
-raw
-den
-```
-
-Implemented batch I/O helper:
-
-```fortran
-call discrete_read_imgbatch_source(params, build, source, nptcls, pinds, &
-    batchlims, imgs)
-```
-
-The raw default path may use the existing optimized `discrete_read_imgbatch`
-helper. Denoised matching reads use `discrete_read_imgbatch_source` with
-`source='den'`; raw reconstruction and sigma-repolarization reads use
-`source='raw'` or the existing raw helper.
-
-## 14. Error Messages
-
-Errors should name the selected source and both stack paths where possible.
-
-Examples:
-
-```text
-match_src=den requires oritype=ptcl3D
-os_stk row 17 has no stk_den entry
-denoised source requires raw stack ctf=flip
-missing denoised stack for raw stack raw_particles.mrcs: stk_den=my_denoised_particles.mrcs
-raw/denoised stack image counts differ: raw_particles.mrcs has 120000, my_denoised_particles.mrcs has 119998
-raw/denoised stack dimensions differ: raw_particles.mrcs is 256x256, my_denoised_particles.mrcs is 384x384
-particle indstk is outside denoised stack range
-refine3D_auto did not propagate match_src to child refine3D command
-```
-
-## 15. Testing Requirements
-
-Minimum tests:
-
-- import stores `stk_den` on the correct `os_stk` row
-- `stktab_den` maps row-by-row to `stktab`
-- validation passes for matching raw/denoised dimensions and counts
-- validation fails when `stk_den` is missing
-- validation fails when a `stk_den` file is missing
-- validation fails when dimensions differ
-- validation fails when image counts differ
-- validation fails for non-`ptcl3D` denoised-source use
-- validation fails when raw stack CTF is not `flip`
-- `match_src=raw` preserves existing `reconstruct3D` and `refine3D` behavior
-- `match_src=den` is ignored or rejected by offline `reconstruct3D`; reconstruction reads raw images
-- `match_src=den` makes `refine3D` use denoised images for matching
-- `match_src=den` makes `refine3D` estimate matching residual sigmas from denoised images
-- `match_src=den` makes `refine3D` estimate reconstruction residual sigmas from raw images
-- `match_src=den` makes `refine3D` online Cartesian reconstruction use raw images
-- `refine3D_auto` propagates `match_src` to child commands
-- `refine3D_multi` propagates `match_src` to child commands
-- users can switch between `match_src=raw` and `match_src=den` from the same
-  dual-representative project without rewriting stack metadata
-
-Distributed tests should verify that worker command lines preserve `match_src`.
-
-## 16. Open Future Extensions
-
-Future versions may consider:
-
-- support for CTF conventions other than `flip`
-- source-provenance labels in output volumes and FSC reports
-- side-by-side raw and denoised reconstruction diagnostics
-
-Those extensions should be policy-gated separately. The first implementation
-should stay narrow enough that the single-source particle-domain and
-volume-domain contracts remain easy to audit.
+- `ptcl_src=raw` preserves the historical raw-image behavior
+- `ptcl_src=den` uses denoised images for matching
+- `ptcl_src=den` estimates sigmas from denoised images
+- `ptcl_src=den` reconstructs volumes from denoised images
+- distributed worker command lines preserve `ptcl_src`
+- `ptcl_src=den` fails clearly when `stk_den` is missing or the stack geometry
+  is incompatible

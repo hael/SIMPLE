@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
 use simple_cmdline,         only: cmdline
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, killimgbatch
+use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
@@ -86,7 +86,12 @@ contains
             batchsz   = batchlims(2) - batchlims(1) + 1
             ! read images
             if( DEBUG ) t = tic()
-            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            if( trim(params%ptcl_src) == 'den' )then
+                call discrete_read_imgbatch_source(params, build, 'den', batchsz, pinds(batchlims(1):batchlims(2)), &
+                    [1,batchsz], build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            endif
             if( DEBUG ) t_read = t_read + toc(t)
             ! preprocess images into padded objects
             if( DEBUG ) t = tic()

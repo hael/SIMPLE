@@ -407,13 +407,13 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
-        character(len=STDLEN) :: match_src_eff
+        character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff
         logical :: l_den_src
         logical :: l_full_update_stage
         l_full_update_stage = docked_split_stage(params, istage) .or. force_full_sampling_mode(params)
-        match_src_eff        = stage_match_src(cfg, params)
-        l_den_src           = trim(match_src_eff) == 'den'
+        ptcl_src_eff        = stage_ptcl_src(cfg, params)
+        l_den_src           = trim(ptcl_src_eff) == 'den'
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
@@ -453,7 +453,7 @@ contains
         call cline_refine3D%set('balance',                cfg%balance)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
-        call cline_refine3D%set('match_src',               match_src_eff)
+        call cline_refine3D%set('ptcl_src',               ptcl_src_eff)
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
@@ -523,10 +523,10 @@ contains
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
 
-    character(len=STDLEN) function stage_match_src( cfg, params ) result( match_src )
+    character(len=STDLEN) function stage_ptcl_src( cfg, params ) result( ptcl_src )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
-        match_src = trim(params%match_src)
-    end function stage_match_src
+        ptcl_src = trim(params%ptcl_src)
+    end function stage_ptcl_src
 
 end submodule simple_abinitio_controller

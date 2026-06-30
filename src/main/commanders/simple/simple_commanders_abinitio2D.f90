@@ -281,8 +281,8 @@ contains
             class(cmdline), intent(in) :: cline
             cline_cluster2D  = cline
             cline_calc_pspec = cline
-            call cline_cluster2D%delete('match_src')
-            call cline_calc_pspec%delete('match_src')
+            call cline_cluster2D%delete('ptcl_src')
+            call cline_calc_pspec%delete('ptcl_src')
             ! initial sigma2
             call cline_calc_pspec%set('prg',      'calc_pspec')
             ! cluster2D
@@ -364,7 +364,7 @@ contains
             finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
             ! classes generation
             cline_make_cavgs = cline ! ncls is transferred here
-            call cline_make_cavgs%delete('match_src')
+            call cline_make_cavgs%delete('ptcl_src')
             call cline_make_cavgs%delete('autoscale')
             call cline_make_cavgs%delete('balance')
             call cline_make_cavgs%delete('smpd_crop')
