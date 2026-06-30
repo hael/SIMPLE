@@ -29,6 +29,7 @@ integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-stan
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
+character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
 character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'sum'
@@ -236,6 +237,9 @@ contains
                 cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
                 if( params%nstates == 1 .and. cfg%prob_neigh_mode.eq.'sum' ) cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
             endif
+        else if( istage == 1 )then
+            cfg%refine           = 'prob_neigh'
+            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1
         else if( istage <  PROB_REFINE_STAGE )then
             cfg%refine           = 'prob_neigh'
             cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
