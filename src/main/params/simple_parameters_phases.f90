@@ -819,6 +819,8 @@ contains
             self%ptcl_src = 'raw'
             self%ml_reg   = 'no'
             self%l_ml_reg = .false.
+            call cline%set('ptcl_src', self%ptcl_src)
+            call cline%set('ml_reg',   self%ml_reg)
         endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')
