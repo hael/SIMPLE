@@ -39,7 +39,7 @@ use simple_decay_funs
 use simple_parameters_registry, only: param_registry
 implicit none
 
-public :: parameters, apply_particle_source_policy_to_cline
+public :: parameters
 private
 #include "simple_local_flags.inc"
 
@@ -291,8 +291,7 @@ type :: parameters
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|sum|shc|snhc){state}
-    character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching(raw|den){raw}
-    character(len=STDLEN)     :: rec_src='match'!< particle source for 3D rec(match|raw|den){match}
+    character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching and 3D rec(raw|den){raw}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
@@ -617,11 +616,6 @@ contains
 end type parameters
 
 interface
-    module subroutine apply_particle_source_policy_to_cline(cline, l_reconstruct3d)
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: l_reconstruct3d
-    end subroutine apply_particle_source_policy_to_cline
-
     module subroutine init_dynamic_defaults(self)
         class(parameters), intent(inout) :: self
     end subroutine init_dynamic_defaults

@@ -2,7 +2,6 @@
 module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
-use simple_parameters,        only: apply_particle_source_policy_to_cline
 use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
 implicit none
 #include "simple_local_flags.inc"
@@ -102,7 +101,6 @@ contains
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
-        call apply_particle_source_policy_to_cline(cline)
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
             maxits_user = cline%get_iarg('maxits')
@@ -610,7 +608,6 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                 'no')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_MULTI)
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',                 'no')
-        call apply_particle_source_policy_to_cline(cline)
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
             if( trim(multivol_mode%to_char()).eq.'input_oris_fixed' ) min_maxits_required = 1
@@ -1173,7 +1170,6 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call apply_particle_source_policy_to_cline(cline)
         call cline%set('prg', 'refine3D')
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)

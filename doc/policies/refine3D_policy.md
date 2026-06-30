@@ -15,10 +15,6 @@ Related workflow policies:
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)
 
-Related design notes:
-
-- [refine3D_denoised_rec_source_policy.md](refine3D_denoised_rec_source_policy.md)
-
 ## 1. Scope
 
 `refine3D` is an iterative projection-matching workflow over an existing

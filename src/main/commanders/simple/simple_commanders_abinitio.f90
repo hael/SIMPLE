@@ -8,7 +8,6 @@ use simple_commanders_project_core, only: commander_selection
 use simple_commanders_reproject,    only: commander_reproject
 use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D
 use simple_commanders_rec,          only: commander_rec3D, commander_rec3D
-use simple_parameters,              only: apply_particle_source_policy_to_cline
 use simple_cluster_seed,            only: gen_labelling
 use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
@@ -1154,7 +1153,6 @@ contains
         if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
         if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
-        call apply_particle_source_policy_to_cline(cline)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
             THROW_HARD('nsample_start/nsample_stop are no longer supported for abinitio3D; set nsample instead')
         endif
@@ -1192,8 +1190,7 @@ contains
         endif
         ! make master parameters
         call params%new(cline)
-        write(logfhandle,'(A,A)') '>>> ABINITIO3D MATCHING SOURCE: ', trim(params%ptcl_src)
-        write(logfhandle,'(A,A)') '>>> ABINITIO3D RECONSTRUCTION SOURCE: ', trim(params%rec_src)
+        write(logfhandle,'(A,A)') '>>> ABINITIO3D PARTICLE SOURCE: ', trim(params%ptcl_src)
         l_state_continue_mode = l_state_continue
         if( trim(params%multivol_mode).eq.'independent' )then
             if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &

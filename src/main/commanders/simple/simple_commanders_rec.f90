@@ -31,7 +31,7 @@ contains
 
     subroutine exec_rec3D( self, cline )
         use simple_rec3D_strategy, only: rec3D_strategy, create_rec3D_strategy
-        use simple_parameters,     only: parameters, apply_particle_source_policy_to_cline
+        use simple_parameters,     only: parameters
         use simple_builder,        only: builder
         class(commander_rec3D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
@@ -42,7 +42,6 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call apply_particle_source_policy_to_cline(cline, l_reconstruct3d=.true.)
         call cline%delete('refine')
         ! Select and run strategy
         strategy = create_rec3D_strategy(cline)

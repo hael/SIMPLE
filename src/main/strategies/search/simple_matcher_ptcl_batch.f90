@@ -60,13 +60,9 @@ contains
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
-        character(len=STDLEN) :: rec_src_eff
-        logical :: l_backup_imgs, l_den_src, l_same_src
+        logical :: l_backup_imgs, l_den_src
         l_backup_imgs = present(imgs4rec)
         l_den_src     = trim(params%ptcl_src) == 'den'
-        rec_src_eff   = trim(params%rec_src)
-        if( trim(rec_src_eff) == 'match' ) rec_src_eff = trim(params%ptcl_src)
-        l_same_src     = trim(rec_src_eff) == trim(params%ptcl_src)
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         if( .not. l_den_src )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
@@ -74,11 +70,7 @@ contains
             call discrete_read_imgbatch_source(params, build, 'den', &
                 nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
         endif
-        if( l_backup_imgs .and. (.not. l_same_src) )then
-            call discrete_read_imgbatch_source(params, build, trim(rec_src_eff), &
-                nptcls_here, pinds_here, [1,nptcls_here], imgs4rec(:nptcls_here))
-        endif
-        if( l_backup_imgs .and. l_same_src )then
+        if( l_backup_imgs )then
             call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
                 tmp_imgs, tmp_imgs_pad, imgs4rec=imgs4rec(:nptcls_here))
         else

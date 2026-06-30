@@ -5,25 +5,6 @@ implicit none
 
 contains
 
-    module subroutine apply_particle_source_policy_to_cline(cline, l_reconstruct3d)
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: l_reconstruct3d
-        type(string) :: rec_src_arg
-        logical      :: l_den_rec, l_force_cc_rec
-        l_den_rec      = .false.
-        l_force_cc_rec = .false.
-        if( present(l_reconstruct3d) ) l_force_cc_rec = l_reconstruct3d
-        if( cline%defined('rec_src') )then
-            rec_src_arg = cline%get_carg('rec_src')
-            l_den_rec = trim(rec_src_arg%to_char()) == 'den'
-            call rec_src_arg%kill
-        endif
-        if( .not. l_den_rec ) return
-        call cline%set('ptcl_src', 'raw')
-        call cline%set('ml_reg',   'no')
-        if( l_force_cc_rec ) call cline%set('objfun', 'cc')
-    end subroutine apply_particle_source_policy_to_cline
-
     module subroutine init_dynamic_defaults(self)
         class(parameters), intent(inout) :: self
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
