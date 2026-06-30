@@ -804,8 +804,21 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
+        select case(trim(self%rec_src))
+            case('match','raw','den')
+            case DEFAULT
+                THROW_HARD('Unsupported rec_src='//trim(self%rec_src)//'; expected match|raw|den')
+        end select
         if( trim(self%ptcl_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
+        endif
+        if( trim(self%rec_src) == 'den' )then
+            if( trim(self%oritype) /= 'ptcl3D' )then
+                THROW_HARD('rec_src=den is supported only for oritype=ptcl3D')
+            endif
+            self%ptcl_src = 'raw'
+            self%ml_reg   = 'no'
+            self%l_ml_reg = .false.
         endif
         select case(trim(self%mcconvention))
             case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')

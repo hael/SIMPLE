@@ -69,6 +69,7 @@ contains
             &'state label', .false., 1., gui_submenu="search", gui_advanced=.true.)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}', '(single|independent|docked){single}', .false., 'single')
         call abinitio3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
+        call abinitio3D%add_input(UI_SRCH, rec_src, gui_submenu="search")
         ! filter controls
         call abinitio3D%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

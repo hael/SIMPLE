@@ -3,15 +3,16 @@
 This document defines the policy for projects that carry paired raw and
 denoised particle representatives.
 
-The current implementation exposes one public source selector:
+The current implementation exposes two public source selectors:
 
 ```text
 ptcl_src = raw | den
+rec_src  = match | raw | den
 ```
 
-The selected source is used consistently for 3D matching, Euclidean sigma
-estimation, and volume reconstruction. SIMPLE does not maintain separate
-matching and reconstruction particle sources in this version.
+`ptcl_src` selects the particle images used for 3D matching/alignment and
+Euclidean sigma estimation. `rec_src` selects the particle images used for 3D
+volume reconstruction. The default `rec_src=match` follows `ptcl_src`.
 
 Related policy documents:
 
@@ -30,13 +31,28 @@ logical particle:
 1. a raw representative image
 2. a denoised representative image
 
-At execution time, `ptcl_src` selects the representation used by the 3D
-workflow:
+At execution time, SIMPLE can select the representation independently for
+matching and reconstruction:
 
 ```text
-ptcl_src=raw  -> raw images supply matching, sigmas, and reconstruction
-ptcl_src=den  -> denoised images supply matching, sigmas, and reconstruction
+ptcl_src=raw -> raw images supply matching and matching sigmas
+ptcl_src=den -> denoised images supply matching and matching sigmas
+
+rec_src=match -> reconstruction follows ptcl_src
+rec_src=raw   -> raw images supply 3D reconstruction
+rec_src=den   -> denoised images supply 3D reconstruction
 ```
+
+When `rec_src=den`, reconstruction is CC-style and unregularized:
+
+```text
+rec_src=den forces ptcl_src=raw
+rec_src=den forces ml_reg=no
+```
+
+This keeps denoised-image reconstruction out of the Euclidean ML-regularized
+path and avoids mixing denoised reconstruction images with denoised matching
+residual sigmas.
 
 There is one Euclidean sigma stream:
 
@@ -89,38 +105,48 @@ For `stktab_den`, row `i` must be the denoised stack corresponding to raw
 
 ## 4. Source Resolution
 
-All 3D commands that read particle images through `ptcl_src` must resolve the
-stack path through project metadata:
+All 3D commands that read particle images through `ptcl_src` or `rec_src` must
+resolve stack paths through project metadata:
 
 ```text
-ptcl_src=raw -> os_stk%stk
-ptcl_src=den -> os_stk%stk_den
+raw -> os_stk%stk
+den -> os_stk%stk_den
 ```
 
-`ptcl_src=den` requires `oritype=ptcl3D`; 2D workflows continue to use the
+The `den` source requires `oritype=ptcl3D`; 2D workflows continue to use the
 historical raw particle path.
 
 ## 5. Command Behavior
 
-`refine3D`, `refine3D_auto`, and `refine3D_multi` pass `ptcl_src` through to
-their child 3D matching and sigma-calculation commands.
+`refine3D`, `refine3D_auto`, `refine3D_multi`, and `abinitio3D` expose both
+source selectors. Wrapper commands pass both selectors to child 3D matching and
+reconstruction commands.
 
-`calc_pspec` estimates the single sigma stream from the selected particle
-source. `calc_group_sigmas` consolidates only `sigma2_noise_part*` into
-`sigma2_it_*.star`.
+`calc_pspec` estimates the single sigma stream from `ptcl_src`. `calc_group_sigmas`
+consolidates only `sigma2_noise_part*` into `sigma2_it_*.star`.
 
-Online Cartesian reconstruction in `refine3D` grids the selected particle
-source. Offline `reconstruct3D` also honors `ptcl_src` and reads the selected
-source.
+Online Cartesian reconstruction in `refine3D` grids the effective reconstruction
+source. When `rec_src=match`, or when explicit `rec_src` equals `ptcl_src`, the
+matcher reads each particle batch once and copies the pre-alignment images into
+the reconstruction buffer. When the sources differ, the matcher reads the
+matching source into the polar-alignment buffer and reads the reconstruction
+source directly into the reconstruction buffer.
+
+Offline `reconstruct3D` honors `rec_src` and reads that source directly.
 
 ## 6. Validation Expectations
 
 Tests should verify:
 
-- `ptcl_src=raw` preserves the historical raw-image behavior
-- `ptcl_src=den` uses denoised images for matching
-- `ptcl_src=den` estimates sigmas from denoised images
-- `ptcl_src=den` reconstructs volumes from denoised images
-- distributed worker command lines preserve `ptcl_src`
-- `ptcl_src=den` fails clearly when `stk_den` is missing or the stack geometry
-  is incompatible
+- `ptcl_src=raw rec_src=match` preserves historical raw-image behavior
+- `ptcl_src=den rec_src=match` uses denoised images for matching and
+  reconstruction
+- `ptcl_src=den rec_src=raw` uses denoised images for matching and raw images
+  for reconstruction
+- `ptcl_src=raw rec_src=den ml_reg=no` uses raw images for matching and
+  denoised images for reconstruction
+- `rec_src=den ptcl_src=den` resolves to raw matching and denoised reconstruction
+- `rec_src=den ml_reg=yes` resolves to unregularized reconstruction
+- distributed worker command lines preserve both source selectors
+- `den` source selection fails clearly when `stk_den` is missing or the stack
+  geometry is incompatible

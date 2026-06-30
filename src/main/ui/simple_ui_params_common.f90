@@ -129,6 +129,7 @@ type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
 type(ui_param) :: qsys_reservation
 type(ui_param) :: ptcl_src
+type(ui_param) :: rec_src
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
@@ -392,9 +393,13 @@ subroutine set_ui_params
                                    'Maximum number of iterations', &
                                    'Max # iterations', .false., 100.)
 
-    call ptcl_src%set_param(       'ptcl_src',        'multi',  'Particle source', &
-                                   'Particle source for matching and 3D rec(raw|den){raw}', &
+    call ptcl_src%set_param(       'ptcl_src',        'multi',  'Matching particle source', &
+                                   'Particle source for matching(raw|den){raw}', &
                                    '(raw|den){raw}', .false., 'raw')
+
+    call rec_src%set_param(        'rec_src',         'multi',  '3D rec particle source', &
+                                   'Particle source for 3D reconstruction(match|raw|den){match}', &
+                                   '(match|raw|den){match}', .false., 'match')
 
     call maxnchunks%set_param(     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', &
                                    'After this number of subsets has been classified all processing will stop(0=no end){0}', &

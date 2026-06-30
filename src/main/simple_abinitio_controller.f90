@@ -407,13 +407,12 @@ contains
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
-        character(len=STDLEN) :: ptcl_src_eff
+        character(len=STDLEN) :: ptcl_src_eff, rec_src_eff
         real :: lp_eff
-        logical :: l_den_src
         logical :: l_full_update_stage
         l_full_update_stage = docked_split_stage(params, istage) .or. force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
-        l_den_src           = trim(ptcl_src_eff) == 'den'
+        rec_src_eff         = trim(params%rec_src)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',                     'refine3D')
         if( l_cavgs )then
@@ -454,6 +453,7 @@ contains
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%set('ptcl_src',               ptcl_src_eff)
+        call cline_refine3D%set('rec_src',                rec_src_eff)
         call cline_refine3D%set('nu_refine',              cfg%nu_refine)
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
@@ -473,11 +473,8 @@ contains
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
         call cline_refine3D%set('trs',                    cfg%trs)
-        ! if( l_den_src )then
-        !     call cline_refine3D%set('ml_reg',             'no')
-        ! else
-            call cline_refine3D%set('ml_reg',             cfg%ml_reg)
-        ! endif
+        call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
+        call apply_particle_source_policy_to_cline(cline_refine3D)
         call cline_refine3D%set('conical_fsc',            cfg%conical_fsc)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)

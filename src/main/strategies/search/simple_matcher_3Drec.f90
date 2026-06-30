@@ -64,6 +64,7 @@ contains
         integer,           intent(in)    :: nptcls
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
+        character(len=STDLEN) :: rec_src_eff
         integer :: batchlims(2), ibatch, batchsz
         logical :: DEBUG = .false.
         integer(timer_int_kind) :: t, t0
@@ -74,6 +75,8 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        rec_src_eff = trim(params%rec_src)
+        if( trim(rec_src_eff) == 'match' ) rec_src_eff = trim(params%ptcl_src)
         if( DEBUG ) t_init = toc(t)
         ! gridding batch loop
         if( DEBUG ) then
@@ -86,7 +89,7 @@ contains
             batchsz   = batchlims(2) - batchlims(1) + 1
             ! read images
             if( DEBUG ) t = tic()
-            if( trim(params%ptcl_src) == 'den' )then
+            if( trim(rec_src_eff) == 'den' )then
                 call discrete_read_imgbatch_source(params, build, 'den', batchsz, pinds(batchlims(1):batchlims(2)), &
                     [1,batchsz], build%imgbatch(:batchsz))
             else

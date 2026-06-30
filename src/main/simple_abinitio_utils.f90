@@ -7,7 +7,7 @@ use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
 use simple_euclid_sigma2,        only: sigma2_star_from_iter
 use simple_matcher_refvol_utils, only: remove_ref_section_files
-use simple_parameters,           only: parameters
+use simple_parameters,           only: parameters, apply_particle_source_policy_to_cline
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
@@ -753,6 +753,8 @@ contains
                 ! resolution document next to rec_final_stateNN.mrc.
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')
                 call child_cline%set('pgrp',    params%pgrp)
+                call child_cline%set('ptcl_src', params%ptcl_src)
+                call child_cline%set('rec_src', params%rec_src)
                 if( params%nthr    > 1  ) call child_cline%set('nthr',    params%nthr)
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
@@ -761,6 +763,7 @@ contains
                 if( .not. l_postprocess )then
                     call child_cline%set('postprocess', 'no')
                 endif
+                if( prg.eq.'reconstruct3D' ) call apply_particle_source_policy_to_cline(child_cline, l_reconstruct3d=.true.)
                 if( prg.eq.'reconstruct3D' .and. .not. final_stage_uses_ml_reg() )then
                     call child_cline%set('objfun', 'cc')
                     call child_cline%set('ml_reg', 'no')
