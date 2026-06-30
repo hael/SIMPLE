@@ -241,6 +241,7 @@ contains
                         cline_make_pickrefs = cline
                         call cline_make_pickrefs%set('prg',   'make_pickrefs')
                         call cline_make_pickrefs%set('stream','no')
+                        call cline_make_pickrefs%set('nrots', 25)
                         call cline_make_pickrefs%set('smpd',  params%smpd)
                         call xmake_pickrefs%execute(cline_make_pickrefs)
                         call cline_pick_extract%set('pickrefs', '../'//PICKREFS_FBODY//params%ext%to_char())
