@@ -46,10 +46,12 @@ type, extends(image) :: image_bin
     procedure          :: cc2bin
     procedure          :: cos_edge
     procedure          :: diameter_bin
+    procedure          :: feret_minmax
     procedure          :: inv_bimg 
     procedure          :: grow_bins
     procedure          :: max_dist
     procedure          :: apply_mask
+    
     ! MORPHOLOGICAL OPERATIONS
     procedure          :: dilate
     procedure          :: erode
@@ -545,6 +547,61 @@ contains
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%diameter_cc(1, diam)
     end subroutine diameter_bin
+
+    subroutine feret_minmax( self, min_feret, max_feret, ntheta )
+        class(image_bin),   intent(inout) :: self
+        real,               intent(out)   :: min_feret, max_feret
+        integer,  optional, intent(in)    :: ntheta
+        integer :: ntheta_use, npix, i, j, k, itheta
+        real, allocatable :: xpts(:), ypts(:)
+        real :: pi_v, theta, cth, sth, proj, pmin, pmax, width
+
+        if( .not. self%bimat_is_set ) call self%set_imat
+        if( self%bldim(3) /= 1 ) THROW_HARD('2D images only: feret_minmax')
+
+        npix = count(self%bimat(:,:,1) > 0)
+        if( npix <= 0 )then
+            min_feret = 0.
+            max_feret = 0.
+            return
+        endif
+
+        ntheta_use = 180
+        if( present(ntheta) ) ntheta_use = max(1, ntheta)
+
+        allocate(xpts(npix), ypts(npix))
+        k = 0
+        do j = 1, self%bldim(2)
+            do i = 1, self%bldim(1)
+                if( self%bimat(i,j,1) > 0 )then
+                    k = k + 1
+                    xpts(k) = real(i) * self%bsmpd
+                    ypts(k) = real(j) * self%bsmpd
+                endif
+            enddo
+        enddo
+
+        pi_v = acos(-1.)
+        min_feret = huge(1.)
+        max_feret = 0.
+        do itheta = 0, ntheta_use - 1
+            theta = pi_v * real(itheta) / real(ntheta_use)
+            cth = cos(theta)
+            sth = sin(theta)
+            pmin = huge(1.)
+            pmax = -huge(1.)
+            do k = 1, npix
+                proj = xpts(k) * cth + ypts(k) * sth
+                if( proj < pmin ) pmin = proj
+                if( proj > pmax ) pmax = proj
+            enddo
+            width = (pmax - pmin) + self%bsmpd
+            if( width < min_feret ) min_feret = width
+            if( width > max_feret ) max_feret = width
+        enddo
+
+        deallocate(xpts, ypts)
+    end subroutine feret_minmax
 
     subroutine max_dist( self, dist )
         class(image_bin), intent(inout) :: self
