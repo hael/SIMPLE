@@ -9,9 +9,11 @@ use simple_defs,             only: logfhandle
 use simple_error,            only: simple_exception
 use simple_image,            only: image
 use simple_string,           only: string
+use simple_fileio,           only: swap_suffix
 use simple_cmdline,          only: cmdline
+use simple_gui_utils,        only: mrc2jpeg_tiled
 use simple_image_bin,        only: image_bin
-use simple_defs_fname,       only: METADATA_EXT
+use simple_defs_fname,       only: METADATA_EXT, MRC_EXT, JPG_EXT
 use simple_sp_project,       only: sp_project
 use simple_imgarr_utils,     only: read_cavgs_into_imgarr, write_imgarr, dealloc_imgarr
 use simple_segmentation,     only: otsu_img
@@ -189,6 +191,7 @@ contains
         class(cavg_compatibility_analysis), intent(inout) :: self
         type(image), allocatable :: selected_imgs(:), rejected_imgs(:)
         type(string)             :: selected_out, rejected_out
+        type(string)             :: selected_jpg, rejected_jpg
         integer                  :: i, nsel, nrej, isel, irej
 
         nsel = 0
@@ -198,8 +201,8 @@ contains
             if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
         end do
 
-        selected_out = self%input_stkname//'.selected_cavgs.mrcs'
-        rejected_out = self%input_stkname//'.rejected_cavgs.mrcs'
+        selected_out =  swap_suffix(self%input_stkname, '_selected'//MRC_EXT, MRC_EXT)
+        rejected_out =  swap_suffix(self%input_stkname, '_rejected'//MRC_EXT, MRC_EXT)
 
         if( nsel > 0 )then
             allocate(selected_imgs(nsel))
@@ -227,6 +230,13 @@ contains
 
         write(logfhandle,'(A,I0,A,A)') 'selected cavg stack count=', nsel, ' file=', selected_out%to_char()
         write(logfhandle,'(A,I0,A,A)') 'rejected cavg stack count=', nrej, ' file=', rejected_out%to_char()
+
+        selected_jpg = swap_suffix(selected_out, JPG_EXT, MRC_EXT)
+        rejected_jpg = swap_suffix(rejected_out, JPG_EXT, MRC_EXT)
+        call mrc2jpeg_tiled(selected_out, selected_jpg)
+        call mrc2jpeg_tiled(rejected_out, rejected_jpg)
+        write(logfhandle,'(A,A)') '>>> JPEG ', selected_jpg%to_char()
+        write(logfhandle,'(A,A)') '>>> JPEG ', rejected_jpg%to_char()
     end subroutine write_selected_rejected_stacks
    
     ! Infer a size-compatible subset and reject incompatible candidates.
