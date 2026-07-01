@@ -6,36 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
-<body class="bg-streambg min-h-screen font-sans">
-    <div class="px-5 pt-4">
-        <a class="inline-flex items-center gap-1.5 text-xs text-streamsubtle hover:text-streamtext transition-colors cursor-pointer"
-           title="back" onclick="hideWindow()">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 3L5 8l5 5"/>
-            </svg>
-            back
-        </a>
-    </div>
-
-    <div class="flex justify-center px-5 pt-10 pb-16">
-        <div class="relative w-full max-w-fit">
-            <div class="absolute -top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-                <div class="w-10 h-10 rounded-xl bg-streamaccent flex items-center justify-center shadow-sm">
-                    <svg class="w-6 h-6" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="1,8 3,4 5,11 7,6 9,10 11,3 13,8 15,8"/>
-                    </svg>
+<body class="bg-streambg min-h-screen font-sans flex flex-col">
+    <div class="flex justify-center p-5 flex-1">
+        <div class="flex flex-col w-full">
+            <div class="bg-streambar rounded-xl border border-streamline px-6 pb-6 h-full flex flex-col">
+                <div class="py-4 flex items-center justify-between gap-2">
+                    <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest">
+                        {% if type == "dir" %}
+                            directory selector
+                        {% else %}
+                            file selector
+                        {% endif %}
+                    </div>
+                    <button type="button" onclick="hideWindow()"
+                            class="h-7 w-7 inline-flex items-center justify-center rounded-md text-streamicon hover:text-streamtext hover:bg-streamsurface transition-colors"
+                            title="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+                            <path d="M4 4l8 8M12 4l-8 8" />
+                        </svg>
+                    </button>
                 </div>
-            </div>
-            <div class="bg-streambar rounded-xl border border-streamline pt-14 pb-6 px-6 min-h-[32rem] flex flex-col">
-                <div class="text-sm font-semibold text-streamtext text-center mb-6">
-                    {% if type == "dir" %}
-                        directory selector
-                    {% else %}
-                        file selector
-                    {% endif %}
-                </div>
-
                 <div class="flex items-center gap-2 mb-3">
                     <div class="bg-streamsurface border border-streamline rounded-lg flex-1 flex items-center overflow-hidden">
                         <form method="GET" action={% url 'nice_lite:file_browser' type parentdir %} class="shrink-0">
