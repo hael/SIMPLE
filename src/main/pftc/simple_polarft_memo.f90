@@ -291,7 +291,7 @@ contains
         nelems   = int(self%pftsz+1,kind=longer) * int(self%nk,kind=longer) * int(self%nptcls,kind=longer)
         array_gb = real(nelems,dp) * 8.d0 / (1024.d0**3)
         total_gb = 2.d0 * array_gb
-        if( trim(self%p_ptr%objfun_den) == 'yes' ) total_gb = total_gb + array_gb
+        if( self%p_ptr%l_objfun_den ) total_gb = total_gb + array_gb
         alloc_msg = ''
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &stat=alloc_stat, errmsg=alloc_msg)
@@ -305,7 +305,7 @@ contains
             if( allocated(self%ft_ptcl_ctf) ) deallocate(self%ft_ptcl_ctf)
             call memo_ptcls_alloc_error('ft_ctf2', array_gb, total_gb, trim(alloc_msg))
         endif
-        if( trim(self%p_ptr%objfun_den) == 'yes' )then
+        if( self%p_ptr%l_objfun_den )then
             alloc_msg = ''
             allocate(self%ft_ptcl_den(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                     &stat=alloc_stat, errmsg=alloc_msg)

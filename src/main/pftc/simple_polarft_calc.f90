@@ -762,11 +762,12 @@ interface
         integer,                     intent(in)    :: iptcl, irot
     end function gen_euclid_for_rot_8_1
 
-    module real(dp) function gen_euclid_for_rot_8_2( self, pft_ref, iptcl, shvec, irot )
+    module real(dp) function gen_euclid_for_rot_8_2( self, pft_ref, iptcl, shvec, irot, shmat_8_ready )
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
+        logical, optional,           intent(in)    :: shmat_8_ready
     end function gen_euclid_for_rot_8_2
 
     module real(dp) function gen_denoised_corr_for_rot_8_1( self, pft_ref, iptcl, irot )
@@ -775,11 +776,12 @@ interface
         integer,                     intent(in)    :: iptcl, irot
     end function gen_denoised_corr_for_rot_8_1
 
-    module real(dp) function gen_denoised_corr_for_rot_8_2( self, pft_ref, iptcl, shvec, irot )
+    module real(dp) function gen_denoised_corr_for_rot_8_2( self, pft_ref, iptcl, shvec, irot, shmat_8_ready )
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
+        logical, optional,           intent(in)    :: shmat_8_ready
     end function gen_denoised_corr_for_rot_8_2
 
     module real(sp) function hybrid_dist_from_score( self, score )
@@ -802,20 +804,22 @@ interface
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_corr_cc_grad_for_rot_8
 
-    module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad)
+    module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready)
         class(polarft_calc), target, intent(inout) :: self
         complex(dp), pointer,        intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
+        logical, optional,           intent(in)    :: shmat_8_ready
     end subroutine gen_euclid_grad_for_rot_8
 
-    module subroutine gen_denoised_corr_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad)
+    module subroutine gen_denoised_corr_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready)
         class(polarft_calc), target, intent(inout) :: self
         complex(dp), pointer,        intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
+        logical, optional,           intent(in)    :: shmat_8_ready
     end subroutine gen_denoised_corr_grad_for_rot_8
 
     module subroutine gen_corr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )

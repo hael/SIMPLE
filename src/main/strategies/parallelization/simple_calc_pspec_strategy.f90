@@ -202,7 +202,7 @@ contains
                 do i = 1, nptcls_part_sel, batchsz_max
                     batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
                     nbatch    = batchlims(2) - batchlims(1) + 1
-                    if( trim(params%ptcl_src) == 'den' )then
+                    if( params%l_ptcl_src_den )then
                         call discrete_read_imgbatch_source(params, build, 'den', nbatch, pinds(batchlims(1):batchlims(2)), &
                             [1,nbatch], build%imgbatch(:nbatch))
                     else

@@ -62,7 +62,7 @@ contains
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
         logical :: l_backup_imgs, l_den_src
         l_backup_imgs = present(imgs4rec)
-        l_den_src     = trim(params%ptcl_src) == 'den'
+        l_den_src     = params%l_ptcl_src_den
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
         if( .not. l_den_src )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
@@ -77,7 +77,7 @@ contains
             call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
                 tmp_imgs, tmp_imgs_pad)
         endif
-        if( trim(params%objfun_den) == 'yes' )then
+        if( params%l_objfun_den )then
             call discrete_read_imgbatch_source(params, build, 'den', &
                 nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
             call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &

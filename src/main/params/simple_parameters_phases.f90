@@ -804,7 +804,8 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        if( trim(self%ptcl_src) == 'den' .and. trim(self%oritype) /= 'ptcl3D' )then
+        self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
+        if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
         endif
         select case(trim(self%objfun_den))
@@ -812,11 +813,12 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported objfun_den='//trim(self%objfun_den)//'; expected yes|no')
         end select
-        if( trim(self%objfun_den) == 'yes' )then
+        self%l_objfun_den = trim(self%objfun_den) == 'yes'
+        if( self%l_objfun_den )then
             if( trim(self%objfun) /= 'euclid' )then
                 THROW_HARD('objfun_den=yes requires objfun=euclid')
             endif
-            if( trim(self%ptcl_src) /= 'raw' )then
+            if( self%l_ptcl_src_den )then
                 THROW_HARD('objfun_den=yes requires ptcl_src=raw')
             endif
             if( self%objfun_den_w < 0. .or. self%objfun_den_w > 1. )then

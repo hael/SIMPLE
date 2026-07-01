@@ -589,9 +589,11 @@ type :: parameters
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
+    logical :: l_objfun_den      = .false.
     logical :: l_phaseplate      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
+    logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided

@@ -42,7 +42,7 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        l_den_src = trim(params%ptcl_src) == 'den'
+        l_den_src = params%l_ptcl_src_den
         ! 3D limits
         vollims = build%eorecvols(1)%even%loop_lims(2)
         h_edge  = vollims(1,1)

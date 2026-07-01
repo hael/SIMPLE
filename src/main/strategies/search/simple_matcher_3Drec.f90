@@ -75,7 +75,7 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        l_den_src = trim(params%ptcl_src) == 'den'
+        l_den_src = params%l_ptcl_src_den
         if( DEBUG ) t_init = toc(t)
         ! gridding batch loop
         if( DEBUG ) then

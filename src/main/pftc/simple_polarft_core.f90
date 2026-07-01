@@ -114,7 +114,7 @@ contains
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
-        if( trim(self%p_ptr%objfun_den) == 'yes' )then
+        if( self%p_ptr%l_objfun_den )then
             allocate(self%pfts_ptcls_den(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                     &self%sqsums_ptcls_den(1:self%nptcls), self%ksqsums_ptcls_den(1:self%nptcls))
             self%pfts_ptcls_den    = zero
@@ -188,7 +188,7 @@ contains
                      &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
                      &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
-            if( trim(self%p_ptr%objfun_den) == 'yes' )then
+            if( self%p_ptr%l_objfun_den )then
                 allocate(self%pfts_ptcls_den(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                         &self%sqsums_ptcls_den(1:self%nptcls), self%ksqsums_ptcls_den(1:self%nptcls))
             endif
