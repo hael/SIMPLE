@@ -80,7 +80,10 @@ only one is an error.
 ## 5. Staged Refinement
 
 The number of ini3D stages is capped by `abinitio_nstages_ini3D_max()`. A user
-`nstages` value can shorten the route up to that cap.
+`nstages` value can shorten the route up to that cap. In
+`multivol_mode=docked`, the shortened route must still reach the configured
+`split_stage`; otherwise the command is rejected instead of completing as an
+accidental single-state initializer.
 
 Supported `multivol_mode` values are:
 
@@ -93,14 +96,15 @@ state. When the user gives `nstates > 1` and no `multivol_mode`, the commander
 defaults to `independent`, matching particle `abinitio3D`.
 
 Before staged refinement, `rndstart` randomizes orientations, zeros shifts,
-randomizes states uniformly for ordinary multi-state runs, and reconstructs
+randomizes states with balanced uniform labels for ordinary multi-state runs, and reconstructs
 starting volumes. In `multivol_mode=docked`, active class-average entries are
 first collapsed to one active state, so the pre-split stages build a single
 class-average ab initio model. At the configured `split_stage` (default 6), the
 commander restores the requested `nstates`, clears `sampled` and `updatecnt`,
-randomizes active temporary `ptcl3D` entries into the requested state labels,
-and reconstructs split state volumes before entering the split-stage
-`refine3D`. Starting volumes and half maps are renamed to the standard
+randomizes active temporary `ptcl3D` entries into balanced uniform state labels,
+requires every randomized state to exceed the probabilistic-table minimum
+population threshold, and reconstructs split state volumes before entering the
+split-stage `refine3D`. Starting volumes and half maps are renamed to the standard
 `refine3D` start-volume names, including `_unfil` copies of the half maps.
 
 Each stage is configured through the shared ab initio stage controller with

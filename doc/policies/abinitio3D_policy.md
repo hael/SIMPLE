@@ -125,7 +125,7 @@ sampling, deletes previous 3D alignment while preserving shifts, transfers 2D
 shifts from `ptcl2D`, and initializes `ptcl3D%state` only from the 2D
 selection state: selected particles become state 1 and unselected particles
 become state 0. Fresh `independent` runs then randomize active particles into
-the requested 3D states.
+the requested 3D states with balanced uniform labels.
 
 Class-average initialization and external class-average initialization both
 skip the random-volume start. With `cavg_ini=yes`, the nested
@@ -176,15 +176,20 @@ active-particle updates each stage.
 In `docked` mode, the controller starts as one state, runs stages 1-5 as a
 single-state ab initio model, then expands to the requested number of states at
 the docked split stage. The default split stage is 6, meaning the split occurs
-after stage 5.
+after stage 5. Docked schedules must reach the configured split stage; an
+ordinary `nstages` early stop before `split_stage` is rejected rather than
+silently producing a single-state result.
 
 The docked split starts a new multi-state update epoch:
 
 - restore `nstates` to the requested value
-- recompute the fixed `nsample`-derived update target for later post-split stages
-  when `nsample/active_particles <= 0.9`
+- recompute the fixed `nsample`-derived update target for the post-split epoch
+  when `nsample/active_particles <= 0.9`; pre-split stages keep the
+  single-state target
 - clear `ptcl3D%sampled` and `ptcl3D%updatecnt`
-- randomize active particles into the requested state labels
+- randomize active particles into balanced uniform state labels
+- require each randomized split state to exceed the probabilistic-table minimum
+  population threshold
 - reconstruct split state volumes from the randomized labels without trailing
   volume averaging
 

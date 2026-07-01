@@ -120,6 +120,9 @@ contains
         if( cline%defined('nstages') )then
             nstages_ini3D = min(abinitio_nstages_ini3D_max(),params%nstages)
         endif
+        if( trim(params%multivol_mode).eq.'docked' .and. nstages_ini3D < split_stage )then
+            THROW_HARD('multivol_mode=docked requires nstages >= split_stage for abinitio3D_cavgs')
+        endif
         nstages_refine3D = nstages_ini3D
         ! prepare class command lines
         call prep_class_command_lines(params, cline, work_projfile)
@@ -1270,6 +1273,9 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
         end select
+        if( trim(params%multivol_mode).eq.'docked' .and. last_stage < split_stage )then
+            THROW_HARD('multivol_mode=docked requires nstages >= split_stage unless running an explicit pre-split diagnostic')
+        endif
         if( trim(params%multivol_mode).eq.'docked' )then
             params%nstates = 1
             call cline%delete('nstates')
@@ -1452,7 +1458,7 @@ contains
             end select
             ! randomize states
             if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
-                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
             if( l_vol_ini_ext )then
@@ -1469,7 +1475,7 @@ contains
             endif
             ! randomize states
             if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
-                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'squared_uniform')
+                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
             endif
             ! create an initial balanced greedy sampling
             noris = spproj%os_ptcl3D%get_noris()
@@ -1520,24 +1526,17 @@ contains
                 if( istage == split_stage )then
                     ! map all particles to a projection direction
                     call ensure_docked_multistate_particle_assignments
-                endif
-                if( (istage == split_stage-1) .or. (istage == split_stage) )then
-                    ! updates sampling & reset the nstates in params
+                    ! update post-split sampling and reset nstates in params
                     if( l_force_full_sampling )then
                         update_frac = 1.0
                     else
                         update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
                         update_frac = min(abinitio_update_frac_max(), update_frac)
                     endif
-                    if( istage == split_stage-1 )then
-                        write(logfhandle,'(A,I0,A,F8.4)') &
-                            &'>>> ABINITIO3D DOCKED PRE-SPLIT STAGE/UPDATE_FRAC: ', istage, '/', update_frac
-                    else if( istage == split_stage )then
-                        params%nstates = nstates_glob
-                        write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                            &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
-                            &istage, '/', params%nstates, '/', update_frac
-                    endif
+                    params%nstates = nstates_glob
+                    write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
+                        &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
+                        &istage, '/', params%nstates, '/', update_frac
                 endif
             endif
             ! Preparation of command line for refinement

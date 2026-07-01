@@ -169,9 +169,13 @@ top-ranked fraction. The outer particle target remains the fixed
 
 `abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
 Stages before the split run as one state. The default split stage is 6, so the
-split occurs after stage 5. At the split, the commander restores the requested
-state count, clears `ptcl3D%sampled` and `ptcl3D%updatecnt`, randomizes active
-particles into state labels, and reconstructs split state volumes.
+split occurs after stage 5. Docked early stops before the split are rejected.
+At the split, the commander restores the requested state count, recomputes the
+post-split `nsample`-derived update target, clears `ptcl3D%sampled` and
+`ptcl3D%updatecnt`, randomizes active particles into balanced uniform state
+labels, validates that every split state is populated enough for probabilistic
+multi-state tables, and reconstructs split state volumes. Pre-split stages
+continue to use the single-state update target.
 
 The first post-split stage uses `refine=prob_state`, removes `update_frac`,
 `nsample`, and `fillin`, and therefore processes all active particles without

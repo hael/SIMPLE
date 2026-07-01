@@ -332,14 +332,7 @@ contains
             THROW_HARD('multi-state refine3D found inconsistent existing state assignments')
         endif
         call activate_ptcl3D_states_from_selection(build, params)
-        if( l_complete_vols )then
-            call gen_labelling(build%spproj_field, params%nstates, 'uniform')
-        else
-            if( .not.build%spproj_field%isthere('corr') )then
-                THROW_HARD('multi-state refine3D without vol1..volN requires previous objective function values')
-            endif
-            call gen_labelling(build%spproj_field, params%nstates, 'squared_uniform')
-        endif
+        call gen_labelling(build%spproj_field, params%nstates, 'uniform')
     end subroutine seed_multistate_startup_labels
 
     subroutine assert_multistate_populations( build, params )

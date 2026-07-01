@@ -139,10 +139,8 @@ Euler sampling.
 For multi-state distributed startup:
 
 - existing state assignments must match the requested `nstates`
-- if complete starting volumes are supplied, state labels are randomized
-  uniformly
-- otherwise prior objective values are required and labels are randomized with
-  squared-uniform seeding
+- fresh state labels are randomized uniformly, whether complete starting
+  volumes are supplied or the project references are used
 - probabilistic multi-state startup requires each state to exceed the minimum
   population guard
 
