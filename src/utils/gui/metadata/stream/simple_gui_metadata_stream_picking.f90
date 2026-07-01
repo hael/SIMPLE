@@ -41,7 +41,7 @@ module simple_gui_metadata_stream_picking
     integer               :: micrographs_accepted     = 0  ! micrographs passing acceptance criteria
     integer               :: micrographs_rejected     = 0  ! micrographs_imported - micrographs_accepted
     integer               :: particles_extracted      = 0  ! total particles picked across accepted mics
-    integer               :: particles_per_mic        = 0  ! average particles per imported micrograph
+    integer               :: particles_per_mic        = 0  ! average particles per accepted micrograph
     integer               :: last_micrograph_imported = 0  ! Unix timestamp of most recent import event
     integer               :: box_size                 = 0  ! particle box size in pixels
   contains
@@ -70,8 +70,8 @@ contains
     self%particles_extracted  = particles_extracted
     self%box_size             = box_size
     self%micrographs_rejected = self%micrographs_imported - self%micrographs_accepted
-    if( self%micrographs_imported > 0 ) then
-      self%particles_per_mic  = nint(real(self%particles_extracted) / real(self%micrographs_imported))
+    if( self%micrographs_accepted > 0 ) then
+      self%particles_per_mic  = nint(real(self%particles_extracted) / real(self%micrographs_accepted))
     else
       self%particles_per_mic  = 0
     end if
