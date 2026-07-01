@@ -90,7 +90,7 @@
         </form>
 
         <!-- Restart -->
-        <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="_parent">
+        <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="job_builder_iframe">
             {% csrf_token %}
             <input type="hidden" name="selected_job_id" value="{{ job.id }}">
             <button type="submit" title="restart stream"
