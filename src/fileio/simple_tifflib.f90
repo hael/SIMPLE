@@ -113,37 +113,6 @@ interface
     ! These functions are defined in the C helper functions
     !
 
-    subroutine EERDecode_7bit(uchar, bitpos, p1, s1, p2, s2) bind(c,name='EERDecode_7bit')
-        use iso_c_binding, only: c_int32_t, c_ptr
-        type(c_ptr),                   value :: uchar
-        integer(kind=c_int32_t),       value :: bitpos
-        integer(kind=c_int32_t), intent(out) :: p1, s1, p2, s2
-    end subroutine EERDecode_7bit
-
-    subroutine EERDecode_8bit(b0, b1, b2, p1, s1, p2, s2) bind(c,name='EERDecode_8bit')
-        use iso_c_binding, only: c_int32_t, c_int8_t
-        integer(kind=c_int8_t),        value :: b0, b1, b2
-        integer(kind=c_int32_t), intent(out) :: p1, s1, p2, s2
-    end subroutine EERDecode_8bit
-
-    subroutine EERdecodePos4K(p, x, y) bind(c,name='EERdecodePos4K')
-        use iso_c_binding, only: c_int32_t
-        integer(kind=c_int32_t),       value :: p
-        integer(kind=c_int32_t), intent(out) :: x,y
-    end subroutine EERdecodePos4K
-
-    subroutine EERdecodePos8K(p, s, x, y) bind(c,name='EERdecodePos8K')
-        use iso_c_binding, only: c_int32_t
-        integer(kind=c_int32_t),       value :: p,s
-        integer(kind=c_int32_t), intent(out) :: x,y
-    end subroutine EERdecodePos8K
-
-    subroutine EERdecodePos16K(p, s, x, y) bind(c,name='EERdecodePos16K')
-        use iso_c_binding, only: c_int32_t
-        integer(kind=c_int32_t),       value :: p,s
-        integer(kind=c_int32_t), intent(out) :: x,y
-    end subroutine EERdecodePos16K
-
     integer function TIFFRawStripSizer(my_tiff,strip) bind(c,name='TIFFRawStripSizer')
         use iso_c_binding, only: c_ptr, c_int32_t
         type(c_ptr),             value :: my_tiff

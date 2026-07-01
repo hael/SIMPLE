@@ -17,43 +17,6 @@ int TIFFRawStripSizer(TIFF *my_tiff, int strip)
 #endif
 }
 
-void EERDecode_7bit(tdata_t bytes, int bitpos, int *p1, int *s1, int *p2, int *s2)
-{
-	const unsigned int bit_offset_in_first_byte = ((unsigned int)bitpos) & 7;
-    const unsigned long int chunk = (*(unsigned int*)bytes) >> bit_offset_in_first_byte;
-	*p1 = (int)chunk & 127;
-	*s1 = (int)((chunk >> 7) & 15) ^ 0x0A;
-	*p2 = (int)(chunk >> 11) & 127;
-	*s2 = (int)((chunk >> 18) & 15) ^ 0x0A;
-}
-
-void EERDecode_8bit(unsigned char b0, unsigned char b1, unsigned char b2,
-    int *p1, int *s1, int *p2, int *s2)
-{
-    *p1 = b0;
-    *s1 = (int)(b1 & 0x0F) ^ 0x0A;
-    *p2 = (int)(b1 >> 4) | (b2 << 4);
-    *s2 = (int)(b2 >> 4) ^ 0x0A;
-}
-
-void EERdecodePos4K(int p, int *x, int *y)
-{
-	*x = (p & 4095) + 1;
-	*y = (p >> 12)  + 1;
-}
-
-void EERdecodePos8K(int p, int s, int *x, int *y)
-{
-    *x = (((p & 4095) << 1) | ((s & 2) >> 1)) + 1;
-	*y = (((p >> 12)  << 1) | ((s & 8) >> 3)) + 1;
-}
-
-void EERdecodePos16K(int p, int s, int *x, int *y)
-{
-	*x = (((p & 4095) << 2) |  (s & 3)) + 1;
-    *y = (((p >> 12)  << 2) | ((s & 12) >> 2)) + 1;
-}
-
 void TIFFPrintInfo(TIFF *my_tiff)
 {
     TIFFPrintDirectory(my_tiff,stdout,TIFFPRINT_NONE);

@@ -1,7 +1,9 @@
 !@descr: for eer movie format i/o
 module simple_eer_factory
 use simple_core_module_api
-use simple_tifflib
+use simple_tifflib, only: TIFFAllocateStripBuffer, TIFFClose, TIFFfree, TIFFGetCompression, &
+    TIFFGetLength, TIFFGetWidth, TIFFMuteWarnings, TIFFNumDirectories, TIFFNumberOfStrips, &
+    TIFFOpen, TIFFRawStripSizer, TIFFReadRawStrip, TIFFSetDirectory, TIFFUnMuteWarnings
 use simple_image, only: image
 implicit none
 
@@ -9,11 +11,28 @@ public :: eer_decoder
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: EER_IMAGE_WIDTH  = 4096
-integer, parameter :: EER_IMAGE_HEIGHT = 4096
-integer, parameter :: EER_IMAGE_PIXELS = EER_IMAGE_WIDTH * EER_IMAGE_HEIGHT
-integer, parameter :: TIFF_COMPRESSION_EER8bit = 65000
-integer, parameter :: TIFF_COMPRESSION_EER7bit = 65001
+integer,         parameter :: EER_IMAGE_WIDTH  = 4096
+integer,         parameter :: EER_IMAGE_HEIGHT = 4096
+integer,         parameter :: EER_IMAGE_PIXELS = EER_IMAGE_WIDTH * EER_IMAGE_HEIGHT
+integer,         parameter :: TIFF_COMPRESSION_EER8bit = 65000
+integer,         parameter :: TIFF_COMPRESSION_EER7bit = 65001
+integer,         parameter :: EER_BYTE_MASK    = 255
+integer,         parameter :: EER_XMASK        = EER_IMAGE_WIDTH - 1
+integer,         parameter :: EER_YSHIFT       = 12
+integer,         parameter :: EER_7BIT_SKIP    = 127
+integer,         parameter :: EER_SYMBOL_XOR   = 10
+integer,         parameter :: EER_8K_XMASK     = 2
+integer,         parameter :: EER_8K_YMASK     = 8
+integer,         parameter :: EER_8K_SCALE     = 1
+integer,         parameter :: EER_8K_XSHIFT    = 1
+integer,         parameter :: EER_8K_YSHIFT    = 3
+integer,         parameter :: EER_16K_XMASK    = 3
+integer,         parameter :: EER_16K_YMASK    = 12
+integer,         parameter :: EER_16K_SCALE    = 2
+integer,         parameter :: EER_16K_YSHIFT   = 2
+integer(kind=2), parameter :: one2 = int(1,kind=2)
+integer(kind=8), parameter :: EER_7BIT_MASK8   = int(127,kind=8)
+integer(kind=8), parameter :: EER_SYMBOL_MASK8 = int(15,kind=8)
 
 type eer_decoder
     private
@@ -38,7 +57,7 @@ contains
     procedure, private :: read
     ! Doers
     procedure          :: decode
-    procedure, private :: decode_frames
+    procedure          :: decode_frames
     procedure          :: prep_gainref
     ! Setter
     procedure          :: set_dims
@@ -185,99 +204,306 @@ contains
         class(eer_decoder), intent(in)    :: self
         class(image),       intent(inout) :: img
         integer,            intent(in)    :: istart, iend ! base 1
-        integer(kind=2), parameter :: one2 = int(1,kind=2)
-        integer(kind=1),   pointer :: byte_array(:)
-        type(c_ptr)     :: cptr
-        integer         :: symbols(self%nmax_el), pos_els(self%nmax_el)
         integer(kind=2) :: imat(self%onx,self%ony,1)
-        integer(kind=8) :: pos, first_byte
-        integer         :: iframe, n_el, p1,s1,p2,s2, x,y, i, iostat, bit_pos, pos_el
+        integer(kind=8) :: frame_start, frame_end
+        integer         :: iframe
         if( .not.self%l_exists ) THROW_HARD('EER decoder object has not been instantiated!')
         if( .not.self%l_hasbeenread ) THROW_HARD('File needs be read prior to decoding!')
-        cptr = TIFFmalloc(4)
-        call c_f_pointer(cptr, byte_array, [4])
         imat = int(0,kind=2)
-        do iframe = istart-1,iend-1
-            pos     = self%frames_start(iframe)
-            pos_els = 0
-            pos_el  = 0
-            n_el    = 0
-            ! works out indexed positions
-            if( self%l_7bit )then
-                ! 7-bit: 2 * (4+7) in 2*(2*8)
-                bit_pos = 0
-                do while( .true. )
-                    first_byte      = pos + shiftr(bit_pos,3)
-                    byte_array(1:4) = self%raw_bytes(first_byte:first_byte+3)
-                    call EERDecode_7bit(cptr, bit_pos, p1, s1, p2, s2)
-                    ! First electron
-                    bit_pos = bit_pos + 7
-                    pos_el  = pos_el  + p1
-                    if( pos_el >= EER_IMAGE_PIXELS ) exit
-                    if( p1 == 127 ) cycle
-                    bit_pos       = bit_pos + 11
-                    n_el          = n_el    + 1
-                    pos_els(n_el) = pos_el
-                    symbols(n_el) = s1
-                    ! Second electron
-                    pos_el        = pos_el  + p2 + 1
-                    if( pos_el >= EER_IMAGE_PIXELS ) exit
-                    if( p2  == 127 ) cycle
-                    bit_pos       = bit_pos + 4
-                    n_el          = n_el    + 1
-                    pos_els(n_el) = pos_el
-                    symbols(n_el) = s2
-                    pos_el        = pos_el  + 1
-                enddo
-            else
-                ! 8-bit: 2 * (4+8) in 3*8; untested
-                do while( pos < self%frames_start(iframe) + self%frames_sz(iframe))
-                    call EERDecode_8bit(self%raw_bytes(pos),self%raw_bytes(pos+1),self%raw_bytes(pos+2), p1, s1, p2, s2)
-                    pos_el = pos_el + p1
-                    if( pos_el >= EER_IMAGE_PIXELS ) exit
-                    if( p1 < 255 )then
-                        n_el          = n_el + 1
-                        pos_els(n_el) = pos_el
-                        symbols(n_el) = s1
-                        pos_el        = pos_el + 1
-                    endif
-                    pos_el = pos_el + p2
-                    if( pos_el >= EER_IMAGE_PIXELS ) exit
-                    if( p2 < 255 )then
-                        n_el          = n_el + 1
-                        pos_els(n_el) = pos_el
-                        symbols(n_el) = s2
-                        pos_el        = pos_el + 1
-                    endif
-                    pos = pos + 3
-                enddo
-            endif
-            ! indexed positions to coordinates & counts
+        if( self%l_7bit )then
             select case(self%upsampling)
             case(1)
-                do i = 1,n_el
-                    call EERdecodePos4K(pos_els(i), x,y)
-                    imat(x,y,1) = imat(x,y,1) + one2
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    call decode_frame_7bit_4k(self%raw_bytes, frame_start, imat)
                 enddo
             case(2)
-                do i = 1,n_el
-                    call EERdecodePos8K(pos_els(i), symbols(i), x,y)
-                    imat(x,y,1) = imat(x,y,1) + one2
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    call decode_frame_7bit_8k(self%raw_bytes, frame_start, imat)
                 enddo
             case(3)
-                do i = 1,n_el
-                    call EERdecodePos16K(pos_els(i), symbols(i), x,y)
-                    imat(x,y,1) = imat(x,y,1) + one2
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    call decode_frame_7bit_16k(self%raw_bytes, frame_start, imat)
                 enddo
             end select
-        enddo
-        ! generates image
+        else
+            select case(self%upsampling)
+            case(1)
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    frame_end   = frame_start + self%frames_sz(iframe)
+                    call decode_frame_8bit_4k(self%raw_bytes, frame_start, frame_end, imat)
+                enddo
+            case(2)
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    frame_end   = frame_start + self%frames_sz(iframe)
+                    call decode_frame_8bit_8k(self%raw_bytes, frame_start, frame_end, imat)
+                enddo
+            case(3)
+                do iframe = istart-1,iend-1
+                    frame_start = self%frames_start(iframe)
+                    frame_end   = frame_start + self%frames_sz(iframe)
+                    call decode_frame_8bit_16k(self%raw_bytes, frame_start, frame_end, imat)
+                enddo
+            end select
+        endif
+        ! generate image
         call img%new([self%onx,self%ony,1], self%osmpd, wthreads=.false.)
         call img%set_rmat(real(imat), .false.)
-        ! cleanup
-        nullify(byte_array)
-        iostat = TIFFfree(cptr)
     end subroutine decode_frames
+
+    subroutine decode_frame_7bit_4k( raw_bytes, frame_start, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos, first_byte, chunk
+        integer :: p1, p2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        pos     = frame_start
+        pos_el  = 0
+        bit_pos = 0
+        do while( .true. )
+            first_byte = pos + shiftr(bit_pos,3)
+            b0 = iand(int(raw_bytes(first_byte)),   EER_BYTE_MASK)
+            b1 = iand(int(raw_bytes(first_byte+1)), EER_BYTE_MASK)
+            b2 = iand(int(raw_bytes(first_byte+2)), EER_BYTE_MASK)
+            b3 = iand(int(raw_bytes(first_byte+3)), EER_BYTE_MASK)
+            chunk = int(b0, kind=8)             &
+                  + shiftl(int(b1, kind=8),  8) &
+                  + shiftl(int(b2, kind=8), 16) &
+                  + shiftl(int(b3, kind=8), 24)
+            chunk = shiftr(chunk, iand(bit_pos, 7))
+            p1 = int(iand(chunk, EER_7BIT_MASK8))
+            p2 = int(iand(shiftr(chunk, 11), EER_7BIT_MASK8))
+            ! First electron
+            bit_pos = bit_pos + 7
+            pos_el  = pos_el  + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 11
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = px + 1
+            y  = py + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            ! Second electron
+            pos_el = pos_el  + p2 + 1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 4
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = px + 1
+            y  = py + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            pos_el = pos_el  + 1
+        enddo
+    end subroutine decode_frame_7bit_4k
+
+    subroutine decode_frame_7bit_8k( raw_bytes, frame_start, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos, first_byte, chunk
+        integer :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        pos     = frame_start
+        pos_el  = 0
+        bit_pos = 0
+        do while( .true. )
+            first_byte = pos + shiftr(bit_pos,3)
+            b0 = iand(int(raw_bytes(first_byte)),   EER_BYTE_MASK)
+            b1 = iand(int(raw_bytes(first_byte+1)), EER_BYTE_MASK)
+            b2 = iand(int(raw_bytes(first_byte+2)), EER_BYTE_MASK)
+            b3 = iand(int(raw_bytes(first_byte+3)), EER_BYTE_MASK)
+            chunk = int(b0, kind=8)             &
+                  + shiftl(int(b1, kind=8),  8) &
+                  + shiftl(int(b2, kind=8), 16) &
+                  + shiftl(int(b3, kind=8), 24)
+            chunk = shiftr(chunk, iand(bit_pos, 7))
+            p1 = int(iand(chunk, EER_7BIT_MASK8))
+            s1 = ieor(int(iand(shiftr(chunk,  7), EER_SYMBOL_MASK8)), EER_SYMBOL_XOR)
+            p2 = int(iand(shiftr(chunk, 11), EER_7BIT_MASK8))
+            s2 = ieor(int(iand(shiftr(chunk, 18), EER_SYMBOL_MASK8)), EER_SYMBOL_XOR)
+            ! First electron
+            bit_pos = bit_pos + 7
+            pos_el  = pos_el  + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 11
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = shiftl(px, EER_8K_SCALE) + shiftr(iand(s1, EER_8K_XMASK), EER_8K_XSHIFT) + 1
+            y  = shiftl(py, EER_8K_SCALE) + shiftr(iand(s1, EER_8K_YMASK), EER_8K_YSHIFT) + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            ! Second electron
+            pos_el = pos_el  + p2 + 1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 4
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = shiftl(px, EER_8K_SCALE) + shiftr(iand(s2, EER_8K_XMASK), EER_8K_XSHIFT) + 1
+            y  = shiftl(py, EER_8K_SCALE) + shiftr(iand(s2, EER_8K_YMASK), EER_8K_YSHIFT) + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            pos_el = pos_el  + 1
+        enddo
+    end subroutine decode_frame_7bit_8k
+
+    subroutine decode_frame_7bit_16k( raw_bytes, frame_start, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos, first_byte, chunk
+        integer :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        pos     = frame_start
+        pos_el  = 0
+        bit_pos = 0
+        do while( .true. )
+            first_byte = pos + shiftr(bit_pos,3)
+            b0 = iand(int(raw_bytes(first_byte)),   EER_BYTE_MASK)
+            b1 = iand(int(raw_bytes(first_byte+1)), EER_BYTE_MASK)
+            b2 = iand(int(raw_bytes(first_byte+2)), EER_BYTE_MASK)
+            b3 = iand(int(raw_bytes(first_byte+3)), EER_BYTE_MASK)
+            chunk = int(b0, kind=8)             &
+                  + shiftl(int(b1, kind=8),  8) &
+                  + shiftl(int(b2, kind=8), 16) &
+                  + shiftl(int(b3, kind=8), 24)
+            chunk = shiftr(chunk, iand(bit_pos, 7))
+            p1 = int(iand(chunk, EER_7BIT_MASK8))
+            s1 = ieor(int(iand(shiftr(chunk,  7), EER_SYMBOL_MASK8)), EER_SYMBOL_XOR)
+            p2 = int(iand(shiftr(chunk, 11), EER_7BIT_MASK8))
+            s2 = ieor(int(iand(shiftr(chunk, 18), EER_SYMBOL_MASK8)), EER_SYMBOL_XOR)
+            ! First electron
+            bit_pos = bit_pos + 7
+            pos_el  = pos_el  + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 11
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = shiftl(px, EER_16K_SCALE) + iand(s1, EER_16K_XMASK) + 1
+            y  = shiftl(py, EER_16K_SCALE) + shiftr(iand(s1, EER_16K_YMASK), EER_16K_YSHIFT) + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            ! Second electron
+            pos_el = pos_el  + p2 + 1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 == EER_7BIT_SKIP ) cycle
+            bit_pos = bit_pos + 4
+            px = iand(pos_el, EER_XMASK)
+            py = shiftr(pos_el, EER_YSHIFT)
+            x  = shiftl(px, EER_16K_SCALE) + iand(s2, EER_16K_XMASK) + 1
+            y  = shiftl(py, EER_16K_SCALE) + shiftr(iand(s2, EER_16K_YMASK), EER_16K_YSHIFT) + 1
+            imat(x,y,1) = imat(x,y,1) + one2
+            pos_el = pos_el  + 1
+        enddo
+    end subroutine decode_frame_7bit_16k
+
+    subroutine decode_frame_8bit_4k( raw_bytes, frame_start, frame_end, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start, frame_end
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos
+        integer :: p1, p2, pos_el, x, y, ub1, ub2
+        pos     = frame_start
+        pos_el  = 0
+        do while( pos < frame_end )
+            ub1 = iand(int(raw_bytes(pos+1)), 255)
+            ub2 = iand(int(raw_bytes(pos+2)), 255)
+            p1  = iand(int(raw_bytes(pos)), 255)
+            p2  = ior(shiftr(ub1, 4), shiftl(ub2, 4))
+            pos_el = pos_el + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 < 255 )then
+                x = iand(pos_el, 4095) + 1
+                y = shiftr(pos_el, 12) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos_el = pos_el + p2
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 < 255 )then
+                x = iand(pos_el, 4095) + 1
+                y = shiftr(pos_el, 12) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos = pos + 3
+        enddo
+    end subroutine decode_frame_8bit_4k
+
+    subroutine decode_frame_8bit_8k( raw_bytes, frame_start, frame_end, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start, frame_end
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos
+        integer :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
+        pos     = frame_start
+        pos_el  = 0
+        do while( pos < frame_end )
+            ub0 = iand(int(raw_bytes(pos)),   255)
+            ub1 = iand(int(raw_bytes(pos+1)), 255)
+            ub2 = iand(int(raw_bytes(pos+2)), 255)
+            p1 = ub0
+            s1 = ieor(iand(ub1, 15), 10)
+            p2 = ior(shiftr(ub1, 4), shiftl(ub2, 4))
+            s2 = ieor(shiftr(ub2, 4), 10)
+            pos_el = pos_el + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 < 255 )then
+                x = ior(shiftl(iand(pos_el, 4095), 1), shiftr(iand(s1, 2), 1)) + 1
+                y = ior(shiftl(shiftr(pos_el, 12), 1), shiftr(iand(s1, 8), 3)) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos_el = pos_el + p2
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 < 255 )then
+                x = ior(shiftl(iand(pos_el, 4095), 1), shiftr(iand(s2, 2), 1)) + 1
+                y = ior(shiftl(shiftr(pos_el, 12), 1), shiftr(iand(s2, 8), 3)) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos = pos + 3
+        enddo
+    end subroutine decode_frame_8bit_8k
+
+    subroutine decode_frame_8bit_16k( raw_bytes, frame_start, frame_end, imat )
+        integer(kind=1),    intent(in)    :: raw_bytes(0:)
+        integer(kind=8),    intent(in)    :: frame_start, frame_end
+        integer(kind=2),    intent(inout) :: imat(:,:,:)
+        integer(kind=8) :: pos
+        integer :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
+        pos     = frame_start
+        pos_el  = 0
+        do while( pos < frame_end )
+            ub0 = iand(int(raw_bytes(pos)),   255)
+            ub1 = iand(int(raw_bytes(pos+1)), 255)
+            ub2 = iand(int(raw_bytes(pos+2)), 255)
+            p1 = ub0
+            s1 = ieor(iand(ub1, 15), 10)
+            p2 = ior(shiftr(ub1, 4), shiftl(ub2, 4))
+            s2 = ieor(shiftr(ub2, 4), 10)
+            pos_el = pos_el + p1
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p1 < 255 )then
+                x = ior(shiftl(iand(pos_el, 4095), 2), iand(s1, 3)) + 1
+                y = ior(shiftl(shiftr(pos_el, 12), 2), shiftr(iand(s1, 12), 2)) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos_el = pos_el + p2
+            if( pos_el >= EER_IMAGE_PIXELS ) exit
+            if( p2 < 255 )then
+                x = ior(shiftl(iand(pos_el, 4095), 2), iand(s2, 3)) + 1
+                y = ior(shiftl(shiftr(pos_el, 12), 2), shiftr(iand(s2, 12), 2)) + 1
+                imat(x,y,1) = imat(x,y,1) + one2
+                pos_el = pos_el + 1
+            endif
+            pos = pos + 3
+        enddo
+    end subroutine decode_frame_8bit_16k
 
     subroutine prep_gainref( self, fname, gain )
         class(eer_decoder), intent(in)    :: self
