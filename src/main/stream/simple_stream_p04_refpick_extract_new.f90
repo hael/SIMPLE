@@ -354,9 +354,9 @@ contains
 
         call write_project
         ! write star files (just in case you want to import these particles/micrographs elsewhere)
-        call spproj%write_mics_star(string("micrographs.star"))
-        call validate_ptcl2D_star_inputs()
-        call spproj%write_ptcl2D_star(string("particles.star"))
+     !   call spproj%write_mics_star(string("micrographs.star"))
+     !   call validate_ptcl2D_star_inputs()
+     !   call spproj%write_ptcl2D_star(string("particles.star"))
         ! cleanup
         call spproj%kill
         call qsys_cleanup(params)
