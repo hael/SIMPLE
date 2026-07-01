@@ -95,10 +95,13 @@
 
                             {% if input.keytype == "hidden" %}
                                 {# Hidden: submitted but not shown. Value falls back to descr_placeholder. #}
-                                <input name="{{ input.key }}" type="hidden"
-                                    {% if input.required %}required{% endif %}
-                                    {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
-
+                                <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
+                                    for="field_{{ input.key }}">{{ input.descr_short }}</label>
+                                <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
+                                    <input id="field_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
+                                        {% if input.required %}required{% endif %}
+                                        {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+                                </div>
                             {% else %}
                                 {# Visible label aligned with its control #}
                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap"
@@ -243,9 +246,13 @@
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
-                                                <input name="batch_{{ program.prg }}_{{ input.key }}" type="hidden"
+                                                  <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
+                                                      for="batch_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
+                                                  <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
+                                                   <input id="batch_{{ program.prg }}_{{ input.key }}" name="batch_{{ program.prg }}_{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+                                                  </div>
                                             {% else %}
                                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
                                                 <div class="relative flex items-center">
@@ -368,9 +375,13 @@
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
-                                                <input name="single_{{ program.prg }}_{{ input.key }}" type="hidden"
+                                                  <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
+                                                      for="single_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
+                                                  <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
+                                                   <input id="single_{{ program.prg }}_{{ input.key }}" name="single_{{ program.prg }}_{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}>
+                                                  </div>
                                             {% else %}
                                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.descr_short }}</label>
                                                 <div class="relative flex items-center">
@@ -582,6 +593,46 @@
             const active = document.getElementById("single_program_" + programKey);
             if (active) active.classList.remove("hidden");
         }
+
+        let hiddenInputsVisible = false;
+        function toggleHiddenInputsVisibility() {
+            hiddenInputsVisible = !hiddenInputsVisible;
+            const toggled = document.querySelectorAll("input[data-toggle-hidden='true']");
+            const labels = document.querySelectorAll("label[data-toggle-hidden-label='true']");
+            const containers = document.querySelectorAll("[data-toggle-hidden-container='true']");
+            toggled.forEach((input) => {
+                input.type = hiddenInputsVisible ? "text" : "hidden";
+                if (hiddenInputsVisible) {
+                    input.className = "w-full text-xs px-2 py-1 border border-streamring rounded-lg bg-streamsurface text-streaminput";
+                    if (!input.placeholder) {
+                        input.placeholder = input.name;
+                    }
+                } else {
+                    input.removeAttribute("class");
+                }
+            });
+            labels.forEach((label) => {
+                if (hiddenInputsVisible) {
+                    label.classList.remove("hidden");
+                } else {
+                    label.classList.add("hidden");
+                }
+            });
+            containers.forEach((container) => {
+                if (hiddenInputsVisible) {
+                    container.classList.remove("hidden");
+                } else {
+                    container.classList.add("hidden");
+                }
+            });
+        }
+
+        document.addEventListener("keydown", function(event) {
+            if (event.ctrlKey && (event.key === "q" || event.key === "Q")) {
+                event.preventDefault();
+                toggleHiddenInputsVisibility();
+            }
+        });
     </script>
 
     {% include 'messages.html' %}

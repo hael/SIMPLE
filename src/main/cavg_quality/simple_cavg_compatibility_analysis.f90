@@ -37,8 +37,6 @@ real,    parameter :: RESCUE_EDGE_FRAC       = 0.0                           ! E
 integer, parameter :: NRELAX                 = 5                             ! Number of relaxation candidates in support-model grid
 integer, parameter :: NQ                     = 3                             ! Number of lower/upper quantile candidates in grid
 real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.0                           ! Soft edge slack for c/a bounds during support check
-real,    parameter :: TOPVIEW_RATIO_MAX      = 1.25                          ! max/min Feret ratio accepted as near-circular top view
-real,    parameter :: TOPVIEW_C_FRAC         = 0.20                          ! Allowed positive slack of top-view max Feret relative to inferred c-axis
 real,    parameter :: RELAX_GRID(NRELAX)     = [0.03, 0.05, 0.07, 0.1, 0.15] ! Relative interval expansion candidates
 real,    parameter :: QLOW_GRID(NQ)          = [0.05, 0.1, 0.15]             ! Lower-quantile candidates for c-axis estimate
 real,    parameter :: QHIGH_GRID(NQ)         = [0.85, 0.9, 0.95]             ! Upper-quantile candidates for a-axis estimate
@@ -246,7 +244,6 @@ contains
         real,    allocatable :: min_dim(:), max_dim(:)
         integer :: n, ii, nallowed, ncomp, nrejected_here
         real    :: axis_c, axis_b, axis_a, used_relax, used_qlo, used_qhi
-        real    :: aspect_ratio
         logical :: do_autotune
 
         n = self%nimagesets
@@ -288,26 +285,10 @@ contains
         nrejected_here = 0
         do ii = 1, n
             if( allowed(ii) .and. .not. compatible(ii) )then
-                if( axis_b >= min_dim(ii) * (1.0 - used_relax) .and. axis_b <= max_dim(ii) * (1.0 + used_relax) .and. &
-                    min_dim(ii) >= axis_c * (1.0 - used_relax - RESCUE_EDGE_FRAC) .and. &
+                if( min_dim(ii) >= axis_c * (1.0 - used_relax - RESCUE_EDGE_FRAC) .and. &
                     max_dim(ii) <= axis_a * (1.0 + used_relax + RESCUE_EDGE_FRAC) )then
                     compatible(ii) = .true.
-                    write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rescued idx=', ii, ' reason=near_size_boundary'
-                end if
-            end if
-
-            if( allowed(ii) .and. .not. compatible(ii) )then
-                if( min_dim(ii) > 1.0e-6 )then
-                    aspect_ratio = max_dim(ii) / min_dim(ii)
-                else
-                    aspect_ratio = huge(1.0)
-                end if
-                if( aspect_ratio <= TOPVIEW_RATIO_MAX .and. &
-                    min_dim(ii) >= axis_c * (1.0 - used_relax - RESCUE_EDGE_FRAC) .and. &
-                    max_dim(ii) <= axis_c * (1.0 + TOPVIEW_C_FRAC) )then
-                    compatible(ii) = .true.
-                    write(logfhandle,'(A,I0,A,ES14.6)') 'infer_compatible_size_subset: rescued idx=', ii, &
-                        ' reason=topview_like_caxis aspect=', aspect_ratio
+                    write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rescued idx=', ii, ' reason=within_c_to_a_envelope'
                 end if
             end if
 
