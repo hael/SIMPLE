@@ -106,7 +106,7 @@ contains
     end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
-    module pure subroutine mirror_ref_pft( self, pft, pftm )
+    module pure subroutine mirror_ref_pft_1( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self
         complex(sp),         intent(in)  :: pft(1:self%pftsz, self%kfromto(1):self%interpklim)
         complex(sp),         intent(out) :: pftm(1:self%pftsz, self%kfromto(1):self%interpklim)
@@ -127,7 +127,14 @@ contains
                 pftm(j,:) = pft(i,:)
             enddo
         endif
-    end subroutine mirror_ref_pft
+    end subroutine mirror_ref_pft_1
+
+    ! mirrors the even reference into the odd position
+    module pure subroutine mirror_ref_pft_2( self, iref )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref
+        call self%mirror_ref_pft_1(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref))
+    end subroutine mirror_ref_pft_2
 
     module subroutine rotate_ref_8( self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
