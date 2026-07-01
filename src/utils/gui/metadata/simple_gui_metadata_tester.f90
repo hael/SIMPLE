@@ -1084,8 +1084,8 @@ contains
     call meta%set(stage=string('sieving'), particles_imported=10000, &
                   particles_accepted=8000, particles_rejected=2000)
     call meta%set_user_input(.true.)
-    call meta%set_initial_ref_selection(3)
-    call meta%set_initial_ref_selection(7)
+    call meta%set_selection(3)
+    call meta%set_selection(7)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, particles_imported=particles_imported,     &
                               particles_accepted=particles_accepted,                  &

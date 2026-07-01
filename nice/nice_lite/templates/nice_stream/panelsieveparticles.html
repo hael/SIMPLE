@@ -48,23 +48,23 @@
         </div>
 
         <!-- Status message while sieving (no ref classes yet) -->
-        {% if status == "running" and "ref_cls2D" not in jobstats %}
+        {% if status == "running" and "latest_cls2D" not in jobstats %}
             <div class="flex flex-1 items-center justify-center text-[11px] text-streamlabel">
                 {% if "stage" in jobstats %}{{ jobstats.stage }}{% else %}sieving particles&hellip;{% endif %}
             </div>
         {% endif %}
 
         <!-- Reference class gallery -->
-        {% if "ref_cls2D" in jobstats and jobstats.ref_cls2D|length > 0 %}
+        {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
             <div class="flex flex-col px-4 pt-2 flex-1">
-                <span class="text-[10px] text-streamlabel mb-2">reference classes</span>
+                <span class="text-[10px] text-streamlabel mb-2">latest selected classes</span>
                 <div class="flex items-center gap-1">
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
                     <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
                         <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
-                            {% for cls2D in jobstats.ref_cls2D %}
+                            {% for cls2D in jobstats.latest_cls2D %}
                                 {% if cls2D.selected %}
                                     <div class="snap-center sieveclscontainer"
                                         data-pop="{{ cls2D.pop }}"

@@ -79,23 +79,22 @@ contains
         integer,            parameter   :: FINAL_INGESTION_IDLE_TIME = 5 * 60 ! idle time (s) since last import before signalling final ingestion
         type(string),       allocatable :: projects(:)
         character(len=:),   allocatable :: meta_buffer
-        integer,            allocatable :: jpeg_inds(:), jpeg_pops(:), ref_selection(:)
+        integer,            allocatable :: jpeg_inds(:), jpeg_pops(:), jpeg_selection(:)
         real,               allocatable :: jpeg_res(:)
-        type(string)                    :: refs_jpeg, refs_stk
-        type(string)                    :: match_jpeg, match_stk
+        type(string)                    :: latest_jpeg, latest_stk
         type(rec_list)                  :: project_list
         type(qsys_env)                  :: qenv
         type(parameters)                :: params
         type(sp_project)                :: spproj_glob, spproj_tmp
         type(project_rec)               :: prec
         type(rec_iterator)              :: it
-        type(microchunked2D_fast)            :: chunked_2D
+        type(microchunked2D_fast)       :: chunked_2D
         type(stream_watcher)            :: project_buff
         type(gui_metadata_cavg2D)       :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
         integer :: nprojects, n_mics_imported, n_ptcls_imported, i, xtiles, ytiles
         integer :: last_import_time   ! wall-clock timestamp (s) of the most recent successful import
-        logical :: l_refs_complete, l_terminate, l_once
+        logical :: l_terminate, l_once
         l_once      = .true.
         l_terminate = .false.
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
@@ -107,7 +106,6 @@ contains
         ! initialise counters
         n_ptcls_imported = 0
         n_mics_imported  = 0
-        l_refs_complete  = .false.
         last_import_time = simple_gettime()
         ! initialise metadata
         call meta_particle_sieving%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
@@ -184,23 +182,9 @@ contains
             else
                 call send_meta(string('waiting on reference picking'))
             endif
-
-            ! if( l_refs_complete ) then
-            !     call meta_particle_sieving%set_user_input(.true.)
-            !     if( chunked_2D%get_latest_match(jpeg_inds, jpeg_pops, jpeg_res, match_jpeg, match_stk, xtiles, ytiles) ) then
-            !         call send_matched_cavgs2D(match_jpeg, size(jpeg_inds))
-            !     end if
-            ! else
-            !     if( chunked_2D%get_references(jpeg_inds, jpeg_pops, jpeg_res, refs_jpeg, refs_stk, xtiles, ytiles) ) then
-            !         if( chunked_2D%get_reference_selection(ref_selection) ) then
-            !             do i=1, size(ref_selection)
-            !                 call meta_particle_sieving%set_initial_ref_selection(ref_selection(i))
-            !             end do
-            !         end if
-            !         call send_reference_cavgs2D(refs_jpeg, size(jpeg_inds))
-            !         l_refs_complete = .true.
-            !     end if
-            ! end if
+            if( chunked_2D%get_latest(jpeg_inds, jpeg_pops, jpeg_res, latest_jpeg, latest_stk, xtiles, ytiles, jpeg_selection) ) then
+                call send_cavgs2D_batch(latest_jpeg, latest_stk, size(jpeg_inds), GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
+            end if
             call sleep(WAITTIME)
         end do
         call meta_particle_sieving%set_user_input(.false.)
@@ -223,6 +207,12 @@ contains
             particles_imported = n_ptcls_imported,                  &
             particles_accepted = chunked_2D%get_n_accepted_ptcls(), &
             particles_rejected = chunked_2D%get_n_rejected_ptcls())
+            call meta_particle_sieving%clear_selection()
+            if( allocated(jpeg_inds) ) then
+                do i=1, size(jpeg_inds)
+                    if( jpeg_selection(i) /= 0 ) call meta_particle_sieving%set_selection(jpeg_inds(i))
+                end do
+            endif
             if( meta_particle_sieving%assigned() .and. mq_stream_master_in%is_active() ) then
                 call meta_particle_sieving%serialise(meta_buffer)
                 call mq_stream_master_in%send(meta_buffer)
@@ -231,7 +221,7 @@ contains
 
         ! Serialise and broadcast a single class-average tile's metadata to the GUI.
         ! Precondition: jpeg_inds, jpeg_pops, jpeg_res, xtiles, ytiles must have been
-        ! populated by a prior call to get_references() or get_latest_match().
+        ! populated by a prior call to get_latest().
         subroutine send_cavg2D_meta( my_path, my_stk, my_i, my_i_max, my_xtile, my_ytile )
             type(string), intent(in) :: my_path, my_stk
             integer,      intent(in) :: my_i, my_i_max, my_xtile, my_ytile
@@ -266,20 +256,6 @@ contains
                 call mq_stream_master_in%send(meta_buffer)
             endif
         end subroutine send_cavg2D_meta
-
-        ! Send a batch of cavg2D metadata to the GUI, resetting tile counters.
-        ! my_meta_type selects the GUI metadata subtype (ref or match).
-        subroutine send_reference_cavgs2D( my_path, n )
-            type(string), intent(in) :: my_path
-            integer,      intent(in) :: n
-            call send_cavgs2D_batch(my_path, refs_stk, n, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE)
-        end subroutine send_reference_cavgs2D
-
-        subroutine send_matched_cavgs2D( my_path, n )
-            type(string), intent(in) :: my_path
-            integer,      intent(in) :: n
-            call send_cavgs2D_batch(my_path, match_stk, n, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
-        end subroutine send_matched_cavgs2D
 
         subroutine send_cavgs2D_batch( my_path, my_stk, n, meta_type )
             type(string), intent(in) :: my_path, my_stk

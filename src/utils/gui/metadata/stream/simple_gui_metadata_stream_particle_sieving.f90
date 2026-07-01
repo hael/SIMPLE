@@ -40,8 +40,8 @@ module simple_gui_metadata_stream_particle_sieving
     private
     
     character(len=STDLEN) :: stage                   = 'unknown'
-    integer(kind=2)       :: initial_ref_selection(1500) = 0
-    integer               :: n_initial_ref_selection = 0
+    integer(kind=2)       :: selection(1500)         = 0
+    integer               :: n_selection             = 0
     integer               :: particles_imported      = 0       ! total particles received from upstream
     integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
     integer               :: particles_rejected      = 0       ! particles_imported - particles_accepted
@@ -50,7 +50,8 @@ module simple_gui_metadata_stream_particle_sieving
   contains
     procedure :: set
     procedure :: set_user_input
-    procedure :: set_initial_ref_selection
+    procedure :: set_selection
+    procedure :: clear_selection
     procedure :: get
     procedure :: jsonise => jsonise_override
   end type gui_metadata_stream_particle_sieving
@@ -83,15 +84,26 @@ contains
     self%user_input = user_input
   end subroutine set_user_input
 
-  subroutine set_initial_ref_selection( self, idx )
+  ! Append one selected class index to the packed selection list.
+  ! Enforces initialization and fixed-capacity bounds.
+  subroutine set_selection( self, idx )
     class(gui_metadata_stream_particle_sieving), intent(inout) :: self
     integer,                                     intent(in)    :: idx
-    if( .not.self%l_initialized )                THROW_HARD('gui metadata object is uninitialised')
-    if( self%n_initial_ref_selection >= size(self%initial_ref_selection) ) THROW_HARD('idx is out of range')
+    if( .not.self%l_initialized )                  THROW_HARD('gui metadata object is uninitialised')
+    if( self%n_selection >= size(self%selection) ) THROW_HARD('idx is out of range')
     self%l_assigned = .true.
-    self%n_initial_ref_selection = self%n_initial_ref_selection + 1
-    self%initial_ref_selection(self%n_initial_ref_selection) = int2(idx)
-  end subroutine set_initial_ref_selection
+    self%n_selection = self%n_selection + 1
+    self%selection(self%n_selection) = int2(idx)
+  end subroutine set_selection
+
+  ! Clear all selected indices and reset the packed-selection count.
+  subroutine clear_selection( self )
+    class(gui_metadata_stream_particle_sieving), intent(inout) :: self
+    if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%l_assigned  = .true.
+    self%selection   = 0
+    self%n_selection = 0
+  end subroutine clear_selection
 
   ! Retrieve particle counts, user-input flag, and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
@@ -128,10 +140,10 @@ contains
       call json%add(json_ptr, 'particles_rejected',      self%particles_rejected )
       call json%add(json_ptr, 'last_import_time',        self%last_import_time   )
       call json%add(json_ptr, 'user_input',              self%user_input         )
-      if( self%n_initial_ref_selection > 0 ) then
-        call json%create_array(json_ref_selection_ptr, 'initial_ref_selection')
-        do i_ref = 1, self%n_initial_ref_selection
-          call json%add(json_ref_selection_ptr, '', int(self%initial_ref_selection(i_ref)))
+      if( self%n_selection > 0 ) then
+        call json%create_array(json_ref_selection_ptr, 'selection')
+        do i_ref = 1, self%n_selection
+          call json%add(json_ref_selection_ptr, '', int(self%selection(i_ref)))
         end do
         call json%add(json_ptr, json_ref_selection_ptr)
       end if

@@ -5,7 +5,7 @@
   avoiding repeated dict key lookups per template render.
 {% endcomment %}
 {% load humanize %}
-{% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
+{% with ms=job.preprocessing_stats cs=job.classification_2D_stats ss=job.particle_sieving_stats %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px]">
 
     <!-- Header: status dot · stream name · open-detail button -->
@@ -61,6 +61,20 @@
                         {% endif %}
                     {% endfor %}
                 </div>
+            {% elif "latest_cls2D" in ss and ss.latest_cls2D|length > 0 %}
+                <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest 2D classes</div>
+                <div class="grid grid-cols-3 gap-0.5 w-[180px] h-[180px] m-auto">
+                    {% for cls2D in ss.latest_cls2D %}
+                        {% if forloop.counter <= 9 %}
+                            <div class="aspect-square overflow-hidden bg-black rounded-sm">
+                                <div onclick="toggleCls(this)" data-idx="{{ cls2D.mrcidx }}"
+                                     style="background:url({% url 'nice_lite:image' cls2D.path %});background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%;background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
+                                     class="cls2D w-full h-full">
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>    
             {% elif "latest_micrographs" in ms and ms.latest_micrographs|length > 0 %}
                 <div class="text-[9px] text-streamlabel uppercase tracking-wide mb-1 pt-2">latest micrograph</div>
                 <!-- Show right half of the double-width composite image -->

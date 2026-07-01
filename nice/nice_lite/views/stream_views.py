@@ -603,18 +603,20 @@ def view_stream_sieve_particles(request):
         return HttpResponseNoContent()
 
     # sort cls2D on res, and annotate ref entries with matching latest entry
-    stats = jobmodel.particle_sieving_stats
-    if "ref_cls2D" in stats:
-        stats["ref_cls2D"].sort(key=lambda d: d["res"])
-        if "latest_cls2D" in stats:
-            latest_by_idx = {d["idx"]: d for d in stats["latest_cls2D"]}
-            for ref in stats["ref_cls2D"]:
-                if ref["idx"] in latest_by_idx:
-                    ref["latest"] = latest_by_idx[ref["idx"]]
-        if "ref_selection" in jobmodel.master_update:
-            ref_selection = set(jobmodel.master_update["ref_selection"])
-            for ref in stats["ref_cls2D"]:
-                ref["selected"] = ref["idx"] in ref_selection
+    if "latest_cls2D" in jobmodel.particle_sieving_stats:
+        latest_cls2d = []
+        if "selection" in jobmodel.particle_sieving_stats:
+            ref_selection = set(jobmodel.particle_sieving_stats["selection"])
+            for cls2d in jobmodel.particle_sieving_stats["latest_cls2D"]:
+                cls2d["selected"] = cls2d["idx"] in ref_selection
+        for cls2d in jobmodel.particle_sieving_stats["latest_cls2D"]:
+            try:
+                if float(cls2d.get("pop", 0)) == 0.0:
+                    continue
+            except (TypeError, ValueError, AttributeError):
+                pass
+            latest_cls2d.append(cls2d)
+        jobmodel.particle_sieving_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d["res"], reverse=False)
 
     context = {
         "jobid": jobmodel.id,
@@ -637,19 +639,21 @@ def view_stream_sieve_particles_zoom(request):
         return HttpResponseNoContent()
 
     # sort cls2D on res, and annotate ref entries with matching latest entry
-    stats = jobmodel.particle_sieving_stats
 
-    if "ref_cls2D" in stats:
-        stats["ref_cls2D"].sort(key=lambda d: d["res"])
-        if "latest_cls2D" in stats:
-            latest_by_idx = {d["idx"]: d for d in stats["latest_cls2D"]}
-            for ref in stats["ref_cls2D"]:
-                if ref["idx"] in latest_by_idx:
-                    ref["latest"] = latest_by_idx[ref["idx"]]
-        if "ref_selection" in jobmodel.master_update:
-            ref_selection = set(jobmodel.master_update["ref_selection"])
-            for ref in stats["ref_cls2D"]:
-                ref["selected"] = ref["idx"] in ref_selection
+    if "latest_cls2D" in jobmodel.particle_sieving_stats:
+        latest_cls2d = []
+        if "selection" in jobmodel.particle_sieving_stats:
+            ref_selection = set(jobmodel.particle_sieving_stats["selection"])
+            for cls2d in jobmodel.particle_sieving_stats["latest_cls2D"]:
+                cls2d["selected"] = cls2d["idx"] in ref_selection
+        for cls2d in jobmodel.particle_sieving_stats["latest_cls2D"]:
+            try:
+                if float(cls2d.get("pop", 0)) == 0.0:
+                    continue
+            except (TypeError, ValueError, AttributeError):
+                pass
+            latest_cls2d.append(cls2d)
+        jobmodel.particle_sieving_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d["res"], reverse=False)
 
     context = {
         "jobid": jobmodel.id,

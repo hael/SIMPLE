@@ -665,27 +665,6 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_particle_sieving_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
-                                case( GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE )
-                                    my_l_reinit = .false.
-                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
-                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
-                                    ! allocate or resize meta_particle_sieving_ref_cavgs2D as necessary based on i_max
-                                    if( .not.allocated(meta_particle_sieving_ref_cavgs2D) ) then
-                                        my_l_reinit = .true.
-                                    else if( size(meta_particle_sieving_ref_cavgs2D) /= meta_cavg2D_tmp%get_i_max() ) then
-                                        deallocate(meta_particle_sieving_ref_cavgs2D)
-                                        my_l_reinit = .true.
-                                    endif
-                                    if( my_l_reinit ) then
-                                        ! allocate and initialise each object in meta_particle_sieving_ref_cavgs2D
-                                        allocate(meta_particle_sieving_ref_cavgs2D(meta_cavg2D_tmp%get_i_max()))
-                                        do my_i=1, size(meta_particle_sieving_ref_cavgs2D)
-                                            call meta_particle_sieving_ref_cavgs2D(my_i)%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE)
-                                            if( .not.meta_particle_sieving_ref_cavgs2D(my_i)%initialized() ) THROW_HARD('failed to initialise particle sieving ref cavg2D metadata')
-                                        enddo
-                                    endif
-                                    ! place the already-deserialised tmp object into the correct slot
-                                    meta_particle_sieving_ref_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
                                 case( GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of cavg2D metadata to read routing fields
