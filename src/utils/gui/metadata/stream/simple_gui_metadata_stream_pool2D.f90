@@ -52,6 +52,7 @@ module simple_gui_metadata_stream_pool2D
     integer               :: mskdiam                 = 0
     logical               :: user_input              = .false. ! .true. once the user has supplied input
     real                  :: mskscale                = 0.0
+    real                  :: resolution              = 0.0
   contains
     procedure :: set
     procedure :: set_user_input
@@ -65,13 +66,13 @@ contains
   ! Assign particle counts and masking fields. Derives particles_rejected
   ! automatically. Updates last_particles_imported only when the import
   ! count changes.
-  subroutine set( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, mskdiam, mskscale )
+  subroutine set( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, mskdiam, mskscale, resolution )
     class(gui_metadata_stream_pool2D), intent(inout) :: self
     type(string), intent(in) :: stage
     integer,      intent(in) :: iteration
     integer,      intent(in) :: particles_imported, particles_accepted, particles_rejected
     integer,      intent(in) :: mskdiam
-    real,         intent(in) :: mskscale
+    real,         intent(in) :: mskscale, resolution
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned         = .true.
     self%stage              = stage%to_char()
@@ -83,6 +84,7 @@ contains
     self%particles_rejected = particles_rejected
     self%mskdiam            = mskdiam
     self%mskscale           = mskscale
+    self%resolution         = resolution
   end subroutine set
 
   ! Set the user-input flag. May be called independently of set().
@@ -106,7 +108,7 @@ contains
 
   ! Retrieve particle counts, user-input flag, and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
-  function get( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, last_import_time, user_input, mskdiam, mskscale ) result( l_assigned )
+  function get( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, last_import_time, user_input, mskdiam, mskscale, resolution ) result( l_assigned )
     class(gui_metadata_stream_pool2D), intent(in)  :: self
     type(string), intent(out) :: stage
     integer,      intent(out) :: iteration
@@ -114,7 +116,7 @@ contains
     integer,      intent(out) :: last_import_time
     logical,      intent(out) :: user_input
     integer,      intent(out) :: mskdiam
-    real,         intent(out) :: mskscale
+    real,         intent(out) :: mskscale, resolution
     logical                   :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned         = self%l_assigned
@@ -127,6 +129,7 @@ contains
     user_input         = self%user_input
     mskdiam            = self%mskdiam
     mskscale           = self%mskscale
+    resolution         = self%resolution
   end function get
 
   ! Serialise all fields to a JSON object. Returns a null pointer when
@@ -148,6 +151,7 @@ contains
       call json%add(json_ptr, 'user_input',              self%user_input         )
       call json%add(json_ptr, 'mskdiam',                 self%mskdiam            )
       call json%add(json_ptr, 'mskscale',                dble(self%mskscale)     )
+      call json%add(json_ptr, 'resolution',              dble(self%resolution)   )
       if( self%n_initial_ref_selection > 0 ) then
         call json%create_array(json_ref_selection_ptr, 'initial_ref_selection')
         do i_ref = 1, self%n_initial_ref_selection

@@ -43,8 +43,8 @@
                     {% if "mskdiam" in jobstats and jobstats.mskdiam > 0 %}
                         {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.mskdiam label="mask diameter" count_unit="Å" %}
                     {% endif %}
-                    {% if "latest_cls2D" in jobstats and jobstats.latest_cls2D|length > 0 %}
-                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.final_cls2D|length label="resolution" %}
+                    {% if "resolution" in jobstats and jobstats.resolution > 0 %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.resolution label="resolution" count_unit="Å" %}
                     {% endif %}
                 </div>
             </div>

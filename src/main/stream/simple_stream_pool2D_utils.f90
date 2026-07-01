@@ -16,6 +16,7 @@ public :: get_pool_cavgs_mrc
 public :: get_pool_iter
 public :: get_pool_ptr
 public :: get_pool_rejected
+public :: get_pool_resolution
 public :: is_pool_available
 ! SETTERS
 public :: set_lpthres_type
@@ -511,6 +512,10 @@ contains
     integer function get_pool_rejected()
         get_pool_rejected = nptcls_rejected_glob
     end function get_pool_rejected
+
+    real function get_pool_resolution()
+        get_pool_resolution = current_resolution
+    end function get_pool_resolution
 
     ! whether the pool available for another iteration
     logical function is_pool_available()

@@ -414,7 +414,7 @@ contains
     write(*,'(A)') 'test_pool2D'
     call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call meta_pool2D%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
-                         particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+                         particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5, resolution=3.5)
     call meta_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
     call meta_snapshot%set(id=3, snapshot_filename=string('snapshot_3.simple'), snapshot_nptcls=16000)
     allocate(meta_latest_cavgs2D(3))

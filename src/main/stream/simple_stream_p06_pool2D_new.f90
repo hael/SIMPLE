@@ -538,7 +538,8 @@ contains
                 particles_accepted = get_pool_assigned(),         &
                 particles_rejected = get_pool_rejected(),         &
                 mskdiam            = nint(params%mskdiam),        &
-                mskscale           = params%box * params%smpd)
+                mskscale           = params%box * params%smpd,    &
+                resolution         = get_pool_resolution()        )            
                 if( meta_pool2D%assigned() .and. mq_stream_master_in%is_active() ) then
                     call meta_pool2D%serialise(meta_buffer)
                     call mq_stream_master_in%send(meta_buffer)

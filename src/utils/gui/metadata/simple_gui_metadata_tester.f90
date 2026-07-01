@@ -1162,14 +1162,14 @@ contains
     type(string) :: stage
     integer      :: iteration, particles_imported, particles_accepted, particles_rejected
     integer      :: last_import_time, mskdiam
-    real         :: mskscale
+    real         :: mskscale, resolution
     logical      :: user_input
     write(*,'(A)') 'test_set_get_stream_pool2D'
     call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_TYPE, 'type is set correctly')
     call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
-                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5, resolution=3.5)
     call meta%set_user_input(.true.)
     call meta%set_initial_ref_selection(2)
     call assert_true(meta%assigned(), 'metadata object is set')
@@ -1179,7 +1179,7 @@ contains
                               particles_rejected=particles_rejected,                  &
                               last_import_time=last_import_time,                      &
                               user_input=user_input, mskdiam=mskdiam,                &
-                              mskscale=mskscale), 'metadata retrieved')
+                              mskscale=mskscale, resolution=resolution), 'metadata retrieved')
     call assert_char(stage%to_char(), 'pool2D', 'stage set/get correctly')
     call assert_int(iteration,            3,     'iteration set/get correctly')
     call assert_int(particles_imported,  20000,  'particles_imported set/get correctly')
@@ -1189,6 +1189,7 @@ contains
     call assert_true(user_input,                 'user_input set/get correctly')
     call assert_int(mskdiam,              180,   'mskdiam set/get correctly')
     call assert_true(mskscale == 0.5,            'mskscale set/get correctly')
+    call assert_true(resolution == 3.5,          'resolution set/get correctly')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_pool2D
@@ -1202,7 +1203,7 @@ contains
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_POOL2D_TYPE, 'type is set correctly')
     call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
-                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5, resolution=3.5)
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
@@ -1226,7 +1227,7 @@ contains
     call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
-                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5)
+                  particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5, resolution=3.5)
     call assert_true(meta%assigned(), 'metadata object is set')
     json_ptr => meta%jsonise()
     call assert_true(associated(json_ptr), 'json pointer is associated')
@@ -1236,7 +1237,7 @@ contains
     call assert_true(len(buffer) > 0, 'json output is non-empty')
     json_str = buffer
     json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '6504A9531CD8C97D', 'json is stable')
+    call assert_char(json_hash%to_char(), '09A1FDD98F13C4CE', 'json is stable')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)
