@@ -98,8 +98,7 @@ contains
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                 &self%heap_vars(self%p_ptr%nthr))
         do ithr=1,self%p_ptr%nthr
-            allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%argvec(self%pftsz),&
+            allocate(self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%kcorrs(self%nrots),&
@@ -107,7 +106,6 @@ contains
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%pft_r(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%w_weights(self%nk),&
                     &self%heap_vars(ithr)%sumsq_cache(self%nk))
         end do

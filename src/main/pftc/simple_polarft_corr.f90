@@ -184,7 +184,7 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: cc(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
+        complex(sp), pointer :: shmat(:,:)
         real(sp) :: shift_mag_sq
         integer  :: i, ithr, k, kk, k0
         logical  :: even, needs_shift
@@ -199,21 +199,23 @@ contains
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
         needs_shift  = shift_mag_sq > SHERRSQ
         if (needs_shift) then
-            pft_ref => self%heap_vars(ithr)%pft_ref
             ! Generate shift matrix
             call self%gen_shmat4aln(ithr, shift, shmat)
-            ! Shift reference
+            ! Shift reference directly into cmat2_many
             if (even) then
-                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                enddo
             else
-                pft_ref = shmat(:,:self%kfromto(2)) * self%pfts_refs_odd( :,self%kfromto(1):self%kfromto(2),iref)
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                enddo
             endif
             ! Calculate FFT(S.REF)
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       pft_ref(:,k)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
-            end do
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         else
             ! no shift, memoized reference is used
@@ -237,7 +239,7 @@ contains
             end do
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%drvec(ithr)%r = real(self%crvec1(ithr)%r(1:self%nrots), dp)
+        cc = self%crvec1(ithr)%r(1:self%nrots)
         ! ========================================================================
         ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
         ! ========================================================================
@@ -248,10 +250,9 @@ contains
                 self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
         end do
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
         ! Final correlation computation
-        self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots), dp)
-        cc = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
+        cc = self%crvec1(ithr)%r(1:self%nrots) / &
+            &sqrt(cc * real(self%sqsums_ptcls(i), sp) * real(2*self%nrots, sp))
     end subroutine gen_corrs
 
     module subroutine gen_euclids( self, iref, iptcl, shift, euclids )
@@ -261,8 +262,8 @@ contains
         real(sp),                    intent(out)   :: euclids(self%nrots)
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
-        real(dp)    :: ptcl_sqsum, wk, A
-        real(sp)    :: shift_mag_sq
+        real(dp)    :: ptcl_sqsum
+        real(sp)    :: A_sp, shift_mag_sq, wk
         integer     :: k, i, ithr, kk, k0, p
         logical     :: even
         ithr         =  omp_get_thread_num() + 1
@@ -279,14 +280,14 @@ contains
             if (even) then
                 do k = self%kfromto(1), self%kfromto(2)
                     kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_even(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_even(:,k,iref))
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
                 end do
             else
                 do k = self%kfromto(1), self%kfromto(2)
                     kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       shmat(:,k) * self%pfts_refs_odd(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(shmat(:,k) * self%pfts_refs_odd(:,k,iref))
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
                 end do
             endif
             ! Calculate FT(S.REF)
@@ -295,8 +296,8 @@ contains
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             if (even) then
                 do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     kk = k - k0 + 1
-                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
                     do p = 1,self%pftsz
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                         c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
@@ -305,8 +306,8 @@ contains
                 end do
             else
                 do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     kk = k - k0 + 1
-                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
                     do p = 1,self%pftsz
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                         c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
@@ -320,7 +321,7 @@ contains
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             if (even) then
                 do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     do p = 1,self%pftsz
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
                         c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
@@ -329,7 +330,7 @@ contains
                 end do
             else
                 do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     do p = 1,self%pftsz
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
                         c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
@@ -338,13 +339,11 @@ contains
                 end do
             endif
         endif
-        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*) )
+        ! IFFT
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        ! Normalization & exponentiation
-        A = ptcl_sqsum * real(2*self%nrots, dp)
-        do p = 1,self%nrots
-            euclids(p) = exp(-1.d0 - self%crvec1(ithr)%r(p) / A)
-        end do
+        ! Normalise and exponentiate — sp array expression enables vectorised vexpf
+        A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
+        euclids(1:self%nrots) = exp(-1. - self%crvec1(ithr)%r(1:self%nrots) / A_sp)
     end subroutine gen_euclids
 
     module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )
@@ -383,8 +382,8 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: cc(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        real(dp) :: ref_sumsq, denom
+        complex(sp), pointer :: shmat(:,:)
+        real(dp) :: ref_sumsq, denom, norm_factor
         real(sp) :: shift_mag_sq
         integer  :: i, ithr, k, kk, k0, p
         logical  :: even, needs_shift
@@ -394,27 +393,29 @@ contains
         k0      = self%kfromto(1)
         even    = self%iseven(i)
         shmat   => self%heap_vars(ithr)%shmat
-        ref_sumsq = 0.d0
+        ref_sumsq   = 0.d0
+        norm_factor = real(2*self%nrots, dp)
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
         needs_shift  = shift_mag_sq > SHERRSQ
         if( needs_shift )then
-            pft_ref => self%heap_vars(ithr)%pft_ref
             call self%gen_shmat4aln(ithr, shift, shmat)
             if( even )then
                 do k = self%kfromto(1), self%kfromto(2)
-                    pft_ref(:,k) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                    ref_sumsq = ref_sumsq + sum(real(self%cmat2_many(ithr)%c(1:self%pftsz,kk) * &
+                        &conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk)),dp))
                 enddo
             else
                 do k = self%kfromto(1), self%kfromto(2)
-                    pft_ref(:,k) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                    ref_sumsq = ref_sumsq + sum(real(self%cmat2_many(ithr)%c(1:self%pftsz,kk) * &
+                        &conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk)),dp))
                 enddo
             endif
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                self%cmat2_many(ithr)%c(1:self%pftsz,            kk) =       pft_ref(:,k)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(pft_ref(:,k))
-                ref_sumsq = ref_sumsq + sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
-            end do
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
         else
             if( even )then
@@ -438,13 +439,11 @@ contains
                 self%ft_ptcl_den(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
         end do
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        denom = sqrt(ref_sumsq * self%sqsums_ptcls_den(i) * real(2*self%nrots,dp))
+        denom = sqrt(ref_sumsq * self%sqsums_ptcls_den(i) * norm_factor)
         if( denom < TINY )then
             cc = 0.
         else
-            do p = 1,self%nrots
-                cc(p) = real(real(self%crvec1(ithr)%r(p),dp) / denom, sp)
-            end do
+            cc = real(self%crvec1(ithr)%r(1:self%nrots) / denom, sp)
         endif
     end subroutine gen_denoised_corrs
 

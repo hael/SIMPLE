@@ -31,7 +31,6 @@ type fftw_crvec
 end type fftw_crvec
 
 type heap_vars
-    complex(sp), pointer :: pft_ref(:,:)        => null()
     real(dp),    pointer :: argvec(:)           => null()
     complex(sp), pointer :: shmat(:,:)          => null()
     real(dp),    pointer :: kcorrs(:)           => null()
@@ -40,7 +39,6 @@ type heap_vars
     complex(dp), pointer :: shvec(:)            => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
     real(dp),    pointer :: pft_r1_8(:,:)       => null()
-    real(sp),    pointer :: pft_r(:,:)          => null()
     ! cache arrays for batched computations
     real(dp),    pointer :: w_weights(:)        => null()  ! k/sigma2 weights
     real(dp),    pointer :: sumsq_cache(:)      => null()  ! particle sumsq per k
@@ -154,7 +152,8 @@ type :: polarft_calc
     procedure, private :: gen_shmat_8, gen_shmat4aln_8
     procedure          :: shift_ptcl
     procedure          :: shift_ref
-    procedure          :: mirror_ref_pft
+    procedure, private :: mirror_ref_pft_1, mirror_ref_pft_2
+    generic            :: mirror_ref_pft => mirror_ref_pft_1, mirror_ref_pft_2
     procedure, private :: rotate_ref_8
     procedure, private :: rotate_ptcl
     procedure, private :: rotate_ctf
@@ -511,11 +510,16 @@ interface
         real(sp),            intent(in)    :: shvec(2)
     end subroutine shift_ref
 
-    module pure subroutine mirror_ref_pft( self, pft, pftm )
+    module pure subroutine mirror_ref_pft_1( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self
         complex(sp),         intent(in)  :: pft(1:self%pftsz, self%kfromto(1):self%interpklim)
         complex(sp),         intent(out) :: pftm(1:self%pftsz, self%kfromto(1):self%interpklim)
-    end subroutine mirror_ref_pft
+    end subroutine mirror_ref_pft_1
+
+    module pure subroutine mirror_ref_pft_2( self, iref )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref
+    end subroutine mirror_ref_pft_2
 
     module subroutine rotate_ref_8(self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self
