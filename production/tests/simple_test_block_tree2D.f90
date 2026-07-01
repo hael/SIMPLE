@@ -8,7 +8,6 @@ use simple_atoms,                   only: atoms
 use simple_simple_volinterp,        only: reproject
 use simple_parameters,              only: parameters
 use simple_image,                   only: image                 
-use simple_corrmat,                 only: calc_inpl_invariant_cc_nomirr
 use simple_binary_tree,             only: bt_node 
 use simple_timer
 use simple_block_tree

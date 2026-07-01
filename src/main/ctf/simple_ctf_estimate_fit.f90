@@ -484,13 +484,11 @@ contains
     subroutine gen_roavspec1d( self, center )
         class(ctf_estimate_fit), intent(inout) :: self
         logical,       optional, intent(in)    :: center
-        real, pointer :: prmat(:,:,:)
         real          :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
         integer       :: i,j,h,k, mh,mk, sh, shlim, n
         logical       :: center_here
         center_here = .true.
         if( present(center) ) center_here = center
-        call self%pspec%get_rmat_ptr(prmat)
         ! spectrum 1D
         self%roavg_spec1d = 0.
         mh    = abs(self%flims(1,1))
@@ -503,7 +501,7 @@ contains
                 sh = nint(sqrt(real(h*h+k*k)))
                 if( sh > shlim )  cycle
                 j = min(max(1,k+mk+1),self%ldim_box(2))
-                self%roavg_spec1d(sh) = self%roavg_spec1d(sh)+prmat(i,j,1)
+                self%roavg_spec1d(sh) = self%roavg_spec1d(sh)+self%pspec%get([i,j,1])
                 cnt(sh) = cnt(sh)+1
             enddo
         enddo
@@ -813,15 +811,13 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real, optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real, pointer :: prmat(:,:,:)
         real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
         integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
         ! initialize
         aadd_phshift = 0.
         if( present(add_phshift) ) aadd_phshift = add_phshift
         call self%tfun%init(dfx, dfy, angast)
-        call img%get_rmat_ptr(prmat)
-        prmat    = 0.
+        call img%zero_and_unflag_ft
         lims     = img%loop_lims(3)
         mh       = abs(lims(1,1))
         mk       = abs(lims(2,1))
@@ -839,7 +835,7 @@ contains
                 ang       = atan2(real(k),real(h))
                 tval      = self%tfun%eval(spaFreqSq, ang, aadd_phshift)
                 tval      = min(1.,max(tval * tval,SMALL))
-                prmat(i,j,1) = sqrt(tval)
+                call img%set([i,j,1],sqrt(tval))
             end do
         end do
         !$omp end parallel do
@@ -849,11 +845,9 @@ contains
     subroutine ft2img( self, img, img_out )
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: img, img_out
-        real, pointer :: prmat(:,:,:)
         integer :: h,mh,k,mk,i,j,lims(3,2)
         if( .not.img%is_ft() ) THROW_HARD('Fted images only! ft2img')
         call img_out%zero_and_unflag_ft
-        call img_out%get_rmat_ptr(prmat)
         lims = img%loop_lims(3)
         mh   = abs(lims(1,1))
         mk   = abs(lims(2,1))
@@ -861,7 +855,7 @@ contains
             j = min(max(1,k+mk+1),self%box)
             do h=lims(1,1),lims(1,2)
                 i = min(max(1,h+mh+1),self%box)
-                prmat(i,j,1) = sqrt(csq_fast(img%get_fcomp2D(h,k)))
+                call img_out%set([i,j,1],sqrt(csq_fast(img%get_fcomp2D(h,k))))
             end do
         end do
     end subroutine ft2img
