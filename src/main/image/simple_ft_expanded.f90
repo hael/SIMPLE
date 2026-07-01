@@ -199,7 +199,7 @@ contains
         self%sumsq = self2copy%sumsq
         self%cmat  = self2copy%cmat
         self%bandmsk = self2copy%bandmsk
-        self%existence = self%existence
+        self%existence = self2copy%existence
     end subroutine copy
 
     ! ARITHMETICS
@@ -256,11 +256,10 @@ contains
 
     ! MODIFIERS
 
-    subroutine shift( self, shvec, self_out, calc_sumsq )
+    subroutine shift( self, shvec, self_out )
         class(ft_expanded),           intent(inout) :: self
         real,                         intent(in)    :: shvec(2)
         class(ft_expanded), optional, intent(inout) :: self_out
-        logical,            optional, intent(in)    :: calc_sumsq
         integer  :: hind,kind,kind_shift,kkind
         real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real(dp) :: argh,argk,ck,sk
@@ -295,11 +294,7 @@ contains
                 end do
             end do
         endif
-        if( present(calc_sumsq) )then
-            if( calc_sumsq ) self_out%sumsq = real(self_out%corr_unnorm_serial(self))
-        else
-            self_out%sumsq = real(self_out%corr_unnorm_serial(self_out))
-        endif
+        self_out%sumsq = real(self_out%corr_unnorm_serial(self_out))
     end subroutine shift
 
     subroutine shift_and_add( self, shvec, w, self_out )
