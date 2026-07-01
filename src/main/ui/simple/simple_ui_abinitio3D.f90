@@ -130,6 +130,10 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp)
         call abinitio3D_cavgs%add_input(UI_SRCH, pgrp_start)
+        call abinitio3D_cavgs%add_input(UI_SRCH, nstates, gui_submenu="search", gui_advanced=.false.)
+        call abinitio3D_cavgs%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume class-average ab initio mode', &
+            &'Multi-volume class-average ab initio mode(single|independent|docked){single}', &
+            &'(single|independent|docked){single}', .false., 'single')
         ! filter controls
         call abinitio3D_cavgs%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio3D_cavgs%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

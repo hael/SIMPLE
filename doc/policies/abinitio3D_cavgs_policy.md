@@ -82,9 +82,25 @@ only one is an error.
 The number of ini3D stages is capped by `abinitio_nstages_ini3D_max()`. A user
 `nstages` value can shorten the route up to that cap.
 
+Supported `multivol_mode` values are:
+
+- `single`
+- `independent`
+- `docked`
+
+`single` requires `nstates=1`. `independent` and `docked` require more than one
+state. When the user gives `nstates > 1` and no `multivol_mode`, the commander
+defaults to `independent`, matching particle `abinitio3D`.
+
 Before staged refinement, `rndstart` randomizes orientations, zeros shifts,
-randomizes states uniformly for multi-state runs, and reconstructs starting
-volumes. Starting volumes and half maps are renamed to the standard
+randomizes states uniformly for ordinary multi-state runs, and reconstructs
+starting volumes. In `multivol_mode=docked`, active class-average entries are
+first collapsed to one active state, so the pre-split stages build a single
+class-average ab initio model. At the configured `split_stage` (default 6), the
+commander restores the requested `nstates`, clears `sampled` and `updatecnt`,
+randomizes active temporary `ptcl3D` entries into the requested state labels,
+and reconstructs split state volumes before entering the split-stage
+`refine3D`. Starting volumes and half maps are renamed to the standard
 `refine3D` start-volume names, including `_unfil` copies of the half maps.
 
 Each stage is configured through the shared ab initio stage controller with
@@ -96,6 +112,11 @@ Each stage is configured through the shared ab initio stage controller with
 - `update_frac` is deleted from emitted refine3D child commands
 - `snr_noise_reg` is set from the stage controls
 - early Gaussian reference filtering remains available through stage policy
+
+The docked split uses the same shared stage policy as particle `abinitio3D`:
+the split stage is emitted as `refine=prob_state`, later docked multi-state
+neighborhood stages use `prob_neigh_mode=geom`, and trailing reconstruction is
+disabled at the split stage itself.
 
 At the symmetry-search stage, the workflow runs the shared symmetry handling
 used by ab initio workflows.

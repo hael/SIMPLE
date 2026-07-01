@@ -54,6 +54,7 @@ contains
         type(stack_io)            :: stkio_r, stkio_r2, stkio_w
         type(string)              :: final_vol, work_projfile
         integer                   :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
+        integer                   :: nstates_on_cline, nstates_target, split_stage
         integer                   :: cavg_ldim(3), cavg_nimgs
         real                      :: cavg_smpd
         if( cline%defined('part') )then
@@ -77,10 +78,39 @@ contains
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart', abinitio_lpstart_ini3D())
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   abinitio_lpstop_ini3D())
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',                     'yes')
+        ! splitting stage
+        split_stage = abinitio_het_docked_stage()
+        if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
+        if( split_stage < 2 .or. split_stage > abinitio_nstages_ini3D_max() )then
+            THROW_HARD('split_stage must be between 2 and '//int2str(abinitio_nstages_ini3D_max())//' for abinitio3D_cavgs')
+        endif
+        call cline%set('split_stage', split_stage)
+        ! adjust default multivol_mode unless given on command line
+        if( cline%defined('nstates') )then
+            nstates_on_cline = cline%get_iarg('nstates')
+            if( nstates_on_cline > 1 .and. .not. cline%defined('multivol_mode') )then
+                call cline%set('multivol_mode', 'independent')
+            endif
+        endif
         ! make master parameters
         call params%new(cline)
+        nstates_target = params%nstates
+        nstates_glob   = nstates_target
+        select case(trim(params%multivol_mode))
+            case('single')
+                if( nstates_target /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
+            case('independent', 'docked')
+                if( nstates_target == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
+            case DEFAULT
+                THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
+        end select
+        if( trim(params%multivol_mode).eq.'docked' )then
+            params%nstates = 1
+            call cline%delete('nstates')
+        endif
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        params%oritype = 'ptcl3D'
         ! set work projfile
         work_projfile = 'abinitio3D_cavgs_tmpproj.simple'
         ! set class global filtering flags for staged refine3D policy
@@ -144,6 +174,9 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//params%projfile%to_char()//'; abinitio3D_cavgs')
         endif
+        if( trim(params%multivol_mode).eq.'docked' )then
+            where( states > 0 ) states = 1
+        endif
         params%nptcls = 2 * ncavgs
         call configure_cavgs_distributed_clines
         ! prepare a temporary project file
@@ -186,8 +219,22 @@ contains
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', lpinfo(istage)%lp
+            ! Splitting stage of docked mode
+            if( trim(params%multivol_mode).eq.'docked' )then
+                if( istage == split_stage-1 )then
+                    write(logfhandle,'(A,I0,A,I0)') &
+                        &'>>> ABINITIO3D_CAVGS DOCKED PRE-SPLIT STAGE/NSTATES: ', istage, '/', params%nstates
+                else if( istage == split_stage )then
+                    params%nstates = nstates_target
+                    write(logfhandle,'(A,I0,A,I0)') &
+                        &'>>> ABINITIO3D_CAVGS DOCKED SPLIT STAGE/NSTATES: ', istage, '/', params%nstates
+                endif
+            endif
             ! Preparation of command line for probabilistic search
             call set_cline_refine3D(params, istage, l_cavgs=.true.)
+            if( trim(params%multivol_mode).eq.'docked' .and. istage == split_stage )then
+                call randomize_states(params, work_proj, work_projfile, xrec3D, split_stage)
+            endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
             endif
