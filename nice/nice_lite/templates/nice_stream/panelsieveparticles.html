@@ -44,7 +44,7 @@
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles accepted" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label="particles rejected" sublabel=jobstats.particles_imported sublabel_sep="/" variant="rejected"%}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_rejected label="particles rejected" sublabel=jobstats.particles_imported sublabel_sep="/" variant="neutral"%}
         </div>
 
         <!-- Status message while sieving (no ref classes yet) -->

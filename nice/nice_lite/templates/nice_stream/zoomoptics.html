@@ -64,14 +64,14 @@
             const ctx = canvas.getContext("2d");
             const assignments = parseAssignments(canvas.dataset.assignments);
 
-            const workspaces = [];
+            const datasets = [];
             const points = [];
             for (const group of assignments) {
                 const workspace = {
                     label: group.id,
                     data: group.coordinates
                 };
-                workspaces.push(workspace);
+                datasets.push(workspace);
                 for (const coordinate of group.coordinates) {
                     points.push(coordinate);
                 }
@@ -124,7 +124,7 @@
                     aspectRatio: 1
                 },
                 data: {
-                    workspaces
+                    datasets: datasets
                 }
             });
         };

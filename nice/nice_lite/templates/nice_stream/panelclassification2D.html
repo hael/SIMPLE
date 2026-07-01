@@ -48,7 +48,7 @@
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.particles_accepted label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%}
-            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.resolution label="resolution" count_unit="Å" %}
+            {% include 'nice_stream/includes/_count_tile.html' with count=jobstats.resolution|floatformat:1 label="resolution" count_unit="Å" %}
         </div>
 
         <!-- Latest classes gallery (user-input mode, iteration > 0) -->
