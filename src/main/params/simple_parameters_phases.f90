@@ -809,10 +809,21 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported overfit_hard_reject='//trim(self%overfit_hard_reject)//'; expected yes|no')
         end select
+        select case(trim(self%chunk_hard_reject))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported chunk_hard_reject='//trim(self%chunk_hard_reject)//'; expected yes|no')
+        end select
+        if( trim(self%overfit_hard_reject) == 'yes' .and. trim(self%chunk_hard_reject) == 'yes' ) &
+            THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
         if( trim(self%overfit_hard_reject) == 'yes' .and. &
             (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
              (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
             THROW_HARD('overfit_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
+        if( trim(self%chunk_hard_reject) == 'yes' .and. &
+            (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
+             (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
+            THROW_HARD('chunk_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')

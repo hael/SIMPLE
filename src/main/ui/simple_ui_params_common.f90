@@ -28,6 +28,7 @@ type(ui_param) :: ctf
 type(ui_param) :: ctf_yes
 type(ui_param) :: ctfpatch
 type(ui_param) :: ctfresthreshold
+type(ui_param) :: chunk_hard_reject
 type(ui_param) :: deftab
 type(ui_param) :: dferr
 type(ui_param) :: dfmax
@@ -266,6 +267,11 @@ subroutine set_ui_params
     call ctfresthreshold%set_param('ctfresthreshold', 'num',    'CTF Resolution rejection threshold', &
                                    'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{6.}', &
                                    'CTF resolution threshold(in Angstroms){6.}', .false., 6.0)
+
+    call chunk_hard_reject%set_param('chunk_hard_reject', 'binary', 'Chunk hard reject', &
+                                   'Apply standard class-average hard gates plus fixed chunk-quality z-feature rules, '//&
+                                   'without a model(yes|no){no}', &
+                                   'Chunk hard rejection(yes|no){no}', .false., 'no')
 
     call deftab%set_param(         'deftab',          'file',   'CTF parameter file', &
                                    'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values', &

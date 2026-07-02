@@ -46,8 +46,8 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 | Foreground local variance | Robust-z rule on foreground/background local variance after 10 A low-pass and Otsu masking. | `log_locvar_fg` feature; only both variances non-positive is a hard reject. | Active feature. |
 | Background local variance | Robust-z rule paired with foreground local variance. | `log_locvar_bg` feature; only both variances non-positive is a hard reject. | Active feature. |
 | Stored score evidence | Not used by the rule engine. | `corr_frc_proxy` reads stored class correlation or FRC-like score when present. | Active feature. |
-| Center/edge signal | Not used by the rule engine. | `log_center_edge_snr` feature in the `signal` family. | Available, zero weight in current chunk default. |
-| Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Available, zero weight in current chunk default. |
+| Center/edge signal | Not used by the rule engine. | `log_center_edge_snr` feature in the `signal` family. | Active feature. |
+| Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Active feature. |
 | Overfit local variance | Not used by the rule engine. | `neg_log_locvar_fg`, `neg_log_locvar_bg`, and `log_locvar_fg_bg_ratio` provide low/localized variance evidence. | Active features in learned policies. |
 | Invalid pixels | Not a named microchunk rule. | Image values containing invalid pixels are hard rejected. | Hard gate. |
 
@@ -105,9 +105,9 @@ Feature-family policies act as a small structural model-selection layer:
 | Policy | Active families | Purpose |
 | --- | --- | --- |
 | `microchunk` | `microchunk`, `overfit` | Tests whether scalar analogues of the stream rejector plus overfit local-variance evidence are sufficient. |
-| `microchunk_plus_score` | `microchunk`, `overfit`, `score` | Adds stored class correlation/FRC-like evidence. This is the current chunk default. |
+| `microchunk_plus_score` | `microchunk`, `overfit`, `score` | Adds stored class correlation/FRC-like evidence. |
 | `microchunk_plus_signal` | `microchunk`, `overfit`, `signal` | Adds center/edge and presence evidence without stored score evidence. |
-| `microchunk_plus_score_signal` | `microchunk`, `overfit`, `score`, `signal` | Uses the full compact quality feature set. |
+| `microchunk_plus_score_signal` | `microchunk`, `overfit`, `score`, `signal` | Uses the full compact quality feature set. This is the current chunk default. |
 
 Learn mode reports feature signal, feature-drop diagnostics, and leave-one-dataset-out feature-policy diagnostics so that the selected model can be interpreted as a compact scientific statement about which evidence family and weight structure generalized on the supplied training set.
 
@@ -125,7 +125,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates.
+For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when a fixed chunk-quality hard gate approximation to `chunk100mics` should be layered on top of the standard hard gates without loading or applying a model.
 
 ## Model Selection
 
@@ -221,6 +221,22 @@ The default hard reject is:
 
 On the FlipQR overfit-training table, the support/local-variance rule rejects 18/26 trainable overfit-labeled classes while retaining 31/33 trainable good classes. Rows rejected by the overfit hard rule are marked as hard rejects in the final decision, but their normalized features remain inspectable in the output tables because those values explain the hard-gate decision.
 
+### Optional Chunk Hard Gate
+
+`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed chunk-quality hard rule approximating the promoted `chunk100mics` model. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
+
+The fixed chunk hard rule rejects a trainable class when any of these dataset-normalized gates fire:
+
+```text
+z_corr_frc_proxy      < -0.224682
+z_neg_log_locvar_fg   < -2.073230
+z_cc_area_frac        < -2.398173
+z_log_center_edge_snr < -3.274551
+z_log_pop             < -3.513258
+```
+
+These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` as a compact hard-gate approximation to the learned `chunk100mics` operating point. Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.
+
 ## Normalization
 
 `normalize_cavg_quality_features` computes per-feature robust statistics over non-hard-rejected rows only. Each feature is centered by the median and scaled by the Gaussian MAD. Values are clipped to `[-CLIP_Z, CLIP_Z]`. If a feature has no robust spread, its normalized value is set to zero for trainable rows.
@@ -250,7 +266,7 @@ min_score_separation    0.05
 otsu_min_offset         0.05
 otsu_max_offset         0.40
 cluster_rescue_margin   0.20
-min_accept_frac         0.50
+min_accept_frac         0.60
 use_lowsep_otsu         false
 use_otsu_window         true
 use_cluster_rescue      false
@@ -388,6 +404,17 @@ Apply only the standard hard gates plus the fixed overfit hard gate:
 simple_exec prg=model_cavgs_rejection \
   quality_mode=apply \
   overfit_hard_reject=yes \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+```
+
+Apply only the standard hard gates plus the fixed chunk hard gates:
+
+```bash
+simple_exec prg=model_cavgs_rejection \
+  quality_mode=apply \
+  chunk_hard_reject=yes \
   projfile=my_project.simple \
   mskdiam=180 \
   mkdir=yes

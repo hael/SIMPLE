@@ -38,7 +38,13 @@ public :: CAVG_RES_HARD_REJECT_A
 public :: POP_FRACTION_HARD_REJECT
 public :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN
 public :: CAVG_OVERFIT_SUPPORT_Z_MAX
+public :: CAVG_CHUNK_CORR_FRC_Z_MIN
+public :: CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN
+public :: CAVG_CHUNK_CC_AREA_FRAC_Z_MIN
+public :: CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN
+public :: CAVG_CHUNK_LOG_POP_Z_MIN
 public :: cavg_overfit_hard_reject
+public :: cavg_chunk_hard_reject
 
 #include "simple_local_flags.inc"
 
@@ -77,6 +83,26 @@ integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 12
 ! cavg_overfit_hard_reject directly.
 real, parameter :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN = 0.0
 real, parameter :: CAVG_OVERFIT_SUPPORT_Z_MAX   = 0.5
+
+! Optional hard rule for chunk-style class-average rejection. This is a
+! dataset-normalized approximation of the chunk100mics learned model, intended
+! as a no-model path after the standard hard validity gates. A class average is
+! rejected when any one of these low-quality evidence gates fires:
+!
+!   z_corr_frc_proxy      < -0.224682
+!   z_neg_log_locvar_fg   < -2.073230
+!   z_cc_area_frac        < -2.398173
+!   z_log_center_edge_snr < -3.274551
+!   z_log_pop             < -3.513258
+!
+! The thresholds were fit on
+! /Users/elmlundho/cavgs_quality/chunk100mic_training_data as a compact
+! hard-gate approximation to the promoted chunk100mics model.
+real, parameter :: CAVG_CHUNK_CORR_FRC_Z_MIN        = -0.224682
+real, parameter :: CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN   = -2.073230
+real, parameter :: CAVG_CHUNK_CC_AREA_FRAC_Z_MIN    = -2.398173
+real, parameter :: CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN = -3.274551
+real, parameter :: CAVG_CHUNK_LOG_POP_Z_MIN         = -3.513258
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -149,11 +175,20 @@ contains
         real, intent(in) :: z_features(:)
         logical          :: reject
         if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_overfit_hard_reject: invalid feature count')
-        write(*,*) 'cavg_overfit_hard_reject: z_neg_log_locvar_fg=', z_features(I_NEG_LOCVAR_FG), &
-            ' z_cc_area_frac=', z_features(I_CC_AREA_FRAC), 'icc_area_frac=', CAVG_OVERFIT_SUPPORT_Z_MAX, ' lowvar_fg=', CAVG_OVERFIT_LOWVAR_FG_Z_MIN
         reject = z_features(I_NEG_LOCVAR_FG) > CAVG_OVERFIT_LOWVAR_FG_Z_MIN .and. &
                  z_features(I_CC_AREA_FRAC)  < CAVG_OVERFIT_SUPPORT_Z_MAX
     end function cavg_overfit_hard_reject
+
+    function cavg_chunk_hard_reject( z_features ) result( reject )
+        real, intent(in) :: z_features(:)
+        logical          :: reject
+        if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_chunk_hard_reject: invalid feature count')
+        reject = z_features(I_CORR_FRC)        < CAVG_CHUNK_CORR_FRC_Z_MIN        .or. &
+                 z_features(I_NEG_LOCVAR_FG)   < CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN   .or. &
+                 z_features(I_CC_AREA_FRAC)    < CAVG_CHUNK_CC_AREA_FRAC_Z_MIN    .or. &
+                 z_features(I_CENTER_EDGE_SNR) < CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN .or. &
+                 z_features(I_LOG_POP)         < CAVG_CHUNK_LOG_POP_Z_MIN
+    end function cavg_chunk_hard_reject
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
         class(image),         intent(inout) :: imgs(:)

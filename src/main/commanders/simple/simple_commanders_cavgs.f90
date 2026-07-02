@@ -2,7 +2,8 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
-    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject
+    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject, &
+    evaluate_cavg_quality_chunk_hard_reject
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
@@ -336,6 +337,7 @@ contains
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
         logical                   :: use_overfit_hard_reject
+        logical                   :: use_chunk_hard_reject
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -355,14 +357,21 @@ contains
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
         use_overfit_hard_reject = trim(params%overfit_hard_reject) == 'yes'
-        if( use_overfit_hard_reject )then
+        use_chunk_hard_reject   = trim(params%chunk_hard_reject)   == 'yes'
+        if( use_overfit_hard_reject .and. use_chunk_hard_reject ) &
+            THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
+        if( use_overfit_hard_reject .or. use_chunk_hard_reject )then
             if( quality_mode == QUALITY_MODE_LEARN .or. quality_mode == QUALITY_MODE_PROMOTE ) &
-                THROW_HARD('overfit_hard_reject=yes cannot be combined with quality_mode=learn/promote')
+                THROW_HARD('hard reject options cannot be combined with quality_mode=learn/promote')
             if( quality_mode == QUALITY_MODE_EVALUATE .and. cline%defined('filetab') ) &
-                THROW_HARD('overfit_hard_reject=yes cannot evaluate analysis file tables')
+                THROW_HARD('hard reject options cannot evaluate analysis file tables')
             if( cline%defined('infile') ) &
-                THROW_HARD('overfit_hard_reject=yes uses fixed hard rules and does not accept infile')
-            call configure_overfit_hard_report_model()
+                THROW_HARD('hard reject options use fixed rules and do not accept infile')
+            if( use_overfit_hard_reject )then
+                call configure_overfit_hard_report_model()
+            else
+                call configure_chunk_hard_report_model()
+            endif
         else
             if( quality_mode == QUALITY_MODE_LEARN )then
                 if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
@@ -425,6 +434,8 @@ contains
         reference_states = spproj%os_cls2D%get_all_asint('state')
         if( use_overfit_hard_reject )then
             call evaluate_cavg_quality_overfit_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        else if( use_chunk_hard_reject )then
+            call evaluate_cavg_quality_chunk_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
         else
             call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
         endif
@@ -433,6 +444,8 @@ contains
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
         if( use_overfit_hard_reject ) &
             write(logfhandle,'(A,I6)') '>>> OVERFIT HARD RULE REJECTED : ', count(quality%labels == 2)
+        if( use_chunk_hard_reject ) &
+            write(logfhandle,'(A,I6)') '>>> CHUNK HARD RULE REJECTED   : ', count(quality%labels == 2)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
@@ -495,6 +508,26 @@ contains
             model%use_cluster_rescue      = .false.
             model%enforce_min_accept_frac = .false.
         end subroutine configure_overfit_hard_report_model
+
+        subroutine configure_chunk_hard_report_model()
+            ! Metadata shim for existing report writers only. The
+            ! chunk_hard_reject path does not call model%classify, does not
+            ! load infile, and does not use clustering/Otsu/model thresholds.
+            model%name                    = 'chunk_hard_reject'
+            model%context                 = 'hard_gate'
+            model%feature_policy          = 'standard_gates_plus_chunk_rules'
+            model%weights                 = 0.0
+            model%boundary_margin         = 0.0
+            model%min_score_separation    = 0.0
+            model%otsu_min_offset         = 0.0
+            model%otsu_max_offset         = 0.0
+            model%cluster_rescue_margin   = 0.0
+            model%min_accept_frac         = 0.0
+            model%use_lowsep_otsu         = .false.
+            model%use_otsu_window         = .false.
+            model%use_cluster_rescue      = .false.
+            model%enforce_min_accept_frac = .false.
+        end subroutine configure_chunk_hard_report_model
 
         subroutine annotate_project()
             integer :: icls, ncls3d

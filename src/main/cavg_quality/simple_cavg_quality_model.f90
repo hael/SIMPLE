@@ -91,7 +91,7 @@ real, parameter :: CHUNK100MICS_BOUNDARY_MARGIN      = 0.30
 real, parameter :: CHUNK100MICS_MIN_SCORE_SEPARATION = 0.05
 real, parameter :: CHUNK100MICS_OTSU_MIN_OFFSET      = 0.05
 real, parameter :: CHUNK100MICS_OTSU_MAX_OFFSET      = 0.40
-real, parameter :: CHUNK100MICS_MIN_ACCEPT_FRAC      = 0.50
+real, parameter :: CHUNK100MICS_MIN_ACCEPT_FRAC      = 0.60
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT

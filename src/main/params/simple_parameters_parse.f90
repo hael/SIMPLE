@@ -51,6 +51,7 @@ contains
         call reg%add_char('center_pdb', self%center_pdb)
         call reg%add_char('center_type', self%center_type)
         call reg%add_char('chunk', self%chunk)
+        call reg%add_char('chunk_hard_reject', self%chunk_hard_reject)
         call reg%add_char('class_assignment', self%class_assignment)
         call reg%add_char('classtats', self%classtats)
         call reg%add_char('clear', self%clear)
