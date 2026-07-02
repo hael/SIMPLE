@@ -66,6 +66,9 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
+        call track_particles%add_input(UI_COMP, 'ncunits', 'num', 'Concurrent particle trackers',&
+        &'Maximum number of independent particle tracking jobs to run at once',&
+        &'# simultaneous trackers', .true., 1.)
         call track_particles%add_input(UI_COMP, nthr)
         ! add to ui_hash
         call add_ui_program('track_particles', track_particles, prgtab)

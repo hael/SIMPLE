@@ -55,13 +55,15 @@ contains
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
-        integer :: ndatlines, numlen, j, orig_box, ipart
+        integer :: ndatlines, numlen, j, orig_box, ipart, nactive
         if( .not. cline%defined('neg')       ) call cline%set('neg',       'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',          2.3)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       5.0)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',   50)
         if( .not. cline%defined('filter'))     call cline%set('filter', 'nlmean')
         if( .not. cline%defined('offset'))     call cline%set('offset',      20.)
+        if( cline%defined('nparts') ) THROW_HARD('track_particles: nparts is number of particles; use ncunits')
+        if( .not. cline%defined('ncunits') ) THROW_HARD('track_particles requires ncunits as the concurrent tracker count')
         call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -84,8 +86,12 @@ contains
         endif
         call boxfile%kill
         params%nptcls  = ndatlines
+        if( params%ncunits < 1 ) THROW_HARD('ncunits must be >= 1 for track_particles')
+        nactive        = min(params%ncunits, params%nptcls)
         params%nparts  = params%nptcls
-        params%ncunits = params%nparts
+        params%ncunits = nactive
+        write(logfhandle,'(A,I0)') '>>> particles to track                  : ', params%nptcls
+        write(logfhandle,'(A,I0)') '>>> concurrent particle tracking jobs   : ', params%ncunits
         ! box and numlen need to be part of command line
         if( .not. cline%defined('hp') ) call cline%set('hp', real(orig_box) )
         call cline%set('box',    real(orig_box))
