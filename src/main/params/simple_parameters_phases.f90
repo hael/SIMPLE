@@ -804,6 +804,11 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
+        select case(trim(self%quality_target))
+            case('quality','overfit')
+            case DEFAULT
+                THROW_HARD('Unsupported quality_target='//trim(self%quality_target)//'; expected quality|overfit')
+        end select
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')

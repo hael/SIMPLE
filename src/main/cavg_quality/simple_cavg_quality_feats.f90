@@ -8,7 +8,8 @@ use simple_image_bin,          only: image_bin
 use simple_oris,               only: oris
 use simple_segmentation,       only: otsu_img
 use simple_stat,               only: median, mad_gau
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_feature_def
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_TARGET_OVERFIT, &
+    cavg_quality_feature_def
 implicit none
 private
 
@@ -26,6 +27,9 @@ public :: I_PRESENCE
 public :: I_LOG_INT_BOUNDARY_TEX
 public :: I_INT_TEX_COVERAGE
 public :: I_TEX_EFFECTIVE_AREA
+public :: I_NEG_LOCVAR_FG
+public :: I_NEG_LOCVAR_BG
+public :: I_LOG_LOCVAR_FG_BG_RATIO
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -65,6 +69,9 @@ integer, parameter :: I_PRESENCE                = 9
 integer, parameter :: I_LOG_INT_BOUNDARY_TEX    = 10
 integer, parameter :: I_INT_TEX_COVERAGE        = 11
 integer, parameter :: I_TEX_EFFECTIVE_AREA      = 12
+integer, parameter :: I_NEG_LOCVAR_FG           = 13
+integer, parameter :: I_NEG_LOCVAR_BG           = 14
+integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 15
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -90,7 +97,13 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('int_tex_coverage', 'higher_is_better', &
         'fraction of eroded foreground interior with medium-frequency texture above robust background', 'texture'), &
     cavg_quality_feature_def('tex_effective_area', 'higher_is_better', &
-        'foreground fraction effectively occupied by above-background medium-frequency texture', 'texture') ]
+        'foreground fraction effectively occupied by above-background medium-frequency texture', 'texture'), &
+    cavg_quality_feature_def('neg_log_locvar_fg', 'higher_is_better', &
+        'negative log local variance in the foreground Otsu mask; higher values indicate less overfit-like texture', 'overfit'), &
+    cavg_quality_feature_def('neg_log_locvar_bg', 'higher_is_better', &
+        'negative log local variance outside the foreground Otsu mask; higher values indicate quieter background', 'overfit'), &
+    cavg_quality_feature_def('log_locvar_fg_bg_ratio', 'higher_is_better', &
+        'log foreground/background local variance ratio; higher values indicate support-localized detail', 'overfit') ]
 
 contains
 
@@ -133,12 +146,13 @@ contains
         end do
     end subroutine write_cavg_quality_feature_inventory
 
-    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
+    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject, quality_target )
         class(image),         intent(inout) :: imgs(:)
         type(oris),           intent(in)    :: cls_oris
         real,                 intent(in)    :: mskdiam
         real,    allocatable, intent(inout) :: raw(:,:)
         logical, allocatable, intent(inout) :: hard_reject(:)
+        character(len=*), optional, intent(in) :: quality_target
         integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
         integer              :: ncls, i, ldim(3), pop_hard_threshold
@@ -150,7 +164,7 @@ contains
         real                 :: center_edge_snr, presence_score
         real                 :: int_boundary_tex_ratio, int_tex_coverage, tex_effective_area
         integer              :: ithr
-        logical              :: no_component, mask_hard_reject, bad_pixels
+        logical              :: no_component, mask_hard_reject, bad_pixels, overfit_target
         ncls = size(imgs)
         if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
@@ -174,6 +188,8 @@ contains
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         if( smpd <= 0.0 ) THROW_HARD('extract_cavg_quality_features: non-positive smpd')
+        overfit_target = .false.
+        if( present(quality_target) ) overfit_target = trim(quality_target) == CAVG_QUALITY_TARGET_OVERFIT
         rad_px = (mskdiam / smpd) / 2.0
         call imgs(1)%memoize_mask_coords()
         allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
@@ -227,14 +243,23 @@ contains
             raw(i, I_LOG_INT_BOUNDARY_TEX)    = log(max(int_boundary_tex_ratio, LOG_EPS))
             raw(i, I_INT_TEX_COVERAGE)        = int_tex_coverage
             raw(i, I_TEX_EFFECTIVE_AREA)      = tex_effective_area
-            ! Catastrophic population, resolution, and foreground-geometry
-            ! failures are hard validity rejects. The population fraction and
-            ! connected-component pruning mirror the microchunk rejector, while
-            ! ordinary variation remains active scalar evidence for the model.
-            hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
-                                              res(i) > CAVG_RES_HARD_REJECT_A .or. &
-                                              bad_pixels .or. no_component .or. mask_hard_reject .or. &
-                                              (locvar_fg <= EPS .and. locvar_bg <= EPS)
+            raw(i, I_NEG_LOCVAR_FG)          = -log(max(locvar_fg, LOG_EPS))
+            raw(i, I_NEG_LOCVAR_BG)          = -log(max(locvar_bg, LOG_EPS))
+            raw(i, I_LOG_LOCVAR_FG_BG_RATIO) = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
+            if( overfit_target )then
+                ! The overfit target keeps generic-quality failures trainable.
+                ! Only true validity failures remain hard rejects.
+                hard_reject(i) = pop(i) <= 0 .or. bad_pixels
+            else
+                ! Catastrophic population, resolution, and foreground-geometry
+                ! failures are hard validity rejects. The population fraction and
+                ! connected-component pruning mirror the microchunk rejector, while
+                ! ordinary variation remains active scalar evidence for the model.
+                hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
+                                                  res(i) > CAVG_RES_HARD_REJECT_A .or. &
+                                                  bad_pixels .or. no_component .or. mask_hard_reject .or. &
+                                                  (locvar_fg <= EPS .and. locvar_bg <= EPS)
+            endif
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob

@@ -28,7 +28,7 @@ contains
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
         call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, model%target)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
@@ -68,10 +68,11 @@ contains
             suggested_weights = model%weights
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=5'
+        write(funit,'(A)') '# model_cavgs_rejection_analysis_version=6'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
         write(funit,'(A,A)') '# model_context=', trim(model%context)
+        write(funit,'(A,A)') '# model_target=', trim(model%target)
         write(funit,'(A,I0)') '# n_classes=', ncls
         write(funit,'(A,I0)') '# manual_selected=', ngood
         write(funit,'(A,I0)') '# manual_rejected=', nbad
@@ -160,6 +161,7 @@ contains
         type(cavg_quality_model), intent(in) :: model
         integer :: i
         write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
+        write(funit,'(A,A)') '# model_target=', trim(model%target)
         write(funit,'(A)', advance='no') '# model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
             if( i > 1 ) write(funit,'(A)', advance='no') ','
@@ -181,7 +183,9 @@ contains
     subroutine write_analysis_class_header( funit )
         integer, intent(in) :: funit
         integer :: ifeat
-        write(funit,'(A)', advance='no') 'dataset_id,model_context,model_name,class,state,hard_reject,quality_cluster,quality_score,manual_state,auto_matches_manual'
+        write(funit,'(A)', advance='no') &
+            'dataset_id,model_context,model_target,model_name,class,state,hard_reject,quality_cluster,quality_score,'//&
+            'manual_state,auto_matches_manual'
         do ifeat = 1, CAVG_QUALITY_NFEATS
             write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
                 ',z_'//trim(cavg_quality_feature_name(ifeat))
@@ -205,8 +209,9 @@ contains
         type(cavg_quality_model),  intent(in) :: model
         type(cavg_quality_result), intent(in) :: quality
         integer :: ifeat
-        write(funit,'(A,A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
-            trim(dataset_id), ',', trim(model%context), ',', trim(model%name), ',', icls, ',', quality%states(icls), ',', &
+        write(funit,'(A,A,A,A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
+            trim(dataset_id), ',', trim(model%context), ',', trim(model%target), ',', trim(model%name), ',', &
+            icls, ',', quality%states(icls), ',', &
             quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_state, ',', &
             auto_match
         do ifeat = 1, CAVG_QUALITY_NFEATS

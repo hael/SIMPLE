@@ -4,9 +4,9 @@ use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
-    write_cavg_quality_model_builtin_code
-use simple_cavg_quality_types,    only: cavg_quality_result
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_OVERFIT_DEFAULT, &
+    cavg_quality_model, write_cavg_quality_model_builtin_code
+use simple_cavg_quality_types,    only: CAVG_QUALITY_TARGET_OVERFIT, cavg_quality_result
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -345,7 +345,11 @@ contains
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
         if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
-            call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+            if( trim(params%quality_target) == CAVG_QUALITY_TARGET_OVERFIT )then
+                call model%init_preset(CAVG_QUALITY_MODEL_OVERFIT_DEFAULT)
+            else
+                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+            endif
         else
             call model%init_preset(params%quality_model)
         endif
@@ -353,6 +357,8 @@ contains
         ! infile is a complete model and wins over the built-in preset.
         if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
             call model%read(params%infile%to_char())
+        if( quality_mode /= QUALITY_MODE_PROMOTE .and. trim(model%target) /= trim(params%quality_target) ) &
+            THROW_HARD('model target '//trim(model%target)//' does not match quality_target='//trim(params%quality_target))
         if( quality_mode == QUALITY_MODE_PROMOTE )then
             if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
             out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
@@ -366,7 +372,7 @@ contains
         if( quality_mode == QUALITY_MODE_LEARN )then
             if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             call read_filetable(params%filetab, analysis_files)
-            model_fname = 'cavgs_quality_model_'//trim(model%context)//'_learned.txt'
+            model_fname = 'cavgs_quality_model_'//trim(model%target)//'_'//trim(model%context)//'_learned.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
             report_fname = 'cavgs_quality_learn_report.txt'
             call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
@@ -403,6 +409,7 @@ contains
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
+        write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL TARGET   : ', trim(model%target)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
