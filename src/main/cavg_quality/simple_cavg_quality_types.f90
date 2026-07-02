@@ -5,8 +5,6 @@ implicit none
 private
 
 public :: CAVG_QUALITY_NFEATS
-public :: CAVG_QUALITY_TARGET_DEFAULT
-public :: CAVG_QUALITY_TARGET_OVERFIT
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -16,11 +14,9 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_NFEATS  = 15
+integer, parameter :: CAVG_QUALITY_NFEATS  = 12
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
-character(len=*), parameter :: CAVG_QUALITY_TARGET_DEFAULT = 'quality'
-character(len=*), parameter :: CAVG_QUALITY_TARGET_OVERFIT = 'overfit'
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:
@@ -34,7 +30,6 @@ end type cavg_quality_feature_def
 type :: cavg_quality_model_spec
     character(len=64) :: name                         = ''
     character(len=32) :: context                      = 'chunk'
-    character(len=32) :: target                       = CAVG_QUALITY_TARGET_DEFAULT
     character(len=64) :: feature_policy               = 'microchunk_plus_score_signal'
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
     real              :: boundary_margin              = 0.0
@@ -66,7 +61,6 @@ type :: cavg_quality_result
     logical              :: used_threshold   = .false.
     character(len=64)    :: model_name       = ''
     character(len=32)    :: model_context    = ''
-    character(len=32)    :: model_target     = ''
     character(len=32)    :: soft_decision    = ''
     character(len=64)    :: soft_reason      = ''
 contains
@@ -76,7 +70,6 @@ end type cavg_quality_result
 type :: cavg_quality_training_dataset
     character(len=LONGSTRLEN) :: fname      = ''
     character(len=LONGSTRLEN) :: dataset_id = ''
-    character(len=32)         :: target     = ''
     integer                   :: ncls       = 0
     real,    allocatable      :: features(:,:)
     integer, allocatable      :: manual_states(:)
@@ -129,7 +122,6 @@ contains
         quality%used_threshold   = .false.
         quality%model_name       = ''
         quality%model_context    = ''
-        quality%model_target     = ''
         quality%soft_decision    = ''
         quality%soft_reason      = ''
     end subroutine reset_cavg_quality_result

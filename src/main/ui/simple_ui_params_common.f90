@@ -127,7 +127,6 @@ type(ui_param) :: prune
 type(ui_param) :: pspecsz
 type(ui_param) :: quality_mode
 type(ui_param) :: quality_model
-type(ui_param) :: quality_target
 type(ui_param) :: qsys_name
 type(ui_param) :: qsys_partition
 type(ui_param) :: qsys_qos
@@ -667,10 +666,6 @@ subroutine set_ui_params
                                    'Quality model preset(chunk_default_v2|chunk_lp4|'//&
                                    'pool_default_v2){chunk_default_v2}', &
                                    .false., 'chunk_default_v2')
-
-    call quality_target%set_param( 'quality_target',  'multi',  'Class-average rejection target', &
-                                   'Training/application target for model_cavgs_rejection(quality|overfit){quality}', &
-                                   'Rejection target(quality|overfit){quality}', .false., 'quality')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|coarray|slurm|pbs|lsf|sge)', &

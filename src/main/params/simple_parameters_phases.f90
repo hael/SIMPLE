@@ -804,11 +804,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        select case(trim(self%quality_target))
-            case('quality','overfit')
-            case DEFAULT
-                THROW_HARD('Unsupported quality_target='//trim(self%quality_target)//'; expected quality|overfit')
-        end select
         select case(trim(self%overfit_hard_reject))
             case('yes','no')
             case DEFAULT

@@ -300,7 +300,6 @@ type :: parameters
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
     ! class-average quality model preset(chunk_default_v2|chunk_lp4|pool_default_v2){chunk_default_v2}
     character(len=STDLEN)     :: quality_model='chunk_default_v2'
-    character(len=STDLEN)     :: quality_target='quality' !< class-average rejection target(quality|overfit){quality}
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}

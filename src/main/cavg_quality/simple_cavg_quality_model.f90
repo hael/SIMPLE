@@ -6,8 +6,7 @@ use simple_string_utils,       only: str_is_true, lowercase, uppercase, &
     fortran_symbol_from_string, fortran_quote, fortran_logical
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_TARGET_DEFAULT, &
-    CAVG_QUALITY_TARGET_OVERFIT, cavg_quality_model_spec, cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_model_spec, cavg_quality_result
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
 private
@@ -100,8 +99,7 @@ character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk_plus_score_s
 real, parameter :: CAVG_QUALITY_POOL_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.826303E-01, 2.379928E-01, 0.000000E+00, 7.328372E-02, &
     6.126274E-02, 1.257789E-01, 1.572098E-01, 2.139509E-02, &
-    1.404466E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    1.404466E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 1.70
 real, parameter :: POOL_V2_MIN_SCORE_SEPARATION = 0.20
 real, parameter :: POOL_V2_OTSU_MIN_OFFSET      = 0.15
@@ -115,8 +113,7 @@ character(len=*), parameter :: CHUNK_V2_FEATURE_POLICY = 'microchunk_plus_score'
 real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.355581E-01, 1.808395E-01, 4.942806E-02, 1.635655E-01, &
     1.726983E-01, 2.108072E-01, 0.000000E+00, 8.710331E-02, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
 real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
@@ -128,8 +125,7 @@ character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_signa
 real, parameter :: CAVG_QUALITY_CHUNK_LP4_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.256393E-01, 1.026731E-01, 4.134843E-02, 1.367731E-01, &
     1.996999E-01, 0.000000E+00, 2.763570E-02, 1.404427E-01, &
-    2.257877E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00 ]
+    2.257877E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
 real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      = -0.15
 real, parameter :: CHUNK_LP4_MIN_SCORE_SEPARATION =  0.15
 real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.35
@@ -138,7 +134,6 @@ real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.40
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: context                 = 'chunk'
-    character(len=32) :: target                  = CAVG_QUALITY_TARGET_DEFAULT
     character(len=64) :: feature_policy          = CHUNK_V2_FEATURE_POLICY
     real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
     real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
@@ -207,8 +202,6 @@ contains
         self%name                    = trim(spec%name)
         self%context                 = lowercase(trim(spec%context))
         call assert_valid_model_context(self%context)
-        self%target                  = lowercase(trim(spec%target))
-        call assert_valid_model_target(self%target)
         self%feature_policy          = trim(spec%feature_policy)
         self%weights                 = spec%weights
         self%boundary_margin         = spec%boundary_margin
@@ -229,7 +222,6 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = self%name
         spec%context                 = self%context
-        spec%target                  = self%target
         spec%feature_policy          = self%feature_policy
         spec%weights                 = self%weights
         spec%boundary_margin         = self%boundary_margin
@@ -248,7 +240,6 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%context                 = 'chunk'
-        spec%target                  = CAVG_QUALITY_TARGET_DEFAULT
         spec%feature_policy          = CHUNK_V2_FEATURE_POLICY
         spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
         spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
@@ -267,7 +258,6 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_LP4
         spec%context                 = 'chunk'
-        spec%target                  = CAVG_QUALITY_TARGET_DEFAULT
         spec%feature_policy          = CHUNK_LP4_FEATURE_POLICY
         spec%weights                 = CAVG_QUALITY_CHUNK_LP4_WEIGHTS
         spec%boundary_margin         = CHUNK_LP4_BOUNDARY_MARGIN
@@ -286,7 +276,6 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_POOL_DEFAULT
         spec%context                 = 'pool'
-        spec%target                  = CAVG_QUALITY_TARGET_DEFAULT
         spec%feature_policy          = POOL_V2_FEATURE_POLICY
         spec%weights                 = CAVG_QUALITY_POOL_V2_WEIGHTS
         spec%boundary_margin         = POOL_V2_BOUNDARY_MARGIN
@@ -305,13 +294,11 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P1
         spec%context                 = 'chunk'
-        spec%target                  = CAVG_QUALITY_TARGET_DEFAULT
         spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = [ &
               1.152264E-02,   9.737433E-02,   6.403663E-02,   2.116542E-01, &
               1.794099E-01,   1.902685E-01,   1.129871E-01,   6.321478E-03, &
-              1.264252E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00, &
-              0.000000E+00,   0.000000E+00,   0.000000E+00 ]
+              1.264252E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
         spec%boundary_margin         =   8.000000E-01
         spec%min_score_separation    =   2.000000E-01
         spec%otsu_min_offset         =   2.500000E-01
@@ -328,13 +315,11 @@ contains
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P2
         spec%context                 = 'chunk'
-        spec%target                  = CAVG_QUALITY_TARGET_DEFAULT
-        spec%feature_policy          = 'microchunk_plus_score_signal_texture'
+        spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = [ &
               9.300453E-02,   9.552415E-02,   1.010380E-01,   9.765499E-02, &
               1.325033E-01,   1.486267E-01,   1.026389E-01,   4.956052E-02, &
-              1.352742E-01,   4.417469E-02,   0.000000E+00,   0.000000E+00, &
-              0.000000E+00,   0.000000E+00,   0.000000E+00 ]
+              1.352742E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
         spec%boundary_margin         =   1.500000E-01
         spec%min_score_separation    =   3.000000E-01
         spec%otsu_min_offset         =   2.500000E-01
@@ -365,7 +350,6 @@ contains
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         quality%model_name     = self%name
         quality%model_context  = self%context
-        quality%model_target   = self%target
         call apply_linear_boundary(quality, self)
     end subroutine classify
 
@@ -375,10 +359,9 @@ contains
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
-        write(funit,'(A)') 'model_version=7'
+        write(funit,'(A)') 'model_version=8'
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'context=', trim(self%context)
-        write(funit,'(A,A)') 'target=', trim(self%target)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
         write(funit,'(A)', advance='no') 'feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -443,7 +426,6 @@ contains
         write(funit,'(A)') '        type(cavg_quality_model_spec) :: spec'
         write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
         write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
-        write(funit,'(A,A)') '        spec%target                  = ', trim(fortran_quote(model%target))
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
         call write_weights_assignment(funit, model%weights)
         write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
@@ -516,8 +498,6 @@ contains
                     self%name = trim(val)
                 case('context')
                     self%context = lowercase(trim(val))
-                case('target')
-                    self%target = lowercase(trim(val))
                 case('feature_policy', 'feature_family_set')
                     self%feature_policy = trim(val)
                 case('feature_weights')
@@ -554,7 +534,6 @@ contains
         end do
         close(funit)
         call assert_valid_model_context(self%context)
-        call assert_valid_model_target(self%target)
         call self%normalize()
     end subroutine read_model
 
@@ -626,7 +605,6 @@ contains
         class(cavg_quality_model), intent(inout) :: self
         self%name                    = ''
         self%context                 = ''
-        self%target                  = ''
         self%feature_policy          = ''
         self%weights                 = 0.0
         self%boundary_margin         = 0.0
@@ -807,7 +785,6 @@ contains
         quality%used_threshold   = .false.
         quality%model_name       = model%name
         quality%model_context    = model%context
-        quality%model_target     = model%target
         quality%soft_decision    = 'hard_only'
         quality%soft_reason      = 'initial'
         call prepare_cached_decision(cache, model, decision)
@@ -1106,22 +1083,12 @@ contains
     subroutine assert_valid_model_context( context )
         character(len=*), intent(in) :: context
         select case(trim(context))
-            case('chunk', 'pool')
+            case('chunk', 'pool', 'learned')
                 return
             case default
                 THROW_HARD('invalid class-average quality model context: '//trim(context))
         end select
     end subroutine assert_valid_model_context
-
-    subroutine assert_valid_model_target( target )
-        character(len=*), intent(in) :: target
-        select case(trim(target))
-            case(CAVG_QUALITY_TARGET_DEFAULT, CAVG_QUALITY_TARGET_OVERFIT)
-                return
-            case default
-                THROW_HARD('invalid class-average quality model target: '//trim(target))
-        end select
-    end subroutine assert_valid_model_target
 
     subroutine otsu_score_threshold( scores, threshold, separation, ok )
         real,    intent(in)  :: scores(:)
