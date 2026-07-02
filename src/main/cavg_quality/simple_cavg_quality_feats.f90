@@ -40,9 +40,9 @@ public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: CAVG_RES_HARD_REJECT_A
 public :: POP_FRACTION_HARD_REJECT
-public :: CAVG_OVERFIT_SCORE_REJECT_THRESHOLD
-public :: CAVG_OVERFIT_SCORE_REJECT_WEIGHTS
-public :: cavg_overfit_score
+public :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN
+public :: CAVG_OVERFIT_SUPPORT_Z_MAX
+public :: cavg_overfit_hard_reject
 
 #include "simple_local_flags.inc"
 
@@ -76,27 +76,18 @@ integer, parameter :: I_NEG_LOCVAR_FG           = 13
 integer, parameter :: I_NEG_LOCVAR_BG           = 14
 integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 15
 
-! Optional hard-gate score for rejecting overfitted fuzzy-ball class averages.
-! This is deliberately not a learned model at application time. It is the
-! promoted four-feature linear score from overfit_default_v1, evaluated on the
-! dataset-normalized z-features produced after the standard quality hard gates.
+! Optional hard rule for rejecting overfitted fuzzy-ball class averages.
+! This is deliberately not a learned model at application time. The rule is
+! evaluated on dataset-normalized z-features produced after the standard
+! quality hard gates:
 !
-! The score intentionally excludes resolution, population, and centering:
-!   score =
-!       0.1930057 * z_log_center_edge_snr
-!     + 0.2138741 * z_cc_area_frac
-!     + 0.4490834 * z_presence
-!     + 0.1440368 * z_log_locvar_fg_bg_ratio
+!   z_neg_log_locvar_fg > 0.0  and  z_cc_area_frac < 0.5
 !
-! Classes with score < CAVG_OVERFIT_SCORE_REJECT_THRESHOLD are rejected when
-! overfit_score_reject=yes. Joe/microchunking can reuse this block directly:
-! compute the same normalized features, call cavg_overfit_score, and compare
-! against the threshold below.
-real, parameter :: CAVG_OVERFIT_SCORE_REJECT_THRESHOLD = 0.0
-real, parameter :: CAVG_OVERFIT_SCORE_REJECT_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    0.0000000, 0.0000000, 0.0000000, 0.0000000, 0.0000000, &
-    0.0000000, 0.1930057, 0.2138741, 0.4490834, 0.0000000, &
-    0.0000000, 0.0000000, 0.0000000, 0.0000000, 0.1440368 ]
+! This says the class has lower-than-dataset-median foreground local variance
+! and weak foreground support. Joe/microchunking can reuse
+! cavg_overfit_hard_reject directly.
+real, parameter :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN = 0.0
+real, parameter :: CAVG_OVERFIT_SUPPORT_Z_MAX   = 0.5
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -171,12 +162,13 @@ contains
         end do
     end subroutine write_cavg_quality_feature_inventory
 
-    function cavg_overfit_score( z_features ) result( score )
+    function cavg_overfit_hard_reject( z_features ) result( reject )
         real, intent(in) :: z_features(:)
-        real             :: score
-        if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_overfit_score: invalid feature count')
-        score = sum(z_features * CAVG_OVERFIT_SCORE_REJECT_WEIGHTS)
-    end function cavg_overfit_score
+        logical          :: reject
+        if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_overfit_hard_reject: invalid feature count')
+        reject = z_features(I_NEG_LOCVAR_FG) > CAVG_OVERFIT_LOWVAR_FG_Z_MIN .and. &
+                 z_features(I_CC_AREA_FRAC)  < CAVG_OVERFIT_SUPPORT_Z_MAX
+    end function cavg_overfit_hard_reject
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject, quality_target )
         class(image),         intent(inout) :: imgs(:)

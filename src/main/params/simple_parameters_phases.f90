@@ -809,15 +809,15 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported quality_target='//trim(self%quality_target)//'; expected quality|overfit')
         end select
-        select case(trim(self%overfit_score_reject))
+        select case(trim(self%overfit_hard_reject))
             case('yes','no')
             case DEFAULT
-                THROW_HARD('Unsupported overfit_score_reject='//trim(self%overfit_score_reject)//'; expected yes|no')
+                THROW_HARD('Unsupported overfit_hard_reject='//trim(self%overfit_hard_reject)//'; expected yes|no')
         end select
-        if( trim(self%overfit_score_reject) == 'yes' .and. &
+        if( trim(self%overfit_hard_reject) == 'yes' .and. &
             (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
              (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
-            THROW_HARD('overfit_score_reject=yes is supported only for project-backed apply/analyze/evaluate')
+            THROW_HARD('overfit_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')

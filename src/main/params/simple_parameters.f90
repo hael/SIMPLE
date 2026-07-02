@@ -115,7 +115,7 @@ type :: parameters
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)          :: overfit_score_reject='no' !< reject class averages with hard overfit score gate(yes|no){no}
+    character(len=3)          :: overfit_hard_reject='no' !< reject class averages with hard overfit rule(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}

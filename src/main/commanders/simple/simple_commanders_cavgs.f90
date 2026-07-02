@@ -2,8 +2,7 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
-    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_score_reject
-use simple_cavg_quality_feats,    only: CAVG_OVERFIT_SCORE_REJECT_THRESHOLD, CAVG_OVERFIT_SCORE_REJECT_WEIGHTS
+    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_OVERFIT_DEFAULT, &
     cavg_quality_model, write_cavg_quality_model_builtin_code
@@ -327,7 +326,7 @@ contains
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
-        logical                   :: use_overfit_score_reject
+        logical                   :: use_overfit_hard_reject
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -346,15 +345,15 @@ contains
             case default
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
-        use_overfit_score_reject = trim(params%overfit_score_reject) == 'yes'
-        if( use_overfit_score_reject )then
+        use_overfit_hard_reject = trim(params%overfit_hard_reject) == 'yes'
+        if( use_overfit_hard_reject )then
             if( quality_mode == QUALITY_MODE_LEARN .or. quality_mode == QUALITY_MODE_PROMOTE ) &
-                THROW_HARD('overfit_score_reject=yes cannot be combined with quality_mode=learn/promote')
+                THROW_HARD('overfit_hard_reject=yes cannot be combined with quality_mode=learn/promote')
             if( quality_mode == QUALITY_MODE_EVALUATE .and. cline%defined('filetab') ) &
-                THROW_HARD('overfit_score_reject=yes cannot evaluate analysis file tables')
+                THROW_HARD('overfit_hard_reject=yes cannot evaluate analysis file tables')
             if( cline%defined('infile') ) &
-                THROW_HARD('overfit_score_reject=yes uses a fixed hard score gate and does not accept infile')
-            call configure_overfit_score_report_model()
+                THROW_HARD('overfit_hard_reject=yes uses fixed hard rules and does not accept infile')
+            call configure_overfit_hard_report_model()
         else
             if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
                 if( trim(params%quality_target) == CAVG_QUALITY_TARGET_OVERFIT )then
@@ -417,8 +416,8 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        if( use_overfit_score_reject )then
-            call evaluate_cavg_quality_overfit_score_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        if( use_overfit_hard_reject )then
+            call evaluate_cavg_quality_overfit_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
         else
             call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
         endif
@@ -427,9 +426,8 @@ contains
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL TARGET   : ', trim(model%target)
-        if( use_overfit_score_reject ) &
-            write(logfhandle,'(A,F8.3,A,I6)') '>>> OVERFIT SCORE HARD GATE THRESHOLD / REJECTED : ', &
-                CAVG_OVERFIT_SCORE_REJECT_THRESHOLD, ' / ', count(quality%labels == 2)
+        if( use_overfit_hard_reject ) &
+            write(logfhandle,'(A,I6)') '>>> OVERFIT HARD RULE REJECTED : ', count(quality%labels == 2)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
@@ -473,15 +471,15 @@ contains
 
     contains
 
-        subroutine configure_overfit_score_report_model()
+        subroutine configure_overfit_hard_report_model()
             ! Metadata shim for existing report writers only. The
-            ! overfit_score_reject path does not call model%classify, does not
+            ! overfit_hard_reject path does not call model%classify, does not
             ! load infile, and does not use clustering/Otsu/model thresholds.
-            model%name                    = 'overfit_score_reject'
+            model%name                    = 'overfit_hard_reject'
             model%context                 = 'hard_gate'
             model%target                  = CAVG_QUALITY_TARGET_DEFAULT
-            model%feature_policy          = 'standard_gates_plus_overfit_score'
-            model%weights                 = CAVG_OVERFIT_SCORE_REJECT_WEIGHTS
+            model%feature_policy          = 'standard_gates_plus_overfit_rules'
+            model%weights                 = 0.0
             model%boundary_margin         = 0.0
             model%min_score_separation    = 0.0
             model%otsu_min_offset         = 0.0
@@ -492,7 +490,7 @@ contains
             model%use_otsu_window         = .false.
             model%use_cluster_rescue      = .false.
             model%enforce_min_accept_frac = .false.
-        end subroutine configure_overfit_score_report_model
+        end subroutine configure_overfit_hard_report_model
 
         subroutine annotate_project()
             integer :: icls, ncls3d

@@ -259,21 +259,17 @@ For `quality_target=overfit`, a class average is hard rejected only when either 
 
 Hard-rejected classes receive rejected state directly. Their normalized features are set to `-CLIP_Z`, their model scores are set to `-CLIP_Z`, and they remain visible in analysis and learning reports.
 
-### Optional Overfit Score Hard Gate
+### Optional Overfit Hard Gate
 
-`overfit_score_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard `quality_target=quality` hard gates first, computes normalized features over the remaining rows, and then rejects any remaining class whose fixed overfit score is below threshold. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, or minimum-acceptance model logic.
+`overfit_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard `quality_target=quality` hard gates first, computes normalized features over the remaining rows, and then applies a fixed overfit hard rule. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, or minimum-acceptance model logic.
 
-The score is defined in `simple_cavg_quality_feats.f90` as:
+The default hard reject is:
 
 ```text
-overfit_score =
-    0.1930057 * z_log_center_edge_snr
-  + 0.2138741 * z_cc_area_frac
-  + 0.4490834 * z_presence
-  + 0.1440368 * z_log_locvar_fg_bg_ratio
+(z_neg_log_locvar_fg > 0.0 AND z_cc_area_frac < 0.5)
 ```
 
-The default hard threshold is `0.0`; classes with `overfit_score < 0.0` are rejected. The score intentionally excludes resolution, population, and centering. Rows rejected by the overfit score gate are marked as hard rejects in the final decision, but their score and normalized features remain inspectable in the output tables because those values explain the hard-gate decision.
+On the FlipQR overfit-training table, the support/local-variance rule rejects 18/26 trainable overfit-labeled classes while retaining 31/33 trainable good classes. Rows rejected by the overfit hard rule are marked as hard rejects in the final decision, but their normalized features remain inspectable in the output tables because those values explain the hard-gate decision.
 
 ## Normalization
 
@@ -551,12 +547,12 @@ simple_exec prg=model_cavgs_rejection \
   mkdir=yes
 ```
 
-Apply only the standard hard gates plus the fixed overfit score hard gate:
+Apply only the standard hard gates plus the fixed overfit hard gate:
 
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=apply \
-  overfit_score_reject=yes \
+  overfit_hard_reject=yes \
   projfile=my_project.simple \
   mskdiam=180 \
   mkdir=yes

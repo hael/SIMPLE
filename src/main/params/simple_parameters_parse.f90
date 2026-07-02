@@ -131,7 +131,7 @@ contains
         call reg%add_char('oritype', self%oritype)
         call reg%add_char('outdir', self%outdir)
         call reg%add_char('outside', self%outside)
-        call reg%add_char('overfit_score_reject', self%overfit_score_reject)
+        call reg%add_char('overfit_hard_reject', self%overfit_hard_reject)
         call reg%add_char('pad', self%pad)
         call reg%add_char('partition', self%partition)
         call reg%add_char('pca_mode', self%pca_mode)
