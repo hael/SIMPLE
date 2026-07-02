@@ -1,4 +1,5 @@
 submodule(simple_abinitio_utils) simple_abinitio_controller
+use simple_math_ft, only: calc_lowpass_lim
 implicit none
 #include "simple_local_flags.inc"
 
@@ -40,6 +41,7 @@ real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
+integer,          parameter :: FIND_STAGE1             = 5    ! stage-1 Fourier shell index
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for abinitio3D_cavgs/cavgs_ini
 real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for abinitio3D_cavgs/cavgs_ini
 real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative default for independent multi-state abinitio3D
@@ -509,6 +511,12 @@ contains
         sample_frac  = real(params%nsample) / real(nptcls_eff)
         l_force_full = sample_frac > abinitio_full_sample_switch_frac()
     end function force_full_sampling_mode
+
+    module subroutine force_stage1_lowpass_limit( lpinfo_local )
+        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
+        if( size(lpinfo_local) < 1 ) return
+        lpinfo_local(1)%lp = calc_lowpass_lim(FIND_STAGE1, lpinfo_local(1)%box_crop, lpinfo_local(1)%smpd_crop)
+    end subroutine force_stage1_lowpass_limit
 
     real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
         type(refine3D_stage_cfg), intent(in) :: cfg

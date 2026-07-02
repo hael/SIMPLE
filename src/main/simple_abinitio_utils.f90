@@ -110,6 +110,10 @@ interface
         integer,           intent(in) :: istage
         logical,           intent(in) :: l_cavgs
     end subroutine set_cline_refine3D
+
+    module subroutine force_stage1_lowpass_limit( lpinfo_local )
+        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
+    end subroutine force_stage1_lowpass_limit
 end interface
 
 contains
@@ -307,6 +311,7 @@ contains
             if( allocated(lpinfo) ) deallocate(lpinfo)
             allocate(lpinfo(nstages))
             call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+            call force_stage1_lowpass_limit(lpinfo)
             return
         endif
         ! retrieve FRC info
@@ -332,6 +337,7 @@ contains
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
         endif
+        call force_stage1_lowpass_limit(lpinfo)
         ! cleanup
         call clsfrcs%kill
         contains
@@ -360,6 +366,7 @@ contains
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
         call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+        call force_stage1_lowpass_limit(lpinfo)
     end subroutine set_lplims_from_input
 
     integer function active_lp_schedule_nstages() result(nstages)
