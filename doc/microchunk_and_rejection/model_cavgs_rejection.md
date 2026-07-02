@@ -223,7 +223,7 @@ On the FlipQR overfit-training table, the support/local-variance rule rejects 18
 
 ### Optional Chunk Hard Gate
 
-`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed chunk-quality hard rule approximating the promoted `chunk100mics` model. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
+`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed chunk-quality hard rule approximating the promoted `chunk100mics` model. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, model cluster-rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
 
 The fixed chunk hard rule rejects a trainable class when any of these dataset-normalized gates fire:
 
@@ -233,6 +233,25 @@ z_neg_log_locvar_fg   < -2.073230
 z_cc_area_frac        < -2.398173
 z_log_center_edge_snr < -3.274551
 z_log_pop             < -3.513258
+```
+
+The stored-score gate has one guarded exception for MotAB-style top views: if `z_corr_frc_proxy` is the only failing gate, the class is rescued when independent image-derived evidence is strong enough. The rescue conditions are:
+
+```text
+z_corr_frc_proxy > -1.0
+AND z_log_center_edge_snr > 0.75
+AND z_cc_area_frac > -2.4
+AND z_log_pop > 0.45
+```
+
+or:
+
+```text
+z_corr_frc_proxy > -1.5
+AND z_neg_log_locvar_fg > 3.0
+AND z_cc_area_frac > 0.5
+AND z_log_pop > -1.0
+AND z_log_center_edge_snr > -1.5
 ```
 
 These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` as a compact hard-gate approximation to the learned `chunk100mics` operating point. Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.

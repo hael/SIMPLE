@@ -95,6 +95,10 @@ real, parameter :: CAVG_OVERFIT_SUPPORT_Z_MAX   = 0.5
 !   z_log_center_edge_snr < -3.274551
 !   z_log_pop             < -3.513258
 !
+! Stored class score can be misleading for MotAB-style top views, so it is
+! allowed to be the only failing gate only when independent image-derived
+! evidence strongly supports keeping the class average.
+!
 ! The thresholds were fit on
 ! /Users/elmlundho/cavgs_quality/chunk100mic_training_data as a compact
 ! hard-gate approximation to the promoted chunk100mics model.
@@ -103,6 +107,15 @@ real, parameter :: CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN   = -2.073230
 real, parameter :: CAVG_CHUNK_CC_AREA_FRAC_Z_MIN    = -2.398173
 real, parameter :: CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN = -3.274551
 real, parameter :: CAVG_CHUNK_LOG_POP_Z_MIN         = -3.513258
+real, parameter :: CAVG_CHUNK_RESCUE_CORR_CENTER_MIN      = -1.0
+real, parameter :: CAVG_CHUNK_RESCUE_CENTER_EDGE_SNR_MIN  =  0.75
+real, parameter :: CAVG_CHUNK_RESCUE_CC_AREA_FRAC_MIN     = -2.4
+real, parameter :: CAVG_CHUNK_RESCUE_LOG_POP_MIN          =  0.45
+real, parameter :: CAVG_CHUNK_RESCUE_CORR_COMPACT_MIN     = -1.5
+real, parameter :: CAVG_CHUNK_RESCUE_NEG_LOCVAR_FG_MIN    =  3.0
+real, parameter :: CAVG_CHUNK_RESCUE_CC_AREA_COMPACT_MIN  =  0.5
+real, parameter :: CAVG_CHUNK_RESCUE_LOG_POP_COMPACT_MIN  = -1.0
+real, parameter :: CAVG_CHUNK_RESCUE_CENTER_EDGE_LOOSE_MIN = -1.5
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -182,13 +195,38 @@ contains
     function cavg_chunk_hard_reject( z_features ) result( reject )
         real, intent(in) :: z_features(:)
         logical          :: reject
+        logical          :: bad_corr, bad_neg_locvar_fg, bad_cc_area_frac
+        logical          :: bad_center_edge_snr, bad_log_pop
         if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_chunk_hard_reject: invalid feature count')
-        reject = z_features(I_CORR_FRC)        < CAVG_CHUNK_CORR_FRC_Z_MIN        .or. &
-                 z_features(I_NEG_LOCVAR_FG)   < CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN   .or. &
-                 z_features(I_CC_AREA_FRAC)    < CAVG_CHUNK_CC_AREA_FRAC_Z_MIN    .or. &
-                 z_features(I_CENTER_EDGE_SNR) < CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN .or. &
-                 z_features(I_LOG_POP)         < CAVG_CHUNK_LOG_POP_Z_MIN
+        bad_corr            = z_features(I_CORR_FRC)        < CAVG_CHUNK_CORR_FRC_Z_MIN
+        bad_neg_locvar_fg   = z_features(I_NEG_LOCVAR_FG)   < CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN
+        bad_cc_area_frac    = z_features(I_CC_AREA_FRAC)    < CAVG_CHUNK_CC_AREA_FRAC_Z_MIN
+        bad_center_edge_snr = z_features(I_CENTER_EDGE_SNR) < CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN
+        bad_log_pop         = z_features(I_LOG_POP)         < CAVG_CHUNK_LOG_POP_Z_MIN
+        reject = bad_corr .or. bad_neg_locvar_fg .or. bad_cc_area_frac .or. &
+                 bad_center_edge_snr .or. bad_log_pop
+        if( reject .and. bad_corr .and. .not.(bad_neg_locvar_fg .or. bad_cc_area_frac .or. &
+            bad_center_edge_snr .or. bad_log_pop) )then
+            reject = .not. cavg_chunk_score_only_rescue(z_features)
+        endif
     end function cavg_chunk_hard_reject
+
+    function cavg_chunk_score_only_rescue( z_features ) result( rescue )
+        real, intent(in) :: z_features(:)
+        logical          :: rescue, center_signal_rescue, compact_support_rescue
+        center_signal_rescue = &
+            z_features(I_CORR_FRC)        > CAVG_CHUNK_RESCUE_CORR_CENTER_MIN     .and. &
+            z_features(I_CENTER_EDGE_SNR) > CAVG_CHUNK_RESCUE_CENTER_EDGE_SNR_MIN .and. &
+            z_features(I_CC_AREA_FRAC)    > CAVG_CHUNK_RESCUE_CC_AREA_FRAC_MIN    .and. &
+            z_features(I_LOG_POP)         > CAVG_CHUNK_RESCUE_LOG_POP_MIN
+        compact_support_rescue = &
+            z_features(I_CORR_FRC)        > CAVG_CHUNK_RESCUE_CORR_COMPACT_MIN      .and. &
+            z_features(I_NEG_LOCVAR_FG)   > CAVG_CHUNK_RESCUE_NEG_LOCVAR_FG_MIN     .and. &
+            z_features(I_CC_AREA_FRAC)    > CAVG_CHUNK_RESCUE_CC_AREA_COMPACT_MIN   .and. &
+            z_features(I_LOG_POP)         > CAVG_CHUNK_RESCUE_LOG_POP_COMPACT_MIN   .and. &
+            z_features(I_CENTER_EDGE_SNR) > CAVG_CHUNK_RESCUE_CENTER_EDGE_LOOSE_MIN
+        rescue = center_signal_rescue .or. compact_support_rescue
+    end function cavg_chunk_score_only_rescue
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
         class(image),         intent(inout) :: imgs(:)
