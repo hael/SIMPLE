@@ -530,7 +530,7 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
-    real    :: objfun_den_w=0.5    !< denoised correlation weight in hybrid objective{0.5}
+    real    :: objfun_den_w=0.3    !< denoised correlation weight in hybrid objective{0.3}
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
