@@ -60,7 +60,6 @@ type :: cavg_quality_result
     integer              :: good_label       = 0
     logical              :: used_threshold   = .false.
     character(len=64)    :: model_name       = ''
-    character(len=32)    :: model_context    = ''
     character(len=32)    :: soft_decision    = ''
     character(len=64)    :: soft_reason      = ''
 contains
@@ -121,7 +120,6 @@ contains
         quality%good_label       = 0
         quality%used_threshold   = .false.
         quality%model_name       = ''
-        quality%model_context    = ''
         quality%soft_decision    = ''
         quality%soft_reason      = ''
     end subroutine reset_cavg_quality_result

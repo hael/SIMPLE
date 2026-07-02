@@ -70,7 +70,6 @@ contains
         quality%good_label       = 1
         quality%used_threshold   = .false.
         quality%model_name       = 'overfit_hard_reject'
-        quality%model_context    = 'hard_gate'
         quality%soft_decision    = 'hard_overfit_rules'
         quality%soft_reason      = 'standard_gates_plus_overfit_rules'
         do icls = 1, ncls
@@ -125,7 +124,6 @@ contains
         write(funit,'(A)') '# model_cavgs_rejection_analysis_version=7'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
-        write(funit,'(A,A)') '# model_context=', trim(model%context)
         write(funit,'(A,I0)') '# n_classes=', ncls
         write(funit,'(A,I0)') '# manual_selected=', ngood
         write(funit,'(A,I0)') '# manual_rejected=', nbad
@@ -236,7 +234,7 @@ contains
         integer, intent(in) :: funit
         integer :: ifeat
         write(funit,'(A)', advance='no') &
-            'dataset_id,model_context,model_name,class,state,hard_reject,quality_cluster,quality_score,'//&
+            'dataset_id,model_name,class,state,hard_reject,quality_cluster,quality_score,'//&
             'manual_state,auto_matches_manual'
         do ifeat = 1, CAVG_QUALITY_NFEATS
             write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
@@ -261,8 +259,8 @@ contains
         type(cavg_quality_model),  intent(in) :: model
         type(cavg_quality_result), intent(in) :: quality
         integer :: ifeat
-        write(funit,'(A,A,A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
-            trim(dataset_id), ',', trim(model%context), ',', trim(model%name), ',', &
+        write(funit,'(A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
+            trim(dataset_id), ',', trim(model%name), ',', &
             icls, ',', quality%states(icls), ',', &
             quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_state, ',', &
             auto_match

@@ -200,8 +200,8 @@ contains
         class(cavg_quality_model),     intent(inout) :: self
         type(cavg_quality_model_spec), intent(in)    :: spec
         self%name                    = trim(spec%name)
-        self%context                 = lowercase(trim(spec%context))
-        call assert_valid_model_context(self%context)
+        ! Context is legacy metadata only; model behavior is name/spec driven.
+        self%context                 = ''
         self%feature_policy          = trim(spec%feature_policy)
         self%weights                 = spec%weights
         self%boundary_margin         = spec%boundary_margin
@@ -221,7 +221,7 @@ contains
         class(cavg_quality_model), intent(in) :: self
         type(cavg_quality_model_spec) :: spec
         spec%name                    = self%name
-        spec%context                 = self%context
+        spec%context                 = ''
         spec%feature_policy          = self%feature_policy
         spec%weights                 = self%weights
         spec%boundary_margin         = self%boundary_margin
@@ -349,7 +349,6 @@ contains
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         quality%model_name     = self%name
-        quality%model_context  = self%context
         call apply_linear_boundary(quality, self)
     end subroutine classify
 
@@ -361,7 +360,6 @@ contains
         write(funit,'(A)') '# model_cavgs_rejection model'
         write(funit,'(A)') 'model_version=8'
         write(funit,'(A,A)') 'name=', trim(self%name)
-        write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
         write(funit,'(A)', advance='no') 'feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -425,7 +423,6 @@ contains
         write(funit,'(A,A,A)') '    function ', trim(func_name), '() result( spec )'
         write(funit,'(A)') '        type(cavg_quality_model_spec) :: spec'
         write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
-        write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
         call write_weights_assignment(funit, model%weights)
         write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
@@ -497,7 +494,8 @@ contains
                 case('name')
                     self%name = trim(val)
                 case('context')
-                    self%context = lowercase(trim(val))
+                    ! Legacy key for backward compatibility with older model files.
+                    cycle
                 case('feature_policy', 'feature_family_set')
                     self%feature_policy = trim(val)
                 case('feature_weights')
@@ -533,7 +531,6 @@ contains
             end select
         end do
         close(funit)
-        call assert_valid_model_context(self%context)
         call self%normalize()
     end subroutine read_model
 
@@ -784,7 +781,6 @@ contains
         quality%good_label       = 0
         quality%used_threshold   = .false.
         quality%model_name       = model%name
-        quality%model_context    = model%context
         quality%soft_decision    = 'hard_only'
         quality%soft_reason      = 'initial'
         call prepare_cached_decision(cache, model, decision)
@@ -1079,16 +1075,6 @@ contains
             bad_label  = 1
         endif
     end subroutine choose_tied_good_label
-
-    subroutine assert_valid_model_context( context )
-        character(len=*), intent(in) :: context
-        select case(trim(context))
-            case('chunk', 'pool', 'learned')
-                return
-            case default
-                THROW_HARD('invalid class-average quality model context: '//trim(context))
-        end select
-    end subroutine assert_valid_model_context
 
     subroutine otsu_score_threshold( scores, threshold, separation, ok )
         real,    intent(in)  :: scores(:)

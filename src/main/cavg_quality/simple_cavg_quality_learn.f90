@@ -173,7 +173,6 @@ contains
         type(cavg_quality_model)      :: defaults
         spec = defaults%get_spec()
         spec%name                    = 'abinitio_learn_base'
-        spec%context                 = 'learned'
         spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = 0.0
         spec%boundary_margin         = 0.0
@@ -805,7 +804,6 @@ contains
         call collect_learn_diagnostics(dsets, learned_model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection learn report'
-        write(funit,'(A,A)') 'context=', trim(learned_model%context)
         write(funit,'(A,A)') 'foundation_model=', trim(base_spec%name)
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
         write(funit,'(A,F10.5)') 'macro_learn_score=', best_score
@@ -868,7 +866,6 @@ contains
         call collect_learn_diagnostics(dsets, model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection evaluate report'
-        write(funit,'(A,A)') 'context=', trim(model%context)
         write(funit,'(A,A)') 'model=', trim(model%name)
         write(funit,'(A,F10.5)') 'macro_evaluate_score=', eval_score
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)

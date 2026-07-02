@@ -422,7 +422,6 @@ contains
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
-        write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
         if( use_overfit_hard_reject ) &
             write(logfhandle,'(A,I6)') '>>> OVERFIT HARD RULE REJECTED : ', count(quality%labels == 2)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
