@@ -178,6 +178,7 @@ type :: parameters
     type(string)              :: dir_exec             !< name of execution directory
     type(string)              :: dir_meta             !< grab xml files from here
     type(string)              :: dir_movies           !< grab mrc mrcs files from here
+    type(string)              :: dir_preprocess       !< grab preprocessed files from here
     type(string)              :: dir_prev             !< grab previous projects for streaming
     type(string)              :: dir_refine           !< refinement directory
     type(string)              :: dir_reject           !< move rejected files to here{rejected}

@@ -1,6 +1,7 @@
 !@descr: task 00 in the stream pipeline: master controller used when running from GUI
 module simple_stream_p00_master
 use unix
+use simple_syslib,                         only: symlink
 use simple_stream_api
 use simple_stream_mq_defs             
 use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
@@ -160,18 +161,24 @@ contains
         type(json_value),              pointer     :: json_child_ptr
         logical                                    :: l_terminate=.false., l_last_loop=.false., l_found, l_test=.false., l_terminate_loop=.false.
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
-        logical                                    :: l_existing_pickrefs, l_existing_box
+        logical                                    :: l_existing_pickrefs, l_existing_box, l_existing_preprocess
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
         ! check cline arguments 
-        l_existing_pickrefs = .false.
-        l_existing_box      = .false.
+        l_existing_pickrefs   = .false.
+        l_existing_box        = .false.
+        l_existing_preprocess = .false.
         if( cline%defined('pickrefs') )    l_existing_pickrefs = .true.
         if( cline%defined('box_extract') ) l_existing_box      = .true.
         ! init params
         call cline%printline()
         call params%new(cline)
         call simple_getcwd(cwd)
+        ! check for existing preprocessing directory
+        if( params%dir_preprocess%strlen() > 0 ) then
+            if( .not.dir_exists(params%dir_preprocess)) THROW_HARD('Preprocessing directory '//params%dir_preprocess%to_char()//' does not exist.')
+            l_existing_preprocess = .true.
+        endif
         ! init assembler and http handler
         call post%new(params%niceserver)
         call assembler%new(params%niceprocid)
@@ -211,7 +218,13 @@ contains
                                 arg           = c_null_ptr)
         if( stat /= 0 ) THROW_HARD('failed to create metadata listener thread')
         ! fork stream processes
-        call fork_preprocess%start(       name=string(PREPROC_JOB_NAME),   logfile=string(PREPROC_JOB_NAME//'.log'),   cline=cline_preprocess,       restart=.false.)
+        if( l_existing_preprocess ) then
+            rc = symlink(params%dir_preprocess%to_char()//achar(0), PREPROC_JOB_NAME)
+            if( rc /= 0 ) THROW_HARD('failed to create symlink for existing preprocessing directory')
+            call fork_preprocess%skip()
+        else
+            call fork_preprocess%start(name=string(PREPROC_JOB_NAME), logfile=string(PREPROC_JOB_NAME//'.log'), cline=cline_preprocess, restart=.false.)
+        endif
         call fork_assign_optics%start(    name=string(OPTICS_JOB_NAME),    logfile=string(OPTICS_JOB_NAME//'.log'),    cline=cline_assign_optics,    restart=.false.)
         call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.false.)
         call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
@@ -222,7 +235,9 @@ contains
             call fork_opening2D%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D, restart=.false.)
         endif
         ! test stream processes started successfully
-        if( fork_preprocess%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
+        if( .not. l_existing_preprocess ) then
+            if( fork_preprocess%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork preprocessing'    )
+        endif
         if( fork_assign_optics%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork assign optics'    )
         if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
         if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )

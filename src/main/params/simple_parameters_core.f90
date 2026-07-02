@@ -20,6 +20,7 @@ contains
         self%dir_exec=''          !< name of execution directory
         self%dir_meta=''          !< grab xml files from here
         self%dir_movies=''        !< grab mrc mrcs files from here
+        self%dir_preprocess=''    !< grab preprocessed files from here
         self%dir_prev=''          !< grab previous projects for streaming
         self%dir_refine=''        !< refinement directory
         self%dir_reject='rejected'!< move rejected files to here{rejected}

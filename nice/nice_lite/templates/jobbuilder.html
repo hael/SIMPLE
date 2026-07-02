@@ -92,8 +92,9 @@
 
                     <div class="flex-1 grid grid-cols-[auto_2fr] gap-x-6 gap-y-3 items-center content-baseline mx-4">
                         {% for input in stream_user_inputs %}
+                            {% with keytype=input.keytype|cut:"hidden_" hidden=input.keytype|slice:":7" %}
 
-                            {% if input.keytype == "hidden" %}
+                            {% if input.keytype == "hidden" or hidden == "hidden_" %}
                                 {# Hidden: submitted but not shown. Value falls back to descr_placeholder. #}
                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
                                     for="field_{{ input.key }}">{{ input.descr_short }}</label>
@@ -104,26 +105,26 @@
                                 </div>
                             {% else %}
                                 {# Visible label aligned with its control #}
-                                <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" 
                                     for="field_{{ input.key }}">{{ input.descr_short }}</label>
 
                                 <div class="relative flex items-center">
-
-                                    {% if input.keytype == "int" %}
+ 
+                                    {% if keytype == "int" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="1"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
                                             class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
 
-                                    {% elif input.keytype == "float" %}
+                                    {% elif keytype == "float" %}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             type="number" min="0" step="0.0001"
                                             {% if input.required %}required{% endif %}
                                             {% if "value" in input %}value="{{ input.value }}"{% elif "descr_placeholder" in input %}value="{{ input.descr_placeholder }}"{% endif %}
                                             class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
 
-                                    {% elif input.keytype == "multi" %}
+                                    {% elif keytype == "multi" %}
                                         <select id="field_{{ input.key }}" name="{{ input.key }}"
                                                 {% if input.required %}required{% endif %}
                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
@@ -135,7 +136,7 @@
                                             {% endfor %}
                                         </select>
 
-                                    {% elif input.keytype == "dir" %}
+                                    {% elif keytype == "dir" %}
                                         {# Directory picker: text input + folder icon + full-screen iframe browser #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
@@ -149,7 +150,7 @@
                                             </svg>
                                         </button>
 
-                                    {% elif input.keytype == "file" %}
+                                    {% elif keytype == "file" %}
                                         {# File picker: same pattern, file icon, file browser URL #}
                                         <input id="field_{{ input.key }}" name="{{ input.key }}"
                                             {% if input.required %}required{% endif %}
@@ -173,6 +174,7 @@
 
                                 </div>
                             {% endif %}
+                            {% endwith %}
 
                         {% endfor %}
                     </div>

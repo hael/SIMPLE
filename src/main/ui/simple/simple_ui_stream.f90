@@ -155,10 +155,11 @@ contains
         call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '')
         call master%add_input(UI_PARM, 'kv',             'int',    'Acceleration voltage (kV)',   'Acceleration voltage (kV)',   '300',                    .true.,  '')
         call master%add_input(UI_PARM, 'smpd',           'float',  'Pixel size (A)',              'Pixel size (A)',              '',                       .true.,  '')
-        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '')
+        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden_float', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '')
         call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '')
         call master%add_input(UI_PARM, 'pickrefs',       'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')
-        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')        
+        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')
+        call master%add_input(UI_PARM, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '')     
         ! alternative inputs
         ! search controls
         ! filter controls

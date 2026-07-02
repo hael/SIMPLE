@@ -276,6 +276,7 @@ contains
         call reg%add_dir('dir_box', self%dir_box)
         call reg%add_dir('dir_meta', self%dir_meta)
         call reg%add_dir('dir_movies', self%dir_movies)
+        call reg%add_dir('dir_preprocess', self%dir_preprocess)
         call reg%add_dir('dir_prev', self%dir_prev)
         call reg%add_dir('dir_refine', self%dir_refine)
         call reg%add_dir('dir_reject', self%dir_reject)
