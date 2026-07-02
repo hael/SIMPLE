@@ -22,7 +22,7 @@ from ..models                    import ProjectModel
 # ------------------------------------------------------------------
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_file_browser(request, type, path=None):
     """
     Render the file browser page.

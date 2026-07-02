@@ -88,7 +88,7 @@ def _collect_programs(batchui, executable_name):
 # Views
 # ------------------------------------------------------------------
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_job_builder(request):
     """Render stream job-builder page for a new job or from an existing stream job."""
     template = "jobbuilder.html"

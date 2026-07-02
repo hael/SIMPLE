@@ -26,7 +26,7 @@ from ..helpers                   import clear_checksum_cookies, get_string, prin
 # ------------------------------------------------------------------
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_create_project(request):
     """
@@ -73,7 +73,7 @@ def view_create_project(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_new_project(request, mode):
     """Render the create-new-project page."""
     template = "newproject.html"

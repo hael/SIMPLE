@@ -70,7 +70,7 @@ def _normalize_latest_cls2d(jobs):
 # Views
 # ------------------------------------------------------------------
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_workspace(request):
     """Render parent workspace payload, or return 204 when unchanged."""
     workspace_id = get_workspace_id(request)
@@ -118,7 +118,7 @@ def view_workspace(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_workspace_jobs(request):
     """Render jobs iframe payload, or return 204 when unchanged."""
     workspace_id = get_workspace_id(request)
@@ -143,7 +143,7 @@ def view_workspace_jobs(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_delete_workspace(request):
     """Delete a workspace and redirect back to workspace landing page."""
     deleteworkspaceid = get_integer(request.POST, "delete_workspace_id")
@@ -162,7 +162,7 @@ def view_delete_workspace(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_update_workspace_name(request):
     """Rename selected workspace and redirect back to workspace landing page."""
     workspaceid = get_workspace_id(request)
@@ -182,7 +182,7 @@ def view_update_workspace_name(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_update_workspace_description(request):
     """Update selected workspace description and redirect back to workspace page."""
     workspaceid = get_workspace_id(request)

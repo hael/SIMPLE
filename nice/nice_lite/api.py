@@ -245,7 +245,7 @@ def index_classic(request):
     return JsonResponse(response)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_GET
 @cache_control(max_age=300, must_revalidate=True, no_transform=True)
 def image(request, src):

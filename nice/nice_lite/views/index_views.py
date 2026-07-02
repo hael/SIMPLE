@@ -41,7 +41,7 @@ def view_user_login(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_user_logout(request):
     """Log out the authenticated user and redirect to login."""
@@ -53,7 +53,7 @@ def view_user_logout(request):
 # Index View
 # ------------------------------------------------------------------
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_index(request):
     """Render the top-level stream workspace page."""
     template = "index.html"

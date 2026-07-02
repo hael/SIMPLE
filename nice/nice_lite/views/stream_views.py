@@ -156,7 +156,7 @@ def _is_safe_filename(filename):
 # ------------------------------------------------------------------
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_create_stream(request):
     """Starts a new stream and refreshes page by redirecting to stream view."""
@@ -178,7 +178,7 @@ def view_stream_create_stream(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_terminate_stream(request):
     """Terminates stream and refreshes page by redirecting to workspace view."""
@@ -190,7 +190,7 @@ def view_stream_terminate_stream(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_terminate_stream_process(request):
     """Terminate stream process and refresh panel by redirect."""
@@ -215,7 +215,7 @@ def view_stream_terminate_stream_process(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_restart_stream_process(request):
     """Restart stream process and refresh panel by redirect."""
@@ -240,7 +240,7 @@ def view_stream_restart_stream_process(request):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_delete_stream(request):
     """Deletes stream and refreshes page by redirecting to workspace view."""
@@ -257,7 +257,7 @@ def view_stream_delete_stream(request):
 # ------------------------------------------------------------------
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream(request, jobid):
     """Returns stream view."""
     template = "nice_stream/streamview.html"
@@ -281,7 +281,7 @@ def view_stream(request, jobid):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_movies(request):
     """Returns movies panel in stream view."""
     template = "nice_stream/panelmovies.html"
@@ -298,7 +298,7 @@ def view_stream_movies(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_preprocess(request):
     """Returns preprocess panel in stream view."""
     template = "nice_stream/panelpreprocess.html"
@@ -318,7 +318,7 @@ def view_stream_preprocess(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_preprocess_zoom(request):
     """Returns preprocess zoom panel in stream view."""
     template = "nice_stream/zoompreprocess.html"
@@ -353,7 +353,7 @@ def view_stream_preprocess_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_optics(request):
     """Returns optics panel in stream view."""
     template = "nice_stream/paneloptics.html"
@@ -373,7 +373,7 @@ def view_stream_optics(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_optics_zoom(request):
     """Returns optics zoom panel in stream view."""
     template = "nice_stream/zoomoptics.html"
@@ -408,7 +408,7 @@ def view_stream_optics_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_initial_pick(request):
     """Returns initial picking panel in stream view."""
     template = "nice_stream/panelinitialpick.html"
@@ -428,7 +428,7 @@ def view_stream_initial_pick(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_initial_pick_zoom(request):
     """Returns initial picking zoom panel in stream view."""
     template = "nice_stream/zoominitialpick.html"
@@ -463,7 +463,7 @@ def view_stream_initial_pick_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_generate_pickrefs(request):
     """Returns reference generation panel in stream view."""
     template = "nice_stream/panelgeneratepickrefs.html"
@@ -487,7 +487,7 @@ def view_stream_generate_pickrefs(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_generate_pickrefs_zoom(request):
     """Returns reference generation zoom panel in stream view."""
     template = "nice_stream/zoomgeneratepickrefs.html"
@@ -541,7 +541,7 @@ def view_stream_generate_pickrefs_zoom(request):
 
     return _render_if_changed(request, template, context, checksum_cookie)
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_reference_picking(request):
     """Returns reference picking panel in stream view."""
     template = "nice_stream/panelreferencepicking.html"
@@ -559,7 +559,7 @@ def view_stream_reference_picking(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_reference_picking_zoom(request):
     """Returns reference picking zoom panel in stream view."""
     template = "nice_stream/zoomreferencepicking.html"
@@ -592,7 +592,7 @@ def view_stream_reference_picking_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_sieve_particles(request):
     """Returns particle sieving panel in stream view."""
     template = "nice_stream/panelsieveparticles.html"
@@ -626,7 +626,7 @@ def view_stream_sieve_particles(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_sieve_particles_zoom(request):
     """Returns particle sieving zoom panel in stream view."""
     template = "nice_stream/zoomsieveparticles.html"
@@ -690,7 +690,7 @@ def view_stream_sieve_particles_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_classification_2D(request):
     """Returns 2D classification panel in stream view."""
     template = "nice_stream/panelclassification2D.html"
@@ -720,7 +720,7 @@ def view_stream_classification_2D(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_classification_2D_zoom(request):
     """Returns 2D classification zoom panel in stream view."""
     template = "nice_stream/zoomclassification2D.html"
@@ -779,7 +779,7 @@ def view_stream_classification_2D_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_particle_sets(request):
     """Returns particle sets panel in stream view."""
     template = "nice_stream/panelparticlesets.html"
@@ -810,13 +810,13 @@ def view_stream_particle_sets(request):
 # ------------------------------------------------------------------
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 def view_stream_logs(request, jobid, log, error):
     """Fallback logs endpoint that routes back to the stream view."""
     return redirect("nice_lite:view_stream", jobid=jobid)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_update_description(request):
     """Update description for given stream job id."""
@@ -829,7 +829,7 @@ def view_stream_update_description(request):
     return HttpResponseNoContent()
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_update_parameters(request):
     """Update stream process parameters."""
@@ -844,7 +844,7 @@ def view_stream_update_parameters(request):
     return HttpResponseNoContent()
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_link_particle_set(request, jobid, setid, filename, type):
     """Tie stream output particle sets to classic jobs."""
@@ -900,7 +900,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
     return response
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_select_pickrefs(request):
     """Store the picking-reference selection and redirect to the stream view."""
@@ -919,7 +919,7 @@ def view_stream_select_pickrefs(request):
     return redirect("nice_lite:view_stream", jobid=jobid)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_update_classification_2D_mskdiam(request):
     """Validate and store mask diameter for 2D classification."""
@@ -939,7 +939,7 @@ def view_stream_update_classification_2D_mskdiam(request):
     return HttpResponseRedirect(reverse("nice_lite:view_stream_classification_2D", query={"selected_job_id": jobid}))
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_snapshot_classification_2D(request):
     """Record a 2D-classification snapshot particle set and redirect to stream view."""
@@ -964,7 +964,7 @@ def view_stream_snapshot_classification_2D(request):
     return redirect("nice_lite:view_stream", jobid=jobid)
 
 
-@login_required(login_url="/login/")
+@login_required(login_url="/login")
 @require_POST
 def view_stream_select_classification_2D(request):
     """Record final 2D-classification particle selection and redirect to stream view."""
