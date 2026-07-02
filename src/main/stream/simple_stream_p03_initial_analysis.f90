@@ -48,7 +48,7 @@ use simple_stream_cluster2D_microchunked, only: stream_cluster2D_microchunked
 use simple_mini_stream_utils,     only: segdiampick_mics_multi
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
-use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT
+use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
@@ -799,7 +799,7 @@ contains
                 imgfiles_inout(1) = cavgsstk_local
                 cavg_imgs_local = read_cavgs_into_imgarr(spproj_inout)
                 smpd_stk_out    = spproj_inout%get_smpd()
-                call model_local%init_preset(CAVG_QUALITY_MODEL_POOL_DEFAULT)
+                call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, model_local)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)

@@ -34,7 +34,7 @@ The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`.
 
 ## Evidence Comparison
 
-The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk_default_v2` preset uses the `microchunk_plus_score` policy: microchunk plus overfit-family features, with `corr_frc_proxy` added.
+The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score_signal` policy: microchunk plus overfit-family features, stored-score evidence, and compact signal evidence.
 
 | Evidence | Microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
 | --- | --- | --- | --- |
@@ -76,7 +76,7 @@ Microchunk tier thresholds:
 | Reference chunk | `0.0025` | `-2.0` | `-2.0` |
 | Match chunk | `0.0025` | `-2.0` | `-2.0` |
 
-`model_cavgs_rejection` uses a fixed population hard-reject fraction of `0.0035` for the current feature extractor, independent of model context.
+`model_cavgs_rejection` uses a fixed population hard-reject fraction of `0.0035` for the current feature extractor, independent of the selected model preset.
 
 ## Learning Model
 
@@ -125,24 +125,19 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and `evaluate`, the command uses `chunk_default_v2` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates.
+For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates.
 
 ## Model Selection
 
-`quality_model` selects a built-in preset. The default is `chunk_default_v2`. The available built-ins are:
+`quality_model` selects a built-in preset. The default and only hardcoded built-in is:
 
-- `chunk_default_v2`: default chunk/stream-style model.
-- `chunk_lp4`: learned chunk model trained from the `chunk_new_train2` lp4-style class-average selection references, including the `*_2*` additions.
-- `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
-- `microchunk_p1`: pass-1-oriented chunk model using the `microchunk_plus_score_signal` feature policy.
-- `microchunk_p2`: pass-2-oriented compatibility chunk model using the compact `microchunk_plus_score_signal` feature policy.
+- `chunk100mics`: default chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
 Model files use `model_version=8` and explicit key-value fields:
 
 - `name`
-- `context`
 - `feature_policy`
 - `feature_weights`
 - `boundary_margin`
@@ -232,97 +227,35 @@ On the FlipQR overfit-training table, the support/local-variance rule rejects 18
 
 ## Built-In Presets
 
-`chunk_default_v2` has context `chunk`, feature policy `microchunk_plus_score`, cluster rescue disabled, and minimum accepted fraction disabled.
+`chunk100mics` uses feature policy `microchunk_plus_score_signal`, low-separation Otsu disabled, Otsu windowing enabled, cluster rescue disabled, and minimum accepted fraction enforcement enabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
 
 ```text
-log_pop             1.355581E-01
-neg_log_res         1.808395E-01
-centered            4.942806E-02
-log_locvar_fg       1.635655E-01
-log_locvar_bg       1.726983E-01
-corr_frc_proxy      2.108072E-01
-log_center_edge_snr 0.000000E+00
-cc_area_frac        8.710331E-02
-presence            0.000000E+00
+log_pop             9.978756E-02
+neg_log_res         1.167914E-01
+centered            3.642511E-02
+log_locvar_fg       1.329548E-01
+log_locvar_bg       1.402481E-01
+corr_frc_proxy      1.610645E-01
+log_center_edge_snr 6.630784E-02
+cc_area_frac        6.981037E-02
+presence            1.294257E-01
 neg_log_locvar_fg   0.000000E+00
 neg_log_locvar_bg   0.000000E+00
-log_locvar_fg_bg_ratio 0.000000E+00
+log_locvar_fg_bg_ratio 4.718454E-02
 ```
 
 ```text
-boundary_margin         0.15
-min_score_separation    0.15
-otsu_min_offset         0.35
-otsu_max_offset         0.50
-cluster_rescue_margin   0.20
-min_accept_frac         0.00
-use_lowsep_otsu         true
-use_otsu_window         true
-use_cluster_rescue      false
-enforce_min_accept_frac false
-```
-
-`chunk_lp4` has context `chunk`, feature policy `microchunk_plus_signal`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the `chunk_new_train2` lp4-style chunk references, including the `*_2*` additions.
-
-```text
-log_pop             1.256393E-01
-neg_log_res         1.026731E-01
-centered            4.134843E-02
-log_locvar_fg       1.367731E-01
-log_locvar_bg       1.996999E-01
-corr_frc_proxy      0.000000E+00
-log_center_edge_snr 2.763570E-02
-cc_area_frac        1.404427E-01
-presence            2.257877E-01
-neg_log_locvar_fg   0.000000E+00
-neg_log_locvar_bg   0.000000E+00
-log_locvar_fg_bg_ratio 0.000000E+00
-```
-
-```text
-boundary_margin        -0.15
-min_score_separation    0.15
-otsu_min_offset         0.35
+boundary_margin         0.30
+min_score_separation    0.05
+otsu_min_offset         0.05
 otsu_max_offset         0.40
 cluster_rescue_margin   0.20
-min_accept_frac         0.00
-use_lowsep_otsu         true
+min_accept_frac         0.50
+use_lowsep_otsu         false
 use_otsu_window         true
 use_cluster_rescue      false
-enforce_min_accept_frac false
-```
-
-`pool_default_v2` has context `pool`, feature policy `microchunk_plus_score_signal`, cluster rescue enabled, Otsu windowing disabled, and minimum accepted fraction enforcement enabled.
-
-```text
-log_pop             1.826303E-01
-neg_log_res         2.379928E-01
-centered            0.000000E+00
-log_locvar_fg       7.328372E-02
-log_locvar_bg       6.126274E-02
-corr_frc_proxy      1.257789E-01
-log_center_edge_snr 1.572098E-01
-cc_area_frac        2.139509E-02
-presence            1.404466E-01
-neg_log_locvar_fg   0.000000E+00
-neg_log_locvar_bg   0.000000E+00
-log_locvar_fg_bg_ratio 0.000000E+00
-```
-
-```text
-boundary_margin         1.70
-min_score_separation    0.20
-otsu_min_offset         0.15
-otsu_max_offset         0.50
-cluster_rescue_margin   0.20
-min_accept_frac         0.95
-use_lowsep_otsu         true
-use_otsu_window         false
-use_cluster_rescue      true
 enforce_min_accept_frac true
 ```
-
-`microchunk_p1` and `microchunk_p2` are chunk-context built-ins intended for stage-specific validation and comparison against streaming microchunk behavior. They do not replace the live `simple_microchunked2D` rejector in this tree; the stream path still calls `simple_cluster2D_rejector`.
 
 All model weights are clipped to non-negative values and normalized to sum to one when a model is initialized or read.
 
@@ -415,7 +348,7 @@ Learn mode searches:
 - `enforce_min_accept_frac`: `false, true`;
 - `min_accept_frac`: `0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90, 0.925, 0.95, 0.975, 1.00` when `enforce_min_accept_frac` is true.
 
-The training algorithm is unified and ab initio with respect to the rejection model. It uses a neutral foundation with `context=learned`, zero starting weights, no rescue, no minimum-acceptance enforcement, and no Otsu rescue/window behavior. This foundation is only a tie-break anchor and a source of inactive-field defaults; it is not a chunk or pool preset. Chunk, pool, and stage-specific behavior should be represented by the learned model parameters or by promoted model definitions, not by separate training procedures.
+The training algorithm is unified and ab initio with respect to the rejection model. It uses a neutral foundation with zero starting weights, no rescue, no minimum-acceptance enforcement, and no Otsu rescue/window behavior. This foundation is only a tie-break anchor and a source of inactive-field defaults; it is not a chunk or pool preset. Chunk, pool, and stage-specific behavior should be represented by the learned model parameters or by promoted model definitions, not by separate training procedures.
 
 Each candidate is evaluated by running the full classifier on every scoreable training dataset and averaging the role-specific learn score. If multiple candidates tie, the selected candidate is the one closest to the neutral foundation in the searched threshold controls and policy flags.
 
@@ -475,7 +408,7 @@ Evaluate a fixed built-in model on held-out analysis outputs:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=evaluate \
-  quality_model=chunk_lp4 \
+  quality_model=chunk100mics \
   filetab=holdout_analysis_files.txt \
   fname=cavgs_quality_evaluate_report.txt \
   mkdir=yes
@@ -486,7 +419,7 @@ Evaluate a single manually selected project directly:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=evaluate \
-  quality_model=chunk_lp4 \
+  quality_model=chunk100mics \
   projfile=my_project.simple \
   mskdiam=180 \
   fname=cavgs_quality_evaluate_report.txt \

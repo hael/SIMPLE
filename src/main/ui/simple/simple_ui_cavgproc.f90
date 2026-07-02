@@ -103,7 +103,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call model_cavgs_rejection%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze')
+        call model_cavgs_rejection%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze|evaluate')
         ! computer controls
         call model_cavgs_rejection%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn|evaluate')
         ! add to ui_hash

@@ -95,7 +95,7 @@ module simple_microchunked2D_fast
   use simple_string_utils,                only: int2str
   use simple_projfile_utils,              only: merge_chunk_projfiles
   use simple_cluster2D_rejector,          only: cluster2D_rejector
-  use simple_cavg_quality_model,          only: cavg_quality_model, CAVG_QUALITY_MODEL_MICROCHUNK_P1, CAVG_QUALITY_MODEL_MICROCHUNK_P2
+  use simple_cavg_quality_model,          only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
   use simple_cavg_quality_types,          only: cavg_quality_result
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality
   use simple_cavg_compatibility_analysis, only: cavg_compatibility_analysis
@@ -1120,7 +1120,7 @@ contains
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK PASS 1 # ', chunk%id
           end if
         end if
-        call self%reject_cavgs(chunk, string(LABEL_PASS_1), CAVG_QUALITY_MODEL_MICROCHUNK_P1)
+        call self%reject_cavgs(chunk, string(LABEL_PASS_1), CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         if( self%pass_1_only .and. chunk%rejection_complete .and. .not. chunk%complete ) then
           call spproj%read_segment('mic',    chunk%projfile)
           call spproj%read_segment('ptcl2D', chunk%projfile)
@@ -1185,7 +1185,7 @@ contains
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF MICROCHUNK PASS 2 # ', chunk%id
           end if
         end if
-        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_MICROCHUNK_P2)
+        call self%reject_cavgs(chunk, string(LABEL_PASS_2), CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         if( chunk%rejection_complete .and. .not. chunk%complete ) then
           call spproj%read_segment('mic',    chunk%projfile)
           call spproj%read_segment('ptcl2D', chunk%projfile)

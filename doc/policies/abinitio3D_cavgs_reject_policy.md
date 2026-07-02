@@ -62,7 +62,7 @@ When unset, the route supplies:
 
 - `nrestarts=3`
 - `mkdir=yes`
-- `quality_model=chunk_default_v2`
+- `quality_model=chunk100mics`
 - `prune=no`
 
 `nrestarts` must be at least 1. In the UI, `nrestarts` is grouped with

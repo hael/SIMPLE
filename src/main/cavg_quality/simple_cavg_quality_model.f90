@@ -13,10 +13,6 @@ private
 #include "simple_local_flags.inc"
 
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
-public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
-public :: CAVG_QUALITY_MODEL_MICROCHUNK_P1
-public :: CAVG_QUALITY_MODEL_MICROCHUNK_P2
-public :: CAVG_QUALITY_MODEL_CHUNK_LP4
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 public :: cavg_quality_classify_cache
@@ -79,73 +75,39 @@ end type cavg_quality_cached_decision
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk_default_v2'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_LP4     = 'chunk_lp4'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v2'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P1 = 'microchunk_p1'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P2 = 'microchunk_p2'
-character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_CHUNK_LP4//'|'//&
-    CAVG_QUALITY_MODEL_POOL_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_MICROCHUNK_P1//'|'//&
-    CAVG_QUALITY_MODEL_MICROCHUNK_P2
+character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk100mics'
+character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 
-real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
-real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
-real, parameter :: CLUSTER_RESCUE_MARGIN   = 0.20
+real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
-! Pool default for batch-style class-average rejection.
-character(len=*), parameter :: POOL_V2_FEATURE_POLICY = 'microchunk_plus_score_signal'
-real, parameter :: CAVG_QUALITY_POOL_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.826303E-01, 2.379928E-01, 0.000000E+00, 7.328372E-02, &
-    6.126274E-02, 1.257789E-01, 1.572098E-01, 2.139509E-02, &
-    1.404466E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-real, parameter :: POOL_V2_BOUNDARY_MARGIN      = 1.70
-real, parameter :: POOL_V2_MIN_SCORE_SEPARATION = 0.20
-real, parameter :: POOL_V2_OTSU_MIN_OFFSET      = 0.15
-real, parameter :: POOL_V2_OTSU_MAX_OFFSET      = 0.50
-real, parameter :: POOL_V2_MIN_ACCEPT_FRAC      = 0.95
-
-! Chunk default for stream-style class-average rejection. Hard validity
-! failures reject before fitting; the weights below describe the trainable
-! quality boundary for classes that pass those validity checks.
-character(len=*), parameter :: CHUNK_V2_FEATURE_POLICY = 'microchunk_plus_score'
-real, parameter :: CAVG_QUALITY_CHUNK_V2_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.355581E-01, 1.808395E-01, 4.942806E-02, 1.635655E-01, &
-    1.726983E-01, 2.108072E-01, 0.000000E+00, 8.710331E-02, &
-    0.000000E+00, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-real, parameter :: CHUNK_V2_BOUNDARY_MARGIN      =  0.15
-real, parameter :: CHUNK_V2_MIN_SCORE_SEPARATION =  0.15
-real, parameter :: CHUNK_V2_OTSU_MIN_OFFSET      =  0.35
-real, parameter :: CHUNK_V2_OTSU_MAX_OFFSET      =  0.50
-
-! Chunk model learned from lp4-style class-average selection references in
-! /Users/elmlundho/cavgs_quality/chunk_new_train2, including the *_2* datasets.
-character(len=*), parameter :: CHUNK_LP4_FEATURE_POLICY = 'microchunk_plus_signal'
-real, parameter :: CAVG_QUALITY_CHUNK_LP4_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.256393E-01, 1.026731E-01, 4.134843E-02, 1.367731E-01, &
-    1.996999E-01, 0.000000E+00, 2.763570E-02, 1.404427E-01, &
-    2.257877E-01, 0.000000E+00, 0.000000E+00, 0.000000E+00 ]
-real, parameter :: CHUNK_LP4_BOUNDARY_MARGIN      = -0.15
-real, parameter :: CHUNK_LP4_MIN_SCORE_SEPARATION =  0.15
-real, parameter :: CHUNK_LP4_OTSU_MIN_OFFSET      =  0.35
-real, parameter :: CHUNK_LP4_OTSU_MAX_OFFSET      =  0.40
+! Default class-average quality model learned from
+! /Users/elmlundho/cavgs_quality/chunk100mic_training_data.
+character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_score_signal'
+real, parameter :: CAVG_QUALITY_CHUNK100MICS_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
+    9.978756E-02, 1.167914E-01, 3.642511E-02, 1.329548E-01, &
+    1.402481E-01, 1.610645E-01, 6.630784E-02, 6.981037E-02, &
+    1.294257E-01, 0.000000E+00, 0.000000E+00, 4.718454E-02 ]
+real, parameter :: CHUNK100MICS_BOUNDARY_MARGIN      = 0.30
+real, parameter :: CHUNK100MICS_MIN_SCORE_SEPARATION = 0.05
+real, parameter :: CHUNK100MICS_OTSU_MIN_OFFSET      = 0.05
+real, parameter :: CHUNK100MICS_OTSU_MAX_OFFSET      = 0.40
+real, parameter :: CHUNK100MICS_MIN_ACCEPT_FRAC      = 0.50
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
     character(len=32) :: context                 = 'chunk'
-    character(len=64) :: feature_policy          = CHUNK_V2_FEATURE_POLICY
-    real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK_V2_WEIGHTS
-    real              :: boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
-    real              :: min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
-    real              :: otsu_min_offset         = CHUNK_V2_OTSU_MIN_OFFSET
-    real              :: otsu_max_offset         = CHUNK_V2_OTSU_MAX_OFFSET
+    character(len=64) :: feature_policy          = CHUNK100MICS_FEATURE_POLICY
+    real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_CHUNK100MICS_WEIGHTS
+    real              :: boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
+    real              :: min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
+    real              :: otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
+    real              :: otsu_max_offset         = CHUNK100MICS_OTSU_MAX_OFFSET
     real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-    real              :: min_accept_frac         = 0.0
-    logical           :: use_lowsep_otsu         = .true.
+    real              :: min_accept_frac         = CHUNK100MICS_MIN_ACCEPT_FRAC
+    logical           :: use_lowsep_otsu         = .false.
     logical           :: use_otsu_window         = .true.
     logical           :: use_cluster_rescue      = .false.
-    logical           :: enforce_min_accept_frac = .false.
+    logical           :: enforce_min_accept_frac = .true.
 contains
     procedure :: init_preset
     procedure :: init_spec
@@ -175,15 +137,7 @@ contains
         character(len=LONGSTRLEN) :: errmsg
         select case(trim(preset_name))
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                spec = chunk_default_v2_model_spec()
-            case(CAVG_QUALITY_MODEL_CHUNK_LP4)
-                spec = chunk_lp4_model_spec()
-            case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
-                spec = pool_default_model_spec()
-            case(CAVG_QUALITY_MODEL_MICROCHUNK_P1)
-                spec = microchunk_p1_model_spec()
-            case(CAVG_QUALITY_MODEL_MICROCHUNK_P2)
-                spec = microchunk_p2_model_spec()
+                spec = chunk100mics_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -236,101 +190,23 @@ contains
         spec%enforce_min_accept_frac = self%enforce_min_accept_frac
     end function get_spec
 
-    function chunk_default_v2_model_spec() result( spec )
+    function chunk100mics_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
         spec%context                 = 'chunk'
-        spec%feature_policy          = CHUNK_V2_FEATURE_POLICY
-        spec%weights                 = CAVG_QUALITY_CHUNK_V2_WEIGHTS
-        spec%boundary_margin         = CHUNK_V2_BOUNDARY_MARGIN
-        spec%min_score_separation    = CHUNK_V2_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK_V2_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_V2_OTSU_MAX_OFFSET
+        spec%feature_policy          = CHUNK100MICS_FEATURE_POLICY
+        spec%weights                 = CAVG_QUALITY_CHUNK100MICS_WEIGHTS
+        spec%boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
+        spec%min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
+        spec%otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
+        spec%otsu_max_offset         = CHUNK100MICS_OTSU_MAX_OFFSET
         spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = 0.0
-        spec%use_lowsep_otsu         = .true.
+        spec%min_accept_frac         = CHUNK100MICS_MIN_ACCEPT_FRAC
+        spec%use_lowsep_otsu         = .false.
         spec%use_otsu_window         = .true.
         spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function chunk_default_v2_model_spec
-
-    function chunk_lp4_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_CHUNK_LP4
-        spec%context                 = 'chunk'
-        spec%feature_policy          = CHUNK_LP4_FEATURE_POLICY
-        spec%weights                 = CAVG_QUALITY_CHUNK_LP4_WEIGHTS
-        spec%boundary_margin         = CHUNK_LP4_BOUNDARY_MARGIN
-        spec%min_score_separation    = CHUNK_LP4_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK_LP4_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_LP4_OTSU_MAX_OFFSET
-        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = 0.0
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function chunk_lp4_model_spec
-
-    function pool_default_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_POOL_DEFAULT
-        spec%context                 = 'pool'
-        spec%feature_policy          = POOL_V2_FEATURE_POLICY
-        spec%weights                 = CAVG_QUALITY_POOL_V2_WEIGHTS
-        spec%boundary_margin         = POOL_V2_BOUNDARY_MARGIN
-        spec%min_score_separation    = POOL_V2_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = POOL_V2_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = POOL_V2_OTSU_MAX_OFFSET
-        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = POOL_V2_MIN_ACCEPT_FRAC
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .true.
         spec%enforce_min_accept_frac = .true.
-    end function pool_default_model_spec
-
-    function microchunk_p1_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P1
-        spec%context                 = 'chunk'
-        spec%feature_policy          = 'microchunk_plus_score_signal'
-        spec%weights                 = [ &
-              1.152264E-02,   9.737433E-02,   6.403663E-02,   2.116542E-01, &
-              1.794099E-01,   1.902685E-01,   1.129871E-01,   6.321478E-03, &
-              1.264252E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
-        spec%boundary_margin         =   8.000000E-01
-        spec%min_score_separation    =   2.000000E-01
-        spec%otsu_min_offset         =   2.500000E-01
-        spec%otsu_max_offset         =   5.000000E-01
-        spec%cluster_rescue_margin   =   2.000000E-01
-        spec%min_accept_frac         =   0.000000E+00
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function microchunk_p1_model_spec
-
-    function microchunk_p2_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_MICROCHUNK_P2
-        spec%context                 = 'chunk'
-        spec%feature_policy          = 'microchunk_plus_score_signal'
-        spec%weights                 = [ &
-              9.300453E-02,   9.552415E-02,   1.010380E-01,   9.765499E-02, &
-              1.325033E-01,   1.486267E-01,   1.026389E-01,   4.956052E-02, &
-              1.352742E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00 ]
-        spec%boundary_margin         =   1.500000E-01
-        spec%min_score_separation    =   3.000000E-01
-        spec%otsu_min_offset         =   2.500000E-01
-        spec%otsu_max_offset         =   4.000000E-01
-        spec%cluster_rescue_margin   =   2.000000E-01
-        spec%min_accept_frac         =   0.000000E+00
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function microchunk_p2_model_spec
+    end function chunk100mics_model_spec
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
