@@ -1,0 +1,3167 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/project_stack_indexing_code_review.html">
+      
+      
+        <link rel="prev" href="polar_pft_range_policy_2026-03-19.html">
+      
+      
+        <link rel="next" href="remove_build_glob.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Project Stack Indexing Code Review - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#project-stack-indexing-code-review" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Project Stack Indexing Code Review
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#policy-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-metadata-only-pruneyes-makes-fromptop-unusable-as-a-physical-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: metadata-only prune=yes makes fromp/top unusable as a physical fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-the-canonical-reader-fallback-is-too-permissive-for-sparse-project-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: the canonical reader fallback is too permissive for sparse project ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-merge_chunk_projfiles-bypasses-the-merge-indexing-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: merge_chunk_projfiles bypasses the merge indexing policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-stream-project-writers-do-partial-project-remaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: stream project writers do partial project remaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-validate_projfile-can-report-a-project-as-repaired-without-proving-physical-stack-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: validate_projfile can report a project as repaired without proving physical stack consistency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-metadata-only-prune_particles-has-an-unsafe-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: metadata-only prune_particles has an unsafe fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-append_project-is-an-older-merge-path-that-bypasses-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: append_project is an older merge path that bypasses the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-star-stream-export-leaks-physicalproject-index-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: STAR stream export leaks physical/project index semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-current-tests-cover-the-good-path-not-the-risky-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: current tests cover the good path, not the risky paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-that-looks-policy-compliant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code That Looks Policy-Compliant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code That Looks Policy-Compliant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#canonical-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canonical reader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#main-merge_projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main merge_projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fresh-stack-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fresh stack imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#materializing-prune_project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Materializing prune_project
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-fix-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Fix Strategy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended Fix Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-introduce-one-shared-resolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Introduce one shared resolver
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-introduce-one-shared-stack-range-copy-routine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Introduce one shared stack-range copy routine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-make-validation-physically-aware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Make validation physically aware
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-add-tests-for-the-risky-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Add tests for the risky paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes-on-reject_mics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes On reject_mics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#policy-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-metadata-only-pruneyes-makes-fromptop-unusable-as-a-physical-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: metadata-only prune=yes makes fromp/top unusable as a physical fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-the-canonical-reader-fallback-is-too-permissive-for-sparse-project-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: the canonical reader fallback is too permissive for sparse project ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-merge_chunk_projfiles-bypasses-the-merge-indexing-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: merge_chunk_projfiles bypasses the merge indexing policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-stream-project-writers-do-partial-project-remaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: stream project writers do partial project remaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-validate_projfile-can-report-a-project-as-repaired-without-proving-physical-stack-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: validate_projfile can report a project as repaired without proving physical stack consistency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-metadata-only-prune_particles-has-an-unsafe-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: metadata-only prune_particles has an unsafe fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-append_project-is-an-older-merge-path-that-bypasses-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: append_project is an older merge path that bypasses the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-star-stream-export-leaks-physicalproject-index-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: STAR stream export leaks physical/project index semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-current-tests-cover-the-good-path-not-the-risky-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: current tests cover the good path, not the risky paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-that-looks-policy-compliant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code That Looks Policy-Compliant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code That Looks Policy-Compliant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#canonical-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canonical reader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#main-merge_projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main merge_projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fresh-stack-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fresh stack imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#materializing-prune_project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Materializing prune_project
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-fix-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Fix Strategy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended Fix Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-introduce-one-shared-resolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Introduce one shared resolver
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-introduce-one-shared-stack-range-copy-routine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Introduce one shared stack-range copy routine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-make-validation-physically-aware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Make validation physically aware
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-add-tests-for-the-risky-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Add tests for the risky paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes-on-reject_mics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes On reject_mics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="project-stack-indexing-code-review">Project Stack Indexing Code Review<a class="headerlink" href="#project-stack-indexing-code-review" title="Permanent link">&para;</a></h1>
+<p>Date: 2026-06-03</p>
+<p>This review compares the current written stack-indexing policy against the code
+paths that create, merge, prune, validate, export, or consume SIMPLE project
+particle-stack metadata.</p>
+<p>The key policy is <code>doc/policies/project_stack_indexing_policy.md</code>.</p>
+<h2 id="executive-summary">Executive Summary<a class="headerlink" href="#executive-summary" title="Permanent link">&para;</a></h2>
+<p>The written policy is coherent. The core reader and the main <code>merge_projects</code>
+implementation mostly implement it correctly.</p>
+<p>The remaining risk is in project writers and rewriters that still perform
+partial remaps by hand. Several stream and chunk-merge paths remap project
+indices (<code>fromp</code>, <code>top</code>, <code>stkind</code>) without normalizing the physical stack index
+(<code>indstk</code>) or the physical stack count (<code>nptcls_stk</code>). Those paths can produce a
+project that looks internally plausible but later asks a stack reader for image
+<code>N + 1</code> from a physical stack containing only <code>N</code> images.</p>
+<p>This is consistent with downstream failures such as:</p>
+<pre><code class="language-text">ERROR! index i out of range: 50 / 49; simple_discrete_stack_io.f90; line: 61
+</code></pre>
+<p>The physical stack reader is only reporting the symptom. The corruption is
+introduced earlier when project metadata and physical stack metadata are allowed
+to drift apart.</p>
+<p>There is one especially important nuance: after a metadata-only prune, such as
+<code>map_cavgs_selection</code> followed by <code>prune=yes</code>, <code>fromp/top</code> no longer describe a
+contiguous physical image range in the backing stack. They describe only the
+remaining project rows. From that point on, the project must carry valid
+<code>indstk</code> values. Falling back to <code>particle_project_row - fromp + 1</code> is no longer
+safe unless the project row range is known to still mirror the physical stack
+order.</p>
+<h2 id="policy-contract">Policy Contract<a class="headerlink" href="#policy-contract" title="Permanent link">&para;</a></h2>
+<p>The policy separates two index domains:</p>
+<ul>
+<li><code>os_stk%fromp</code>, <code>os_stk%top</code>, and <code>os_stk%nptcls</code> are project-row metadata.</li>
+<li><code>os_ptcl2D/os_ptcl3D%indstk</code> is the physical image index inside the stack file.</li>
+<li><code>os_stk%nptcls_stk</code> is the physical image count in the stack file.</li>
+<li><code>os_ptcl2D/os_ptcl3D%stkind</code> is the project-local stack row index.</li>
+</ul>
+<p>Required invariants when particle rows and stack rows are present:</p>
+<pre><code class="language-text">top - fromp + 1 == nptcls
+stack ranges are contiguous in project-row space
+stack ranges cover the particle rows in the project segment
+particle rows in a stack range have matching stkind
+1 &lt;= indstk &lt;= nptcls_stk
+</code></pre>
+<p>When <code>indstk</code> cannot be trusted and the original stack file is still being used,
+the fallback is:</p>
+<pre><code class="language-text">indstk = particle_project_row - source_fromp + 1
+</code></pre>
+<p>That fallback is in the source project's project-row domain. It must not use the
+output project row after merge/remap.</p>
+<p>The fallback is valid only when the source project row range still corresponds to
+the physical stack order. Once a metadata-only prune removes rows while keeping
+the original stack file, <code>fromp/top</code> becomes a project-only range and must not be
+used to reconstruct physical indices for missing or invalid <code>indstk</code> values.</p>
+<p><code>state</code> is not part of the stack-indexing contract. <code>state = 0</code> rows still count
+in <code>fromp/top/nptcls</code> while they remain present in the project.</p>
+<h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
+<h3 id="p1-metadata-only-pruneyes-makes-fromptop-unusable-as-a-physical-fallback">P1: metadata-only <code>prune=yes</code> makes <code>fromp/top</code> unusable as a physical fallback<a class="headerlink" href="#p1-metadata-only-pruneyes-makes-fromptop-unusable-as-a-physical-fallback" title="Permanent link">&para;</a></h3>
+<p>Files:</p>
+<ul>
+<li><code>src/main/commanders/simple/simple_commanders_cavgs.f90</code></li>
+<li><code>src/main/project/simple_sp_project_ptcl.f90</code></li>
+</ul>
+<p>Relevant lines:</p>
+<ul>
+<li><code>simple_commanders_cavgs.f90:831-833</code></li>
+<li><code>simple_commanders_cavgs.f90:295-297</code></li>
+<li><code>simple_commanders_cavgs.f90:409-411</code></li>
+<li><code>simple_commanders_cavgs.f90:627</code></li>
+<li><code>simple_sp_project_ptcl.f90:430-532</code></li>
+</ul>
+<p>Several class-average selection commands call <code>map_cavgs_selection</code>, then
+optionally call <code>prune_particles</code> when <code>prune=yes</code>. This is a metadata-only
+prune: it removes particle rows from the project and rewrites <code>fromp/top/nptcls</code>,
+but it does not rewrite the physical particle stacks.</p>
+<p>After this operation, the output stack row range is dense in project-row space,
+but the physical images may be sparse. For example:</p>
+<pre><code class="language-text">original physical stack images: 1 2 3 4 5 6
+selected project rows/images:  1 4 6
+
+after metadata-only prune:
+    fromp = 1
+    top = 3
+    nptcls = 3
+    nptcls_stk = 6
+    required indstk values = [1, 4, 6]
+</code></pre>
+<p>In this state, <code>iptcl - fromp + 1</code> would produce <code>[1, 2, 3]</code>, which is a valid
+project-row sequence but the wrong physical image sequence.</p>
+<p>Recommendation:</p>
+<p>Any project with <code>nptcls_stk &gt; nptcls</code> or <code>nptcls_stk &gt; top - fromp + 1</code> should
+be treated as physically sparse. In that state:</p>
+<ul>
+<li>valid existing <code>indstk</code> is mandatory,</li>
+<li>missing, zero, or out-of-range <code>indstk</code> should hard fail,</li>
+<li>readers, merge, validation, and metadata-only prune should not fall back to
+  <code>iptcl - fromp + 1</code>,</li>
+<li>the only automatic repair is a materializing prune that rewrites the stack and
+  resets <code>indstk = 1..nptcls</code> and <code>nptcls_stk = nptcls</code>.</li>
+</ul>
+<p>This should be promoted to the formal policy.</p>
+<h3 id="p1-the-canonical-reader-fallback-is-too-permissive-for-sparse-project-ranges">P1: the canonical reader fallback is too permissive for sparse project ranges<a class="headerlink" href="#p1-the-canonical-reader-fallback-is-too-permissive-for-sparse-project-ranges" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_sp_project_ptcl.f90</code></p>
+<p>Relevant lines: 58-110</p>
+<p><code>map_ptcl_ind2stk_ind</code> currently reads <code>indstk</code> whenever present, regardless of
+whether <code>nptcls_stk</code> is present. If <code>indstk</code> is missing or non-positive, it falls
+back to <code>iptcl - fromp + 1</code>:</p>
+<pre><code class="language-fortran">if( ptcl_field%isthere(iptcl, 'indstk') )then
+    ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
+endif
+if( ind_in_stk &lt; 1 )then
+    call set_indstk_from_range
+endif
+</code></pre>
+<p>This is unsafe after metadata-only pruning. If <code>fromp/top</code> is already a
+post-prune project range, the fallback returns an in-range but semantically
+wrong physical index. It can silently read the wrong particles rather than
+throwing an out-of-range error.</p>
+<p>It is also more permissive than the written policy for old stream projects:
+positive <code>indstk</code> is trusted even when <code>nptcls_stk</code> is absent, although the
+policy says old stream <code>indstk</code> may be unreliable without <code>nptcls_stk</code>.</p>
+<p>Recommendation:</p>
+<p>The reader should compute the project range count:</p>
+<pre><code class="language-text">nptcls_project = top - fromp + 1
+</code></pre>
+<p>Then:</p>
+<ul>
+<li>if <code>nptcls_stk</code> is present and <code>nptcls_stk &gt; nptcls_project</code>, require valid
+  <code>indstk</code> and do not fallback,</li>
+<li>if <code>nptcls_stk</code> is present and <code>nptcls_stk == nptcls_project</code>, fallback is
+  acceptable for missing legacy <code>indstk</code>,</li>
+<li>if <code>nptcls_stk</code> is absent, do not trust positive <code>indstk</code>; use fallback only as
+  a legacy unverified mapping and report/repair upstream when possible.</li>
+</ul>
+<h3 id="p1-merge_chunk_projfiles-bypasses-the-merge-indexing-policy">P1: <code>merge_chunk_projfiles</code> bypasses the merge indexing policy<a class="headerlink" href="#p1-merge_chunk_projfiles-bypasses-the-merge-indexing-policy" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/fileio/simple_projfile_utils.f90</code></p>
+<p>Relevant lines: 174-191</p>
+<p>The chunk merge implementation loops over source stack ranges, mutates the
+source particle <code>stkind</code>, transfers the particle row, remaps output <code>fromp/top</code>,
+and transfers the stack row:</p>
+<pre><code class="language-fortran">fromp = chunks(ic)%os_stk%get_fromp(i)
+top   = chunks(ic)%os_stk%get_top(i)
+do j = fromp,top
+    iptcl_glob = iptcl_glob + 1
+    call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
+    call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
+enddo
+top_glob = fromp_glob + top - fromp
+call chunks(ic)%os_stk%set(i, 'fromp', fromp_glob)
+call chunks(ic)%os_stk%set(i, 'top',   top_glob)
+call merged_proj%os_stk%transfer_ori(istk, chunks(ic)%os_stk, i)
+</code></pre>
+<p>This does not call the policy-compliant <code>resolved_particle_indstk</code> logic used by
+<code>merge_selected_project_files</code>. It does not treat source <code>indstk</code> as a candidate,
+does not repair old-stream <code>indstk</code>, and does not explicitly verify that
+<code>nptcls_stk</code> is credible.</p>
+<p>This function is used in important stream paths, including:</p>
+<ul>
+<li><code>src/main/stream/simple_microchunked2D.f90:1418</code></li>
+<li><code>src/main/stream/simple_microchunked2D.f90:1822</code></li>
+<li><code>src/main/stream/simple_stream_p05_sieve_cavgs.f90:405</code></li>
+<li><code>src/main/commanders/simple/simple_commanders_project_core.f90:389</code></li>
+</ul>
+<p>Recommendation:</p>
+<p>Refactor <code>resolved_particle_indstk</code> out of <code>merge_selected_project_files</code> into a
+shared project-indexing helper. Use it in <code>merge_chunk_projfiles</code> for both
+<code>ptcl2D</code> and any <code>ptcl3D</code>-derived output. After remapping, assert:</p>
+<pre><code class="language-text">top - fromp + 1 == nptcls
+1 &lt;= indstk &lt;= nptcls_stk
+</code></pre>
+<h3 id="p1-stream-project-writers-do-partial-project-remaps">P1: stream project writers do partial project remaps<a class="headerlink" href="#p1-stream-project-writers-do-partial-project-remaps" title="Permanent link">&para;</a></h3>
+<p>Several stream-side writers transfer stack and particle rows, then remap only
+<code>fromp/top</code> and <code>stkind</code>. They do not consistently rewrite or validate <code>nptcls</code>,
+<code>nptcls_stk</code>, or <code>indstk</code>.</p>
+<p>Primary targets:</p>
+<ul>
+<li><code>src/main/project/simple_sp_project_core.f90:615</code></li>
+<li><code>src/main/stream/simple_stream_p04_refpick_extract_new.f90:416</code></li>
+<li><code>src/main/stream/simple_stream_p04_refpick_extract.f90:471</code></li>
+<li><code>src/main/stream/simple_stream_p06_pool2D_new.f90:403</code></li>
+<li><code>src/main/stream/simple_stream_p06_pool2D.f90:349</code></li>
+<li><code>src/main/stream/simple_stream_pool2D_utils.f90:314</code></li>
+<li><code>src/main/stream/simple_stream_cluster2D_microchunked.f90:205</code></li>
+<li><code>src/main/stream/simple_stream_cluster2D_subsets.f90:289</code></li>
+</ul>
+<p>Typical pattern:</p>
+<pre><code class="language-fortran">call dst%os_stk%transfer_ori(new_stk, src%os_stk, old_stk)
+call dst%os_stk%set(new_stk, 'fromp', new_fromp)
+call dst%os_stk%set(new_stk, 'top',   new_top)
+
+call dst%os_ptcl2D%transfer_ori(new_ptcl, src%os_ptcl2D, old_ptcl)
+call dst%os_ptcl2D%set_stkind(new_ptcl, new_stk)
+</code></pre>
+<p>This pattern is incomplete under the policy. Any code that remaps <code>fromp/top</code> and
+<code>stkind</code> must also resolve <code>indstk</code> in the source stack domain and must preserve
+or establish <code>nptcls_stk</code> correctly.</p>
+<p>Recommendation:</p>
+<p>Introduce a shared routine for copying a stack range from one project into
+another. The routine should:</p>
+<ul>
+<li>copy stack metadata and stack path,</li>
+<li>set output <code>fromp/top/nptcls</code>,</li>
+<li>preserve <code>nptcls_stk</code> if present and credible,</li>
+<li>physically inspect the stack only when necessary and available,</li>
+<li>copy particle rows,</li>
+<li>set output <code>stkind</code>,</li>
+<li>resolve output <code>indstk</code> from the source row using the policy.</li>
+</ul>
+<p>Stream code should use that routine instead of open-coding stack/particle range
+copies.</p>
+<h3 id="p1-validate_projfile-can-report-a-project-as-repaired-without-proving-physical-stack-consistency">P1: <code>validate_projfile</code> can report a project as repaired without proving physical stack consistency<a class="headerlink" href="#p1-validate_projfile-can-report-a-project-as-repaired-without-proving-physical-stack-consistency" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/fileio/simple_projfile_utils.f90</code></p>
+<p>Relevant lines: 1115-1133 and 1138-1176</p>
+<p><code>repair_stack_nptcls_stk</code> trusts an existing <code>nptcls_stk</code> if it is greater than
+or equal to the project stack count:</p>
+<pre><code class="language-fortran">if( nptcls_stk &gt;= stack_counts(istk) .and. nptcls_stk &gt;= 0 )then
+    trusted_nptcls_stk(istk) = .true.
+</code></pre>
+<p>This is not enough to establish physical correctness. If a stream project writes
+<code>nptcls_stk = 50</code> but the file has 49 images, validation will trust the metadata
+and downstream stack reads can still fail.</p>
+<p>More seriously, <code>repair_particle_segment</code> expands <code>nptcls_stk</code> to cover fallback
+<code>indstk</code>:</p>
+<pre><code class="language-fortran">if( fallback_indstk &gt; nptcls_stk )then
+    call proj%os_stk%set(stkind, 'nptcls_stk', fallback_indstk)
+</code></pre>
+<p>That changes a physical count without rewriting or inspecting the physical stack
+file. Under the policy, <code>nptcls_stk</code> is not a repair convenience; it is the
+physical image count.</p>
+<p>Recommendation:</p>
+<p>Validation should separate metadata repairs from physical verification.</p>
+<p>For each stack row with a stack path:</p>
+<ul>
+<li>inspect the physical stack file when possible,</li>
+<li>set <code>nptcls_stk</code> from the physical file count,</li>
+<li>if the file cannot be inspected, report that <code>nptcls_stk</code> is unverified,</li>
+<li>never expand <code>nptcls_stk</code> merely to accommodate a fallback index,</li>
+<li>flag any particle whose resolved <code>indstk</code> exceeds verified <code>nptcls_stk</code>.</li>
+</ul>
+<p>If the intended behavior is best-effort metadata normalization, the program
+should say so explicitly and should not claim full conformity when physical stack
+inspection was skipped or failed.</p>
+<h3 id="p2-metadata-only-prune_particles-has-an-unsafe-fallback">P2: metadata-only <code>prune_particles</code> has an unsafe fallback<a class="headerlink" href="#p2-metadata-only-prune_particles-has-an-unsafe-fallback" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_sp_project_ptcl.f90</code></p>
+<p>Relevant lines: 489-505</p>
+<p><code>prune_particles</code> preserves valid source <code>indstk</code> when <code>nptcls_stk</code> exists, but
+if the source <code>indstk</code> is missing or invalid it falls back to:</p>
+<pre><code class="language-fortran">indstk = iptcl - fromp + 1
+</code></pre>
+<p>The fallback is policy-correct in principle, but the implementation does not
+recheck that the fallback is within <code>1..nptcls_stk</code> before writing it to the
+output particle rows. More importantly, the fallback is not policy-correct after
+a previous metadata-only prune, because the source <code>fromp/top</code> range may already
+be a project-only sparse range relative to the original physical stack.</p>
+<p>Recommendation:</p>
+<p>Before using the fallback, determine whether the source stack is physically
+sparse:</p>
+<pre><code class="language-text">nptcls_project = top - fromp + 1
+nptcls_stk &gt; nptcls_project
+</code></pre>
+<p>If the stack is physically sparse, require a valid existing <code>indstk</code>. Do not
+fall back to <code>iptcl - fromp + 1</code>. If the stack is not sparse, fallback is
+acceptable, but the result must still satisfy:</p>
+<pre><code class="language-text">1 &lt;= indstk &lt;= nptcls_stk
+</code></pre>
+<p>If the input cannot meet these constraints, the project is not safely repairable
+as a metadata-only prune. It should either hard fail or require a materializing
+prune that rewrites the physical stack.</p>
+<h3 id="p2-append_project-is-an-older-merge-path-that-bypasses-the-policy">P2: <code>append_project</code> is an older merge path that bypasses the policy<a class="headerlink" href="#p2-append_project-is-an-older-merge-path-that-bypasses-the-policy" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_sp_project_core.f90</code></p>
+<p>Relevant lines: 263-283</p>
+<p><code>append_project</code> appends stack and particle rows, remaps <code>fromp/top</code>, and remaps
+<code>stkind</code>. It does not normalize or validate <code>indstk</code>.</p>
+<p>This is used by <code>concatenate_projects</code>:</p>
+<ul>
+<li><code>src/main/commanders/simple/simple_commanders_project_core.f90:357</code></li>
+</ul>
+<p>Recommendation:</p>
+<p>Either route <code>concatenate_projects</code> through the policy-compliant
+<code>merge_selected_project_files</code>, or update <code>append_project</code> to use the shared
+index resolver.</p>
+<h3 id="p2-star-stream-export-leaks-physicalproject-index-semantics">P2: STAR stream export leaks physical/project index semantics<a class="headerlink" href="#p2-star-stream-export-leaks-physicalproject-index-semantics" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/star/simple_starproject_stream.f90</code></p>
+<p>Relevant lines: 246-248 and 299-301</p>
+<p><code>get_stkname_and_ind</code> returns a physical stack index in <code>ind_in_stk</code>. The export
+code then uses <code>ind_in_stk</code> as a row index into <code>os_ptcl2D</code>:</p>
+<pre><code class="language-fortran">call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
+stkind = floor(spproj%os_ptcl2d%get(ind_in_stk, 'stkind'))
+</code></pre>
+<p>That should use the project particle row <code>i</code>, not the physical stack index
+<code>ind_in_stk</code>.</p>
+<p>Recommendation:</p>
+<p>Replace those lookups with:</p>
+<pre><code class="language-fortran">stkind = spproj%os_ptcl2d%get_int(i, 'stkind')
+</code></pre>
+<p>This is probably not the direct cause of distributed <code>abinitio2D</code> stack-read
+errors, but it is a clear violation of the same indexing separation.</p>
+<h3 id="p3-current-tests-cover-the-good-path-not-the-risky-paths">P3: current tests cover the good path, not the risky paths<a class="headerlink" href="#p3-current-tests-cover-the-good-path-not-the-risky-paths" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_project_merge_tester.f90</code></p>
+<p>Relevant lines: 21-157</p>
+<p>The current tests verify:</p>
+<ul>
+<li><code>merge_selected_project_files</code> preserves physical <code>indstk</code> when <code>nptcls_stk</code>
+  exists,</li>
+<li>legacy missing <code>nptcls_stk</code> falls back to <code>row - fromp + 1</code>,</li>
+<li><code>state = 0</code> rows remain present during validation.</li>
+</ul>
+<p>Those tests are useful, but they do not exercise the code paths most likely to
+produce stream indexing corruption:</p>
+<ul>
+<li><code>merge_chunk_projfiles</code>,</li>
+<li><code>projrecords2proj</code>,</li>
+<li><code>simple_stream_p04_refpick_extract(_new)%write_project</code>,</li>
+<li><code>simple_stream_p06_pool2D(_new)%import_sets_into_pool</code>,</li>
+<li><code>simple_stream_pool2D_utils</code> pool subset project generation,</li>
+<li><code>simple_stream_cluster2D_microchunked</code> chunk generation,</li>
+<li>metadata-only <code>prune_particles</code> with bad old-stream <code>indstk</code>,</li>
+<li>validation against a real physical stack with fewer images than metadata says.</li>
+</ul>
+<p>Recommendation:</p>
+<p>Add a small test fixture with a physical stack count mismatch:</p>
+<pre><code class="language-text">project says nptcls = 50
+project says nptcls_stk = 50
+physical stack file contains 49 images
+one particle resolves to indstk = 50
+</code></pre>
+<p><code>validate_projfile</code> should flag this as physically incompatible. It should not
+write a project that still appears valid and later fails in <code>dstack_io%read</code>.</p>
+<h2 id="code-that-looks-policy-compliant">Code That Looks Policy-Compliant<a class="headerlink" href="#code-that-looks-policy-compliant" title="Permanent link">&para;</a></h2>
+<h3 id="canonical-reader">Canonical reader<a class="headerlink" href="#canonical-reader" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_sp_project_ptcl.f90</code></p>
+<p>Relevant lines: 8-115</p>
+<p><code>map_ptcl_ind2stk_ind</code> centralizes the reader policy. That is good, but the
+current fallback is too permissive for sparse metadata-only pruned projects. It:</p>
+<ul>
+<li>resolves <code>stkind</code>,</li>
+<li>reads <code>fromp/top</code>,</li>
+<li>uses <code>nptcls_stk</code> when present,</li>
+<li>checks <code>indstk &lt;= nptcls_stk</code> when <code>nptcls_stk</code> is present,</li>
+<li>falls back to <code>iptcl - fromp + 1</code> when <code>indstk</code> is missing or non-positive.</li>
+</ul>
+<p>That fallback should be disallowed when <code>nptcls_stk</code> shows that the project range
+is physically sparse.</p>
+<p>The downstream physical stack reader then correctly fails if the resolved
+physical index exceeds the actual physical file count:</p>
+<ul>
+<li><code>src/fileio/simple_discrete_stack_io.f90:48</code></li>
+</ul>
+<h3 id="main-merge_projects">Main <code>merge_projects</code><a class="headerlink" href="#main-merge_projects" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/fileio/simple_projfile_utils.f90</code></p>
+<p>Relevant lines: 247-471 and 758-809</p>
+<p><code>merge_selected_project_files</code> is the best current implementation of the policy.
+Its <code>resolved_particle_indstk</code> helper treats source <code>indstk</code> as a candidate,
+trusts it only when <code>nptcls_stk</code> exists and the value is in range, and otherwise
+uses the source-domain fallback:</p>
+<pre><code class="language-text">source_particle_project_row - source_fromp + 1
+</code></pre>
+<p>This behavior should be shared rather than kept local to one merge routine.</p>
+<h3 id="fresh-stack-imports">Fresh stack imports<a class="headerlink" href="#fresh-stack-imports" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/project/simple_sp_project_stk.f90</code></p>
+<p>Relevant lines: 7-168</p>
+<p>Fresh stack imports physically inspect the stack and write:</p>
+<pre><code class="language-text">nptcls = physical count
+nptcls_stk = physical count
+fromp/top = project range
+indstk = 1..physical count
+</code></pre>
+<p>This is policy-compliant.</p>
+<h3 id="materializing-prune_project">Materializing <code>prune_project</code><a class="headerlink" href="#materializing-prune_project" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/commanders/simple/simple_commanders_project_ptcl.f90</code></p>
+<p>Relevant lines: 652-821</p>
+<p>The materializing prune path reads through <code>map_ptcl_ind2stk_ind</code>, writes new
+physical stack files, and then writes:</p>
+<pre><code class="language-text">indstk = 1..ptcl_cnt
+nptcls_stk = ptcl_cnt
+nptcls = ptcl_cnt
+fromp/top = new project range
+</code></pre>
+<p>This is the correct behavior when pruning rewrites the physical stack files.</p>
+<h2 id="recommended-fix-strategy">Recommended Fix Strategy<a class="headerlink" href="#recommended-fix-strategy" title="Permanent link">&para;</a></h2>
+<h3 id="1-introduce-one-shared-resolver">1. Introduce one shared resolver<a class="headerlink" href="#1-introduce-one-shared-resolver" title="Permanent link">&para;</a></h3>
+<p>Add a shared helper with semantics equivalent to the current
+<code>resolved_particle_indstk</code> in <code>merge_selected_project_files</code>.</p>
+<p>Inputs:</p>
+<pre><code class="language-text">source os_stk
+source particle segment
+source particle row
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">resolved physical indstk
+status: preserved, fallback, invalid
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li>require valid source <code>stkind</code>,</li>
+<li>require source <code>fromp/top</code>,</li>
+<li>require the source row to fall inside that source stack range,</li>
+<li>if source stack has credible <code>nptcls_stk</code>, preserve positive in-range
+  <code>indstk</code>,</li>
+<li>otherwise derive <code>indstk = source_row - source_fromp + 1</code>,</li>
+<li>never derive from the output project row.</li>
+</ul>
+<h3 id="2-introduce-one-shared-stack-range-copy-routine">2. Introduce one shared stack-range copy routine<a class="headerlink" href="#2-introduce-one-shared-stack-range-copy-routine" title="Permanent link">&para;</a></h3>
+<p>Every stream/chunk project writer should use one routine that copies a stack row
+and its particle rows together. That routine should update all coupled fields:</p>
+<pre><code class="language-text">os_stk%fromp
+os_stk%top
+os_stk%nptcls
+os_stk%nptcls_stk
+os_ptcl2D/os_ptcl3D%stkind
+os_ptcl2D/os_ptcl3D%indstk
+</code></pre>
+<p>This removes the current repeated open-coded pattern.</p>
+<h3 id="3-make-validation-physically-aware">3. Make validation physically aware<a class="headerlink" href="#3-make-validation-physically-aware" title="Permanent link">&para;</a></h3>
+<p><code>validate_projfile</code> should inspect physical stack files when possible. If it
+cannot inspect a stack, it should report that explicitly and avoid claiming full
+physical conformity.</p>
+<p>It should never increase <code>nptcls_stk</code> unless a physical stack file was actually
+rewritten or physically inspected and found to contain that many images.</p>
+<h3 id="4-add-tests-for-the-risky-paths">4. Add tests for the risky paths<a class="headerlink" href="#4-add-tests-for-the-risky-paths" title="Permanent link">&para;</a></h3>
+<p>Minimum regression tests:</p>
+<ul>
+<li><code>merge_chunk_projfiles</code> with source project <code>fromp &gt; 1</code> and stale <code>indstk</code>.</li>
+<li><code>projrecords2proj</code> with old-stream-style missing <code>nptcls_stk</code>.</li>
+<li>metadata-only <code>prune_particles</code> where fallback would exceed physical
+  <code>nptcls_stk</code>.</li>
+<li>metadata-only <code>prune_particles</code> after a prior project-only prune where
+  <code>nptcls_stk &gt; nptcls</code> and one retained particle has missing <code>indstk</code>.</li>
+<li><code>validate_projfile</code> with real physical stack count less than metadata.</li>
+<li>one microchunk or pool project generation path that exercises the shared copy
+  routine.</li>
+</ul>
+<h2 id="notes-on-reject_mics">Notes On <code>reject_mics</code><a class="headerlink" href="#notes-on-reject_mics" title="Permanent link">&para;</a></h2>
+<p>Changing the default of <code>reject_mics</code> is not itself an indexing-policy violation.
+It can expose the bug by changing which micrographs or particle rows enter later
+stream stages, but <code>state</code> and rejection policy should not alter the meaning of
+<code>fromp/top/nptcls</code> while rows remain present.</p>
+<p>If a path removes rows, it must rewrite project ranges. If it keeps rows with
+<code>state = 0</code>, those rows remain counted by <code>fromp/top/nptcls</code>.</p>
+<p>The indexing bug is not that particles are rejected. The bug is that some code
+paths remap project rows without also resolving physical stack indices.</p>
+<h2 id="acceptance-criteria">Acceptance Criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
+<p>A project emitted by merge, stream, prune, or validation should satisfy:</p>
+<pre><code class="language-text">for every stack row:
+    top - fromp + 1 == nptcls
+    fromp/top ranges are contiguous and cover the particle segment
+
+for every particle row:
+    stkind points to a valid stack row
+    particle row lies inside os_stk(stkind)%fromp/top
+    indstk is positive
+    indstk &lt;= nptcls_stk when nptcls_stk is known
+
+for every stack row with an inspectable stack file:
+    nptcls_stk == physical image count in that file
+</code></pre>
+<p>And for any code that rewrites project stack ranges:</p>
+<pre><code class="language-text">project row indices may change
+stack row indices may change
+physical image indices must not change unless the physical stack is rewritten
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

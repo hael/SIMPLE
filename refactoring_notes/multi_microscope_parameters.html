@@ -1,0 +1,2936 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/multi_microscope_parameters.html">
+      
+      
+        <link rel="prev" href="euclid_build_new_policy.html">
+      
+      
+        <link rel="next" href="nu_filter_extension_ft_reuse.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Refactoring: Merge Projects With Distinct CTF Models - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#refactoring-merge-projects-with-distinct-ctf-models" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Refactoring: Merge Projects With Distinct CTF Models
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="multi_microscope_parameters.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#original-code-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original Code Findings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-field-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Field Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-state-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle State Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optics-assignment-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optics Assignment Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Refactor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-merge-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Merge Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-optics-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Optics Metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2d-and-3d-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D and 3D Analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-migration-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Migration Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#original-code-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original Code Findings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-field-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Field Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#particle-state-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle State Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optics-assignment-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optics Assignment Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Refactor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-merge-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Merge Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-optics-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Optics Metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2d-and-3d-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D and 3D Analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-migration-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Migration Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="refactoring-merge-projects-with-distinct-ctf-models">Refactoring: Merge Projects With Distinct CTF Models<a class="headerlink" href="#refactoring-merge-projects-with-distinct-ctf-models" title="Permanent link">&para;</a></h1>
+<h2 id="implementation-status">Implementation Status<a class="headerlink" href="#implementation-status" title="Permanent link">&para;</a></h2>
+<p>The first implementation phase is in place:</p>
+<ul>
+<li><code>src/main/commanders/simple/simple_commanders_project_core.f90</code> routes
+  <code>merge_projects</code> through the dedicated project table parameter <code>projtab</code> and
+  requires <code>projfile_merged</code> as the explicit output project.</li>
+<li><code>src/main/ui/simple/simple_ui_project.f90</code> exposes the file-table-only
+  interface and no longer treats <code>merge_projects</code> as an in-place two-project
+  project command.</li>
+<li><code>src/fileio/simple_projfile_utils.f90</code> has a reusable
+  <code>merge_selected_project_files</code> helper, following the same file-array merge
+  shape as <code>merge_chunk_projfiles</code>.</li>
+<li>Input <code>.simple</code> files are inspected through existing <code>sp_project</code>
+  segment-info and segment-read methods, avoiding the full project read path
+  that rewrites <code>projinfo</code>.</li>
+<li>If a listed project file contains only metadata, the helper fails with the
+  offending filename and, when possible, a hint pointing at a nearby
+  data-bearing numbered-stage project file.</li>
+</ul>
+<p>The helper is now a generic project-field merger. It accepts any data-bearing
+project shape whose populated data segments match across all inputs:</p>
+<ul>
+<li>movie/micrograph-only projects through <code>os_mic</code></li>
+<li>stack-only projects through <code>os_stk</code></li>
+<li>particle projects through <code>os_ptcl2D</code> and/or <code>os_ptcl3D</code></li>
+<li>class/output/optics-bearing projects when those segments are present in all
+  inputs</li>
+</ul>
+<p>Top-level project files that contain only metadata segments such as <code>projinfo</code>
+and <code>compenv</code> are rejected because there is no data segment to merge.</p>
+<p>The helper currently:</p>
+<ul>
+<li>validates all populated mergeable data segments as all-or-none across inputs</li>
+<li>validates stack box and sampling distance when stack rows carry those fields</li>
+<li>validates micrograph sampling distance when mic-only rows carry <code>smpd</code></li>
+<li>validates row-level CTF-model fields on <code>os_mic</code> and <code>os_stk</code> when CTF is
+  enabled</li>
+<li>validates particle <code>stkind</code> when particles are merged with stacks</li>
+<li>preserves complete rows with <code>transfer_ori</code></li>
+<li>precomputes output row offsets and parallelizes independent row
+  transfer/remap loops for mic, stack, optics, <code>ptcl2D</code>, and <code>ptcl3D</code> segments</li>
+<li>parallelizes large particle validation scans and row-level <code>ogid</code> discovery
+  while reporting deterministic first failing rows</li>
+<li>preserves exact <code>os_ptcl2D%state</code> values when <code>ptcl2D</code> exists</li>
+<li>remaps stack <code>fromp</code> / <code>top</code> only when particle rows are present, remaps
+  particle <code>stkind</code> and row-level <code>ogid</code>, and clears stale <code>ptcl2D</code> clustering
+  fields while preserving <code>ptcl2D%state</code></li>
+<li>remaps <code>ogid</code> independently of whether <code>os_optics</code> exists</li>
+<li>copies/remaps <code>os_optics</code> only when the optics segment is part of the matching
+  input field set</li>
+<li>rebuilds <code>os_ptcl3D</code> from merged <code>os_ptcl2D</code> only for the historical
+  ptcl2D-only input shape, then removes 2D-clustering fields from <code>ptcl3D</code>;
+  this synthetic <code>ptcl3D</code> row construction is also parallelized</li>
+</ul>
+<p>No <code>os_optics</code> backfill path was added. <code>sp_project%get_ctfparams</code> already
+reads <code>smpd</code>, <code>ctf</code>, <code>kv</code>, <code>cs</code>, <code>fraca</code>, and <code>phaseplate</code> from <code>os_stk</code> for
+particle analysis and particle-specific defocus from particle rows, so the
+remaining resolver-related work is an audit of direct CTF construction outside
+that project API plus dedicated merge tests.</p>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Support N-project merging for SIMPLE projects that may come from different
+microscopes or CTF models but have compatible analysis data. The immediate use
+case is merging independently processed projects that have already been scaled
+to the same sampling distance, but the merge utility should not be hard-coded
+to a 2D-selected particle project shape.</p>
+<p>The general contract is:</p>
+<ol>
+<li>Every input has the same populated project data segments.</li>
+<li>Row counts may differ.</li>
+<li>Segment rows are preserved verbatim except for required merge-local
+   rewrites.</li>
+<li>Cross-project local namespaces and foreign keys are remapped.</li>
+<li>CTF-model values come from authoritative row-level fields, not from
+   <code>os_optics</code>.</li>
+</ol>
+<p>For CTF-aware rows, the merger must preserve:</p>
+<ul>
+<li><code>smpd</code></li>
+<li><code>kv</code></li>
+<li><code>cs</code></li>
+<li><code>fraca</code></li>
+<li><code>ctf</code></li>
+<li><code>phaseplate</code></li>
+</ul>
+<p><code>fraca</code> is deliberately included. It is not a microscope hardware constant, but
+it changes the CTF and therefore must be merged and resolved with <code>kv</code>, <code>cs</code>,
+and <code>smpd</code>.</p>
+<h2 id="non-goals">Non-Goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
+<p>Do not change heterogeneous movie, micrograph, or particle import in this
+refactor. The current scenario assumes data have already been imported and
+processed in separate internally consistent projects when needed.</p>
+<p>Do not make <code>os_optics</code> required. Some datasets do not have optics-group
+metadata, depending on collection and import path.</p>
+<p>Do not use <code>os_optics</code> as a source of truth or a repair source for missing
+authoritative row-level CTF fields.</p>
+<p>Do not rescale or re-extract during merge. For stack/particle projects, the
+current target requires input stacks to have already been scaled/extracted to
+the same sampling distance and compatible box size. Mismatches should fail
+validation with an actionable message.</p>
+<p>Do not attempt to scientifically reconcile per-project class averages,
+reconstructions, or output artifacts. For <code>merge_projects</code>, <code>cls2D</code>, <code>cls3D</code>,
+and <code>out</code> are intentionally ignored on input and left empty in the merged
+output.</p>
+<h2 id="target-policy">Target Policy<a class="headerlink" href="#target-policy" title="Permanent link">&para;</a></h2>
+<p>The authoritative CTF-model representation is the row-level bundle used by each
+processing stage:</p>
+<ul>
+<li><code>os_mic</code>: source of truth for movie/micrograph CTF fitting history.</li>
+<li><code>os_stk</code>: source of truth for particle-stack-level CTF constants used by
+  CTF-aware 2D/3D analysis.</li>
+<li><code>os_ptcl2D</code> / <code>os_ptcl3D</code>: source of truth for particle-level CTF values such
+  as defocus, astigmatism angle, phase shift, <code>stkind</code>, and selection state.</li>
+</ul>
+<p><code>os_optics</code> rows are optional metadata. Row-level <code>ogid</code> values, when present,
+are optics-group assignments and must be remapped during merge even if the input
+project has no <code>os_optics</code> segment. The merge must still work from row-level
+CTF-model fields when no durable optics rows exist.</p>
+<p>Because this generic merger requires matching populated data segments, mixed
+presence of <code>os_optics</code> is treated as a project-shape mismatch in this phase. If
+none of the input projects have <code>os_optics</code>, the merge is still valid and any
+row-level <code>ogid</code> values are remapped. If future workflows need mixed optional
+optics metadata, that should be an explicit extension rather than an implicit
+backfill from optics rows.</p>
+<p>The merge must not use <code>os_optics</code> to repair missing CTF-model fields. For this
+workflow the authoritative <code>mic</code>, <code>stk</code>, and particle rows are expected to
+already contain the values needed for CTF fitting and downstream analysis. A
+missing authoritative field is a validation error unless CTF is explicitly
+disabled for that row.</p>
+<p>All active stacks entering a merged 2D/3D project should have one effective
+analysis sampling distance. Different sampling distances should be handled by
+an explicit scaling or re-extraction step before this merge.</p>
+<h2 id="original-code-findings">Original Code Findings<a class="headerlink" href="#original-code-findings" title="Permanent link">&para;</a></h2>
+<p>Before this refactor, the <code>merge_projects</code> commander in
+<code>src/main/commanders/simple/simple_commanders_project_core.f90</code> was not the
+right abstraction:</p>
+<ul>
+<li>It supported exactly two projects by hard-coding <code>nprojs = 2</code>.</li>
+<li>It read <code>projfile</code> and <code>projfile_target</code>, appended the target into the first
+  project with <code>sp_project%append_project</code>, and wrote back to <code>projfile</code>.</li>
+<li>It detected different box or sampling distance and then ran <code>reextract</code>.
+  Heterogeneous CTF-model merging should instead require compatible data for
+  the current scenario.</li>
+<li>It delegated row merging to <code>sp_project%append_project</code>, which mixed merge
+  policy with project mutation.</li>
+<li>It remapped <code>ogid</code> only inside the <code>os_optics</code> branch, missing projects that
+  carry row-level optics-group assignments without an <code>os_optics</code> table.</li>
+</ul>
+<p>The stream <code>cluster2D_subsets</code> path has a better framework for project
+aggregation:</p>
+<ul>
+<li><code>src/main/stream/simple_stream_cluster2D_subsets.f90</code> tracks project files in
+  <code>rec_list</code> / <code>chunk_rec</code> and passes arrays of project filenames into a merge
+  utility.</li>
+<li><code>src/fileio/simple_projfile_utils.f90::merge_chunk_projfiles</code> accepts an
+  array of project files, allocates output project segments, transfers
+  orientations with <code>transfer_ori</code>, remaps stack and particle indices, and
+  optionally writes the merged project.</li>
+<li>That framework keeps commanders thin and puts reusable project-file merge
+  mechanics outside the commander.</li>
+</ul>
+<p>The refactor reuses this framework shape: <code>merge_projects</code> builds an ordered
+list of source project files from <code>projtab</code>, then calls a project-file merge
+utility in <code>simple_projfile_utils</code>.</p>
+<h2 id="project-field-contract">Project Field Contract<a class="headerlink" href="#project-field-contract" title="Permanent link">&para;</a></h2>
+<p>The merger should determine the populated project data segments for every input
+project:</p>
+<ul>
+<li><code>os_mic</code></li>
+<li><code>os_stk</code></li>
+<li><code>os_ptcl2D</code></li>
+<li><code>os_ptcl3D</code></li>
+<li><code>os_optics</code></li>
+</ul>
+<p>Every segment must be either populated in all inputs or empty in all inputs.
+This is the meaning of "the individual fields match" for this phase. A
+stack-only project can merge with another stack-only project; a movie-only
+project can merge with another movie-only project; a particle project can merge
+with another particle project that has the same populated particle/support
+segments. A stack-only project should not be silently merged with a
+stack-plus-particle project.</p>
+<p><code>merge_projects</code> is an acquisition/particle merge for heterogeneous CTF models,
+not an analysis-product merge. The helper should ignore <code>os_cls2D</code>, <code>os_cls3D</code>,
+and <code>os_out</code> when reading input shape and must not populate those fields in the
+merged output. Existing class-average and output rows are considered stale after
+cross-microscope merge; users should re-run 2D/3D analysis from the merged
+particle/stack state.</p>
+<p>Metadata-only segments such as <code>projinfo</code>, <code>jobproc</code>, and <code>compenv</code> are not a
+data shape. The merged project should copy them from the first input and update
+the output project filename.</p>
+<p>Complete source rows should be transferred with <code>transfer_ori</code>. The merger
+should mutate only fields whose values are local to the source project and
+therefore cannot remain verbatim in the merged namespace.</p>
+<h2 id="particle-state-contract">Particle State Contract<a class="headerlink" href="#particle-state-contract" title="Permanent link">&para;</a></h2>
+<p>When <code>os_ptcl2D</code> is present, <code>state</code> is an authoritative input field. The
+merger must preserve the <code>state</code> value for every copied <code>ptcl2D</code> row verbatim
+after append and index remapping. It must not reset all particles to active,
+infer <code>ptcl2D</code> state from class rows, drop deselected rows, or normalize
+positive state labels unless a separate explicit pruning/relabeling command is
+requested.</p>
+<p>If <code>os_ptcl2D</code> is present and <code>os_ptcl3D</code> is absent, the helper may preserve the
+historical stream behavior of creating <code>os_ptcl3D</code> from the merged <code>ptcl2D</code>
+rows and deleting 2D-clustering fields. If both particle segments are present,
+both should be transferred and remapped as independent authoritative segments.</p>
+<h2 id="index-contracts">Index Contracts<a class="headerlink" href="#index-contracts" title="Permanent link">&para;</a></h2>
+<p><code>stkind</code> is not a value to preserve verbatim across projects. It is a foreign
+key from each particle row into that project's local <code>os_stk</code> table. During an
+N-project merge, stack rows are concatenated into one output <code>os_stk</code> table, so
+every copied particle row with stacks present must have <code>stkind</code> rewritten to
+the corresponding output stack index.</p>
+<p>For stack/particle projects, the merger must:</p>
+<ol>
+<li>Transfer each source stack row.</li>
+<li>Rewrite stack <code>fromp</code> / <code>top</code> into the output particle index range when
+   those fields are present.</li>
+<li>Require valid particle <code>stkind</code> values when particles are merged with
+   stacks.</li>
+<li>Rewrite each transferred particle <code>stkind</code> from the source stack index to
+   the output stack index.</li>
+</ol>
+<p>For stack-only projects, stack rows are transferred as-is. The absence of
+particles should not make the stack field unmergeable, and stack-only merges do
+not rewrite <code>fromp</code> / <code>top</code>.</p>
+<p>When class segments are present, class rows and particle <code>class</code> assignments
+must be offset into the merged class namespace. The helper should not infer
+selection from class rows.</p>
+<h2 id="optics-assignment-contract">Optics Assignment Contract<a class="headerlink" href="#optics-assignment-contract" title="Permanent link">&para;</a></h2>
+<p><code>ogid</code> is a row-level assignment namespace. Values from different source
+projects can collide, so the merged project must rewrite positive <code>ogid</code> values
+into a single output namespace.</p>
+<p>The remapping trigger is the presence of row-level <code>ogid</code> values on any copied
+segment, not the presence of <code>os_optics</code>. For each source project, collect the
+maximum positive <code>ogid</code> namespace used by its rows, allocate a collision-free
+output offset, and rewrite every copied row that has an <code>ogid</code> field.</p>
+<p>If <code>os_optics</code> is part of the matching input field set, append/remap those rows
+with the same output <code>ogid</code> namespace and update <code>ogname</code> when appropriate. If
+no source project has <code>os_optics</code>, no durable optics rows need to be synthesized.</p>
+<h2 id="core-refactor">Core Refactor<a class="headerlink" href="#core-refactor" title="Permanent link">&para;</a></h2>
+<p>Add or finish a project-level CTF-model resolver in <code>src/main/project</code>, with
+behavior roughly equivalent to:</p>
+<ol>
+<li>Identify the relevant row for <code>oritype</code> and particle index.</li>
+<li>Read CTF-model parameters from the stage's primary row: <code>os_mic</code> for
+   micrographs, <code>os_stk</code> for stacks and particles.</li>
+<li>Do not consult <code>os_optics</code> to fill missing CTF-model values.</li>
+<li>Require the returned model to be complete unless CTF is explicitly disabled;
+   missing authoritative fields should fail validation rather than be inferred
+   from metadata.</li>
+<li>Read image- or particle-specific defocus from the current particle-row
+   locations.</li>
+<li>Return a complete <code>ctfparams</code>.</li>
+</ol>
+<p>Update <code>sp_project%get_ctfparams</code> to call this resolver if direct duplicated
+logic remains. That change covers the major CTF-aware 2D/3D consumers because
+polar-FT CTF matrix generation, class averaging, and reconstruction helper
+paths already call <code>get_ctfparams</code>.</p>
+<p>Add validation helpers:</p>
+<ul>
+<li><code>validate_project_field_shape</code>: ensure all inputs have matching populated
+  data segments.</li>
+<li><code>validate_ctf_model_rows</code>: ensure every active <code>mic</code> or <code>stk</code> row that needs
+  CTF has complete row-level <code>smpd</code>, <code>kv</code>, <code>cs</code>, <code>fraca</code>, <code>ctf</code>, and
+  phase-plate state.</li>
+<li><code>validate_particle_ctf_rows</code>: ensure particles with CTF enabled through their
+  stack have defocus/astigmatism/phase-shift fields required by their CTF mode.</li>
+<li><code>validate_ptcl2D_state_rows</code>: when <code>ptcl2D</code> exists, record the state vector
+  so the merger can assert that copied rows are unchanged.</li>
+<li><code>build_ogid_remap</code>: collect row-level <code>ogid</code> assignments per source project
+  and allocate a collision-free output <code>ogid</code> namespace independent of
+  <code>os_optics</code>.</li>
+<li><code>validate_common_analysis_smpd</code>: enforce or report the common sampling
+  distance expected by current 2D/3D parameter derivation when stack/mic rows
+  carry <code>smpd</code>.</li>
+<li><code>validate_common_particle_box</code>: enforce identical particle image dimensions
+  when stack rows carry <code>box</code>.</li>
+</ul>
+<h2 id="project-merge-changes">Project Merge Changes<a class="headerlink" href="#project-merge-changes" title="Permanent link">&para;</a></h2>
+<p><code>merge_projects</code> should remain a thin commander over the reusable N-project
+merge utility:</p>
+<ol>
+<li>Accept only a project file table for N input projects through <code>projtab</code>.
+   Do not preserve the legacy two-project <code>projfile</code> plus <code>projfile_target</code>
+   interface for this refactor.</li>
+<li>Require an explicit output project name, <code>projfile_merged</code>, so the merged
+   project is not written over one of the inputs.</li>
+<li>Resolve a relative <code>projfile_merged</code> against the execution directory without
+   calling an existence-based canonicalizer; the output file may not exist yet.</li>
+<li>Build an ordered <code>project_fnames(:)</code> array, analogous to the stream
+   <code>cluster2D_subsets</code> / <code>merge_chunk_projfiles</code> call sites.</li>
+<li>Read each source through existing <code>sp_project</code> segment-info and
+   segment-read methods so <code>merge_projects</code> can inspect arbitrary populated
+   fields without rewriting source project metadata.</li>
+<li>Call the shared project-file merge helper:
+   <code>merge_selected_project_files(project_fnames, projfile_out, merged_proj, ...)</code>.</li>
+<li>Keep the commander responsible only for CLI validation, input normalization,
+   writing, and <code>simple_end</code>.</li>
+</ol>
+<p>The shared helper should:</p>
+<ol>
+<li>Read all source projects and determine their populated project field shape.</li>
+<li>Fail if the populated data segments do not match across inputs.</li>
+<li>Fail if no mergeable data segments exist beyond metadata.</li>
+<li>Validate row-level CTF-model data where CTF is enabled.</li>
+<li>Validate identical analysis sampling distance and particle box dimensions
+   when those fields exist. Do not run <code>reextract</code> in this merge path.</li>
+<li>Allocate every populated mergeable output segment up front, excluding
+   <code>os_cls2D</code>, <code>os_cls3D</code>, and <code>os_out</code>.</li>
+<li>Copy source rows with <code>transfer_ori</code>.</li>
+<li>Remap only merge-local fields: stack <code>fromp</code> / <code>top</code> when particles are
+   present, particle <code>stkind</code>, and row-level <code>ogid</code>.</li>
+<li>Preserve row-level CTF-model values by transferring complete <code>os_mic</code> and
+   <code>os_stk</code> rows. Do not overwrite <code>kv</code>, <code>cs</code>, <code>fraca</code>, <code>ctf</code>, <code>phaseplate</code>, or
+   <code>smpd</code> from global parameters.</li>
+<li>Preserve particle-level CTF values and exact <code>os_ptcl2D%state</code> flags by
+    transferring complete particle rows. Clear stale <code>ptcl2D</code> clustering fields
+    after transfer because class rows are intentionally not carried forward.</li>
+<li>Remap row-level <code>ogid</code> assignments for every copied segment that carries
+    <code>ogid</code>, independent of whether the source project has <code>os_optics</code>.</li>
+<li>Preserve/remap <code>os_optics</code> only when it is part of the matching input field
+    set.</li>
+<li>If a source project has incomplete authoritative row-level CTF fields, fail
+    validation even if corresponding values exist in <code>os_optics</code>.</li>
+</ol>
+<p>Performance policy:</p>
+<ul>
+<li>The merge is allowed to keep all input and output metadata rows in memory;
+  this refactor is not optimized for memory-constrained machines.</li>
+<li>The merge must not rewrite movie, micrograph, stack, or particle image data.</li>
+<li>The hot row-transfer/remap loops should be OpenMP-parallel where each
+  iteration writes to a precomputed, distinct output row.</li>
+<li>Large validation and namespace-discovery scans should also use OpenMP when
+  they can reduce to deterministic scalar results, such as the first invalid
+  particle row or the maximum row-level <code>ogid</code> in a source project.</li>
+<li>The final project metadata write is still a single output-file serialization
+  step through the existing project writer.</li>
+</ul>
+<p>This keeps merge behavior predictable and avoids accidental regrouping.</p>
+<h2 id="optional-optics-metadata">Optional Optics Metadata<a class="headerlink" href="#optional-optics-metadata" title="Permanent link">&para;</a></h2>
+<p>When <code>os_optics</code> exists for every source project, it should be kept consistent
+with row-level values and remapped with the same <code>ogid</code> namespace used for the
+rows. When no source project has <code>os_optics</code>, the row-level <code>ogid</code> assignment
+should still be remapped and the project should still be complete and
+scientifically valid.</p>
+<p><code>os_optics</code> is not a repair source for this refactor. It may be preserved and
+remapped as metadata, but it should not be read to fill missing <code>smpd</code>, <code>kv</code>,
+<code>cs</code>, <code>fraca</code>, CTF flag, or phase-plate state on authoritative rows.</p>
+<p>If future STAR export needs an optics table from a merged project that lacks
+<code>os_optics</code>, the STAR adapter can synthesize a temporary export-only optics
+table from row-level CTF-model groups. It should not require or persist
+<code>os_optics</code> just to export.</p>
+<h2 id="2d-and-3d-analysis">2D and 3D Analysis<a class="headerlink" href="#2d-and-3d-analysis" title="Permanent link">&para;</a></h2>
+<p>Once <code>get_ctfparams</code> uses the resolver consistently, most CTF-aware 2D/3D
+analysis should pick up mixed <code>kv</code>, <code>cs</code>, and <code>fraca</code> values without broad
+algorithm changes.</p>
+<p>Still audit these areas explicitly:</p>
+<ul>
+<li><code>src/main/pftc/simple_polarft_ctf.f90</code></li>
+<li><code>src/main/class/simple_classaverager_restore.f90</code></li>
+<li><code>src/main/volume</code> reconstruction helpers that apply CTF</li>
+<li>any direct construction of <code>ctf(params%smpd, params%kv, params%cs, ...)</code>
+  outside simulation or validation code</li>
+</ul>
+<p>Global <code>params%kv</code> and <code>params%cs</code> should not be used for real project CTF
+evaluation. They can remain defaults for simulation, validation, and
+homogeneous import.</p>
+<h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
+<p>Add project-level and commander-level tests for matching field shapes:</p>
+<ul>
+<li><code>merge_projects</code> accepts an N-project file table and routes through the shared
+  project-file merge helper rather than an in-commander append loop.</li>
+<li>Stack-only projects merge when all inputs have <code>os_stk</code> and no particle
+  segments.</li>
+<li>Movie/micrograph-only projects merge when all inputs have <code>os_mic</code> and no
+  stack/particle segments.</li>
+<li>Particle projects merge when all populated data segments match.</li>
+<li>Metadata-only projects fail with a clear error that identifies the offending
+  <code>projtab</code> entry and hints at a nearby data-bearing stage project when one is
+  present.</li>
+<li>Projects with mismatched populated data segments fail with a clear field-shape
+  error.</li>
+<li>Input projects can have identical analysis <code>smpd</code> and compatible boxes but
+  different <code>kv</code>, <code>cs</code>, and/or <code>fraca</code> on their <code>os_stk</code> rows.</li>
+<li><code>merge_projects</code> preserves row-level mic/stack CTF-model values.</li>
+<li><code>merge_projects</code> preserves the exact <code>os_ptcl2D%state</code> vector from each input
+  project in the corresponding output row range, including <code>0</code> entries and any
+  positive labels.</li>
+<li><code>merge_projects</code> preserves particle-level defocus fields and remaps <code>stkind</code>
+  correctly after append.</li>
+<li>For every output stack row, all output particles in that stack's <code>fromp</code> /
+  <code>top</code> range have <code>stkind</code> equal to the output stack index.</li>
+<li>Class rows and particle <code>class</code> values are offset when class segments are
+  part of the matching input field set.</li>
+<li><code>sp_project%get_ctfparams('ptcl2D', iptcl)</code> returns different <code>kv</code>/<code>cs</code> for
+  particles originating from different projects.</li>
+<li>Cluster2D and refine3D CTF matrix construction call through the resolver.</li>
+<li>The merger works when no source project has <code>os_optics</code>.</li>
+<li>The merger remaps row-level <code>ogid</code> assignments even when no source project
+  has <code>os_optics</code>.</li>
+<li>If two source projects both use <code>ogid=1</code>, the output rows from those projects
+  receive distinct output <code>ogid</code> values even when neither source has
+  <code>os_optics</code>.</li>
+<li>A project with incomplete row-level CTF fields fails validation even if
+  <code>os_optics</code> contains matching values.</li>
+<li>A mixed-sampling or mixed-box project fails validation for this merge path,
+  with instructions to rescale/re-extract before merging.</li>
+<li>The old two-project <code>projfile</code> / <code>projfile_target</code> interface is not supported
+  by this refactor.</li>
+</ul>
+<h2 id="suggested-migration-plan">Suggested Migration Plan<a class="headerlink" href="#suggested-migration-plan" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add resolver and validation helpers with no behavior change.</li>
+<li>Route <code>get_ctfparams</code> through the resolver without introducing an
+   <code>os_optics</code> path for missing authoritative fields.</li>
+<li>Add a reusable project-file merge helper alongside <code>merge_chunk_projfiles</code>.</li>
+<li>Refactor <code>merge_projects</code> to build a project filename array from <code>projtab</code>
+   and call the shared helper.</li>
+<li>Generalize the helper from a 2D-selected particle-only merge to a matching
+   project-field merge.</li>
+<li>Make stack/particle merge paths require identical <code>smpd</code> and box size when
+   those fields are present; leave scaling/re-extraction as an explicit
+   pre-merge step.</li>
+<li>Preserve row-level CTF-model fields and exact <code>os_ptcl2D%state</code> flags during
+   row transfer.</li>
+<li>Remap local indices and namespaces during row transfer independently of
+   whether <code>os_optics</code> exists.</li>
+<li>Add merge tests for stack-only, mic-only, particle, and heterogeneous CTF
+   particle projects.</li>
+<li>Audit direct CTF-field lookups in 2D/3D paths and route them through the
+    resolver where needed.</li>
+<li>Leave heterogeneous import support for a separate future refactor.</li>
+</ol>
+<h2 id="open-questions">Open Questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Should mixed optional <code>os_optics</code> presence be supported by explicitly dropping
+  optics rows from the merged output, or should matching field shape remain the
+  rule?</li>
+<li>Should phase-plate state be required to be stack-level for merged particle
+  projects, or should per-particle phase-plate state be allowed?</li>
+<li>Should selected class provenance be retained as optional annotations after
+  class/output segments are concatenated?</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

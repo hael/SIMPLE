@@ -1,0 +1,2600 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/importance_sampling_fractional_update_policy.html">
+      
+      
+        <link rel="prev" href="fsc_area_score_policy.html">
+      
+      
+        <link rel="next" href="microscope_parameters_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Importance Sampling and Fractional Update Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#importance-sampling-and-fractional-update-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Importance Sampling and Fractional Update Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-bookkeeping-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Bookkeeping Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-abinitio2d-and-cluster2d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Abinitio2D and Cluster2D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-abinitio3d-and-refine3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Abinitio3D and Refine3D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-probabilistic-pre-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Probabilistic Pre-Alignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-restoration-and-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Restoration and Assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Review Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-core-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Core Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-bookkeeping-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Bookkeeping Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-abinitio2d-and-cluster2d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Abinitio2D and Cluster2D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-abinitio3d-and-refine3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Abinitio3D and Refine3D
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-probabilistic-pre-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Probabilistic Pre-Alignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-restoration-and-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Restoration and Assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Review Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="importance-sampling-and-fractional-update-policy">Importance Sampling and Fractional Update Policy<a class="headerlink" href="#importance-sampling-and-fractional-update-policy" title="Permanent link">&para;</a></h1>
+<p>This document records durable workflow contracts for sampled particle updates,
+probabilistic candidate sampling, fractional class-average restoration, and
+trailing reconstruction in <code>abinitio2D</code>, <code>cluster2D</code>, <code>abinitio3D</code>, and
+<code>refine3D</code>. It is policy, not a line-by-line implementation map.</p>
+<h2 id="1-core-model">1. Core Model<a class="headerlink" href="#1-core-model" title="Permanent link">&para;</a></h2>
+<p>SIMPLE has two sampling layers that must remain separate:</p>
+<ol>
+<li>outer fractional-update sampling chooses which particles participate in the
+   current iteration</li>
+<li>inner importance sampling chooses which reference, orientation, or in-plane
+   candidates are explored for those participating particles</li>
+</ol>
+<p>The outer subset is recorded in the project through <code>sampled</code> and <code>updatecnt</code>.
+Downstream restoration and reconstruction consume that recorded state. They must
+not infer participation from the nominal command-line <code>update_frac</code> alone.</p>
+<p>Probabilistic pre-alignment is a sample-once-and-reuse path: the pre-alignment
+commander chooses the outer subset, probability-table workers reuse it, and the
+matcher reuses it again for the hard particle update.</p>
+<h2 id="2-ownership">2. Ownership<a class="headerlink" href="#2-ownership" title="Permanent link">&para;</a></h2>
+<p><code>simple_commanders_abinitio2D.f90</code> owns <code>abinitio2D</code> orchestration: defaults,
+stage execution, final fill-in, and final class-average generation.</p>
+<p><code>simple_abinitio2D_controller.f90</code> owns the 2D stage policy: <code>NPTCLS2SAMPLE_2D</code>,
+<code>nsample</code> override handling, stage-local <code>update_frac</code>, search-mode transitions,
+and the rule that stage 1 may sample particles without fractionally restoring
+previous class averages.</p>
+<p><code>simple_commanders_abinitio.f90</code> and <code>simple_abinitio_controller.f90</code> own 3D
+stage scheduling: dynamic <code>update_frac</code>, <code>fillin</code>, <code>frac_best</code>, <code>balance</code>,
+<code>trail_rec</code>, and transitions between early <code>prob_neigh</code> modes, <code>prob</code>, and
+late <code>prob_neigh</code>.</p>
+<p><code>simple_matcher_smpl_and_lplims.f90</code> owns the shared outer subset-selection
+helpers for 2D and 3D. This is where full update, random sampling,
+update-count-biased sampling, class-balanced sampling, fill-in sampling, and
+subset reproduction are dispatched.</p>
+<p><code>simple_oris_sampling.f90</code> and <code>simple_oris_getters.f90</code> own the bookkeeping:
+<code>sampled</code>, <code>updatecnt</code>, exact subset reproduction, global realized update
+fraction, and class-local realized update fractions.</p>
+<p><code>simple_commanders_prob.f90</code> owns probabilistic pre-alignment orchestration:
+sampling the outer subset once, writing it to the project, running table
+generation, aggregating probability-table outputs, and writing the assignment
+artifact.</p>
+<p><code>simple_eul_prob_tab*.f90</code> owns inner candidate importance sampling. These
+modules may sample references, orientations, neighbors, or in-plane candidates
+inside the active particle subset, but they must not choose a new particle
+subset.</p>
+<p><code>simple_strategy2D_matcher.f90</code> and <code>simple_strategy3D_matcher.f90</code> own
+particle-domain search on the active subset, assignment consumption, pose or
+class updates, sigma updates during search, and writing partition-local
+reconstruction or class-average inputs.</p>
+<p>The classaverager modules own 2D class-average restoration and assembly.
+<code>commander_volassemble</code> owns 3D volume assembly and trailing reconstruction.
+These layers consume sampled-update state; they do not own particle selection.</p>
+<h2 id="3-bookkeeping-contracts">3. Bookkeeping Contracts<a class="headerlink" href="#3-bookkeeping-contracts" title="Permanent link">&para;</a></h2>
+<p><code>sampled</code> marks the current sampling round. All particles with the latest
+<code>sampled</code> value belong to the current active subset.</p>
+<p><code>updatecnt</code> tracks cumulative update history. Count-biased and fill-in paths use
+it to prefer under-updated or never-updated active particles.</p>
+<p><code>sample4update_reprod</code> is the only correct way to reuse a previously selected
+probabilistic subset. A probability-table worker or downstream matcher must not
+silently resample when a probabilistic pre-step has already sampled the subset.</p>
+<p><code>get_state_update_fracs</code> returns state-local realized update fractions for 3D
+trailing from the current <code>sampled</code> round, state labels, and particles with
+<code>updatecnt &gt; 0</code>. <code>get_update_frac</code> remains available for callers that need the
+legacy global summary.</p>
+<p><code>get_class_update_fracs</code> returns per-class realized update fractions for 2D
+class-average carry-over. It uses active particles, current class assignments,
+the latest <code>sampled</code> round, and <code>updatecnt &gt; 0</code>.</p>
+<p>The nominal <code>update_frac</code> is a target used by sampling. The realized fraction in
+<code>simple_oris</code> is the downstream restoration and trailing contract.</p>
+<h2 id="4-abinitio2d-and-cluster2d">4. Abinitio2D and Cluster2D<a class="headerlink" href="#4-abinitio2d-and-cluster2d" title="Permanent link">&para;</a></h2>
+<p><code>abinitio2D</code> uses a fixed run-local target sample size:</p>
+<ul>
+<li>default: <code>NPTCLS2SAMPLE_2D = 200000</code></li>
+<li>override: <code>nsample=&lt;integer&gt;</code></li>
+</ul>
+<p>The stage controller converts that target into:</p>
+<pre><code class="language-text">update_frac_2D = min(1.0, real(min(nptcls_eff, nsample_target_2D)) / real(nptcls_eff))
+</code></pre>
+<p>where <code>nptcls_eff</code> is the number of active particles with <code>state &gt; 0</code>. If the
+target covers almost all active particles, the stage command omits
+<code>update_frac</code> and naturally becomes a full update.</p>
+<p>Current stage policy:</p>
+<ul>
+<li>stage 1 uses the sampled-update machinery when needed, but fractional
+  class-average carry-over is disabled</li>
+<li>while <code>startit == 1</code>, <code>sample_ptcls4update2D</code> keeps the initial subset sticky
+  by reproducing it after the first random draw</li>
+<li>later non-probabilistic iterations use <code>sample4update_cnt</code>, which is
+  stochastic but biased toward particles with lower <code>updatecnt</code></li>
+<li>probabilistic stages use <code>prob_align2D</code> to sample once, then <code>prob_tab2D</code> and
+  <code>cluster2D_exec</code> reproduce the same subset</li>
+<li>staged <code>fillin=yes</code> currently acts as a full-assignment coverage guard. It
+  requires active particles to have assignments before convergence, while
+  particle selection still follows the normal sampled-update path</li>
+<li>staged <code>abinitio2D</code> refinement uses sampled SNHC (<code>refine=snhc_smpl</code>) for
+  stages 1-4, then sparse probabilistic SNHC (<code>refine=prob_snhc</code>) for stage 5
+  and later staged <code>cluster2D</code> invocations, including staged fill-in targets</li>
+<li>when staged updates were sampled, <code>abinitio2D</code> then runs a separate terminal
+  dense probabilistic all-particle pass with <code>update_frac</code> and <code>fillin</code>
+  disabled, refreshing class, in-plane, and shift parameters before final
+  class-average generation</li>
+</ul>
+<p>Fractional 2D restoration is class-local. <code>cavger_init_online</code> reads or centers
+previous partial sums when fractional update is active, obtains per-class
+realized fractions through <code>get_class_update_fracs</code>, and weights previous
+even/odd class sums and CTF-squared sums independently for each class. This is
+the 2D analogue of respecting independently updated objects in 3D.</p>
+<p>Distributed cleanup must preserve class-average partial sums while fractional
+restoration still needs them as carry-over input. Assignment and distance
+artifacts are per-iteration handoffs and may be removed before the next
+iteration writes replacements.</p>
+<h2 id="5-abinitio3d-and-refine3d">5. Abinitio3D and Refine3D<a class="headerlink" href="#5-abinitio3d-and-refine3d" title="Permanent link">&para;</a></h2>
+<p>The 3D controller derives the abinitio3D outer update policy from <code>nsample</code>.
+The resulting update fraction is capped by <code>UPDATE_FRAC_MAX</code>.</p>
+<p>Current high-level ab initio stage policy:</p>
+<ul>
+<li>stage 1 uses <code>prob_neigh</code> with <code>prob_neigh_mode=snhc</code></li>
+<li>stage 2 uses <code>prob_neigh</code> with <code>prob_neigh_mode=shc</code></li>
+<li>stages 3-5 use <code>prob</code></li>
+<li>final neighborhood stages use <code>prob_neigh</code></li>
+<li>stages 1 and 2 use the same <code>nspace=1000</code></li>
+<li>stage 1 keeps its low-pass limit but reuses stage 2 <code>box_crop</code> and <code>smpd_crop</code></li>
+<li>final active stages may switch to <code>fillin</code>, except where the multi-state
+  policy disables it</li>
+</ul>
+<p>For <code>abinitio3D</code> <code>multivol_mode=independent</code>, the default policy is an
+inspection-first multi-state run: <code>nstages=5</code> and <code>lpstop=6.0 A</code> unless the
+user overrides them. This stops after the <code>prob</code> phase and before
+<code>prob_neigh</code>, staged NU filtering, independent-mode trailing reconstruction,
+and staged automasking. The workflow still runs the final reconstruction step
+at the configured last stage so it writes inspectable final state volumes. To
+increase the chance that all active particles receive assignments before that
+exit, independent mode starts stochastic balanced sampling at stage 4: the child
+<code>refine3D</code> stages use <code>greedy_sampling=no</code> with <code>frac_best=1.0</code> from stage 4
+onward. This keeps class-balanced quotas but draws from the whole class, not a
+top-ranked fraction. The outer particle target remains the fixed
+<code>nsample</code>-derived update fraction at every stage.</p>
+<p><code>abinitio3D</code> <code>multivol_mode=docked</code> has an explicit split/update epoch policy.
+Stages before the split run as one state. The default split stage is 6, so the
+split occurs after stage 5. Docked early stops before the split are rejected.
+At the split, the commander restores the requested state count, recomputes the
+post-split <code>nsample</code>-derived update target, clears <code>ptcl3D%sampled</code> and
+<code>ptcl3D%updatecnt</code>, randomizes active particles into balanced uniform state
+labels, validates that every split state is populated enough for probabilistic
+multi-state tables, and reconstructs split state volumes. Pre-split stages
+continue to use the single-state update target.</p>
+<p>The first post-split stage uses <code>refine=prob_state</code>, removes <code>update_frac</code>,
+<code>nsample</code>, and <code>fillin</code>, and therefore processes all active particles without
+fractional particle sampling. It also keeps trailing reconstruction off,
+preventing pre-split mixed-volume memory from being blended into the split-stage
+volumes. Later post-split stages restore the fixed <code>nsample</code>-derived fractional
+particle target and trailing reconstruction inside the new multi-state epoch.</p>
+<p>Because the split clears the counters, <code>updatecnt</code> after the split is
+post-split multi-state update history, not single-state history. Final docked
+reconstruction requires every active particle to have a post-split update.</p>
+<p><code>sample_ptcls4update3D</code> applies the normal 3D subset policy:</p>
+<ul>
+<li>if fractional update is off, select all active particles</li>
+<li>if <code>balance=yes</code>, use class-balanced sampling</li>
+<li>otherwise use update-count-biased sampling</li>
+</ul>
+<p><code>sample_ptcls4fillin</code> is a separate late-stage coverage policy. Its purpose is
+to update particles with insufficient history, not to preserve the normal
+balanced or count-biased exploration distribution.</p>
+<p>The 3D matcher writes partial reconstructions from the active subset. Volume
+assembly then restores volumes, calculates FSCs, postprocesses references, and
+applies trailing reconstruction when requested. Trailing uses an explicit
+<code>ufrac_trec</code> only when the parsed <code>params%l_ufrac_trec_defined</code> flag is true
+and the run is single-state; otherwise it consumes realized per-state fractions
+from <code>get_state_update_fracs</code>. The numeric <code>params%ufrac_trec</code> field has a
+default value and must not be interpreted as an active override by itself.
+Multi-state convergence reporting records those effective state-local fractions
+as <code>TRAIL_REC_UPDATE_FRAC_STATE01</code>, <code>TRAIL_REC_UPDATE_FRAC_STATE02</code>, and so on.</p>
+<h2 id="6-probabilistic-pre-alignment">6. Probabilistic Pre-Alignment<a class="headerlink" href="#6-probabilistic-pre-alignment" title="Permanent link">&para;</a></h2>
+<p>Probabilistic pre-alignment is not a second outer sampler.</p>
+<p>The workflow is:</p>
+<ol>
+<li>choose the outer subset through the normal 2D or 3D sampling helper</li>
+<li>write the sampled project state</li>
+<li>run probability-table generation only for that subset</li>
+<li>aggregate table outputs into one assignment artifact</li>
+<li>reproduce the same subset in the matcher</li>
+<li>perform the hard particle update</li>
+</ol>
+<p><code>simple_eul_prob_tab.f90</code>, <code>simple_eul_prob_tab_neigh.f90</code>, and
+<code>simple_eul_prob_tab2D.f90</code> perform candidate-level importance sampling inside
+that subset. They may use score-derived candidate distributions,
+<code>angle_sampling</code>, <code>greedy_sampling</code>, or neighborhood sampling, but the selected
+particle set is already fixed before they run.</p>
+<h2 id="7-restoration-and-assembly">7. Restoration and Assembly<a class="headerlink" href="#7-restoration-and-assembly" title="Permanent link">&para;</a></h2>
+<p>2D class-average restoration consumes class-local realized update fractions:</p>
+<ul>
+<li>previous class contribution: <code>1 - rho(class)</code></li>
+<li>current class contribution: the new partial sums for that class</li>
+</ul>
+<p>Classes with no active updated particles keep a zero realized fraction. Classes
+with full sampled participation replace previous sums.</p>
+<p>3D volume assembly consumes realized state-local update fractions for trailing:</p>
+<ul>
+<li>previous state-volume contribution: <code>1 - update_frac_trail_rec(state)</code></li>
+<li>current state-volume contribution: <code>update_frac_trail_rec(state)</code></li>
+</ul>
+<p>Neither class-average restoration nor volume assembly should make new particle
+sampling decisions. If a restoration or assembly change requires a different
+subset policy, that policy belongs in the commander/controller/sampling-helper
+layer and must be reflected in <code>sampled</code> and <code>updatecnt</code>.</p>
+<p>Online matcher restoration/reconstruction paths must read active particle
+images from disk once per batch and reuse those batch images for both matching
+and restoration/reconstruction. Do not introduce a trailing full reconstruction
+or class-average restoration pass that re-reads image stacks as a memory
+optimization unless the single-read performance contract is explicitly changed.
+Probabilistic table-generation programs and explicit offline assembly commands
+are separate workflow stages and may perform their own reads.</p>
+<h2 id="8-invariants">8. Invariants<a class="headerlink" href="#8-invariants" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Outer particle sampling happens before probabilistic table generation.</li>
+<li>Probabilistic table workers and downstream matchers reproduce the same subset.</li>
+<li>Candidate importance sampling never changes the particle subset.</li>
+<li><code>sampled</code> remains the current-round marker.</li>
+<li><code>updatecnt</code> remains cumulative update history.</li>
+<li>Downstream restoration uses realized update state, not only nominal
+  <code>update_frac</code>.</li>
+<li>Stage 1 of <code>abinitio2D</code> may be sampled but must not fractionally carry over
+  previous class-average sums.</li>
+<li>The <code>abinitio3D</code> docked split starts a new multi-state <code>sampled/updatecnt</code>
+  epoch.</li>
+<li>Independent multi-state <code>abinitio3D</code> defaults to a five-stage,
+  <code>lpstop=6.0 A</code> inspection run, starts stochastic balanced sampling at stage
+  4, and still writes final reconstruction outputs.</li>
+<li>Docked split-stage refinement must not use trailing volume averaging; later
+  post-split stages restore trailing inside the new multi-state epoch.</li>
+<li>2D fractional class-average restoration remains class-local.</li>
+<li>Staged <code>abinitio2D</code> <code>fillin=yes</code> remains a full-assignment coverage guard
+  unless the implementation is deliberately changed to missing-only assignment.</li>
+<li>Sampled <code>abinitio2D</code> runs a terminal dense probabilistic all-particle refresh before final
+  class-average generation.</li>
+<li><code>volassemble</code> and the classaverager remain consumers of sampled-update state,
+  not producers of particle-selection policy.</li>
+<li>Online matcher restoration/reconstruction reuses the particle images already
+  read for the current batch.</li>
+</ul>
+<h2 id="9-review-checklist">9. Review Checklist<a class="headerlink" href="#9-review-checklist" title="Permanent link">&para;</a></h2>
+<p>For sampling, probabilistic alignment, class-average restoration, or volume
+assembly changes, check:</p>
+<ul>
+<li>Does the outer subset get selected exactly once for a probabilistic
+  pre-alignment iteration?</li>
+<li>Do table workers and matchers reuse the recorded subset through
+  <code>sample4update_reprod</code>?</li>
+<li>Is candidate-level importance sampling kept separate from particle-level
+  subset selection?</li>
+<li>Are <code>sampled</code> and <code>updatecnt</code> updated consistently before downstream
+  restoration or trailing consumes them?</li>
+<li>Does 2D restoration use class-local realized fractions?</li>
+<li>Does 3D trailing consume the realized or explicit trailing fraction?</li>
+<li>Does the online matcher path preserve one image-stack read per particle batch?</li>
+<li>Are shared-memory and distributed paths preserving the same scientific
+  workflow and artifact contracts?</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

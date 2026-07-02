@@ -1,0 +1,3055 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/abinitio2D_stream_snapshot_collapse_report.html">
+      
+      
+        <link rel="prev" href="../policies/sigma_calculation_policy.html">
+      
+      
+        <link rel="next" href="abinitio3d_sgd_refinement_plan.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>abinitio2D stream snapshot collapse report - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#abinitio2d-stream-snapshot-collapse-report" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              abinitio2D stream snapshot collapse report
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_1" id="__nav_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Microchunk and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunking and Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_model_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk and Model Rejection Relationship
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/microchunk_rejection_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microchunk Rejection and Cleanup Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microchunk_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/prior_guided_probability_neighborhood_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prior-Guided Probability Neighborhood Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="abinitio2D_stream_snapshot_collapse_report.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D stream snapshot collapse report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observed-symptom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observed symptom
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-inspection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot inspection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#last-three-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last three commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Last three commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a5cebb3b-removing-stale-2d-artifacts-before-fresh-abinitio2d-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        a5cebb3b - removing stale 2D artifacts before fresh abinitio2D run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d967ac6-ignoring-output-fields-in-ctf-heteroegenous-merge-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2d967ac6 - ignoring output fields in CTF-heteroegenous merge projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#77c272d9-trying-to-get-2d-going-from-stream-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        77c272d9 - trying to get 2D going from stream projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-uncommitted-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current uncommitted changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current uncommitted changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-fresh-start-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared fresh-start helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-allocation-and-previous-class-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search allocation and previous-class setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pftc-reference-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PFTC reference preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#greedy-tie-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Greedy tie handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-reverted-or-rejected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What we reverted or rejected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What we reverted or rejected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#broad-abinitio2d-project-rewrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broad abinitio2D project rewrite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ctfsigma-suspicion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CTF/sigma suspicion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shift-carryover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shift carryover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-explains-starting-references-being-all-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What explains starting references being all zero?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What explains starting references being all zero?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#case-1-the-mrc-starting-reference-file-is-already-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Case 1: the MRC starting-reference file is already zero
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#case-2-the-mrc-file-is-nonzero-but-pftcsearch-sees-zero-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Case 2: the MRC file is nonzero, but PFTC/search sees zero references
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-clean-runs-behave-differently" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why clean runs behave differently
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-so-far" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification so far
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-next-diagnostic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended next diagnostic
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observed-symptom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observed symptom
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-inspection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snapshot inspection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#last-three-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last three commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Last three commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a5cebb3b-removing-stale-2d-artifacts-before-fresh-abinitio2d-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        a5cebb3b - removing stale 2D artifacts before fresh abinitio2D run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2d967ac6-ignoring-output-fields-in-ctf-heteroegenous-merge-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2d967ac6 - ignoring output fields in CTF-heteroegenous merge projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#77c272d9-trying-to-get-2d-going-from-stream-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        77c272d9 - trying to get 2D going from stream projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-uncommitted-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current uncommitted changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current uncommitted changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-fresh-start-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared fresh-start helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-allocation-and-previous-class-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search allocation and previous-class setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pftc-reference-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PFTC reference preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#greedy-tie-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Greedy tie handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-reverted-or-rejected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What we reverted or rejected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What we reverted or rejected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#broad-abinitio2d-project-rewrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broad abinitio2D project rewrite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ctfsigma-suspicion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CTF/sigma suspicion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shift-carryover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shift carryover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-explains-starting-references-being-all-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What explains starting references being all zero?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What explains starting references being all zero?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#case-1-the-mrc-starting-reference-file-is-already-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Case 1: the MRC starting-reference file is already zero
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#case-2-the-mrc-file-is-nonzero-but-pftcsearch-sees-zero-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Case 2: the MRC file is nonzero, but PFTC/search sees zero references
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-clean-runs-behave-differently" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why clean runs behave differently
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-so-far" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification so far
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-next-diagnostic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended next diagnostic
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="abinitio2d-stream-snapshot-collapse-report">abinitio2D stream snapshot collapse report<a class="headerlink" href="#abinitio2d-stream-snapshot-collapse-report" title="Permanent link">&para;</a></h1>
+<p>Date: 2026-05-30</p>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>We have not proven the root cause yet. The changes made so far fall into two
+families:</p>
+<ol>
+<li>Remove or ignore stale 2D/3D project state when a new abinitio2D run starts.</li>
+<li>Prevent stale first-iteration search state from forcing all particles toward
+   a previous class index.</li>
+</ol>
+<p>Those changes address real failure modes in stream-derived projects, but they do
+not fully explain the newest observation that the starting references themselves
+were all zero. If the references on disk are already zero before the search, the
+search/objective layer will only expose the problem: every class comparison is
+nearly identical, and the old tie handling can then collapse everything into the
+last class encountered.</p>
+<p>The most important remaining distinction is:</p>
+<ul>
+<li>If <code>start2Drefs.mrc</code> is already all zero immediately after reference
+  initialization, the bug is upstream of <code>shc_inpl</code> and PFTC reference
+  polarization.</li>
+<li>If <code>start2Drefs.mrc</code> is nonzero on disk but PFTC sees zero references, the bug
+  is in reference preparation, most likely stale <code>cls2D</code>/<code>ptcl2D</code> state causing
+  some refs to be skipped.</li>
+</ul>
+<h2 id="observed-symptom">Observed symptom<a class="headerlink" href="#observed-symptom" title="Permanent link">&para;</a></h2>
+<p>On stream-derived projects with previous selections/classification state, a
+fresh 2D run initializes but the first iteration assigns all particles to the
+last class, for example class index 100. One diagnostic score from the first
+abinitio2D iteration was:</p>
+<pre><code class="language-text">&gt;&gt;&gt; SCORE [0,1] AVG/SDEV/MIN/MAX: 0.368 0.000 0.368 0.368
+</code></pre>
+<p>That score is a strong clue. For the Euclidean objective, comparing particles to
+zero references can produce a nearly constant value around <code>exp(-1) = 0.367879</code>.
+A zero standard deviation across classes means the class-dependent term has
+effectively disappeared. That is consistent with zero references, or references
+that were never polarized/prepared and therefore behave as zero in the objective.</p>
+<p>The previous greedy update condition used <code>&gt;=</code>. With identical class scores,
+that condition walks through ties and keeps replacing the best class with the
+latest equal-scoring class. That makes the collapse to the last class a
+downstream effect of the constant-score condition, not by itself the source of
+the zero scores.</p>
+<h2 id="snapshot-inspection">Snapshot inspection<a class="headerlink" href="#snapshot-inspection" title="Permanent link">&para;</a></h2>
+<p>The failing project snapshot inspected was <code>~/snapshot_1.simple</code>, copied to
+<code>/private/tmp/snapshot_1.simple</code> for local SIMPLE project readers.</p>
+<p>Facts from the snapshot:</p>
+<ul>
+<li><code>nptcl2D = 320406</code></li>
+<li><code>ncls2D = 150</code></li>
+<li><code>nstk = 2009</code></li>
+<li>Active/selected particles: <code>62075</code></li>
+<li>Inactive particles: <code>258331</code></li>
+<li>Active particles with stale 2D search state: <code>62075</code></li>
+<li>Particles with positive class assignment: <code>62075</code></li>
+<li>Particles assigned to the last class in the snapshot: <code>375</code></li>
+<li>Particles with class index greater than <code>ncls2D</code>: <code>0</code></li>
+<li>Particles with nonzero <code>corr</code>: <code>62075</code></li>
+<li>Particles with nonzero <code>e3</code>: <code>0</code></li>
+<li><code>stkind</code> values are in range.</li>
+<li><code>indstk</code> is not present as a real particle field; printed zeros are just the
+  default value. <code>get_stkname_and_ind</code> can still fall back through <code>stkind</code>,
+  <code>fromp</code>, and <code>top</code>.</li>
+<li>All stack rows had <code>ctf=yes</code>.</li>
+<li><code>cls2D</code> contained 30 zero-population classes:
+  <code>4 6 11 13 24 27 37 55 59 61 63 66 80 83 84 85 90 94 102 105 110 112 113 116 117 120 121 128 140 148</code></li>
+</ul>
+<p>Interpretation:</p>
+<ul>
+<li>The snapshot definitely contains stale 2D state in <code>ptcl2D</code> and stale
+  aggregate <code>cls2D</code> state from a previous stream/classification step.</li>
+<li>The provided snapshot does not support the earlier suspicion that bad
+  <code>stkind</code> reindexing is the immediate cause. The <code>stkind</code> values look valid.</li>
+<li>The provided snapshot does not support the CTF-flag suspicion. All stack rows
+  are CTF-enabled.</li>
+<li>The project metadata alone is not enough to verify whether the source stack
+  images or generated starting-reference MRC files are nonzero.</li>
+</ul>
+<h2 id="last-three-commits">Last three commits<a class="headerlink" href="#last-three-commits" title="Permanent link">&para;</a></h2>
+<h3 id="a5cebb3b-removing-stale-2d-artifacts-before-fresh-abinitio2d-run"><code>a5cebb3b</code> - removing stale 2D artifacts before fresh abinitio2D run<a class="headerlink" href="#a5cebb3b-removing-stale-2d-artifacts-before-fresh-abinitio2d-run" title="Permanent link">&para;</a></h3>
+<p>This was the first broad cleanup attempt in
+<code>src/main/commanders/simple/simple_commanders_abinitio2D.f90</code>.</p>
+<p>What it did:</p>
+<ul>
+<li>Added <code>cleanup_stale_run_artifacts</code>.</li>
+<li>Deleted <code>FRCS_FILE</code> and <code>ABINITIO2D_FINISHED</code> before the new run.</li>
+<li>Changed the fresh-run particle cleanup to:
+  <code>delete_2Dclustering(keepshifts=.false., keepcls=.false.)</code>.</li>
+<li>Explicitly killed <code>os_cls2D</code> and <code>os_cls3D</code>.</li>
+<li>Replaced <code>write_segment_inside(params%oritype, params%projfile)</code> with a full
+  <code>spproj%write(params%projfile)</code> so killed class segments would be omitted from
+  the binary project file.</li>
+</ul>
+<p>Why we tried it:</p>
+<ul>
+<li>The first hypothesis was that stale class segments and stale particle
+  alignment fields were being left in the project and read by the fresh run.</li>
+</ul>
+<p>Why it was not enough:</p>
+<ul>
+<li>The collapse still happened.</li>
+<li>It was too broad: it rewrote the whole project and changed abinitio2D behavior
+  outside the narrow first-iteration search problem.</li>
+<li>It was later reverted in <code>77c272d9</code>.</li>
+</ul>
+<h3 id="2d967ac6-ignoring-output-fields-in-ctf-heteroegenous-merge-projects"><code>2d967ac6</code> - ignoring output fields in CTF-heteroegenous merge projects<a class="headerlink" href="#2d967ac6-ignoring-output-fields-in-ctf-heteroegenous-merge-projects" title="Permanent link">&para;</a></h3>
+<p>This changed merge behavior in <code>src/fileio/simple_projfile_utils.f90</code> and the
+merge test in <code>src/main/project/simple_project_merge_tester.f90</code>.</p>
+<p>What it did:</p>
+<ul>
+<li>Treated only <code>mic</code>, <code>stk</code>, <code>ptcl2D</code>, <code>ptcl3D</code>, and <code>optics</code> as mergeable data
+  segments for <code>merge_selected_project_files</code>.</li>
+<li>Ignored analysis-product segments <code>cls2D</code>, <code>cls3D</code>, and <code>out</code>.</li>
+<li>Stopped remapping/copying class-output rows from those ignored segments.</li>
+<li>Reset copied <code>ptcl2D</code> clustering with
+  <code>merged_proj%os_ptcl2D%delete_2Dclustering(iptcl2D_glob)</code>.</li>
+<li>Updated tests to expect empty merged <code>cls2D</code>, <code>cls3D</code>, and <code>out</code>, and reset
+  <code>ptcl2D</code> class assignments.</li>
+</ul>
+<p>Why we tried it:</p>
+<ul>
+<li>Stream/selection workflows can merge projects that already carry old 2D class
+  products. Carrying <code>cls2D</code>, <code>cls3D</code>, and <code>out</code> forward into a new analysis is
+  dangerous because they look like valid analysis state but no longer match the
+  intended fresh run.</li>
+</ul>
+<p>Why it was not enough:</p>
+<ul>
+<li>The failing snapshot inspected here still has <code>cls2D</code>, <code>cls3D</code>, and <code>out</code>.
+  It is a stream snapshot, not necessarily a project produced by the modified
+  merge path.</li>
+<li>The snapshot's <code>stkind</code> mapping looks valid, so the collapse is unlikely to be
+  explained by merge <code>stkind</code> reindexing in this specific case.</li>
+</ul>
+<h3 id="77c272d9-trying-to-get-2d-going-from-stream-projects"><code>77c272d9</code> - trying to get 2D going from stream projects<a class="headerlink" href="#77c272d9-trying-to-get-2d-going-from-stream-projects" title="Permanent link">&para;</a></h3>
+<p>This reverted the broad abinitio2D cleanup and moved the fix into 2D search
+preparation.</p>
+<p>What it did:</p>
+<ul>
+<li>Reverted the full-project rewrite and class-segment killing in
+  <code>simple_commanders_abinitio2D.f90</code>.</li>
+<li>Returned the abinitio2D fresh-run cleanup to the narrower:
+  <code>spproj_field%delete_2Dclustering</code>
+  followed by <code>write_segment_inside(params%oritype, params%projfile)</code>.</li>
+<li>In <code>src/main/strategies/search/simple_strategy2D_alloc.f90</code>, introduced a
+  fresh-start condition for <code>startit &lt;= 1</code>, first iteration, not <code>continue=yes</code>,
+  and not fill-in mode.</li>
+<li>On fresh start, <code>prep_strategy2D_glob</code> now allocates all classes as eligible
+  instead of trusting stale <code>cls2D</code> populations or stale <code>ptcl2D</code> class fields.</li>
+<li>On fresh start, <code>prep_strategy2D_batch</code> now ignores the old particle class
+  when generating the stochastic search order, so <code>put_last</code> does not move a
+  stale previous class to the end.</li>
+<li>In <code>src/main/strategies/search/simple_strategy2D_srch.f90</code>, fresh start now
+  ignores stale <code>os%get(class)</code> when seeding <code>prev_class</code>.</li>
+</ul>
+<p>Why we tried it:</p>
+<ul>
+<li>The user observation was that search-order generation puts the current class
+  index last to prevent cycling, and every particle appeared to have the last
+  class index assigned. Ignoring stale previous class on the first fresh
+  iteration directly addresses that mechanism.</li>
+</ul>
+<p>Why it was not enough:</p>
+<ul>
+<li>It protects the search order and initial <code>prev_class</code>, but does not guarantee
+  that references on disk are nonzero.</li>
+<li>It also did not initially protect PFTC reference preparation from stale
+  project state.</li>
+</ul>
+<h2 id="current-uncommitted-changes">Current uncommitted changes<a class="headerlink" href="#current-uncommitted-changes" title="Permanent link">&para;</a></h2>
+<p>The current working tree adds a small helper and applies the same fresh-start
+definition consistently in search and PFTC prep.</p>
+<h3 id="shared-fresh-start-helper">Shared fresh-start helper<a class="headerlink" href="#shared-fresh-start-helper" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/strategies/search/simple_strategy2D_alloc.f90</code></p>
+<p>Added public helper:</p>
+<pre><code class="language-fortran">logical function is_fresh_2D_start( params, which_iter )
+    class(parameters), intent(in) :: params
+    integer,           intent(in) :: which_iter
+    is_fresh_2D_start = params%startit &lt;= 1 .and. which_iter &lt;= params%startit &amp;
+        &amp;.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+end function is_fresh_2D_start
+</code></pre>
+<p>This removes duplicated fresh-start logic from the search modules.</p>
+<h3 id="search-allocation-and-previous-class-setup">Search allocation and previous-class setup<a class="headerlink" href="#search-allocation-and-previous-class-setup" title="Permanent link">&para;</a></h3>
+<p>Files:</p>
+<ul>
+<li><code>src/main/strategies/search/simple_strategy2D_alloc.f90</code></li>
+<li><code>src/main/strategies/search/simple_strategy2D_srch.f90</code></li>
+</ul>
+<p>Current behavior:</p>
+<ul>
+<li>Fresh start gives every class a nonzero synthetic population for search
+  eligibility.</li>
+<li>Fresh start does not use stale <code>ptcl2D%class</code> when constructing per-particle
+  search order.</li>
+<li>Fresh start does not seed <code>prev_class</code> from stale <code>ptcl2D%class</code>.</li>
+</ul>
+<p>This addresses the user-observed mechanism where stale current class could be
+placed last in the search order for every particle.</p>
+<h3 id="pftc-reference-preparation">PFTC reference preparation<a class="headerlink" href="#pftc-reference-preparation" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/strategies/search/simple_matcher_pftc_prep.f90</code></p>
+<p>Current behavior:</p>
+<ul>
+<li>Imports <code>is_fresh_2D_start</code>.</li>
+<li>Computes:</li>
+</ul>
+<pre><code class="language-fortran">l_fresh_start     = is_fresh_2D_start(params, which_iter)
+has_been_searched = (.not. l_fresh_start) .and. (.not.build%spproj%is_virgin_field(params%oritype))
+</code></pre>
+<p>Why this matters:</p>
+<ul>
+<li>Previously, stale <code>ptcl2D</code> search fields could make the project look
+  non-virgin on the first fresh iteration.</li>
+<li>If PFTC reference prep believes the run has already been searched, it can use
+  existing class populations to decide which references to prepare.</li>
+<li>In the inspected snapshot, <code>cls2D</code> has zero-population classes. Those could be
+  skipped even though the fresh run has just generated a full reference stack.</li>
+<li>A skipped reference can look like a zero reference to the objective function.</li>
+</ul>
+<p>This is downstream of starting-reference generation. It explains zero
+references inside the search/PFTC layer, not an already-zero <code>start2Drefs.mrc</code>
+file on disk.</p>
+<h3 id="greedy-tie-handling">Greedy tie handling<a class="headerlink" href="#greedy-tie-handling" title="Permanent link">&para;</a></h3>
+<p>File: <code>src/main/strategies/search/simple_strategy2D_greedy.f90</code></p>
+<p>Changed:</p>
+<pre><code class="language-fortran">if( inpl_corr &gt;= corr )then
+</code></pre>
+<p>to:</p>
+<pre><code class="language-fortran">if( inpl_corr &gt; corr )then
+</code></pre>
+<p>Why this matters:</p>
+<ul>
+<li>With all class scores equal, <code>&gt;=</code> makes the last equal score win.</li>
+<li>With strict <code>&gt;</code>, ties no longer deterministically walk to the last class.</li>
+</ul>
+<p>This is a guard against collapse under degenerate scores. It does not fix the
+underlying zero-reference or constant-score cause.</p>
+<h2 id="what-we-reverted-or-rejected">What we reverted or rejected<a class="headerlink" href="#what-we-reverted-or-rejected" title="Permanent link">&para;</a></h2>
+<h3 id="broad-abinitio2d-project-rewrite">Broad abinitio2D project rewrite<a class="headerlink" href="#broad-abinitio2d-project-rewrite" title="Permanent link">&para;</a></h3>
+<p>The earlier change that killed <code>cls2D</code>/<code>cls3D</code> and rewrote the entire project was
+reverted because it did not fix the bug and changed too much state at the
+commander level.</p>
+<h3 id="ctfsigma-suspicion">CTF/sigma suspicion<a class="headerlink" href="#ctfsigma-suspicion" title="Permanent link">&para;</a></h3>
+<p>We considered whether CTF or sigma handling could be causing the constant score.
+The inspected snapshot argues against this as the primary cause:</p>
+<ul>
+<li>All stack rows had <code>ctf=yes</code>.</li>
+<li>The score pattern is more directly explained by zero references or skipped
+  reference preparation.</li>
+</ul>
+<p>No CTF code change remains in the current diff.</p>
+<h3 id="shift-carryover">Shift carryover<a class="headerlink" href="#shift-carryover" title="Permanent link">&para;</a></h3>
+<p>We considered stale shifts early, but shifts alone should not make every class
+score exactly identical with zero standard deviation. The <code>0.368</code> constant-score
+observation points more strongly at zero references or a degenerate objective
+input.</p>
+<h2 id="what-explains-starting-references-being-all-zero">What explains starting references being all zero?<a class="headerlink" href="#what-explains-starting-references-being-all-zero" title="Permanent link">&para;</a></h2>
+<p>There are two different "zero reference" cases, and they imply different bugs.</p>
+<h3 id="case-1-the-mrc-starting-reference-file-is-already-zero">Case 1: the MRC starting-reference file is already zero<a class="headerlink" href="#case-1-the-mrc-starting-reference-file-is-already-zero" title="Permanent link">&para;</a></h3>
+<p>If <code>start2Drefs.mrc</code> is all zero immediately after <code>init_cluster2D_refs</code> or
+abinitio2D <code>inirefs</code>, the current search/PFTC fixes cannot explain it. The bug
+is upstream in reference initialization.</p>
+<p>Relevant code paths:</p>
+<ul>
+<li><code>abinitio2D</code> defaults <code>cls_init=rand</code> if no value is supplied.</li>
+<li>For a normal fresh run with no input <code>refs</code>, <code>cluster2D</code> should call
+  <code>init_cluster2D_refs</code>.</li>
+<li><code>init_standard_refs</code> with <code>cls_init=rand</code> calls:
+  <code>noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)</code>.</li>
+<li><code>noise_imgfile</code> calls <code>img%ran</code> for every image before writing, so the output
+  should not be all zero.</li>
+</ul>
+<p>Therefore, if <code>cls_init=rand</code> and no input <code>refs</code> are defined, all-zero
+<code>start2Drefs.mrc</code> means one of these is true:</p>
+<ul>
+<li><code>noise_imgfile</code> was not called.</li>
+<li>The reference file was overwritten after <code>noise_imgfile</code>.</li>
+<li>The run is not actually using the default no-refs path.</li>
+<li>The file being inspected is stale from an earlier failed run, not the one just
+  generated.</li>
+</ul>
+<p>There is also one suspicious direct path:</p>
+<ul>
+<li><code>abinitio2D%inirefs</code> normalizes user-supplied references into
+  <code>start2Drefs.mrc</code>.</li>
+<li>If the incoming <code>refs</code> argument already equals <code>start2Drefs.mrc</code>, then
+  <code>copy_imgfile(refs, params%refs, ...)</code> becomes a copy from a file to itself.</li>
+<li><code>copy_imgfile</code> opens the source for read and then opens the destination for
+  write. It does not guard against source and destination being the same path.</li>
+<li>A self-copy can plausibly truncate or corrupt the file before reads complete,
+  producing zero or invalid references.</li>
+</ul>
+<p>That self-copy path is a plausible explanation if the stream/NICE command line
+or a resumed failed job is carrying <code>refs=start2Drefs.mrc</code> into abinitio2D.
+It is not yet proven because we have not captured the stage-1 command line.</p>
+<h3 id="case-2-the-mrc-file-is-nonzero-but-pftcsearch-sees-zero-references">Case 2: the MRC file is nonzero, but PFTC/search sees zero references<a class="headerlink" href="#case-2-the-mrc-file-is-nonzero-but-pftcsearch-sees-zero-references" title="Permanent link">&para;</a></h3>
+<p>This is what the current uncommitted <code>prep_pftc4align2D</code> change targets.</p>
+<p>In the inspected snapshot, stale <code>ptcl2D</code> state makes the project non-virgin and
+stale <code>cls2D</code> has zero-population classes. If PFTC reference preparation trusts
+that stale state during a fresh start, it can skip classes that are valid for
+the new run. Those skipped classes then behave as zero references in the
+objective.</p>
+<p>This case explains:</p>
+<ul>
+<li>valid-looking starting reference files,</li>
+<li>zero or unprepared PFTC references,</li>
+<li>flat <code>0.368</code> Euclidean scores,</li>
+<li>and collapse to the last class through old tie behavior.</li>
+</ul>
+<p>It does not explain an already-zero <code>start2Drefs.mrc</code> file.</p>
+<h2 id="why-clean-runs-behave-differently">Why clean runs behave differently<a class="headerlink" href="#why-clean-runs-behave-differently" title="Permanent link">&para;</a></h2>
+<p>A clean project that has never had 2D classification typically lacks stale
+<code>ptcl2D</code> class/corr fields and stale <code>cls2D</code> populations. That makes these
+checks naturally fall into the "first iteration, all classes are valid" path:</p>
+<ul>
+<li><code>is_virgin_field('ptcl2D')</code> is true.</li>
+<li><code>ptcl2D%class</code> is absent or zero.</li>
+<li><code>cls2D</code> is absent or empty.</li>
+<li>Search order has no meaningful previous class to place last.</li>
+<li>PFTC prep has no stale populations to use for skipping refs.</li>
+</ul>
+<p>The stream snapshot is different:</p>
+<ul>
+<li>Active particles already have previous class/corr state.</li>
+<li><code>cls2D</code> exists and includes zero-population classes.</li>
+<li><code>out</code> and <code>cls3D</code> also exist.</li>
+<li>The project can look like a continuation even when the user intends a fresh
+  abinitio2D/cluster2D run.</li>
+</ul>
+<p>That explains why stale-field guards are necessary. It still does not fully
+explain zero starting-reference files.</p>
+<h2 id="verification-so-far">Verification so far<a class="headerlink" href="#verification-so-far" title="Permanent link">&para;</a></h2>
+<p>Completed:</p>
+<ul>
+<li>Inspected the provided snapshot metadata with a temporary Fortran reader.</li>
+<li>Confirmed <code>stkind</code> ranges look valid.</li>
+<li>Confirmed all stack rows in the snapshot have <code>ctf=yes</code>.</li>
+<li>Confirmed stale active-particle 2D search/classification state exists.</li>
+<li>Confirmed stale <code>cls2D</code> zero-population classes exist.</li>
+<li>Built the current code with:
+  <code>cmake --build build --target SIMPLE3.0.0</code></li>
+<li>Ran <code>git diff --check</code>.</li>
+</ul>
+<p>Not completed:</p>
+<ul>
+<li>We have not reproduced the full failing run from the snapshot because the
+  project file alone does not include all image-stack data needed to prove the
+  reference images are nonzero.</li>
+<li>We have not yet instrumented the exact reference files at the moment they are
+  created.</li>
+<li>We have not captured the actual stage-1 <code>cluster2D</code> command line to verify
+  whether <code>refs</code> is defined and whether it points to <code>start2Drefs.mrc</code>.</li>
+</ul>
+<h2 id="recommended-next-diagnostic">Recommended next diagnostic<a class="headerlink" href="#recommended-next-diagnostic" title="Permanent link">&para;</a></h2>
+<p>Add temporary logging or a debug helper at two boundaries.</p>
+<p>First boundary: immediately after abinitio2D/cluster2D reference initialization.
+Log:</p>
+<ul>
+<li><code>params%cls_init</code></li>
+<li>whether the incoming command line defines <code>refs</code></li>
+<li><code>params%refs</code>, <code>params%refs_even</code>, <code>params%refs_odd</code></li>
+<li>for each reference stack: number of images, dimensions, min, max, mean,
+  standard deviation, and sum of squares per image</li>
+</ul>
+<p>Second boundary: immediately after PFTC reference polarization in
+<code>prep_pftc4align2D</code>. Log:</p>
+<ul>
+<li>whether <code>is_fresh_2D_start</code> is true</li>
+<li>whether <code>has_been_searched</code> is true</li>
+<li>class populations used for reference prep</li>
+<li>count/list of references with zero polar sum of squares</li>
+</ul>
+<p>This should separate the two failure modes cleanly:</p>
+<ul>
+<li>Disk refs are zero: fix reference initialization or stale <code>refs</code> command-line
+  propagation.</li>
+<li>Disk refs are nonzero but PFTC refs are zero: fix PFTC prep/skipping logic.</li>
+</ul>
+<p>The most suspicious new lead from the zero-starting-reference observation is the
+self-copy possibility in <code>copy_imgfile</code> when an inherited <code>refs</code> argument already
+points at <code>start2Drefs.mrc</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
