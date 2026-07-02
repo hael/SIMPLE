@@ -4,9 +4,9 @@ use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_OVERFIT_DEFAULT, &
-    cavg_quality_model, write_cavg_quality_model_builtin_code
-use simple_cavg_quality_types,    only: CAVG_QUALITY_TARGET_DEFAULT, CAVG_QUALITY_TARGET_OVERFIT, cavg_quality_result
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
+    write_cavg_quality_model_builtin_code
+use simple_cavg_quality_types,    only: CAVG_QUALITY_TARGET_DEFAULT, cavg_quality_result
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -356,11 +356,7 @@ contains
             call configure_overfit_hard_report_model()
         else
             if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
-                if( trim(params%quality_target) == CAVG_QUALITY_TARGET_OVERFIT )then
-                    call model%init_preset(CAVG_QUALITY_MODEL_OVERFIT_DEFAULT)
-                else
-                    call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                endif
+                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
             else
                 call model%init_preset(params%quality_model)
             endif

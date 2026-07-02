@@ -663,9 +663,9 @@ subroutine set_ui_params
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in quality model preset(chunk_default_v2|chunk_lp4|'//&
-                                   'pool_default_v2|overfit_default_v1){chunk_default_v2}', &
+                                   'pool_default_v2){chunk_default_v2}', &
                                    'Quality model preset(chunk_default_v2|chunk_lp4|'//&
-                                   'pool_default_v2|overfit_default_v1){chunk_default_v2}', &
+                                   'pool_default_v2){chunk_default_v2}', &
                                    .false., 'chunk_default_v2')
 
     call quality_target%set_param( 'quality_target',  'multi',  'Class-average rejection target', &

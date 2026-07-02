@@ -18,7 +18,6 @@ public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: CAVG_QUALITY_MODEL_MICROCHUNK_P1
 public :: CAVG_QUALITY_MODEL_MICROCHUNK_P2
 public :: CAVG_QUALITY_MODEL_CHUNK_LP4
-public :: CAVG_QUALITY_MODEL_OVERFIT_DEFAULT
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 public :: cavg_quality_classify_cache
@@ -86,13 +85,11 @@ character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_LP4     = 'chunk_lp4'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool_default_v2'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P1 = 'microchunk_p1'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_MICROCHUNK_P2 = 'microchunk_p2'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_OVERFIT_DEFAULT = 'overfit_default_v1'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
     CAVG_QUALITY_MODEL_CHUNK_LP4//'|'//&
     CAVG_QUALITY_MODEL_POOL_DEFAULT//'|'//&
     CAVG_QUALITY_MODEL_MICROCHUNK_P1//'|'//&
-    CAVG_QUALITY_MODEL_MICROCHUNK_P2//'|'//&
-    CAVG_QUALITY_MODEL_OVERFIT_DEFAULT
+    CAVG_QUALITY_MODEL_MICROCHUNK_P2
 
 real, parameter :: CHUNK_OTSU_MIN_OFFSET   = 0.25
 real, parameter :: CHUNK_OTSU_MAX_OFFSET   = 0.50
@@ -192,8 +189,6 @@ contains
                 spec = microchunk_p1_model_spec()
             case(CAVG_QUALITY_MODEL_MICROCHUNK_P2)
                 spec = microchunk_p2_model_spec()
-            case(CAVG_QUALITY_MODEL_OVERFIT_DEFAULT)
-                spec = overfit_default_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -351,29 +346,6 @@ contains
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function microchunk_p2_model_spec
-
-    function overfit_default_model_spec() result( spec )
-        type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_OVERFIT_DEFAULT
-        spec%context                 = 'chunk'
-        spec%target                  = CAVG_QUALITY_TARGET_OVERFIT
-        spec%feature_policy          = 'overfit_support'
-        spec%weights                 = [ &
-              0.000000E+00,   0.000000E+00,   0.000000E+00,   0.000000E+00, &
-              0.000000E+00,   0.000000E+00,   1.930057E-01,   2.138741E-01, &
-              4.490834E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00, &
-              0.000000E+00,   0.000000E+00,   1.440368E-01 ]
-        spec%boundary_margin         = 0.8
-        spec%min_score_separation    = 0.15
-        spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET
-        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = 0.0
-        spec%use_lowsep_otsu         = .true.
-        spec%use_otsu_window         = .true.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
-    end function overfit_default_model_spec
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self

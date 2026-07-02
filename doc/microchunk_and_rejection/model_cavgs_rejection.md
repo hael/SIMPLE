@@ -85,7 +85,7 @@ Microchunk tier thresholds:
 
 For `quality_target=quality`, `model_cavgs_rejection` uses a fixed population hard-reject fraction of `0.0035` for the current feature extractor, independent of model context.
 
-For `quality_target=overfit`, only `pop <= 0` and invalid image pixels are hard rejects. Population fraction, resolution, foreground geometry, and local-variance failures stay in the trainable table so that the overfit model can learn overfitting-specific separation without silently removing the edge cases from training.
+For `quality_target=overfit`, only `pop <= 0` and invalid image pixels are hard rejects. Population fraction, resolution, foreground geometry, and local-variance failures stay in the analysis table so that overfit-target experiments can inspect those edge cases without silently removing them first.
 
 ## Learning Model
 
@@ -147,7 +147,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-`quality_target=quality` is the default and uses `chunk_default_v2` unless `quality_model` or `infile` is supplied. `quality_target=overfit` uses `overfit_default_v1` by default and requires an overfit-target model for `apply`, `analyze`, `learn`, and `evaluate`.
+`quality_target=quality` is the default and uses `chunk_default_v2` unless `quality_model` or `infile` is supplied. The trained overfit preset has been removed; use `overfit_hard_reject=yes` for the current no-model overfit rejection path.
 
 ## Model Selection
 
@@ -158,7 +158,6 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 - `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
 - `microchunk_p1`: pass-1-oriented chunk model using the `microchunk_plus_score_signal` feature policy.
 - `microchunk_p2`: pass-2-oriented chunk model using the `microchunk_plus_score_signal_texture` feature policy.
-- `overfit_default_v1`: overfit-target chunk model using the `overfit_support` feature policy.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -378,39 +377,6 @@ enforce_min_accept_frac true
 
 `microchunk_p1` and `microchunk_p2` are chunk-context built-ins intended for stage-specific validation and comparison against streaming microchunk behavior. They do not replace the live `simple_microchunked2D` rejector in this tree; the stream path still calls `simple_cluster2D_rejector`.
 
-`overfit_default_v1` has context `chunk`, target `overfit`, feature policy `overfit_support`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the `/Users/elmlundho/cavgs_quality/overfit_train` overfit-target analysis set.
-
-```text
-log_pop             0.000000E+00
-neg_log_res         0.000000E+00
-centered            0.000000E+00
-log_locvar_fg       0.000000E+00
-log_locvar_bg       0.000000E+00
-corr_frc_proxy      0.000000E+00
-log_center_edge_snr 1.930057E-01
-cc_area_frac        2.138741E-01
-presence            4.490834E-01
-log_int_boundary_tex 0.000000E+00
-int_tex_coverage    0.000000E+00
-tex_effective_area  0.000000E+00
-neg_log_locvar_fg   0.000000E+00
-neg_log_locvar_bg   0.000000E+00
-log_locvar_fg_bg_ratio 1.440368E-01
-```
-
-```text
-boundary_margin         0.80
-min_score_separation    0.15
-otsu_min_offset         0.25
-otsu_max_offset         0.50
-cluster_rescue_margin   0.20
-min_accept_frac         0.00
-use_lowsep_otsu         true
-use_otsu_window         true
-use_cluster_rescue      false
-enforce_min_accept_frac false
-```
-
 All model weights are clipped to non-negative values and normalized to sum to one when a model is initialized or read.
 
 ## Classification
@@ -526,17 +492,6 @@ simple_exec prg=model_cavgs_rejection \
   mkdir=yes
 ```
 
-Analyze a manually selected project for overfit training:
-
-```bash
-simple_exec prg=model_cavgs_rejection \
-  quality_mode=analyze \
-  quality_target=overfit \
-  projfile=my_project.simple \
-  mskdiam=180 \
-  mkdir=yes
-```
-
 Apply the default chunk model:
 
 ```bash
@@ -565,17 +520,6 @@ simple_exec prg=model_cavgs_rejection \
   quality_mode=learn \
   filetab=analysis_files.txt \
   fname=cavgs_quality_model_chunk_learned.txt \
-  mkdir=yes
-```
-
-Train an overfit model from overfit-target analysis outputs:
-
-```bash
-simple_exec prg=model_cavgs_rejection \
-  quality_mode=learn \
-  quality_target=overfit \
-  filetab=overfit_analysis_files.txt \
-  fname=cavgs_quality_model_overfit_chunk_learned.txt \
   mkdir=yes
 ```
 
