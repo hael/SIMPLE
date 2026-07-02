@@ -104,6 +104,7 @@ type(ui_param) :: oritype
 type(ui_param) :: outdir
 type(ui_param) :: outfile
 type(ui_param) :: outside
+type(ui_param) :: overfit_score_reject
 type(ui_param) :: outstk
 type(ui_param) :: outvol
 type(ui_param) :: nu_refine
@@ -570,6 +571,10 @@ subroutine set_ui_params
     call outside%set_param(        'outside',         'binary', 'Extract outside stage boundaries', &
                                    'Extract boxes outside the micrograph boundaries(yes|no){no}', &
                                    '(yes|no){no}', .false., 'no')
+
+    call overfit_score_reject%set_param('overfit_score_reject', 'binary', 'Overfit score hard reject', &
+                                   'Apply standard class-average hard gates plus the fixed overfit score gate, without a model(yes|no){no}', &
+                                   'Overfit score rejection(yes|no){no}', .false., 'no')
 
     call outstk%set_param(         'outstk',          'file',   'Output stack name', &
                                    'Output images stack name', &

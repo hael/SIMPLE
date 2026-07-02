@@ -357,13 +357,13 @@ contains
         spec%name                    = CAVG_QUALITY_MODEL_OVERFIT_DEFAULT
         spec%context                 = 'chunk'
         spec%target                  = CAVG_QUALITY_TARGET_OVERFIT
-        spec%feature_policy          = 'overfit_support_texture'
+        spec%feature_policy          = 'overfit_support'
         spec%weights                 = [ &
               0.000000E+00,   0.000000E+00,   0.000000E+00,   0.000000E+00, &
-              0.000000E+00,   0.000000E+00,   1.800000E-01,   1.800000E-01, &
-              1.800000E-01,   6.000000E-02,   6.000000E-02,   6.000000E-02, &
-              1.200000E-01,   8.000000E-02,   8.000000E-02 ]
-        spec%boundary_margin         = 0.0
+              0.000000E+00,   0.000000E+00,   1.930057E-01,   2.138741E-01, &
+              4.490834E-01,   0.000000E+00,   0.000000E+00,   0.000000E+00, &
+              0.000000E+00,   0.000000E+00,   1.440368E-01 ]
+        spec%boundary_margin         = 0.8
         spec%min_score_separation    = 0.15
         spec%otsu_min_offset         = CHUNK_OTSU_MIN_OFFSET
         spec%otsu_max_offset         = CHUNK_OTSU_MAX_OFFSET

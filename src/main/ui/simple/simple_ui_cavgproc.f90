@@ -83,6 +83,8 @@ contains
         call model_cavgs_rejection%add_input(UI_PARM, quality_mode)
         call model_cavgs_rejection%add_input(UI_PARM, quality_target)
         call model_cavgs_rejection%add_input(UI_PARM, quality_model)
+        call model_cavgs_rejection%add_input(UI_PARM, overfit_score_reject, &
+            gui_active_flags='quality_mode=apply|analyze|evaluate')
         call model_cavgs_rejection%add_input(UI_PARM, prune)
         ! alternative inputs
         call model_cavgs_rejection%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &

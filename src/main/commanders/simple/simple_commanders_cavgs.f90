@@ -2,11 +2,12 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
-    write_cavg_quality_feature_table
+    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_score_reject
+use simple_cavg_quality_feats,    only: CAVG_OVERFIT_SCORE_REJECT_THRESHOLD, CAVG_OVERFIT_SCORE_REJECT_WEIGHTS
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_OVERFIT_DEFAULT, &
     cavg_quality_model, write_cavg_quality_model_builtin_code
-use simple_cavg_quality_types,    only: CAVG_QUALITY_TARGET_OVERFIT, cavg_quality_result
+use simple_cavg_quality_types,    only: CAVG_QUALITY_TARGET_DEFAULT, CAVG_QUALITY_TARGET_OVERFIT, cavg_quality_result
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -326,6 +327,7 @@ contains
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
+        logical                   :: use_overfit_score_reject
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -344,55 +346,66 @@ contains
             case default
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
-        if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
-            if( trim(params%quality_target) == CAVG_QUALITY_TARGET_OVERFIT )then
-                call model%init_preset(CAVG_QUALITY_MODEL_OVERFIT_DEFAULT)
-            else
-                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-            endif
+        use_overfit_score_reject = trim(params%overfit_score_reject) == 'yes'
+        if( use_overfit_score_reject )then
+            if( quality_mode == QUALITY_MODE_LEARN .or. quality_mode == QUALITY_MODE_PROMOTE ) &
+                THROW_HARD('overfit_score_reject=yes cannot be combined with quality_mode=learn/promote')
+            if( quality_mode == QUALITY_MODE_EVALUATE .and. cline%defined('filetab') ) &
+                THROW_HARD('overfit_score_reject=yes cannot evaluate analysis file tables')
+            if( cline%defined('infile') ) &
+                THROW_HARD('overfit_score_reject=yes uses a fixed hard score gate and does not accept infile')
+            call configure_overfit_score_report_model()
         else
-            call model%init_preset(params%quality_model)
-        endif
-        ! Precedence: preset/default first, model file last.
-        ! infile is a complete model and wins over the built-in preset.
-        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
-            call model%read(params%infile%to_char())
-        if( quality_mode /= QUALITY_MODE_PROMOTE .and. trim(model%target) /= trim(params%quality_target) ) &
-            THROW_HARD('model target '//trim(model%target)//' does not match quality_target='//trim(params%quality_target))
-        if( quality_mode == QUALITY_MODE_PROMOTE )then
-            if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
-            out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
-            if( cline%defined('fname') ) out_fname = params%fname%to_char()
-            call write_cavg_quality_model_builtin_code(model, trim(out_fname))
-            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(out_fname)
-            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
-                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
-            return
-        endif
-        if( quality_mode == QUALITY_MODE_LEARN )then
-            if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
-            call read_filetable(params%filetab, analysis_files)
-            model_fname = 'cavgs_quality_model_'//trim(model%target)//'_'//trim(model%context)//'_learned.txt'
-            if( cline%defined('fname') ) model_fname = params%fname%to_char()
-            report_fname = 'cavgs_quality_learn_report.txt'
-            call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
-            write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
-            if( allocated(analysis_files) ) deallocate(analysis_files)
-            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
-                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
-            return
-        endif
-        if( quality_mode == QUALITY_MODE_EVALUATE )then
-            if( cline%defined('filetab') )then
-                call read_filetable(params%filetab, analysis_files)
-                report_fname = 'cavgs_quality_evaluate_report.txt'
-                if( cline%defined('fname') ) report_fname = params%fname%to_char()
-                call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
-                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
-                if( allocated(analysis_files) ) deallocate(analysis_files)
-                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
+            if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
+                if( trim(params%quality_target) == CAVG_QUALITY_TARGET_OVERFIT )then
+                    call model%init_preset(CAVG_QUALITY_MODEL_OVERFIT_DEFAULT)
+                else
+                    call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
+                endif
+            else
+                call model%init_preset(params%quality_model)
+            endif
+            ! Precedence: preset/default first, model file last.
+            ! infile is a complete model and wins over the built-in preset.
+            if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
+                call model%read(params%infile%to_char())
+            if( quality_mode /= QUALITY_MODE_PROMOTE .and. trim(model%target) /= trim(params%quality_target) ) &
+                THROW_HARD('model target '//trim(model%target)//' does not match quality_target='//trim(params%quality_target))
+            if( quality_mode == QUALITY_MODE_PROMOTE )then
+                if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
+                out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
+                if( cline%defined('fname') ) out_fname = params%fname%to_char()
+                call write_cavg_quality_model_builtin_code(model, trim(out_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(out_fname)
+                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
                     verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
                 return
+            endif
+            if( quality_mode == QUALITY_MODE_LEARN )then
+                if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
+                call read_filetable(params%filetab, analysis_files)
+                model_fname = 'cavgs_quality_model_'//trim(model%target)//'_'//trim(model%context)//'_learned.txt'
+                if( cline%defined('fname') ) model_fname = params%fname%to_char()
+                report_fname = 'cavgs_quality_learn_report.txt'
+                call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
+                if( allocated(analysis_files) ) deallocate(analysis_files)
+                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
+                    verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+                return
+            endif
+            if( quality_mode == QUALITY_MODE_EVALUATE )then
+                if( cline%defined('filetab') )then
+                    call read_filetable(params%filetab, analysis_files)
+                    report_fname = 'cavgs_quality_evaluate_report.txt'
+                    if( cline%defined('fname') ) report_fname = params%fname%to_char()
+                    call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
+                    write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
+                    if( allocated(analysis_files) ) deallocate(analysis_files)
+                    call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
+                        verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+                    return
+                endif
             endif
         endif
         if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires projfile')
@@ -404,12 +417,19 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
+        if( use_overfit_score_reject )then
+            call evaluate_cavg_quality_overfit_score_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        else
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
+        endif
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL TARGET   : ', trim(model%target)
+        if( use_overfit_score_reject ) &
+            write(logfhandle,'(A,F8.3,A,I6)') '>>> OVERFIT SCORE HARD GATE THRESHOLD / REJECTED : ', &
+                CAVG_OVERFIT_SCORE_REJECT_THRESHOLD, ' / ', count(quality%labels == 2)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
@@ -452,6 +472,27 @@ contains
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
+
+        subroutine configure_overfit_score_report_model()
+            ! Metadata shim for existing report writers only. The
+            ! overfit_score_reject path does not call model%classify, does not
+            ! load infile, and does not use clustering/Otsu/model thresholds.
+            model%name                    = 'overfit_score_reject'
+            model%context                 = 'hard_gate'
+            model%target                  = CAVG_QUALITY_TARGET_DEFAULT
+            model%feature_policy          = 'standard_gates_plus_overfit_score'
+            model%weights                 = CAVG_OVERFIT_SCORE_REJECT_WEIGHTS
+            model%boundary_margin         = 0.0
+            model%min_score_separation    = 0.0
+            model%otsu_min_offset         = 0.0
+            model%otsu_max_offset         = 0.0
+            model%cluster_rescue_margin   = 0.0
+            model%min_accept_frac         = 0.0
+            model%use_lowsep_otsu         = .false.
+            model%use_otsu_window         = .false.
+            model%use_cluster_rescue      = .false.
+            model%enforce_min_accept_frac = .false.
+        end subroutine configure_overfit_score_report_model
 
         subroutine annotate_project()
             integer :: icls, ncls3d

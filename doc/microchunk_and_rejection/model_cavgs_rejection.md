@@ -158,7 +158,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 - `pool_default_v2`: pool/batch-style model with minimum accepted fraction enforcement.
 - `microchunk_p1`: pass-1-oriented chunk model using the `microchunk_plus_score_signal` feature policy.
 - `microchunk_p2`: pass-2-oriented chunk model using the `microchunk_plus_score_signal_texture` feature policy.
-- `overfit_default_v1`: overfit-target chunk model using the `overfit_support_texture` feature policy.
+- `overfit_default_v1`: overfit-target chunk model using the `overfit_support` feature policy.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -258,6 +258,22 @@ For `quality_target=overfit`, a class average is hard rejected only when either 
 - the image contains invalid pixels.
 
 Hard-rejected classes receive rejected state directly. Their normalized features are set to `-CLIP_Z`, their model scores are set to `-CLIP_Z`, and they remain visible in analysis and learning reports.
+
+### Optional Overfit Score Hard Gate
+
+`overfit_score_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard `quality_target=quality` hard gates first, computes normalized features over the remaining rows, and then rejects any remaining class whose fixed overfit score is below threshold. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, or minimum-acceptance model logic.
+
+The score is defined in `simple_cavg_quality_feats.f90` as:
+
+```text
+overfit_score =
+    0.1930057 * z_log_center_edge_snr
+  + 0.2138741 * z_cc_area_frac
+  + 0.4490834 * z_presence
+  + 0.1440368 * z_log_locvar_fg_bg_ratio
+```
+
+The default hard threshold is `0.0`; classes with `overfit_score < 0.0` are rejected. The score intentionally excludes resolution, population, and centering. Rows rejected by the overfit score gate are marked as hard rejects in the final decision, but their score and normalized features remain inspectable in the output tables because those values explain the hard-gate decision.
 
 ## Normalization
 
@@ -366,7 +382,7 @@ enforce_min_accept_frac true
 
 `microchunk_p1` and `microchunk_p2` are chunk-context built-ins intended for stage-specific validation and comparison against streaming microchunk behavior. They do not replace the live `simple_microchunked2D` rejector in this tree; the stream path still calls `simple_cluster2D_rejector`.
 
-`overfit_default_v1` has context `chunk`, target `overfit`, feature policy `overfit_support_texture`, cluster rescue disabled, and minimum accepted fraction disabled. It is an initialization preset for training and held-out evaluation, not a substitute for inspecting overfit-labeled training data.
+`overfit_default_v1` has context `chunk`, target `overfit`, feature policy `overfit_support`, cluster rescue disabled, and minimum accepted fraction disabled. It was trained from the `/Users/elmlundho/cavgs_quality/overfit_train` overfit-target analysis set.
 
 ```text
 log_pop             0.000000E+00
@@ -375,19 +391,19 @@ centered            0.000000E+00
 log_locvar_fg       0.000000E+00
 log_locvar_bg       0.000000E+00
 corr_frc_proxy      0.000000E+00
-log_center_edge_snr 1.800000E-01
-cc_area_frac        1.800000E-01
-presence            1.800000E-01
-log_int_boundary_tex 6.000000E-02
-int_tex_coverage    6.000000E-02
-tex_effective_area  6.000000E-02
-neg_log_locvar_fg   1.200000E-01
-neg_log_locvar_bg   8.000000E-02
-log_locvar_fg_bg_ratio 8.000000E-02
+log_center_edge_snr 1.930057E-01
+cc_area_frac        2.138741E-01
+presence            4.490834E-01
+log_int_boundary_tex 0.000000E+00
+int_tex_coverage    0.000000E+00
+tex_effective_area  0.000000E+00
+neg_log_locvar_fg   0.000000E+00
+neg_log_locvar_bg   0.000000E+00
+log_locvar_fg_bg_ratio 1.440368E-01
 ```
 
 ```text
-boundary_margin         0.00
+boundary_margin         0.80
 min_score_separation    0.15
 otsu_min_offset         0.25
 otsu_max_offset         0.50
@@ -530,6 +546,17 @@ Apply the default chunk model:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=apply \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+```
+
+Apply only the standard hard gates plus the fixed overfit score hard gate:
+
+```bash
+simple_exec prg=model_cavgs_rejection \
+  quality_mode=apply \
+  overfit_score_reject=yes \
   projfile=my_project.simple \
   mskdiam=180 \
   mkdir=yes

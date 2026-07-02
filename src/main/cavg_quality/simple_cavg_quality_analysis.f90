@@ -6,16 +6,19 @@ use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
     extract_cavg_quality_features, normalize_cavg_quality_features, &
-    write_cavg_quality_feature_inventory
+    write_cavg_quality_feature_inventory, CAVG_OVERFIT_SCORE_REJECT_THRESHOLD, &
+    cavg_overfit_score
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_TARGET_DEFAULT, EPS, CLIP_Z, &
+    cavg_quality_result
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: evaluate_cavg_quality
+public :: evaluate_cavg_quality_overfit_score_reject
 public :: write_cavg_quality_analysis
 public :: write_cavg_quality_feature_table
 
@@ -32,6 +35,67 @@ contains
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
+
+    subroutine evaluate_cavg_quality_overfit_score_reject( imgs, cls_oris, mskdiam, quality )
+        class(image),              intent(inout) :: imgs(:)
+        type(oris),                intent(in)    :: cls_oris
+        real,                      intent(in)    :: mskdiam
+        type(cavg_quality_result), intent(inout) :: quality
+        call quality%kill()
+        ! Use the ordinary quality target here on purpose: overfit_score_reject
+        ! is an extra hard gate layered after the standard population,
+        ! resolution, mask/support, invalid-pixel, and degenerate-local-variance
+        ! gates. It does not use the overfit target's training-time minimal gates.
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, &
+            CAVG_QUALITY_TARGET_DEFAULT)
+        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
+        call apply_overfit_score_hard_gate(quality)
+    end subroutine evaluate_cavg_quality_overfit_score_reject
+
+    subroutine apply_overfit_score_hard_gate( quality )
+        type(cavg_quality_result), intent(inout) :: quality
+        logical, allocatable :: standard_hard_reject(:)
+        integer :: icls, ncls
+        real    :: score
+        if( .not. allocated(quality%features)    ) THROW_HARD('apply_overfit_score_hard_gate: missing features')
+        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_overfit_score_hard_gate: missing hard-reject mask')
+        ncls = size(quality%features, dim=1)
+        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('apply_overfit_score_hard_gate: invalid feature count')
+        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_overfit_score_hard_gate: invalid mask size')
+        allocate(standard_hard_reject(ncls), source=quality%hard_reject)
+        if( allocated(quality%states)  ) deallocate(quality%states)
+        if( allocated(quality%labels)  ) deallocate(quality%labels)
+        if( allocated(quality%medoids) ) deallocate(quality%medoids)
+        if( allocated(quality%scores)  ) deallocate(quality%scores)
+        allocate(quality%states(ncls), quality%labels(ncls), source=0)
+        allocate(quality%scores(ncls), source=-CLIP_Z)
+        quality%threshold        = CAVG_OVERFIT_SCORE_REJECT_THRESHOLD
+        quality%raw_threshold    = CAVG_OVERFIT_SCORE_REJECT_THRESHOLD
+        quality%threshold_offset = 0.0
+        quality%separation       = 0.0
+        quality%nclust           = 2
+        quality%good_label       = 1
+        quality%used_threshold   = .true.
+        quality%model_name       = 'overfit_score_reject'
+        quality%model_context    = 'hard_gate'
+        quality%model_target     = CAVG_QUALITY_TARGET_DEFAULT
+        quality%soft_decision    = 'hard_overfit_score'
+        quality%soft_reason      = 'standard_gates_plus_overfit_score'
+        do icls = 1, ncls
+            if( standard_hard_reject(icls) ) cycle
+            score = cavg_overfit_score(quality%features(icls,:))
+            quality%scores(icls) = score
+            if( score >= CAVG_OVERFIT_SCORE_REJECT_THRESHOLD )then
+                quality%states(icls) = 1
+                quality%labels(icls) = 1
+            else
+                quality%hard_reject(icls) = .true.
+                quality%labels(icls)      = 2
+            endif
+        end do
+        deallocate(standard_hard_reject)
+    end subroutine apply_overfit_score_hard_gate
 
     subroutine write_cavg_quality_analysis( quality, reference_states, model, fname, dataset_id )
         type(cavg_quality_result), intent(in) :: quality
