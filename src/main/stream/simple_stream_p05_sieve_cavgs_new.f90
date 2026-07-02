@@ -169,7 +169,12 @@ contains
                     write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
                     call spproj_tmp%kill()
                     ! Initialise and drive the chunk pipeline for this first cycle
-                    call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
+                    if( params%pickrefs%strlen() > 0 ) then
+                        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), compatibility_refs=params%pickrefs)
+                    else
+                        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
+                    end if
+                    call chunked_2D%cycle(project_list)
                     call chunked_2D%cycle(project_list)
                     l_once = .false.
                 end if 

@@ -166,6 +166,7 @@ contains
         integer                       :: ncls, ncls_sel, icls, cnt, nptcls
         integer                       :: i, nclust, iclust, nptcls_good
         integer                       :: ldim(3), pop
+        logical                       :: l_skip_junk_rejection
         real                          :: frac_good
         real                          :: oa_min, oa_max, smpd
         ! defaults
@@ -178,11 +179,19 @@ contains
         if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
+        l_skip_junk_rejection = trim(params%skip_rejection) == 'yes'
         ! read project file
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
         ! prep class average stack
-        call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        if( l_skip_junk_rejection ) then
+            states = spproj%os_cls2D%get_all_asint('state')
+            l_non_junk = states > 0
+            call prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+            deallocate(states)
+        else
+            call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+        endif
         ncls_sel = size(cavg_imgs)
         smpd     = cavg_imgs(1)%get_smpd()
         ldim     = cavg_imgs(1)%get_ldim()

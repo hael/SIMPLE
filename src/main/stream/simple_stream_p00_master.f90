@@ -828,6 +828,11 @@ contains
           !  call cline_particle_sieving%set('nparts',                                  8)
             call cline_particle_sieving%set('nchunks',                                 4)
             call cline_particle_sieving%set('worker_priority',                    'high')
+            if( l_existing_pickrefs ) then
+                call cline_particle_sieving%set('pickrefs',              params%pickrefs)
+            else
+                call cline_particle_sieving%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
+            end if
             if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)
         end subroutine init_cline_particle_sieving
 

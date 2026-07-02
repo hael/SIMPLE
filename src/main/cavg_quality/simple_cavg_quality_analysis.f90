@@ -16,6 +16,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: evaluate_cavg_quality
+public :: evaluate_cavg_quality_hard_reject
 public :: evaluate_cavg_quality_overfit_hard_reject
 public :: write_cavg_quality_analysis
 public :: write_cavg_quality_feature_table
@@ -33,6 +34,38 @@ contains
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
+
+    subroutine evaluate_cavg_quality_hard_reject( imgs, cls_oris, mskdiam, quality )
+        class(image),              intent(inout) :: imgs(:)
+        type(oris),                intent(in)    :: cls_oris
+        real,                      intent(in)    :: mskdiam
+        type(cavg_quality_result), intent(inout) :: quality
+        logical,                     allocatable :: standard_hard_reject(:)
+        integer                                  :: icls, ncls
+        call quality%kill()
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
+        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
+        if( .not. allocated(quality%features)    ) THROW_HARD('apply_overfit_hard_rules: missing features')
+        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_overfit_hard_rules: missing hard-reject mask')
+        ncls = size(quality%features, dim=1)
+        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('apply_overfit_hard_rules: invalid feature count')
+        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_overfit_hard_rules: invalid mask size')
+        allocate(standard_hard_reject(ncls), source=quality%hard_reject)
+        if( allocated(quality%states)  ) deallocate(quality%states)
+        if( allocated(quality%labels)  ) deallocate(quality%labels)
+        if( allocated(quality%medoids) ) deallocate(quality%medoids)
+        if( allocated(quality%scores)  ) deallocate(quality%scores)
+        allocate(quality%states(ncls), quality%labels(ncls), source=0)
+        allocate(quality%scores(ncls), source=-CLIP_Z)
+        do icls = 1, ncls
+            if( standard_hard_reject(icls) ) cycle
+            quality%states(icls) = 1
+            quality%labels(icls) = 1
+            quality%scores(icls) = 1.0
+        end do
+        deallocate(standard_hard_reject)
+    end subroutine evaluate_cavg_quality_hard_reject
 
     subroutine evaluate_cavg_quality_overfit_hard_reject( imgs, cls_oris, mskdiam, quality )
         class(image),              intent(inout) :: imgs(:)

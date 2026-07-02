@@ -149,6 +149,8 @@ contains
         real, intent(in) :: z_features(:)
         logical          :: reject
         if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_overfit_hard_reject: invalid feature count')
+        write(*,*) 'cavg_overfit_hard_reject: z_neg_log_locvar_fg=', z_features(I_NEG_LOCVAR_FG), &
+            ' z_cc_area_frac=', z_features(I_CC_AREA_FRAC), 'icc_area_frac=', CAVG_OVERFIT_SUPPORT_Z_MAX, ' lowvar_fg=', CAVG_OVERFIT_LOWVAR_FG_Z_MIN
         reject = z_features(I_NEG_LOCVAR_FG) > CAVG_OVERFIT_LOWVAR_FG_Z_MIN .and. &
                  z_features(I_CC_AREA_FRAC)  < CAVG_OVERFIT_SUPPORT_Z_MAX
     end function cavg_overfit_hard_reject

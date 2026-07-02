@@ -145,6 +145,7 @@ type :: parameters
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}

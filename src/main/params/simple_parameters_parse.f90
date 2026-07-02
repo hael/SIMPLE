@@ -187,6 +187,7 @@ contains
         call reg%add_char('script', self%script)
         call reg%add_char('select_flag', self%select_flag)
         call reg%add_char('shbarrier', self%shbarrier)
+        call reg%add_char('skip_rejection', self%skip_rejection)
         call reg%add_char('sigma_est', self%sigma_est)
         call reg%add_char('snapshot', self%snapshot)
         call reg%add_char('sort', self%sort)

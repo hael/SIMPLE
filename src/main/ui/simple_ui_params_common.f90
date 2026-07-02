@@ -135,6 +135,7 @@ type(ui_param) :: ptcl_src
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
+type(ui_param) :: skip_rejection
 type(ui_param) :: sherr
 type(ui_param) :: sigma
 type(ui_param) :: sigma_est
@@ -693,6 +694,10 @@ subroutine set_ui_params
 
     call script%set_param(         'script',          'binary', 'Generate script for shared-mem exec on cluster', &
                                    'Generate script for shared-mem exec on cluster(yes|no){no}', &
+                                   '(yes|no){no}', .false., 'no')
+
+    call skip_rejection%set_param( 'skip_rejection',  'binary', 'Skip class-average rejection', &
+                                   'Skip class-average rejection and leave project selections unchanged(yes|no){no}', &
                                    '(yes|no){no}', .false., 'no')
 
     call sherr%set_param(          'sherr',           'num',    'Shift error half-width', &

@@ -114,6 +114,8 @@ module simple_microchunked2D_fast
   integer, parameter :: DEFAULT_MICRO_P2_BOX                  = 128
   integer, parameter :: DEFAULT_MICRO_P1_NSAMPLE              = 2000
   integer, parameter :: DEFAULT_MICRO_P2_NSAMPLE              = 2000
+  integer, parameter :: MICROCHUNK_P1_COMPATIBILITY_TRAINING_THRESHOLD = 10
+  integer, parameter :: MICROCHUNK_P2_COMPATIBILITY_TRAINING_THRESHOLD = 10
   real,    parameter :: DEFAULT_LPSTART                       = 15.0
   real,    parameter :: DEFAULT_MICRO_P1_LP                   = 15.0
   real,    parameter :: DEFAULT_MICRO_P2_LP                   = 10.0
@@ -140,31 +142,37 @@ module simple_microchunked2D_fast
 
   type :: microchunked2D_fast
     private
-    type(chunk2D), allocatable  :: microchunks_pass_1(:)
-    type(chunk2D), allocatable  :: microchunks_pass_2(:)
-    integer,       allocatable  :: latest_jpeg_inds(:)
-    integer,       allocatable  :: latest_jpeg_pops(:)
-    integer,       allocatable  :: latest_jpeg_selection(:)
-    real,          allocatable  :: latest_jpeg_res(:)
-    type(qsys_env)              :: qenv
-    type(string)                :: outdir_microchunks_pass_1
-    type(string)                :: outdir_microchunks_pass_2
-    type(string)                :: completedir
-    type(string)                :: latest_jpeg
-    type(string)                :: latest_stkname
-    logical                     :: pass_1_only        = .false.
-    logical                     :: pre_chunked        = .false.
-    logical                     :: final_ingestion    = .false.
-    integer                     :: nparallel          = 1
-    integer                     :: nthr               = 1
-    integer                     :: nparts             = 1
-    integer                     :: n_accepted_ptcls   = 0
-    integer                     :: n_accepted_mics    = 0
-    integer                     :: n_rejected_ptcls   = 0
-    integer                     :: last_import        = 0
-    integer                     :: latest_jpeg_xtiles = 0
-    integer                     :: latest_jpeg_ytiles = 0
-    real                        :: mskdiam            = 0.0
+    type(chunk2D),       allocatable  :: microchunks_pass_1(:)
+    type(chunk2D),       allocatable  :: microchunks_pass_2(:)
+    integer,             allocatable  :: latest_jpeg_inds(:)
+    integer,             allocatable  :: latest_jpeg_pops(:)
+    integer,             allocatable  :: latest_jpeg_selection(:)
+    real,                allocatable  :: latest_jpeg_res(:)
+    type(cavg_compatibility_analysis) :: compatibility_analysis_pass_1
+    type(cavg_compatibility_analysis) :: compatibility_analysis_pass_2
+    type(qsys_env)                    :: qenv
+    type(string)                      :: outdir_microchunks_pass_1
+    type(string)                      :: outdir_microchunks_pass_2
+    type(string)                      :: completedir
+    type(string)                      :: latest_jpeg
+    type(string)                      :: latest_stkname
+    logical                           :: pass_1_only        = .false.
+    logical                           :: pre_chunked        = .false.
+    logical                           :: final_ingestion    = .false.
+    logical                           :: compatibility_training_pass_1_complete = .false.
+    logical                           :: compatibility_training_pass_2_complete = .false.
+    integer                           :: compatibility_training_pass_1_count    = 0
+    integer                           :: compatibility_training_pass_2_count    = 0
+    integer                           :: nparallel          = 1
+    integer                           :: nthr               = 1
+    integer                           :: nparts             = 1
+    integer                           :: n_accepted_ptcls   = 0
+    integer                           :: n_accepted_mics    = 0
+    integer                           :: n_rejected_ptcls   = 0
+    integer                           :: last_import        = 0
+    integer                           :: latest_jpeg_xtiles = 0
+    integer                           :: latest_jpeg_ytiles = 0
+    real                              :: mskdiam            = 0.0
   contains
     procedure :: new
     procedure :: kill
@@ -206,10 +214,11 @@ contains
   ! limit, mask diameter, and thread count; imports any existing chunks from a
   ! previous run; creates all four output directories; allocates empty chunk
   ! arrays; and initialises the queue environment.
-  subroutine new( self, params, completedir, pass_1_only, pre_chunked )
+  subroutine new( self, params, completedir, pass_1_only, pre_chunked, compatibility_refs )
     class(microchunked2D_fast), intent(inout) :: self
     type(parameters),           intent(in)    :: params
     type(string),               intent(in)    :: completedir
+    type(string),     optional, intent(in)    :: compatibility_refs
     logical,          optional, intent(in)    :: pass_1_only
     logical,          optional, intent(in)    :: pre_chunked
     type(string)                              :: cwd
@@ -234,6 +243,14 @@ contains
     call simple_mkdir(self%outdir_microchunks_pass_1)
     call simple_mkdir(self%outdir_microchunks_pass_2)
     call self%qenv%new(params, 1, exec_bin=string('simple_exec'))
+    call self%compatibility_analysis_pass_1%new()
+    call self%compatibility_analysis_pass_2%new()
+    if( present(compatibility_refs) ) then
+      if( file_exists(compatibility_refs) ) then
+        call self%compatibility_analysis_pass_1%train(compatibility_refs)
+        call self%compatibility_analysis_pass_2%train(compatibility_refs)
+      end if
+    end if
     call timer_stop(t0, string('new'))
   end subroutine new
 
@@ -257,6 +274,12 @@ contains
       end do
       deallocate(self%microchunks_pass_2)
     end if
+    call self%compatibility_analysis_pass_1%kill()
+    call self%compatibility_analysis_pass_2%kill()
+    self%compatibility_training_pass_1_complete = .false.
+    self%compatibility_training_pass_2_complete = .false.
+    self%compatibility_training_pass_1_count    = 0
+    self%compatibility_training_pass_2_count    = 0
     self%n_accepted_ptcls    = 0
     self%n_accepted_mics     = 0
     self%n_rejected_ptcls    = 0
@@ -1207,7 +1230,6 @@ contains
     type(image),                allocatable   :: cavg_imgs(:)
     integer,                    allocatable   :: states(:)
     type(sp_project)                          :: spproj
-    type(cavg_compatibility_analysis)         :: compatibility_analysis
     type(string)                              :: stkname
     integer(timer_int_kind)                   :: t0
     integer                                   :: ncls
@@ -1220,10 +1242,29 @@ contains
     t0 = timer_start()
 
     call spproj%read(chunk%projfile)
-    call compatibility_analysis%new(spproj)
-    call compatibility_analysis%analyse()
-    call compatibility_analysis%get_rejection_states(states)
-    call compatibility_analysis%kill()
+    if( label == LABEL_PASS_1 ) then
+      if( .not. self%compatibility_training_pass_1_complete ) then
+        call self%compatibility_analysis_pass_1%train(spproj)
+        self%compatibility_training_pass_1_count = self%compatibility_training_pass_1_count + 1
+        if( self%compatibility_training_pass_1_count >= MICROCHUNK_P1_COMPATIBILITY_TRAINING_THRESHOLD ) then
+          self%compatibility_training_pass_1_complete = .true.
+          write(logfhandle,'(A)') '>>> COMPLETED COMPATIBILITY TRAINING FOR PASS 1'
+        end if
+      end if
+      call self%compatibility_analysis_pass_1%infer(spproj)
+      call self%compatibility_analysis_pass_1%get_rejection_states(states)
+    else
+      if( .not. self%compatibility_training_pass_2_complete ) then
+        call self%compatibility_analysis_pass_2%train(spproj)
+        self%compatibility_training_pass_2_count = self%compatibility_training_pass_2_count + 1
+        if( self%compatibility_training_pass_2_count >= MICROCHUNK_P2_COMPATIBILITY_TRAINING_THRESHOLD ) then
+          self%compatibility_training_pass_2_complete = .true.
+          write(logfhandle,'(A)') '>>> COMPLETED COMPATIBILITY TRAINING FOR PASS 2'
+        end if
+      end if
+      call self%compatibility_analysis_pass_2%infer(spproj)
+      call self%compatibility_analysis_pass_2%get_rejection_states(states)
+    end if
     call spproj%map_cavgs_selection(states)
     call spproj%write()
 

@@ -1,9 +1,9 @@
-!@descr: shared types for class-average compatibility analysis
+!@descr: class-average compatibility analysis, support-model training, and rejection
 module simple_cavg_compatibility_analysis
 ! Module overview:
-! - Preprocess class averages and derive mask/shape/statistical descriptors.
-! - Reject incompatible class averages with geometric and cluster-level criteria.
-! - Emit selected/rejected stacks plus per-class rejection reasons.
+! - Preprocess class averages and derive geometric/statistical descriptors.
+! - Reject class averages with support and cluster-level criteria.
+! - Write selected/rejected stacks and per-class rejection reasons.
 use unix,                    only: c_float
 use simple_defs,             only: logfhandle
 use simple_error,            only: simple_exception
@@ -15,10 +15,12 @@ use simple_gui_utils,        only: mrc2jpeg_tiled
 use simple_image_bin,        only: image_bin
 use simple_defs_fname,       only: METADATA_EXT, MRC_EXT, JPG_EXT
 use simple_sp_project,       only: sp_project
-use simple_imgarr_utils,     only: read_cavgs_into_imgarr, write_imgarr, dealloc_imgarr
+use simple_imgarr_utils,     only: read_cavgs_into_imgarr, read_stk_into_imgarr, write_imgarr, dealloc_imgarr
 use simple_segmentation,     only: otsu_img
 use simple_srch_sort_loc,    only: hpsort
 use simple_commanders_cavgs, only: commander_cluster_cavgs
+use simple_cavg_quality_types, only: cavg_quality_result
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality_overfit_hard_reject
 
 implicit none
 
@@ -33,7 +35,7 @@ integer, parameter :: ANALYSIS_MORPH_SIZE          = 5      ! Number of dilate/e
 logical, parameter :: ANALYSIS_AUTOTUNE_SIZE_MODEL = .true. ! Enable grid-search autotuning of size-support parameters
 
 ! Size-subset support model constants.
-real,    parameter :: RESCUE_EDGE_FRAC       = 0.0                           ! Extra margin for boundary rescue in size compatibility
+real,    parameter :: RESCUE_EDGE_FRAC       = 0.00                          ! Extra margin for boundary rescue in size compatibility
 integer, parameter :: NRELAX                 = 5                             ! Number of relaxation candidates in support-model grid
 integer, parameter :: NQ                     = 3                             ! Number of lower/upper quantile candidates in grid
 real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.0                           ! Soft edge slack for c/a bounds during support check
@@ -43,6 +45,7 @@ real,    parameter :: QHIGH_GRID(NQ)         = [0.85, 0.9, 0.95]             ! U
 
 ! Cluster overfitting rejection constants.
 real,    parameter :: LOWVAR_CLUSTER_REJECT_FRAC          = 0.60 ! Reject cluster when low-variance fraction exceeds this value
+integer, parameter :: MIN_CLUSTER_REJECTION_CAVGS         = 10   ! Minimum selected class averages required to run cluster overfitting rejection.
 
 ! Rejection reason codes for image_set
 integer, parameter :: REJECT_REASON_NONE                  = 0    ! Rejection code for non-rejected images.
@@ -50,6 +53,25 @@ integer, parameter :: REJECT_REASON_ZERO_VARIANCE         = 1    ! Rejection cod
 integer, parameter :: REJECT_REASON_MASK_OUTSIDE_SUPPORT  = 2    ! Rejection code for mask outside circular support.
 integer, parameter :: REJECT_REASON_SIZE_INCOMPATIBLE     = 3    ! Rejection code for size-incompatible subset.
 integer, parameter :: REJECT_REASON_SUSPECTED_OVERFITTING = 4    ! Rejection code for cluster-level overfitting suspicion.
+integer, parameter :: REJECT_REASON_QUALITY_HARD_REJECT   = 5    ! Rejection code for quality hard-reject gate.
+
+type :: support_model_state
+    logical              :: do_autotune = ANALYSIS_AUTOTUNE_SIZE_MODEL
+    logical              :: valid       = .false.
+    real                 :: axis_c      = 0.0
+    real                 :: axis_b      = 0.0
+    real                 :: axis_a      = 0.0
+    real                 :: used_relax  = 0.07
+    real                 :: used_qlo    = 0.08
+    real                 :: used_qhi    = 0.93
+end type support_model_state
+
+type :: support_training_set_state
+    real,    allocatable :: min_dim(:)
+    real,    allocatable :: max_dim(:)
+    integer, allocatable :: batch_id(:)
+    integer              :: nbatches = 0
+end type support_training_set_state
 
 type :: image_set
     type(image)          :: img                          ! Processed class-average image used for analysis and outputs.
@@ -61,46 +83,179 @@ type :: image_set
     real                 :: feret_max          = 0.0     ! Maximum Feret diameter of the binary mask.
     real                 :: feret_min          = 0.0     ! Minimum Feret diameter of the binary mask.
     logical              :: is_rejected        = .false. ! True when this image_set is rejected by any criterion.
-    logical              :: is_compatible      = .false. ! True when accepted by the inferred size-compatibility model.
 end type image_set
 
 type :: cavg_compatibility_analysis
     private
-    type(image_set), allocatable :: imagesets(:)        ! Per-class analysis state for all input class averages.
-    type(sp_project)             :: spproj              ! Project handle used to read/write class-average metadata.
-    type(string)                 :: input_stkname       ! Input class-average stack filename.
-    integer                      :: nimagesets = 0      ! Number of class averages stored in imagesets.
-contains
-    procedure :: new
-    procedure :: kill
-    procedure :: analyse
-    procedure :: get_rejection_states
-    procedure :: print_rejection_reasons
-    procedure :: preprocess
-    procedure :: infer_compatible_size_subset
-    procedure :: write_selected_rejected_stacks
-    procedure :: run_cluster_overfitting_rejection
+    type(image_set),     allocatable :: imagesets(:)         ! Per-class analysis state for all input class averages.
+    type(support_model_state)        :: support_model        ! Support model used by infer() through apply_support_model().
+    type(support_training_set_state) :: support_training_set ! Training pool used by generate_support_model().
+    type(sp_project)                 :: spproj               ! Project handle used to read/write class-average metadata.
+    type(string)                     :: input_stkname        ! Input class-average stack filename.
+    integer                          :: nimagesets = 0       ! Number of class averages stored in imagesets.
     
+contains
+    procedure, public :: new
+    procedure, public :: kill
+    procedure, public :: kill_support_training_set
+    procedure, public :: kill_support_model
+    procedure, public :: infer
+    procedure, public :: get_rejection_states
+    generic,   public :: train => train_1, train_2
+    procedure, private :: kill_imagesets
+    procedure, private :: train_1
+    procedure, private :: train_2
+    procedure, private :: cache_support_training_set
+    procedure, private :: generate_support_model
+    procedure, private :: print_rejection_reasons
+    procedure, private :: preprocess
+    procedure, private :: write_selected_rejected_stacks
+    procedure, private :: run_cluster_overfitting_rejection
 end type cavg_compatibility_analysis
 
 contains
 
-    ! Initialize analysis state and preprocess every input class average.
-    subroutine new( self, spproj )
+    ! Initialize analysis object state.
+    subroutine new( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        call self%kill()
+    end subroutine new
+
+    ! Release owned resources and reset object state.
+    subroutine kill( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        call self%input_stkname%kill()
+        call self%spproj%kill()
+        call self%kill_imagesets()
+        call self%kill_support_training_set()
+        call self%kill_support_model()
+    end subroutine kill
+
+    ! Release processed image/mask buffers and reset image counter.
+    subroutine kill_imagesets( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        integer :: i
+        if( allocated(self%imagesets) )then
+            do i = 1, size(self%imagesets)
+                call self%imagesets(i)%img%kill()
+                call self%imagesets(i)%mask%kill_bimg()
+            end do
+            deallocate(self%imagesets)
+        end if
+        self%nimagesets = 0
+    end subroutine kill_imagesets
+
+    ! Release module-level training arrays for support-model fitting.
+    subroutine kill_support_training_set( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        if( allocated(self%support_training_set%min_dim)  ) deallocate(self%support_training_set%min_dim)
+        if( allocated(self%support_training_set%max_dim)  ) deallocate(self%support_training_set%max_dim)
+        if( allocated(self%support_training_set%batch_id) ) deallocate(self%support_training_set%batch_id)
+        self%support_training_set%nbatches = 0
+    end subroutine kill_support_training_set
+
+    ! Reset module-level support model state.
+    subroutine kill_support_model( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        self%support_model%axis_c     = 0.0
+        self%support_model%axis_b     = 0.0
+        self%support_model%axis_a     = 0.0
+        self%support_model%used_relax = 0.07
+        self%support_model%used_qlo   = 0.08
+        self%support_model%used_qhi   = 0.93
+        self%support_model%valid      = .false.
+    end subroutine kill_support_model
+
+    ! Append current non-rejected min/max Feret dimensions to the training pool.
+    subroutine cache_support_training_set( self )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        integer :: ii, jj, nkeep, nold, ntot, ibatch
+        real,    allocatable :: min_new(:), max_new(:), min_all(:), max_all(:)
+        integer, allocatable :: bid_new(:), bid_all(:)
+        
+        if( self%nimagesets < 1 ) return
+
+        ! Keep min/max arrays consistent if previous state was partially allocated.
+        if( allocated(self%support_training_set%min_dim) .neqv. allocated(self%support_training_set%max_dim) .or. &
+            allocated(self%support_training_set%min_dim) .neqv. allocated(self%support_training_set%batch_id) )then
+            call self%kill_support_training_set()
+        end if
+
+        nkeep = 0
+        do ii = 1, self%nimagesets
+            if( .not. self%imagesets(ii)%is_rejected ) nkeep = nkeep + 1
+        end do
+        if( nkeep < 1 )then
+            write(logfhandle,'(A)') 'cavg_compat: train_cache skipped (accepted=0)'
+            return
+        end if
+
+        ibatch = self%support_training_set%nbatches + 1
+        allocate(min_new(nkeep), max_new(nkeep), bid_new(nkeep))
+        jj = 0
+        do ii = 1, self%nimagesets
+            if( self%imagesets(ii)%is_rejected ) cycle
+            jj = jj + 1
+            min_new(jj) = self%imagesets(ii)%feret_min
+            max_new(jj) = self%imagesets(ii)%feret_max
+            bid_new(jj) = ibatch
+        end do
+
+        if( .not. allocated(self%support_training_set%min_dim) )then
+            allocate(self%support_training_set%min_dim(nkeep), self%support_training_set%max_dim(nkeep), self%support_training_set%batch_id(nkeep))
+            self%support_training_set%min_dim = min_new
+            self%support_training_set%max_dim = max_new
+            self%support_training_set%batch_id = bid_new
+            ntot = nkeep
+        else
+            nold = size(self%support_training_set%min_dim)
+            ntot = nold + nkeep
+            allocate(min_all(ntot), max_all(ntot), bid_all(ntot))
+            min_all(1:nold) = self%support_training_set%min_dim
+            max_all(1:nold) = self%support_training_set%max_dim
+            bid_all(1:nold) = self%support_training_set%batch_id
+            min_all(nold+1:ntot) = min_new
+            max_all(nold+1:ntot) = max_new
+            bid_all(nold+1:ntot) = bid_new
+            call move_alloc(min_all, self%support_training_set%min_dim)
+            call move_alloc(max_all, self%support_training_set%max_dim)
+            call move_alloc(bid_all, self%support_training_set%batch_id)
+        end if
+        self%support_training_set%nbatches = ibatch
+
+        deallocate(min_new, max_new, bid_new)
+
+        write(logfhandle,'(A,I0,A,I0,A,I0)') 'cavg_compat: train_cache appended=', nkeep, ' run_total=', self%nimagesets, ' pool_total=', ntot
+    end subroutine cache_support_training_set
+
+    ! Run compatibility inference and write outputs.
+    subroutine infer( self, spproj )
         class(cavg_compatibility_analysis), intent(inout) :: self
         type(sp_project),                      intent(in) :: spproj
         type(image),                          allocatable :: imgs(:), img_out(:), mask_out(:)
+        type(cavg_quality_result)                         :: quality
         type(string)                                      :: out_imgs, out_masks
-        integer                                           :: iimg, ncls
+        integer                                           :: iimg, ncls, i, nrej, ncomp
         real                                              :: smpd
-        call self%kill()
+
+        if( .not. self%support_model%valid )then
+            THROW_HARD('cavg_compatibility_analysis: infer requires successful train (support model is invalid)')
+        end if
+
+        call self%kill_imagesets()
+        call self%spproj%kill()
         self%spproj = spproj
         call self%spproj%get_cavgs_stk(self%input_stkname, ncls, smpd)
         imgs            = read_cavgs_into_imgarr(self%spproj)
         self%nimagesets = size(imgs)
         if( self%nimagesets < 1 ) THROW_HARD('cavg_compatibility_analysis: no images found in input stack')
         allocate(self%imagesets(self%nimagesets), img_out(self%nimagesets), mask_out(self%nimagesets))
+        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality)
         do iimg = 1, self%nimagesets
+            if( quality%states(iimg) == 0 ) then
+                self%imagesets(iimg)%is_rejected      = .true.
+                self%imagesets(iimg)%rejection_reason = REJECT_REASON_QUALITY_HARD_REJECT
+            end if
             call imgs(iimg)%set_smpd(smpd)
             call self%preprocess(iimg, imgs(iimg))
             call img_out(iimg)%copy(self%imagesets(iimg)%img)
@@ -120,50 +275,95 @@ contains
         call dealloc_imgarr(img_out)
         call dealloc_imgarr(mask_out)
         call dealloc_imgarr(imgs)
-    end subroutine new
 
-    ! Release all owned resources and reset object state.
-    subroutine kill( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        integer :: i
-        if( allocated(self%imagesets) )then
-            do i = 1, size(self%imagesets)
-                call self%imagesets(i)%img%kill()
-                call self%imagesets(i)%mask%kill_bimg()
-            end do
-            deallocate(self%imagesets)
-        end if
-        call self%input_stkname%kill()
-        call self%spproj%kill()
-        self%nimagesets = 0
-    end subroutine kill
-
-    ! Run the full rejection workflow and write output artifacts.
-    subroutine analyse( self )
-        class(cavg_compatibility_analysis), intent(inout) :: self
-        integer :: i, nrej
-
-        write(logfhandle,'(A,I0)') 'cavg_compatibility analyse: nimagesets=', self%nimagesets
+        write(logfhandle,'(A,I0)') 'cavg_compat: analyze n_images=', self%nimagesets
 
         call self%run_cluster_overfitting_rejection(5000.0)
         nrej = 0
         do i = 1, self%nimagesets
             if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
         end do
-        write(logfhandle,'(A,I0)') 'after cluster overfitting rejection: nrejected=', nrej
+        write(logfhandle,'(A,I0)') 'cavg_compat: reject_cluster n_rejected=', nrej
+        write(logfhandle,'(A,ES14.6,A,ES14.6,A,ES14.6)') 'cavg_compat: support_model axes c/b/a=', &
+            self%support_model%axis_c, '/', self%support_model%axis_b, '/', self%support_model%axis_a
+        write(logfhandle,'(A,L1,A,ES14.6,A,ES14.6,A,ES14.6)') 'cavg_compat: support_model autotune=', self%support_model%do_autotune, &
+            ' relax=', self%support_model%used_relax, ' qlo=', self%support_model%used_qlo, ' qhi=', self%support_model%used_qhi
 
-        call self%infer_compatible_size_subset()
+        call apply_support_model(self, ncomp)
+        write(logfhandle,'(A,I0)') 'cavg_compat: support_apply n_compatible=', ncomp
         nrej = 0
         do i = 1, self%nimagesets
             if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
         end do
-        write(logfhandle,'(A,I0)') 'after infer_compatible_size_subset: nrejected=', nrej
+        write(logfhandle,'(A,I0)') 'cavg_compat: support_apply n_rejected=', nrej
 
         call self%write_selected_rejected_stacks()
 
         call self%print_rejection_reasons()
-        write(logfhandle,'(A)') 'rejection reasons written to rejection_reasons.txt'
-    end subroutine analyse
+        write(logfhandle,'(A)') 'cavg_compat: wrote rejection reasons file=rejection_reasons.txt'
+    end subroutine infer
+
+    ! Train support model from class averages in a project.
+    subroutine train_1( self, spproj )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        type(sp_project),                      intent(in) :: spproj
+        type(image),                          allocatable :: imgs(:)
+        type(cavg_quality_result)                         :: quality
+        integer                                           :: iimg, ncls, i, nrej
+        real                                              :: smpd
+        call self%kill_imagesets()
+        call self%spproj%kill()
+        self%spproj = spproj
+        call self%spproj%get_cavgs_stk(self%input_stkname, ncls, smpd)
+        imgs            = read_cavgs_into_imgarr(self%spproj)
+        self%nimagesets = size(imgs)
+        if( self%nimagesets < 1 ) THROW_HARD('cavg_compatibility_analysis: no images found in input stack')
+        allocate(self%imagesets(self%nimagesets))
+        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality)
+        do iimg = 1, self%nimagesets
+            if( quality%states(iimg) == 0 ) then
+                self%imagesets(iimg)%is_rejected      = .true.
+                self%imagesets(iimg)%rejection_reason = REJECT_REASON_QUALITY_HARD_REJECT
+            end if
+            call imgs(iimg)%set_smpd(smpd)
+            call self%preprocess(iimg, imgs(iimg))
+        end do
+        call dealloc_imgarr(imgs)
+
+        write(logfhandle,'(A,I0)') 'cavg_compat: analyze n_images=', self%nimagesets
+
+        call self%run_cluster_overfitting_rejection(5000.0)
+        nrej = 0
+        do i = 1, self%nimagesets
+            if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
+        end do
+        write(logfhandle,'(A,I0)') 'cavg_compat: reject_cluster n_rejected=', nrej
+        call self%cache_support_training_set()
+        call self%generate_support_model()
+    end subroutine train_1
+
+    ! Train support model from class averages in a stack.
+    subroutine train_2( self, refs )
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        type(string),                          intent(in) :: refs
+        type(image),                          allocatable :: imgs(:)
+        integer                                           :: iimg
+        call self%kill_imagesets()
+        call self%spproj%kill()
+        imgs            = read_stk_into_imgarr(refs)
+        self%nimagesets = size(imgs)
+        if( self%nimagesets < 1 ) THROW_HARD('cavg_compatibility_analysis: no images found in input stack')
+        allocate(self%imagesets(self%nimagesets))
+        do iimg = 1, self%nimagesets
+            call self%preprocess(iimg, imgs(iimg))
+        end do
+        call dealloc_imgarr(imgs)
+
+        write(logfhandle,'(A,I0)') 'cavg_compat: analyze n_images=', self%nimagesets
+
+        call self%cache_support_training_set()
+        call self%generate_support_model()
+    end subroutine train_2
 
     ! Export selection states as integers (1=accepted, 0=rejected).
     subroutine get_rejection_states( self, states )
@@ -184,7 +384,7 @@ contains
         end do
     end subroutine get_rejection_states
 
-    ! Write selected and rejected class-average stacks.
+    ! Write selected and rejected class-average stacks and JPEG summaries.
     subroutine write_selected_rejected_stacks( self )
         class(cavg_compatibility_analysis), intent(inout) :: self
         type(image), allocatable :: selected_imgs(:), rejected_imgs(:)
@@ -195,7 +395,7 @@ contains
         nsel = 0
         nrej = 0
         do i = 1, self%nimagesets
-            if( self%imagesets(i)%is_compatible ) nsel = nsel + 1
+            if( .not. self%imagesets(i)%is_rejected ) nsel = nsel + 1
             if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
         end do
 
@@ -206,7 +406,7 @@ contains
             allocate(selected_imgs(nsel))
             isel = 0
             do i = 1, self%nimagesets
-                if( .not. self%imagesets(i)%is_compatible ) cycle
+                if( self%imagesets(i)%is_rejected ) cycle
                 isel = isel + 1
                 call selected_imgs(isel)%copy(self%imagesets(i)%img)
             end do
@@ -226,8 +426,8 @@ contains
             call dealloc_imgarr(rejected_imgs)
         end if
 
-        write(logfhandle,'(A,I0,A,A)') 'selected cavg stack count=', nsel, ' file=', selected_out%to_char()
-        write(logfhandle,'(A,I0,A,A)') 'rejected cavg stack count=', nrej, ' file=', rejected_out%to_char()
+        write(logfhandle,'(A,I0,A,A)') 'cavg_compat: wrote stack kind=selected n=', nsel, ' file=', selected_out%to_char()
+        write(logfhandle,'(A,I0,A,A)') 'cavg_compat: wrote stack kind=rejected n=', nrej, ' file=', rejected_out%to_char()
 
         selected_jpg = swap_suffix(selected_out, JPG_EXT, MRC_EXT)
         rejected_jpg = swap_suffix(rejected_out, JPG_EXT, MRC_EXT)
@@ -236,256 +436,235 @@ contains
         write(logfhandle,'(A,A)') '>>> JPEG ', selected_jpg%to_char()
         write(logfhandle,'(A,A)') '>>> JPEG ', rejected_jpg%to_char()
     end subroutine write_selected_rejected_stacks
-   
-    ! Infer a size-compatible subset and reject incompatible candidates.
-    subroutine infer_compatible_size_subset( self )
+
+
+    ! Fit latent support-model axes from cached training dimensions.
+    subroutine generate_support_model( self )
         class(cavg_compatibility_analysis), intent(inout) :: self
-        logical, allocatable :: allowed(:), compatible(:)
-        real,    allocatable :: min_dim(:), max_dim(:)
-        integer :: n, ii, nallowed, ncomp, nrejected_here
-        real    :: axis_c, axis_b, axis_a, used_relax, used_qlo, used_qhi
-        logical :: do_autotune
+        integer :: nn, i, j, k, best_count
+        integer :: ir, iq, jq, final_count, best_final_count
+        real, allocatable :: cands(:), mins_sup(:), maxs_sup(:), w_sup(:), sample_weights(:)
+        integer, allocatable :: batch_counts(:)
+        integer :: nbatches
+        real    :: b_cand, left, right
+        real    :: spread, best_spread, score, best_score
+        real    :: weighted_count, best_weighted_count, best_final_weighted_count
+        real    :: relax_cur, qlo_cur, qhi_cur
+        real    :: c_cur, b_cur, a_cur, c_soft, a_soft
+        real    :: c_best, b_best, a_best
+        logical :: in_b, in_c, in_a
+        logical, allocatable :: tmp_support(:), support_cur(:)
+        
+        call self%kill_support_model()
 
-        n = self%nimagesets
-        if( n < 1 ) return
-
-        do ii = 1, n
-            self%imagesets(ii)%is_compatible = .false.
-        end do
-
-        allocate(allowed(n), source=.false.)
-        allocate(min_dim(n), max_dim(n), source=0.0)
-        nallowed = 0
-        do ii = 1, n
-            allowed(ii) = .not. self%imagesets(ii)%is_rejected
-            if( .not. allowed(ii) ) cycle
-            nallowed = nallowed + 1
-            max_dim(ii) = self%imagesets(ii)%feret_max
-            min_dim(ii) = self%imagesets(ii)%feret_min
-            write(logfhandle,'(A,I0,A,ES14.6,A,ES14.6)') 'infer_compatible_size_subset dims: idx=', ii, &
-                ' min_dim=', min_dim(ii), ' max_dim=', max_dim(ii)
-        end do
-        write(logfhandle,'(A,I0)') 'infer_compatible_size_subset: allowed candidates=', nallowed
-
-        if( nallowed <= 2 )then
-            do ii = 1, n
-                self%imagesets(ii)%is_compatible = allowed(ii)
-            end do
-            deallocate(allowed, min_dim, max_dim)
+        if( allocated(self%support_training_set%min_dim) .neqv. allocated(self%support_training_set%max_dim) )then
+            call self%kill_support_training_set()
+            write(logfhandle,'(A)') 'cavg_compat: support_model invalid training allocation state (min/max mismatch)'
             return
         end if
-        do_autotune = ANALYSIS_AUTOTUNE_SIZE_MODEL
-        call find_reprojection_support(min_dim, max_dim, allowed, axis_c, axis_b, axis_a, compatible, do_autotune, used_relax, used_qlo, used_qhi)
-        ncomp = count(compatible)
-        write(logfhandle,'(A,ES14.6,A,ES14.6,A,ES14.6,A,I0)') 'infer_compatible_size_subset: latent_axes c/b/a=', &
-            axis_c, '/', axis_b, '/', axis_a, ' compatible_count=', ncomp
-        write(logfhandle,'(A,L1,A,ES14.6,A,ES14.6,A,ES14.6)') 'infer_compatible_size_subset: autotune=', do_autotune, &
-            ' relax=', used_relax, ' qlo=', used_qlo, ' qhi=', used_qhi
 
-        nrejected_here = 0
-        do ii = 1, n
-            if( allowed(ii) .and. .not. compatible(ii) )then
-                if( min_dim(ii) >= axis_c * (1.0 - used_relax - RESCUE_EDGE_FRAC) .and. &
-                    max_dim(ii) <= axis_a * (1.0 + used_relax + RESCUE_EDGE_FRAC) )then
-                    compatible(ii) = .true.
-                    write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rescued idx=', ii, ' reason=within_c_to_a_envelope'
-                end if
-            end if
+        if( allocated(self%support_training_set%min_dim) .and. .not. allocated(self%support_training_set%batch_id) )then
+            nn = size(self%support_training_set%min_dim)
+            allocate(self%support_training_set%batch_id(nn), source=1)
+            self%support_training_set%nbatches = 1
+            write(logfhandle,'(A)') 'cavg_compat: support_model reconstructed batch metadata from legacy training set'
+        else if( .not. allocated(self%support_training_set%min_dim) .and. allocated(self%support_training_set%batch_id) )then
+            call self%kill_support_training_set()
+            write(logfhandle,'(A)') 'cavg_compat: support_model invalid training allocation state (batch without dims)'
+            return
+        end if
 
-            self%imagesets(ii)%is_compatible = allowed(ii) .and. compatible(ii)
-            if( allowed(ii) .and. .not. compatible(ii) )then
-                self%imagesets(ii)%is_rejected = .true.
-                self%imagesets(ii)%rejection_reason = REJECT_REASON_SIZE_INCOMPATIBLE
-                self%imagesets(ii)%is_compatible = .false.
-                nrejected_here = nrejected_here + 1
-                write(logfhandle,'(A,I0,A)') 'infer_compatible_size_subset: rejecting idx=', ii, ' reason=size_incompatible_subset'
+        if( .not. allocated(self%support_training_set%min_dim) )then
+            write(logfhandle,'(A)') 'cavg_compat: support_model training set is not allocated'
+            return
+        end if
+
+        if( size(self%support_training_set%min_dim) /= size(self%support_training_set%max_dim) .or. &
+            size(self%support_training_set%min_dim) /= size(self%support_training_set%batch_id) )then
+            call self%kill_support_training_set()
+            write(logfhandle,'(A)') 'cavg_compat: support_model training set size mismatch'
+            return
+        end if
+
+        nn = size(self%support_training_set%min_dim)
+
+        if( nn <= 2 )then
+            write(logfhandle,'(A)') 'cavg_compat: support_model skipped (training set too small)'
+            return
+        end if
+
+        nbatches = self%support_training_set%nbatches
+        if( nbatches < 1 ) nbatches = maxval(self%support_training_set%batch_id)
+        if( nbatches < 1 )then
+            write(logfhandle,'(A)') 'cavg_compat: support_model invalid batch metadata'
+            return
+        end if
+
+        allocate(batch_counts(nbatches), source=0)
+        allocate(sample_weights(nn),     source=0.0)
+        do i = 1, nn
+            if( self%support_training_set%batch_id(i) < 1 .or. self%support_training_set%batch_id(i) > nbatches )then
+                deallocate(batch_counts, sample_weights)
+                write(logfhandle,'(A)') 'cavg_compat: support_model invalid batch id in training set'
+                return
             end if
+            batch_counts(self%support_training_set%batch_id(i)) = batch_counts(self%support_training_set%batch_id(i)) + 1
         end do
-        ncomp = count(compatible)
-        write(logfhandle,'(A,I0,A,I0)') 'infer_compatible_size_subset: compatible count=', ncomp, ' newly_rejected=', nrejected_here
+        do i = 1, nn
+            sample_weights(i) = 1.0 / real(batch_counts(self%support_training_set%batch_id(i)))
+        end do
 
-        deallocate(allowed, compatible, min_dim, max_dim)
+        allocate(tmp_support(nn), source=.false.)
+        allocate(support_cur(nn), source=.false.)
+        allocate(cands(2*nn))
+        k = 0
+        do i = 1, nn
+            k = k + 1
+            cands(k) = self%support_training_set%min_dim(i)
+            k = k + 1
+            cands(k) = self%support_training_set%max_dim(i)
+        end do
+
+        best_count = -1
+        best_weighted_count = -1.0
+        best_spread = huge(1.0)
+        best_final_count = -1
+        best_final_weighted_count = -1.0
+        best_score = -huge(1.0)
+        c_best = 0.0
+        b_best = 0.0
+        a_best = 0.0
+
+        do ir = 1, NRELAX
+            if( self%support_model%do_autotune )then
+                relax_cur = RELAX_GRID(ir)
+            else
+                if( ir > 1 ) cycle
+                relax_cur = 0.07
+            end if
+
+            do iq = 1, NQ
+                if( self%support_model%do_autotune )then
+                    qlo_cur = QLOW_GRID(iq)
+                else
+                    if( iq > 1 ) cycle
+                    qlo_cur = 0.08
+                end if
+
+                do jq = 1, NQ
+                    if( self%support_model%do_autotune )then
+                        qhi_cur = QHIGH_GRID(jq)
+                    else
+                        if( jq > 1 ) cycle
+                        qhi_cur = 0.93
+                    end if
+                    if( qhi_cur <= qlo_cur ) cycle
+
+                    best_count = -1
+                    best_spread = huge(1.0)
+                    b_cur = 0.0
+                    support_cur = .false.
+
+                    do i = 1, k
+                        b_cand = cands(i)
+                        final_count = 0
+                        weighted_count = 0.0
+                        spread = 0.0
+                        tmp_support = .false.
+
+                        do j = 1, nn
+                            left = self%support_training_set%min_dim(j) * (1.0 - relax_cur)
+                            right = self%support_training_set%max_dim(j) * (1.0 + relax_cur)
+                            if( b_cand >= left .and. b_cand <= right )then
+                                final_count = final_count + 1
+                                weighted_count = weighted_count + sample_weights(j)
+                                tmp_support(j) = .true.
+                                spread = spread + sample_weights(j) * abs(b_cand - 0.5 * (self%support_training_set%min_dim(j) + self%support_training_set%max_dim(j))) / &
+                                    max(self%support_training_set%max_dim(j)-self%support_training_set%min_dim(j), 1.0e-6)
+                            end if
+                        end do
+
+                        if( weighted_count > best_weighted_count .or. &
+                            (abs(weighted_count - best_weighted_count) <= 1.0e-6 .and. spread < best_spread) )then
+                            best_count = final_count
+                            best_weighted_count = weighted_count
+                            best_spread = spread
+                            b_cur = b_cand
+                            support_cur = tmp_support
+                        end if
+                    end do
+
+                    if( best_count <= 0 ) cycle
+
+                    allocate(mins_sup(best_count), maxs_sup(best_count), w_sup(best_count))
+                    j = 0
+                    do i = 1, nn
+                        if( .not. support_cur(i) ) cycle
+                        j = j + 1
+                        mins_sup(j) = self%support_training_set%min_dim(i)
+                        maxs_sup(j) = self%support_training_set%max_dim(i)
+                        w_sup(j) = sample_weights(i)
+                    end do
+
+                    c_cur = percentile_weighted_real(mins_sup, w_sup, qlo_cur)
+                    a_cur = percentile_weighted_real(maxs_sup, w_sup, qhi_cur)
+                    if( c_cur > b_cur ) c_cur = minval(mins_sup)
+                    if( a_cur < b_cur ) a_cur = maxval(maxs_sup)
+
+                    final_count = 0
+                    weighted_count = 0.0
+                    spread = 0.0
+                    tmp_support = .false.
+                    do i = 1, nn
+                        left = self%support_training_set%min_dim(i) * (1.0 - relax_cur)
+                        right = self%support_training_set%max_dim(i) * (1.0 + relax_cur)
+                        c_soft = c_cur * (1.0 - relax_cur - SUPPORT_EDGE_SOFT_FRAC)
+                        a_soft = a_cur * (1.0 + relax_cur + SUPPORT_EDGE_SOFT_FRAC)
+                        in_b = (b_cur >= left .and. b_cur <= right)
+                        in_c = (self%support_training_set%min_dim(i) >= c_cur * (1.0 - relax_cur))
+                        in_a = (self%support_training_set%max_dim(i) <= a_cur * (1.0 + relax_cur))
+                        if( in_b .and. ( (in_c .and. in_a) .or. (self%support_training_set%min_dim(i) >= c_soft .and. in_a) .or. (in_c .and. self%support_training_set%max_dim(i) <= a_soft) ) )then
+                            final_count = final_count + 1
+                            weighted_count = weighted_count + sample_weights(i)
+                            tmp_support(i) = .true.
+                            spread = spread + sample_weights(i) * abs(b_cur - 0.5 * (self%support_training_set%min_dim(i) + self%support_training_set%max_dim(i))) / &
+                                max(self%support_training_set%max_dim(i)-self%support_training_set%min_dim(i), 1.0e-6)
+                        end if
+                    end do
+
+                    score = weighted_count - 0.01 * spread - 0.10 * relax_cur
+                    if( score > best_score .or. (abs(score - best_score) <= 1.0e-6 .and. weighted_count > best_final_weighted_count) )then
+                        best_score = score
+                        best_final_count = final_count
+                        best_final_weighted_count = weighted_count
+                        c_best = c_cur
+                        b_best = b_cur
+                        a_best = a_cur
+                        self%support_model%used_relax = relax_cur
+                        self%support_model%used_qlo = qlo_cur
+                        self%support_model%used_qhi = qhi_cur
+                    end if
+
+                    deallocate(mins_sup, maxs_sup, w_sup)
+                end do
+            end do
+        end do
+
+        if( best_final_count <= 0 )then
+            deallocate(cands, tmp_support, support_cur, batch_counts, sample_weights)
+            return
+        end if
+
+        self%support_model%axis_c = c_best
+        self%support_model%axis_b = b_best
+        self%support_model%axis_a = a_best
+        self%support_model%valid = .true.
+
+        deallocate(cands, tmp_support, support_cur, batch_counts, sample_weights)
 
     contains
 
-        subroutine find_reprojection_support(mins, maxs, allowed_mask, c_out, b_out, a_out, support_mask, autotune, relax_out, qlo_out, qhi_out)
-            real,               intent(in)  :: mins(:), maxs(:)
-            logical,            intent(in)  :: allowed_mask(:)
-            real,               intent(out) :: c_out, b_out, a_out
-            logical, allocatable, intent(out) :: support_mask(:)
-            logical,            intent(in)  :: autotune
-            real,               intent(out) :: relax_out, qlo_out, qhi_out
-            integer :: nn, i, j, k, nvalid, best_count
-            integer :: ir, iq, jq, final_count, best_final_count
-            real, allocatable :: cands(:), mins_sup(:), maxs_sup(:)
-            real    :: b_cand, left, right
-            real    :: spread, best_spread, score, best_score
-            real    :: relax_cur, qlo_cur, qhi_cur
-            real    :: c_cur, b_cur, a_cur, c_soft, a_soft
-            real    :: c_best, b_best, a_best
-            logical :: in_b, in_c, in_a
-            logical, allocatable :: tmp_support(:), support_cur(:), best_support(:)
-
-            nn = size(mins)
-            allocate(support_mask(nn), source=.false.)
-            allocate(tmp_support(nn), source=.false.)
-            allocate(support_cur(nn), source=.false.)
-            allocate(best_support(nn), source=.false.)
-            c_out = 0.0
-            b_out = 0.0
-            a_out = 0.0
-            relax_out = 0.07
-            qlo_out = 0.08
-            qhi_out = 0.93
-
-            nvalid = 0
-            do i = 1, nn
-                if( allowed_mask(i) ) nvalid = nvalid + 1
-            end do
-            if( nvalid <= 0 )then
-                deallocate(tmp_support, support_cur, best_support)
-                return
-            end if
-
-            allocate(cands(2*nvalid))
-            k = 0
-            do i = 1, nn
-                if( .not. allowed_mask(i) ) cycle
-                k = k + 1
-                cands(k) = mins(i)
-                k = k + 1
-                cands(k) = maxs(i)
-            end do
-
-            best_count = -1
-            best_spread = huge(1.0)
-            best_final_count = -1
-            best_score = -huge(1.0)
-            c_best = 0.0
-            b_best = 0.0
-            a_best = 0.0
-
-            do ir = 1, NRELAX
-                if( autotune )then
-                    relax_cur = RELAX_GRID(ir)
-                else
-                    if( ir > 1 ) cycle
-                    relax_cur = 0.07
-                end if
-
-                do iq = 1, NQ
-                    if( autotune )then
-                        qlo_cur = QLOW_GRID(iq)
-                    else
-                        if( iq > 1 ) cycle
-                        qlo_cur = 0.08
-                    end if
-
-                    do jq = 1, NQ
-                        if( autotune )then
-                            qhi_cur = QHIGH_GRID(jq)
-                        else
-                            if( jq > 1 ) cycle
-                            qhi_cur = 0.93
-                        end if
-                        if( qhi_cur <= qlo_cur ) cycle
-
-                        best_count = -1
-                        best_spread = huge(1.0)
-                        b_cur = 0.0
-                        support_cur = .false.
-
-                        do i = 1, k
-                            b_cand = cands(i)
-                            final_count = 0
-                            spread = 0.0
-                            tmp_support = .false.
-
-                            do j = 1, nn
-                                if( .not. allowed_mask(j) ) cycle
-                                left = mins(j) * (1.0 - relax_cur)
-                                right = maxs(j) * (1.0 + relax_cur)
-                                if( b_cand >= left .and. b_cand <= right )then
-                                    final_count = final_count + 1
-                                    tmp_support(j) = .true.
-                                    spread = spread + abs(b_cand - 0.5 * (mins(j) + maxs(j))) / max(maxs(j)-mins(j), 1.0e-6)
-                                end if
-                            end do
-
-                            if( final_count > best_count .or. (final_count == best_count .and. spread < best_spread) )then
-                                best_count = final_count
-                                best_spread = spread
-                                b_cur = b_cand
-                                support_cur = tmp_support
-                            end if
-                        end do
-
-                        if( best_count <= 0 ) cycle
-
-                        allocate(mins_sup(best_count), maxs_sup(best_count))
-                        j = 0
-                        do i = 1, nn
-                            if( .not. support_cur(i) ) cycle
-                            j = j + 1
-                            mins_sup(j) = mins(i)
-                            maxs_sup(j) = maxs(i)
-                        end do
-
-                        c_cur = percentile_real(mins_sup, qlo_cur)
-                        a_cur = percentile_real(maxs_sup, qhi_cur)
-                        if( c_cur > b_cur ) c_cur = minval(mins_sup)
-                        if( a_cur < b_cur ) a_cur = maxval(maxs_sup)
-
-                        final_count = 0
-                        spread = 0.0
-                        tmp_support = .false.
-                        do i = 1, nn
-                            if( .not. allowed_mask(i) ) cycle
-                            left = mins(i) * (1.0 - relax_cur)
-                            right = maxs(i) * (1.0 + relax_cur)
-                            c_soft = c_cur * (1.0 - relax_cur - SUPPORT_EDGE_SOFT_FRAC)
-                            a_soft = a_cur * (1.0 + relax_cur + SUPPORT_EDGE_SOFT_FRAC)
-                            in_b = (b_cur >= left .and. b_cur <= right)
-                            in_c = (mins(i) >= c_cur * (1.0 - relax_cur))
-                            in_a = (maxs(i) <= a_cur * (1.0 + relax_cur))
-                            if( in_b .and. ( (in_c .and. in_a) .or. (mins(i) >= c_soft .and. in_a) .or. (in_c .and. maxs(i) <= a_soft) ) )then
-                                final_count = final_count + 1
-                                tmp_support(i) = .true.
-                                spread = spread + abs(b_cur - 0.5 * (mins(i) + maxs(i))) / max(maxs(i)-mins(i), 1.0e-6)
-                            end if
-                        end do
-
-                        score = real(final_count) - 0.01 * spread - 0.10 * relax_cur
-                        if( score > best_score .or. (abs(score - best_score) <= 1.0e-6 .and. final_count > best_final_count) )then
-                            best_score = score
-                            best_final_count = final_count
-                            c_best = c_cur
-                            b_best = b_cur
-                            a_best = a_cur
-                            relax_out = relax_cur
-                            qlo_out = qlo_cur
-                            qhi_out = qhi_cur
-                            best_support = tmp_support
-                        end if
-
-                        deallocate(mins_sup, maxs_sup)
-                    end do
-                end do
-            end do
-
-            if( best_final_count <= 0 )then
-                deallocate(cands, tmp_support, support_cur, best_support)
-                return
-            end if
-
-            c_out = c_best
-            b_out = b_best
-            a_out = a_best
-            support_mask = best_support
-
-            deallocate(cands, tmp_support, support_cur, best_support)
-        end subroutine find_reprojection_support
-
+        ! Return the nearest-rank percentile of a real-valued vector.
         real function percentile_real(arr, q) result(pval)
             real, intent(in) :: arr(:)
             real, intent(in) :: q
@@ -508,9 +687,105 @@ contains
             deallocate(sorted)
         end function percentile_real
 
-    end subroutine infer_compatible_size_subset
+        ! Return the weighted nearest-rank percentile of a real-valued vector.
+        real function percentile_weighted_real(arr, warr, q) result(pval)
+            real, intent(in) :: arr(:)
+            real, intent(in) :: warr(:)
+            real, intent(in) :: q
+            real, allocatable :: sorted(:), wsorted(:)
+            real :: wtot, wacc, qtarget, wtmp
+            integer :: nvals, ia, ib, kk
 
-    ! Write a text table of rejection reason codes for rejected imagesets.
+            nvals = size(arr)
+            if( nvals <= 0 )then
+                pval = 0.0
+                return
+            end if
+            if( size(warr) /= nvals )then
+                pval = percentile_real(arr, q)
+                return
+            end if
+
+            allocate(sorted(nvals), wsorted(nvals))
+            sorted = arr
+            wsorted = warr
+
+            do ia = 1, nvals - 1
+                do ib = ia + 1, nvals
+                    if( sorted(ib) < sorted(ia) )then
+                        pval = sorted(ia)
+                        sorted(ia) = sorted(ib)
+                        sorted(ib) = pval
+                        wtmp = wsorted(ia)
+                        wsorted(ia) = wsorted(ib)
+                        wsorted(ib) = wtmp
+                    end if
+                end do
+            end do
+
+            wtot = sum(max(wsorted, 0.0))
+            if( wtot <= 0.0 )then
+                pval = percentile_real(arr, q)
+                deallocate(sorted, wsorted)
+                return
+            end if
+
+            qtarget = min(max(q, 0.0), 1.0) * wtot
+            wacc = 0.0
+            pval = sorted(nvals)
+            do kk = 1, nvals
+                wacc = wacc + max(wsorted(kk), 0.0)
+                if( wacc >= qtarget )then
+                    pval = sorted(kk)
+                    exit
+                end if
+            end do
+
+            deallocate(sorted, wsorted)
+        end function percentile_weighted_real
+        
+    end subroutine generate_support_model
+
+    ! Apply support-model bounds and mark size-based rejections.
+    subroutine apply_support_model(self, ncomp)
+        class(cavg_compatibility_analysis), intent(inout) :: self
+        integer,                            intent(out)   :: ncomp
+        integer :: ii
+        logical :: compatible
+        real    :: min_dim, max_dim, relax
+
+        ncomp = 0
+        relax = self%support_model%used_relax
+        do ii = 1, self%nimagesets
+            if( self%imagesets(ii)%is_rejected )then
+                cycle
+            end if
+
+            min_dim = self%imagesets(ii)%feret_min
+            max_dim = self%imagesets(ii)%feret_max
+            compatible = self%support_model%axis_b >= min_dim * (1.0 - relax) .and. &
+                self%support_model%axis_b <= max_dim * (1.0 + relax) .and. &
+                min_dim >= self%support_model%axis_c * (1.0 - relax) .and. &
+                max_dim <= self%support_model%axis_a * (1.0 + relax)
+
+            if( .not. compatible )then
+                if( min_dim >= self%support_model%axis_c * (1.0 - relax - RESCUE_EDGE_FRAC) .and. &
+                    max_dim <= self%support_model%axis_a * (1.0 + relax + RESCUE_EDGE_FRAC) )then
+                    compatible = .true.
+                    write(logfhandle,'(A,I0,A)') 'cavg_compat: support_apply rescued idx=', ii, ' reason=within_c_to_a_envelope'
+                end if
+            end if
+
+            if( compatible ) ncomp = ncomp + 1
+            if( .not. compatible )then
+                self%imagesets(ii)%is_rejected = .true.
+                self%imagesets(ii)%rejection_reason = REJECT_REASON_SIZE_INCOMPATIBLE
+                write(logfhandle,'(A,I0,A)') 'cavg_compat: support_apply rejected idx=', ii, ' reason=size_incompatible_subset'
+            end if
+        end do
+    end subroutine apply_support_model
+
+    ! Write rejection reason codes for rejected image sets.
     subroutine print_rejection_reasons( self )
         class(cavg_compatibility_analysis), intent(inout) :: self
         integer :: i, funit
@@ -518,7 +793,7 @@ contains
 
         open(newunit=funit, file='rejection_reasons.txt', status='replace', action='write')
         write(funit,'(A)') '# class_index reason_code reason_text'
-        write(logfhandle,'(A)') 'Rejected class averages:'
+        write(logfhandle,'(A)') 'cavg_compat: writing rejection reasons'
 
         do i = 1, self%nimagesets
             if( .not. self%imagesets(i)%is_rejected ) cycle
@@ -531,17 +806,19 @@ contains
                 reason_txt = 'size_incompatible_subset'
             case(REJECT_REASON_SUSPECTED_OVERFITTING)
                 reason_txt = 'suspected_overfitting'
+            case(REJECT_REASON_QUALITY_HARD_REJECT)
+                reason_txt = 'quality_hard_reject'
             case default
                 reason_txt = 'unknown'
             end select
             write(funit,'(I0,1X,I0,1X,A)') i, self%imagesets(i)%rejection_reason, trim(reason_txt)
-            write(logfhandle,'(A,I0,A,I0,A,A)') '  idx=', i, ' code=', self%imagesets(i)%rejection_reason, ' reason=', trim(reason_txt)
+            write(logfhandle,'(A,I0,A,I0,A,A)') 'cavg_compat: reject idx=', i, ' code=', self%imagesets(i)%rejection_reason, ' reason=', trim(reason_txt)
         end do
 
         close(funit)
     end subroutine print_rejection_reasons
 
-    ! Preprocess one class average and populate its image_set descriptors.
+    ! Preprocess one class average and populate image-set descriptors.
     subroutine preprocess( self, i, img )
         class(cavg_compatibility_analysis), intent(inout) :: self
         type(image),                        intent(inout) :: img
@@ -555,11 +832,6 @@ contains
         integer     :: ldim(3)
         integer     :: ldim_target(3)
         integer     :: imorph
-
-        ! Reset per-image outputs so repeated calls on the same slot are safe.
-        self%imagesets(i)%rejection_reason = REJECT_REASON_NONE
-        self%imagesets(i)%local_var_in_mask = 0.0
-        self%imagesets(i)%local_var_out_mask = 0.0
 
         ! Preprocess the input image: zero edge average and bandpass filter.
         call img%zero_edgeavg()
@@ -578,10 +850,18 @@ contains
         call img%set_smpd(img%get_smpd() * real(ldim(1)) / real(ldim_target(1)))
 
         ! Keep a processed copy of the resized image for downstream analysis/output.
-        self%imagesets(i)%img           = img
+        self%imagesets(i)%img = img
+
+        if( self%imagesets(i)%is_rejected ) return
+
+        ! Reset per-image outputs so repeated calls on the same slot are safe.
+        self%imagesets(i)%rejection_reason = REJECT_REASON_NONE
+        self%imagesets(i)%local_var_in_mask = 0.0
+        self%imagesets(i)%local_var_out_mask = 0.0
+
+        ! Compute global variance and reject if zero.
         self%imagesets(i)%variance      = img%variance()
         self%imagesets(i)%is_rejected   = self%imagesets(i)%variance == 0.0
-        self%imagesets(i)%is_compatible = .false.
         if( self%imagesets(i)%is_rejected ) then
             self%imagesets(i)%rejection_reason = REJECT_REASON_ZERO_VARIANCE
             return
@@ -627,15 +907,14 @@ contains
         ! Compute local variance inside and outside the mask.
         call self%imagesets(i)%img%loc_var_masked(rmat_mask(1:ldim(1), 1:ldim(2), 1), 10, &
             self%imagesets(i)%local_var_in_mask, self%imagesets(i)%local_var_out_mask)
-        !
-        write(logfhandle,'(A,I0,A,ES14.6,A,ES14.6)') 'preprocess: idx=', i, ' var_in=', self%imagesets(i)%local_var_in_mask, &
+        write(logfhandle,'(A,I0,A,ES14.6,A,ES14.6)') 'cavg_compat: preprocess idx=', i, ' var_in=', self%imagesets(i)%local_var_in_mask, &
             ' var_out=', self%imagesets(i)%local_var_out_mask
         nullify(rmat_mask)
         
     end subroutine preprocess
 
-    ! Reject clusters that exhibit globally low local-variance statistics.
-    subroutine run_cluster_overfitting_rejection( self, mskdiam, nclust_in )
+    ! Reject clusters with globally low local-variance statistics.
+   subroutine run_cluster_overfitting_rejection( self, mskdiam, nclust_in )
         class(cavg_compatibility_analysis), intent(inout) :: self
         real,                                  intent(in) :: mskdiam
         integer,                     optional, intent(in) :: nclust_in
@@ -696,8 +975,8 @@ contains
                 mad_out_all = median_real_local(absdev)
                 deallocate(absdev)
 
-                thr_in  = med_in_all  - 0.5 * max(mad_in_all,  1.0e-3)
-                thr_out = med_out_all - 0.5 * max(mad_out_all, 1.0e-3)
+                thr_in  = med_in_all  - 2.0 * max(mad_in_all,  1.0e-3)
+                thr_out = med_out_all - 0.25 * max(mad_out_all, 1.0e-3)
 
                 allocate(per_cluster_lowvar(nclusters), source=0)
                 allocate(per_cluster_total(nclusters), source=0)
@@ -706,8 +985,10 @@ contains
                     if( clusters(i) < 1 .or. clusters(i) > nclusters ) cycle
                     per_cluster_total(clusters(i)) = per_cluster_total(clusters(i)) + 1
                     if( self%imagesets(i)%is_rejected ) cycle
-                    vin = log(max(self%imagesets(i)%local_var_in_mask,  1.0e-8))
+                    vin = log(max(self%imagesets(i)%local_var_in_mask,   1.0e-8))
                     vout = log(max(self%imagesets(i)%local_var_out_mask, 1.0e-8))
+                    write(logfhandle,'(A,I0,A,I0,A,ES14.6,A,ES14.6)') 'run_exec_cluster_cavgs: idx=', i, ' cluster=', clusters(i), &
+                        ' var_in=', vin, ' var_out=', vout
                     if( vin <= thr_in .and. vout <= thr_out )then
                         per_cluster_lowvar(clusters(i)) = per_cluster_lowvar(clusters(i)) + 1
                     end if

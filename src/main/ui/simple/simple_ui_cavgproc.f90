@@ -56,6 +56,7 @@ contains
         ! <empty>
         ! search controls
         call cluster_cavgs%add_input(UI_SRCH, clust_crit)
+        call cluster_cavgs%add_input(UI_SRCH, skip_rejection)
         ! filter controls
         call cluster_cavgs%add_input(UI_FILT, hp)
         call cluster_cavgs%add_input(UI_FILT, lp)
