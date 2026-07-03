@@ -68,6 +68,7 @@ type(ui_param) :: mirr
 type(ui_param) :: ml_reg
 type(ui_param) :: ml_reg_chunk
 type(ui_param) :: ml_reg_pool
+type(ui_param) :: model_family
 type(ui_param) :: moldiam
 type(ui_param) :: moldiam_max
 type(ui_param) :: mskdiam
@@ -667,11 +668,14 @@ subroutine set_ui_params
                                    '(apply|analyze|learn|evaluate|promote){apply}', &
                                    'Class-average quality mode(apply|analyze|learn|evaluate|promote){apply}', .false., 'apply')
 
+    call model_family%set_param(   'model_family',    'multi',  'Class-average learner family', &
+                                   'Learner family for quality_mode=learn(linear|logistic){logistic}', &
+                                   'Class-average learner family(linear|logistic){logistic}', .false., 'logistic')
+
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
-                                   'Learner family for quality_mode=learn(linear|logistic); otherwise built-in preset'//&
-                                   '(chunk100mics|chunk100mics_linear|pool_logistic_v1){chunk100mics}', &
-                                   'Quality model(linear|logistic|chunk100mics|chunk100mics_linear|'//&
-                                   'pool_logistic_v1){chunk100mics}', &
+                                   'Built-in class-average quality model preset'//&
+                                   '(chunk100mics|chunk100mics_linear|pool){chunk100mics}', &
+                                   'Quality model(chunk100mics|chunk100mics_linear|pool){chunk100mics}', &
                                    .false., 'chunk100mics')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &

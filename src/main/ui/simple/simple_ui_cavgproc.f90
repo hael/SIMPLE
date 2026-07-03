@@ -82,7 +82,9 @@ contains
         ! <empty>
         ! parameter input/output
         call model_cavgs_rejection%add_input(UI_PARM, quality_mode)
-        call model_cavgs_rejection%add_input(UI_PARM, quality_model)
+        call model_cavgs_rejection%add_input(UI_PARM, model_family, gui_active_flags='quality_mode=learn')
+        call model_cavgs_rejection%add_input(UI_PARM, quality_model, &
+            gui_active_flags='quality_mode=apply|analyze|evaluate|promote')
         call model_cavgs_rejection%add_input(UI_PARM, overfit_hard_reject, &
             gui_active_flags='quality_mode=apply|analyze|evaluate')
         call model_cavgs_rejection%add_input(UI_PARM, chunk_hard_reject, &

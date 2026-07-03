@@ -824,12 +824,14 @@ contains
             (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
              (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
             THROW_HARD('chunk_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
-        if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' .and. &
-            cline%defined('quality_model') )then
-            select case(trim(self%quality_model))
+        if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' )then
+            if( cline%defined('quality_model') ) &
+                THROW_HARD('model_cavgs_rejection quality_mode=learn uses model_family=linear|logistic; '//&
+                           'quality_model selects presets outside learn mode')
+            select case(trim(self%model_family))
                 case('linear','logistic')
                 case DEFAULT
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn supports quality_model=linear|logistic')
+                    THROW_HARD('model_cavgs_rejection quality_mode=learn supports model_family=linear|logistic')
             end select
         endif
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'

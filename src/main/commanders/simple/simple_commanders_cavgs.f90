@@ -381,9 +381,7 @@ contains
                 call read_filetable(params%filetab, analysis_files)
                 if( .not. allocated(analysis_files) ) &
                     THROW_HARD('model_cavgs_rejection quality_mode=learn received an empty filetab')
-                learn_model = 'linear'
-                if( cline%defined('quality_model') .and. trim(params%quality_model) /= '' ) &
-                    learn_model = trim(params%quality_model)
+                learn_model = trim(params%model_family)
                 model_fname = 'cavgs_quality_model_learned.txt'
                 if( cline%defined('fname') ) model_fname = params%fname%to_char()
                 report_fname = 'cavgs_quality_learn_report.txt'

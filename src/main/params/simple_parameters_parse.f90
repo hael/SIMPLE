@@ -166,6 +166,7 @@ contains
         call reg%add_char('projstats', self%projstats)
         call reg%add_char('protocol', self%protocol)
         call reg%add_char('prune', self%prune)
+        call reg%add_char('model_family', self%model_family)
         call reg%add_char('qsys_name', self%qsys_name)
         call reg%add_char('qsys_partition2D', self%qsys_partition2D)
         call reg%add_char('quality_mode', self%quality_mode)

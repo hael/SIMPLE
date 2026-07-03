@@ -16,7 +16,7 @@ private
 
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_CHUNK_LINEAR
-public :: CAVG_QUALITY_MODEL_POOL_LOGISTIC_V1
+public :: CAVG_QUALITY_MODEL_POOL
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 public :: cavg_quality_classify_cache
@@ -81,9 +81,9 @@ end type cavg_quality_cached_decision
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk100mics'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_LINEAR = 'chunk100mics_linear'
-character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_LOGISTIC_V1 = 'pool_logistic_v1'
+character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL = 'pool'
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT//'|'//&
-    CAVG_QUALITY_MODEL_CHUNK_LINEAR//'|'//CAVG_QUALITY_MODEL_POOL_LOGISTIC_V1
+    CAVG_QUALITY_MODEL_CHUNK_LINEAR//'|'//CAVG_QUALITY_MODEL_POOL
 
 real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
@@ -165,8 +165,8 @@ contains
                 spec = chunk100mics_model_spec()
             case(CAVG_QUALITY_MODEL_CHUNK_LINEAR)
                 spec = chunk100mics_linear_model_spec()
-            case(CAVG_QUALITY_MODEL_POOL_LOGISTIC_V1)
-                spec = pool_logistic_v1_model_spec()
+            case(CAVG_QUALITY_MODEL_POOL)
+                spec = pool_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -301,9 +301,9 @@ contains
         spec%enforce_min_accept_frac = .true.
     end function chunk100mics_linear_model_spec
 
-    function pool_logistic_v1_model_spec() result( spec )
+    function pool_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
-        spec%name                    = CAVG_QUALITY_MODEL_POOL_LOGISTIC_V1
+        spec%name                    = CAVG_QUALITY_MODEL_POOL
         spec%context                 = 'pool'
         spec%feature_policy          = CHUNK100MICS_FEATURE_POLICY
         spec%model_family            = CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
@@ -344,7 +344,7 @@ contains
         spec%use_otsu_window         = .false.
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
-    end function pool_logistic_v1_model_spec
+    end function pool_model_spec
 
     subroutine set_all_pairwise_interactions( spec, coefficients )
         type(cavg_quality_model_spec), intent(inout) :: spec
