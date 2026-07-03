@@ -33,6 +33,8 @@ integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
 integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY   = 3
 real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
 real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
+real,    parameter :: LEARN_BALANCED_RECALL_WEIGHT   = 0.75
+real,    parameter :: LEARN_BALANCED_SPEC_WEIGHT     = 1.0 - LEARN_BALANCED_RECALL_WEIGHT
 real,    parameter :: LEARN_MINSEPS(7)              = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
 ! Positive margins deliberately over-select relative to the learned boundary.
 real,    parameter :: LEARN_BOUNDARY_MARGINS(37)     = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
@@ -48,9 +50,10 @@ real,    parameter :: LEARN_MIN_ACCEPT_FRACS(11)    = [0.50, 0.60, 0.65, 0.70, 0
                                                        0.90, 0.925, 0.95, 0.975, 1.00]
 real,    parameter :: LOGISTIC_LAMBDAS(7)           = [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, &
                                                        1.0e-2, 3.0e-2, 1.0e-1]
-real,    parameter :: LOGISTIC_THRESHOLDS(17)       = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, &
-                                                       0.40, 0.45, 0.50, 0.55, 0.60, 0.65, &
-                                                       0.70, 0.75, 0.80, 0.85, 0.90]
+real,    parameter :: LOGISTIC_THRESHOLDS(20)       = [0.02, 0.05, 0.075, 0.10, 0.15, 0.20, &
+                                                       0.25, 0.30, 0.35, 0.40, 0.45, 0.50, &
+                                                       0.55, 0.60, 0.65, 0.70, 0.75, 0.80, &
+                                                       0.85, 0.90]
 real,    parameter :: LOGISTIC_COEFF_ABS_BOUND      = 20.0
 
 type :: cavg_quality_logistic_problem
@@ -87,7 +90,7 @@ contains
         integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
         integer :: n_grid, n_top, n_best_ties
         character(len=32) :: requested_family
-        requested_family = CAVG_MODEL_FAMILY_LINEAR
+        requested_family = 'logistic'
         if( present(model_family) ) requested_family = trim(model_family)
         select case(trim(requested_family))
         case('linear', CAVG_MODEL_FAMILY_LINEAR)
@@ -291,8 +294,8 @@ contains
         select case(role)
         case(LEARN_ROLE_BALANCED)
             if( ngood <= 0 .or. nbad <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid balanced dataset')
-            good_weight = 0.5d0 / real(ngood, kind=8)
-            bad_weight  = 0.5d0 / real(nbad,  kind=8)
+            good_weight = real(LEARN_BALANCED_RECALL_WEIGHT, kind=8) / real(ngood, kind=8)
+            bad_weight  = real(LEARN_BALANCED_SPEC_WEIGHT,   kind=8) / real(nbad,  kind=8)
         case(LEARN_ROLE_RECALL_ONLY)
             if( ngood <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid recall-only dataset')
             good_weight = 1.0d0 / real(ngood, kind=8)
@@ -971,7 +974,7 @@ contains
         call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
         select case(role)
             case(LEARN_ROLE_BALANCED)
-                learn_balacc_from_confusion = balacc
+                learn_balacc_from_confusion = recall_weighted_balanced_score(recall, specificity)
             case(LEARN_ROLE_RECALL_ONLY)
                 learn_balacc_from_confusion = guarded_recall_score(recall)
             case(LEARN_ROLE_SPECIFICITY_ONLY)
@@ -986,6 +989,12 @@ contains
         guarded_recall_score = recall - LEARN_RECALL_ONLY_PENALTY * &
             max(0.0, LEARN_RECALL_ONLY_FLOOR - recall)
     end function guarded_recall_score
+
+    real function recall_weighted_balanced_score( recall, specificity )
+        real, intent(in) :: recall, specificity
+        recall_weighted_balanced_score = LEARN_BALANCED_RECALL_WEIGHT * recall + &
+            LEARN_BALANCED_SPEC_WEIGHT * specificity
+    end function recall_weighted_balanced_score
 
     subroutine consider_model_candidate( spec, score, best_spec, best_score, best_tie_specs, n_best_ties, &
                                          top_specs, top_scores, n_top )
@@ -1164,11 +1173,14 @@ contains
         write(funit,'(A)') 'note=feature_policy_scans_include_microchunk_and_overfit_features'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
         write(funit,'(A)') 'note=feature_weights_use_only_datasets_with_both_manual_states_after_hard_rejects'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_recall_weighted_balanced_score'
         write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
         write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
         write(funit,'(A)') 'note=learn_mode_uses_neutral_abinitio_foundation_not_quality_model_or_infile_seed'
         call write_feature_policy_grid(funit)
+        write(funit,'(A,ES14.6)') 'balanced_score_recall_weight=', LEARN_BALANCED_RECALL_WEIGHT
+        write(funit,'(A,ES14.6)') 'balanced_score_specificity_weight=', LEARN_BALANCED_SPEC_WEIGHT
         write(funit,'(A,ES14.6)') 'grid_recall_only_floor=', LEARN_RECALL_ONLY_FLOOR
         write(funit,'(A,ES14.6)') 'grid_recall_only_shortfall_penalty=', LEARN_RECALL_ONLY_PENALTY
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
@@ -1225,10 +1237,13 @@ contains
         write(funit,'(A,I0)') 'model_search_grid_n=', n_candidates
         write(funit,'(A)') 'note=pairwise_logistic_uses_existing_normalized_training_table_features'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
-        write(funit,'(A)') 'note=balanced_datasets_are_class_weighted_within_dataset'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_recall_weighted_balanced_score'
+        write(funit,'(A)') 'note=balanced_dataset_logistic_loss_uses_recall_weighted_class_weights'
         write(funit,'(A)') 'note=trainable_good_only_datasets_contribute_recall_evidence'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_contribute_specificity_evidence'
         call write_feature_policy_grid(funit)
+        write(funit,'(A,ES14.6)') 'balanced_score_recall_weight=', LEARN_BALANCED_RECALL_WEIGHT
+        write(funit,'(A,ES14.6)') 'balanced_score_specificity_weight=', LEARN_BALANCED_SPEC_WEIGHT
         call write_real_list(funit, 'grid_logistic_lambdas=', LOGISTIC_LAMBDAS)
         call write_real_list(funit, 'grid_probability_thresholds=', LOGISTIC_THRESHOLDS)
         call write_fixed_model_summary(funit, learned_model)
@@ -1277,8 +1292,11 @@ contains
         write(funit,'(A)') 'note=fixed_model_no_refit'
         write(funit,'(A)') 'note=analysis_table_rows_reclassified_with_selected_model'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_scoring'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_recall_weighted_balanced_score'
         write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
+        write(funit,'(A,ES14.6)') 'balanced_score_recall_weight=', LEARN_BALANCED_RECALL_WEIGHT
+        write(funit,'(A,ES14.6)') 'balanced_score_specificity_weight=', LEARN_BALANCED_SPEC_WEIGHT
         call write_fixed_model_summary(funit, model)
         write(funit,'(A)') ''
         call write_evaluate_diagnostics(funit, model, diag)

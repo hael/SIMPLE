@@ -34,7 +34,7 @@ The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`.
 
 ## Evidence Comparison
 
-The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score_signal` policy: microchunk plus overfit-family features, stored-score evidence, and compact signal evidence.
+The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score` policy: microchunk plus overfit-family features and stored-score evidence.
 
 | Evidence | Microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
 | --- | --- | --- | --- |
@@ -88,11 +88,11 @@ The standard linear learned artifact has three parts:
 - non-negative feature weights, which define a linear scalar quality score;
 - thresholding controls, which govern how the per-dataset score boundary is chosen after k-medoids clustering and optional Otsu thresholding.
 
-`model_family=logistic` trains a pairwise logistic artifact instead. Its fitted parameters are an intercept, linear feature coefficients, pairwise feature-interaction coefficients, a probability threshold, and a regularization strength. The coefficients are fit from the training analysis files only.
+`model_family=logistic` trains a pairwise logistic artifact instead. Its fitted parameters are an intercept, linear feature coefficients, pairwise feature-interaction coefficients, a probability threshold, and a regularization strength. The coefficients are fit from the training analysis files only. On two-class trainable datasets, the logistic loss uses the same recall-weighted class balance as the learn score.
 
 The apply-time classifier is partly dataset-adaptive. Features are robustly normalized inside the current dataset. K-medoids and Otsu operate on the current score/feature distribution. The learned parameters provide the inductive bias: which features are active, how the score is weighted, and how aggressively the cluster-derived boundary is shifted or replaced.
 
-The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute balanced accuracy. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
+The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute a recall-weighted balanced score, currently `0.75 * recall + 0.25 * specificity`, so rejecting a manually selected class is treated as worse than accepting a manually deselected class. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
 
 Feature-weight search is ab initio for the supplied training data. The learner first constructs an AUC-derived seed:
 
@@ -111,7 +111,7 @@ Use `filetab=` to define the target workflow scenario being trained. For example
 | `microchunk` | `microchunk`, `overfit` | Tests whether scalar analogues of the stream rejector plus overfit local-variance evidence are sufficient. |
 | `microchunk_plus_score` | `microchunk`, `overfit`, `score` | Adds stored class correlation/FRC-like evidence. |
 | `microchunk_plus_signal` | `microchunk`, `overfit`, `signal` | Adds center/edge and presence evidence without stored score evidence. |
-| `microchunk_plus_score_signal` | `microchunk`, `overfit`, `score`, `signal` | Uses the full compact quality feature set. This is the current chunk default. |
+| `microchunk_plus_score_signal` | `microchunk`, `overfit`, `score`, `signal` | Uses the full compact quality feature set. |
 
 Learn mode reports feature signal, feature-drop diagnostics, and leave-one-dataset-out feature-policy diagnostics so that the selected model can be interpreted as a compact scientific statement about which evidence family and weight structure generalized on the supplied training set.
 
@@ -268,13 +268,13 @@ These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_t
 
 ## Built-In Presets
 
-`chunk100mics` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+`chunk100mics` uses feature policy `microchunk_plus_score` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` with recall-weighted balanced scoring.
 
 ```text
 model_family        pairwise_logistic
 prob_threshold      4.500000E-01
-regularization      3.000000E-04
-feature_weights     uniform over the 12-feature microchunk_plus_score_signal vector
+regularization      1.000000E-04
+feature_weights     uniform over the 10 active microchunk_plus_score features
 ```
 
 ```text
@@ -290,7 +290,7 @@ use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
 
-`pool` uses the same feature policy and pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training`.
+`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training`.
 
 ```text
 model_family        pairwise_logistic
@@ -376,7 +376,7 @@ Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `inv
 - confusion metrics against the manual `cls2D` state;
 - score AUC;
 - raw threshold, threshold offset, and effective threshold;
-- best balanced-accuracy and F1 thresholds against the manual reference;
+- best learn-score and F1 thresholds against the manual reference;
 - model fields as comments;
 - feature inventory;
 - per-feature AUC, robust separation, current weight, and suggested weight;
@@ -398,7 +398,7 @@ Hard-rejected rows are kept in reports but excluded from feature-weight estimati
 
 Learn mode assigns each dataset an automatic role:
 
-- `balanced`: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by balanced accuracy.
+- `balanced`: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by a recall-weighted balanced score.
 - `trainable_good_only`: only manual good rows remain after hard rejects; not used for feature weights, scored by guarded recall.
 - `trainable_bad_only`: only manual bad rows remain after hard rejects and no manually good rows were hard rejected; not used for feature weights, scored by specificity.
 - `skip_hard_gate_blocked`: only manual bad rows remain because all manually good rows were hard rejected; reported but skipped for soft-model fitting and scoring.
@@ -411,7 +411,7 @@ weight(feature) = max(0, pooled_auc(feature, manual_state) - 0.5)
 
 The weights are normalized to sum to one. If all active weights are zero for a policy, uniform weights are assigned over the active policy features. The full classifier search chooses among the AUC-derived candidate vectors for the available feature policies.
 
-Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the learn score applies an additional shortfall penalty below the recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large number of classes from datasets that contain only trainable manual positives.
+Balanced datasets use a recall-weighted score so threshold selection prefers retaining selected classes unless specificity improves enough to justify rejection. Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the learn score applies an additional shortfall penalty below the recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large number of classes from datasets that contain only trainable manual positives.
 
 Learn mode searches:
 
