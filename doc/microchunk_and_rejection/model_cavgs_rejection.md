@@ -82,11 +82,13 @@ Microchunk tier thresholds:
 
 The rejection model is a low-dimensional, monotone feature-vector classifier with explicit hard constraints. In learning-theory terms, the hard rejects are prior validity constraints: they remove classes the model is not asked to rescue or fit. The remaining rows form a supervised training set from manual selections.
 
-The learned artifact has three parts:
+The standard linear learned artifact has three parts:
 
 - a feature policy, which selects a cumulative family set;
 - non-negative feature weights, which define a linear scalar quality score;
 - thresholding controls, which govern how the per-dataset score boundary is chosen after k-medoids clustering and optional Otsu thresholding.
+
+`quality_model=logistic` trains a pairwise logistic artifact instead. Its fitted parameters are an intercept, linear feature coefficients, pairwise feature-interaction coefficients, a probability threshold, and a regularization strength. The coefficients are fit from the training analysis files only.
 
 The apply-time classifier is partly dataset-adaptive. Features are robustly normalized inside the current dataset. K-medoids and Otsu operate on the current score/feature distribution. The learned parameters provide the inductive bias: which features are active, how the score is weighted, and how aggressively the cluster-derived boundary is shifted or replaced.
 
@@ -100,7 +102,9 @@ weight(feature) = max(0, pooled_auc(feature, manual_state) - 0.5)
 
 The weights are normalized after the active feature policy is applied. Each feature policy contributes one deterministic AUC-derived weight vector to the full classifier search. There is no base-weight blending in the current learner. This means each training run derives the scalar model from the current analysis files rather than nudging an inherited default.
 
-Feature-family policies act as a small structural model-selection layer:
+Feature-family policies act as a small structural model-selection layer. For the linear learner, the training data derive the AUC feature weights and select the feature policy and thresholding controls. For the logistic learner, the training data fit the coefficients and select the feature policy, regularization lambda, and probability threshold.
+
+Use `filetab=` to define the target workflow scenario being trained. For example, early streaming chunk models should be fit from chunk analyses, while late pooled-refinement models should be fit from pool analyses. To inspect cross-scenario behavior without influencing the model, train the target model and then run `quality_mode=evaluate filetab=... infile=...` on the other scenario.
 
 | Policy | Active families | Purpose |
 | --- | --- | --- |
@@ -117,7 +121,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=analyze` computes the same model output but treats the existing `cls2D` state as the manual reference. It writes `cavgs_quality_analysis.txt` and the selected/rejected stacks. The project selection is left unchanged.
 
-`quality_mode=learn` reads a file table of `cavgs_quality_analysis.txt` files and searches for a model specification from a neutral `abinitio_learn_base` foundation. It does not accept `quality_model` or `infile` as seeds. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
+`quality_mode=learn` reads a training file table of `cavgs_quality_analysis.txt` files from `filetab=` and searches for a model specification from a neutral `abinitio_learn_base` foundation. `quality_model=linear|logistic` selects the model family to train; if omitted, learn mode uses `linear`. It does not accept `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
 `quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_analysis.txt` files. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
@@ -129,13 +133,15 @@ For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `
 
 ## Model Selection
 
-`quality_model` selects a built-in preset. The default and only hardcoded built-in is:
+`quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
-- `chunk100mics`: default chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+- `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+- `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+- `pool_logistic_v1`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training`.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
-Model files use `model_version=8` and explicit key-value fields:
+Linear model files use `model_version=8`, pairwise logistic model files use `model_version=9`, and both use explicit key-value fields:
 
 - `name`
 - `feature_policy`
@@ -262,7 +268,38 @@ These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_t
 
 ## Built-In Presets
 
-`chunk100mics` uses feature policy `microchunk_plus_score_signal`, low-separation Otsu disabled, Otsu windowing enabled, cluster rescue disabled, and minimum accepted fraction enforcement enabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+`chunk100mics` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+
+```text
+model_family        pairwise_logistic
+prob_threshold      4.500000E-01
+regularization      3.000000E-04
+feature_weights     uniform over the 12-feature microchunk_plus_score_signal vector
+```
+
+```text
+boundary_margin         0.00
+min_score_separation    0.05
+otsu_min_offset         0.00
+otsu_max_offset         0.00
+cluster_rescue_margin   0.20
+min_accept_frac         0.00
+use_lowsep_otsu         false
+use_otsu_window         false
+use_cluster_rescue      false
+enforce_min_accept_frac false
+```
+
+`pool_logistic_v1` uses the same feature policy and pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training`.
+
+```text
+model_family        pairwise_logistic
+prob_threshold      3.000000E-01
+regularization      1.000000E-04
+feature_weights     uniform over the 12-feature microchunk_plus_score_signal vector
+```
+
+`chunk100mics_linear` preserves the previous linear score-and-threshold model as an interpretability tool. Its feature weights can be read directly as non-negative contributions to the normalized scalar quality score.
 
 ```text
 log_pop             9.978756E-02
@@ -292,11 +329,11 @@ use_cluster_rescue      false
 enforce_min_accept_frac true
 ```
 
-All model weights are clipped to non-negative values and normalized to sum to one when a model is initialized or read.
+Linear model weights are clipped to non-negative values and normalized to sum to one when a linear model is initialized or read.
 
 ## Classification
 
-For non-hard-rejected class averages:
+For non-hard-rejected class averages, `model_family=linear_score` uses the historical score-and-cluster path:
 
 1. Compute a linear quality score with `matmul(normalized_features, weights)`.
 2. Build a pairwise Euclidean distance matrix in normalized feature space using nonzero-weight features.
@@ -309,6 +346,14 @@ For non-hard-rejected class averages:
 9. If `use_otsu_window` is enabled, replace the threshold with Otsu when the Otsu threshold is at least `otsu_min_offset` and at most `otsu_max_offset` above the raw threshold, and Otsu separation is sufficient.
 10. If `use_cluster_rescue` is enabled, also accept good-cluster members within `cluster_rescue_margin` below the threshold.
 11. If `enforce_min_accept_frac` is enabled, accept enough top-scoring trainable rows to satisfy `min_accept_frac`.
+
+For `model_family=pairwise_logistic`, the model computes:
+
+```text
+prob_accept = sigmoid(intercept + sum(linear_coefficients * features) + sum(interaction_coefficients * feature_i * feature_j))
+```
+
+Non-hard-rejected rows are accepted when `prob_accept >= prob_threshold`. Standard hard gates still run before the logistic model.
 
 If there are fewer than four trainable rows, the distance matrix is degenerate, clustering fails, or the low-separation branch has no acceptable Otsu threshold, all non-hard-rejected rows are accepted as a single cluster.
 

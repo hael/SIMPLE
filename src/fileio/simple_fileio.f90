@@ -809,7 +809,7 @@ contains
         integer :: nl, funit, iline, io_stat
         nl = nlines(filetable)
         if( nl == 0 ) return
-        call fopen(funit, filetable, 'old', 'unknown', io_stat)
+        call fopen(funit, filetable, 'old', 'read', io_stat)
         call fileiochk("read_filetable failed to open file "//filetable%to_char(), io_stat)
         if( allocated(filenames) )then
             call filenames%kill
@@ -1137,4 +1137,3 @@ contains
     end function get_relative_path
 
 end module simple_fileio
-

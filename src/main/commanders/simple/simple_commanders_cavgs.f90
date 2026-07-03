@@ -336,6 +336,7 @@ contains
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
+        character(len=32)         :: learn_model
         logical                   :: use_overfit_hard_reject
         logical                   :: use_chunk_hard_reject
         call cline%set('oritype', 'cls2D')
@@ -375,15 +376,19 @@ contains
         else
             if( quality_mode == QUALITY_MODE_LEARN )then
                 if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
-                if( cline%defined('quality_model') ) &
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept quality_model')
                 if( cline%defined('infile') ) &
                     THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept infile')
                 call read_filetable(params%filetab, analysis_files)
+                if( .not. allocated(analysis_files) ) &
+                    THROW_HARD('model_cavgs_rejection quality_mode=learn received an empty filetab')
+                learn_model = 'linear'
+                if( cline%defined('quality_model') .and. trim(params%quality_model) /= '' ) &
+                    learn_model = trim(params%quality_model)
                 model_fname = 'cavgs_quality_model_learned.txt'
                 if( cline%defined('fname') ) model_fname = params%fname%to_char()
                 report_fname = 'cavgs_quality_learn_report.txt'
-                call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
+                call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
+                    trim(learn_model))
                 write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
                 if( allocated(analysis_files) ) deallocate(analysis_files)
                 call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &

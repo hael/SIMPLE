@@ -8,9 +8,13 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_fea
 use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, &
     build_classify_cache, kill_classify_cache, cached_decision_confusion
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, cavg_quality_model_spec, cavg_quality_result, &
-    cavg_quality_training_dataset, cavg_quality_learn_diagnostics
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CAVG_MODEL_FAMILY_LINEAR, &
+    CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, &
+    cavg_quality_learn_diagnostics
 use simple_srch_sort_loc,      only: hpsort
+use simple_optimizer,          only: optimizer
+use simple_opt_factory,        only: opt_factory
+use simple_opt_spec,           only: opt_spec
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -42,13 +46,36 @@ real,    parameter :: LEARN_OTSU_MIN_OFFSETS(9)     = [0.05, 0.10, 0.15, 0.25, 0
 real,    parameter :: LEARN_OTSU_MAX_OFFSETS(9)     = [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60, 0.75, 0.90]
 real,    parameter :: LEARN_MIN_ACCEPT_FRACS(11)    = [0.50, 0.60, 0.65, 0.70, 0.80, 0.85, &
                                                        0.90, 0.925, 0.95, 0.975, 1.00]
+real,    parameter :: LOGISTIC_LAMBDAS(7)           = [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, &
+                                                       1.0e-2, 3.0e-2, 1.0e-1]
+real,    parameter :: LOGISTIC_THRESHOLDS(17)       = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, &
+                                                       0.40, 0.45, 0.50, 0.55, 0.60, 0.65, &
+                                                       0.70, 0.75, 0.80, 0.85, 0.90]
+real,    parameter :: LOGISTIC_COEFF_ABS_BOUND      = 20.0
+
+type :: cavg_quality_logistic_problem
+    integer :: nobs           = 0
+    integer :: ndim           = 0
+    integer :: n_linear       = 0
+    integer :: n_interactions = 0
+    integer :: linear_features(CAVG_QUALITY_NFEATS) = 0
+    integer :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
+    real(kind=8) :: lambda       = 0.0d0
+    real(kind=8) :: total_weight = 0.0d0
+    real(kind=8), allocatable :: design(:,:)
+    real(kind=8), allocatable :: labels(:)
+    real(kind=8), allocatable :: weights(:)
+contains
+    procedure :: kill => kill_logistic_problem
+end type cavg_quality_logistic_problem
 
 contains
 
-    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname )
+    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname, model_family )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
+        character(len=*), optional,intent(in)    :: model_family
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         type(cavg_quality_classify_cache),   allocatable :: caches(:)
         type(cavg_quality_model_spec) :: base_spec, candidate_spec, best_spec
@@ -56,9 +83,21 @@ contains
         type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
-        real :: best_score
+        real :: best_score, learn_score
         integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
         integer :: n_grid, n_top, n_best_ties
+        character(len=32) :: requested_family
+        requested_family = CAVG_MODEL_FAMILY_LINEAR
+        if( present(model_family) ) requested_family = trim(model_family)
+        select case(trim(requested_family))
+        case('linear', CAVG_MODEL_FAMILY_LINEAR)
+            continue
+        case('logistic', CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC)
+            call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname)
+            return
+        case default
+            THROW_HARD('learn_cavg_quality_model: unsupported model family: '//trim(requested_family))
+        end select
         call load_quality_training_datasets(analysis_files, dsets)
         base_spec = abinitio_learn_base_spec()
         call calc_suggested_training_weights(dsets, suggested_weights)
@@ -119,15 +158,321 @@ contains
         call select_preferred_best_tie(base_spec, best_tie_specs, n_best_ties, best_spec)
         best_spec%name = 'learned_v1'
         call learned_model%init_spec(best_spec)
+        learn_score = macro_balacc_for_model(dsets, learned_model)
         call learned_model%write(model_fname)
-        call write_cavg_quality_learn_report(report_fname, dsets, base_spec, suggested_weights, learned_model, best_score, &
-            n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties)
+        call write_cavg_quality_learn_report(report_fname, dsets, base_spec, suggested_weights, learned_model, &
+            learn_score, n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties)
         call kill_policy_caches(caches)
         deallocate(caches)
         call kill_training_datasets(dsets)
         deallocate(best_tie_specs)
         deallocate(dsets)
     end subroutine learn_cavg_quality_model
+
+    subroutine learn_cavg_quality_pairwise_logistic_model( analysis_files, learned_model, model_fname, report_fname )
+        class(string),             intent(in)    :: analysis_files(:)
+        type(cavg_quality_model),  intent(inout) :: learned_model
+        character(len=*),          intent(in)    :: model_fname, report_fname
+        type(cavg_quality_training_dataset), allocatable :: dsets(:)
+        type(cavg_quality_logistic_problem) :: problem
+        type(cavg_quality_model) :: candidate, best_model
+        type(cavg_quality_model_spec) :: spec
+        real(kind=8), allocatable :: solution(:)
+        real :: score, best_score, objective, best_objective, learn_score
+        integer :: ipol, ilambda, ithresh, n_candidates
+        call load_quality_training_datasets(analysis_files, dsets)
+        best_score      = -huge(1.0)
+        best_objective  = huge(1.0)
+        n_candidates    = 0
+        do ipol = 1, n_feature_policies()
+            do ilambda = 1, size(LOGISTIC_LAMBDAS)
+                call build_logistic_problem(dsets, ipol, LOGISTIC_LAMBDAS(ilambda), problem)
+                call fit_logistic_problem(problem, solution, objective)
+                call logistic_solution_to_model(solution, problem, feature_policy_name(ipol), candidate)
+                do ithresh = 1, size(LOGISTIC_THRESHOLDS)
+                    spec = candidate%get_spec()
+                    spec%prob_threshold = LOGISTIC_THRESHOLDS(ithresh)
+                    call candidate%init_spec(spec)
+                    score = macro_balacc_for_model(dsets, candidate)
+                    n_candidates = n_candidates + 1
+                    if( score > best_score + EPS .or. &
+                        (abs(score - best_score) <= EPS .and. objective < best_objective) )then
+                        best_score     = score
+                        best_objective = objective
+                        best_model     = candidate
+                    endif
+                end do
+                if( allocated(solution) ) deallocate(solution)
+                call problem%kill()
+            end do
+        end do
+        if( n_candidates == 0 ) THROW_HARD('learn_cavg_quality_pairwise_logistic_model: no logistic candidates')
+        learned_model = best_model
+        learn_score = macro_balacc_for_model(dsets, learned_model)
+        call learned_model%write(model_fname)
+        call write_cavg_quality_logistic_learn_report(report_fname, dsets, learned_model, learn_score, &
+            n_candidates, best_objective)
+        call kill_training_datasets(dsets)
+        deallocate(dsets)
+    end subroutine learn_cavg_quality_pairwise_logistic_model
+
+    subroutine build_logistic_problem( dsets, ipolicy, lambda, problem )
+        type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
+        integer,                             intent(in)    :: ipolicy
+        real,                                intent(in)    :: lambda
+        type(cavg_quality_logistic_problem), intent(inout) :: problem
+        integer :: ids, irow, iobs, ifeat, jfeat, ilinear, jlinear, iterm
+        integer :: role, nfit, ngood, nbad
+        real(kind=8) :: good_weight, bad_weight
+        call problem%kill()
+        call feature_policy_indices(ipolicy, problem%linear_features, problem%n_linear)
+        if( problem%n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
+        problem%n_interactions = 0
+        do ilinear = 1, problem%n_linear - 1
+            do jlinear = ilinear + 1, problem%n_linear
+                problem%n_interactions = problem%n_interactions + 1
+                problem%interaction_terms(problem%n_interactions,1) = problem%linear_features(ilinear)
+                problem%interaction_terms(problem%n_interactions,2) = problem%linear_features(jlinear)
+            end do
+        end do
+        problem%ndim = 1 + problem%n_linear + problem%n_interactions
+        problem%lambda = real(lambda, kind=8)
+        problem%nobs = 0
+        do ids = 1, size(dsets)
+            role = dataset_learn_role(dsets(ids))
+            if( role == LEARN_ROLE_SKIP ) cycle
+            problem%nobs = problem%nobs + count_trainable_classes(dsets(ids))
+        end do
+        if( problem%nobs == 0 ) THROW_HARD('build_logistic_problem: no trainable class averages')
+        allocate(problem%design(problem%nobs, problem%ndim), source=0.0d0)
+        allocate(problem%labels(problem%nobs), source=0.0d0)
+        allocate(problem%weights(problem%nobs), source=0.0d0)
+        iobs = 0
+        do ids = 1, size(dsets)
+            role = dataset_learn_role(dsets(ids))
+            if( role == LEARN_ROLE_SKIP ) cycle
+            ngood = count_trainable_manual_good(dsets(ids))
+            nbad  = count_trainable_manual_bad(dsets(ids))
+            call logistic_dataset_class_weights(role, ngood, nbad, good_weight, bad_weight)
+            do irow = 1, dsets(ids)%ncls
+                if( dsets(ids)%hard_reject(irow) ) cycle
+                iobs = iobs + 1
+                problem%design(iobs,1) = 1.0d0
+                do ilinear = 1, problem%n_linear
+                    ifeat = problem%linear_features(ilinear)
+                    problem%design(iobs, 1 + ilinear) = real(dsets(ids)%features(irow, ifeat), kind=8)
+                end do
+                do iterm = 1, problem%n_interactions
+                    ifeat = problem%interaction_terms(iterm,1)
+                    jfeat = problem%interaction_terms(iterm,2)
+                    problem%design(iobs, 1 + problem%n_linear + iterm) = &
+                        real(dsets(ids)%features(irow, ifeat) * dsets(ids)%features(irow, jfeat), kind=8)
+                end do
+                if( dsets(ids)%manual_states(irow) > 0 )then
+                    problem%labels(iobs)  = 1.0d0
+                    problem%weights(iobs) = good_weight
+                else
+                    problem%labels(iobs)  = 0.0d0
+                    problem%weights(iobs) = bad_weight
+                endif
+            end do
+            nfit = count_trainable_classes(dsets(ids))
+            if( nfit > 0 .and. iobs > problem%nobs ) THROW_HARD('build_logistic_problem: row overflow')
+        end do
+        problem%total_weight = sum(problem%weights)
+        if( problem%total_weight <= 0.0d0 ) THROW_HARD('build_logistic_problem: nonpositive total weight')
+    end subroutine build_logistic_problem
+
+    subroutine logistic_dataset_class_weights( role, ngood, nbad, good_weight, bad_weight )
+        integer,      intent(in)  :: role, ngood, nbad
+        real(kind=8), intent(out) :: good_weight, bad_weight
+        good_weight = 0.0d0
+        bad_weight  = 0.0d0
+        select case(role)
+        case(LEARN_ROLE_BALANCED)
+            if( ngood <= 0 .or. nbad <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid balanced dataset')
+            good_weight = 0.5d0 / real(ngood, kind=8)
+            bad_weight  = 0.5d0 / real(nbad,  kind=8)
+        case(LEARN_ROLE_RECALL_ONLY)
+            if( ngood <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid recall-only dataset')
+            good_weight = 1.0d0 / real(ngood, kind=8)
+        case(LEARN_ROLE_SPECIFICITY_ONLY)
+            if( nbad <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid specificity-only dataset')
+            bad_weight = 1.0d0 / real(nbad, kind=8)
+        case default
+            THROW_HARD('logistic_dataset_class_weights: unsupported dataset role')
+        end select
+    end subroutine logistic_dataset_class_weights
+
+    subroutine fit_logistic_problem( problem, solution, objective )
+        type(cavg_quality_logistic_problem), intent(inout) :: problem
+        real(kind=8), allocatable,           intent(inout) :: solution(:)
+        real,                                intent(out)   :: objective
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: ospec
+        class(optimizer), pointer :: opt_obj
+        real, allocatable         :: limits(:,:)
+        real(kind=8)              :: pos_weight, neg_weight
+        integer :: i
+        if( allocated(solution) ) deallocate(solution)
+        allocate(solution(problem%ndim), source=0.0d0)
+        allocate(limits(problem%ndim,2), source=0.0)
+        limits(:,1) = -LOGISTIC_COEFF_ABS_BOUND
+        limits(:,2) =  LOGISTIC_COEFF_ABS_BOUND
+        pos_weight = sum(problem%weights, mask=problem%labels > 0.5d0)
+        neg_weight = sum(problem%weights, mask=problem%labels <= 0.5d0)
+        solution(1) = log(max(pos_weight, 1.0d-12) / max(neg_weight, 1.0d-12))
+        opt_obj => null()
+        call ospec%specify('lbfgsb', problem%ndim, ftol=1e-7, gtol=1e-7, maxits=250, &
+            factr=1.0d+7, pgtol=1.0d-5, limits=limits)
+        call ofac%new(ospec, opt_obj)
+        call ospec%set_costfun_8(logistic_cost_wrapper)
+        call ospec%set_gcostfun_8(logistic_gradient_wrapper)
+        call ospec%set_fdfcostfun_8(logistic_fdf_wrapper)
+        ospec%x   = real(solution)
+        ospec%x_8 = solution
+        call opt_obj%minimize(ospec, problem, objective)
+        do i = 1, problem%ndim
+            solution(i) = ospec%x_8(i)
+        end do
+        call opt_obj%kill()
+        deallocate(opt_obj)
+        call ospec%kill()
+        deallocate(limits)
+    end subroutine fit_logistic_problem
+
+    subroutine logistic_solution_to_model( solution, problem, feature_policy, model )
+        real(kind=8),                      intent(in)    :: solution(:)
+        type(cavg_quality_logistic_problem), intent(in)  :: problem
+        character(len=*),                  intent(in)    :: feature_policy
+        type(cavg_quality_model),          intent(inout) :: model
+        type(cavg_quality_model_spec) :: spec
+        integer :: ilinear, iterm, ifeat
+        spec = abinitio_learn_base_spec()
+        spec%name               = 'learned_pairwise_logistic_v1'
+        spec%feature_policy     = trim(feature_policy)
+        spec%model_family       = CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
+        spec%weights            = 0.0
+        spec%intercept          = real(solution(1))
+        spec%linear_coefficients = 0.0
+        do ilinear = 1, problem%n_linear
+            ifeat = problem%linear_features(ilinear)
+            spec%weights(ifeat) = 1.0 / real(problem%n_linear)
+            spec%linear_coefficients(ifeat) = real(solution(1 + ilinear))
+        end do
+        spec%n_interactions = problem%n_interactions
+        spec%interaction_terms = 0
+        spec%interaction_coefficients = 0.0
+        do iterm = 1, problem%n_interactions
+            spec%interaction_terms(iterm,:) = problem%interaction_terms(iterm,:)
+            spec%interaction_coefficients(iterm) = real(solution(1 + problem%n_linear + iterm))
+        end do
+        spec%prob_threshold          = 0.5
+        spec%regularization_lambda   = real(problem%lambda)
+        spec%calibration_temperature = 1.0
+        call model%init_spec(spec)
+    end subroutine logistic_solution_to_model
+
+    function logistic_cost_wrapper( fun_self, vec, D ) result( cost )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(in)    :: vec(D)
+        real(kind=8)                :: cost
+        real(kind=8) :: grad(D)
+        select type(problem => fun_self)
+        type is(cavg_quality_logistic_problem)
+            call logistic_problem_fdf(problem, vec, cost, grad, D)
+        class default
+            THROW_HARD('logistic_cost_wrapper: invalid optimization context')
+        end select
+    end function logistic_cost_wrapper
+
+    subroutine logistic_gradient_wrapper( fun_self, vec, grad, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: grad(D)
+        real(kind=8) :: cost
+        select type(problem => fun_self)
+        type is(cavg_quality_logistic_problem)
+            call logistic_problem_fdf(problem, vec, cost, grad, D)
+        class default
+            THROW_HARD('logistic_gradient_wrapper: invalid optimization context')
+        end select
+    end subroutine logistic_gradient_wrapper
+
+    subroutine logistic_fdf_wrapper( fun_self, vec, f, grad, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D)
+        select type(problem => fun_self)
+        type is(cavg_quality_logistic_problem)
+            call logistic_problem_fdf(problem, vec, f, grad, D)
+        class default
+            THROW_HARD('logistic_fdf_wrapper: invalid optimization context')
+        end select
+    end subroutine logistic_fdf_wrapper
+
+    subroutine logistic_problem_fdf( problem, vec, f, grad, D )
+        type(cavg_quality_logistic_problem), intent(in) :: problem
+        integer,                             intent(in) :: D
+        real(kind=8),                        intent(in) :: vec(D)
+        real(kind=8),                        intent(out):: f, grad(D)
+        integer :: iobs, idim
+        real(kind=8) :: eta, prob, resid, loss
+        if( D /= problem%ndim ) THROW_HARD('logistic_problem_fdf: dimension mismatch')
+        if( problem%total_weight <= 0.0d0 ) THROW_HARD('logistic_problem_fdf: nonpositive total weight')
+        f    = 0.0d0
+        grad = 0.0d0
+        do iobs = 1, problem%nobs
+            eta  = dot_product(vec, problem%design(iobs,:))
+            prob = stable_sigmoid_8(eta)
+            if( eta >= 0.0d0 )then
+                loss = (1.0d0 - problem%labels(iobs)) * eta + log(1.0d0 + exp(-min(eta, 80.0d0)))
+            else
+                loss = -problem%labels(iobs) * eta + log(1.0d0 + exp(max(eta, -80.0d0)))
+            endif
+            f = f + problem%weights(iobs) * loss
+            resid = problem%weights(iobs) * (prob - problem%labels(iobs))
+            do idim = 1, D
+                grad(idim) = grad(idim) + resid * problem%design(iobs,idim)
+            end do
+        end do
+        f    = f    / problem%total_weight
+        grad = grad / problem%total_weight
+        do idim = 2, D
+            f = f + 0.5d0 * problem%lambda * vec(idim)**2
+            grad(idim) = grad(idim) + problem%lambda * vec(idim)
+        end do
+    end subroutine logistic_problem_fdf
+
+    real(kind=8) function stable_sigmoid_8( eta )
+        real(kind=8), intent(in) :: eta
+        real(kind=8) :: z
+        if( eta >= 0.0d0 )then
+            z = exp(-min(eta, 80.0d0))
+            stable_sigmoid_8 = 1.0d0 / (1.0d0 + z)
+        else
+            z = exp(max(eta, -80.0d0))
+            stable_sigmoid_8 = z / (1.0d0 + z)
+        endif
+    end function stable_sigmoid_8
+
+    subroutine kill_logistic_problem( self )
+        class(cavg_quality_logistic_problem), intent(inout) :: self
+        if( allocated(self%design)  ) deallocate(self%design)
+        if( allocated(self%labels)  ) deallocate(self%labels)
+        if( allocated(self%weights) ) deallocate(self%weights)
+        self%nobs              = 0
+        self%ndim              = 0
+        self%n_linear          = 0
+        self%n_interactions    = 0
+        self%linear_features   = 0
+        self%interaction_terms = 0
+        self%lambda            = 0.0d0
+        self%total_weight      = 0.0d0
+    end subroutine kill_logistic_problem
 
     subroutine evaluate_cavg_quality_model( analysis_files, model, report_fname )
         class(string),            intent(in) :: analysis_files(:)
@@ -759,7 +1104,11 @@ contains
         type(cavg_quality_classify_cache),   intent(in) :: cache
         type(cavg_quality_model),            intent(in) :: model
         integer,                             intent(out):: tp, fp, tn, fn
-        call cached_decision_confusion(cache, model, dset%manual_states, tp, fp, tn, fn)
+        if( trim(model%model_family) == CAVG_MODEL_FAMILY_LINEAR )then
+            call cached_decision_confusion(cache, model, dset%manual_states, tp, fp, tn, fn)
+        else
+            call classify_training_dataset(dset, model, tp, fp, tn, fn)
+        endif
     end subroutine classify_training_dataset_cached
 
     subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
@@ -856,6 +1205,62 @@ contains
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
     end subroutine write_cavg_quality_learn_report
 
+    subroutine write_cavg_quality_logistic_learn_report( fname, dsets, learned_model, best_score, &
+                                                         n_candidates, best_objective )
+        character(len=*),                    intent(in) :: fname
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        type(cavg_quality_model),            intent(in) :: learned_model
+        real,                                intent(in) :: best_score, best_objective
+        integer,                             intent(in) :: n_candidates
+        type(cavg_quality_learn_diagnostics) :: diag
+        integer :: funit
+        call collect_learn_diagnostics(dsets, learned_model, diag)
+        open(newunit=funit, file=trim(fname), status='replace', action='write')
+        write(funit,'(A)') '# model_cavgs_rejection pairwise-logistic learn report'
+        write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
+        write(funit,'(A,A)') 'model_family=', trim(learned_model%model_family)
+        write(funit,'(A,F10.5)') 'macro_learn_score=', best_score
+        write(funit,'(A,ES14.6)') 'best_weighted_logistic_objective=', best_objective
+        write(funit,'(A,I0)') 'n_datasets=', size(dsets)
+        write(funit,'(A,I0)') 'model_search_grid_n=', n_candidates
+        write(funit,'(A)') 'note=pairwise_logistic_uses_existing_normalized_training_table_features'
+        write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
+        write(funit,'(A)') 'note=balanced_datasets_are_class_weighted_within_dataset'
+        write(funit,'(A)') 'note=trainable_good_only_datasets_contribute_recall_evidence'
+        write(funit,'(A)') 'note=trainable_bad_only_datasets_contribute_specificity_evidence'
+        call write_feature_policy_grid(funit)
+        call write_real_list(funit, 'grid_logistic_lambdas=', LOGISTIC_LAMBDAS)
+        call write_real_list(funit, 'grid_probability_thresholds=', LOGISTIC_THRESHOLDS)
+        call write_fixed_model_summary(funit, learned_model)
+        call write_logistic_coefficient_table(funit, learned_model)
+        write(funit,'(A)') ''
+        call write_evaluate_diagnostics(funit, learned_model, diag)
+        call write_dataset_metric_table(funit, dsets, learned_model, 'learn_score')
+        close(funit)
+        write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
+    end subroutine write_cavg_quality_logistic_learn_report
+
+    subroutine write_logistic_coefficient_table( funit, model )
+        integer,                  intent(in) :: funit
+        type(cavg_quality_model), intent(in) :: model
+        integer :: ifeat, iterm
+        write(funit,'(A)') ''
+        write(funit,'(A)') 'logistic_coefficient_header=term,feature_a,feature_b,coefficient'
+        write(funit,'(A,ES14.6)') 'logistic_coefficient,intercept,,,', model%intercept
+        do ifeat = 1, CAVG_QUALITY_NFEATS
+            if( abs(model%linear_coefficients(ifeat)) <= EPS ) cycle
+            write(funit,'(A,A,A,ES14.6)') 'logistic_coefficient,linear,', &
+                trim(cavg_quality_feature_name(ifeat)), ',,', model%linear_coefficients(ifeat)
+        end do
+        do iterm = 1, model%n_interactions
+            if( abs(model%interaction_coefficients(iterm)) <= EPS ) cycle
+            write(funit,'(A,A,A,A,A,ES14.6)') 'logistic_coefficient,pairwise,', &
+                trim(cavg_quality_feature_name(model%interaction_terms(iterm,1))), ',', &
+                trim(cavg_quality_feature_name(model%interaction_terms(iterm,2))), ',', &
+                model%interaction_coefficients(iterm)
+        end do
+    end subroutine write_logistic_coefficient_table
+
     subroutine write_cavg_quality_evaluate_report( fname, dsets, model, eval_score )
         character(len=*),                    intent(in) :: fname
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
@@ -887,6 +1292,7 @@ contains
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
         integer :: i
+        write(funit,'(A,A)') 'model_family=', trim(model%model_family)
         write(funit,'(A,A)') 'model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') 'model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -904,6 +1310,32 @@ contains
         write(funit,'(A,L1)') 'model_use_otsu_window=', model%use_otsu_window
         write(funit,'(A,L1)') 'model_use_cluster_rescue=', model%use_cluster_rescue
         write(funit,'(A,L1)') 'model_enforce_min_accept_frac=', model%enforce_min_accept_frac
+        if( trim(model%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC )then
+            write(funit,'(A,ES14.6)') 'model_intercept=', model%intercept
+            write(funit,'(A)', advance='no') 'model_linear_coefficients='
+            do i = 1, CAVG_QUALITY_NFEATS
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(ES14.6)', advance='no') model%linear_coefficients(i)
+            end do
+            write(funit,*)
+            write(funit,'(A)', advance='no') 'model_interaction_terms='
+            do i = 1, model%n_interactions
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(A,A,A)', advance='no') &
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,1))), ':', &
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,2)))
+            end do
+            write(funit,*)
+            write(funit,'(A)', advance='no') 'model_interaction_coefficients='
+            do i = 1, model%n_interactions
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(ES14.6)', advance='no') model%interaction_coefficients(i)
+            end do
+            write(funit,*)
+            write(funit,'(A,ES14.6)') 'model_prob_threshold=', model%prob_threshold
+            write(funit,'(A,ES14.6)') 'model_regularization_lambda=', model%regularization_lambda
+            write(funit,'(A,ES14.6)') 'model_calibration_temperature=', model%calibration_temperature
+        endif
     end subroutine write_fixed_model_summary
 
     subroutine write_dataset_metric_table( funit, dsets, model, score_name )

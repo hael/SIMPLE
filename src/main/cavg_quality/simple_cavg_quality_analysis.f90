@@ -10,7 +10,8 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, &
+    CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, cavg_quality_result
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -297,6 +298,7 @@ contains
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
         integer :: i
+        write(funit,'(A,A)') '# model_family=', trim(model%model_family)
         write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') '# model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -314,6 +316,32 @@ contains
         write(funit,'(A,L1)') '# model_use_otsu_window=', model%use_otsu_window
         write(funit,'(A,L1)') '# model_use_cluster_rescue=', model%use_cluster_rescue
         write(funit,'(A,L1)') '# model_enforce_min_accept_frac=', model%enforce_min_accept_frac
+        if( trim(model%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC )then
+            write(funit,'(A,ES14.6)') '# model_intercept=', model%intercept
+            write(funit,'(A)', advance='no') '# model_linear_coefficients='
+            do i = 1, CAVG_QUALITY_NFEATS
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(ES14.6)', advance='no') model%linear_coefficients(i)
+            end do
+            write(funit,*)
+            write(funit,'(A)', advance='no') '# model_interaction_terms='
+            do i = 1, model%n_interactions
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(A,A,A)', advance='no') &
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,1))), ':', &
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,2)))
+            end do
+            write(funit,*)
+            write(funit,'(A)', advance='no') '# model_interaction_coefficients='
+            do i = 1, model%n_interactions
+                if( i > 1 ) write(funit,'(A)', advance='no') ','
+                write(funit,'(ES14.6)', advance='no') model%interaction_coefficients(i)
+            end do
+            write(funit,*)
+            write(funit,'(A,ES14.6)') '# model_prob_threshold=', model%prob_threshold
+            write(funit,'(A,ES14.6)') '# model_regularization_lambda=', model%regularization_lambda
+            write(funit,'(A,ES14.6)') '# model_calibration_temperature=', model%calibration_temperature
+        endif
     end subroutine write_model_as_analysis_comments
 
     subroutine write_analysis_class_header( funit )

@@ -259,31 +259,37 @@ Important diagnostic questions:
 
 ### Phase 1: Model Representation
 
-- Add `model_family` to `cavg_quality_model_spec`.
-- Add intercept, linear coefficients, interaction term indices, interaction
+- Done: added `model_family` to `cavg_quality_model_spec` and
+  `cavg_quality_model`.
+- Done: added intercept, linear coefficients, interaction term indices,
   coefficients, probability threshold, and regularization metadata.
-- Update model read/write and promotion snippet generation.
-- Keep `linear_score` as the default behavior for existing models.
+- Done: updated model read/write, analysis comments, and fixed-model summaries
+  for the new family.
+- Done: kept `linear_score` as the default behavior for existing models.
 
 ### Phase 2: Logistic Scoring
 
-- Add a small helper to build pairwise terms from normalized features.
-- Add logistic probability evaluation to `simple_cavg_quality_model.f90`.
-- Route `classify` by `model_family`.
-- Ensure hard-rejected rows remain final and get probability zero or the
-  existing clipped sentinel score, consistently documented.
+- Done: added logistic probability evaluation to
+  `simple_cavg_quality_model.f90`.
+- Done: routed `classify` by `model_family`.
+- Done: hard-rejected rows remain final and get probability zero in the
+  pairwise-logistic path.
 
 ### Phase 3: Training
 
-- Add a logistic candidate path in `simple_cavg_quality_learn.f90`.
-- Add a logistic-training state object with design matrix, labels, dataset
+- Done: added an explicit logistic candidate path in
+  `simple_cavg_quality_learn.f90`, selected with
+  `quality_mode=learn quality_model=logistic`.
+- Done: added a logistic-training state object with design matrix, labels,
   weights, regularization strength, and interaction metadata.
-- Implement a double-precision `fdf` callback for weighted binary cross entropy
+- Done: implemented a double-precision `fdf` callback for weighted binary cross entropy
   plus L2 penalty.
-- Use existing `lbfgsb` infrastructure with broad coefficient bounds as the
+- Done: uses existing `lbfgsb` infrastructure with broad coefficient bounds as the
   first optimizer path.
-- Search over regularization, threshold, and interaction policy.
+- Done: searches over feature policy, regularization, and probability threshold.
 - Reuse existing analysis-table reading and dataset-role diagnostics.
+- Pending: add leave-one-dataset-out diagnostics and interaction-policy
+  ablations once enough training data accumulates.
 
 ### Phase 4: Reporting and Validation
 

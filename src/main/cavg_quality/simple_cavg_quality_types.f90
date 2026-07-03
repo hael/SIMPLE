@@ -5,6 +5,9 @@ implicit none
 private
 
 public :: CAVG_QUALITY_NFEATS
+public :: CAVG_QUALITY_MAX_INTERACTIONS
+public :: CAVG_MODEL_FAMILY_LINEAR
+public :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -15,8 +18,11 @@ public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_QUALITY_NFEATS  = 12
+integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
+character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR            = 'linear_score'
+character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC = 'pairwise_logistic'
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:
@@ -31,7 +37,16 @@ type :: cavg_quality_model_spec
     character(len=64) :: name                         = ''
     character(len=32) :: context                      = 'chunk'
     character(len=64) :: feature_policy               = 'microchunk_plus_score_signal'
+    character(len=32) :: model_family                 = CAVG_MODEL_FAMILY_LINEAR
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
+    real              :: intercept                    = 0.0
+    real              :: linear_coefficients(CAVG_QUALITY_NFEATS) = 0.0
+    integer           :: n_interactions               = 0
+    integer           :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
+    real              :: interaction_coefficients(CAVG_QUALITY_MAX_INTERACTIONS) = 0.0
+    real              :: prob_threshold               = 0.5
+    real              :: regularization_lambda        = 0.0
+    real              :: calibration_temperature      = 1.0
     real              :: boundary_margin              = 0.0
     real              :: min_score_separation         = 0.0
     real              :: otsu_min_offset              = 0.0
