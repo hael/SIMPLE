@@ -26,6 +26,7 @@ public :: I_PRESENCE
 public :: I_NEG_LOCVAR_FG
 public :: I_NEG_LOCVAR_BG
 public :: I_LOG_LOCVAR_FG_BG_RATIO
+public :: I_BP40_100_CENTER_EDGE_VAR
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -53,6 +54,8 @@ real,    parameter :: LOG_EPS                   = 1.0e-12
 ! doc/microchunk_and_rejection/model_cavgs_rejection.md.
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
+real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0
+real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
 integer, parameter :: LOCVAR_WINDOW             = 10
@@ -70,6 +73,7 @@ integer, parameter :: I_PRESENCE                = 9
 integer, parameter :: I_NEG_LOCVAR_FG           = 10
 integer, parameter :: I_NEG_LOCVAR_BG           = 11
 integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 12
+integer, parameter :: I_BP40_100_CENTER_EDGE_VAR = 13
 
 ! Optional hard rule for rejecting overfitted fuzzy-ball class averages.
 ! This is deliberately not a learned model at application time. The rule is
@@ -141,7 +145,9 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('neg_log_locvar_bg', 'higher_is_better', &
         'negative log local variance outside the foreground Otsu mask; higher values indicate quieter background', 'overfit'), &
     cavg_quality_feature_def('log_locvar_fg_bg_ratio', 'higher_is_better', &
-        'log foreground/background local variance ratio; higher values indicate support-localized detail', 'overfit') ]
+        'log foreground/background local variance ratio; higher values indicate support-localized detail', 'overfit'), &
+    cavg_quality_feature_def('log_bp40_100_center_edge_var', 'higher_is_better', &
+        'log center/edge variance ratio after 100-40 A band-pass; low values flag overfit fuzzy balls', 'overfit') ]
 
 contains
 
@@ -242,7 +248,7 @@ contains
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: centroid_norm, locvar_fg, locvar_bg
         real                 :: cc_area_frac
-        real                 :: center_edge_snr, presence_score
+        real                 :: center_edge_snr, presence_score, bp_center_edge_var
         integer              :: ithr
         logical              :: no_component, mask_hard_reject, bad_pixels
         ncls = size(imgs)
@@ -282,7 +288,7 @@ contains
             disc_area(ithr) = count(rmat_disc(:,:,:,ithr) > 0.0)
         end do
         !$omp parallel do default(shared) private(i,ithr,centroid_norm,no_component,&
-        !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,&
+        !$omp& mask_hard_reject,bad_pixels,locvar_fg,locvar_bg,center_edge_snr,presence_score,bp_center_edge_var,&
         !$omp& cc_area_frac)&
         !$omp proc_bind(close) schedule(static)
         do i = 1, ncls
@@ -297,12 +303,13 @@ contains
                 locvar_bg           = 0.0
                 center_edge_snr     = 0.0
                 presence_score      = 0.0
+                bp_center_edge_var  = 0.0
             else
                 call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
                                                       rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, &
                                                       centroid_norm, cc_area_frac, no_component, mask_hard_reject)
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score)
+                                                presence_score, bp_center_edge_var)
             endif
             raw(i, I_LOG_POP)                 = log(real(max(pop(i), 0)) + 1.0)
             raw(i, I_NEG_LOG_RES)             = resolution_feature(res(i))
@@ -316,6 +323,7 @@ contains
             raw(i, I_NEG_LOCVAR_FG)          = -log(max(locvar_fg, LOG_EPS))
             raw(i, I_NEG_LOCVAR_BG)          = -log(max(locvar_bg, LOG_EPS))
             raw(i, I_LOG_LOCVAR_FG_BG_RATIO) = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
+            raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
             ! Catastrophic population, resolution, and foreground-geometry
             ! failures are hard validity rejects. The population fraction and
             ! connected-component pruning mirror the microchunk rejector, while
@@ -423,18 +431,24 @@ contains
         if( outside > MASK_HARD_OUTSIDE_PIXELS ) mask_hard_reject = .true.
     end subroutine measure_cavg_foreground_geometry
 
-    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score )
+    subroutine measure_cavg_image_metrics( img_src, rad_px, locvar_fg, locvar_bg, center_edge_snr, presence_score, &
+                                           bp_center_edge_var )
         class(image), intent(inout) :: img_src
         real,         intent(in)    :: rad_px
         real,         intent(out)   :: locvar_fg, locvar_bg, center_edge_snr
-        real,         intent(out)   :: presence_score
-        type(image)       :: img, img_bin
+        real,         intent(out)   :: presence_score, bp_center_edge_var
+        type(image)       :: img, img_bin, img_bp
         real, allocatable :: bin_mask(:,:,:)
+        real              :: bp_center_edge_std
         integer           :: ldim(3)
         img  = img_src
         call img%zero_edgeavg()
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
+        img_bp = img
+        call img_bp%bp(OVERFIT_SIGNAL_BP_HP, OVERFIT_SIGNAL_BP_LP)
+        bp_center_edge_std = img_bp%center_edge_snr(rad_px)
+        bp_center_edge_var = bp_center_edge_std * bp_center_edge_std
         call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
@@ -445,6 +459,7 @@ contains
         deallocate(bin_mask)
         call img%kill()
         call img_bin%kill()
+        call img_bp%kill()
     end subroutine measure_cavg_image_metrics
 
     real function resolution_feature( res )

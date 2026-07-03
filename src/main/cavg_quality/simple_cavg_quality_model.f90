@@ -94,17 +94,20 @@ character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_sc
 real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     1.000000E-01, 1.000000E-01, 1.000000E-01, 1.000000E-01, &
     1.000000E-01, 1.000000E-01, 0.000000E+00, 1.000000E-01, &
-    0.000000E+00, 1.000000E-01, 1.000000E-01, 1.000000E-01 ]
+    0.000000E+00, 1.000000E-01, 1.000000E-01, 1.000000E-01, &
+    0.000000E+00 ]
 character(len=*), parameter :: CHUNK100MICS_LINEAR_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_CHUNK100MICS_LINEAR_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     9.978756E-02, 1.167914E-01, 3.642511E-02, 1.329548E-01, &
     1.402481E-01, 1.610645E-01, 6.630784E-02, 6.981037E-02, &
-    1.294257E-01, 0.000000E+00, 0.000000E+00, 4.718454E-02 ]
+    1.294257E-01, 0.000000E+00, 0.000000E+00, 4.718454E-02, &
+    0.000000E+00 ]
 character(len=*), parameter :: POOL_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_POOL_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     8.333334E-02, 8.333334E-02, 8.333334E-02, 8.333334E-02, &
     8.333334E-02, 8.333334E-02, 8.333334E-02, 8.333334E-02, &
-    8.333334E-02, 8.333334E-02, 8.333334E-02, 8.333334E-02 ]
+    8.333334E-02, 8.333334E-02, 8.333334E-02, 8.333334E-02, &
+    0.000000E+00 ]
 real, parameter :: CHUNK100MICS_BOUNDARY_MARGIN      = 0.00
 real, parameter :: CHUNK100MICS_MIN_SCORE_SEPARATION = 0.05
 real, parameter :: CHUNK100MICS_OTSU_MIN_OFFSET      = 0.00
@@ -254,7 +257,8 @@ contains
         spec%linear_coefficients     = [ &
             6.769620E-01,  4.201044E-01, -1.265003E-01,  1.838305E-01, &
            -1.551546E-01,  1.913865E+00,  0.000000E+00,  6.528412E-01, &
-            0.000000E+00, -2.146587E+00,  1.623915E+00, -3.337763E-01 ]
+            0.000000E+00, -2.146587E+00,  1.623915E+00, -3.337763E-01, &
+            0.000000E+00 ]
         spec%n_interactions           = 45
         spec%interaction_terms        = 0
         spec%interaction_coefficients = 0.0
@@ -393,8 +397,9 @@ contains
         spec%linear_coefficients     = [ &
             8.599021E-01,  1.908682E+00, -2.104348E-02, -2.616964E-01, &
             3.323164E-01, -3.691716E-01,  1.505065E+00,  1.067771E+00, &
-           -6.319820E-01,  2.635496E-01, -8.618861E-01, -2.414124E-01 ]
-        call set_all_pairwise_interactions(spec, [ &
+           -6.319820E-01,  2.635496E-01, -8.618861E-01, -2.414124E-01, &
+            0.000000E+00 ]
+        call set_pairwise_interactions_for_feature_count(spec, 12, [ &
             8.793383E-01, -7.701499E-01, -2.472747E+00,  1.968437E+00, &
            -9.512236E-01,  3.224142E+00,  1.929347E+00, -5.482838E-01, &
             2.470711E+00, -8.645242E-01,  1.752121E+00, -2.869924E-02, &
@@ -427,22 +432,28 @@ contains
         spec%enforce_min_accept_frac = .false.
     end function pool_model_spec
 
-    subroutine set_all_pairwise_interactions( spec, coefficients )
+    subroutine set_pairwise_interactions_for_feature_count( spec, nfeatures, coefficients )
         type(cavg_quality_model_spec), intent(inout) :: spec
-        real,                          intent(in)    :: coefficients(CAVG_QUALITY_MAX_INTERACTIONS)
-        integer :: ifeat, jfeat, iterm
-        spec%n_interactions          = CAVG_QUALITY_MAX_INTERACTIONS
+        integer,                       intent(in)    :: nfeatures
+        real,                          intent(in)    :: coefficients(:)
+        integer :: ifeat, jfeat, iterm, expected_terms
+        if( nfeatures < 1 .or. nfeatures > CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('set_pairwise_interactions_for_feature_count: invalid feature count')
+        expected_terms = (nfeatures * (nfeatures - 1)) / 2
+        if( size(coefficients) /= expected_terms ) &
+            THROW_HARD('set_pairwise_interactions_for_feature_count: coefficient count mismatch')
+        spec%n_interactions          = expected_terms
         spec%interaction_terms       = 0
         spec%interaction_coefficients = 0.0
         iterm = 0
-        do ifeat = 1, CAVG_QUALITY_NFEATS - 1
-            do jfeat = ifeat + 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, nfeatures - 1
+            do jfeat = ifeat + 1, nfeatures
                 iterm = iterm + 1
                 spec%interaction_terms(iterm,:) = [ifeat, jfeat]
             end do
         end do
-        spec%interaction_coefficients(1:CAVG_QUALITY_MAX_INTERACTIONS) = coefficients
-    end subroutine set_all_pairwise_interactions
+        spec%interaction_coefficients(1:expected_terms) = coefficients
+    end subroutine set_pairwise_interactions_for_feature_count
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
