@@ -28,9 +28,9 @@ Primary implementation files:
 `refine3D_multi` is an automated multi-state refinement workflow for projects
 with existing input orientations. It chooses multi-state defaults, establishes
 the number of states by inquiring either the command line or the project state
-labels, prepares or validates state volumes, maps `multivol_mode` onto a staged
-base-`refine3D` workflow, and then runs a final all-particle `reconstruct3D`
-pass at native project sampling.
+labels, prepares or validates state volumes, maps the supported `input_oris*`
+mode onto a staged base-`refine3D` workflow, and then runs a final all-particle
+`reconstruct3D` pass at native project sampling.
 
 It is not a separate matcher implementation. Once the wrapper has prepared the
 command line for a stage, all particle-domain and volume-domain iteration work
@@ -43,7 +43,7 @@ Its durable contract is:
 3. derive sampling, update fraction, and per-stage iteration caps
 4. derive default autoscaling and translation limits, unless `autoscale=no`
 5. validate or initialize per-state starting volumes
-6. run the `multivol_mode` stage plan
+6. run the prior-orientation stage plan
 7. verify that every active particle has been updated at least once
 8. reconstruct and postprocess final maps from all particles at native sampling
 9. write final reconstruction products
@@ -54,7 +54,7 @@ filtering should be checked against their own policy documents as well.
 
 The old `multivol_assign` public application has been removed from the
 library. Multi-volume assignment and refinement policy lives in
-`refine3D_multi` through `multivol_mode`.
+`refine3D_multi` through the supported `input_oris*` modes.
 
 ## 2. Entry Points and Ownership
 
@@ -117,10 +117,10 @@ value:
 - `center=no`
 - `sigma_est=global`
 - `prob_inpl=yes`
-- `prob_neigh_mode=sum`
+- `prob_neigh_mode=geom`
 - `nsample=min(100000, 10000 * nstates)`
 - `autoscale=yes`
-- `multivol_mode=input_oris_start`
+- `multivol_mode=input_oris_refine`
 - `ml_reg=yes`
 - `filt_mode=nonuniform_lpset`
 - `lpstop=6.0`
@@ -148,27 +148,18 @@ diverge.
 
 ## 4. Mode and State Model
 
-`refine3D_multi` is always multi-state. The effective `nstates` is established
-before the wrapper parses the full parameter object, and `multivol_mode`
-decides how project state labels are interpreted.
+`refine3D_multi` is always a docked prior-orientation workflow: input particles
+are expected to have a previous 3D orientation assignment to a state-averaged
+volume. The effective `nstates` is established before the wrapper parses the
+full parameter object, and `multivol_mode` decides whether those input
+orientations may be refined or must remain fixed.
 
 Supported `multivol_mode` values are:
 
-- `input_oris_start`
 - `input_oris_refine`
 - `input_oris_fixed`
 
-`input_oris_start` is the default. It is the full workflow:
-
-- state 0/1 input with command-line `nstates`: run `prob_state`, then
-  `shc_smpl`, then `prob_neigh`
-- existing project state labels greater than one with no command-line
-  `nstates`: reuse those labels and skip `prob_state`
-- existing project state labels greater than one with command-line `nstates`:
-  fail, because command-line `nstates` means the caller expects a state 0/1
-  project and a fresh state split
-
-`input_oris_refine` is the refinement-from-input-orientations route:
+`input_oris_refine` is the default refinement-from-input-orientations route:
 
 - state 0/1 input requires command-line `nstates`
 - state 0/1 input runs `prob_state`, then goes directly to `prob_neigh`
@@ -276,21 +267,20 @@ When active particles exceed the sample target:
 reconstruction for this mode even when the active particle count exceeds the
 ordinary sample target.
 
-Fractional multi-state sampling is class-balanced by default:
+Fractional multi-state sampling is projection-direction balanced by default:
 
 - `balance=yes`
 - `greedy_sampling=no`
 - `frac_best=1.0`
 
-This uses the prior 2D class analysis only to define class-biased sampling
-quotas. It does not sample greedily with respect to 2D objective-function
-values, and `frac_best=1.0` leaves all particles in each selected class eligible
-for balanced coverage sampling. Within each class quota, the sampler prefers
-the lowest `updatecnt` tier first and randomizes only among particles tied at
-the same update count. When fractional balanced updates are active, the wrapper
-writes the same class-sampling sidecar consumed by base `refine3D`. If the
-project lacks selected `cls2D` entries, the run fails early with an explicit
-class-balanced sampling error.
+The wrapper writes the same class-sampling sidecar consumed by base
+`refine3D`, but the sidecar bins are active `ptcl3D` projection directions
+rather than 2D class indices. This keeps the sampled subset spread across the
+current 3D orientation distribution. `frac_best=1.0` leaves all particles in
+each projection bin eligible for balanced coverage sampling. Within each bin,
+the sampler prefers the lowest `updatecnt` tier first and randomizes only among
+particles tied at the same update count. Projection-balanced fractional updates
+require prior 3D orientations.
 
 The wrapper does not set `ufrac_trec`; trailing reconstruction consumes the
 realized per-state update fractions recorded in `sampled` and `updatecnt`.
@@ -311,15 +301,17 @@ The automatically planned stage cap is clamped to:
 If the user supplies `maxits`, that value is interpreted as a stage cap for
 `refine3D_multi`, not as the total wrapper iteration count.
 `input_oris_fixed` accepts `maxits >= 1` because it has no `prob_neigh` stage.
-The other modes require `maxits >= 5` because `prob_neigh` has a minimum of
-five iterations. In `input_oris_start` and `input_oris_refine`, the
-state-initialization `prob_state` phase remains capped at five iterations.
+`input_oris_refine` requires `maxits >= 5` because `prob_neigh` has a minimum
+of five iterations. Its state-initialization `prob_state` phase remains capped
+at five iterations.
 
 After all stages finish, the wrapper reads `ptcl3D` and verifies update
-coverage. The run is not allowed to continue to final reconstruction unless
-every active particle has `updatecnt > 0`, meaning every active particle has
-seen the multi-state model and had its state assignment and, for non-fixed
-modes, orientation-accounting path updated at least once.
+coverage. If active particles are still missing `updatecnt > 0`, it runs a
+final missing-update assignment pass with volume reconstruction and trailing
+reconstruction disabled, then checks coverage again. Final reconstruction is
+not allowed unless every active particle has seen the multi-state model and had
+its state assignment and, for non-fixed modes, orientation-accounting path
+updated at least once.
 
 ## 7. Autoscaling and Matching Bandwidth
 
@@ -361,25 +353,16 @@ The possible stages are:
    - minimum iterations: `1`
    - maximum iterations: `5` for initialization, or the stage cap when
      `input_oris_fixed` makes this the only stage
-2. stochastic orientation refinement
-   - `refine=shc_smpl`
-   - `nspace=2500`
-   - minimum iterations: `1`
-   - maximum iterations: the planned or user-supplied stage cap
-3. probabilistic neighborhood refinement
+2. probabilistic neighborhood refinement
    - `refine=prob_neigh`
    - `nspace=5000`
    - `nspace_sub=500`
-   - `prob_neigh_mode=sum`
+   - `prob_neigh_mode=geom`
    - minimum iterations: `5`
    - maximum iterations: the planned or user-supplied stage cap
 
 The `multivol_mode` stage map is:
 
-- `input_oris_start` with state 0/1 input: `prob_state`, `shc_smpl`,
-  `prob_neigh`
-- `input_oris_start` with existing multi-state labels: `shc_smpl`,
-  `prob_neigh`
 - `input_oris_refine` with state 0/1 input: `prob_state`, `prob_neigh`
 - `input_oris_refine` with existing multi-state labels: `prob_neigh`
 - `input_oris_fixed`: `prob_state`
@@ -394,7 +377,7 @@ For every stage-level base-`refine3D` call, the wrapper sets:
 - `refine` to the stage mode
 - `nspace` to the stage projection count
 - `nspace_sub=500` for `prob_neigh`, and no `nspace_sub` for other stages
-- `prob_neigh_mode=sum` by default, unless explicitly overridden
+- `prob_neigh_mode=geom`
 - `overlap` to the stage state-overlap target
 
 The wrapper deletes stale `endit` before each staged call and reads the new
@@ -423,7 +406,6 @@ final mean `mi_state` over active particles:
 The stage targets are:
 
 - `prob_state`: `0.95`
-- `shc_smpl`: `0.95`
 - `prob_neigh`: `overlap`, default `0.99`
 
 A stage may stop only after its minimum iteration count has been reached and
@@ -529,11 +511,12 @@ This final pass is an ordinary global final reconstruction/postprocess route.
 NU filtering is a refinement-reference feature here, not a separate final-map
 postprocessing path.
 
-Before this final pass, the wrapper verifies that every active particle has
-`updatecnt > 0`. After final reconstruction, `write_final_rec_outputs` copies
-each populated state's `vol_stateNN.mrc` to the final reconstruction naming
-convention, writes a low-pass snapshot using `lpstop` at native sampling, and
-copies available postprocessed and mirrored products.
+Before this final pass, the wrapper ensures every active particle has
+`updatecnt > 0`, using the missing-update assignment pass when needed. After
+final reconstruction, `write_final_rec_outputs` copies each populated state's
+`vol_stateNN.mrc` to the final reconstruction naming convention, writes a
+low-pass snapshot using `lpstop` at native sampling, and copies available
+postprocessed and mirrored products.
 
 ## 13. Continue, Restarts, and Execution Mode
 
@@ -605,16 +588,14 @@ fixed, and the run must still verify that every active particle was updated.
 When reviewing `refine3D_multi`, check these policy points first:
 
 - UI defaults and commander defaults still match.
-- `multivol_mode` accepts only `input_oris_start`, `input_oris_refine`, and
-  `input_oris_fixed`.
+- `multivol_mode` accepts only `input_oris_refine` and `input_oris_fixed`.
 - `nstates` is established before full parameter parsing.
-- `input_oris_start` with command-line `nstates` rejects existing project
-  multi-state labels.
-- `input_oris_start` without command-line `nstates` reuses existing
-  multi-state labels.
+- `input_oris_refine` is the default prior-orientation route.
 - `input_oris_refine` skips `prob_state` when project multi-state labels
   already exist.
 - `input_oris_fixed` rejects existing project multi-state labels.
+- `prob_neigh_mode` is `geom`; other neighborhood modes are not supported by
+  the wrapper.
 - state 0/1 initialization modes require command-line `nstates > 1`.
 - state 0/1 initialization modes use complete `vol1..volN` inputs, compatible
   project state volumes, or distributed base-`refine3D` startup reconstruction
@@ -632,8 +613,8 @@ When reviewing `refine3D_multi`, check these policy points first:
   `nonuniform_lpset` as the default.
 - fractional updates use `balance=yes`, `greedy_sampling=no`, and
   `frac_best=1.0`.
-- class-balanced fractional updates prefer the lowest `updatecnt` tier within
-  each class quota.
+- projection-direction-balanced fractional updates prefer the lowest
+  `updatecnt` tier within each projection-bin quota.
 - `input_oris_fixed` disables fractional updates and trailing reconstruction.
 - `nsample`, `update_frac`, and trailing reconstruction behave consistently
   for full-update versus fractional-update runs.
@@ -644,14 +625,14 @@ When reviewing `refine3D_multi`, check these policy points first:
   counters.
 - stale `endit` is deleted before each stage-level base call, and the returned
   `endit` is used to advance the wrapper counter.
-- `prob_neigh` sets `nspace_sub=500` and uses `prob_neigh_mode=sum`
-  unless the caller overrides it.
+- `prob_neigh` sets `nspace_sub=500` and uses `prob_neigh_mode=geom`.
 - stage stop logic uses `mi_state` over the latest sampled subset when
   available.
-- `prob_state` and `shc_smpl` use state-overlap target `0.95`.
+- `prob_state` uses state-overlap target `0.95`.
 - `prob_neigh` uses state-overlap target `0.99` by default.
 - stage stop logic does not claim FSC or pose convergence.
-- every active particle must have `updatecnt > 0` before final reconstruction.
+- every active particle must have `updatecnt > 0` before final reconstruction;
+  the wrapper runs a missing-update assignment pass when needed.
 - final reconstruction deletes crop and fractional-update controls.
 - final reconstruction is at native project box and sampling.
 - final reconstruction disables NU filtering and `nu_refine`.
@@ -671,11 +652,11 @@ When reviewing `refine3D_multi`, check these policy points first:
 - Do not move volume assembly or NU filtering into `exec_refine3D_multi`.
 - Preserve all-or-none state-volume input.
 - Preserve mode-specific project-label authority:
-  `input_oris_start` reuses labels only when `nstates` is omitted,
   `input_oris_refine` reuses labels as the neighborhood-refinement start, and
   `input_oris_fixed` rejects labels greater than one.
 - Preserve explicit state 0/1 initialization mode for projects without
-  multi-state labels or for `input_oris_start` calls that supply `nstates`.
+  multi-state labels and `input_oris_refine` or `input_oris_fixed` calls that
+  supply `nstates`.
 - Keep stage counters global and monotonic.
 - Keep `maxits` semantics documented if changing them; total-wrapper and
   per-stage budgets are easy to confuse.
