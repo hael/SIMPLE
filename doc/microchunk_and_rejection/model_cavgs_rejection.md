@@ -34,7 +34,7 @@ The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`.
 
 ## Evidence Comparison
 
-The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score` policy: microchunk plus overfit-family features and stored-score evidence.
+The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed by optional overfit hard rejection. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_signal` policy: microchunk plus overfit-family features, center/edge signal, presence, and fuzzy-ball signal evidence.
 
 | Evidence | Microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 | Full-image component cleanup | Connected components spanning the full image are removed before mask tests. | Same concept is applied during feature extraction before geometry features and hard mask rejection. | Hard-gate preprocessing. |
 | Foreground local variance | Robust-z rule on foreground/background local variance after 10 A low-pass and Otsu masking. | `log_locvar_fg` feature; only both variances non-positive is a hard reject. | Active feature. |
 | Background local variance | Robust-z rule paired with foreground local variance. | `log_locvar_bg` feature; only both variances non-positive is a hard reject. | Active feature. |
-| Stored score evidence | Not used by the rule engine. | `corr_frc_proxy` reads stored class correlation or FRC-like score when present. | Active feature. |
+| Stored score evidence | Not used by the rule engine. | `corr_frc_proxy` reads stored class correlation or FRC-like score when present. | Inactive in the current chunk preset. |
 | Center/edge signal | Not used by the rule engine. | `log_center_edge_snr` feature in the `signal` family. | Active feature. |
 | Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Active feature. |
 | Overfit local variance | Not used by the rule engine. | `neg_log_locvar_fg`, `neg_log_locvar_bg`, and `log_locvar_fg_bg_ratio` provide low/localized variance evidence. | Active features in learned policies. |
@@ -131,13 +131,13 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when a fixed chunk-quality hard gate approximation to `chunk100mics` should be layered on top of the standard hard gates without loading or applying a model.
+For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when the fixed legacy chunk-quality hard gate should be layered on top of the standard hard gates without loading or applying a model.
 
 ## Model Selection
 
 `quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
-- `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
+- `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3`.
 - `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
 - `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training`.
 
@@ -235,7 +235,7 @@ On the FlipQR overfit-training table, the support/local-variance rule rejects 18
 
 ### Optional Chunk Hard Gate
 
-`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed chunk-quality hard rule approximating the promoted `chunk100mics` model. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, model cluster-rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
+`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed legacy chunk-quality hard rule. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, model cluster-rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
 
 The fixed chunk hard rule rejects a trainable class when any of these dataset-normalized gates fire:
 
@@ -266,7 +266,7 @@ AND z_log_pop > -1.0
 AND z_log_center_edge_snr > -1.5
 ```
 
-These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` as a compact hard-gate approximation to the learned `chunk100mics` operating point. Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.
+These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` as a compact hard-gate approximation to the earlier learned chunk operating point. They have not been re-fit to the current `chunk100mics` v3 logistic preset. Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.
 
 ## Normalization
 
@@ -274,13 +274,13 @@ These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_t
 
 ## Built-In Presets
 
-`chunk100mics` uses feature policy `microchunk_plus_score` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` with the chunk learn objective in effect at the time of promotion.
+`chunk100mics` uses feature policy `microchunk_plus_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3` with the chunk learn objective in effect at the time of promotion.
 
 ```text
 model_family        pairwise_logistic
 prob_threshold      4.500000E-01
-regularization      1.000000E-04
-feature_weights     uniform over the legacy microchunk_plus_score vector with zero weight on newly added features
+regularization      1.000000E-03
+feature_weights     uniform over the active microchunk_plus_signal vector with zero weight on stored score evidence
 ```
 
 ```text

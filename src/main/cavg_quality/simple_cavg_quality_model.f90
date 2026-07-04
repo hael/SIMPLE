@@ -89,13 +89,13 @@ real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
 ! Default chunk class-average quality model, promoted from the pairwise
 ! logistic artifact learned from
-! /Users/elmlundho/cavgs_quality/chunk100mic_training_data.
-character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_score'
+! /Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3.
+character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_signal'
 real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
-    1.000000E-01, 1.000000E-01, 1.000000E-01, 1.000000E-01, &
-    1.000000E-01, 1.000000E-01, 0.000000E+00, 1.000000E-01, &
-    0.000000E+00, 1.000000E-01, 1.000000E-01, 1.000000E-01, &
-    0.000000E+00, 0.000000E+00 ]
+    7.692308E-02, 7.692308E-02, 7.692308E-02, 7.692308E-02, &
+    7.692308E-02, 0.000000E+00, 7.692308E-02, 7.692308E-02, &
+    7.692308E-02, 7.692308E-02, 7.692308E-02, 7.692308E-02, &
+    7.692308E-02, 7.692308E-02 ]
 character(len=*), parameter :: CHUNK100MICS_LINEAR_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_CHUNK100MICS_LINEAR_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     9.978756E-02, 1.167914E-01, 3.642511E-02, 1.329548E-01, &
@@ -253,107 +253,35 @@ contains
         spec%feature_policy          = CHUNK100MICS_FEATURE_POLICY
         spec%model_family            = CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
         spec%weights                 = CAVG_QUALITY_LOGISTIC_WEIGHTS
-        spec%intercept               = 2.620223E+00
+        spec%intercept               = 1.799114E+00
         spec%linear_coefficients     = [ &
-            6.769620E-01,  4.201044E-01, -1.265003E-01,  1.838305E-01, &
-           -1.551546E-01,  1.913865E+00,  0.000000E+00,  6.528412E-01, &
-            0.000000E+00, -2.146587E+00,  1.623915E+00, -3.337763E-01, &
-            0.000000E+00,  0.000000E+00 ]
-        spec%n_interactions           = 45
-        spec%interaction_terms        = 0
-        spec%interaction_coefficients = 0.0
-        spec%interaction_terms(1,:) = [1, 2]
-        spec%interaction_coefficients(1) = -2.339950E-01
-        spec%interaction_terms(2,:) = [1, 3]
-        spec%interaction_coefficients(2) = 1.607263E-01
-        spec%interaction_terms(3,:) = [1, 4]
-        spec%interaction_coefficients(3) = 1.008087E+00
-        spec%interaction_terms(4,:) = [1, 5]
-        spec%interaction_coefficients(4) = -2.779168E-01
-        spec%interaction_terms(5,:) = [1, 6]
-        spec%interaction_coefficients(5) = -4.433721E-01
-        spec%interaction_terms(6,:) = [1, 8]
-        spec%interaction_coefficients(6) = 4.165756E-01
-        spec%interaction_terms(7,:) = [1, 10]
-        spec%interaction_coefficients(7) = -9.121307E-01
-        spec%interaction_terms(8,:) = [1, 11]
-        spec%interaction_coefficients(8) = 6.028960E-01
-        spec%interaction_terms(9,:) = [1, 12]
-        spec%interaction_coefficients(9) = -2.240524E-01
-        spec%interaction_terms(10,:) = [2, 3]
-        spec%interaction_coefficients(10) = 1.873882E-01
-        spec%interaction_terms(11,:) = [2, 4]
-        spec%interaction_coefficients(11) = 8.013876E-03
-        spec%interaction_terms(12,:) = [2, 5]
-        spec%interaction_coefficients(12) = 3.255760E-02
-        spec%interaction_terms(13,:) = [2, 6]
-        spec%interaction_coefficients(13) = 5.717449E-01
-        spec%interaction_terms(14,:) = [2, 8]
-        spec%interaction_coefficients(14) = -5.989576E-01
-        spec%interaction_terms(15,:) = [2, 10]
-        spec%interaction_coefficients(15) = -1.072976E-02
-        spec%interaction_terms(16,:) = [2, 11]
-        spec%interaction_coefficients(16) = -2.806428E-01
-        spec%interaction_terms(17,:) = [2, 12]
-        spec%interaction_coefficients(17) = -4.255314E-02
-        spec%interaction_terms(18,:) = [3, 4]
-        spec%interaction_coefficients(18) = 2.443754E-01
-        spec%interaction_terms(19,:) = [3, 5]
-        spec%interaction_coefficients(19) = 7.573785E-02
-        spec%interaction_terms(20,:) = [3, 6]
-        spec%interaction_coefficients(20) = -6.683999E-01
-        spec%interaction_terms(21,:) = [3, 8]
-        spec%interaction_coefficients(21) = 1.456839E-01
-        spec%interaction_terms(22,:) = [3, 10]
-        spec%interaction_coefficients(22) = -2.125431E-01
-        spec%interaction_terms(23,:) = [3, 11]
-        spec%interaction_coefficients(23) = -4.062431E-02
-        spec%interaction_terms(24,:) = [3, 12]
-        spec%interaction_coefficients(24) = 1.031161E-01
-        spec%interaction_terms(25,:) = [4, 5]
-        spec%interaction_coefficients(25) = 9.639653E-01
-        spec%interaction_terms(26,:) = [4, 6]
-        spec%interaction_coefficients(26) = -1.421327E-01
-        spec%interaction_terms(27,:) = [4, 8]
-        spec%interaction_coefficients(27) = -6.342738E-01
-        spec%interaction_terms(28,:) = [4, 10]
-        spec%interaction_coefficients(28) = 1.629434E+00
-        spec%interaction_terms(29,:) = [4, 11]
-        spec%interaction_coefficients(29) = -1.406184E+00
-        spec%interaction_terms(30,:) = [4, 12]
-        spec%interaction_coefficients(30) = 7.178115E-01
-        spec%interaction_terms(31,:) = [5, 6]
-        spec%interaction_coefficients(31) = -8.687040E-01
-        spec%interaction_terms(32,:) = [5, 8]
-        spec%interaction_coefficients(32) = 3.070457E-01
-        spec%interaction_terms(33,:) = [5, 10]
-        spec%interaction_coefficients(33) = 1.832502E-01
-        spec%interaction_terms(34,:) = [5, 11]
-        spec%interaction_coefficients(34) = 9.406955E-01
-        spec%interaction_terms(35,:) = [5, 12]
-        spec%interaction_coefficients(35) = -2.075648E-01
-        spec%interaction_terms(36,:) = [6, 8]
-        spec%interaction_coefficients(36) = -5.526727E-01
-        spec%interaction_terms(37,:) = [6, 10]
-        spec%interaction_coefficients(37) = 4.981228E-01
-        spec%interaction_terms(38,:) = [6, 11]
-        spec%interaction_coefficients(38) = -2.958237E-02
-        spec%interaction_terms(39,:) = [6, 12]
-        spec%interaction_coefficients(39) = -2.676944E-01
-        spec%interaction_terms(40,:) = [8, 10]
-        spec%interaction_coefficients(40) = 7.465228E-01
-        spec%interaction_terms(41,:) = [8, 11]
-        spec%interaction_coefficients(41) = -1.114949E+00
-        spec%interaction_terms(42,:) = [8, 12]
-        spec%interaction_coefficients(42) = 5.665810E-01
-        spec%interaction_terms(43,:) = [10, 11]
-        spec%interaction_coefficients(43) = 2.912811E-01
-        spec%interaction_terms(44,:) = [10, 12]
-        spec%interaction_coefficients(44) = 1.244213E-01
-        spec%interaction_terms(45,:) = [11, 12]
-        spec%interaction_coefficients(45) = -3.974347E-02
+            6.802843E-01,  6.128433E-01, -2.501230E-01,  6.517312E-01, &
+           -1.626719E-01,  0.000000E+00, -8.575440E-02,  1.300446E+00, &
+           -2.487067E-01, -1.889265E+00,  5.885081E-01, -1.243061E-01, &
+            9.793385E-01, -5.729020E-02 ]
+        call set_pairwise_interactions_for_feature_indices(spec, [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14], [ &
+            2.360030E-03, -6.263957E-02,  4.821143E-01, -3.121943E-01, &
+           -3.289542E-02,  2.055763E-01, -3.291644E-01, -5.655561E-01, &
+            4.530455E-01, -2.044310E-01,  5.971544E-01,  2.643677E-01, &
+            4.185527E-02,  7.557562E-04,  2.117884E-01,  1.968304E-02, &
+           -1.283057E-01,  6.671613E-03, -3.022597E-01, -1.376580E-01, &
+            1.005488E-02, -1.731239E-02, -3.937151E-01, -2.716357E-01, &
+            2.664569E-01,  2.462925E-01,  2.924888E-01, -8.409232E-01, &
+           -1.194365E-01, -9.441161E-02,  1.718410E-01,  6.162158E-03, &
+            4.196871E-01,  6.496040E-01, -2.233421E-01, -7.474085E-01, &
+            4.017707E-01, -3.855067E-02, -7.281386E-01,  4.634536E-01, &
+            6.549260E-01, -5.058915E-01,  2.447556E-01,  6.894841E-01, &
+           -2.733067E-01,  3.750035E-01,  6.765434E-01,  1.527498E-01, &
+           -1.470978E-01,  2.947312E-02,  1.150736E-01,  5.732577E-02, &
+            7.062555E-02,  5.917469E-02,  3.061580E-02, -6.114318E-01, &
+            1.924328E-01, -1.156941E+00,  5.590926E-01, -8.128747E-01, &
+            5.724564E-01, -7.771953E-01,  7.623075E-01, -1.270047E-01, &
+            1.892797E-01,  1.669685E-01,  1.100845E+00,  1.643094E-01, &
+           -2.835444E-01,  1.956896E-01, -8.888062E-02,  8.211127E-01, &
+           -2.504349E-01,  1.032503E-01, -1.164710E-01, -4.617103E-01, &
+           -6.409482E-01, -7.320803E-01 ])
         spec%prob_threshold          = 4.500000E-01
-        spec%regularization_lambda   = 1.000000E-04
+        spec%regularization_lambda   = 1.000000E-03
         spec%calibration_temperature = 1.000000E+00
         spec%boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
@@ -454,6 +382,34 @@ contains
         end do
         spec%interaction_coefficients(1:expected_terms) = coefficients
     end subroutine set_pairwise_interactions_for_feature_count
+
+    subroutine set_pairwise_interactions_for_feature_indices( spec, feature_indices, coefficients )
+        type(cavg_quality_model_spec), intent(inout) :: spec
+        integer,                       intent(in)    :: feature_indices(:)
+        real,                          intent(in)    :: coefficients(:)
+        integer :: i, j, iterm, nfeatures, expected_terms
+        nfeatures = size(feature_indices)
+        if( nfeatures < 1 .or. nfeatures > CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('set_pairwise_interactions_for_feature_indices: invalid feature count')
+        do i = 1, nfeatures
+            if( feature_indices(i) < 1 .or. feature_indices(i) > CAVG_QUALITY_NFEATS ) &
+                THROW_HARD('set_pairwise_interactions_for_feature_indices: invalid feature index')
+        end do
+        expected_terms = (nfeatures * (nfeatures - 1)) / 2
+        if( size(coefficients) /= expected_terms ) &
+            THROW_HARD('set_pairwise_interactions_for_feature_indices: coefficient count mismatch')
+        spec%n_interactions          = expected_terms
+        spec%interaction_terms       = 0
+        spec%interaction_coefficients = 0.0
+        iterm = 0
+        do i = 1, nfeatures - 1
+            do j = i + 1, nfeatures
+                iterm = iterm + 1
+                spec%interaction_terms(iterm,:) = [feature_indices(i), feature_indices(j)]
+            end do
+        end do
+        spec%interaction_coefficients(1:expected_terms) = coefficients
+    end subroutine set_pairwise_interactions_for_feature_indices
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
@@ -692,7 +648,8 @@ contains
         class(cavg_quality_model), intent(inout) :: self
         character(len=*),          intent(in)    :: fname
         character(len=XLONGSTRLEN) :: line
-        character(len=LONGSTRLEN)  :: key, val, preset_name
+        character(len=LONGSTRLEN)  :: key, preset_name
+        character(len=XLONGSTRLEN) :: val
         integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients
         logical :: have_model_family, have_preset, ok_line
         ! Model files are complete model definitions. Start from chunk defaults,
@@ -849,7 +806,7 @@ contains
         character(len=*), intent(in)  :: val
         real,             intent(out) :: values(:)
         integer,          intent(out) :: nvals
-        character(len=LONGSTRLEN) :: work, token
+        character(len=XLONGSTRLEN) :: work, token
         integer :: isep, ios
         values = 0.0
         nvals  = 0
@@ -878,7 +835,8 @@ contains
         character(len=*), intent(in)  :: val
         integer,          intent(out) :: terms(CAVG_QUALITY_MAX_INTERACTIONS,2)
         integer,          intent(out) :: nterms
-        character(len=LONGSTRLEN) :: work, token, lhs, rhs, errmsg
+        character(len=XLONGSTRLEN) :: work, token
+        character(len=LONGSTRLEN)  :: lhs, rhs, errmsg
         integer :: isep, icolon, ifeat, jfeat
         terms  = 0
         nterms = 0
@@ -940,7 +898,7 @@ contains
         character(len=*), intent(in)  :: val
         real,             intent(out) :: weights(CAVG_QUALITY_NFEATS)
         integer,          intent(out) :: nvals
-        character(len=LONGSTRLEN) :: work, token
+        character(len=XLONGSTRLEN) :: work, token
         integer :: isep, ios
         weights = 0.0
         nvals   = 0
