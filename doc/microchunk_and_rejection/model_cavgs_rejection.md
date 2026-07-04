@@ -139,7 +139,7 @@ For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `
 
 - `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3`.
 - `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
-- `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training`.
+- `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training2`.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -278,14 +278,16 @@ use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
 
-`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training`.
+`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training2`.
 
 ```text
 model_family        pairwise_logistic
-prob_threshold      3.000000E-01
+prob_threshold      4.500000E-01
 regularization      1.000000E-04
-feature_weights     uniform over the legacy score/signal vector with zero weight on newly added features
+feature_weights     uniform over all 14 microchunk_plus_score_signal features
 ```
+
+On the refreshed pool-training table, this promoted preset scored `macro_evaluate_score=0.91875`, improving over the previous built-in pool preset (`0.74351`) while reducing total soft-classification errors from `fp=15, fn=35` to `fp=3, fn=11`.
 
 `chunk100mics_linear` preserves the previous linear score-and-threshold model as an interpretability tool. Its feature weights can be read directly as non-negative contributions to the normalized scalar quality score.
 
