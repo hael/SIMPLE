@@ -131,7 +131,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when the fixed legacy chunk-quality hard gate should be layered on top of the standard hard gates without loading or applying a model.
+For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when the fixed v3 chunk-quality hard-gate surrogate should be layered on top of the standard hard gates without loading or applying a model.
 
 ## Model Selection
 
@@ -235,38 +235,20 @@ On the FlipQR overfit-training table, the support/local-variance rule rejects 18
 
 ### Optional Chunk Hard Gate
 
-`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed legacy chunk-quality hard rule. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, model cluster-rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
+`chunk_hard_reject=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It applies the standard hard gates first, computes normalized features over the remaining rows, and then applies a fixed v3 chunk-quality hard-gate surrogate. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, model cluster-rescue, or minimum-acceptance model logic. It is mutually exclusive with `overfit_hard_reject=yes`.
 
-The fixed chunk hard rule rejects a trainable class when any of these dataset-normalized gates fire:
-
-```text
-z_corr_frc_proxy      < -0.224682
-z_neg_log_locvar_fg   < -2.073230
-z_cc_area_frac        < -2.398173
-z_log_center_edge_snr < -3.274551
-z_log_pop             < -3.513258
-```
-
-The stored-score gate has one guarded exception for MotAB-style top views: if `z_corr_frc_proxy` is the only failing gate, the class is rescued when independent image-derived evidence is strong enough. The rescue conditions are:
+The fixed chunk hard rule rejects a trainable class when any of these paired dataset-normalized gates fire:
 
 ```text
-z_corr_frc_proxy > -1.0
-AND z_log_center_edge_snr > 0.75
-AND z_cc_area_frac > -2.4
-AND z_log_pop > 0.45
+z_neg_log_res < -0.789 AND z_fuzzy_ball_signal < -0.364
+z_fuzzy_ball_signal < -0.965 AND z_log_locvar_fg < -0.285
+z_log_locvar_fg > 2.000 AND z_log_locvar_bg > 1.500
+z_centered > 1.000 AND z_fuzzy_ball_signal < -0.364
+z_log_locvar_bg < -1.225 AND z_log_bp40_100_center_edge_var < -0.750
+z_neg_log_res < -0.789 AND z_cc_area_frac < -1.386
 ```
 
-or:
-
-```text
-z_corr_frc_proxy > -1.5
-AND z_neg_log_locvar_fg > 3.0
-AND z_cc_area_frac > 0.5
-AND z_log_pop > -1.0
-AND z_log_center_edge_snr > -1.5
-```
-
-These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data` as a compact hard-gate approximation to the earlier learned chunk operating point. They have not been re-fit to the current `chunk100mics` v3 logistic preset. Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.
+These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3` as a compact, interpretable hard-gate approximation to the promoted `chunk100mics` v3 logistic preset. It is not equivalent to the logistic model: on the v3 training table, the hard surrogate protected selected classes more strongly than the old hard gate (`fn=7` instead of `fn=39`) but rejected fewer manually bad classes than the logistic model (`fp=148` for the surrogate, `fp=103` for logistic v3). Rows rejected by the chunk hard rule are marked as hard rejects in the final decision, while their normalized feature values remain inspectable in the output tables.
 
 ## Normalization
 

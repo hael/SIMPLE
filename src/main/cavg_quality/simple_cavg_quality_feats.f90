@@ -40,11 +40,16 @@ public :: CAVG_RES_HARD_REJECT_A
 public :: POP_FRACTION_HARD_REJECT
 public :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN
 public :: CAVG_OVERFIT_SUPPORT_Z_MAX
-public :: CAVG_CHUNK_CORR_FRC_Z_MIN
-public :: CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN
-public :: CAVG_CHUNK_CC_AREA_FRAC_Z_MIN
-public :: CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN
-public :: CAVG_CHUNK_LOG_POP_Z_MIN
+public :: CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX
+public :: CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
+public :: CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX
+public :: CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX
+public :: CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN
+public :: CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN
+public :: CAVG_CHUNK_V3_CENTERED_Z_MIN
+public :: CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX
+public :: CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX
+public :: CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX
 public :: cavg_overfit_hard_reject
 public :: cavg_chunk_hard_reject
 
@@ -91,37 +96,25 @@ real, parameter :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN = 0.0
 real, parameter :: CAVG_OVERFIT_SUPPORT_Z_MAX   = 0.5
 
 ! Optional hard rule for chunk-style class-average rejection. This is a
-! dataset-normalized approximation of the chunk100mics learned model, intended
-! as a no-model path after the standard hard validity gates. A class average is
-! rejected when any one of these low-quality evidence gates fires:
-!
-!   z_corr_frc_proxy      < -0.224682
-!   z_neg_log_locvar_fg   < -2.073230
-!   z_cc_area_frac        < -2.398173
-!   z_log_center_edge_snr < -3.274551
-!   z_log_pop             < -3.513258
-!
-! Stored class score can be misleading for MotAB-style top views, so it is
-! allowed to be the only failing gate only when independent image-derived
-! evidence strongly supports keeping the class average.
-!
-! The thresholds were fit on
-! /Users/elmlundho/cavgs_quality/chunk100mic_training_data as a compact
-! hard-gate approximation to the promoted chunk100mics model.
-real, parameter :: CAVG_CHUNK_CORR_FRC_Z_MIN        = -0.224682
-real, parameter :: CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN   = -2.073230
-real, parameter :: CAVG_CHUNK_CC_AREA_FRAC_Z_MIN    = -2.398173
-real, parameter :: CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN = -3.274551
-real, parameter :: CAVG_CHUNK_LOG_POP_Z_MIN         = -3.513258
-real, parameter :: CAVG_CHUNK_RESCUE_CORR_CENTER_MIN      = -1.0
-real, parameter :: CAVG_CHUNK_RESCUE_CENTER_EDGE_SNR_MIN  =  0.75
-real, parameter :: CAVG_CHUNK_RESCUE_CC_AREA_FRAC_MIN     = -2.4
-real, parameter :: CAVG_CHUNK_RESCUE_LOG_POP_MIN          =  0.45
-real, parameter :: CAVG_CHUNK_RESCUE_CORR_COMPACT_MIN     = -1.5
-real, parameter :: CAVG_CHUNK_RESCUE_NEG_LOCVAR_FG_MIN    =  3.0
-real, parameter :: CAVG_CHUNK_RESCUE_CC_AREA_COMPACT_MIN  =  0.5
-real, parameter :: CAVG_CHUNK_RESCUE_LOG_POP_COMPACT_MIN  = -1.0
-real, parameter :: CAVG_CHUNK_RESCUE_CENTER_EDGE_LOOSE_MIN = -1.5
+! conservative, dataset-normalized hard-gate surrogate of the promoted v3
+! chunk100mics logistic model. It is not model-equivalent: it is intended as a
+! compact set of interpretable two-feature gates for no-model operation and for
+! reasoning about which evidence patterns drive rejection. A class average is
+! rejected when any one of the paired gates in cavg_chunk_hard_reject fires
+! after the standard hard validity gates. The surrogate was fit on
+! /Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3 to protect good
+! classes more strongly than the older hard gate, while accepting that it leaks
+! more bad classes than the full logistic model.
+real, parameter :: CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX            = -0.789
+real, parameter :: CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX           = -0.364
+real, parameter :: CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX    = -0.965
+real, parameter :: CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX          = -0.285
+real, parameter :: CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN         =  2.000
+real, parameter :: CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN         =  1.500
+real, parameter :: CAVG_CHUNK_V3_CENTERED_Z_MIN               =  1.000
+real, parameter :: CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX          = -1.225
+real, parameter :: CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX         = -0.750
+real, parameter :: CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX           = -1.386
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -205,38 +198,25 @@ contains
     function cavg_chunk_hard_reject( z_features ) result( reject )
         real, intent(in) :: z_features(:)
         logical          :: reject
-        logical          :: bad_corr, bad_neg_locvar_fg, bad_cc_area_frac
-        logical          :: bad_center_edge_snr, bad_log_pop
+        logical          :: low_res_fuzzy, low_texture_fuzzy, global_high_texture
+        logical          :: too_centered_fuzzy, quiet_bg_bad_bandpass
+        logical          :: low_res_weak_support
         if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_chunk_hard_reject: invalid feature count')
-        bad_corr            = z_features(I_CORR_FRC)        < CAVG_CHUNK_CORR_FRC_Z_MIN
-        bad_neg_locvar_fg   = z_features(I_NEG_LOCVAR_FG)   < CAVG_CHUNK_NEG_LOCVAR_FG_Z_MIN
-        bad_cc_area_frac    = z_features(I_CC_AREA_FRAC)    < CAVG_CHUNK_CC_AREA_FRAC_Z_MIN
-        bad_center_edge_snr = z_features(I_CENTER_EDGE_SNR) < CAVG_CHUNK_CENTER_EDGE_SNR_Z_MIN
-        bad_log_pop         = z_features(I_LOG_POP)         < CAVG_CHUNK_LOG_POP_Z_MIN
-        reject = bad_corr .or. bad_neg_locvar_fg .or. bad_cc_area_frac .or. &
-                 bad_center_edge_snr .or. bad_log_pop
-        if( reject .and. bad_corr .and. .not.(bad_neg_locvar_fg .or. bad_cc_area_frac .or. &
-            bad_center_edge_snr .or. bad_log_pop) )then
-            reject = .not. cavg_chunk_score_only_rescue(z_features)
-        endif
+        low_res_fuzzy       = z_features(I_NEG_LOG_RES)     < CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX .and. &
+                              z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
+        low_texture_fuzzy   = z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX .and. &
+                              z_features(I_LOCVAR_FG)      < CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX
+        global_high_texture = z_features(I_LOCVAR_FG)       > CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN .and. &
+                              z_features(I_LOCVAR_BG)      > CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN
+        too_centered_fuzzy  = z_features(I_CENTERED)        > CAVG_CHUNK_V3_CENTERED_Z_MIN .and. &
+                              z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
+        quiet_bg_bad_bandpass = z_features(I_LOCVAR_BG)     < CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX .and. &
+                              z_features(I_BP40_100_CENTER_EDGE_VAR) < CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX
+        low_res_weak_support = z_features(I_NEG_LOG_RES)    < CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX .and. &
+                              z_features(I_CC_AREA_FRAC)   < CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX
+        reject = low_res_fuzzy .or. low_texture_fuzzy .or. global_high_texture .or. &
+                 too_centered_fuzzy .or. quiet_bg_bad_bandpass .or. low_res_weak_support
     end function cavg_chunk_hard_reject
-
-    function cavg_chunk_score_only_rescue( z_features ) result( rescue )
-        real, intent(in) :: z_features(:)
-        logical          :: rescue, center_signal_rescue, compact_support_rescue
-        center_signal_rescue = &
-            z_features(I_CORR_FRC)        > CAVG_CHUNK_RESCUE_CORR_CENTER_MIN     .and. &
-            z_features(I_CENTER_EDGE_SNR) > CAVG_CHUNK_RESCUE_CENTER_EDGE_SNR_MIN .and. &
-            z_features(I_CC_AREA_FRAC)    > CAVG_CHUNK_RESCUE_CC_AREA_FRAC_MIN    .and. &
-            z_features(I_LOG_POP)         > CAVG_CHUNK_RESCUE_LOG_POP_MIN
-        compact_support_rescue = &
-            z_features(I_CORR_FRC)        > CAVG_CHUNK_RESCUE_CORR_COMPACT_MIN      .and. &
-            z_features(I_NEG_LOCVAR_FG)   > CAVG_CHUNK_RESCUE_NEG_LOCVAR_FG_MIN     .and. &
-            z_features(I_CC_AREA_FRAC)    > CAVG_CHUNK_RESCUE_CC_AREA_COMPACT_MIN   .and. &
-            z_features(I_LOG_POP)         > CAVG_CHUNK_RESCUE_LOG_POP_COMPACT_MIN   .and. &
-            z_features(I_CENTER_EDGE_SNR) > CAVG_CHUNK_RESCUE_CENTER_EDGE_LOOSE_MIN
-        rescue = center_signal_rescue .or. compact_support_rescue
-    end function cavg_chunk_score_only_rescue
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
         class(image),         intent(inout) :: imgs(:)
