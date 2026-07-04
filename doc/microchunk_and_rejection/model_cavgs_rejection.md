@@ -50,6 +50,7 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 | Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Active feature. |
 | Overfit local variance | Not used by the rule engine. | `neg_log_locvar_fg`, `neg_log_locvar_bg`, and `log_locvar_fg_bg_ratio` provide low/localized variance evidence. | Active features in learned policies. |
 | Overfit band-pass localization | Not used by the rule engine. | `log_bp40_100_center_edge_var` measures center/edge variance after 100 to 40 A band-pass; raw values below `log(2)` match Joe's fuzzy-ball heuristic. | Active feature in learned policies. |
+| Fuzzy-ball signal | Not used by the rule engine. | `fuzzy_ball_signal` combines foreground texture, central presence, and 100 to 40 A center/edge localization. Low values mark the fuzzy-ball pattern as continuous learned evidence, not as an apply-time hard gate. | Active feature in learned policies. |
 | Invalid pixels | Not a named microchunk rule. | Image values containing invalid pixels are hard rejected. | Hard gate. |
 
 ## Hard-Reject Comparison
@@ -89,11 +90,11 @@ The standard linear learned artifact has three parts:
 - non-negative feature weights, which define a linear scalar quality score;
 - thresholding controls, which govern how the per-dataset score boundary is chosen after k-medoids clustering and optional Otsu thresholding.
 
-`model_family=logistic` trains a pairwise logistic artifact instead. Its fitted parameters are an intercept, linear feature coefficients, pairwise feature-interaction coefficients, a probability threshold, and a regularization strength. The coefficients are fit from the training analysis files only. On two-class trainable datasets, the logistic loss gives manually selected classes moderately higher total weight than manually deselected classes so the probability surface learns rejection evidence without becoming an overly aggressive rejector. Manually deselected examples with the overfit/support-poor signature get an additional training-time loss multiplier, so fuzzy-ball examples influence the fit without becoming an apply-time hard reject.
+`model_family=logistic` trains a pairwise logistic artifact instead. Its fitted parameters are an intercept, linear feature coefficients, pairwise feature-interaction coefficients, a probability threshold, and a regularization strength. The coefficients are fit from the training analysis files only. On two-class trainable datasets, the logistic loss gives manually selected classes moderately higher total weight than manually deselected classes so the probability surface learns rejection evidence without becoming an overly aggressive rejector. Manually deselected examples with the overfit/support-poor or band-pass-localization signature get an additional training-time loss multiplier, so fuzzy-ball examples influence the fit without becoming an apply-time hard reject. Learn reports also expose an internal overfit-focus loss scale for experiments; it is currently neutral.
 
 The apply-time classifier is partly dataset-adaptive. Features are robustly normalized inside the current dataset. K-medoids and Otsu operate on the current score/feature distribution. The learned parameters provide the inductive bias: which features are active, how the score is weighted, and how aggressively the cluster-derived boundary is shifted or replaced.
 
-The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute specificity with a small count-based false-negative tolerance, currently `specificity - 0.20 * max(0, fn - 1)`. The final macro score is a fixed robust score: half the mean dataset score and half the mean of the three lowest dataset scores. This makes the learner care about datasets where manually deselected classes are still leaking through, without exposing scenario-specific tuning knobs. During pairwise-logistic fitting, manually bad rows with `z_neg_log_locvar_fg > 0.0` and `z_cc_area_frac < 0.5` get a modest extra loss weight because these examples match the fuzzy/support-poor failure mode seen in small membrane-protein chunks. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
+The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute specificity with a small false-negative-rate tolerance over the trainable manually good rows. Datasets where at least 20% of the trainable class averages are manually bad rows matching the fuzzy-ball signature get an additional hinge/quadratic objective penalty when the accepted fuzzy-ball-signature rate is above the tolerated rate. The signature is poor support plus either low local-variance evidence or low 100 to 40 A band-pass center/edge localization. This keeps selected-class protection global while making the objective care specifically about fuzzy-ball leakage in small-specimen chunks. The final macro score is a fixed robust score: half the mean dataset score and half the mean score over the lower tail of datasets. During pairwise-logistic fitting, manually bad rows with the same fuzzy-ball signature get extra loss weight. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
 
 Feature-weight search is ab initio for the supplied training data. The learner first constructs an AUC-derived seed:
 
@@ -162,7 +163,7 @@ Unknown model-file keys are rejected.
 
 ## Feature Bank
 
-`CAVG_QUALITY_NFEATS` is 13. All feature directions are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
+`CAVG_QUALITY_NFEATS` is 14. All feature directions are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
 
 | Index | Feature | Family | Source | Meaning |
 | --- | --- | --- | --- | --- |
@@ -179,6 +180,7 @@ Unknown model-file keys are rejected.
 | 11 | `neg_log_locvar_bg` | `overfit` | Background-mask local variance | Negative log local variance outside the foreground Otsu mask; higher values indicate quieter background. |
 | 12 | `log_locvar_fg_bg_ratio` | `overfit` | Foreground/background local variance | Log foreground/background local variance ratio; higher values indicate support-localized detail. |
 | 13 | `log_bp40_100_center_edge_var` | `overfit` | Band-pass center/edge variance | Log center/edge variance ratio after 100 to 40 A band-pass; low raw values flag overfit fuzzy balls. |
+| 14 | `fuzzy_ball_signal` | `overfit` | Combined overfit evidence | Sum of `log_locvar_fg`, `presence`, and `log_bp40_100_center_edge_var`; low values indicate fuzzy-ball overfit evidence. |
 
 Feature families are used by learn mode. Every learned policy includes `microchunk` and `overfit`; the policy variants append optional evidence families:
 
@@ -278,7 +280,7 @@ These thresholds were derived from `/Users/elmlundho/cavgs_quality/chunk100mic_t
 model_family        pairwise_logistic
 prob_threshold      4.500000E-01
 regularization      1.000000E-04
-feature_weights     uniform over the 10 active microchunk_plus_score features
+feature_weights     uniform over the legacy microchunk_plus_score vector with zero weight on newly added features
 ```
 
 ```text
@@ -300,7 +302,7 @@ enforce_min_accept_frac false
 model_family        pairwise_logistic
 prob_threshold      3.000000E-01
 regularization      1.000000E-04
-feature_weights     uniform over the 12-feature microchunk_plus_score_signal vector
+feature_weights     uniform over the legacy score/signal vector with zero weight on newly added features
 ```
 
 `chunk100mics_linear` preserves the previous linear score-and-threshold model as an interpretability tool. Its feature weights can be read directly as non-negative contributions to the normalized scalar quality score.
@@ -318,6 +320,8 @@ presence            1.294257E-01
 neg_log_locvar_fg   0.000000E+00
 neg_log_locvar_bg   0.000000E+00
 log_locvar_fg_bg_ratio 4.718454E-02
+log_bp40_100_center_edge_var 0.000000E+00
+fuzzy_ball_signal   0.000000E+00
 ```
 
 ```text
@@ -396,13 +400,13 @@ Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `inv
 - `dataset_id`
 - `hard_reject`
 - `manual_state`
-- all `z_*` feature columns for the 12-feature bank
+- all required `z_*` feature columns for the 14-feature bank
 
 Hard-rejected rows are kept in reports but excluded from feature-weight estimation, candidate scoring, feature-signal diagnostics, feature-drop diagnostics, and feature-policy diagnostics.
 
 Learn mode assigns each dataset an automatic role:
 
-- `balanced`: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by specificity with a small count-based false-negative tolerance.
+- `balanced`: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by specificity with a small false-negative-rate tolerance.
 - `trainable_good_only`: only manual good rows remain after hard rejects; not used for feature weights, scored by guarded recall.
 - `trainable_bad_only`: only manual bad rows remain after hard rejects and no manually good rows were hard rejected; not used for feature weights, scored by specificity.
 - `skip_hard_gate_blocked`: only manual bad rows remain because all manually good rows were hard rejected; reported but skipped for soft-model fitting and scoring.
@@ -415,7 +419,7 @@ weight(feature) = max(0, pooled_auc(feature, manual_state) - 0.5)
 
 The weights are normalized to sum to one. If all active weights are zero for a policy, uniform weights are assigned over the active policy features. The full classifier search chooses among the AUC-derived candidate vectors for the available feature policies.
 
-Balanced datasets use specificity with a small count-based false-negative tolerance, and the final macro score blends the mean dataset score with the lower tail of the dataset scores. This makes threshold selection care about the datasets where bad classes still leak through, while still penalizing candidates that reject more than a few manually selected classes. Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the guarded learn score applies an additional shortfall penalty below the good-only recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large number of classes from datasets that contain only trainable manual positives.
+Balanced datasets use specificity with a small false-negative-rate tolerance over trainable manually good rows. Overfit-focused datasets also subtract a hinge/quadratic penalty for the accepted manually bad fuzzy-ball-signature rate above the tolerated rate. The final macro score blends the mean dataset score with a fractional lower tail of the dataset scores. This makes threshold selection care about datasets where bad fuzzy-ball classes still leak through, while still penalizing candidates that reject too large a fraction of manually selected classes. Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the guarded learn score applies an additional shortfall penalty below the good-only recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large fraction of classes from datasets that contain only trainable manual positives.
 
 Learn mode searches:
 

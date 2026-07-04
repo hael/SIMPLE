@@ -17,7 +17,7 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_NFEATS  = 13
+integer, parameter :: CAVG_QUALITY_NFEATS  = 14
 integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
@@ -114,6 +114,9 @@ type :: cavg_quality_learn_diagnostics
     integer :: n_min_accept_like   = 0
     integer :: min_accept_like_fp  = 0
     integer :: min_accept_like_fn  = 0
+    integer :: n_overfit_focus     = 0
+    integer :: overfit_focus_bad   = 0
+    integer :: overfit_focus_fp    = 0
 end type cavg_quality_learn_diagnostics
 
 contains

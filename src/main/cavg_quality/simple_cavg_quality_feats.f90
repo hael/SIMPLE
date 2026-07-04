@@ -27,6 +27,7 @@ public :: I_NEG_LOCVAR_FG
 public :: I_NEG_LOCVAR_BG
 public :: I_LOG_LOCVAR_FG_BG_RATIO
 public :: I_BP40_100_CENTER_EDGE_VAR
+public :: I_FUZZY_BALL_SIGNAL
 public :: cavg_quality_feature_def
 public :: cavg_quality_feature_name
 public :: cavg_quality_feature_description
@@ -74,6 +75,7 @@ integer, parameter :: I_NEG_LOCVAR_FG           = 10
 integer, parameter :: I_NEG_LOCVAR_BG           = 11
 integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 12
 integer, parameter :: I_BP40_100_CENTER_EDGE_VAR = 13
+integer, parameter :: I_FUZZY_BALL_SIGNAL       = 14
 
 ! Optional hard rule for rejecting overfitted fuzzy-ball class averages.
 ! This is deliberately not a learned model at application time. The rule is
@@ -147,7 +149,9 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('log_locvar_fg_bg_ratio', 'higher_is_better', &
         'log foreground/background local variance ratio; higher values indicate support-localized detail', 'overfit'), &
     cavg_quality_feature_def('log_bp40_100_center_edge_var', 'higher_is_better', &
-        'log center/edge variance ratio after 100-40 A band-pass; low values flag overfit fuzzy balls', 'overfit') ]
+        'log center/edge variance ratio after 100-40 A band-pass; low values flag overfit fuzzy balls', 'overfit'), &
+    cavg_quality_feature_def('fuzzy_ball_signal', 'higher_is_better', &
+        'combined foreground texture, presence, and 100-40 A localization; low values flag fuzzy balls', 'overfit') ]
 
 contains
 
@@ -324,6 +328,8 @@ contains
             raw(i, I_NEG_LOCVAR_BG)          = -log(max(locvar_bg, LOG_EPS))
             raw(i, I_LOG_LOCVAR_FG_BG_RATIO) = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
             raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
+            raw(i, I_FUZZY_BALL_SIGNAL) = raw(i, I_LOCVAR_FG) + raw(i, I_PRESENCE) + &
+                                           raw(i, I_BP40_100_CENTER_EDGE_VAR)
             ! Catastrophic population, resolution, and foreground-geometry
             ! failures are hard validity rejects. The population fraction and
             ! connected-component pruning mirror the microchunk rejector, while

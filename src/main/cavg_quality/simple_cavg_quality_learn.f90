@@ -5,9 +5,9 @@ use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family, &
-    I_NEG_LOCVAR_FG, I_CC_AREA_FRAC
+    I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
 use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, &
-    build_classify_cache, kill_classify_cache, cached_decision_confusion
+    build_classify_cache, kill_classify_cache, cached_decision_confusion, apply_cached_decision_to_quality
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CAVG_MODEL_FAMILY_LINEAR, &
     CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, &
@@ -34,15 +34,20 @@ integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
 integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY   = 3
 real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
 real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
-integer, parameter :: LEARN_BALANCED_FN_TOLERANCE    = 1
-real,    parameter :: LEARN_BALANCED_FN_PENALTY      = 0.20
-integer, parameter :: LEARN_ROBUST_TAIL_DATASETS     = 3
+real,    parameter :: LEARN_BALANCED_FN_TOLERANCE_FRAC = 0.02
+real,    parameter :: LEARN_BALANCED_FN_RATE_PENALTY = 10.0
+real,    parameter :: LEARN_ROBUST_TAIL_FRAC         = 0.25
 real,    parameter :: LEARN_ROBUST_TAIL_WEIGHT       = 0.50
 real,    parameter :: LEARN_BALANCED_GOOD_LOSS_WEIGHT = 0.65
 real,    parameter :: LEARN_BALANCED_BAD_LOSS_WEIGHT  = 1.0 - LEARN_BALANCED_GOOD_LOSS_WEIGHT
 real,    parameter :: LEARN_BAD_OVERFIT_LOSS_MULT     = 1.50
+real,    parameter :: LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE = 0.00
 real,    parameter :: LEARN_BAD_OVERFIT_LOWVAR_FG_MIN = 0.0
 real,    parameter :: LEARN_BAD_OVERFIT_SUPPORT_MAX   = 0.5
+real,    parameter :: LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC = 0.20
+real,    parameter :: LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET = 0.20
+real,    parameter :: LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY = 8.0
+real,    parameter :: LEARN_OVERFIT_FP_BP_Z_MAX       = 0.0
 real,    parameter :: LEARN_MINSEPS(7)              = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
 ! Positive margins deliberately over-select relative to the learned boundary.
 real,    parameter :: LEARN_BOUNDARY_MARGINS(37)     = [-0.60, -0.50, -0.40, -0.30, -0.25, -0.15, &
@@ -234,7 +239,7 @@ contains
         type(cavg_quality_logistic_problem), intent(inout) :: problem
         integer :: ids, irow, iobs, ifeat, jfeat, ilinear, jlinear, iterm
         integer :: role, nfit, ngood, nbad
-        real(kind=8) :: good_weight, bad_weight
+        real(kind=8) :: good_weight, bad_weight, focus_bad_loss_mult
         call problem%kill()
         call feature_policy_indices(ipolicy, problem%linear_features, problem%n_linear)
         if( problem%n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
@@ -265,6 +270,7 @@ contains
             ngood = count_trainable_manual_good(dsets(ids))
             nbad  = count_trainable_manual_bad(dsets(ids))
             call logistic_dataset_class_weights(role, ngood, nbad, good_weight, bad_weight)
+            focus_bad_loss_mult = logistic_overfit_focus_bad_loss_multiplier(dsets(ids), role)
             do irow = 1, dsets(ids)%ncls
                 if( dsets(ids)%hard_reject(irow) ) cycle
                 iobs = iobs + 1
@@ -285,7 +291,7 @@ contains
                 else
                     problem%labels(iobs)  = 0.0d0
                     problem%weights(iobs) = bad_weight * logistic_bad_example_loss_multiplier( &
-                        dsets(ids)%features(irow,:))
+                        dsets(ids)%features(irow,:), focus_bad_loss_mult)
                 endif
             end do
             nfit = count_trainable_classes(dsets(ids))
@@ -316,16 +322,33 @@ contains
         end select
     end subroutine logistic_dataset_class_weights
 
-    real(kind=8) function logistic_bad_example_loss_multiplier( z_features )
-        real, intent(in) :: z_features(:)
+    real(kind=8) function logistic_bad_example_loss_multiplier( z_features, focus_bad_loss_mult )
+        real,         intent(in) :: z_features(:)
+        real(kind=8), intent(in) :: focus_bad_loss_mult
         if( size(z_features) /= CAVG_QUALITY_NFEATS ) &
             THROW_HARD('logistic_bad_example_loss_multiplier: invalid feature count')
         logistic_bad_example_loss_multiplier = 1.0d0
-        if( z_features(I_NEG_LOCVAR_FG) > LEARN_BAD_OVERFIT_LOWVAR_FG_MIN .and. &
-            z_features(I_CC_AREA_FRAC)  < LEARN_BAD_OVERFIT_SUPPORT_MAX )then
-            logistic_bad_example_loss_multiplier = real(LEARN_BAD_OVERFIT_LOSS_MULT, kind=8)
+        if( bad_overfit_signature(z_features) )then
+            logistic_bad_example_loss_multiplier = real(LEARN_BAD_OVERFIT_LOSS_MULT, kind=8) * &
+                focus_bad_loss_mult
         endif
     end function logistic_bad_example_loss_multiplier
+
+    real(kind=8) function logistic_overfit_focus_bad_loss_multiplier( dset, role )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        integer,                             intent(in) :: role
+        integer :: nfit, nbad_overfit
+        real :: signature_frac
+        logistic_overfit_focus_bad_loss_multiplier = 1.0d0
+        if( role /= LEARN_ROLE_BALANCED .and. role /= LEARN_ROLE_SPECIFICITY_ONLY ) return
+        nfit = count_trainable_classes(dset)
+        if( nfit <= 0 ) return
+        nbad_overfit = count_trainable_bad_overfit_signature(dset)
+        signature_frac = real(nbad_overfit) / real(nfit)
+        if( signature_frac < LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC ) return
+        logistic_overfit_focus_bad_loss_multiplier = 1.0d0 + &
+            real(LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE * signature_frac, kind=8)
+    end function logistic_overfit_focus_bad_loss_multiplier
 
     subroutine fit_logistic_problem( problem, solution, objective )
         type(cavg_quality_logistic_problem), intent(inout) :: problem
@@ -965,6 +988,7 @@ contains
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: model
         type(cavg_quality_classify_cache), optional, intent(in) :: caches(:)
+        type(cavg_quality_result) :: quality
         integer :: ids, tp, fp, tn, fn, nused, role
         integer :: tail_n
         real :: balacc, mean_score, tail_score, role_scores(size(dsets))
@@ -977,18 +1001,20 @@ contains
             role = dataset_learn_role(dsets(ids))
             if( role == LEARN_ROLE_SKIP ) cycle
             if( present(caches) )then
-                call classify_training_dataset_cached(dsets(ids), caches(ids), model, tp, fp, tn, fn)
+                call classify_training_dataset_cached_detail(dsets(ids), caches(ids), model, quality, tp, fp, tn, fn)
             else
-                call classify_training_dataset(dsets(ids), model, tp, fp, tn, fn)
+                call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
             endif
             balacc = learn_balacc_from_confusion(tp, fp, tn, fn, role)
+            balacc = balacc - overfit_false_positive_penalty(dsets(ids), quality, role)
             nused = nused + 1
             role_scores(nused) = balacc
+            call quality%kill()
         end do
         if( nused == 0 ) THROW_HARD('macro_balacc_for_model: no scoreable training datasets')
         call sort_real_prefix_ascending(role_scores, nused)
         mean_score = sum(role_scores(1:nused)) / real(nused)
-        tail_n     = min(LEARN_ROBUST_TAIL_DATASETS, nused)
+        tail_n     = max(1, min(nused, ceiling(LEARN_ROBUST_TAIL_FRAC * real(nused))))
         tail_score = sum(role_scores(1:tail_n)) / real(tail_n)
         macro_balacc_for_model = (1.0 - LEARN_ROBUST_TAIL_WEIGHT) * mean_score + &
             LEARN_ROBUST_TAIL_WEIGHT * tail_score
@@ -1000,7 +1026,7 @@ contains
         call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
         select case(role)
             case(LEARN_ROLE_BALANCED)
-                learn_balacc_from_confusion = fn_tolerant_specificity_score(specificity, fn)
+                learn_balacc_from_confusion = fn_tolerant_specificity_score(specificity, tp, fn)
             case(LEARN_ROLE_RECALL_ONLY)
                 learn_balacc_from_confusion = guarded_recall_score(recall)
             case(LEARN_ROLE_SPECIFICITY_ONLY)
@@ -1016,12 +1042,93 @@ contains
             max(0.0, LEARN_RECALL_ONLY_FLOOR - recall)
     end function guarded_recall_score
 
-    real function fn_tolerant_specificity_score( specificity, fn )
+    real function fn_tolerant_specificity_score( specificity, tp, fn )
         real,    intent(in) :: specificity
-        integer, intent(in) :: fn
-        fn_tolerant_specificity_score = specificity - LEARN_BALANCED_FN_PENALTY * &
-            real(max(0, fn - LEARN_BALANCED_FN_TOLERANCE))
+        integer, intent(in) :: tp, fn
+        fn_tolerant_specificity_score = specificity - LEARN_BALANCED_FN_RATE_PENALTY * &
+            balanced_fn_excess_rate(tp, fn)
     end function fn_tolerant_specificity_score
+
+    real function balanced_fn_excess_rate( tp, fn )
+        integer, intent(in) :: tp, fn
+        integer :: npos
+        npos = tp + fn
+        if( npos <= 0 )then
+            balanced_fn_excess_rate = 0.0
+        else
+            balanced_fn_excess_rate = max(0.0, real(fn) / real(npos) - LEARN_BALANCED_FN_TOLERANCE_FRAC)
+        endif
+    end function balanced_fn_excess_rate
+
+    real function overfit_false_positive_penalty( dset, quality, role )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        type(cavg_quality_result),           intent(in) :: quality
+        integer,                             intent(in) :: role
+        integer :: nbad_overfit, nfp_overfit
+        real :: fp_rate, excess_rate
+        overfit_false_positive_penalty = 0.0
+        if( role /= LEARN_ROLE_BALANCED .and. role /= LEARN_ROLE_SPECIFICITY_ONLY ) return
+        if( .not. dataset_is_overfit_focus(dset) ) return
+        nbad_overfit = count_trainable_bad_overfit_signature(dset)
+        if( nbad_overfit <= 0 ) return
+        nfp_overfit = count_accepted_bad_overfit_signature(dset, quality)
+        fp_rate = real(nfp_overfit) / real(nbad_overfit)
+        excess_rate = max(0.0, fp_rate - LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET)
+        overfit_false_positive_penalty = LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY * excess_rate * excess_rate
+    end function overfit_false_positive_penalty
+
+    logical function dataset_is_overfit_focus( dset )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        integer :: nfit, nbad_overfit
+        nfit = count_trainable_classes(dset)
+        if( nfit <= 0 )then
+            dataset_is_overfit_focus = .false.
+            return
+        endif
+        nbad_overfit = count_trainable_bad_overfit_signature(dset)
+        dataset_is_overfit_focus = real(nbad_overfit) / real(nfit) >= LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC
+    end function dataset_is_overfit_focus
+
+    integer function count_trainable_bad_overfit_signature( dset )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        integer :: irow
+        count_trainable_bad_overfit_signature = 0
+        do irow = 1, dset%ncls
+            if( dset%hard_reject(irow) ) cycle
+            if( dset%manual_states(irow) > 0 ) cycle
+            if( bad_overfit_signature(dset%features(irow,:)) ) &
+                count_trainable_bad_overfit_signature = count_trainable_bad_overfit_signature + 1
+        end do
+    end function count_trainable_bad_overfit_signature
+
+    integer function count_accepted_bad_overfit_signature( dset, quality )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        type(cavg_quality_result),           intent(in) :: quality
+        integer :: irow
+        if( .not. allocated(quality%states) ) &
+            THROW_HARD('count_accepted_bad_overfit_signature: missing quality states')
+        if( size(quality%states) /= dset%ncls ) &
+            THROW_HARD('count_accepted_bad_overfit_signature: state/dataset size mismatch')
+        count_accepted_bad_overfit_signature = 0
+        do irow = 1, dset%ncls
+            if( dset%hard_reject(irow) ) cycle
+            if( dset%manual_states(irow) > 0 ) cycle
+            if( quality%states(irow) <= 0 ) cycle
+            if( bad_overfit_signature(dset%features(irow,:)) ) &
+                count_accepted_bad_overfit_signature = count_accepted_bad_overfit_signature + 1
+        end do
+    end function count_accepted_bad_overfit_signature
+
+    logical function bad_overfit_signature( z_features )
+        real, intent(in) :: z_features(:)
+        logical :: low_local_variance, poor_bandpass_localization, poor_support
+        if( size(z_features) /= CAVG_QUALITY_NFEATS ) &
+            THROW_HARD('bad_overfit_signature: invalid feature count')
+        poor_support = z_features(I_CC_AREA_FRAC) < LEARN_BAD_OVERFIT_SUPPORT_MAX
+        low_local_variance = z_features(I_NEG_LOCVAR_FG) > LEARN_BAD_OVERFIT_LOWVAR_FG_MIN
+        poor_bandpass_localization = z_features(I_BP40_100_CENTER_EDGE_VAR) < LEARN_OVERFIT_FP_BP_Z_MAX
+        bad_overfit_signature = poor_support .and. (low_local_variance .or. poor_bandpass_localization)
+    end function bad_overfit_signature
 
     subroutine sort_real_prefix_ascending( vals, nvals )
         real,    intent(inout) :: vals(:)
@@ -1164,6 +1271,36 @@ contains
         endif
     end subroutine classify_training_dataset_cached
 
+    subroutine classify_training_dataset_cached_detail( dset, cache, model, quality, tp, fp, tn, fn )
+        type(cavg_quality_training_dataset), intent(in)    :: dset
+        type(cavg_quality_classify_cache),   intent(in)    :: cache
+        type(cavg_quality_model),            intent(in)    :: model
+        type(cavg_quality_result),           intent(inout) :: quality
+        integer,                             intent(out)   :: tp, fp, tn, fn
+        logical, allocatable :: pred(:), ref(:)
+        integer :: nfit
+        if( trim(model%model_family) /= CAVG_MODEL_FAMILY_LINEAR )then
+            call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
+            return
+        endif
+        call quality%kill()
+        quality%hard_reject = dset%hard_reject
+        call apply_cached_decision_to_quality(cache, model, quality)
+        nfit = count_trainable_classes(dset)
+        if( nfit == 0 )then
+            tp = 0
+            fp = 0
+            tn = 0
+            fn = 0
+            return
+        endif
+        allocate(pred(nfit), ref(nfit))
+        pred = pack(quality%states > 0, .not. dset%hard_reject)
+        ref  = pack(dset%manual_states > 0, .not. dset%hard_reject)
+        call calc_confusion(pred, ref, tp, fp, tn, fn)
+        deallocate(pred, ref)
+    end subroutine classify_training_dataset_cached_detail
+
     subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
         type(cavg_quality_training_dataset), intent(in)    :: dset
         type(cavg_quality_model),            intent(in)    :: model
@@ -1218,16 +1355,24 @@ contains
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
         write(funit,'(A)') 'note=feature_weights_use_only_datasets_with_both_manual_states_after_hard_rejects'
         write(funit,'(A)') 'note=macro_learn_score_is_mean_plus_lower_tail_robust_score'
-        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_tolerance'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_rate_tolerance'
+        write(funit,'(A)') 'note=overfit_focus_datasets_penalize_excess_accepted_bad_fuzzy_ball_signature_rate'
         write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
         write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
         write(funit,'(A)') 'note=learn_mode_uses_neutral_abinitio_foundation_not_quality_model_or_infile_seed'
         call write_feature_policy_grid(funit)
-        write(funit,'(A,I0)') 'robust_score_tail_datasets=', LEARN_ROBUST_TAIL_DATASETS
+        write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
-        write(funit,'(A,I0)') 'balanced_score_fn_tolerance=', LEARN_BALANCED_FN_TOLERANCE
-        write(funit,'(A,ES14.6)') 'balanced_score_fn_excess_penalty=', LEARN_BALANCED_FN_PENALTY
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_rate_penalty=', LEARN_BALANCED_FN_RATE_PENALTY
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_accept_rate_target=', &
+            LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_excess_rate_penalty=', &
+            LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY
+        write(funit,'(A,ES14.6)') 'overfit_focus_min_trainable_signature_frac=', &
+            LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC
+        write(funit,'(A,ES14.6)') 'overfit_focus_bp_z_max=', LEARN_OVERFIT_FP_BP_Z_MAX
         write(funit,'(A,ES14.6)') 'grid_recall_only_floor=', LEARN_RECALL_ONLY_FLOOR
         write(funit,'(A,ES14.6)') 'grid_recall_only_shortfall_penalty=', LEARN_RECALL_ONLY_PENALTY
         call write_real_list(funit, 'grid_min_score_separations=', LEARN_MINSEPS)
@@ -1285,21 +1430,31 @@ contains
         write(funit,'(A)') 'note=pairwise_logistic_uses_existing_normalized_training_table_features'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_fit_and_scoring'
         write(funit,'(A)') 'note=macro_learn_score_is_mean_plus_lower_tail_robust_score'
-        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_tolerance'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_rate_tolerance'
+        write(funit,'(A)') 'note=overfit_focus_datasets_penalize_excess_accepted_bad_fuzzy_ball_signature_rate'
         write(funit,'(A)') 'note=balanced_dataset_logistic_loss_uses_moderate_good_class_weight'
         write(funit,'(A)') 'note=manually_bad_overfit_signature_examples_get_extra_logistic_loss_weight'
+        write(funit,'(A)') 'note=overfit_focus_signature_fraction_loss_scale_is_reported_but_currently_neutral'
         write(funit,'(A)') 'note=trainable_good_only_datasets_contribute_recall_evidence'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_contribute_specificity_evidence'
         call write_feature_policy_grid(funit)
-        write(funit,'(A,I0)') 'robust_score_tail_datasets=', LEARN_ROBUST_TAIL_DATASETS
+        write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
-        write(funit,'(A,I0)') 'balanced_score_fn_tolerance=', LEARN_BALANCED_FN_TOLERANCE
-        write(funit,'(A,ES14.6)') 'balanced_score_fn_excess_penalty=', LEARN_BALANCED_FN_PENALTY
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_rate_penalty=', LEARN_BALANCED_FN_RATE_PENALTY
         write(funit,'(A,ES14.6)') 'balanced_loss_good_class_weight=', LEARN_BALANCED_GOOD_LOSS_WEIGHT
         write(funit,'(A,ES14.6)') 'balanced_loss_bad_class_weight=', LEARN_BALANCED_BAD_LOSS_WEIGHT
         write(funit,'(A,ES14.6)') 'bad_overfit_loss_multiplier=', LEARN_BAD_OVERFIT_LOSS_MULT
+        write(funit,'(A,ES14.6)') 'bad_overfit_focus_loss_scale=', LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE
         write(funit,'(A,ES14.6)') 'bad_overfit_lowvar_fg_min=', LEARN_BAD_OVERFIT_LOWVAR_FG_MIN
         write(funit,'(A,ES14.6)') 'bad_overfit_support_max=', LEARN_BAD_OVERFIT_SUPPORT_MAX
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_accept_rate_target=', &
+            LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_excess_rate_penalty=', &
+            LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY
+        write(funit,'(A,ES14.6)') 'overfit_focus_min_trainable_signature_frac=', &
+            LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC
+        write(funit,'(A,ES14.6)') 'overfit_focus_bp_z_max=', LEARN_OVERFIT_FP_BP_Z_MAX
         call write_real_list(funit, 'grid_logistic_lambdas=', LOGISTIC_LAMBDAS)
         call write_real_list(funit, 'grid_probability_thresholds=', LOGISTIC_THRESHOLDS)
         call write_fixed_model_summary(funit, learned_model)
@@ -1349,13 +1504,18 @@ contains
         write(funit,'(A)') 'note=analysis_table_rows_reclassified_with_selected_model'
         write(funit,'(A)') 'note=hard_rejected_rows_are_reported_but_excluded_from_model_scoring'
         write(funit,'(A)') 'note=macro_learn_score_is_mean_plus_lower_tail_robust_score'
-        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_tolerance'
+        write(funit,'(A)') 'note=balanced_datasets_are_scored_by_specificity_with_small_fn_rate_tolerance'
+        write(funit,'(A)') 'note=overfit_focus_datasets_penalize_excess_accepted_bad_fuzzy_ball_signature_rate'
         write(funit,'(A)') 'note=trainable_good_only_datasets_are_scored_by_guarded_recall'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_are_scored_by_specificity_unless_good_classes_were_hard_rejected'
-        write(funit,'(A,I0)') 'robust_score_tail_datasets=', LEARN_ROBUST_TAIL_DATASETS
+        write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
-        write(funit,'(A,I0)') 'balanced_score_fn_tolerance=', LEARN_BALANCED_FN_TOLERANCE
-        write(funit,'(A,ES14.6)') 'balanced_score_fn_excess_penalty=', LEARN_BALANCED_FN_PENALTY
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
+        write(funit,'(A,ES14.6)') 'balanced_score_fn_rate_penalty=', LEARN_BALANCED_FN_RATE_PENALTY
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_accept_rate_target=', &
+            LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET
+        write(funit,'(A,ES14.6)') 'overfit_focus_fp_excess_rate_penalty=', &
+            LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY
         call write_fixed_model_summary(funit, model)
         write(funit,'(A)') ''
         call write_evaluate_diagnostics(funit, model, diag)
@@ -1421,21 +1581,29 @@ contains
         type(cavg_quality_model),            intent(in) :: model
         character(len=*),                    intent(in) :: score_name
         integer :: ids, tp, fp, tn, fn, role
-        real :: precision, recall, specificity, f1, role_score, accuracy
+        type(cavg_quality_result) :: quality
+        real :: precision, recall, specificity, f1, role_score, accuracy, overfit_penalty
         write(funit,'(A)') ''
         write(funit,'(A,A,A)') 'dataset,n_classes,n_trainable,trainable_manual_good,trainable_manual_bad,learn_role,', &
-            'tp,fp,tn,fn,precision,recall,specificity,f1,', trim(score_name)//',accuracy,hard_rejected_manual_good'
+            'tp,fp,tn,fn,precision,recall,specificity,f1,', trim(score_name)//&
+            ',accuracy,hard_rejected_manual_good,overfit_focus_bad,overfit_focus_fp,overfit_penalty'
         do ids = 1, size(dsets)
             role = dataset_learn_role(dsets(ids))
-            call classify_training_dataset(dsets(ids), model, tp, fp, tn, fn)
+            call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
             call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, role_score, accuracy)
             role_score = learn_balacc_from_confusion(tp, fp, tn, fn, role)
-            write(funit,'(A,A,I0,A,I0,A,I0,A,I0,A,A,A,I0,A,I0,A,I0,A,I0,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,I0)') &
+            overfit_penalty = overfit_false_positive_penalty(dsets(ids), quality, role)
+            role_score = role_score - overfit_penalty
+            write(funit,'(A,A,I0,A,I0,A,I0,A,I0,A,A,A,I0,A,I0,A,I0,A,I0,'//&
+                'A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,I0,A,I0,A,I0,A,F10.5)') &
                 trim(dsets(ids)%dataset_id), ',', dsets(ids)%ncls, ',', count_trainable_classes(dsets(ids)), ',', &
                 count_trainable_manual_good(dsets(ids)), ',', count_trainable_manual_bad(dsets(ids)), ',', &
                 trim(dataset_learn_role_name(role)), ',', &
                 tp, ',', fp, ',', tn, ',', fn, ',', precision, ',', recall, ',', specificity, ',', f1, ',', &
-                role_score, ',', accuracy, ',', count_hard_rejected_manual_good(dsets(ids))
+                role_score, ',', accuracy, ',', count_hard_rejected_manual_good(dsets(ids)), ',', &
+                count_trainable_bad_overfit_signature(dsets(ids)), ',', &
+                count_accepted_bad_overfit_signature(dsets(ids), quality), ',', overfit_penalty
+            call quality%kill()
         end do
     end subroutine write_dataset_metric_table
 
@@ -1843,6 +2011,13 @@ contains
             call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
             diag%total_fp = diag%total_fp + fp
             diag%total_fn = diag%total_fn + fn
+            if( dataset_is_overfit_focus(dsets(ids)) )then
+                diag%n_overfit_focus   = diag%n_overfit_focus + 1
+                diag%overfit_focus_bad = diag%overfit_focus_bad + &
+                    count_trainable_bad_overfit_signature(dsets(ids))
+                diag%overfit_focus_fp  = diag%overfit_focus_fp + &
+                    count_accepted_bad_overfit_signature(dsets(ids), quality)
+            endif
             lowsep = quality%separation < model%min_score_separation
             single_cluster = trim(quality%soft_decision) == 'hard_only' .or. &
                 quality%nclust <= 1 .or. .not. quality%used_threshold
@@ -1925,14 +2100,20 @@ contains
             ';weight_contrast=', diag%n_weight_datasets, ';recall_only=', diag%n_recall_only, &
             ';specificity_only=', diag%n_specificity_only, ';skipped=', diag%n_skipped
         call write_search_diagnostic(funit, 'note', 'dataset_roles', 'automatic', trim(detail))
-        write(detail,'(A,I0,A,F6.3)') 'tail_datasets=', LEARN_ROBUST_TAIL_DATASETS, ';tail_weight=', &
+        write(detail,'(A,F6.3,A,F6.3)') 'tail_frac=', LEARN_ROBUST_TAIL_FRAC, ';tail_weight=', &
             LEARN_ROBUST_TAIL_WEIGHT
         call write_search_diagnostic(funit, 'note', 'macro_learn_score', &
             'mean_plus_lower_tail_robust_score', trim(detail))
-        write(detail,'(A,I0,A,F6.3)') 'fn_tolerance=', LEARN_BALANCED_FN_TOLERANCE, ';excess_penalty=', &
-            LEARN_BALANCED_FN_PENALTY
+        write(detail,'(A,F6.3,A,F6.3)') 'fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC, &
+            ';rate_penalty=', LEARN_BALANCED_FN_RATE_PENALTY
         call write_search_diagnostic(funit, 'note', 'balanced_dataset_score', &
-            'specificity_with_small_fn_tolerance', trim(detail))
+            'specificity_with_small_fn_rate_tolerance', trim(detail))
+        write(detail,'(A,I0,A,I0,A,I0,A,F6.3,A,F6.3)') 'datasets=', diag%n_overfit_focus, &
+            ';bad_signature=', diag%overfit_focus_bad, ';accepted_bad_signature=', diag%overfit_focus_fp, &
+            ';target=', LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET, &
+            ';excess_penalty=', LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY
+        call write_search_diagnostic(funit, 'note', 'overfit_focus_penalty', &
+            'accepted_bad_signature_rate_hinge_quadratic', trim(detail))
         write(detail,'(A,F6.3,A,F6.3)') 'floor=', LEARN_RECALL_ONLY_FLOOR, ';penalty=', &
             LEARN_RECALL_ONLY_PENALTY
         call write_search_diagnostic(funit, 'note', 'trainable_good_only_score', 'guarded_recall', trim(detail))
@@ -1982,14 +2163,20 @@ contains
             ';weight_contrast=', diag%n_weight_datasets, ';recall_only=', diag%n_recall_only, &
             ';specificity_only=', diag%n_specificity_only, ';skipped=', diag%n_skipped
         call write_evaluate_diagnostic(funit, 'note', 'dataset_roles', 'automatic', trim(detail))
-        write(detail,'(A,I0,A,F6.3)') 'tail_datasets=', LEARN_ROBUST_TAIL_DATASETS, ';tail_weight=', &
+        write(detail,'(A,F6.3,A,F6.3)') 'tail_frac=', LEARN_ROBUST_TAIL_FRAC, ';tail_weight=', &
             LEARN_ROBUST_TAIL_WEIGHT
         call write_evaluate_diagnostic(funit, 'note', 'macro_evaluate_score', &
             'mean_plus_lower_tail_robust_score', trim(detail))
-        write(detail,'(A,I0,A,F6.3)') 'fn_tolerance=', LEARN_BALANCED_FN_TOLERANCE, ';excess_penalty=', &
-            LEARN_BALANCED_FN_PENALTY
+        write(detail,'(A,F6.3,A,F6.3)') 'fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC, &
+            ';rate_penalty=', LEARN_BALANCED_FN_RATE_PENALTY
         call write_evaluate_diagnostic(funit, 'note', 'balanced_dataset_score', &
-            'specificity_with_small_fn_tolerance', trim(detail))
+            'specificity_with_small_fn_rate_tolerance', trim(detail))
+        write(detail,'(A,I0,A,I0,A,I0,A,F6.3,A,F6.3)') 'datasets=', diag%n_overfit_focus, &
+            ';bad_signature=', diag%overfit_focus_bad, ';accepted_bad_signature=', diag%overfit_focus_fp, &
+            ';target=', LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET, &
+            ';excess_penalty=', LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY
+        call write_evaluate_diagnostic(funit, 'note', 'overfit_focus_penalty', &
+            'accepted_bad_signature_rate_hinge_quadratic', trim(detail))
         write(detail,'(A,F6.3,A,F6.3)') 'floor=', LEARN_RECALL_ONLY_FLOOR, ';penalty=', &
             LEARN_RECALL_ONLY_PENALTY
         call write_evaluate_diagnostic(funit, 'note', 'trainable_good_only_score', 'guarded_recall', trim(detail))
