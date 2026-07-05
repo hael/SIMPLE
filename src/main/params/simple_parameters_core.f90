@@ -58,9 +58,11 @@ contains
         self%plaintexttab=''      !< plain text file of input parameters
         self%prg=''               !< SIMPLE program being executed
         self%projfile=''          !< SIMPLE *.simple project file
+        self%projfile_den=''      !< denoise_project child SIMPLE project file with assignments
         self%projfile_orig=''     !< original SIMPLE *.simple project file
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
+        self%projfile_raw=''      !< raw SIMPLE project used as input to denoise_project
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name

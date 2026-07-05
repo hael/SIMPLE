@@ -220,9 +220,11 @@ type :: parameters
     type(string)              :: prg                  !< SIMPLE program being executed
     type(string)              :: test                 !< SIMPLE TEST program being executed
     type(string)              :: projfile             !< SIMPLE *.simple project file
+    type(string)              :: projfile_den         !< denoise_project child SIMPLE project file with assignments
     type(string)              :: projfile_orig        !< original SIMPLE *.simple project file (unbootstrap source)
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
+    type(string)              :: projfile_raw         !< raw SIMPLE project used as input to denoise_project
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name

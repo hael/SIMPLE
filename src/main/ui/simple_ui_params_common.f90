@@ -120,7 +120,9 @@ type(ui_param) :: pick_roi
 type(ui_param) :: picker
 type(ui_param) :: pickrefs
 type(ui_param) :: projfile
+type(ui_param) :: projfile_den
 type(ui_param) :: projfile_merged
+type(ui_param) :: projfile_raw
 type(ui_param) :: projfile_ref
 type(ui_param) :: projfile_target
 type(ui_param) :: projname
@@ -634,6 +636,14 @@ subroutine set_ui_params
     call projfile%set_param(       'projfile',        'file',   'Project file', &
                                    'SIMPLE projectfile', &
                                    'e.g. myproject.simple', .true., '')
+
+    call projfile_raw%set_param(   'projfile_raw',    'file',   'Raw project file', &
+                                   'SIMPLE project input to denoise_project', &
+                                   'e.g. raw_project.simple', .true., '')
+
+    call projfile_den%set_param(   'projfile_den',    'file',   'Denoised child project file', &
+                                   'SIMPLE denoise_project child project containing assignments to map', &
+                                   'e.g. den_project.simple', .true., '')
 
     call projfile_target%set_param('projfile_target', 'file',   'Another project file', &
                                    'SIMPLE projectfile', &
