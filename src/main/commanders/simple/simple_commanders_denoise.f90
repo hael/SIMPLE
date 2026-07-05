@@ -83,10 +83,10 @@ contains
         type(sp_project) :: raw_proj, den_proj, outproj
         type(ori)        :: raw2d, den_ori, mapped_ori
         integer, allocatable :: den2raw(:)
-        integer :: iden, iptcl, nptcls, nden2d, nden3d, nraw_active, nmap2d, nmap3d
-        logical :: l_use_pind
+        logical, allocatable :: mapped_raw(:)
+        integer :: iden, iptcl, nptcls, nden2d, nden3d, nraw_active, nmap2d, nmap3d, nzeroed
+        character(len=16) :: mapping_mode
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('projfile') ) call cline%set('projfile', 'map_params_from_den.simple')
         if( .not. cline%defined('projfile_raw') ) THROW_HARD('map_params_from_den requires projfile_raw')
         if( .not. cline%defined('projfile_den') ) THROW_HARD('map_params_from_den requires projfile_den')
         call params%new(cline)
@@ -102,7 +102,7 @@ contains
         if( nden3d > 0 .and. nden3d /= nden2d )then
             THROW_HARD('projfile_den ptcl2D/ptcl3D particle counts differ; map_params_from_den')
         endif
-        call build_den2raw_map(raw_proj, den_proj, den2raw, nraw_active, l_use_pind)
+        call build_den2raw_map(raw_proj, den_proj, den2raw, nraw_active, mapping_mode)
         call outproj%copy(raw_proj)
         if( nden3d == nden2d .and. outproj%os_ptcl3D%get_noris() /= nptcls )then
             outproj%os_ptcl3D = outproj%os_ptcl2D
@@ -110,14 +110,17 @@ contains
         endif
         nmap2d = 0
         nmap3d = 0
+        allocate(mapped_raw(nptcls), source=.false.)
         do iden = 1,nden2d
             iptcl = den2raw(iden)
+            if( mapped_raw(iptcl) ) THROW_HARD('duplicate denoised-to-raw particle mapping; map_params_from_den')
             call raw_proj%os_ptcl2D%get_ori(iptcl, raw2d)
             call den_proj%os_ptcl2D%get_ori(iden, den_ori)
             call den_ori%compose3d2d(raw2d, mapped_ori)
             call outproj%os_ptcl2D%e3set(iptcl, mapped_ori%e3get())
             call outproj%os_ptcl2D%set_shift(iptcl, mapped_ori%get_2Dshift())
             call copy_assignment_keys(den_proj%os_ptcl2D, outproj%os_ptcl2D, iden, iptcl, .false.)
+            mapped_raw(iptcl) = .true.
             nmap2d = nmap2d + 1
             if( nden3d == nden2d )then
                 call den_proj%os_ptcl3D%get_ori(iden, den_ori)
@@ -130,11 +133,19 @@ contains
                 nmap3d = nmap3d + 1
             endif
         end do
+        nzeroed = 0
+        do iptcl = 1,nptcls
+            if( mapped_raw(iptcl) ) cycle
+            call outproj%os_ptcl2D%set(iptcl, 'state', 0)
+            if( outproj%os_ptcl3D%get_noris() == nptcls ) call outproj%os_ptcl3D%set(iptcl, 'state', 0)
+            nzeroed = nzeroed + 1
+        end do
         call outproj%update_projinfo(params%projfile)
         call outproj%write(params%projfile)
         write(logfhandle,'(A,A)') 'Mapped denoised-project assignments written: ', params%projfile%to_char()
         write(logfhandle,'(A,I10,A,I10)') 'Mapped ptcl2D records: ', nmap2d, ' ptcl3D records: ', nmap3d
-        write(logfhandle,'(A,I10,A,A)') 'Raw active particles: ', nraw_active, ' mapping: ', merge('pind','row ',l_use_pind)
+        write(logfhandle,'(A,I10)') 'Raw records set to state=0 because absent from denoised input: ', nzeroed
+        write(logfhandle,'(A,I10,A,A)') 'Raw active particles: ', nraw_active, ' mapping: ', trim(mapping_mode)
         call raw2d%kill
         call den_ori%kill
         call mapped_ori%kill
@@ -142,19 +153,20 @@ contains
         call den_proj%kill
         call outproj%kill
         if( allocated(den2raw) ) deallocate(den2raw)
+        if( allocated(mapped_raw) ) deallocate(mapped_raw)
         call simple_end('**** SIMPLE_MAP_PARAMS_FROM_DEN NORMAL STOP ****')
 
         contains
 
-            subroutine build_den2raw_map( raw_proj, den_proj, den2raw, nraw_active, l_use_pind )
+            subroutine build_den2raw_map( raw_proj, den_proj, den2raw, nraw_active, mapping_mode )
                 type(sp_project), intent(in)  :: raw_proj, den_proj
                 integer, allocatable, intent(out) :: den2raw(:)
                 integer, intent(out) :: nraw_active
-                logical, intent(out) :: l_use_pind
-                integer, allocatable :: pind2raw(:)
+                character(len=*), intent(out) :: mapping_mode
+                integer, allocatable :: pind2raw(:), active_raw(:), den_pinds(:)
                 logical, allocatable :: raw_seen(:)
-                integer :: nraw, nden, i, raw_pind, den_pind, raw_ind, max_pind, nmiss
-                logical :: raw_has_pind, den_has_pind
+                integer :: nraw, nden, i, raw_pind, den_pind, max_pind, iactive
+                logical :: raw_has_pind, den_has_pind, native_ok, ordinal_ok, native_hits_state0
                 nraw = raw_proj%os_ptcl2D%get_noris()
                 nden = den_proj%os_ptcl2D%get_noris()
                 allocate(den2raw(nden), source=0)
@@ -166,8 +178,16 @@ contains
                 do i = 1,nraw
                     if( raw_proj%os_ptcl2D%get_state(i) > 0 ) nraw_active = nraw_active + 1
                 enddo
+                if( nraw_active < 1 ) THROW_HARD('projfile_raw has no active particles; map_params_from_den')
+                allocate(active_raw(nraw_active), source=0)
+                iactive = 0
+                do i = 1,nraw
+                    if( raw_proj%os_ptcl2D%get_state(i) <= 0 ) cycle
+                    iactive = iactive + 1
+                    active_raw(iactive) = i
+                enddo
                 if( den_has_pind )then
-                    l_use_pind = .true.
+                    allocate(den_pinds(nden), source=0)
                     max_pind = 0
                     do i = 1,nraw
                         raw_pind = native_row_pind(raw_proj%os_ptcl2D, i, raw_has_pind, 'projfile_raw')
@@ -175,49 +195,136 @@ contains
                     enddo
                     do i = 1,nden
                         den_pind = native_row_pind(den_proj%os_ptcl2D, i, .true., 'projfile_den')
+                        den_pinds(i) = den_pind
                         max_pind = max(max_pind, den_pind)
                     enddo
                     if( max_pind < 1 ) THROW_HARD('non-positive native particle index; map_params_from_den')
                     allocate(pind2raw(max_pind), source=0)
+                    native_ok = .true.
                     do i = 1,nraw
                         raw_pind = native_row_pind(raw_proj%os_ptcl2D, i, raw_has_pind, 'projfile_raw')
-                        if( pind2raw(raw_pind) /= 0 ) THROW_HARD('duplicate native particle index in projfile_raw; map_params_from_den')
+                        if( pind2raw(raw_pind) /= 0 ) native_ok = .false.
                         pind2raw(raw_pind) = i
                     enddo
-                    do i = 1,nden
-                        den_pind = native_row_pind(den_proj%os_ptcl2D, i, .true., 'projfile_den')
-                        if( den_pind > size(pind2raw) .or. pind2raw(den_pind) == 0 )then
-                            THROW_HARD('projfile_den native particle index absent from projfile_raw; map_params_from_den')
+                    if( native_ok )then
+                        call try_native_pind_map(den_pinds, pind2raw, raw_proj, raw_seen, den2raw, native_ok, native_hits_state0)
+                    endif
+                    if( native_ok .and. native_hits_state0 )then
+                        raw_seen = .false.
+                        call try_active_ordinal_map(den_pinds, active_raw, raw_seen, den2raw, ordinal_ok)
+                        if( ordinal_ok )then
+                            mapping_mode = 'active_ordinal'
+                        else
+                            mapping_mode = 'pind'
                         endif
-                        raw_ind = pind2raw(den_pind)
-                        if( raw_proj%os_ptcl2D%get_state(raw_ind) <= 0 )then
-                            THROW_HARD('projfile_den maps to a state=0 raw particle; map_params_from_den')
+                    else if( native_ok )then
+                        mapping_mode = 'pind'
+                    else
+                        raw_seen = .false.
+                        call try_active_ordinal_map(den_pinds, active_raw, raw_seen, den2raw, ordinal_ok)
+                        if( .not. ordinal_ok )then
+                            write(logfhandle,'(A,I10,A,I10)') 'projfile_raw active particles=', nraw_active, &
+                                ' projfile_den particles=', nden
+                            THROW_HARD('projfile_den pind map is neither native raw indices nor dense active-particle ordinals; map_params_from_den')
                         endif
-                        if( raw_seen(raw_ind) ) THROW_HARD('duplicate projfile_den mapping to raw particle; map_params_from_den')
-                        raw_seen(raw_ind) = .true.
-                        den2raw(i) = raw_ind
-                    enddo
-                    nmiss = 0
-                    do i = 1,nraw
-                        if( raw_proj%os_ptcl2D%get_state(i) > 0 .and. .not.raw_seen(i) ) nmiss = nmiss + 1
-                    enddo
-                    if( nmiss > 0 )then
-                        write(logfhandle,'(A,I10,A,I10)') 'Raw active particles missing denoised assignments: ', nmiss, &
-                            ' raw_active=', nraw_active
-                        THROW_HARD('projfile_den does not cover every active projfile_raw particle; map_params_from_den')
+                        mapping_mode = 'active_ordinal'
                     endif
                     deallocate(pind2raw)
+                    deallocate(den_pinds)
                 else if( nden == nraw )then
-                    l_use_pind = .false.
                     do i = 1,nden
                         den2raw(i) = i
                     enddo
+                    mapping_mode = 'row'
+                else if( nden == nraw_active )then
+                    do i = 1,nden
+                        den2raw(i) = active_raw(i)
+                    enddo
+                    mapping_mode = 'active_row'
                 else
                     write(logfhandle,'(A,I10,A,I10)') 'projfile_raw nptcls=', nraw, ' projfile_den nptcls=', nden
                     THROW_HARD('compressed projfile_den requires ptcl2D:pind native particle indices; map_params_from_den')
                 endif
+                call validate_den2raw_map(raw_proj, den2raw, mapping_mode)
+                deallocate(active_raw)
                 deallocate(raw_seen)
             end subroutine build_den2raw_map
+
+            subroutine try_native_pind_map( den_pinds, pind2raw, raw_proj, raw_seen, den2raw, ok, hits_state0 )
+                integer,          intent(in)    :: den_pinds(:), pind2raw(:)
+                type(sp_project), intent(in)    :: raw_proj
+                logical,          intent(inout) :: raw_seen(:)
+                integer,          intent(inout) :: den2raw(:)
+                logical,          intent(out)   :: ok
+                logical,          intent(out)   :: hits_state0
+                integer :: i, den_pind, raw_ind
+                ok = .true.
+                hits_state0 = .false.
+                raw_seen = .false.
+                den2raw  = 0
+                do i = 1,size(den_pinds)
+                    den_pind = den_pinds(i)
+                    if( den_pind > size(pind2raw) .or. pind2raw(den_pind) == 0 )then
+                        ok = .false.
+                        return
+                    endif
+                    raw_ind = pind2raw(den_pind)
+                    if( raw_proj%os_ptcl2D%get_state(raw_ind) <= 0 )then
+                        hits_state0 = .true.
+                    endif
+                    if( raw_seen(raw_ind) )then
+                        ok = .false.
+                        return
+                    endif
+                    raw_seen(raw_ind) = .true.
+                    den2raw(i) = raw_ind
+                enddo
+            end subroutine try_native_pind_map
+
+            subroutine try_active_ordinal_map( den_pinds, active_raw, raw_seen, den2raw, ok )
+                integer, intent(in)    :: den_pinds(:), active_raw(:)
+                logical, intent(inout) :: raw_seen(:)
+                integer, intent(inout) :: den2raw(:)
+                logical, intent(out)   :: ok
+                logical, allocatable :: ordinal_seen(:)
+                integer :: i, den_pind, raw_ind, nactive
+                nactive = size(active_raw)
+                ok = .false.
+                allocate(ordinal_seen(nactive), source=.false.)
+                raw_seen = .false.
+                den2raw  = 0
+                do i = 1,size(den_pinds)
+                    den_pind = den_pinds(i)
+                    if( den_pind < 1 .or. den_pind > nactive )then
+                        deallocate(ordinal_seen)
+                        return
+                    endif
+                    if( ordinal_seen(den_pind) )then
+                        deallocate(ordinal_seen)
+                        return
+                    endif
+                    ordinal_seen(den_pind) = .true.
+                    raw_ind = active_raw(den_pind)
+                    raw_seen(raw_ind) = .true.
+                    den2raw(i) = raw_ind
+                enddo
+                ok = .true.
+                deallocate(ordinal_seen)
+            end subroutine try_active_ordinal_map
+
+            subroutine validate_den2raw_map( raw_proj, den2raw, mapping_mode )
+                type(sp_project), intent(in) :: raw_proj
+                integer,          intent(in) :: den2raw(:)
+                character(len=*), intent(in) :: mapping_mode
+                integer :: raw_ind
+                if( any(den2raw < 1) ) THROW_HARD('incomplete denoise-to-raw particle map; map_params_from_den')
+                raw_ind = maxval(den2raw)
+                if( raw_ind > raw_proj%os_ptcl2D%get_noris() )then
+                    THROW_HARD('denoise-to-raw particle map outside raw project range; map_params_from_den')
+                endif
+                write(logfhandle,'(A,A,A,I10)') 'Denoise-to-raw particle map mode=', trim(mapping_mode), &
+                    ' mapped_records=', size(den2raw)
+            end subroutine validate_den2raw_map
 
             integer function native_row_pind( os, i, require_pind, context ) result(pind)
                 use simple_oris, only: oris

@@ -286,7 +286,7 @@ contains
         &'Map denoised-project assignments to raw particles',&
         &'is a workflow for transferring assignments obtained on denoise_project transformed particles back to the raw project particle frame',&
         &'all',&
-        &.false.)
+        &.true.)
         call map_params_from_den%add_input(UI_PARM, projfile_raw)
         call map_params_from_den%add_input(UI_PARM, projfile_den)
         call map_params_from_den%add_input(UI_PARM, projfile, required_override=.false.)
