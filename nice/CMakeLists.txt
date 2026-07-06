@@ -10,6 +10,22 @@ endif()
 # Python
 # ------------------------------------------------------------------------------
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c "import sqlite3; print(sqlite3.sqlite_version)"
+  RESULT_VARIABLE NICE_SQLITE3_RESULT
+  OUTPUT_VARIABLE NICE_SQLITE3_VERSION
+  ERROR_VARIABLE NICE_SQLITE3_ERROR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_STRIP_TRAILING_WHITESPACE
+)
+if(NOT NICE_SQLITE3_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "NICE requires Python's sqlite3 module. The selected Python "
+    "interpreter (${Python3_EXECUTABLE}) cannot import sqlite3: "
+    "${NICE_SQLITE3_ERROR}"
+  )
+endif()
+message(STATUS "NICE Python sqlite3 version: ${NICE_SQLITE3_VERSION}")
 
 # ------------------------------------------------------------------------------
 # Paths
@@ -59,7 +75,9 @@ set(NICE_PY_PACKAGES
   dirsync==2.2.6
 )
 
-if(NOT APPLE)
+# pysqlite3-binary publishes no Windows/MSYS2 wheels, and NICE only swaps
+# sqlite3 for pysqlite3 at runtime on Linux.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND NICE_PY_PACKAGES
     pysqlite3-binary==0.5.4
     gunicorn==23.0.0
