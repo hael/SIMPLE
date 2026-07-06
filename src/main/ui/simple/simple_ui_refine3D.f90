@@ -308,9 +308,6 @@ contains
         &'Multi-volume refinement mode(input_oris_refine|input_oris_fixed){input_oris_refine}', &
         &'(input_oris_refine|input_oris_fixed){input_oris_refine}', .false., 'input_oris_refine', &
         &gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|sum|shc|snhc){geom}', '(state|geom|sum|shc|snhc){geom}', .false., 'geom', &
-        &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &

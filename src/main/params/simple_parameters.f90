@@ -287,6 +287,7 @@ type :: parameters
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){ppca}
     character(len=STDLEN)     :: steering='none' !< Orientation graph steering representation(none|so2|se2){none}
+    character(len=3)          :: trust_resolution='yes' !< allow resolution feature during quality-model learning(yes|no){yes}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}

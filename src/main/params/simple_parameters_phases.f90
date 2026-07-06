@@ -814,6 +814,11 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported chunk_hard_reject='//trim(self%chunk_hard_reject)//'; expected yes|no')
         end select
+        select case(trim(self%trust_resolution))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported trust_resolution='//trim(self%trust_resolution)//'; expected yes|no')
+        end select
         if( trim(self%overfit_hard_reject) == 'yes' .and. trim(self%chunk_hard_reject) == 'yes' ) &
             THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
         if( trim(self%overfit_hard_reject) == 'yes' .and. &
@@ -832,6 +837,8 @@ contains
                 case DEFAULT
                     THROW_HARD('model_cavgs_rejection quality_mode=learn supports model_family=linear|logistic')
             end select
+        else if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%trust_resolution) == 'no' )then
+            THROW_HARD('trust_resolution=no is supported only for model_cavgs_rejection quality_mode=learn')
         endif
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then

@@ -123,7 +123,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=analyze` computes the same model output but treats the existing `cls2D` state as the manual reference. It writes `cavgs_quality_analysis.txt` and the selected/rejected stacks. The project selection is left unchanged.
 
-`quality_mode=learn` reads a training file table of `cavgs_quality_analysis.txt` files from `filetab=` and searches for a model specification from a neutral `abinitio_learn_base` foundation. `model_family=linear|logistic` selects the model family to train; if omitted, learn mode uses `logistic`. It does not accept `quality_model` or `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
+`quality_mode=learn` reads a training file table of `cavgs_quality_analysis.txt` files from `filetab=` and searches for a model specification from a neutral `abinitio_learn_base` foundation. `model_family=linear|logistic` selects the model family to train; if omitted, learn mode uses `logistic`. `trust_resolution=yes|no` controls whether the normalized resolution feature `neg_log_res` is allowed to participate in training; when set to `no`, resolution remains present in analysis tables and reports but is excluded from learned weights, logistic coefficients, and pairwise interactions. It does not accept `quality_model` or `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
 `quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_analysis.txt` files. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
@@ -188,6 +188,8 @@ Feature families are used by learn mode. Every learned policy includes `microchu
 - `microchunk_plus_score`
 - `microchunk_plus_signal`
 - `microchunk_plus_score_signal`
+
+`trust_resolution=no` intersects each learn-mode feature policy with an explicit training mask that removes feature 2, `neg_log_res`. This is a training-time decision only: regenerated or saved analysis files can still contain resolution values for reporting and diagnostics, and the learned model file remains self-contained because disabled resolution terms are written as zero or omitted.
 
 Features outside the selected policy are encoded by zero weights.
 
@@ -419,6 +421,8 @@ Learn mode searches:
 - `use_cluster_rescue`: `false, true`;
 - `enforce_min_accept_frac`: `false, true`;
 - `min_accept_frac`: `0.50, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90, 0.925, 0.95, 0.975, 1.00` when `enforce_min_accept_frac` is true.
+
+When `trust_resolution=no`, the same search is run after removing `neg_log_res` from every feature policy. The learn report records `trust_resolution=no` and lists `neg_log_res` under `inactive_training_features`.
 
 The training algorithm is unified and ab initio with respect to the rejection model. It uses a neutral foundation with zero starting weights, no rescue, no minimum-acceptance enforcement, and no Otsu rescue/window behavior. This foundation is only a tie-break anchor and a source of inactive-field defaults; it is not a chunk or pool preset. Chunk, pool, and stage-specific behavior should be represented by the learned model parameters or by promoted model definitions, not by separate training procedures.
 

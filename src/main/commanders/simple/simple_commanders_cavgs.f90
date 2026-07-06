@@ -386,7 +386,7 @@ contains
                 if( cline%defined('fname') ) model_fname = params%fname%to_char()
                 report_fname = 'cavgs_quality_learn_report.txt'
                 call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
-                    trim(learn_model))
+                    trim(learn_model), trust_resolution=trim(params%trust_resolution) == 'yes')
                 write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
                 if( allocated(analysis_files) ) deallocate(analysis_files)
                 call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &

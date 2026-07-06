@@ -165,6 +165,7 @@ type(ui_param) :: time_per_image
 type(ui_param) :: total_dose
 type(ui_param) :: trs
 type(ui_param) :: trs_mc
+type(ui_param) :: trust_resolution
 type(ui_param) :: tseries
 type(ui_param) :: update_frac
 type(ui_param) :: user_account
@@ -687,6 +688,11 @@ subroutine set_ui_params
                                    '(chunk100mics|chunk100mics_linear|pool){chunk100mics}', &
                                    'Quality model(chunk100mics|chunk100mics_linear|pool){chunk100mics}', &
                                    .false., 'chunk100mics')
+
+    call trust_resolution%set_param('trust_resolution', 'binary', 'Trust resolution', &
+                                   'Allow nominal class resolution to contribute as a learned quality feature'//&
+                                   ' (yes|no){yes}', &
+                                   'Trust resolution feature during learning(yes|no){yes}', .false., 'yes')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|coarray|slurm|pbs|lsf|sge)', &
