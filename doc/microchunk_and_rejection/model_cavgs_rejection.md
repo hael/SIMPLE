@@ -34,7 +34,7 @@ The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`.
 
 ## Evidence Comparison
 
-The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed to detect fuzzy-ball overfitting in learned models. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_signal` policy: microchunk plus overfit-family features, center/edge signal, presence, and fuzzy-ball signal evidence.
+The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed to detect fuzzy-ball overfitting in learned models. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score_signal` policy: microchunk plus stored-score, overfit-family, center/edge signal, presence, and fuzzy-ball signal evidence.
 
 | Evidence | Microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
 | --- | --- | --- | --- |
@@ -138,7 +138,7 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 
 `quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
-- `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3`.
+- `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v4`.
 - `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
 - `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training2`.
 
@@ -244,13 +244,13 @@ Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rej
 
 ## Built-In Presets
 
-`chunk100mics` uses feature policy `microchunk_plus_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3` with the chunk learn objective in effect at the time of promotion.
+`chunk100mics` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v4` with the chunk learn objective in effect at the time of promotion.
 
 ```text
 model_family        pairwise_logistic
-prob_threshold      4.500000E-01
+prob_threshold      3.500000E-01
 regularization      1.000000E-03
-feature_weights     uniform over the active microchunk_plus_signal vector with zero weight on stored score evidence
+feature_weights     uniform over all 14 microchunk_plus_score_signal features
 ```
 
 ```text
@@ -265,6 +265,8 @@ use_otsu_window         false
 use_cluster_rescue      false
 enforce_min_accept_frac false
 ```
+
+On the refreshed v4 chunk-training table, this promoted preset scored `macro_evaluate_score=0.50847`, improving over the previous built-in chunk preset (`-0.80859`). The main gain was selected-class protection: soft-classification totals moved from `tp=297, fp=95, tn=151, fn=33` to `tp=324, fp=83, tn=163, fn=6`.
 
 `pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training2`.
 
