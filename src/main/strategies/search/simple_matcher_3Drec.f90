@@ -208,6 +208,7 @@ contains
         do i = 1,size(fplanes)
             if( allocated(fplanes(i)%cmplx_plane) ) deallocate(fplanes(i)%cmplx_plane)
             if( allocated(fplanes(i)%ctfsq_plane) ) deallocate(fplanes(i)%ctfsq_plane)
+            if( allocated(fplanes(i)%transfer_plane) ) deallocate(fplanes(i)%transfer_plane)
         end do
         deallocate(fplanes)
         call dealloc_imgarr(build%img_pad_heap)

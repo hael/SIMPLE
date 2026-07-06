@@ -10,6 +10,7 @@ type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
 type(ui_program), target :: denoise_project
 type(ui_program), target :: map_params_from_den
+type(ui_program), target :: flex_eigenvol
 type(ui_program), target :: ppca_volvar
 
 contains
@@ -23,6 +24,7 @@ contains
         call new_cls_split(prgtab)
         call new_denoise_project(prgtab)
         call new_map_params_from_den(prgtab)
+        call new_flex_eigenvol(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
@@ -36,6 +38,7 @@ contains
         write(logfhandle,'(A)') cls_split%name%to_char()
         write(logfhandle,'(A)') denoise_project%name%to_char()
         write(logfhandle,'(A)') map_params_from_den%name%to_char()
+        write(logfhandle,'(A)') flex_eigenvol%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_denoise_programs
@@ -292,5 +295,34 @@ contains
         call map_params_from_den%add_input(UI_PARM, projfile, required_override=.false.)
         call add_ui_program('map_params_from_den', map_params_from_den, prgtab)
     end subroutine new_map_params_from_den
+
+    subroutine new_flex_eigenvol( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call flex_eigenvol%new(&
+        &'flex_eigenvol',&
+        &'Linear 3D variability eigenvolumes',&
+        &'estimates projected-PPCA linear eigenvolumes from fixed ptcl3D poses and a supplied mean map',&
+        &'simple_exec',&
+        &.true.)
+        call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
+            'Mean volume', 'Mean volume used for residual backprojection', &
+            'input volume e.g. vol1.mrc', .true., '')
+        call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
+        call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
+            'Number of linear eigenvolume components', &
+            'Number of linear eigenvolume components', '# eigenvolumes', .false., 3.0)
+        call flex_eigenvol%add_input(UI_FILT, maxits, required_override=.false., &
+            gui_submenu="algorithm", gui_advanced=.false.)
+        call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
+            descr_placeholder_override='Eigenvolume low-pass limit in Angstroms{8}', &
+            gui_submenu="regularization", gui_advanced=.false.)
+        call flex_eigenvol%add_input(UI_ALT, 'oritype', 'multi', &
+            'Particle orientation segment', 'Particle orientation segment(ptcl3D){ptcl3D}', &
+            '(ptcl3D){ptcl3D}', .false., 'ptcl3D')
+        call flex_eigenvol%add_input(UI_MASK, mskdiam, required_override=.false., &
+            gui_submenu="mask", gui_advanced=.false.)
+        call flex_eigenvol%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('flex_eigenvol', flex_eigenvol, prgtab)
+    end subroutine new_flex_eigenvol
 
 end module simple_ui_denoise

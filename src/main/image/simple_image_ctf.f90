@@ -127,7 +127,7 @@ contains
         end do
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, store_transfer )
         use simple_math,          only: ceil_div, floor_div
         use simple_math_ft,       only: upsample_sigma2
         use simple_euclid_sigma2, only: euclid_sigma2
@@ -138,12 +138,13 @@ contains
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
+        logical, optional, intent(in)    :: store_transfer
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
         real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
-        complex(c_float_complex) :: c, w1, w2, ph0, ph_h, ph_k
+        complex(c_float_complex) :: c, transfer, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
-        logical :: l_ml_reg
+        logical :: l_ml_reg, l_store_transfer
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
@@ -155,6 +156,8 @@ contains
         integer, allocatable :: shell_lut(:)
         integer :: max_r2, r2, abs_hmax, abs_kmax
         l_ml_reg = present(sig2arr)
+        l_store_transfer = .false.
+        if( present(store_transfer) ) l_store_transfer = store_transfer
         ! shift is with respect to the original image dimension
         fplane%shconst = self%get_shconst()
         ! -----------------------
@@ -172,13 +175,16 @@ contains
         ! matrices
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
         if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)
+        if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
         ! allocate only k<=0 due to Friedel symmetry; the rest will be filled in by conjugation
         hmin = fplane%frlims(1,1); hmax = fplane%frlims(1,2)
         kmin = fplane%frlims(2,1); kmax = fplane%frlims(2,2)
         allocate(fplane%cmplx_plane(hmin:hmax, kmin:0), &
         fplane%ctfsq_plane(hmin:hmax, kmin:0))
+        if( l_store_transfer ) allocate(fplane%transfer_plane(hmin:hmax, kmin:0))
         fplane%cmplx_plane = cmplx(0.,0.)
         fplane%ctfsq_plane = 0.
+        if( l_store_transfer ) fplane%transfer_plane = cmplx(0.,0.)
         ! -----------------------
         ! CTF flags
         ! -----------------------
@@ -244,13 +250,19 @@ contains
                 r2    = h*h + k*k
                 shell = shell_lut(r2)
                 if (shell > fplane%nyq) then
-                    c      = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
-                    tvalsq = 0.0
+                    c        = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
+                    if( l_store_transfer ) transfer = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
+                    tvalsq   = 0.0
                 else
                     ! Retrieve Fourier component & apply shift phase
                     physh = ft_map_phys_addrh(h,k)
                     physk = ft_map_phys_addrk(h,k)
-                    c     = merge(conjg(self%cmat(physh,physk,1)), self%cmat(physh,physk,1), h < 0) * (ph_k * ph_h)
+                    if( l_store_transfer )then
+                        transfer = ph_k * ph_h
+                        c = merge(conjg(self%cmat(physh,physk,1)), self%cmat(physh,physk,1), h < 0) * transfer
+                    else
+                        c = merge(conjg(self%cmat(physh,physk,1)), self%cmat(physh,physk,1), h < 0) * (ph_k * ph_h)
+                    endif
                     ! CTF (optimized kernel; no phase-plate support)
                     if (l_ctf) then
                         ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
@@ -260,10 +272,12 @@ contains
                             ! CTF^2 in the denominator to avoid reintroducing the CTF phase.
                             tval   = abs(ker)
                             tvalsq = ker * ker
+                            if( l_store_transfer ) transfer = tval * transfer
                             c      = tval * c
                         else
                             tval   = ker
                             tvalsq = tval * tval
+                            if( l_store_transfer ) transfer = tval * transfer
                             c      = tval * c
                         end if
                     else
@@ -271,12 +285,14 @@ contains
                     end if
                     ! sigma2 weighting (unchanged semantics)
                     if (l_ml_reg) then
-                        c      = c      / sigma2_noise(shell)
-                        tvalsq = tvalsq / sigma2_noise(shell)
+                        c        = c        / sigma2_noise(shell)
+                        if( l_store_transfer ) transfer = transfer / sigma2_noise(shell)
+                        tvalsq   = tvalsq   / sigma2_noise(shell)
                     end if
                 end if
                 fplane%cmplx_plane(h,k) = c
                 fplane%ctfsq_plane(h,k) = tvalsq
+                if( l_store_transfer ) fplane%transfer_plane(h,k) = transfer
                 ph_h = ph_h * w1
             end do
             ph_k = ph_k * w2

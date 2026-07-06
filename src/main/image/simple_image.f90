@@ -2091,7 +2091,7 @@ interface
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr )
+    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, store_transfer )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: kfromto(2)
         real,              intent(in)    :: smpd_crop
@@ -2099,6 +2099,7 @@ interface
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
         real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
+        logical, optional, intent(in)    :: store_transfer
     end subroutine gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )

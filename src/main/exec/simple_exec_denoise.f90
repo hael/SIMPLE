@@ -5,6 +5,7 @@ use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D
 use simple_commanders_volops,    only: commander_ppca_volvar
 use simple_commanders_cluster2D, only: commander_ppca_denoise_classes
 use simple_commanders_denoise,   only: commander_cls_split, commander_denoise_project, commander_map_params_from_den
+use simple_commanders_flex,      only: commander_flex_eigenvol
 use simple_commanders_imgops,    only: commander_ppca_denoise
 implicit none
 
@@ -18,6 +19,7 @@ type(commander_ppca_denoise_classes)      :: xppca_denoise_classes
 type(commander_cls_split)                 :: xcls_split
 type(commander_denoise_project)           :: xdenoise_project
 type(commander_map_params_from_den)        :: xmap_params_from_den
+type(commander_flex_eigenvol)             :: xflex_eigenvol
 type(commander_ppca_volvar)               :: xppca_volvar
 
 contains
@@ -45,6 +47,8 @@ contains
                 call xdenoise_project%execute(cline)
             case( 'map_params_from_den' )
                 call xmap_params_from_den%execute(cline)
+            case( 'flex_eigenvol' )
+                call xflex_eigenvol%execute(cline)
             case( 'ppca_volvar' )
                 call xppca_volvar%execute(cline)
             case default
