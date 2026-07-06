@@ -295,8 +295,8 @@ Important diagnostic questions:
 
 - Add coefficient, interaction, threshold, calibration, and leave-one-dataset-out
   diagnostics.
-- Compare against the current `chunk100mics` model and the `chunk_hard_reject`
-  approximation on the same training file tables.
+- Compare against the current `chunk100mics` model and inspect standard hard-gate
+  rejections on the same training file tables.
 - Add a held-out or leave-one-dataset-out report section focused on known
   failure modes such as MotAB top views and PepT2 false positives.
 

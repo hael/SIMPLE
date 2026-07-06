@@ -804,43 +804,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        select case(trim(self%overfit_hard_reject))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported overfit_hard_reject='//trim(self%overfit_hard_reject)//'; expected yes|no')
-        end select
-        select case(trim(self%chunk_hard_reject))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported chunk_hard_reject='//trim(self%chunk_hard_reject)//'; expected yes|no')
-        end select
-        select case(trim(self%default_hard_gates_only))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported default_hard_gates_only='//trim(self%default_hard_gates_only)//'; expected yes|no')
-        end select
-        select case(trim(self%trust_resolution))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported trust_resolution='//trim(self%trust_resolution)//'; expected yes|no')
-        end select
-        if( trim(self%overfit_hard_reject) == 'yes' .and. trim(self%chunk_hard_reject) == 'yes' ) &
-            THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
-        if( trim(self%default_hard_gates_only) == 'yes' .and. &
-            (trim(self%overfit_hard_reject) == 'yes' .or. trim(self%chunk_hard_reject) == 'yes') ) &
-            THROW_HARD('default_hard_gates_only=yes is mutually exclusive with other hard reject options')
-        if( trim(self%default_hard_gates_only) == 'yes' .and. &
-            (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
-             (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
-            THROW_HARD('default_hard_gates_only=yes is supported only for project-backed apply/analyze/evaluate')
-        if( trim(self%overfit_hard_reject) == 'yes' .and. &
-            (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
-             (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
-            THROW_HARD('overfit_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
-        if( trim(self%chunk_hard_reject) == 'yes' .and. &
-            (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
-             (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
-            THROW_HARD('chunk_hard_reject=yes is supported only for project-backed apply/analyze/evaluate')
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' )then
             if( cline%defined('quality_model') ) &
                 THROW_HARD('quality_mode=learn requires model_family=linear|logistic; quality_model is unsupported')
@@ -849,8 +812,13 @@ contains
                 case DEFAULT
                     THROW_HARD('model_cavgs_rejection quality_mode=learn supports model_family=linear|logistic')
             end select
-        else if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%trust_resolution) == 'no' )then
-            THROW_HARD('trust_resolution=no is supported only for model_cavgs_rejection quality_mode=learn')
+        endif
+        if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
+            select case(trim(self%quality_context))
+                case('chunk','pool')
+                case DEFAULT
+                    THROW_HARD('model_cavgs_rejection quality_context must be chunk or pool')
+            end select
         endif
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then

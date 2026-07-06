@@ -63,7 +63,6 @@ type :: parameters
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
-    character(len=3)          :: chunk_hard_reject='no' !< reject class averages with hard chunk-quality rules(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
@@ -71,7 +70,6 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: conical_fsc='no'     !< whether to perform conical FSC calculation when ML regularization is active(yes|no){no}
-    character(len=3)          :: default_hard_gates_only='no' !< apply only default cavg hard gates(yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
@@ -117,7 +115,6 @@ type :: parameters
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)          :: overfit_hard_reject='no' !< reject class averages with hard overfit rule(yes|no){no}
     character(len=3)          :: pad='no'
     character(len=3)          :: partition='no'
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
@@ -288,7 +285,6 @@ type :: parameters
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){ppca}
     character(len=STDLEN)     :: steering='none' !< Orientation graph steering representation(none|so2|se2){none}
-    character(len=3)          :: trust_resolution='yes' !< allow resolution feature during quality-model learning(yes|no){yes}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -305,6 +301,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
+    character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool){chunk}
     ! class-average quality model preset(chunk100mics|chunk100mics_linear|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''

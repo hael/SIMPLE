@@ -7,7 +7,8 @@ use simple_string_utils,       only: str_is_true, lowercase, uppercase, &
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CLIP_Z, &
-    CAVG_MODEL_FAMILY_LINEAR, CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, cavg_quality_model_spec, cavg_quality_result
+    CAVG_MODEL_FAMILY_LINEAR, CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, CAVG_QUALITY_CONTEXT_CHUNK, &
+    CAVG_QUALITY_CONTEXT_POOL, cavg_quality_model_spec, cavg_quality_result
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
@@ -192,8 +193,7 @@ contains
         class(cavg_quality_model),     intent(inout) :: self
         type(cavg_quality_model_spec), intent(in)    :: spec
         self%name                    = trim(spec%name)
-        ! Context is legacy metadata only; model behavior is name/spec driven.
-        self%context                 = ''
+        self%context                 = trim(spec%context)
         self%feature_policy          = trim(spec%feature_policy)
         self%model_family            = trim(spec%model_family)
         self%weights                 = spec%weights
@@ -222,7 +222,7 @@ contains
         class(cavg_quality_model), intent(in) :: self
         type(cavg_quality_model_spec) :: spec
         spec%name                    = self%name
-        spec%context                 = ''
+        spec%context                 = self%context
         spec%feature_policy          = self%feature_policy
         spec%model_family            = self%model_family
         spec%weights                 = self%weights
@@ -467,6 +467,7 @@ contains
         endif
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'model_family=', trim(self%model_family)
+        write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
         write(funit,'(A)', advance='no') 'feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -539,6 +540,7 @@ contains
         write(funit,'(A,A,A)') '    function ', trim(func_name), '() result( spec )'
         write(funit,'(A)') '        type(cavg_quality_model_spec) :: spec'
         write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
+        write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
         write(funit,'(A,A)') '        spec%model_family            = ', trim(fortran_quote(model%model_family))
         call write_weights_assignment(funit, model%weights)
@@ -711,8 +713,12 @@ contains
                 case('model_family')
                     self%model_family = trim(val)
                 case('context')
-                    ! Legacy key for backward compatibility with older model files.
-                    cycle
+                    select case(trim(val))
+                        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+                            self%context = trim(val)
+                        case DEFAULT
+                            THROW_HARD('read_model: context must be chunk or pool')
+                    end select
                 case('feature_policy', 'feature_family_set')
                     self%feature_policy = trim(val)
                 case('feature_weights')

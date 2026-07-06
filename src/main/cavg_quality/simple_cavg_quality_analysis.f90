@@ -6,7 +6,7 @@ use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
     extract_cavg_quality_features, normalize_cavg_quality_features, &
-    write_cavg_quality_feature_inventory, cavg_overfit_hard_reject, cavg_chunk_hard_reject
+    write_cavg_quality_feature_inventory
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
@@ -18,34 +18,37 @@ private
 
 public :: evaluate_cavg_quality
 public :: evaluate_cavg_quality_hard_reject
-public :: evaluate_cavg_quality_overfit_hard_reject
-public :: evaluate_cavg_quality_chunk_hard_reject
 public :: write_cavg_quality_analysis
 public :: write_cavg_quality_feature_table
 
 contains
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, quality_context )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
+        character(len=*), optional,intent(in)    :: quality_context
+        character(len=32) :: context
         call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
+        context = trim(model%context)
+        if( present(quality_context) ) context = trim(quality_context)
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, trim(context))
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
 
-    subroutine evaluate_cavg_quality_hard_reject( imgs, cls_oris, mskdiam, quality )
+    subroutine evaluate_cavg_quality_hard_reject( imgs, cls_oris, mskdiam, quality, quality_context )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
+        character(len=*), optional,intent(in)    :: quality_context
         logical,                     allocatable :: standard_hard_reject(:)
         integer                                  :: icls, ncls
         call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, quality_context)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         if( .not. allocated(quality%features)    ) THROW_HARD('evaluate_cavg_quality_hard_reject: missing features')
         if( .not. allocated(quality%hard_reject) ) &
@@ -68,8 +71,8 @@ contains
         quality%nclust           = 2
         quality%good_label       = 1
         quality%used_threshold   = .false.
-        quality%model_name       = 'default_hard_gates_only'
-        quality%soft_decision    = 'default_hard_gates_only'
+        quality%model_name       = 'standard_hard_gates'
+        quality%soft_decision    = 'hard_only'
         quality%soft_reason      = 'standard_hard_gates_only'
         do icls = 1, ncls
             if( standard_hard_reject(icls) ) cycle
@@ -79,110 +82,6 @@ contains
         end do
         deallocate(standard_hard_reject)
     end subroutine evaluate_cavg_quality_hard_reject
-
-    subroutine evaluate_cavg_quality_overfit_hard_reject( imgs, cls_oris, mskdiam, quality )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
-        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
-        call apply_overfit_hard_rules(quality)
-    end subroutine evaluate_cavg_quality_overfit_hard_reject
-
-    subroutine evaluate_cavg_quality_chunk_hard_reject( imgs, cls_oris, mskdiam, quality )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
-        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
-        call apply_chunk_hard_rules(quality)
-    end subroutine evaluate_cavg_quality_chunk_hard_reject
-
-    subroutine apply_overfit_hard_rules( quality )
-        type(cavg_quality_result), intent(inout) :: quality
-        logical, allocatable :: standard_hard_reject(:)
-        integer :: icls, ncls
-        if( .not. allocated(quality%features)    ) THROW_HARD('apply_overfit_hard_rules: missing features')
-        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_overfit_hard_rules: missing hard-reject mask')
-        ncls = size(quality%features, dim=1)
-        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('apply_overfit_hard_rules: invalid feature count')
-        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_overfit_hard_rules: invalid mask size')
-        allocate(standard_hard_reject(ncls), source=quality%hard_reject)
-        if( allocated(quality%states)  ) deallocate(quality%states)
-        if( allocated(quality%labels)  ) deallocate(quality%labels)
-        if( allocated(quality%medoids) ) deallocate(quality%medoids)
-        if( allocated(quality%scores)  ) deallocate(quality%scores)
-        allocate(quality%states(ncls), quality%labels(ncls), source=0)
-        allocate(quality%scores(ncls), source=-CLIP_Z)
-        quality%threshold        = 0.0
-        quality%raw_threshold    = 0.0
-        quality%threshold_offset = 0.0
-        quality%separation       = 0.0
-        quality%nclust           = 2
-        quality%good_label       = 1
-        quality%used_threshold   = .false.
-        quality%model_name       = 'overfit_hard_reject'
-        quality%soft_decision    = 'hard_overfit_rules'
-        quality%soft_reason      = 'standard_gates_plus_overfit_rules'
-        do icls = 1, ncls
-            if( standard_hard_reject(icls) ) cycle
-            if( .not. cavg_overfit_hard_reject(quality%features(icls,:)) )then
-                quality%states(icls) = 1
-                quality%labels(icls) = 1
-                quality%scores(icls) = 1.0
-            else
-                quality%hard_reject(icls) = .true.
-                quality%labels(icls)      = 2
-            endif
-        end do
-        deallocate(standard_hard_reject)
-    end subroutine apply_overfit_hard_rules
-
-    subroutine apply_chunk_hard_rules( quality )
-        type(cavg_quality_result), intent(inout) :: quality
-        logical, allocatable :: standard_hard_reject(:)
-        integer :: icls, ncls
-        if( .not. allocated(quality%features)    ) THROW_HARD('apply_chunk_hard_rules: missing features')
-        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_chunk_hard_rules: missing hard-reject mask')
-        ncls = size(quality%features, dim=1)
-        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('apply_chunk_hard_rules: invalid feature count')
-        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_chunk_hard_rules: invalid mask size')
-        allocate(standard_hard_reject(ncls), source=quality%hard_reject)
-        if( allocated(quality%states)  ) deallocate(quality%states)
-        if( allocated(quality%labels)  ) deallocate(quality%labels)
-        if( allocated(quality%medoids) ) deallocate(quality%medoids)
-        if( allocated(quality%scores)  ) deallocate(quality%scores)
-        allocate(quality%states(ncls), quality%labels(ncls), source=0)
-        allocate(quality%scores(ncls), source=-CLIP_Z)
-        quality%threshold        = 0.0
-        quality%raw_threshold    = 0.0
-        quality%threshold_offset = 0.0
-        quality%separation       = 0.0
-        quality%nclust           = 2
-        quality%good_label       = 1
-        quality%used_threshold   = .false.
-        quality%model_name       = 'chunk_hard_reject'
-        quality%soft_decision    = 'hard_chunk_rules'
-        quality%soft_reason      = 'standard_gates_plus_chunk_rules'
-        do icls = 1, ncls
-            if( standard_hard_reject(icls) ) cycle
-            if( .not. cavg_chunk_hard_reject(quality%features(icls,:)) )then
-                quality%states(icls) = 1
-                quality%labels(icls) = 1
-                quality%scores(icls) = 1.0
-            else
-                quality%hard_reject(icls) = .true.
-                quality%labels(icls)      = 2
-            endif
-        end do
-        deallocate(standard_hard_reject)
-    end subroutine apply_chunk_hard_rules
 
     subroutine write_cavg_quality_analysis( quality, reference_states, model, fname, dataset_id )
         type(cavg_quality_result), intent(in) :: quality
@@ -310,6 +209,7 @@ contains
         type(cavg_quality_model), intent(in) :: model
         integer :: i
         write(funit,'(A,A)') '# model_family=', trim(model%model_family)
+        write(funit,'(A,A)') '# model_context=', trim(model%context)
         write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') '# model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS

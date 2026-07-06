@@ -5,13 +5,13 @@ use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family, &
-    I_NEG_LOG_RES, I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
+    I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
 use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, &
     build_classify_cache, kill_classify_cache, cached_decision_confusion, apply_cached_decision_to_quality
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CAVG_MODEL_FAMILY_LINEAR, &
-    CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, &
-    cavg_quality_learn_diagnostics
+    CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
+    cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 use simple_srch_sort_loc,      only: hpsort
 use simple_optimizer,          only: optimizer
 use simple_opt_factory,        only: opt_factory
@@ -88,12 +88,12 @@ end type cavg_quality_logistic_problem
 contains
 
     subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname, model_family, &
-                                         trust_resolution )
+                                         quality_context )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
         character(len=*), optional,intent(in)    :: model_family
-        logical,          optional,intent(in)    :: trust_resolution
+        character(len=*), optional,intent(in)    :: quality_context
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         type(cavg_quality_classify_cache),   allocatable :: caches(:)
         type(cavg_quality_model_spec) :: base_spec, candidate_spec, best_spec
@@ -101,27 +101,30 @@ contains
         type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
         real :: suggested_weights(CAVG_QUALITY_NFEATS)
         real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
-        logical :: feature_mask(CAVG_QUALITY_NFEATS)
         real :: best_score, learn_score
         integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
         integer :: n_grid, n_top, n_best_ties
         character(len=32) :: requested_family
-        call init_learn_feature_mask(feature_mask, trust_resolution)
+        character(len=32) :: context
         requested_family = 'logistic'
         if( present(model_family) ) requested_family = trim(model_family)
+        context = CAVG_QUALITY_CONTEXT_CHUNK
+        if( present(quality_context) ) context = trim(quality_context)
+        call validate_quality_context(context, 'learn_cavg_quality_model')
         select case(trim(requested_family))
         case('linear', CAVG_MODEL_FAMILY_LINEAR)
             continue
         case('logistic', CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC)
             call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname, &
-                feature_mask)
+                trim(context))
             return
         case default
             THROW_HARD('learn_cavg_quality_model: unsupported model family: '//trim(requested_family))
         end select
         call load_quality_training_datasets(analysis_files, dsets)
         base_spec = abinitio_learn_base_spec()
-        call calc_suggested_training_weights(dsets, suggested_weights, feature_mask)
+        base_spec%context = trim(context)
+        call calc_suggested_training_weights(dsets, suggested_weights)
         best_spec  = base_spec
         best_score = -huge(1.0)
         top_scores = -huge(1.0)
@@ -139,7 +142,7 @@ contains
             candidate_spec = base_spec
             candidate_spec%feature_policy = feature_policy_name(ipol)
             candidate_spec%weights = suggested_weights
-            call apply_feature_policy(ipol, candidate_spec%weights, feature_mask)
+            call apply_feature_policy(ipol, candidate_spec%weights)
             ! For a fixed weight vector, the per-dataset scores,
             ! k-medoids partition, raw threshold, and Otsu threshold are
             ! reused across the whole threshold-control sub-grid.
@@ -178,11 +181,12 @@ contains
         end do
         call select_preferred_best_tie(base_spec, best_tie_specs, n_best_ties, best_spec)
         best_spec%name = 'learned_v1'
+        best_spec%context = trim(context)
         call learned_model%init_spec(best_spec)
         learn_score = macro_balacc_for_model(dsets, learned_model)
         call learned_model%write(model_fname)
         call write_cavg_quality_learn_report(report_fname, dsets, base_spec, suggested_weights, learned_model, &
-            learn_score, n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties, feature_mask)
+            learn_score, n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties)
         call kill_policy_caches(caches)
         deallocate(caches)
         call kill_training_datasets(dsets)
@@ -191,11 +195,11 @@ contains
     end subroutine learn_cavg_quality_model
 
     subroutine learn_cavg_quality_pairwise_logistic_model( analysis_files, learned_model, model_fname, report_fname, &
-                                                           feature_mask )
+                                                           quality_context )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
-        logical,                   intent(in)    :: feature_mask(CAVG_QUALITY_NFEATS)
+        character(len=*),          intent(in)    :: quality_context
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         type(cavg_quality_logistic_problem) :: problem
         type(cavg_quality_model) :: candidate, best_model
@@ -209,11 +213,12 @@ contains
         n_candidates    = 0
         do ipol = 1, n_feature_policies()
             do ilambda = 1, size(LOGISTIC_LAMBDAS)
-                call build_logistic_problem(dsets, ipol, LOGISTIC_LAMBDAS(ilambda), problem, feature_mask)
+                call build_logistic_problem(dsets, ipol, LOGISTIC_LAMBDAS(ilambda), problem)
                 call fit_logistic_problem(problem, solution, objective)
                 call logistic_solution_to_model(solution, problem, feature_policy_name(ipol), candidate)
                 do ithresh = 1, size(LOGISTIC_THRESHOLDS)
                     spec = candidate%get_spec()
+                    spec%context = trim(quality_context)
                     spec%prob_threshold = LOGISTIC_THRESHOLDS(ithresh)
                     call candidate%init_spec(spec)
                     score = macro_balacc_for_model(dsets, candidate)
@@ -231,25 +236,34 @@ contains
         end do
         if( n_candidates == 0 ) THROW_HARD('learn_cavg_quality_pairwise_logistic_model: no logistic candidates')
         learned_model = best_model
+        learned_model%context = trim(quality_context)
         learn_score = macro_balacc_for_model(dsets, learned_model)
         call learned_model%write(model_fname)
         call write_cavg_quality_logistic_learn_report(report_fname, dsets, learned_model, learn_score, &
-            n_candidates, best_objective, feature_mask)
+            n_candidates, best_objective)
         call kill_training_datasets(dsets)
         deallocate(dsets)
     end subroutine learn_cavg_quality_pairwise_logistic_model
 
-    subroutine build_logistic_problem( dsets, ipolicy, lambda, problem, feature_mask )
+    subroutine validate_quality_context( quality_context, caller )
+        character(len=*), intent(in) :: quality_context, caller
+        select case(trim(quality_context))
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+            case DEFAULT
+                THROW_HARD(trim(caller)//': quality_context must be chunk or pool')
+        end select
+    end subroutine validate_quality_context
+
+    subroutine build_logistic_problem( dsets, ipolicy, lambda, problem )
         type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
         integer,                             intent(in)    :: ipolicy
         real,                                intent(in)    :: lambda
         type(cavg_quality_logistic_problem), intent(inout) :: problem
-        logical,                             intent(in)    :: feature_mask(CAVG_QUALITY_NFEATS)
         integer :: ids, irow, iobs, ifeat, jfeat, ilinear, jlinear, iterm
         integer :: role, nfit, ngood, nbad
         real(kind=8) :: good_weight, bad_weight, focus_bad_loss_mult
         call problem%kill()
-        call feature_policy_indices(ipolicy, problem%linear_features, problem%n_linear, feature_mask)
+        call feature_policy_indices(ipolicy, problem%linear_features, problem%n_linear)
         if( problem%n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
         problem%n_interactions = 0
         do ilinear = 1, problem%n_linear - 1
@@ -696,16 +710,6 @@ contains
         n_feature_policies = CAVG_QUALITY_LEARN_N_STANDARD_POLICIES
     end function n_feature_policies
 
-    subroutine init_learn_feature_mask( feature_mask, trust_resolution )
-        logical,          intent(out) :: feature_mask(CAVG_QUALITY_NFEATS)
-        logical, optional,intent(in)  :: trust_resolution
-        feature_mask = .true.
-        if( present(trust_resolution) )then
-            if( .not. trust_resolution ) feature_mask(I_NEG_LOG_RES) = .false.
-        endif
-        if( count(feature_mask) < 1 ) THROW_HARD('init_learn_feature_mask: empty training feature mask')
-    end subroutine init_learn_feature_mask
-
     function feature_policy_name( ipolicy ) result( name )
         integer, intent(in) :: ipolicy
         character(len=64) :: name
@@ -723,10 +727,9 @@ contains
         end select
     end function feature_policy_name
 
-    subroutine feature_policy_mask( ipolicy, mask, feature_mask )
+    subroutine feature_policy_mask( ipolicy, mask )
         integer, intent(in)  :: ipolicy
         logical, intent(out) :: mask(CAVG_QUALITY_NFEATS)
-        logical, optional, intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         mask = .false.
         call append_feature_family(mask, 'microchunk')
         call append_feature_family(mask, 'overfit')
@@ -743,7 +746,6 @@ contains
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select
-        if( present(feature_mask) ) mask = mask .and. feature_mask
         if( count(mask) < 1 ) THROW_HARD('feature_policy_mask: empty feature policy')
     end subroutine feature_policy_mask
 
@@ -756,13 +758,12 @@ contains
         end do
     end subroutine append_feature_family
 
-    subroutine apply_feature_policy( ipolicy, weights, feature_mask )
+    subroutine apply_feature_policy( ipolicy, weights )
         integer, intent(in)    :: ipolicy
         real,    intent(inout) :: weights(CAVG_QUALITY_NFEATS)
-        logical, optional, intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         logical :: mask(CAVG_QUALITY_NFEATS)
         integer :: n_active
-        call feature_policy_mask(ipolicy, mask, feature_mask)
+        call feature_policy_mask(ipolicy, mask)
         where( .not. mask ) weights = 0.0
         if( sum(weights) > EPS )then
             weights = weights / sum(weights)
@@ -776,14 +777,13 @@ contains
         endif
     end subroutine apply_feature_policy
 
-    subroutine feature_policy_indices( ipolicy, inds, ninds, feature_mask )
+    subroutine feature_policy_indices( ipolicy, inds, ninds )
         integer, intent(in)  :: ipolicy
         integer, intent(out) :: inds(CAVG_QUALITY_NFEATS)
         integer, intent(out) :: ninds
-        logical, optional, intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         logical :: mask(CAVG_QUALITY_NFEATS)
         integer :: ifeat
-        call feature_policy_mask(ipolicy, mask, feature_mask)
+        call feature_policy_mask(ipolicy, mask)
         inds = 0
         ninds = 0
         do ifeat = 1, CAVG_QUALITY_NFEATS
@@ -922,10 +922,9 @@ contains
         end do
     end subroutine require_analysis_columns
 
-    subroutine calc_suggested_training_weights( dsets, weights, feature_mask )
+    subroutine calc_suggested_training_weights( dsets, weights )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
         real,                                intent(out) :: weights(CAVG_QUALITY_NFEATS)
-        logical,                             intent(in)  :: feature_mask(CAVG_QUALITY_NFEATS)
         real,    allocatable :: vals(:)
         integer, allocatable :: refs(:)
         integer :: nall, ids, j, off, nfit
@@ -940,7 +939,6 @@ contains
         allocate(refs(nall), source=0)
         weights = 0.0
         do j = 1, CAVG_QUALITY_NFEATS
-            if( .not. feature_mask(j) ) cycle
             off = 0
             do ids = 1, size(dsets)
                 if( dataset_learn_role(dsets(ids)) /= LEARN_ROLE_BALANCED ) cycle
@@ -952,7 +950,6 @@ contains
             weights(j) = max(0.0, auc_for_values(vals, refs) - 0.5)
         end do
         if( sum(weights) > EPS ) weights = weights / sum(weights)
-        where( .not. feature_mask ) weights = 0.0
         deallocate(vals, refs)
     end subroutine calc_suggested_training_weights
 
@@ -1353,8 +1350,7 @@ contains
     end subroutine classify_training_dataset_detail
 
     subroutine write_cavg_quality_learn_report( fname, dsets, base_spec, suggested_weights, learned_model, best_score, &
-                                                n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties, &
-                                                feature_mask )
+                                                n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties )
         character(len=*),                    intent(in) :: fname
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model_spec),       intent(in) :: base_spec
@@ -1364,7 +1360,6 @@ contains
         integer,                             intent(in) :: n_grid, n_top, n_best_ties
         type(cavg_quality_model_spec),       intent(in) :: top_specs(:), best_tie_specs(:)
         real,                                intent(in) :: top_scores(:)
-        logical,                             intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         type(cavg_quality_learn_diagnostics) :: diag
         integer :: funit, i
         call collect_learn_diagnostics(dsets, learned_model, diag)
@@ -1372,6 +1367,7 @@ contains
         write(funit,'(A)') '# model_cavgs_rejection learn report'
         write(funit,'(A,A)') 'foundation_model=', trim(base_spec%name)
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
+        write(funit,'(A,A)') 'model_context=', trim(learned_model%context)
         write(funit,'(A,F10.5)') 'macro_learn_score=', best_score
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)
         write(funit,'(A,I0)') 'model_search_grid_n=', n_grid
@@ -1389,7 +1385,6 @@ contains
         write(funit,'(A)') 'note=feature_weights_derived_from_training_data_no_base_weight_blending'
         write(funit,'(A)') 'note=learn_mode_uses_neutral_abinitio_foundation_not_quality_model_or_infile_seed'
         call write_feature_policy_grid(funit)
-        call write_learn_feature_mask(funit, feature_mask)
         write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
         write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
@@ -1421,8 +1416,7 @@ contains
         write(funit,'(A)') ''
         call write_learn_search_diagnostics(funit, learned_model, diag, best_tie_specs, n_best_ties)
         call write_otsu_ablation_diagnostics(funit, dsets, learned_model)
-        call write_feature_screen_diagnostics(funit, dsets, base_spec, suggested_weights, learned_model, best_score, &
-            feature_mask)
+        call write_feature_screen_diagnostics(funit, dsets, base_spec, suggested_weights, learned_model, best_score)
         write(funit,'(A)') ''
         call write_candidate_table_header(funit, 'top_candidate_header=')
         do i = 1, n_top
@@ -1439,13 +1433,12 @@ contains
     end subroutine write_cavg_quality_learn_report
 
     subroutine write_cavg_quality_logistic_learn_report( fname, dsets, learned_model, best_score, &
-                                                         n_candidates, best_objective, feature_mask )
+                                                         n_candidates, best_objective )
         character(len=*),                    intent(in) :: fname
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: learned_model
         real,                                intent(in) :: best_score, best_objective
         integer,                             intent(in) :: n_candidates
-        logical,                             intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         type(cavg_quality_learn_diagnostics) :: diag
         integer :: funit
         call collect_learn_diagnostics(dsets, learned_model, diag)
@@ -1453,6 +1446,7 @@ contains
         write(funit,'(A)') '# model_cavgs_rejection pairwise-logistic learn report'
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
         write(funit,'(A,A)') 'model_family=', trim(learned_model%model_family)
+        write(funit,'(A,A)') 'model_context=', trim(learned_model%context)
         write(funit,'(A,F10.5)') 'macro_learn_score=', best_score
         write(funit,'(A,ES14.6)') 'best_weighted_logistic_objective=', best_objective
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)
@@ -1468,7 +1462,6 @@ contains
         write(funit,'(A)') 'note=trainable_good_only_datasets_contribute_recall_evidence'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_contribute_specificity_evidence'
         call write_feature_policy_grid(funit)
-        call write_learn_feature_mask(funit, feature_mask)
         write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
         write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
@@ -1496,35 +1489,6 @@ contains
         close(funit)
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
     end subroutine write_cavg_quality_logistic_learn_report
-
-    subroutine write_learn_feature_mask( funit, feature_mask )
-        integer, intent(in) :: funit
-        logical, intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
-        integer :: ifeat
-        write(funit,'(A,A)') 'trust_resolution=', yes_no_string(feature_mask(I_NEG_LOG_RES))
-        if( count(.not. feature_mask) == 0 )then
-            write(funit,'(A)') 'inactive_training_features=none'
-            return
-        endif
-        write(funit,'(A)', advance='no') 'inactive_training_features='
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( feature_mask(ifeat) ) cycle
-            if( ifeat > 1 )then
-                if( count(.not. feature_mask(1:ifeat-1)) > 0 ) write(funit,'(A)', advance='no') ','
-            endif
-            write(funit,'(A)', advance='no') trim(cavg_quality_feature_name(ifeat))
-        end do
-        write(funit,*)
-    end subroutine write_learn_feature_mask
-
-    character(len=3) function yes_no_string( val )
-        logical, intent(in) :: val
-        if( val )then
-            yes_no_string = 'yes'
-        else
-            yes_no_string = 'no'
-        endif
-    end function yes_no_string
 
     subroutine write_logistic_coefficient_table( funit, model )
         integer,                  intent(in) :: funit
@@ -1558,6 +1522,7 @@ contains
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection evaluate report'
         write(funit,'(A,A)') 'model=', trim(model%name)
+        write(funit,'(A,A)') 'model_context=', trim(model%context)
         write(funit,'(A,F10.5)') 'macro_evaluate_score=', eval_score
         write(funit,'(A,I0)') 'n_datasets=', size(dsets)
         write(funit,'(A)') 'note=fixed_model_no_refit'
@@ -1697,22 +1662,20 @@ contains
         end do
     end subroutine write_otsu_ablation_diagnostics
 
-    subroutine write_feature_screen_diagnostics( funit, dsets, base_spec, suggested_weights, learned_model, best_score, &
-                                                 feature_mask )
+    subroutine write_feature_screen_diagnostics( funit, dsets, base_spec, suggested_weights, learned_model, best_score )
         integer,                             intent(in) :: funit
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model_spec),       intent(in) :: base_spec
         type(cavg_quality_model),            intent(in) :: learned_model
         real,                                intent(in) :: suggested_weights(:)
         real,                                intent(in) :: best_score
-        logical,                             intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         write(funit,'(A)') ''
         write(funit,'(A)') '# feature-screen diagnostics'
         call write_feature_signal_diagnostics(funit, dsets, base_spec, suggested_weights, learned_model)
         write(funit,'(A)') ''
         call write_feature_drop_diagnostics(funit, dsets, learned_model, best_score)
         write(funit,'(A)') ''
-        call write_feature_policy_screen(funit, dsets, feature_mask)
+        call write_feature_policy_screen(funit, dsets)
     end subroutine write_feature_screen_diagnostics
 
     subroutine write_feature_signal_diagnostics( funit, dsets, base_spec, suggested_weights, learned_model )
@@ -1848,16 +1811,15 @@ contains
         end do
     end subroutine write_feature_drop_diagnostics
 
-    subroutine write_feature_policy_screen( funit, dsets, feature_mask )
+    subroutine write_feature_policy_screen( funit, dsets )
         integer,                             intent(in) :: funit
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        logical,                             intent(in) :: feature_mask(CAVG_QUALITY_NFEATS)
         integer :: inds(CAVG_QUALITY_NFEATS)
         integer :: ipol, ninds
         write(funit,'(A)') 'feature_policy_lodo_header=feature_policy,n_features,mean_auc,min_auc,min_auc_dataset,'//&
             'mean_oracle_score,min_oracle_score,min_score_dataset,total_tp,total_fp,total_tn,total_fn'
         do ipol = 1, n_feature_policies()
-            call feature_policy_indices(ipol, inds, ninds, feature_mask)
+            call feature_policy_indices(ipol, inds, ninds)
             call write_feature_policy_lodo_row(funit, trim(feature_policy_name(ipol)), dsets, inds(1:ninds))
         end do
     end subroutine write_feature_policy_screen

@@ -2,12 +2,12 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
-    write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject, &
-    evaluate_cavg_quality_chunk_hard_reject, evaluate_cavg_quality_hard_reject
+    write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
-use simple_cavg_quality_types,    only: cavg_quality_result
+use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, cavg_quality_result
+use simple_string_utils,          only: lowercase
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -337,10 +337,7 @@ contains
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
         character(len=32)         :: learn_model
-        logical                   :: use_default_hard_gates_only
-        logical                   :: use_overfit_hard_reject
-        logical                   :: use_chunk_hard_reject
-        logical                   :: use_hard_gate_only
+        character(len=32)         :: quality_context
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -359,77 +356,57 @@ contains
             case default
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
-        use_default_hard_gates_only = trim(params%default_hard_gates_only) == 'yes'
-        use_overfit_hard_reject     = trim(params%overfit_hard_reject)     == 'yes'
-        use_chunk_hard_reject       = trim(params%chunk_hard_reject)       == 'yes'
-        use_hard_gate_only = use_default_hard_gates_only .or. use_overfit_hard_reject .or. use_chunk_hard_reject
-        if( count([use_default_hard_gates_only, use_overfit_hard_reject, use_chunk_hard_reject]) > 1 ) &
-            THROW_HARD('default_hard_gates_only, overfit_hard_reject, and chunk_hard_reject are mutually exclusive')
-        if( use_hard_gate_only )then
-            if( quality_mode == QUALITY_MODE_LEARN .or. quality_mode == QUALITY_MODE_PROMOTE ) &
-                THROW_HARD('hard reject options cannot be combined with quality_mode=learn/promote')
-            if( quality_mode == QUALITY_MODE_EVALUATE .and. cline%defined('filetab') ) &
-                THROW_HARD('hard reject options cannot evaluate analysis file tables')
+        if( quality_mode == QUALITY_MODE_LEARN )then
+            if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             if( cline%defined('infile') ) &
-                THROW_HARD('hard reject options use fixed rules and do not accept infile')
-            if( use_default_hard_gates_only )then
-                call configure_default_hard_report_model()
-            else if( use_overfit_hard_reject )then
-                call configure_overfit_hard_report_model()
-            else
-                call configure_chunk_hard_report_model()
-            endif
+                THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept infile')
+            call read_filetable(params%filetab, analysis_files)
+            if( .not. allocated(analysis_files) ) &
+                THROW_HARD('model_cavgs_rejection quality_mode=learn received an empty filetab')
+            learn_model = trim(params%model_family)
+            model_fname = 'cavgs_quality_model_learned.txt'
+            if( cline%defined('fname') ) model_fname = params%fname%to_char()
+            report_fname = 'cavgs_quality_learn_report.txt'
+            call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
+                trim(learn_model), trim(params%quality_context))
+            write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
+            if( allocated(analysis_files) ) deallocate(analysis_files)
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
+                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+            return
+        endif
+        if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
+            call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         else
-            if( quality_mode == QUALITY_MODE_LEARN )then
-                if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
-                if( cline%defined('infile') ) &
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept infile')
+            call model%init_preset(params%quality_model)
+        endif
+        ! Precedence: preset/default first, model file last.
+        ! infile is a complete model and wins over the built-in preset.
+        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
+            call model%read(params%infile%to_char())
+        quality_context = resolve_quality_context()
+        model%context = trim(quality_context)
+        if( quality_mode == QUALITY_MODE_PROMOTE )then
+            if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
+            out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
+            if( cline%defined('fname') ) out_fname = params%fname%to_char()
+            call write_cavg_quality_model_builtin_code(model, trim(out_fname))
+            write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(out_fname)
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
+                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+            return
+        endif
+        if( quality_mode == QUALITY_MODE_EVALUATE )then
+            if( cline%defined('filetab') )then
                 call read_filetable(params%filetab, analysis_files)
-                if( .not. allocated(analysis_files) ) &
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn received an empty filetab')
-                learn_model = trim(params%model_family)
-                model_fname = 'cavgs_quality_model_learned.txt'
-                if( cline%defined('fname') ) model_fname = params%fname%to_char()
-                report_fname = 'cavgs_quality_learn_report.txt'
-                call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
-                    trim(learn_model), trust_resolution=trim(params%trust_resolution) == 'yes')
-                write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
+                report_fname = 'cavgs_quality_evaluate_report.txt'
+                if( cline%defined('fname') ) report_fname = params%fname%to_char()
+                call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
                 if( allocated(analysis_files) ) deallocate(analysis_files)
-                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
+                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
                     verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
                 return
-            endif
-            if( .not. cline%defined('quality_model') .or. trim(params%quality_model) == '' )then
-                call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-            else
-                call model%init_preset(params%quality_model)
-            endif
-            ! Precedence: preset/default first, model file last.
-            ! infile is a complete model and wins over the built-in preset.
-            if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
-                call model%read(params%infile%to_char())
-            if( quality_mode == QUALITY_MODE_PROMOTE )then
-                if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
-                out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
-                if( cline%defined('fname') ) out_fname = params%fname%to_char()
-                call write_cavg_quality_model_builtin_code(model, trim(out_fname))
-                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY MODEL PROMOTION CODE : ', trim(out_fname)
-                call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION PROMOTE NORMAL STOP ****', &
-                    verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
-                return
-            endif
-            if( quality_mode == QUALITY_MODE_EVALUATE )then
-                if( cline%defined('filetab') )then
-                    call read_filetable(params%filetab, analysis_files)
-                    report_fname = 'cavgs_quality_evaluate_report.txt'
-                    if( cline%defined('fname') ) report_fname = params%fname%to_char()
-                    call evaluate_cavg_quality_model(analysis_files, model, trim(report_fname))
-                    write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
-                    if( allocated(analysis_files) ) deallocate(analysis_files)
-                    call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION EVALUATE NORMAL STOP ****', &
-                        verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
-                    return
-                endif
             endif
         endif
         if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires projfile')
@@ -441,24 +418,12 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        if( use_default_hard_gates_only )then
-            call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
-        else if( use_overfit_hard_reject )then
-            call evaluate_cavg_quality_overfit_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
-        else if( use_chunk_hard_reject )then
-            call evaluate_cavg_quality_chunk_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
-        else
-            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
-        endif
+        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, trim(quality_context))
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
-        if( use_default_hard_gates_only ) &
-            write(logfhandle,'(A,I6)') '>>> DEFAULT HARD GATES REJECTED: ', count(quality%hard_reject)
-        if( use_overfit_hard_reject ) &
-            write(logfhandle,'(A,I6)') '>>> OVERFIT HARD RULE REJECTED : ', count(quality%labels == 2)
-        if( use_chunk_hard_reject ) &
-            write(logfhandle,'(A,I6)') '>>> CHUNK HARD RULE REJECTED   : ', count(quality%labels == 2)
+        write(logfhandle,'(A,A)') '>>> CAVG QUALITY CONTEXT        : ', trim(quality_context)
+        write(logfhandle,'(A,I6)') '>>> DEFAULT HARD GATES REJECTED: ', count(quality%hard_reject)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
             quality%raw_threshold, ' / ', quality%threshold_offset, ' / ', quality%threshold
@@ -483,6 +448,7 @@ contains
         endif
         call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
         call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
+        call write_hard_gate_stack(string('hard_gate_rejections'//MRC_EXT))
         if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
             if( quality_mode == QUALITY_MODE_EVALUATE )then
                 write(logfhandle,'(A)') '>>> QUALITY EVALUATE MODE: project selection left unchanged'
@@ -501,66 +467,6 @@ contains
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
-
-        subroutine configure_default_hard_report_model()
-            ! Metadata shim for existing report writers only. This path applies
-            ! only the default hard gates from feature extraction; it does not
-            ! call model%classify or any optional hard-rule layer.
-            model%name                    = 'default_hard_gates_only'
-            model%context                 = 'hard_gate'
-            model%feature_policy          = 'standard_hard_gates_only'
-            model%weights                 = 0.0
-            model%boundary_margin         = 0.0
-            model%min_score_separation    = 0.0
-            model%otsu_min_offset         = 0.0
-            model%otsu_max_offset         = 0.0
-            model%cluster_rescue_margin   = 0.0
-            model%min_accept_frac         = 0.0
-            model%use_lowsep_otsu         = .false.
-            model%use_otsu_window         = .false.
-            model%use_cluster_rescue      = .false.
-            model%enforce_min_accept_frac = .false.
-        end subroutine configure_default_hard_report_model
-
-        subroutine configure_overfit_hard_report_model()
-            ! Metadata shim for existing report writers only. The
-            ! overfit_hard_reject path does not call model%classify, does not
-            ! load infile, and does not use clustering/Otsu/model thresholds.
-            model%name                    = 'overfit_hard_reject'
-            model%context                 = 'hard_gate'
-            model%feature_policy          = 'standard_gates_plus_overfit_rules'
-            model%weights                 = 0.0
-            model%boundary_margin         = 0.0
-            model%min_score_separation    = 0.0
-            model%otsu_min_offset         = 0.0
-            model%otsu_max_offset         = 0.0
-            model%cluster_rescue_margin   = 0.0
-            model%min_accept_frac         = 0.0
-            model%use_lowsep_otsu         = .false.
-            model%use_otsu_window         = .false.
-            model%use_cluster_rescue      = .false.
-            model%enforce_min_accept_frac = .false.
-        end subroutine configure_overfit_hard_report_model
-
-        subroutine configure_chunk_hard_report_model()
-            ! Metadata shim for existing report writers only. The
-            ! chunk_hard_reject path does not call model%classify, does not
-            ! load infile, and does not use clustering/Otsu/model thresholds.
-            model%name                    = 'chunk_hard_reject'
-            model%context                 = 'hard_gate'
-            model%feature_policy          = 'standard_gates_plus_chunk_rules'
-            model%weights                 = 0.0
-            model%boundary_margin         = 0.0
-            model%min_score_separation    = 0.0
-            model%otsu_min_offset         = 0.0
-            model%otsu_max_offset         = 0.0
-            model%cluster_rescue_margin   = 0.0
-            model%min_accept_frac         = 0.0
-            model%use_lowsep_otsu         = .false.
-            model%use_otsu_window         = .false.
-            model%use_cluster_rescue      = .false.
-            model%enforce_min_accept_frac = .false.
-        end subroutine configure_chunk_hard_report_model
 
         subroutine annotate_project()
             integer :: icls, ncls3d
@@ -594,6 +500,41 @@ contains
             enddo
             write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
         end subroutine write_quality_stack
+
+        subroutine write_hard_gate_stack( fname )
+            type(string), intent(in) :: fname
+            integer :: icls, istk
+            if( .not. allocated(quality%hard_reject) ) THROW_HARD('write_hard_gate_stack: missing hard-reject mask')
+            if( size(quality%hard_reject) /= ncls ) THROW_HARD('write_hard_gate_stack: hard-reject size mismatch')
+            if( file_exists(fname) ) call del_file(fname)
+            istk = 0
+            do icls = 1, ncls
+                if( quality%hard_reject(icls) )then
+                    istk = istk + 1
+                    call cavg_imgs(icls)%write(fname, istk)
+                endif
+            enddo
+            write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+        end subroutine write_hard_gate_stack
+
+        function resolve_quality_context() result( context )
+            character(len=32) :: context
+            character(len=64) :: model_name
+            if( cline%defined('quality_context') )then
+                context = trim(params%quality_context)
+            else
+                context = trim(model%context)
+                model_name = lowercase(trim(model%name))
+                if( index(model_name, CAVG_QUALITY_CONTEXT_POOL) > 0 ) context = CAVG_QUALITY_CONTEXT_POOL
+                if( index(model_name, CAVG_QUALITY_CONTEXT_CHUNK) > 0 ) context = CAVG_QUALITY_CONTEXT_CHUNK
+                if( trim(context) == '' ) context = CAVG_QUALITY_CONTEXT_CHUNK
+            endif
+            select case(trim(context))
+                case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+                case DEFAULT
+                    THROW_HARD('model_cavgs_rejection: quality_context must be chunk or pool')
+            end select
+        end function resolve_quality_context
 
     end subroutine exec_model_cavgs_rejection
 

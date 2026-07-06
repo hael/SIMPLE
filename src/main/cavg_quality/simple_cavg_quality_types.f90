@@ -8,6 +8,8 @@ public :: CAVG_QUALITY_NFEATS
 public :: CAVG_QUALITY_MAX_INTERACTIONS
 public :: CAVG_MODEL_FAMILY_LINEAR
 public :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
+public :: CAVG_QUALITY_CONTEXT_CHUNK
+public :: CAVG_QUALITY_CONTEXT_POOL
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -23,6 +25,8 @@ real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR            = 'linear_score'
 character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC = 'pairwise_logistic'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK          = 'chunk'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL           = 'pool'
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:

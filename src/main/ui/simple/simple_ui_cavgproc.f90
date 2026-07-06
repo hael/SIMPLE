@@ -83,15 +83,10 @@ contains
         ! parameter input/output
         call model_cavgs_rejection%add_input(UI_PARM, quality_mode)
         call model_cavgs_rejection%add_input(UI_PARM, model_family, gui_active_flags='quality_mode=learn')
-        call model_cavgs_rejection%add_input(UI_PARM, trust_resolution, gui_active_flags='quality_mode=learn')
         call model_cavgs_rejection%add_input(UI_PARM, quality_model, &
             gui_active_flags='quality_mode=apply|analyze|evaluate|promote')
-        call model_cavgs_rejection%add_input(UI_PARM, default_hard_gates_only, &
-            gui_active_flags='quality_mode=apply|analyze|evaluate')
-        call model_cavgs_rejection%add_input(UI_PARM, overfit_hard_reject, &
-            gui_active_flags='quality_mode=apply|analyze|evaluate')
-        call model_cavgs_rejection%add_input(UI_PARM, chunk_hard_reject, &
-            gui_active_flags='quality_mode=apply|analyze|evaluate')
+        call model_cavgs_rejection%add_input(UI_PARM, quality_context, &
+            gui_active_flags='quality_mode=apply|analyze|learn|evaluate|promote')
         call model_cavgs_rejection%add_input(UI_PARM, prune)
         ! alternative inputs
         call model_cavgs_rejection%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &

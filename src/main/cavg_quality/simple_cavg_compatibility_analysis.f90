@@ -20,7 +20,7 @@ use simple_segmentation,     only: otsu_img
 use simple_srch_sort_loc,    only: hpsort
 use simple_commanders_cavgs, only: commander_cluster_cavgs
 use simple_cavg_quality_types, only: cavg_quality_result
-use simple_cavg_quality_analysis, only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality_overfit_hard_reject
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality_hard_reject
 
 implicit none
 

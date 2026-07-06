@@ -8,7 +8,8 @@ use simple_image_bin,          only: image_bin
 use simple_oris,               only: oris
 use simple_segmentation,       only: otsu_img
 use simple_stat,               only: median, mad_gau
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, cavg_quality_feature_def
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_CONTEXT_CHUNK, &
+    CAVG_QUALITY_CONTEXT_POOL, cavg_quality_feature_def
 implicit none
 private
 
@@ -38,21 +39,7 @@ public :: extract_cavg_quality_features
 public :: normalize_cavg_quality_features
 public :: CAVG_RES_HARD_REJECT_A
 public :: POP_FRACTION_HARD_REJECT
-public :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN
-public :: CAVG_OVERFIT_SUPPORT_Z_MAX
-public :: CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX
-public :: CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
-public :: CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX
-public :: CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX
-public :: CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN
-public :: CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN
-public :: CAVG_CHUNK_V3_CENTERED_Z_MIN
-public :: CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX
-public :: CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX
-public :: CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX
-public :: cavg_overfit_hard_reject
-public :: cavg_chunk_hard_reject
-
+public :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX
 #include "simple_local_flags.inc"
 
 real,    parameter :: LOG_EPS                   = 1.0e-12
@@ -65,6 +52,7 @@ real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
 real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5
+real,    parameter :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX = exp(-4.5)
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 integer, parameter :: ANALYSIS_BOXSIZE          = 128
@@ -83,40 +71,6 @@ integer, parameter :: I_NEG_LOCVAR_BG           = 11
 integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 12
 integer, parameter :: I_BP40_100_CENTER_EDGE_VAR = 13
 integer, parameter :: I_FUZZY_BALL_SIGNAL       = 14
-
-! Optional hard rule for rejecting overfitted fuzzy-ball class averages.
-! This is deliberately not a learned model at application time. The rule is
-! evaluated on dataset-normalized z-features produced after the standard
-! quality hard gates:
-!
-!   z_neg_log_locvar_fg > 0.0  and  z_cc_area_frac < 0.5
-!
-! This says the class has lower-than-dataset-median foreground local variance
-! and weak foreground support. Joe/microchunking can reuse
-! cavg_overfit_hard_reject directly.
-real, parameter :: CAVG_OVERFIT_LOWVAR_FG_Z_MIN = 0.0
-real, parameter :: CAVG_OVERFIT_SUPPORT_Z_MAX   = 0.5
-
-! Optional hard rule for chunk-style class-average rejection. This is a
-! conservative, dataset-normalized hard-gate surrogate of the promoted v3
-! chunk100mics logistic model. It is not model-equivalent: it is intended as a
-! compact set of interpretable two-feature gates for no-model operation and for
-! reasoning about which evidence patterns drive rejection. A class average is
-! rejected when any one of the paired gates in cavg_chunk_hard_reject fires
-! after the standard hard validity gates. The surrogate was fit on
-! /Users/elmlundho/cavgs_quality/chunk100mic_training_data_v3 to protect good
-! classes more strongly than the older hard gate, while accepting that it leaks
-! more bad classes than the full logistic model.
-real, parameter :: CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX            = -0.789
-real, parameter :: CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX           = -0.364
-real, parameter :: CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX    = -0.965
-real, parameter :: CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX          = -0.285
-real, parameter :: CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN         =  2.000
-real, parameter :: CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN         =  1.500
-real, parameter :: CAVG_CHUNK_V3_CENTERED_Z_MIN               =  1.000
-real, parameter :: CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX          = -1.225
-real, parameter :: CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX         = -0.750
-real, parameter :: CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX           = -1.386
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -189,47 +143,18 @@ contains
         end do
     end subroutine write_cavg_quality_feature_inventory
 
-    function cavg_overfit_hard_reject( z_features ) result( reject )
-        real, intent(in) :: z_features(:)
-        logical          :: reject
-        if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_overfit_hard_reject: invalid feature count')
-        reject = z_features(I_NEG_LOCVAR_FG) > CAVG_OVERFIT_LOWVAR_FG_Z_MIN .and. &
-                 z_features(I_CC_AREA_FRAC)  < CAVG_OVERFIT_SUPPORT_Z_MAX
-    end function cavg_overfit_hard_reject
-
-    function cavg_chunk_hard_reject( z_features ) result( reject )
-        real, intent(in) :: z_features(:)
-        logical          :: reject
-        logical          :: low_res_fuzzy, low_texture_fuzzy, global_high_texture
-        logical          :: too_centered_fuzzy, quiet_bg_bad_bandpass
-        logical          :: low_res_weak_support
-        if( size(z_features) /= CAVG_QUALITY_NFEATS ) THROW_HARD('cavg_chunk_hard_reject: invalid feature count')
-        low_res_fuzzy       = z_features(I_NEG_LOG_RES)     < CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX .and. &
-                              z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
-        low_texture_fuzzy   = z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_STRICT_Z_MAX .and. &
-                              z_features(I_LOCVAR_FG)      < CAVG_CHUNK_V3_LOCVAR_FG_LOW_Z_MAX
-        global_high_texture = z_features(I_LOCVAR_FG)       > CAVG_CHUNK_V3_LOCVAR_FG_HIGH_Z_MIN .and. &
-                              z_features(I_LOCVAR_BG)      > CAVG_CHUNK_V3_LOCVAR_BG_HIGH_Z_MIN
-        too_centered_fuzzy  = z_features(I_CENTERED)        > CAVG_CHUNK_V3_CENTERED_Z_MIN .and. &
-                              z_features(I_FUZZY_BALL_SIGNAL) < CAVG_CHUNK_V3_FUZZY_SIGNAL_Z_MAX
-        quiet_bg_bad_bandpass = z_features(I_LOCVAR_BG)     < CAVG_CHUNK_V3_LOCVAR_BG_LOW_Z_MAX .and. &
-                              z_features(I_BP40_100_CENTER_EDGE_VAR) < CAVG_CHUNK_V3_BP_CENTER_EDGE_Z_MAX
-        low_res_weak_support = z_features(I_NEG_LOG_RES)    < CAVG_CHUNK_V3_NEG_LOG_RES_Z_MAX .and. &
-                              z_features(I_CC_AREA_FRAC)   < CAVG_CHUNK_V3_CC_AREA_FRAC_Z_MAX
-        reject = low_res_fuzzy .or. low_texture_fuzzy .or. global_high_texture .or. &
-                 too_centered_fuzzy .or. quiet_bg_bad_bandpass .or. low_res_weak_support
-    end function cavg_chunk_hard_reject
-
-    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject )
+    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject, quality_context )
         class(image),         intent(inout) :: imgs(:)
         type(oris),           intent(in)    :: cls_oris
         real,                 intent(in)    :: mskdiam
         real,    allocatable, intent(inout) :: raw(:,:)
         logical, allocatable, intent(inout) :: hard_reject(:)
+        character(len=*), optional, intent(in) :: quality_context
         integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
         integer              :: ncls, i, ldim(3), pop_hard_threshold
         real                 :: smpd, rad_px
+        character(len=32)    :: context
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
         real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         real                 :: centroid_norm, locvar_fg, locvar_bg
@@ -241,6 +166,9 @@ contains
         if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
         if( mskdiam <= 0.0 ) THROW_HARD('extract_cavg_quality_features: mskdiam must be positive')
+        context = CAVG_QUALITY_CONTEXT_CHUNK
+        if( present(quality_context) ) context = trim(quality_context)
+        call validate_quality_context(context)
         if( allocated(raw)         ) deallocate(raw)
         if( allocated(hard_reject) ) deallocate(hard_reject)
         allocate(raw(ncls, CAVG_QUALITY_NFEATS), source=0.0)
@@ -312,14 +240,8 @@ contains
             raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
             raw(i, I_FUZZY_BALL_SIGNAL) = raw(i, I_LOCVAR_FG) + raw(i, I_PRESENCE) + &
                                            raw(i, I_BP40_100_CENTER_EDGE_VAR)
-            ! Hard rejects are reserved for validity failures plus a conservative
-            ! absolute band-pass center/edge floor. Softer quality variation must
-            ! remain trainable model evidence.
-            hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
-                                              res(i) > CAVG_RES_HARD_REJECT_A .or. &
-                                              bad_pixels .or. no_component .or. mask_hard_reject .or. &
-                                              (locvar_fg <= EPS .and. locvar_bg <= EPS) .or. &
-                                              bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
+            hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, res(i), &
+                bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, bp_center_edge_var)
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob
@@ -329,6 +251,43 @@ contains
         end do
         deallocate(bin_img, cc_img, disc_img, rmat_cc, rmat_disc, disc_area, pop, res, corr)
     end subroutine extract_cavg_quality_features
+
+    subroutine validate_quality_context( quality_context )
+        character(len=*), intent(in) :: quality_context
+        select case(trim(quality_context))
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+            case DEFAULT
+                THROW_HARD('extract_cavg_quality_features: quality_context must be chunk or pool')
+        end select
+    end subroutine validate_quality_context
+
+    logical function cavg_hard_reject_for_context( quality_context, pop, pop_hard_threshold, res, bad_pixels, &
+                                                   no_component, mask_hard_reject, locvar_fg, locvar_bg, &
+                                                   bp_center_edge_var )
+        character(len=*), intent(in) :: quality_context
+        integer,          intent(in) :: pop, pop_hard_threshold
+        real,             intent(in) :: res, locvar_fg, locvar_bg, bp_center_edge_var
+        logical,          intent(in) :: bad_pixels, no_component, mask_hard_reject
+        cavg_hard_reject_for_context = pop <= 0 .or. &
+                                       res > CAVG_RES_HARD_REJECT_A .or. &
+                                       bad_pixels .or. no_component .or. mask_hard_reject .or. &
+                                       (locvar_fg <= EPS .and. locvar_bg <= EPS)
+        select case(trim(quality_context))
+            case(CAVG_QUALITY_CONTEXT_CHUNK)
+                ! Early chunk class averages need stronger non-model cleanup of
+                ! undersupported and fuzzy-ball-like failures. These gates were
+                ! chosen to preserve manually selected chunk classes in the v4
+                ! training set while removing obvious non-trainable junk.
+                cavg_hard_reject_for_context = cavg_hard_reject_for_context .or. &
+                    pop < pop_hard_threshold .or. &
+                    bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN .or. &
+                    locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX
+            case(CAVG_QUALITY_CONTEXT_POOL)
+                ! Late pooled-refinement class averages can be manually useful
+                ! even at low population or low band-pass localization, so pool
+                ! hard gates stay close to validity failures and resolution.
+        end select
+    end function cavg_hard_reject_for_context
 
     subroutine normalize_cavg_quality_features( raw, hard_reject, features )
         real,                 intent(in)    :: raw(:,:)
