@@ -316,9 +316,9 @@ contains
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Eigenvolume low-pass limit in Angstroms{8}', &
             gui_submenu="regularization", gui_advanced=.false.)
-        call flex_eigenvol%add_input(UI_ALT, 'oritype', 'multi', &
-            'Particle orientation segment', 'Particle orientation segment(ptcl3D){ptcl3D}', &
-            '(ptcl3D){ptcl3D}', .false., 'ptcl3D')
+        call flex_eigenvol%add_input(UI_ALT, 'oritype', 'str', &
+            'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
+            'ptcl3D', .false., 'ptcl3D')
         call flex_eigenvol%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
         call flex_eigenvol%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
