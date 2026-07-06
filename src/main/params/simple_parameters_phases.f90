@@ -814,6 +814,11 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported chunk_hard_reject='//trim(self%chunk_hard_reject)//'; expected yes|no')
         end select
+        select case(trim(self%default_hard_gates_only))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported default_hard_gates_only='//trim(self%default_hard_gates_only)//'; expected yes|no')
+        end select
         select case(trim(self%trust_resolution))
             case('yes','no')
             case DEFAULT
@@ -821,6 +826,13 @@ contains
         end select
         if( trim(self%overfit_hard_reject) == 'yes' .and. trim(self%chunk_hard_reject) == 'yes' ) &
             THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
+        if( trim(self%default_hard_gates_only) == 'yes' .and. &
+            (trim(self%overfit_hard_reject) == 'yes' .or. trim(self%chunk_hard_reject) == 'yes') ) &
+            THROW_HARD('default_hard_gates_only=yes is mutually exclusive with other hard reject options')
+        if( trim(self%default_hard_gates_only) == 'yes' .and. &
+            (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
+             (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &
+            THROW_HARD('default_hard_gates_only=yes is supported only for project-backed apply/analyze/evaluate')
         if( trim(self%overfit_hard_reject) == 'yes' .and. &
             (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
              (trim(self%quality_mode) == 'evaluate' .and. cline%defined('filetab'))) ) &

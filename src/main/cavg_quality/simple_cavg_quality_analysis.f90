@@ -47,12 +47,13 @@ contains
         call quality%kill()
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
-        if( .not. allocated(quality%features)    ) THROW_HARD('apply_overfit_hard_rules: missing features')
-        if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_overfit_hard_rules: missing hard-reject mask')
+        if( .not. allocated(quality%features)    ) THROW_HARD('evaluate_cavg_quality_hard_reject: missing features')
+        if( .not. allocated(quality%hard_reject) ) &
+            THROW_HARD('evaluate_cavg_quality_hard_reject: missing hard-reject mask')
         ncls = size(quality%features, dim=1)
         if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('apply_overfit_hard_rules: invalid feature count')
-        if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_overfit_hard_rules: invalid mask size')
+            THROW_HARD('evaluate_cavg_quality_hard_reject: invalid feature count')
+        if( size(quality%hard_reject) /= ncls ) THROW_HARD('evaluate_cavg_quality_hard_reject: invalid mask size')
         allocate(standard_hard_reject(ncls), source=quality%hard_reject)
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
@@ -60,6 +61,16 @@ contains
         if( allocated(quality%scores)  ) deallocate(quality%scores)
         allocate(quality%states(ncls), quality%labels(ncls), source=0)
         allocate(quality%scores(ncls), source=-CLIP_Z)
+        quality%threshold        = 0.0
+        quality%raw_threshold    = 0.0
+        quality%threshold_offset = 0.0
+        quality%separation       = 0.0
+        quality%nclust           = 2
+        quality%good_label       = 1
+        quality%used_threshold   = .false.
+        quality%model_name       = 'default_hard_gates_only'
+        quality%soft_decision    = 'default_hard_gates_only'
+        quality%soft_reason      = 'standard_hard_gates_only'
         do icls = 1, ncls
             if( standard_hard_reject(icls) ) cycle
             quality%states(icls) = 1

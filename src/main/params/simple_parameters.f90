@@ -71,6 +71,7 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: conical_fsc='no'     !< whether to perform conical FSC calculation when ML regularization is active(yes|no){no}
+    character(len=3)          :: default_hard_gates_only='no' !< apply only default cavg hard gates(yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}

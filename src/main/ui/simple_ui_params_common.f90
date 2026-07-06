@@ -29,6 +29,7 @@ type(ui_param) :: ctf_yes
 type(ui_param) :: ctfpatch
 type(ui_param) :: ctfresthreshold
 type(ui_param) :: chunk_hard_reject
+type(ui_param) :: default_hard_gates_only
 type(ui_param) :: deftab
 type(ui_param) :: dferr
 type(ui_param) :: dfmax
@@ -276,6 +277,11 @@ subroutine set_ui_params
                                    'Apply standard class-average hard gates plus fixed chunk-quality z-feature rules, '//&
                                    'without a model(yes|no){no}', &
                                    'Chunk hard rejection(yes|no){no}', .false., 'no')
+
+    call default_hard_gates_only%set_param('default_hard_gates_only', 'binary', 'Default hard gates only', &
+                                   'Apply only default class-average hard gates without a model or optional hard rules'//&
+                                   ' (yes|no){no}', &
+                                   'Default hard gates only(yes|no){no}', .false., 'no')
 
     call deftab%set_param(         'deftab',          'file',   'CTF parameter file', &
                                    'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values', &

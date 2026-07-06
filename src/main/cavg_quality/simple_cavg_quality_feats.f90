@@ -60,15 +60,14 @@ real,    parameter :: LOG_EPS                   = 1.0e-12
 ! doc/microchunk_and_rejection/model_cavgs_rejection.md.
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
-real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0  
+real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0
 real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
-real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 4.0
+real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 integer, parameter :: ANALYSIS_BOXSIZE          = 128
-integer, parameter :: ANALYSIS_MORPH_SIZE       = 5
 
 integer, parameter :: I_LOG_POP                 = 1
 integer, parameter :: I_NEG_LOG_RES             = 2
@@ -313,15 +312,13 @@ contains
             raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
             raw(i, I_FUZZY_BALL_SIGNAL) = raw(i, I_LOCVAR_FG) + raw(i, I_PRESENCE) + &
                                            raw(i, I_BP40_100_CENTER_EDGE_VAR)
-            ! Catastrophic population, resolution, and foreground-geometry
-            ! failures are hard validity rejects. The population fraction and
-            ! connected-component pruning mirror the microchunk rejector, while
-            ! ordinary variation remains active scalar evidence for the model.
-            write(*,*) 'Processing image ', i, "bp_center_edge_var=", bp_center_edge_var, "pop_hard_threshold=", pop_hard_threshold
+            ! Hard rejects are reserved for validity failures plus a conservative
+            ! absolute band-pass center/edge floor. Softer quality variation must
+            ! remain trainable model evidence.
             hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
-                                             ! res(i) > CAVG_RES_HARD_REJECT_A !.or. &
+                                              res(i) > CAVG_RES_HARD_REJECT_A .or. &
                                               bad_pixels .or. no_component .or. mask_hard_reject .or. &
-                                              !(locvar_fg <= EPS .and. locvar_bg <= EPS)
+                                              (locvar_fg <= EPS .and. locvar_bg <= EPS) .or. &
                                               bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
         end do
         !$omp end parallel do
@@ -375,7 +372,7 @@ contains
         real,             intent(out)   :: centroid_norm, cc_area_frac
         logical,          intent(out)   :: no_component, mask_hard_reject
         real, allocatable :: ccsizes(:)
-        integer           :: j, loc, nccs, nccs_valid, area, outside, imorph
+        integer           :: j, loc, nccs, nccs_valid, area, outside
         real              :: cc_diam, xy(2)
         centroid_norm = 2.0
         cc_area_frac  = 0.0
@@ -386,12 +383,6 @@ contains
         call bin_img%zero_edgeavg()
         call bin_img%bp(0.0, FOREGROUND_SEG_LP)
         call otsu_img(bin_img)
-        do imorph = 1, ANALYSIS_MORPH_SIZE
-            call bin_img%dilate()
-        end do
-        do imorph = 1, ANALYSIS_MORPH_SIZE
-            call bin_img%erode()
-        end do
         call bin_img%set_imat()
         call bin_img%find_ccs(cc_img)
         call cc_img%get_nccs(nccs)

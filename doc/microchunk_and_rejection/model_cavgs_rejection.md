@@ -49,7 +49,7 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 | Center/edge signal | Not used by the rule engine. | `log_center_edge_snr` feature in the `signal` family. | Active feature. |
 | Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Active feature. |
 | Overfit local variance | Not used by the rule engine. | `neg_log_locvar_fg`, `neg_log_locvar_bg`, and `log_locvar_fg_bg_ratio` provide low/localized variance evidence. | Active features in learned policies. |
-| Overfit band-pass localization | Not used by the rule engine. | `log_bp40_100_center_edge_var` measures center/edge variance after 100 to 40 A band-pass; raw values below `log(2)` match Joe's fuzzy-ball heuristic. | Active feature in learned policies. |
+| Overfit band-pass localization | Not used by the rule engine. | `log_bp40_100_center_edge_var` measures center/edge variance after 100 to 40 A band-pass; raw variance below `1.5` is a conservative hard floor, while ordinary low values remain learned evidence. | Active feature in learned policies plus conservative hard floor. |
 | Fuzzy-ball signal | Not used by the rule engine. | `fuzzy_ball_signal` combines foreground texture, central presence, and 100 to 40 A center/edge localization. Low values mark the fuzzy-ball pattern as continuous learned evidence, not as an apply-time hard gate. | Active feature in learned policies. |
 | Invalid pixels | Not a named microchunk rule. | Image values containing invalid pixels are hard rejected. | Hard gate. |
 
@@ -68,6 +68,7 @@ Hard rejects in `model_cavgs_rejection` are intended to mirror the non-negotiabl
 | Largest foreground component outside mask | Rejected when outside pixels exceed 10. | Hard rejected when outside pixels exceed 10. |
 | Local variance exactly degenerate | Rejected when both inside/outside scores are near zero. | Hard rejected when both foreground/background local variances are non-positive. |
 | Local variance low but not degenerate | Rejected by fixed robust-z thresholds. | Not a hard reject; encoded as `log_locvar_fg` and `log_locvar_bg` features. |
+| Band-pass center/edge variance extremely low | Not used by the rule engine. | Hard rejected only when raw `bp_center_edge_var < 1.5`; less extreme values remain learned evidence. |
 
 Microchunk tier thresholds:
 
@@ -131,7 +132,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when the fixed v3 chunk-quality hard-gate surrogate should be layered on top of the standard hard gates without loading or applying a model.
+For `apply`, `analyze`, and `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. Use `default_hard_gates_only=yes` to apply only the default hard gates, without loading a model or applying optional hard-rule layers. Use `overfit_hard_reject=yes` when a fixed support/local-variance hard gate should be layered on top of the standard hard gates. Use `chunk_hard_reject=yes` when the fixed v3 chunk-quality hard-gate surrogate should be layered on top of the standard hard gates without loading or applying a model. The three hard-only switches are mutually exclusive and require a project-backed run, not `quality_mode=evaluate filetab=...`.
 
 ## Model Selection
 
@@ -201,6 +202,7 @@ Features outside the selected policy are encoded by zero weights.
 - `OVERFIT_SIGNAL_BP_LP = 40.0`
 - `CAVG_RES_HARD_REJECT_A = 40.0`
 - `POP_FRACTION_HARD_REJECT = 0.0035`
+- `BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5`
 - `LOCVAR_WINDOW = 10`
 - `MASK_HARD_OUTSIDE_PIXELS = 10`
 - `LOG_EPS = 1.0e-12`
@@ -219,9 +221,16 @@ A class average is hard rejected when any of these conditions hold:
 - foreground segmentation has no valid component after full-image connected components are pruned;
 - a segmented foreground component centroid lies outside the mask radius;
 - the largest foreground component has more than 10 pixels outside the mask disc;
-- foreground and background local variance are both non-positive.
+- foreground and background local variance are both non-positive;
+- the raw 100 to 40 A band-pass center/edge variance is below `1.5`.
 
 Hard-rejected classes receive rejected state directly. Their normalized features are set to `-CLIP_Z`, their model scores are set to `-CLIP_Z`, and they remain visible in analysis and learning reports.
+
+The band-pass center/edge floor is deliberately conservative. In the v4 chunk training tables, `bp_center_edge_var < 1.5` preserved all manually selected classes while still removing additional manually rejected classes beyond population and resolution. More aggressive fuzzy-ball evidence should remain in the normalized feature vector or optional hard-gate paths, not in the default pre-training hard rejects.
+
+### Default Hard Gates Only
+
+`default_hard_gates_only=yes` is a no-model application path for project-backed `apply`, `analyze`, and `evaluate` runs. It computes the default hard gates and normalized features, accepts every class that passed the hard gates, and rejects only classes flagged by the default hard gates. It does not read `infile`, does not call `model%classify`, and does not use k-medoids, Otsu thresholds, rescue, minimum-acceptance model logic, `overfit_hard_reject`, or `chunk_hard_reject`.
 
 ### Optional Overfit Hard Gate
 
@@ -453,6 +462,17 @@ Apply the default chunk model:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=apply \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+```
+
+Apply only the default hard gates:
+
+```bash
+simple_exec prg=model_cavgs_rejection \
+  quality_mode=apply \
+  default_hard_gates_only=yes \
   projfile=my_project.simple \
   mskdiam=180 \
   mkdir=yes

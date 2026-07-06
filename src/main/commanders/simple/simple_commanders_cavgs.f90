@@ -3,7 +3,7 @@ module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
     write_cavg_quality_feature_table, evaluate_cavg_quality_overfit_hard_reject, &
-    evaluate_cavg_quality_chunk_hard_reject
+    evaluate_cavg_quality_chunk_hard_reject, evaluate_cavg_quality_hard_reject
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
@@ -337,8 +337,10 @@ contains
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
         character(len=32)         :: learn_model
+        logical                   :: use_default_hard_gates_only
         logical                   :: use_overfit_hard_reject
         logical                   :: use_chunk_hard_reject
+        logical                   :: use_hard_gate_only
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -357,18 +359,22 @@ contains
             case default
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
-        use_overfit_hard_reject = trim(params%overfit_hard_reject) == 'yes'
-        use_chunk_hard_reject   = trim(params%chunk_hard_reject)   == 'yes'
-        if( use_overfit_hard_reject .and. use_chunk_hard_reject ) &
-            THROW_HARD('overfit_hard_reject=yes and chunk_hard_reject=yes are mutually exclusive')
-        if( use_overfit_hard_reject .or. use_chunk_hard_reject )then
+        use_default_hard_gates_only = trim(params%default_hard_gates_only) == 'yes'
+        use_overfit_hard_reject     = trim(params%overfit_hard_reject)     == 'yes'
+        use_chunk_hard_reject       = trim(params%chunk_hard_reject)       == 'yes'
+        use_hard_gate_only = use_default_hard_gates_only .or. use_overfit_hard_reject .or. use_chunk_hard_reject
+        if( count([use_default_hard_gates_only, use_overfit_hard_reject, use_chunk_hard_reject]) > 1 ) &
+            THROW_HARD('default_hard_gates_only, overfit_hard_reject, and chunk_hard_reject are mutually exclusive')
+        if( use_hard_gate_only )then
             if( quality_mode == QUALITY_MODE_LEARN .or. quality_mode == QUALITY_MODE_PROMOTE ) &
                 THROW_HARD('hard reject options cannot be combined with quality_mode=learn/promote')
             if( quality_mode == QUALITY_MODE_EVALUATE .and. cline%defined('filetab') ) &
                 THROW_HARD('hard reject options cannot evaluate analysis file tables')
             if( cline%defined('infile') ) &
                 THROW_HARD('hard reject options use fixed rules and do not accept infile')
-            if( use_overfit_hard_reject )then
+            if( use_default_hard_gates_only )then
+                call configure_default_hard_report_model()
+            else if( use_overfit_hard_reject )then
                 call configure_overfit_hard_report_model()
             else
                 call configure_chunk_hard_report_model()
@@ -435,7 +441,9 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        if( use_overfit_hard_reject )then
+        if( use_default_hard_gates_only )then
+            call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
+        else if( use_overfit_hard_reject )then
             call evaluate_cavg_quality_overfit_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
         else if( use_chunk_hard_reject )then
             call evaluate_cavg_quality_chunk_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality)
@@ -445,6 +453,8 @@ contains
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
+        if( use_default_hard_gates_only ) &
+            write(logfhandle,'(A,I6)') '>>> DEFAULT HARD GATES REJECTED: ', count(quality%hard_reject)
         if( use_overfit_hard_reject ) &
             write(logfhandle,'(A,I6)') '>>> OVERFIT HARD RULE REJECTED : ', count(quality%labels == 2)
         if( use_chunk_hard_reject ) &
@@ -491,6 +501,26 @@ contains
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
+
+        subroutine configure_default_hard_report_model()
+            ! Metadata shim for existing report writers only. This path applies
+            ! only the default hard gates from feature extraction; it does not
+            ! call model%classify or any optional hard-rule layer.
+            model%name                    = 'default_hard_gates_only'
+            model%context                 = 'hard_gate'
+            model%feature_policy          = 'standard_hard_gates_only'
+            model%weights                 = 0.0
+            model%boundary_margin         = 0.0
+            model%min_score_separation    = 0.0
+            model%otsu_min_offset         = 0.0
+            model%otsu_max_offset         = 0.0
+            model%cluster_rescue_margin   = 0.0
+            model%min_accept_frac         = 0.0
+            model%use_lowsep_otsu         = .false.
+            model%use_otsu_window         = .false.
+            model%use_cluster_rescue      = .false.
+            model%enforce_min_accept_frac = .false.
+        end subroutine configure_default_hard_report_model
 
         subroutine configure_overfit_hard_report_model()
             ! Metadata shim for existing report writers only. The
