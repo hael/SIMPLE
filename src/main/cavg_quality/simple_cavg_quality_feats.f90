@@ -60,12 +60,15 @@ real,    parameter :: LOG_EPS                   = 1.0e-12
 ! doc/microchunk_and_rejection/model_cavgs_rejection.md.
 real,    parameter :: FOREGROUND_SEG_LP         = 30.0
 real,    parameter :: SIGNAL_METRIC_LP          = 10.0
-real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0
+real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0  
 real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
+real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 4.0
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
+integer, parameter :: ANALYSIS_BOXSIZE          = 128
+integer, parameter :: ANALYSIS_MORPH_SIZE       = 5
 
 integer, parameter :: I_LOG_POP                 = 1
 integer, parameter :: I_NEG_LOG_RES             = 2
@@ -314,10 +317,12 @@ contains
             ! failures are hard validity rejects. The population fraction and
             ! connected-component pruning mirror the microchunk rejector, while
             ! ordinary variation remains active scalar evidence for the model.
+            write(*,*) 'Processing image ', i, "bp_center_edge_var=", bp_center_edge_var, "pop_hard_threshold=", pop_hard_threshold
             hard_reject(i) = pop(i) <= 0 .or. pop(i) < pop_hard_threshold .or. &
-                                              res(i) > CAVG_RES_HARD_REJECT_A .or. &
+                                             ! res(i) > CAVG_RES_HARD_REJECT_A !.or. &
                                               bad_pixels .or. no_component .or. mask_hard_reject .or. &
-                                              (locvar_fg <= EPS .and. locvar_bg <= EPS)
+                                              !(locvar_fg <= EPS .and. locvar_bg <= EPS)
+                                              bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob
@@ -370,7 +375,7 @@ contains
         real,             intent(out)   :: centroid_norm, cc_area_frac
         logical,          intent(out)   :: no_component, mask_hard_reject
         real, allocatable :: ccsizes(:)
-        integer           :: j, loc, nccs, nccs_valid, area, outside
+        integer           :: j, loc, nccs, nccs_valid, area, outside, imorph
         real              :: cc_diam, xy(2)
         centroid_norm = 2.0
         cc_area_frac  = 0.0
@@ -381,6 +386,12 @@ contains
         call bin_img%zero_edgeavg()
         call bin_img%bp(0.0, FOREGROUND_SEG_LP)
         call otsu_img(bin_img)
+        do imorph = 1, ANALYSIS_MORPH_SIZE
+            call bin_img%dilate()
+        end do
+        do imorph = 1, ANALYSIS_MORPH_SIZE
+            call bin_img%erode()
+        end do
         call bin_img%set_imat()
         call bin_img%find_ccs(cc_img)
         call cc_img%get_nccs(nccs)
@@ -426,19 +437,28 @@ contains
         type(image)       :: img, img_bin, img_bp
         real, allocatable :: bin_mask(:,:,:)
         real              :: bp_center_edge_std
-        integer           :: ldim(3)
+        integer           :: ldim(3), ldim_target(3)
         img  = img_src
+        ldim = img%get_ldim()
         call img%zero_edgeavg()
+        call img%bp(0.0, SIGNAL_METRIC_LP)
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
         img_bp = img
+        ldim_target = [ANALYSIS_BOXSIZE, ANALYSIS_BOXSIZE, ldim(3)]
+        call img_bp%fft()
+        if( ldim(1) > ldim_target(1) .or. ldim(2) > ldim_target(2) )then
+            call img_bp%clip_inplace(ldim_target)
+        else if( ldim(1) < ldim_target(1) .or. ldim(2) < ldim_target(2) )then
+            call img_bp%pad_inplace(ldim_target)
+        end if
+        call img_bp%ifft()
+        call img_bp%set_smpd(img_bp%get_smpd() * real(ldim(1)) / real(ldim_target(1)))
         call img_bp%bp(OVERFIT_SIGNAL_BP_HP, OVERFIT_SIGNAL_BP_LP)
-        bp_center_edge_std = img_bp%center_edge_snr(rad_px)
+        bp_center_edge_std = img_bp%center_edge_snr((real(ldim_target(1)) * 0.4))
         bp_center_edge_var = bp_center_edge_std * bp_center_edge_std
-        call img%bp(0.0, SIGNAL_METRIC_LP)
         img_bin = img
         call otsu_img(img_bin)
-        ldim = img%get_ldim()
         allocate(bin_mask(ldim(1), ldim(2), ldim(3)))
         call img_bin%get_rmat_sub(bin_mask)
         call img%loc_var_masked(bin_mask(:,:,1), LOCVAR_WINDOW, locvar_fg, locvar_bg)
