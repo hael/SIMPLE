@@ -1,6 +1,7 @@
 !@descr: shared types for class-average quality analysis
 module simple_cavg_quality_types
-use simple_defs, only: LONGSTRLEN
+use simple_defs,   only: LONGSTRLEN
+use simple_string, only: string
 implicit none
 private
 
@@ -9,7 +10,15 @@ public :: CAVG_QUALITY_MAX_INTERACTIONS
 public :: CAVG_MODEL_FAMILY_LINEAR
 public :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
 public :: CAVG_QUALITY_CONTEXT_CHUNK
+public :: CAVG_QUALITY_CONTEXT_SIEVE
 public :: CAVG_QUALITY_CONTEXT_POOL
+public :: CAVG_REJECT_REASON_NONE
+public :: CAVG_REJECT_REASON_POP_NONPOS
+public :: CAVG_REJECT_REASON_POP_LOWFRAC
+public :: CAVG_REJECT_REASON_BAD_PIXELS
+public :: CAVG_REJECT_REASON_NO_COMPONENT
+public :: CAVG_REJECT_REASON_MASK_GEOMETRY
+public :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -23,10 +32,19 @@ integer, parameter :: CAVG_QUALITY_NFEATS  = 14
 integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
-character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR            = 'linear_score'
-character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC = 'pairwise_logistic'
-character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK          = 'chunk'
-character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL           = 'pool'
+character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR               = 'linear_score'
+character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC    = 'pairwise_logistic'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'
+
+integer, parameter :: CAVG_REJECT_REASON_NONE               = 0
+integer, parameter :: CAVG_REJECT_REASON_POP_NONPOS         = 1
+integer, parameter :: CAVG_REJECT_REASON_POP_LOWFRAC        = 2
+integer, parameter :: CAVG_REJECT_REASON_BAD_PIXELS         = 3
+integer, parameter :: CAVG_REJECT_REASON_NO_COMPONENT       = 4
+integer, parameter :: CAVG_REJECT_REASON_MASK_GEOMETRY      = 5
+integer, parameter :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW = 6
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:
@@ -70,6 +88,7 @@ type :: cavg_quality_result
     integer, allocatable :: states(:)
     integer, allocatable :: labels(:)
     integer, allocatable :: medoids(:)
+    integer, allocatable :: reasons(:)
     logical, allocatable :: hard_reject(:)
     real                 :: threshold        = 0.0
     real                 :: raw_threshold    = 0.0
@@ -127,13 +146,14 @@ contains
 
     subroutine reset_cavg_quality_result( quality )
         class(cavg_quality_result), intent(inout) :: quality
-        if( allocated(quality%raw)         ) deallocate(quality%raw)
-        if( allocated(quality%features)    ) deallocate(quality%features)
-        if( allocated(quality%scores)      ) deallocate(quality%scores)
-        if( allocated(quality%states)      ) deallocate(quality%states)
-        if( allocated(quality%labels)      ) deallocate(quality%labels)
-        if( allocated(quality%medoids)     ) deallocate(quality%medoids)
-        if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
+        if( allocated(quality%raw)               ) deallocate(quality%raw)
+        if( allocated(quality%features)          ) deallocate(quality%features)
+        if( allocated(quality%scores)            ) deallocate(quality%scores)
+        if( allocated(quality%states)            ) deallocate(quality%states)
+        if( allocated(quality%labels)            ) deallocate(quality%labels)
+        if( allocated(quality%medoids)           ) deallocate(quality%medoids)
+        if( allocated(quality%hard_reject)       ) deallocate(quality%hard_reject)
+        if( allocated(quality%reasons)           ) deallocate(quality%reasons)
         quality%threshold        = 0.0
         quality%raw_threshold    = 0.0
         quality%threshold_offset = 0.0

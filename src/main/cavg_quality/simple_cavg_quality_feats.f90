@@ -9,7 +9,10 @@ use simple_oris,               only: oris
 use simple_segmentation,       only: otsu_img
 use simple_stat,               only: median, mad_gau
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_CONTEXT_CHUNK, &
-    CAVG_QUALITY_CONTEXT_POOL, cavg_quality_feature_def
+    CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_feature_def, &
+    cavg_quality_result, CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP_NONPOS, &
+    CAVG_REJECT_REASON_POP_LOWFRAC, CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, &
+    CAVG_REJECT_REASON_MASK_GEOMETRY, CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
 implicit none
 private
 
@@ -57,20 +60,20 @@ integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 integer, parameter :: ANALYSIS_BOXSIZE          = 128
 
-integer, parameter :: I_LOG_POP                 = 1
-integer, parameter :: I_NEG_LOG_RES             = 2
-integer, parameter :: I_CENTERED                = 3
-integer, parameter :: I_LOCVAR_FG               = 4
-integer, parameter :: I_LOCVAR_BG               = 5
-integer, parameter :: I_CORR_FRC                = 6
-integer, parameter :: I_CENTER_EDGE_SNR         = 7
-integer, parameter :: I_CC_AREA_FRAC            = 8
-integer, parameter :: I_PRESENCE                = 9
-integer, parameter :: I_NEG_LOCVAR_FG           = 10
-integer, parameter :: I_NEG_LOCVAR_BG           = 11
-integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO  = 12
+integer, parameter :: I_LOG_POP                  = 1
+integer, parameter :: I_NEG_LOG_RES              = 2
+integer, parameter :: I_CENTERED                 = 3
+integer, parameter :: I_LOCVAR_FG                = 4
+integer, parameter :: I_LOCVAR_BG                = 5
+integer, parameter :: I_CORR_FRC                 = 6
+integer, parameter :: I_CENTER_EDGE_SNR          = 7
+integer, parameter :: I_CC_AREA_FRAC             = 8
+integer, parameter :: I_PRESENCE                 = 9
+integer, parameter :: I_NEG_LOCVAR_FG            = 10
+integer, parameter :: I_NEG_LOCVAR_BG            = 11
+integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO   = 12
 integer, parameter :: I_BP40_100_CENTER_EDGE_VAR = 13
-integer, parameter :: I_FUZZY_BALL_SIGNAL       = 14
+integer, parameter :: I_FUZZY_BALL_SIGNAL        = 14
 
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
@@ -143,12 +146,13 @@ contains
         end do
     end subroutine write_cavg_quality_feature_inventory
 
-    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, raw, hard_reject, quality_context )
-        class(image),         intent(inout) :: imgs(:)
-        type(oris),           intent(in)    :: cls_oris
+    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, quality, quality_context )
+        class(image),              intent(inout) :: imgs(:)
+        type(oris),                intent(in)    :: cls_oris
+        type(cavg_quality_result), intent(inout) :: quality
         real,                 intent(in)    :: mskdiam
-        real,    allocatable, intent(inout) :: raw(:,:)
-        logical, allocatable, intent(inout) :: hard_reject(:)
+        ! real,    allocatable, intent(inout) :: raw(:,:)
+        ! logical, allocatable, intent(inout) :: hard_reject(:)
         character(len=*), optional, intent(in) :: quality_context
         integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
@@ -169,10 +173,12 @@ contains
         context = CAVG_QUALITY_CONTEXT_CHUNK
         if( present(quality_context) ) context = trim(quality_context)
         call validate_quality_context(context)
-        if( allocated(raw)         ) deallocate(raw)
-        if( allocated(hard_reject) ) deallocate(hard_reject)
-        allocate(raw(ncls, CAVG_QUALITY_NFEATS), source=0.0)
-        allocate(hard_reject(ncls),              source=.false.)
+        if( allocated(quality%raw)         ) deallocate(quality%raw)
+        if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
+        if( allocated(quality%reasons)     ) deallocate(quality%reasons)
+        allocate(quality%raw(ncls, CAVG_QUALITY_NFEATS), source=0.0)
+        allocate(quality%hard_reject(ncls),              source=.false.)
+        allocate(quality%reasons(ncls),                  source=CAVG_REJECT_REASON_NONE)
         pop  = cls_oris%get_all_asint('pop')
         res  = cls_oris%get_all('res')
         if( size(pop) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid pop size')
@@ -225,23 +231,23 @@ contains
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
                                                 presence_score, bp_center_edge_var)
             endif
-            raw(i, I_LOG_POP)                 = log(real(max(pop(i), 0)) + 1.0)
-            raw(i, I_NEG_LOG_RES)             = resolution_feature(res(i))
-            raw(i, I_CENTERED)                = -centroid_norm
-            raw(i, I_LOCVAR_FG)               = log(max(locvar_fg, LOG_EPS))
-            raw(i, I_LOCVAR_BG)               = log(max(locvar_bg, LOG_EPS))
-            raw(i, I_CORR_FRC)                = corr(i)
-            raw(i, I_CENTER_EDGE_SNR)         = log(max(center_edge_snr, LOG_EPS))
-            raw(i, I_CC_AREA_FRAC)            = cc_area_frac
-            raw(i, I_PRESENCE)                = presence_score
-            raw(i, I_NEG_LOCVAR_FG)          = -log(max(locvar_fg, LOG_EPS))
-            raw(i, I_NEG_LOCVAR_BG)          = -log(max(locvar_bg, LOG_EPS))
-            raw(i, I_LOG_LOCVAR_FG_BG_RATIO) = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
-            raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
-            raw(i, I_FUZZY_BALL_SIGNAL) = raw(i, I_LOCVAR_FG) + raw(i, I_PRESENCE) + &
-                                           raw(i, I_BP40_100_CENTER_EDGE_VAR)
-            hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, res(i), &
-                bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, bp_center_edge_var)
+            quality%raw(i, I_LOG_POP)                  = log(real(max(pop(i), 0)) + 1.0)
+            quality%raw(i, I_NEG_LOG_RES)              = resolution_feature(res(i))
+            quality%raw(i, I_CENTERED)                 = -centroid_norm
+            quality%raw(i, I_LOCVAR_FG)                = log(max(locvar_fg, LOG_EPS))
+            quality%raw(i, I_LOCVAR_BG)                = log(max(locvar_bg, LOG_EPS))
+            quality%raw(i, I_CORR_FRC)                 = corr(i)
+            quality%raw(i, I_CENTER_EDGE_SNR)          = log(max(center_edge_snr, LOG_EPS))
+            quality%raw(i, I_CC_AREA_FRAC)             = cc_area_frac
+            quality%raw(i, I_PRESENCE)                 = presence_score
+            quality%raw(i, I_NEG_LOCVAR_FG)            = -log(max(locvar_fg, LOG_EPS))
+            quality%raw(i, I_NEG_LOCVAR_BG)            = -log(max(locvar_bg, LOG_EPS))
+            quality%raw(i, I_LOG_LOCVAR_FG_BG_RATIO)   = log(max(locvar_fg, LOG_EPS)) - log(max(locvar_bg, LOG_EPS))
+            quality%raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
+            quality%raw(i, I_FUZZY_BALL_SIGNAL)        = quality%raw(i, I_LOCVAR_FG) + quality%raw(i, I_PRESENCE) + &
+                                                         quality%raw(i, I_BP40_100_CENTER_EDGE_VAR)
+            quality%hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, res(i), &
+                bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, bp_center_edge_var, quality%reasons(i))
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob
@@ -255,19 +261,21 @@ contains
     subroutine validate_quality_context( quality_context )
         character(len=*), intent(in) :: quality_context
         select case(trim(quality_context))
-            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
+                ! valid contexts
             case DEFAULT
-                THROW_HARD('extract_cavg_quality_features: quality_context must be chunk or pool')
+                THROW_HARD('extract_cavg_quality_features: quality_context must be chunk, pool, or sieve')
         end select
     end subroutine validate_quality_context
 
     logical function cavg_hard_reject_for_context( quality_context, pop, pop_hard_threshold, res, bad_pixels, &
                                                    no_component, mask_hard_reject, locvar_fg, locvar_bg, &
-                                                   bp_center_edge_var )
-        character(len=*), intent(in) :: quality_context
-        integer,          intent(in) :: pop, pop_hard_threshold
-        real,             intent(in) :: res, locvar_fg, locvar_bg, bp_center_edge_var
-        logical,          intent(in) :: bad_pixels, no_component, mask_hard_reject
+                                                   bp_center_edge_var, reason )
+        character(len=*), intent(in)  :: quality_context
+        integer,          intent(in)  :: pop, pop_hard_threshold
+        real,             intent(in)  :: res, locvar_fg, locvar_bg, bp_center_edge_var
+        logical,          intent(in)  :: bad_pixels, no_component, mask_hard_reject
+        integer,          intent(out) :: reason
         cavg_hard_reject_for_context = pop <= 0 .or. &
                                        res > CAVG_RES_HARD_REJECT_A .or. &
                                        bad_pixels .or. no_component .or. mask_hard_reject .or. &
@@ -282,6 +290,19 @@ contains
                     pop < pop_hard_threshold .or. &
                     bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN .or. &
                     locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX
+            case(CAVG_QUALITY_CONTEXT_SIEVE)
+                ! Early microchunk class averages need stronger non-model cleanup of
+                ! undersupported and fuzzy-ball-like failures. These gates were
+                ! chosen to preserve manually selected microchunk classes in the v4
+                ! training set while removing obvious non-trainable junk.
+                cavg_hard_reject_for_context = .false.
+                if( pop < pop_hard_threshold ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_POP_LOWFRAC
+                else if( bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
+                end if
             case(CAVG_QUALITY_CONTEXT_POOL)
                 ! Late pooled-refinement class averages can be manually useful
                 ! even at low population or low band-pass localization, so pool

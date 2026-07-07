@@ -34,7 +34,7 @@ contains
         call quality%kill()
         context = trim(model%context)
         if( present(quality_context) ) context = trim(quality_context)
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, trim(context))
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, trim(context))
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         call model%classify(quality)
     end subroutine evaluate_cavg_quality
@@ -48,7 +48,7 @@ contains
         logical,                     allocatable :: standard_hard_reject(:)
         integer                                  :: icls, ncls
         call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality%raw, quality%hard_reject, quality_context)
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, quality_context)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
         if( .not. allocated(quality%features)    ) THROW_HARD('evaluate_cavg_quality_hard_reject: missing features')
         if( .not. allocated(quality%hard_reject) ) &

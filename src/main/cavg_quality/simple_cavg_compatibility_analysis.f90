@@ -4,22 +4,23 @@ module simple_cavg_compatibility_analysis
 ! - Preprocess class averages and derive geometric/statistical descriptors.
 ! - Reject class averages with support and cluster-level criteria.
 ! - Write selected/rejected stacks and per-class rejection reasons.
-use unix,                    only: c_float
-use simple_defs,             only: logfhandle
-use simple_error,            only: simple_exception
-use simple_image,            only: image
-use simple_string,           only: string
-use simple_fileio,           only: swap_suffix
-use simple_cmdline,          only: cmdline
-use simple_gui_utils,        only: mrc2jpeg_tiled
-use simple_image_bin,        only: image_bin
-use simple_defs_fname,       only: METADATA_EXT, MRC_EXT, JPG_EXT
-use simple_sp_project,       only: sp_project
-use simple_imgarr_utils,     only: read_cavgs_into_imgarr, read_stk_into_imgarr, write_imgarr, dealloc_imgarr
-use simple_segmentation,     only: otsu_img
-use simple_srch_sort_loc,    only: hpsort
-use simple_commanders_cavgs, only: commander_cluster_cavgs
-use simple_cavg_quality_types, only: cavg_quality_result
+use unix,                         only: c_float
+use simple_defs,                  only: logfhandle
+use simple_error,                 only: simple_exception
+use simple_image,                 only: image
+use simple_string,                only: string
+use simple_fileio,                only: swap_suffix
+use simple_cmdline,               only: cmdline
+use simple_gui_utils,             only: mrc2jpeg_tiled
+use simple_image_bin,             only: image_bin
+use simple_defs_fname,            only: METADATA_EXT, MRC_EXT, JPG_EXT
+use simple_sp_project,            only: sp_project
+use simple_imgarr_utils,          only: read_cavgs_into_imgarr, read_stk_into_imgarr, write_imgarr, dealloc_imgarr
+use simple_segmentation,          only: otsu_img
+use simple_srch_sort_loc,         only: hpsort
+use simple_commanders_cavgs,      only: commander_cluster_cavgs
+use simple_cavg_quality_types,    only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE
+use simple_cavg_quality_helpers,  only: cavg_rejection_reason_string
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality_hard_reject
 
 implicit none
@@ -250,7 +251,7 @@ contains
         self%nimagesets = size(imgs)
         if( self%nimagesets < 1 ) THROW_HARD('cavg_compatibility_analysis: no images found in input stack')
         allocate(self%imagesets(self%nimagesets), img_out(self%nimagesets), mask_out(self%nimagesets))
-        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality)
+        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
         do iimg = 1, self%nimagesets
             if( quality%states(iimg) == 0 ) then
                 self%imagesets(iimg)%is_rejected      = .true.
@@ -278,11 +279,11 @@ contains
 
         write(logfhandle,'(A,I0)') 'cavg_compat: analyze n_images=', self%nimagesets
 
-        call self%run_cluster_overfitting_rejection(5000.0)
-        nrej = 0
-        do i = 1, self%nimagesets
-            if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
-        end do
+      !  call self%run_cluster_overfitting_rejection(5000.0)
+      !  nrej = 0
+       ! do i = 1, self%nimagesets
+       !     if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
+       ! end do
         write(logfhandle,'(A,I0)') 'cavg_compat: reject_cluster n_rejected=', nrej
         write(logfhandle,'(A,ES14.6,A,ES14.6,A,ES14.6)') 'cavg_compat: support_model axes c/b/a=', &
             self%support_model%axis_c, '/', self%support_model%axis_b, '/', self%support_model%axis_a
@@ -308,6 +309,7 @@ contains
         class(cavg_compatibility_analysis), intent(inout) :: self
         type(sp_project),                      intent(in) :: spproj
         type(image),                          allocatable :: imgs(:)
+        type(string)                                      :: reason
         type(cavg_quality_result)                         :: quality
         integer                                           :: iimg, ncls, i, nrej
         real                                              :: smpd
@@ -319,10 +321,12 @@ contains
         self%nimagesets = size(imgs)
         if( self%nimagesets < 1 ) THROW_HARD('cavg_compatibility_analysis: no images found in input stack')
         allocate(self%imagesets(self%nimagesets))
-        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality)
+        call evaluate_cavg_quality_hard_reject(imgs, self%spproj%os_cls2D, 5000.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
         do iimg = 1, self%nimagesets
             if( quality%states(iimg) == 0 ) then
                 self%imagesets(iimg)%is_rejected      = .true.
+                reason = cavg_rejection_reason_string(quality%reasons(iimg))
+                write(logfhandle,'(A,I0,A,A)') 'cavg_compat: train_1 hard_reject iimg=', iimg, ' reason=quality_hard_reject', reason%to_char()
                 self%imagesets(iimg)%rejection_reason = REJECT_REASON_QUALITY_HARD_REJECT
             end if
             call imgs(iimg)%set_smpd(smpd)
@@ -332,7 +336,7 @@ contains
 
         write(logfhandle,'(A,I0)') 'cavg_compat: analyze n_images=', self%nimagesets
 
-        call self%run_cluster_overfitting_rejection(5000.0)
+       ! call self%run_cluster_overfitting_rejection(5000.0)
         nrej = 0
         do i = 1, self%nimagesets
             if( self%imagesets(i)%is_rejected ) nrej = nrej + 1
