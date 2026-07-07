@@ -66,11 +66,9 @@ contains
         integer,           intent(in)    :: nrots
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
-        logical :: zero_oris, ncls_diff, l_fresh_start
+        logical :: l_fresh_start
         ! gather class populations
         l_fresh_start = is_fresh_2D_start(params, params%which_iter)
-        zero_oris = spproj%os_cls2D%get_noris() == 0
-        ncls_diff = spproj%os_cls2D%get_noris() /= params%ncls
         if( l_fresh_start )then
             ! A fresh run with freshly generated references must not inherit
             ! class populations from a previous/streamed 2D assignment.
@@ -78,21 +76,14 @@ contains
             ! Previous shift are also zeroed prior to and consistently with search
             call spproj%os_ptcl2D%zero_shifts
         else if( spproj%os_ptcl2D%isthere('class') )then
-            if( zero_oris .or. ncls_diff  )then
-                ! the ==0    is to overcome bug in shared-memory version
-                ! the ==ncls is to be able to restart after having run cleanup with fewer classes
-                if( zero_oris )then
-                    call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params%ncls)
-                else
-                    allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)
-                endif
-            else
-                s2D%cls_pops = nint(spproj%os_cls2D%get_all('pop'))
-                where(s2D%cls_pops < 2 )
-                    ! ignoring classes with one particle
-                    s2D%cls_pops = 0
-                end where
-            endif
+            ! The particle assignment table is the authoritative state for the
+            ! next search. cls2D%pop can lag behind distributed assembly and
+            ! would make valid previous classes look empty for overlap reporting.
+            call spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', maxn=params%ncls)
+            where(s2D%cls_pops < 2 )
+                ! ignoring classes with one particle
+                s2D%cls_pops = 0
+            end where
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params%ncls), source=MINCLSPOPLIM+1)

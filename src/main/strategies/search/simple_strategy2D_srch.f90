@@ -30,6 +30,7 @@ type strategy2D_srch
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
     integer                 :: nsolns          =  0   !< # distinct refs with a stored solution this search
     integer                 :: prev_class      =  0   !< previous class index
+    integer                 :: prev_class_mi   =  0   !< previous class used for overlap reporting
     integer                 :: best_class      =  0   !< best class index found by search
     integer                 :: best_rot        =  0   !< best in-plane rotation found by search
     integer                 :: prev_rot        =  0   !< previous in-plane rotation found by search
@@ -111,12 +112,14 @@ contains
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
         if( self%l_fresh_start )then
-            self%prev_class = 0
-            self%prev_rot   = 1
-            self%prev_shvec = 0.
+            self%prev_class    = 0
+            self%prev_class_mi = 0
+            self%prev_rot      = 1
+            self%prev_shvec    = 0.
         else
-            self%prev_class = nint(os%get(self%iptcl,'class'))            ! class index
-            self%prev_rot   = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
+            self%prev_class_mi = nint(os%get(self%iptcl,'class'))            ! class index before any fallback
+            self%prev_class    = self%prev_class_mi
+            self%prev_rot      = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
             if( self%prev_rot < 1 .or. self%prev_rot > self%nrots ) THROW_HARD('Invalid previous in-plane rotation index')
             self%prev_shvec = os%get_2Dshift(self%iptcl)                  ! shift vector
         endif
@@ -313,7 +316,7 @@ contains
         endif
         ! calculate overlap between distributions
         mi_class = 0.
-        if( (.not. self%l_fresh_start) .and. self%prev_class == best_class_local ) mi_class = 1.
+        if( (.not. self%l_fresh_start) .and. self%prev_class_mi == best_class_local ) mi_class = 1.
         ! search space explored
         frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
         ! update parameters
