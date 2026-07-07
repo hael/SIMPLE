@@ -56,6 +56,9 @@ real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
 real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5
 real,    parameter :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX = exp(-4.5)
+real,    parameter :: POOL_RES_HARD_REJECT_A    = 25.0
+real,    parameter :: POOL_POP_FRACTION_HARD_REJECT = 5.0e-4
+real,    parameter :: POOL_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 10.0
 integer, parameter :: LOCVAR_WINDOW             = 10
 integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
 integer, parameter :: ANALYSIS_BOXSIZE          = 128
@@ -156,7 +159,7 @@ contains
         character(len=*), optional, intent(in) :: quality_context
         integer, allocatable :: pop(:), disc_area(:)
         real,    allocatable :: res(:), corr(:), corr_in(:)
-        integer              :: ncls, i, ldim(3), pop_hard_threshold
+        integer              :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold
         real                 :: smpd, rad_px
         character(len=32)    :: context
         type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
@@ -183,7 +186,8 @@ contains
         res  = cls_oris%get_all('res')
         if( size(pop) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid pop size')
         if( size(res) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid res size')
-        pop_hard_threshold = ceiling(real(sum(pop)) * POP_FRACTION_HARD_REJECT)
+        pop_hard_threshold      = ceiling(real(sum(pop)) * POP_FRACTION_HARD_REJECT)
+        pool_pop_hard_threshold = ceiling(real(sum(pop)) * POOL_POP_FRACTION_HARD_REJECT)
         allocate(corr(ncls), source=0.0)
         if( cls_oris%isthere('corr') )then
             corr_in = cls_oris%get_all('corr')
@@ -246,8 +250,9 @@ contains
             quality%raw(i, I_BP40_100_CENTER_EDGE_VAR) = log(max(bp_center_edge_var, LOG_EPS))
             quality%raw(i, I_FUZZY_BALL_SIGNAL)        = quality%raw(i, I_LOCVAR_FG) + quality%raw(i, I_PRESENCE) + &
                                                          quality%raw(i, I_BP40_100_CENTER_EDGE_VAR)
-            quality%hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, res(i), &
-                bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, bp_center_edge_var, quality%reasons(i))
+            quality%hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, &
+                pool_pop_hard_threshold, res(i), bad_pixels, no_component, mask_hard_reject, &
+                locvar_fg, locvar_bg, bp_center_edge_var, quality%reasons(i))
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob
@@ -268,11 +273,11 @@ contains
         end select
     end subroutine validate_quality_context
 
-    logical function cavg_hard_reject_for_context( quality_context, pop, pop_hard_threshold, res, bad_pixels, &
-                                                   no_component, mask_hard_reject, locvar_fg, locvar_bg, &
+    logical function cavg_hard_reject_for_context( quality_context, pop, pop_hard_threshold, pool_pop_hard_threshold, &
+                                                   res, bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, &
                                                    bp_center_edge_var, reason )
         character(len=*), intent(in)  :: quality_context
-        integer,          intent(in)  :: pop, pop_hard_threshold
+        integer,          intent(in)  :: pop, pop_hard_threshold, pool_pop_hard_threshold
         real,             intent(in)  :: res, locvar_fg, locvar_bg, bp_center_edge_var
         logical,          intent(in)  :: bad_pixels, no_component, mask_hard_reject
         integer,          intent(out) :: reason
@@ -306,8 +311,13 @@ contains
                 end if
             case(CAVG_QUALITY_CONTEXT_POOL)
                 ! Pool is the final pre-3D 2D selection stage after highly cleaned
-                ! chunk outputs are merged. It has its own learned model, so hard
-                ! gates stay close to shared validity failures and resolution.
+                ! chunk outputs are merged. These pool-specific gates remove
+                ! obvious low-population, weak-localization, or low-resolution
+                ! failures before the pool model; subtler cases remain learned.
+                cavg_hard_reject_for_context = cavg_hard_reject_for_context .or. &
+                    pop < pool_pop_hard_threshold .or. &
+                    res > POOL_RES_HARD_REJECT_A .or. &
+                    bp_center_edge_var < POOL_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
         end select
     end function cavg_hard_reject_for_context
 
