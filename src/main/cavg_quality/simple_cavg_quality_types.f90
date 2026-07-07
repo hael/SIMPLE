@@ -34,6 +34,11 @@ real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR               = 'linear_score'
 character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC    = 'pairwise_logistic'
+
+! Class-average quality contexts form a workflow ladder:
+! - sieve: very small 2D chunks; conservative hard gates only, no learned model.
+! - chunk: pre-cleaned 10-30k-particle chunks; logistic model rejection.
+! - pool : highly cleaned merged chunk output; final model rejection before 3D.
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'

@@ -250,7 +250,7 @@ contains
         select case(trim(quality_context))
             case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
             case DEFAULT
-                THROW_HARD(trim(caller)//': quality_context must be chunk or pool')
+                THROW_HARD(trim(caller)//': quality_context must be chunk or pool; sieve is hard-gates-only')
         end select
     end subroutine validate_quality_context
 

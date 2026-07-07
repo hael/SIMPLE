@@ -673,8 +673,8 @@ subroutine set_ui_params
                                    'Class-average learner family(linear|logistic){logistic}', .false., 'logistic')
 
     call quality_context%set_param('quality_context', 'multi',  'Class-average quality context', &
-                                   'Hard-gate context for class-average quality rejection(chunk|pool){chunk}', &
-                                   'Class-average quality context(chunk|pool){chunk}', .false., 'chunk')
+                                   'Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}', &
+                                   'Class-average quality context(chunk|pool|sieve){chunk}', .false., 'chunk')
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in class-average quality model preset'//&

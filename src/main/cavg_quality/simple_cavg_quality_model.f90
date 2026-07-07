@@ -720,7 +720,7 @@ contains
                         case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
                             self%context = trim(val)
                         case DEFAULT
-                            THROW_HARD('read_model: context must be chunk or pool')
+                            THROW_HARD('read_model: context must be chunk or pool; sieve is hard-gates-only')
                     end select
                 case('feature_policy', 'feature_family_set')
                     self%feature_policy = trim(val)

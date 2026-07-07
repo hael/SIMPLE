@@ -301,7 +301,8 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
-    character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool){chunk}
+    ! class-average quality context: sieve=small hard-gate-only chunks, chunk=larger learned chunks, pool=pre-3D pooled classes
+    character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool|sieve){chunk}
     ! class-average quality model preset(chunk100mics|chunk100mics_linear|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''

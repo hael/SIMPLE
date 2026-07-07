@@ -1,12 +1,13 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
 use simple_commanders_api
-use simple_cavg_quality_analysis, only: evaluate_cavg_quality, write_cavg_quality_analysis, &
-    write_cavg_quality_feature_table
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_hard_reject, &
+    write_cavg_quality_analysis, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
-use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, cavg_quality_result
+use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
+    CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_result
 use simple_string_utils,          only: lowercase
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
@@ -357,6 +358,8 @@ contains
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
         if( quality_mode == QUALITY_MODE_LEARN )then
+            if( trim(params%quality_context) == CAVG_QUALITY_CONTEXT_SIEVE ) &
+                THROW_HARD('model_cavgs_rejection quality_mode=learn does not support sieve; sieve is hard-gates-only')
             if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             if( cline%defined('infile') ) &
                 THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept infile')
@@ -418,7 +421,18 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, trim(quality_context))
+        if( trim(quality_context) == CAVG_QUALITY_CONTEXT_SIEVE )then
+            ! Sieve is an explicit no-model route: apply/analyze/evaluate use
+            ! only the conservative sieve hard gates and skip model scoring.
+            model%name = 'sieve_hard_gates'
+            model%context = CAVG_QUALITY_CONTEXT_SIEVE
+            model%model_family = 'hard_gates_only'
+            model%feature_policy = 'sieve_hard_gates'
+            model%weights = 0.0
+            call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, trim(quality_context))
+        else
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, trim(quality_context))
+        endif
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
@@ -523,16 +537,20 @@ contains
             if( cline%defined('quality_context') )then
                 context = trim(params%quality_context)
             else
+                ! Context controls the hard-gate policy: sieve is hard-gate-only
+                ! small-chunk screening, chunk is learned rejection on larger
+                ! pre-cleaned chunks, and pool is learned rejection before 3D.
                 context = trim(model%context)
                 model_name = lowercase(trim(model%name))
                 if( index(model_name, CAVG_QUALITY_CONTEXT_POOL) > 0 ) context = CAVG_QUALITY_CONTEXT_POOL
+                if( index(model_name, CAVG_QUALITY_CONTEXT_SIEVE) > 0 ) context = CAVG_QUALITY_CONTEXT_SIEVE
                 if( index(model_name, CAVG_QUALITY_CONTEXT_CHUNK) > 0 ) context = CAVG_QUALITY_CONTEXT_CHUNK
                 if( trim(context) == '' ) context = CAVG_QUALITY_CONTEXT_CHUNK
             endif
             select case(trim(context))
-                case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+                case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
                 case DEFAULT
-                    THROW_HARD('model_cavgs_rejection: quality_context must be chunk or pool')
+                    THROW_HARD('model_cavgs_rejection: quality_context must be chunk, pool, or sieve')
             end select
         end function resolve_quality_context
 

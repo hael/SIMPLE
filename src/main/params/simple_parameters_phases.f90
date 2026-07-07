@@ -815,9 +815,9 @@ contains
         endif
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
             select case(trim(self%quality_context))
-                case('chunk','pool')
+                case('chunk','pool','sieve')
                 case DEFAULT
-                    THROW_HARD('model_cavgs_rejection quality_context must be chunk or pool')
+                    THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, or sieve')
             end select
         endif
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'

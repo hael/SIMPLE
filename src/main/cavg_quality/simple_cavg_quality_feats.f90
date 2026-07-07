@@ -276,25 +276,26 @@ contains
         real,             intent(in)  :: res, locvar_fg, locvar_bg, bp_center_edge_var
         logical,          intent(in)  :: bad_pixels, no_component, mask_hard_reject
         integer,          intent(out) :: reason
+        reason = CAVG_REJECT_REASON_NONE
         cavg_hard_reject_for_context = pop <= 0 .or. &
                                        res > CAVG_RES_HARD_REJECT_A .or. &
                                        bad_pixels .or. no_component .or. mask_hard_reject .or. &
                                        (locvar_fg <= EPS .and. locvar_bg <= EPS)
         select case(trim(quality_context))
             case(CAVG_QUALITY_CONTEXT_CHUNK)
-                ! Early chunk class averages need stronger non-model cleanup of
-                ! undersupported and fuzzy-ball-like failures. These gates were
-                ! chosen to preserve manually selected chunk classes in the v4
-                ! training set while removing obvious non-trainable junk.
+                ! Chunk is the first learned-model stage: sieve-cleaned particles are
+                ! reclassified in larger 10-30k-particle chunks, then logistic
+                ! rejection handles the trainable cases. These gates only remove
+                ! obvious non-trainable failures before the model stage.
                 cavg_hard_reject_for_context = cavg_hard_reject_for_context .or. &
                     pop < pop_hard_threshold .or. &
                     bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN .or. &
                     locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX
             case(CAVG_QUALITY_CONTEXT_SIEVE)
-                ! Early microchunk class averages need stronger non-model cleanup of
-                ! undersupported and fuzzy-ball-like failures. These gates were
-                ! chosen to preserve manually selected microchunk classes in the v4
-                ! training set while removing obvious non-trainable junk.
+                ! Sieve is the small-chunk screening route. It intentionally uses
+                ! conservative hard gates only and does not inherit the shared
+                ! chunk/pool validity gates, because no learned model is meant to
+                ! rescue or reinterpret these very small 2D runs.
                 cavg_hard_reject_for_context = .false.
                 if( pop < pop_hard_threshold ) then
                     cavg_hard_reject_for_context = .true.
@@ -304,9 +305,9 @@ contains
                     reason = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
                 end if
             case(CAVG_QUALITY_CONTEXT_POOL)
-                ! Late pooled-refinement class averages can be manually useful
-                ! even at low population or low band-pass localization, so pool
-                ! hard gates stay close to validity failures and resolution.
+                ! Pool is the final pre-3D 2D selection stage after highly cleaned
+                ! chunk outputs are merged. It has its own learned model, so hard
+                ! gates stay close to shared validity failures and resolution.
         end select
     end function cavg_hard_reject_for_context
 
