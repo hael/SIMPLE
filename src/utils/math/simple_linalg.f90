@@ -12,6 +12,7 @@ public :: same_energy_euclid, svbksb, svdcmp, svdfit, svd_multifit
 public :: svd_solve, normal_solve, qr_solve, svdvar, test_eigh
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: sparse_eigh
+public :: hermitian_eigh, hermitian_invert, hermitian_solve
 
 abstract interface
     subroutine sparse_matvec_sp_proc(ctx, x, y)
@@ -28,6 +29,20 @@ end interface eigsrt
 interface eigh
     module procedure eigh_sp
 end interface eigh
+
+interface hermitian_eigh
+    module procedure hermitian_eigh_z
+end interface hermitian_eigh
+
+interface hermitian_invert
+    module procedure hermitian_invert_dp
+    module procedure hermitian_invert_z
+end interface hermitian_invert
+
+interface hermitian_solve
+    module procedure hermitian_solve_dp
+    module procedure hermitian_solve_z
+end interface hermitian_solve
 
 interface euclid
     module procedure euclid_sp_1, euclid_sp_2, euclid_dp
@@ -137,6 +152,13 @@ interface
         real(kind=8), intent(inout) :: a(lda,*), b(ldb,*)
     end subroutine dposv
 
+    subroutine zposv(uplo, n, nrhs, a, lda, b, ldb, info)
+        character(len=1), intent(in) :: uplo
+        integer(kind=4), intent(in) :: n, nrhs, lda, ldb
+        integer(kind=4), intent(out) :: info
+        complex(kind=8), intent(inout) :: a(lda,*), b(ldb,*)
+    end subroutine zposv
+
     subroutine sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info)
         character(len=1), intent(in) :: jobu, jobvt
         integer(kind=4), intent(in) :: m, n, lda, ldu, ldvt, lwork
@@ -194,6 +216,14 @@ interface
         real(kind=8), intent(inout) :: a(lda,*), work(*)
         real(kind=8), intent(out) :: w(*)
     end subroutine dsyev
+
+    subroutine zheev(jobz, uplo, n, a, lda, w, work, lwork, rwork, info)
+        character(len=1), intent(in) :: jobz, uplo
+        integer(kind=4), intent(in) :: n, lda, lwork
+        integer(kind=4), intent(out) :: info
+        complex(kind=8), intent(inout) :: a(lda,*), work(*)
+        real(kind=8), intent(out) :: w(*), rwork(*)
+    end subroutine zheev
 
     subroutine ssyevr(jobz, range, uplo, n, a, lda, vl, vu, il, iu, abstol, &
         m, w, z, ldz, isuppz, work, lwork, iwork, liwork, info)
@@ -989,6 +1019,195 @@ subroutine svd_solve(m, n, a, b, x)
     if(info /= 0) call lapack_stop('SVD_SOLVE', 'DGELSS', info)
     x = rhs(1:n,1)
 end subroutine svd_solve
+
+subroutine hermitian_solve_dp(a, b, x, flag)
+    real(kind=8), intent(in)  :: a(:,:), b(:)
+    real(kind=8), intent(out) :: x(:)
+    integer(kind=4), optional, intent(out) :: flag
+    real(kind=8), allocatable :: acopy(:,:), rhs(:,:)
+    integer(kind=4) :: info, n
+    if(present(flag)) flag = 0
+    n = size(b)
+    x = 0.0_dp
+    if(size(a,1) /= n .or. size(a,2) /= n .or. size(x) /= n .or. n <= 0)then
+        if(present(flag))then
+            flag = 1
+            return
+        endif
+        call lapack_stop('HERMITIAN_SOLVE', 'DPOSV', -1)
+    endif
+    allocate(acopy(n,n), rhs(n,1))
+    acopy = 0.5_dp * (a + transpose(a))
+    rhs(:,1) = b
+    call dposv('U', n, 1, acopy, n, rhs, n, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_SOLVE', 'DPOSV', info)
+    endif
+    x = rhs(:,1)
+end subroutine hermitian_solve_dp
+
+subroutine hermitian_invert_dp(a, ainv, flag)
+    real(kind=8), intent(in)  :: a(:,:)
+    real(kind=8), intent(out) :: ainv(:,:)
+    integer(kind=4), optional, intent(out) :: flag
+    real(kind=8), allocatable :: acopy(:,:), rhs(:,:)
+    integer(kind=4) :: info, n, i
+    if(present(flag)) flag = 0
+    n = size(a,1)
+    ainv = 0.0_dp
+    if(size(a,2) /= n .or. size(ainv,1) /= n .or. size(ainv,2) /= n .or. n <= 0)then
+        if(present(flag))then
+            flag = 1
+            return
+        endif
+        call lapack_stop('HERMITIAN_INVERT', 'DPOSV', -1)
+    endif
+    allocate(acopy(n,n), rhs(n,n), source=0.0_dp)
+    acopy = 0.5_dp * (a + transpose(a))
+    do i = 1,n
+        rhs(i,i) = 1.0_dp
+    end do
+    call dposv('U', n, n, acopy, n, rhs, n, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_INVERT', 'DPOSV', info)
+    endif
+    ainv = 0.5_dp * (rhs + transpose(rhs))
+end subroutine hermitian_invert_dp
+
+subroutine hermitian_solve_z(a, b, x, flag)
+    complex(kind=8), intent(in)  :: a(:,:), b(:)
+    complex(kind=8), intent(out) :: x(:)
+    integer(kind=4), optional, intent(out) :: flag
+    complex(kind=8), allocatable :: acopy(:,:), rhs(:,:)
+    integer(kind=4) :: info, n, i
+    if(present(flag)) flag = 0
+    n = size(b)
+    x = cmplx(0.0_dp, 0.0_dp, kind=8)
+    if(size(a,1) /= n .or. size(a,2) /= n .or. size(x) /= n .or. n <= 0)then
+        if(present(flag))then
+            flag = 1
+            return
+        endif
+        call lapack_stop('HERMITIAN_SOLVE', 'ZPOSV', -1)
+    endif
+    allocate(acopy(n,n), rhs(n,1))
+    acopy = 0.5_dp * (a + transpose(conjg(a)))
+    do i = 1,n
+        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
+    end do
+    rhs(:,1) = b
+    call zposv('U', n, 1, acopy, n, rhs, n, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_SOLVE', 'ZPOSV', info)
+    endif
+    x = rhs(:,1)
+end subroutine hermitian_solve_z
+
+subroutine hermitian_invert_z(a, ainv, flag)
+    complex(kind=8), intent(in)  :: a(:,:)
+    complex(kind=8), intent(out) :: ainv(:,:)
+    integer(kind=4), optional, intent(out) :: flag
+    complex(kind=8), allocatable :: acopy(:,:), rhs(:,:)
+    integer(kind=4) :: info, n, i
+    if(present(flag)) flag = 0
+    n = size(a,1)
+    ainv = cmplx(0.0_dp, 0.0_dp, kind=8)
+    if(size(a,2) /= n .or. any(shape(ainv) /= [n,n]) .or. n <= 0)then
+        if(present(flag))then
+            flag = 1
+            return
+        endif
+        call lapack_stop('HERMITIAN_INVERT', 'ZPOSV', -1)
+    endif
+    allocate(acopy(n,n), rhs(n,n), source=cmplx(0.0_dp, 0.0_dp, kind=8))
+    acopy = 0.5_dp * (a + transpose(conjg(a)))
+    do i = 1,n
+        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
+        rhs(i,i) = cmplx(1.0_dp, 0.0_dp, kind=8)
+    end do
+    call zposv('U', n, n, acopy, n, rhs, n, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_INVERT', 'ZPOSV', info)
+    endif
+    ainv = 0.5_dp * (rhs + transpose(conjg(rhs)))
+    do i = 1,n
+        ainv(i,i) = cmplx(real(ainv(i,i), dp), 0.0_dp, kind=8)
+    end do
+end subroutine hermitian_invert_z
+
+subroutine hermitian_eigh_z(a, eigvals, eigvecs, flag)
+    complex(kind=8), intent(in)  :: a(:,:)
+    real(kind=8),    intent(out) :: eigvals(:)
+    complex(kind=8), intent(out) :: eigvecs(:,:)
+    integer(kind=4), optional, intent(out) :: flag
+    complex(kind=8), allocatable :: acopy(:,:), work(:), vec_tmp(:)
+    complex(kind=8) :: work_query(1)
+    real(kind=8), allocatable :: rwork(:)
+    real(kind=8) :: eval_tmp
+    integer(kind=4) :: info, lwork, n, i, j
+    if(present(flag)) flag = 0
+    n = size(a,1)
+    eigvals = 0.0_dp
+    eigvecs = cmplx(0.0_dp, 0.0_dp, kind=8)
+    if(size(a,2) /= n .or. size(eigvals) < n .or. size(eigvecs,1) < n .or. size(eigvecs,2) < n .or. n <= 0)then
+        if(present(flag))then
+            flag = 1
+            return
+        endif
+        call lapack_stop('HERMITIAN_EIGH', 'ZHEEV', -1)
+    endif
+    allocate(acopy(n,n), rwork(max(1, 3*n - 2)))
+    acopy = 0.5_dp * (a + transpose(conjg(a)))
+    do i = 1,n
+        acopy(i,i) = cmplx(real(acopy(i,i), dp), 0.0_dp, kind=8)
+    end do
+    lwork = -1
+    call zheev('V', 'U', n, acopy, n, eigvals, work_query, lwork, rwork, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_EIGH workspace query', 'ZHEEV', info)
+    endif
+    lwork = max(1, int(real(work_query(1), dp)))
+    allocate(work(lwork))
+    call zheev('V', 'U', n, acopy, n, eigvals, work, lwork, rwork, info)
+    if(info /= 0)then
+        if(present(flag))then
+            flag = info
+            return
+        endif
+        call lapack_stop('HERMITIAN_EIGH', 'ZHEEV', info)
+    endif
+    eigvecs(1:n,1:n) = acopy
+    allocate(vec_tmp(n))
+    do i = 1,n / 2
+        j = n - i + 1
+        eval_tmp   = eigvals(i)
+        eigvals(i) = eigvals(j)
+        eigvals(j) = eval_tmp
+        vec_tmp = eigvecs(1:n,i)
+        eigvecs(1:n,i) = eigvecs(1:n,j)
+        eigvecs(1:n,j) = vec_tmp
+    end do
+end subroutine hermitian_eigh_z
 
 subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, info)
     procedure(sparse_matvec_sp_proc) :: matvec

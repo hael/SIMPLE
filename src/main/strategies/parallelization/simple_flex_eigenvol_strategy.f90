@@ -5,11 +5,12 @@ use simple_builder,          only: builder
 use simple_cmdline,          only: cmdline
 use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
+use simple_linalg,           only: hermitian_invert, hermitian_solve
 use simple_matcher_3Drec,    only: init_rec
 use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
-use simple_reconstructor,    only: reconstructor, insert_plane_oversamp_multi_scaled, project_fplanes_mean_basis
+use simple_reconstructor,    only: reconstructor, insert_plane_oversamp_coupled_scaled, project_fplanes_mean_basis
 implicit none
 
 public :: run_flex_eigenvol_linear
@@ -18,6 +19,8 @@ private
 
 real(dp), parameter :: LATENT_RIDGE = 1.0d-3
 real(dp), parameter :: MODE_VAR_FLOOR = 1.0d-3
+real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
+real(dp), parameter :: COUPLED_MSTEP_RIDGE_ABS = 1.0d-10
 real,     parameter :: TRAJ_SIGMAS(7) = [-3., -2., -1., 0., 1., 2., 3.]
 
 contains
@@ -31,17 +34,17 @@ contains
         type(fplane_type),  allocatable  :: fpls(:)
         type(string)                     :: sigma2_fname, zfname
         integer, allocatable             :: pinds(:)
-        real(dp), allocatable            :: z(:,:), z_postvar(:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
+        real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
         integer                          :: nptcls, ncomp, niters, iter, q, kfromto_eff(2)
         integer(timer_int_kind)          :: t_total, t_step
         t_total = tic()
         call validate_inputs(params, cline, ncomp, niters)
         call select_particles(params, build, pinds, nptcls)
-        allocate(z(nptcls,ncomp), z_postvar(nptcls,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls), &
+        allocate(z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls), &
             &mode_vars(ncomp), basis_recs(ncomp))
         call initialize_latents(z, nptcls, ncomp)
         call orthonormalize_latents(z, nptcls, ncomp)
-        z_postvar = 0.d0
+        z_postcov = 0.d0
         mode_vars = 1.d0
         kfromto_eff = flex_kfromto(params)
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL PARTICLES  : ', nptcls
@@ -68,11 +71,11 @@ contains
             write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_EIGENVOL LINEAR ITERATION ', iter, ' / ', niters
             call flush(logfhandle)
             t_step = tic()
-            call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postvar, pinds, nptcls, ncomp, fpls)
+            call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postcov, pinds, nptcls, ncomp, fpls)
             call log_iter_seconds('>>> FLEX_EIGENVOL ITER M-STEP SECONDS', iter, toc(t_step))
             t_step = tic()
             call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, mode_vars, &
-                &z_postvar, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls)
+                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls)
             call log_iter_seconds('>>> FLEX_EIGENVOL ITER E-STEP SECONDS', iter, toc(t_step))
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MODE RESIDUAL ENERGY', resid_energy, nptcls)
@@ -85,11 +88,11 @@ contains
         write(logfhandle,'(A)') '>>> FLEX_EIGENVOL FINAL REFIT'
         call flush(logfhandle)
         t_step = tic()
-        call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postvar, pinds, nptcls, ncomp, fpls)
+        call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postcov, pinds, nptcls, ncomp, fpls)
         call log_seconds('>>> FLEX_EIGENVOL FINAL M-STEP SECONDS', toc(t_step))
         t_step = tic()
         call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, mode_vars, &
-            &z_postvar, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls)
+            &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls)
         call log_seconds('>>> FLEX_EIGENVOL FINAL E-STEP SECONDS', toc(t_step))
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MODE RESIDUAL ENERGY', resid_energy, nptcls)
@@ -114,7 +117,7 @@ contains
         call cleanup_planes(fpls)
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(z) ) deallocate(z)
-        if( allocated(z_postvar) ) deallocate(z_postvar)
+        if( allocated(z_postcov) ) deallocate(z_postcov)
         if( allocated(resid_energy) ) deallocate(resid_energy)
         if( allocated(resid_mean_energy) ) deallocate(resid_mean_energy)
         if( allocated(mode_vars) ) deallocate(mode_vars)
@@ -182,27 +185,33 @@ contains
         call basis_rec%reset_exp
     end subroutine init_output_reconstructor
 
-    subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, z_postvar, pinds, nptcls, ncomp, fpls )
+    subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, z_postcov, pinds, nptcls, ncomp, fpls )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
         integer,             intent(in)    :: nptcls, ncomp
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real(dp),            intent(in)    :: z(nptcls,ncomp), z_postvar(nptcls,ncomp)
+        real(dp),            intent(in)    :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
         integer,             intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         type(fplane_type) :: mean_fpl
         type(ori)         :: orientation
-        integer           :: batchlims(2), batchsz, ibatch, i, iptcl, q, row, progress_stride
+        real,    allocatable :: rho_cross_exp(:,:,:,:)
+        real(dp)             :: latent_second(ncomp,ncomp)
+        integer              :: exp_shape(3), npairs
+        integer           :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, row, progress_stride
         integer(timer_int_kind) :: t_total, t_phase, t_comp
         t_total = tic()
-        write(logfhandle,'(A)') '>>> FLEX_EIGENVOL M-STEP: UPDATING EIGENVOLUMES'
+        write(logfhandle,'(A)') '>>> FLEX_EIGENVOL M-STEP: UPDATING EIGENVOLUMES WITH COUPLED BLOCK SOLVE'
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
         do q = 1, ncomp
             call basis_recs(q)%reset
             call basis_recs(q)%reset_exp
         end do
+        npairs    = (ncomp * (ncomp + 1)) / 2
+        exp_shape = shape(basis_recs(1)%cmat_exp)
+        allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         t_phase = tic()
@@ -219,8 +228,14 @@ contains
                 if( orientation%isstatezero() ) cycle
                 call mean_rec%project_fplane(orientation, fpls(i), mean_fpl, apply_ctf_amp=.true.)
                 call subtract_plane(fpls(i), mean_fpl)
-                call insert_plane_oversamp_multi_scaled(basis_recs, build%pgrpsyms, orientation, fpls(i), &
-                    &z(row,:), z(row,:) * z(row,:) + z_postvar(row,:))
+                latent_second = z_postcov(row,:,:)
+                do q = 1, ncomp
+                    do r = 1, ncomp
+                        latent_second(q,r) = latent_second(q,r) + z(row,q) * z(row,r)
+                    end do
+                end do
+                call insert_plane_oversamp_coupled_scaled(basis_recs, rho_cross_exp, build%pgrpsyms, &
+                    &orientation, fpls(i), z(row,:), latent_second)
             end do
             if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
                 write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_EIGENVOL M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
@@ -232,11 +247,15 @@ contains
         call cleanup_runtime_batch(build, fpls)
         call cleanup_plane(mean_fpl)
         t_phase = tic()
+        call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
+        call log_seconds('>>> FLEX_EIGENVOL M-STEP COUPLED SOLVE SECONDS', toc(t_phase))
+        deallocate(rho_cross_exp)
+        t_phase = tic()
         do q = 1, ncomp
             write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_EIGENVOL M-STEP FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
             t_comp = tic()
-            call finalize_basis_for_projection(params, basis_recs(q))
+            call finalize_basis_for_projection(params, basis_recs(q), density_corrected=.true.)
             call log_comp_seconds('>>> FLEX_EIGENVOL M-STEP FINALIZE SECONDS', q, toc(t_comp))
         end do
         call log_seconds('>>> FLEX_EIGENVOL M-STEP FINALIZE TOTAL SECONDS', toc(t_phase))
@@ -244,7 +263,7 @@ contains
     end subroutine update_basis_from_latents
 
     subroutine infer_latents_from_basis( params, build, mean_rec, basis_recs, z, mode_vars, &
-        &z_postvar, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls )
+        &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -252,13 +271,14 @@ contains
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
         real(dp),            intent(inout) :: z(nptcls,ncomp)
         real(dp),            intent(inout) :: mode_vars(ncomp)
-        real(dp),            intent(out)   :: z_postvar(nptcls,ncomp)
+        real(dp),            intent(out)   :: z_postcov(nptcls,ncomp,ncomp)
         real(dp),            intent(out)   :: resid_energy(nptcls), resid_mean_energy(nptcls)
         integer,             intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpls(:)
         type(ori),         allocatable :: orientations(:)
-        real(dp), allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_diag(:,:), mode_second(:,:)
+        complex(dp), allocatable :: gram_h(:,:,:), rhs_h(:,:)
+        real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:), mode_second(:,:)
         integer           :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, row, ithr, progress_stride
         integer(timer_int_kind) :: t_total, t_phase
         t_total = tic()
@@ -266,11 +286,11 @@ contains
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
         allocate(basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob), orientations(nthr_glob), &
-            &gram(ncomp,ncomp,nthr_glob), rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), &
-            &post_diag(ncomp,nthr_glob), mode_second(ncomp,nthr_glob))
+            &gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob), gram(ncomp,ncomp,nthr_glob), &
+            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), mode_second(ncomp,nthr_glob))
         resid_energy = 0.d0
         resid_mean_energy = 0.d0
-        z_postvar = 0.d0
+        z_postcov = 0.d0
         mode_second = 0.d0
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
@@ -292,21 +312,27 @@ contains
                     &mean_fpls(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
                 call subtract_plane(fpls(i), mean_fpls(ithr))
                 resid_mean_energy(row) = plane_energy(fpls(i))
-                gram(:,:,ithr) = 0.d0
-                rhs(:,ithr)    = 0.d0
+                gram_h(:,:,ithr) = DCMPLX_ZERO
+                rhs_h(:,ithr)    = DCMPLX_ZERO
+                gram(:,:,ithr)   = 0.d0
+                rhs(:,ithr)      = 0.d0
                 do q = 1, ncomp
-                    rhs(q,ithr) = plane_inner_product(fpls(i), basis_fpls(q,ithr))
+                    rhs_h(q,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), fpls(i))
+                    rhs(q,ithr)   = real(rhs_h(q,ithr), dp)
                     do r = q, ncomp
-                        gram(q,r,ithr) = plane_inner_product(basis_fpls(q,ithr), basis_fpls(r,ithr))
-                        gram(r,q,ithr) = gram(q,r,ithr)
+                        gram_h(q,r,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), basis_fpls(r,ithr))
+                        gram_h(r,q,ithr) = conjg(gram_h(q,r,ithr))
+                        gram(q,r,ithr)   = real(gram_h(q,r,ithr), dp)
+                        gram(r,q,ithr)   = gram(q,r,ithr)
                     end do
                     gram(q,q,ithr) = gram(q,q,ithr) + ppca_prior_precision(mode_vars(q))
                 end do
-                call solve_ppca_posterior(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr), post_diag(:,ithr))
+                call solve_ppca_posterior(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr), post_cov(:,:,ithr))
                 z(row,:) = zrow(:,ithr)
+                z_postcov(row,:,:) = post_cov(:,:,ithr)
                 do q = 1, ncomp
-                    z_postvar(row,q) = post_diag(q,ithr)
-                    mode_second(q,ithr) = mode_second(q,ithr) + zrow(q,ithr) * zrow(q,ithr) + post_diag(q,ithr)
+                    mode_second(q,ithr) = mode_second(q,ithr) + zrow(q,ithr) * zrow(q,ithr) + &
+                        &max(0.d0, post_cov(q,q,ithr))
                 end do
                 do q = 1, ncomp
                     call subtract_scaled_plane(fpls(i), basis_fpls(q,ithr), zrow(q,ithr))
@@ -333,15 +359,139 @@ contains
                 call cleanup_plane(basis_fpls(q,ithr))
             end do
         end do
-        deallocate(basis_fpls, mean_fpls, orientations, gram, rhs, zrow, post_diag, mode_second)
+        deallocate(basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov, mode_second)
         call log_seconds('>>> FLEX_EIGENVOL E-STEP TOTAL SECONDS', toc(t_total))
     end subroutine infer_latents_from_basis
 
-    subroutine finalize_basis_for_projection( params, basis_rec )
+    subroutine solve_coupled_basis_exp( basis_recs, rho_cross_exp, ncomp )
+        integer,             intent(in)    :: ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        real,                intent(in)    :: rho_cross_exp(:,:,:,:)
+        complex(dp) :: rhs(ncomp), sol(ncomp)
+        real(dp)    :: amat(ncomp,ncomp)
+        real(dp)    :: diag_sum, ridge, denom
+        integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag
+        lb = lbound(basis_recs(1)%cmat_exp)
+        ub = ubound(basis_recs(1)%cmat_exp)
+        !$omp parallel do collapse(3) default(shared) schedule(static) &
+        !$omp private(h,k,m,ih,ik,im,q,r,amat,rhs,sol,diag_sum,ridge,denom,flag) proc_bind(close)
+        do m = lb(3), ub(3)
+            do k = lb(2), ub(2)
+                do h = lb(1), ub(1)
+                    ih = h - lb(1) + 1
+                    ik = k - lb(2) + 1
+                    im = m - lb(3) + 1
+                    amat = 0.d0
+                    rhs  = DCMPLX_ZERO
+                    diag_sum = 0.d0
+                    do q = 1, ncomp
+                        rhs(q) = cmplx(basis_recs(q)%cmat_exp(h,k,m), kind=dp)
+                        do r = q, ncomp
+                            amat(q,r) = real(rho_cross_exp(pair_index(q,r),ih,ik,im), dp)
+                            amat(r,q) = amat(q,r)
+                        end do
+                        diag_sum = diag_sum + max(0.d0, amat(q,q))
+                    end do
+                    if( diag_sum <= DTINY .and. sum(abs(rhs)) <= DTINY )then
+                        do q = 1, ncomp
+                            basis_recs(q)%cmat_exp(h,k,m) = CMPLX_ZERO
+                        end do
+                        cycle
+                    endif
+                    ridge = max(COUPLED_MSTEP_RIDGE_ABS, COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp))
+                    do q = 1, ncomp
+                        amat(q,q) = amat(q,q) + ridge
+                    end do
+                    call solve_real_spd_complex(amat, rhs, sol, ncomp, flag)
+                    if( flag /= 0 )then
+                        do q = 1, ncomp
+                            denom = max(abs(amat(q,q)), ridge)
+                            if( denom > DTINY )then
+                                sol(q) = rhs(q) / denom
+                            else
+                                sol(q) = DCMPLX_ZERO
+                            endif
+                        end do
+                    endif
+                    do q = 1, ncomp
+                        basis_recs(q)%cmat_exp(h,k,m) = cmplx(real(sol(q), sp), real(aimag(sol(q)), sp))
+                    end do
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine solve_coupled_basis_exp
+
+    integer pure function pair_index( q, r ) result( ipair )
+        integer, intent(in) :: q, r
+        ipair = (r * (r - 1)) / 2 + q
+    end function pair_index
+
+    subroutine solve_real_spd_complex( amat_in, rhs, sol, n, flag )
+        integer,     intent(in)  :: n
+        real(dp),    intent(in)  :: amat_in(n,n)
+        complex(dp), intent(in)  :: rhs(n)
+        complex(dp), intent(out) :: sol(n)
+        integer,     intent(out) :: flag
+        real(dp) :: chol(n,n), yr(n), yi(n), xr(n), xi(n)
+        real(dp) :: sumr, sumi, sumv, tol
+        integer  :: i, j, l
+        flag = 0
+        sol  = DCMPLX_ZERO
+        chol = 0.d0
+        tol  = max(DTINY, epsilon(1.d0) * max(1.d0, maxval(abs(amat_in))))
+        do j = 1, n
+            sumv = amat_in(j,j)
+            do l = 1, j - 1
+                sumv = sumv - chol(j,l) * chol(j,l)
+            end do
+            if( sumv <= tol )then
+                flag = 1
+                return
+            endif
+            chol(j,j) = sqrt(sumv)
+            do i = j + 1, n
+                sumv = amat_in(i,j)
+                do l = 1, j - 1
+                    sumv = sumv - chol(i,l) * chol(j,l)
+                end do
+                chol(i,j) = sumv / chol(j,j)
+            end do
+        end do
+        do i = 1, n
+            sumr = real(rhs(i), dp)
+            sumi = aimag(rhs(i))
+            do l = 1, i - 1
+                sumr = sumr - chol(i,l) * yr(l)
+                sumi = sumi - chol(i,l) * yi(l)
+            end do
+            yr(i) = sumr / chol(i,i)
+            yi(i) = sumi / chol(i,i)
+        end do
+        do i = n, 1, -1
+            sumr = yr(i)
+            sumi = yi(i)
+            do l = i + 1, n
+                sumr = sumr - chol(l,i) * xr(l)
+                sumi = sumi - chol(l,i) * xi(l)
+            end do
+            xr(i) = sumr / chol(i,i)
+            xi(i) = sumi / chol(i,i)
+        end do
+        do i = 1, n
+            sol(i) = cmplx(xr(i), xi(i), kind=dp)
+        end do
+    end subroutine solve_real_spd_complex
+
+    subroutine finalize_basis_for_projection( params, basis_rec, density_corrected )
         class(parameters),   intent(in)    :: params
         type(reconstructor), intent(inout) :: basis_rec
+        logical, optional,   intent(in)    :: density_corrected
+        logical :: l_density_corrected
+        l_density_corrected = .false.
+        if( present(density_corrected) ) l_density_corrected = density_corrected
         call basis_rec%compress_exp
-        call basis_rec%sampl_dens_correct
+        if( .not. l_density_corrected ) call basis_rec%sampl_dens_correct
         call basis_rec%ifft
         call basis_rec%div(real(params%box))
         call regularize_basis_volume(params, basis_rec)
@@ -777,10 +927,10 @@ contains
         if( allocated(fpl%transfer_plane) ) fpl%transfer_plane = data_scale_sp * fpl%transfer_plane
     end subroutine scale_plane_for_latent_insert
 
-    function plane_inner_product( lhs_fpl, rhs_fpl ) result( val )
+    function hermitian_plane_inner_product( lhs_fpl, rhs_fpl ) result( val )
         use simple_math, only: ceil_div, floor_div
         type(fplane_type), intent(in) :: lhs_fpl, rhs_fpl
-        real(dp) :: val
+        complex(dp) :: val
         complex(dp) :: acc
         integer :: h, k, hmin, hmax, kmin, kmax, nyq_eff, sample_stride
         acc = DCMPLX_ZERO
@@ -798,11 +948,11 @@ contains
         do k = kmin, kmax, sample_stride
             do h = hmin, hmax, sample_stride
                 if( nint(sqrt(real(h*h + k*k))) > nyq_eff ) cycle
-                acc = acc + cmplx(lhs_fpl%cmplx_plane(h,k), kind=dp) * conjg(cmplx(rhs_fpl%cmplx_plane(h,k), kind=dp))
+                acc = acc + conjg(cmplx(lhs_fpl%cmplx_plane(h,k), kind=dp)) * cmplx(rhs_fpl%cmplx_plane(h,k), kind=dp)
             end do
         end do
-        val = real(acc, dp)
-    end function plane_inner_product
+        val = acc
+    end function hermitian_plane_inner_product
 
     function plane_energy( fpl ) result( val )
         use simple_math, only: ceil_div, floor_div
@@ -834,69 +984,19 @@ contains
         prec = max(prec, LATENT_RIDGE)
     end function ppca_prior_precision
 
-    subroutine solve_ppca_posterior( gram, rhs, x, post_diag )
+    subroutine solve_ppca_posterior( gram, rhs, x, post_cov )
         real(dp), intent(in)  :: gram(:,:), rhs(:)
-        real(dp), intent(out) :: x(:), post_diag(:)
-        real(dp) :: unit(size(rhs)), sol(size(rhs))
-        integer  :: q, n
+        real(dp), intent(out) :: x(:), post_cov(:,:)
+        integer :: flag
+        integer  :: n
         n = size(rhs)
-        call solve_latent_system(gram, rhs, x)
-        post_diag = 0.d0
-        do q = 1, n
-            unit = 0.d0
-            unit(q) = 1.d0
-            call solve_latent_system(gram, unit, sol)
-            post_diag(q) = max(0.d0, sol(q))
-        end do
-    end subroutine solve_ppca_posterior
-
-    subroutine solve_latent_system( gram, rhs, x )
-        real(dp), intent(in)  :: gram(:,:), rhs(:)
-        real(dp), intent(out) :: x(:)
-        real(dp) :: a(size(rhs),size(rhs)), b(size(rhs)), rowtmp(size(rhs))
-        real(dp) :: pivot, factor, tmp
-        integer  :: n, i, j, k, piv
-        n = size(rhs)
-        a = gram
-        b = rhs
         x = 0.d0
-        do k = 1, n - 1
-            piv   = k
-            pivot = abs(a(k,k))
-            do i = k + 1, n
-                if( abs(a(i,k)) > pivot )then
-                    pivot = abs(a(i,k))
-                    piv   = i
-                endif
-            end do
-            if( pivot <= DTINY ) return
-            if( piv /= k )then
-                rowtmp(:) = a(k,:)
-                a(k,:)    = a(piv,:)
-                a(piv,:)  = rowtmp(:)
-                tmp       = b(k)
-                b(k)      = b(piv)
-                b(piv)    = tmp
-            endif
-            do i = k + 1, n
-                factor = a(i,k) / a(k,k)
-                a(i,k:n) = a(i,k:n) - factor * a(k,k:n)
-                b(i)     = b(i)     - factor * b(k)
-            end do
-        end do
-        if( abs(a(n,n)) <= DTINY ) return
-        do i = n, 1, -1
-            tmp = b(i)
-            do j = i + 1, n
-                tmp = tmp - a(i,j) * x(j)
-            end do
-            if( abs(a(i,i)) <= DTINY )then
-                x = 0.d0
-                return
-            endif
-            x(i) = tmp / a(i,i)
-        end do
-    end subroutine solve_latent_system
+        post_cov = 0.d0
+        call hermitian_solve(gram, rhs, x, flag)
+        if( flag /= 0 ) return
+        call hermitian_invert(gram, post_cov, flag)
+        if( flag /= 0 ) post_cov = 0.d0
+    end subroutine solve_ppca_posterior
 
     subroutine copy_plane( src, dst )
         type(fplane_type), intent(in)    :: src
