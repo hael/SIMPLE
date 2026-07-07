@@ -21,6 +21,7 @@ use simple_exec_ori,        only: exec_ori_commander
 use simple_exec_print,      only: exec_print_commander
 use simple_exec_sim,        only: exec_sim_commander
 use simple_exec_volume,     only: exec_volume_commander
+use simple_exec_sym,        only: exec_sym_commander
 use simple_exec_res,        only: exec_res_commander
 use simple_exec_dock,       only: exec_dock_commander
 use simple_exec_validate,   only: exec_validate_commander
