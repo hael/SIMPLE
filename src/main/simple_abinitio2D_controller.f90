@@ -121,7 +121,7 @@ contains
         call set_cluster2D_stage_iteration_policy( cfg, cline_cluster2D )
         call set_cluster2D_stage_phase_policy( cfg, istage )
         call set_cluster2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
-        call set_cluster2D_stage_search_policy( cfg, params, istage )
+        call set_cluster2D_stage_search_policy( cfg, params, istage, size(stage_parms) )
     end subroutine build_cluster2D_stage_cfg
 
     subroutine set_cluster2D_stage_objfun_policy( cfg, params )
@@ -252,12 +252,16 @@ contains
         cfg%gauref   = 'no'
     end subroutine set_cluster2D_stage_regular_refs
 
-    subroutine set_cluster2D_stage_search_policy( cfg, params, istage )
+    subroutine set_cluster2D_stage_search_policy( cfg, params, istage, nstages )
         type(cluster2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
-        integer,                   intent(in)    :: istage
+        integer,                   intent(in)    :: istage, nstages
         if( istage < PROBREFINE_STAGE )then
             cfg%refine = 'snhc_smpl'
+        else if( trim(params%refine) == 'prob' )then
+            cfg%refine = 'prob'
+        else if( trim(params%refine) == 'prob_snhc' .and. istage == nstages )then
+            cfg%refine = 'prob'
         else if( trim(params%refine) == 'prob_prior' .and. istage >= PROB_PRIOR_STAGE )then
             cfg%refine = 'prob_prior'
         else
