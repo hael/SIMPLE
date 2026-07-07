@@ -284,6 +284,7 @@ contains
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
             call run_distributed_cavg_assembly(params, cline, self%nthr_master)
+            call build%spproj%read_segment(params%oritype, params%projfile)
         endif
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then

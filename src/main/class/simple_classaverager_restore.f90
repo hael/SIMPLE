@@ -125,6 +125,7 @@ contains
         do icls=1,p_ptr%ncls
             pop = pops(icls)
             call b_ptr%clsfrcs%estimate_res(icls, frc05, frc0143)
+            call ptcl_field%set_field2single('class', icls, 'res', frc0143)
             call cls_field%set(icls, 'class',     icls)
             call cls_field%set(icls, 'pop',       pop)
             call cls_field%set(icls, 'res',       frc0143)

@@ -239,6 +239,7 @@ contains
         endif
         call ostats%set(1,'IN-PLANE_DIST',            self%dist_inpl%avg)
         call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
+        call ostats%set(1,'RESOLUTION',               self%res%avg)
         if( l_report_npeaks ) call ostats%set(1,'NPEAKS', self%npeaks%avg)
         call ostats%set(1,'SCORE',                    self%score%avg)
         call ostats%write(string(STATS_FILE))
