@@ -463,6 +463,7 @@ contains
         call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT),  selected=.true.)
         call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), selected=.false.)
         call write_hard_gate_stack(string('hard_gate_rejections'//MRC_EXT))
+        call write_ranked_quality_stack(string('quality_ranked_cavgs'//MRC_EXT), 'quality_ranked_cavgs.txt')
         if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
             if( quality_mode == QUALITY_MODE_EVALUATE )then
                 write(logfhandle,'(A)') '>>> QUALITY EVALUATE MODE: project selection left unchanged'
@@ -530,6 +531,43 @@ contains
             enddo
             write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
         end subroutine write_hard_gate_stack
+
+        subroutine write_ranked_quality_stack( fname, rank_fname )
+            type(string),     intent(in) :: fname
+            character(len=*), intent(in) :: rank_fname
+            real,    allocatable :: sorted_scores(:)
+            integer, allocatable :: order(:)
+            integer :: i, icls, istk, funit
+            if( .not. allocated(quality%scores)      ) THROW_HARD('write_ranked_quality_stack: missing quality scores')
+            if( .not. allocated(quality%states)      ) THROW_HARD('write_ranked_quality_stack: missing quality states')
+            if( .not. allocated(quality%labels)      ) THROW_HARD('write_ranked_quality_stack: missing quality labels')
+            if( .not. allocated(quality%hard_reject) ) THROW_HARD('write_ranked_quality_stack: missing hard-reject mask')
+            if( size(quality%scores) /= ncls ) THROW_HARD('write_ranked_quality_stack: score size mismatch')
+            if( size(quality%states) /= ncls ) THROW_HARD('write_ranked_quality_stack: state size mismatch')
+            if( size(quality%labels) /= ncls ) THROW_HARD('write_ranked_quality_stack: label size mismatch')
+            if( size(quality%hard_reject) /= ncls ) THROW_HARD('write_ranked_quality_stack: hard-reject size mismatch')
+            allocate(sorted_scores(ncls), source=quality%scores)
+            allocate(order(ncls))
+            do i = 1, ncls
+                order(i) = i
+            enddo
+            call hpsort(sorted_scores, order)
+            if( file_exists(fname) ) call del_file(fname)
+            open(newunit=funit, file=trim(rank_fname), status='replace', action='write')
+            write(funit,'(A)') 'rank,class,quality_score,state,hard_reject,quality_cluster'
+            istk = 0
+            do i = ncls, 1, -1
+                icls = order(i)
+                istk = istk + 1
+                call cavg_imgs(icls)%write(fname, istk)
+                write(funit,'(I0,A,I0,A,ES14.6,A,I0,A,L1,A,I0)') istk, ',', icls, ',', quality%scores(icls), ',', &
+                    quality%states(icls), ',', quality%hard_reject(icls), ',', quality%labels(icls)
+            enddo
+            close(funit)
+            deallocate(sorted_scores, order)
+            write(logfhandle,'(A,A,A,I6)') '>>> WROTE ', fname%to_char(), ' #CAVGS: ', istk
+            write(logfhandle,'(A,A)') '>>> WROTE ', trim(rank_fname)
+        end subroutine write_ranked_quality_stack
 
         function resolve_quality_context() result( context )
             character(len=32) :: context
