@@ -140,7 +140,7 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 
 - `chunk100mics`: default chunk/stream-style pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v4`.
 - `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
-- `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training2`.
+- `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training3`.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -268,16 +268,16 @@ enforce_min_accept_frac false
 
 On the refreshed v4 chunk-training table, this promoted preset scored `macro_evaluate_score=0.50847`, improving over the previous built-in chunk preset (`-0.80859`). The main gain was selected-class protection: soft-classification totals moved from `tp=297, fp=95, tn=151, fn=33` to `tp=324, fp=83, tn=163, fn=6`.
 
-`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training2`.
+`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training3`.
 
 ```text
 model_family        pairwise_logistic
-prob_threshold      4.500000E-01
-regularization      1.000000E-04
+prob_threshold      3.500000E-01
+regularization      3.000000E-04
 feature_weights     uniform over all 14 microchunk_plus_score_signal features
 ```
 
-On the refreshed pool-training table, this promoted preset scored `macro_evaluate_score=0.91875`, improving over the previous built-in pool preset (`0.74351`) while reducing total soft-classification errors from `fp=15, fn=35` to `fp=3, fn=11`.
+On the refreshed pool3 training table, this promoted preset scored `macro_evaluate_score=0.48524`, improving over the previous built-in pool preset (`-1.00157`). It reduced accepted manually rejected classes substantially, moving soft-classification totals from `tp=1228, fp=337, tn=169, fn=20` to `tp=1212, fp=141, tn=365, fn=36`.
 
 `chunk100mics_linear` preserves the previous linear score-and-threshold model as an interpretability tool. Its feature weights can be read directly as non-negative contributions to the normalized scalar quality score.
 
