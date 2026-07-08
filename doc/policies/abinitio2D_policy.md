@@ -131,6 +131,21 @@ Stage policy:
 - stage 1 uses a random sampled subset but disables fractional carry-over of previous class-average sums
 - stages 2 and later use sampled update with fractional class-average restoration when the sample is smaller than the active set
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`cluster2D_exec` reproduce that subset rather than resampling
+- `prob_assign=legacy` preserves historical normalized-table sampling, while
+  `prob_assign=likelihood` keeps raw objective distances and samples evaluated
+  class/in-plane candidates with weights proportional to `exp(-dist)` over the
+  explicit top-K support selected by the current probabilistic mode
+- under `prob_assign=likelihood`, variance-normalized Euclidean distances are
+  likelihood-like negative log weights; `objfun=cc` is supported as a monotone
+  pseudo-likelihood with `dist = 1 - clamp(cc, 0, 1)` before applying
+  `exp(-dist)`
+- `refine=prob_prior` only changes how the candidate class neighborhood is
+  proposed from previous promising assignments; it must still obey the selected
+  `prob_assign=legacy|likelihood` assignment route
+- likelihood-weighted 2D modes may still profile/MAP-refine shifts, and
+  sometimes in-plane rotation, after stochastic candidate selection; the
+  assignment table then stores the refined/profiled distance, which is intended
+  current behavior rather than a full soft-assignment EM update
 - staged `fillin=yes` currently acts as a full-assignment coverage guard: it
   keeps iterating until active particles have assignments, while particle
   selection still follows the normal sampled-update path

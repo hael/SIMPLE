@@ -301,16 +301,14 @@ contains
             istate_loc = self%sinds(ri_loc)
             iproj_loc  = self%jinds(ri_loc)
             full_ref   = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
-            if( l_prob_objfun )then
-                if( l_likelihood_inpl )then
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref, iptcl_loc, shift_xy,&
-                        &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                else
-                    call self%b_ptr%pftc%gen_prob_objfun_val(full_ref, iptcl_loc, shift_xy,&
-                        &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
-                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                endif
+            if( l_likelihood_inpl )then
+                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref, iptcl_loc, shift_xy,&
+                    &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            else if( l_prob_objfun )then
+                call self%b_ptr%pftc%gen_prob_objfun_val(full_ref, iptcl_loc, shift_xy,&
+                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
             else
                 call self%b_ptr%pftc%gen_objfun_vals(full_ref, iptcl_loc, shift_xy, dists_inpl(:,ithr_loc))
                 dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)

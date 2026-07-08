@@ -227,6 +227,28 @@ neighborhoods before evaluating candidates:
 - `geom`: use the geometrically nearest subspace point to the current particle
   projection, with no coarse scoring or pooled peaks.
 
+`prob_assign` controls how evaluated probabilistic-table distances are turned
+into stochastic assignments:
+
+- `legacy`: preserve the historical table normalization and threshold-based
+  sampling behavior.
+- `likelihood`: keep raw objective distances and sample evaluated candidates
+  with weights proportional to `exp(-dist)` over an explicit top-K support.
+
+For `prob_assign=likelihood`, the top-K truncation is deliberate. It defines
+the local discrete support actually evaluated by the pre-alignment step; it is
+not meant to represent a full posterior over all SO(3) grid points. Euclidean
+objective distances are variance-normalized by the shell noise model before
+they reach the probability table. `objfun=cc` is supported as a monotone
+pseudo-likelihood by using the distance `1 - clamp(cc, 0, 1)` and then the same
+`exp(-dist)` weighting. Do not describe the CC path as a calibrated Gaussian
+likelihood unless the objective model changes.
+
+Likelihood-weighted probability-table modes may still profile or MAP-refine
+shifts, and sometimes in-plane rotation, after stochastic candidate selection.
+The stored assignment distance is then the refined/profiled objective value.
+This is intended current behavior, not a full soft-assignment EM update.
+
 For multi-state alignment (`nstates > 1`), shift-first candidate scoring is
 disabled. The matcher and probability-table paths may still refine shifts after
 candidate/state selection, but they must not use a shift seed estimated from a

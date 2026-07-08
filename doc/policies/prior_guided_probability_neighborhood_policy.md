@@ -351,6 +351,9 @@ Mode intent:
 - consume a prior artifact written by stage-5 probabilistic registration
 - evaluate stored class rank lists rather than stochastic class proposals for
   particles with a valid prior row
+- leave assignment weighting to `prob_assign`: `prob_prior` only proposes the
+  class neighborhood, while `prob_assign=legacy|likelihood` decides how those
+  evaluated candidates are sampled
 
 Fallback in `refine=prob_prior`:
 
@@ -368,6 +371,8 @@ Orthogonality requirements:
 - no format change to `assignment.dat`
 - no mandatory new command-line flags for existing workflows
 - activation only when `refine=prob_prior` is explicitly requested
+- no private probability route inside `prob_prior`; likelihood mode must use
+  the same top-K `exp(-dist)` assignment semantics as `prob` and `prob_snhc`
 
 ### 2D Binary Artifact Policy (Fast I/O)
 

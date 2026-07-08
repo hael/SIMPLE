@@ -304,14 +304,12 @@ contains
             sh_loc = 0.
             if( l_with_shift .and. l_seed_sh_first ) sh_loc = shift_seed_loc(2:3)
             if( l_snhc_style )then
-                    if( l_prob_objfun )then
-                        if( l_likelihood_inpl )then
-                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                                &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
-                        else
-                            call self%b_ptr%pftc%gen_prob_power_objfun_val(full_ref_loc, iptcl_loc, sh_loc, power_loc,&
-                                &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
-                        endif
+                if( l_likelihood_inpl )then
+                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
+                        &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
+                else if( l_prob_objfun )then
+                    call self%b_ptr%pftc%gen_prob_power_objfun_val(full_ref_loc, iptcl_loc, sh_loc, power_loc,&
+                        &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
                 else
                     call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc, sh_loc, corrs_inpl(:,ithr_loc))
                     call power_sampling(power_loc, self%b_ptr%pftc%get_nrots(), corrs_inpl(:,ithr_loc),&
@@ -321,17 +319,15 @@ contains
                 endif
             else
                 istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
-                if( l_prob_objfun )then
-                    if( l_likelihood_inpl )then
-                        call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                            &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                            &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                    else
-                        call self%b_ptr%pftc%gen_prob_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                            &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
-                            &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                        corr_loc = exp(-dist_loc)
-                    endif
+                if( l_likelihood_inpl )then
+                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
+                        &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
+                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                else if( l_prob_objfun )then
+                    call self%b_ptr%pftc%gen_prob_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
+                        &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
+                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                    corr_loc = exp(-dist_loc)
                 else
                     call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc, sh_loc, corrs_inpl(:,ithr_loc))
                     dists_inpl(:,ithr_loc) = eulprob_dist_switch(corrs_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
@@ -634,27 +630,25 @@ contains
                         if( ri_loc < 1 ) cycle
                         iproj_loc = self%jinds(ri_loc)
                         iref_loc  = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
-                        if( l_prob_objfun )then
-                            if( l_likelihood_inpl )then
-                                if( l_with_shift )then
-                                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
-                                        &shift_seed_loc(2:3), inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
-                                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                                else
-                                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
-                                        &[0.,0.], inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
-                                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                                endif
+                        if( l_likelihood_inpl )then
+                            if( l_with_shift )then
+                                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
+                                    &shift_seed_loc(2:3), inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
                             else
-                                if( l_with_shift )then
-                                    call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, shift_seed_loc(2:3),&
-                                        &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
-                                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                                else
-                                    call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, [0.,0.],&
-                                        &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
-                                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                                endif
+                                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
+                                    &[0.,0.], inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                            endif
+                        else if( l_prob_objfun )then
+                            if( l_with_shift )then
+                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, shift_seed_loc(2:3),&
+                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                            else
+                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, [0.,0.],&
+                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
+                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
                             endif
                         else
                             if( l_with_shift )then
@@ -1091,18 +1085,18 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
-                if( l_prob_objfun )then
+                if( l_likelihood .and. self%p_ptr%l_prob_inpl )then
+                    inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
+                        &self%p_ptr%prob_athres, state=fallback_state)
+                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(fallback_ref_full, self%pinds(iptcl_loc),&
+                        &sh_seed, likelihood_nsample(self%b_ptr%pftc%get_nrots(), inpl_athres_state),&
+                        &dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
+                else if( l_prob_objfun )then
                     if( self%p_ptr%l_prob_inpl )then
                         inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
                             &self%p_ptr%prob_athres, state=fallback_state)
-                        if( l_likelihood )then
-                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(fallback_ref_full, self%pinds(iptcl_loc),&
-                                &sh_seed, likelihood_nsample(self%b_ptr%pftc%get_nrots(), inpl_athres_state),&
-                                &dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
-                        else
-                            call self%b_ptr%pftc%gen_prob_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
-                                &inpl_athres_state, self%p_ptr%prob_athres, dist, irot_loc, dists_inpl_sorted, inds_sorted)
-                        endif
+                        call self%b_ptr%pftc%gen_prob_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
+                            &inpl_athres_state, self%p_ptr%prob_athres, dist, irot_loc, dists_inpl_sorted, inds_sorted)
                     else
                         call self%b_ptr%pftc%gen_best_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
                             &dist, irot_loc)

@@ -239,14 +239,13 @@ contains
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    if( l_prob_objfun )then
-                        if( l_likelihood_inpl )then
-                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
-                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                        else
-                            call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, cxy(2:3), power, ninpl_smpl,&
-                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                        endif
+                    if( l_likelihood_inpl )then
+                        call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        self%loc_tab(icls,i)%dist = inpl_dist
+                    else if( l_prob_objfun )then
+                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, cxy(2:3), power, ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                         self%loc_tab(icls,i)%dist = inpl_dist
                     else
                         call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
@@ -286,14 +285,13 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    if( l_prob_objfun )then
-                        if( l_likelihood_inpl )then
-                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, [0.,0.], ninpl_smpl,&
-                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                        else
-                            call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, [0.,0.], power, ninpl_smpl,&
-                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                        endif
+                    if( l_likelihood_inpl )then
+                        call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, [0.,0.], ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        self%loc_tab(icls,i)%dist = inpl_dist
+                    else if( l_prob_objfun )then
+                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, [0.,0.], power, ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                         self%loc_tab(icls,i)%dist = inpl_dist
                     else
                         call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], inpl_corrs)
@@ -470,14 +468,12 @@ contains
             real,    intent(out) :: dist_loc, corr_loc
             integer, intent(out) :: irot_loc
             integer :: order_ind_loc
-            if( l_prob_objfun )then
-                if( l_likelihood_inpl )then
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
-                        &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
-                else
-                    call self%b_ptr%pftc%gen_prob_power_objfun_val(icls_loc, iptcl_loc, sh_loc, power, ninpl_smpl,&
-                        &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
-                endif
+            if( l_likelihood_inpl )then
+                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
+                    &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
+            else if( l_prob_objfun )then
+                call self%b_ptr%pftc%gen_prob_power_objfun_val(icls_loc, iptcl_loc, sh_loc, power, ninpl_smpl,&
+                    &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
             else
                 call self%b_ptr%pftc%gen_objfun_vals(icls_loc, iptcl_loc, sh_loc, eval_work%inpl_corrs(:,ithr_loc))
                 call power_sampling(power, nrots, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc), ninpl_smpl,&

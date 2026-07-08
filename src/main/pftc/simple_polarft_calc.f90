@@ -177,6 +177,7 @@ type :: polarft_calc
     procedure, private :: gen_euclids
     procedure, private :: gen_hybrid_scores
     procedure, private :: gen_denoised_corrs
+    procedure, private :: gen_prob_likelihood_cc_val
     procedure, private :: gen_best_euclid_val
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_likelihood_euclid_val
@@ -686,6 +687,17 @@ interface
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: cc(self%nrots)
     end subroutine gen_denoised_corrs
+
+    module subroutine gen_prob_likelihood_cc_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_likelihood_cc_val
 
     module subroutine gen_best_euclid_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), target, intent(inout) :: self

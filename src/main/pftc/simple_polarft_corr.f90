@@ -166,7 +166,8 @@ contains
         integer,             intent(inout) :: sorted_inds(self%nrots)
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                THROW_HARD('gen_prob_likelihood_objfun_val not implemented for OBJFUN_CC')
+                call self%gen_prob_likelihood_cc_val(iref, iptcl, shift, nsample, dist, corr, irot, &
+                    &pvec_sorted, sorted_inds)
             case(OBJFUN_EUCLID)
                 if( self%p_ptr%l_objfun_den )then
                     call self%gen_prob_likelihood_hybrid_val(iref, iptcl, shift, nsample, dist, corr, irot, &
@@ -607,6 +608,30 @@ contains
         end function euclid_dist_at_rot
 
     end subroutine gen_prob_euclid_val
+
+    module subroutine gen_prob_likelihood_cc_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        real(sp) :: scores(self%nrots)
+        call self%gen_corrs(iref, iptcl, shift, scores)
+        call sample_likelihood_dist(self%nrots, cc_dist_at_rot, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds)
+        corr = max(0., min(1., scores(irot)))
+
+    contains
+
+        real function cc_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = 1. - max(0., min(1., scores(p_loc)))
+        end function cc_dist_at_rot
+
+    end subroutine gen_prob_likelihood_cc_val
 
     module subroutine gen_prob_likelihood_euclid_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds )
