@@ -147,16 +147,16 @@ contains
         frames2align = 'frames2align_part'//int2str_pad(params%part,params%numlen)//'.mrc'
         ! prepare 4 motion_correct
         ldim = [nint(spproj%os_mic%get(1,'xdim')), nint(spproj%os_mic%get(1,'ydim')), 1]
-        call img%new(ldim, ctfvars%smpd)
+        call img%new(ldim, params%smpd)
         cline_mcorr = cline
         call cline_mcorr%delete('nframesgrp')
         nframesgrp = params%nframesgrp
         params%nframesgrp = 0
         call cline_mcorr%set('prg', 'motion_correct')
         call cline_mcorr%set('mkdir', 'no')
-        ctfvars%smpd = params%smpd
         do iframe=params%fromp,params%top
             call spproj%os_mic%get_ori(iframe, o)
+            ctfvars%smpd = params%smpd
             ! set time window
             fromto(1) = iframe - (nframesgrp-1)/2
             fromto(2) = fromto(1) + nframesgrp - 1
@@ -191,6 +191,7 @@ contains
         call del_file(frames2align)
         call img%kill
         call o%kill
+        call spproj%kill
         call qsys_job_finished(params, string('single_commanders_tseries :: exec_tseries_motion_correct'))
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
