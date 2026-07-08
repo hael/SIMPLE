@@ -98,8 +98,15 @@ set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -w -funroll-loops ${ARCH_FLAG} -fPIC"
     CACHE STRING "Release flags for Fortran" FORCE)
 
 # Debug flags for Fortran
-set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fbounds-check -fcheck=all -Wuninitialized -Wunused -fPIC"
-    CACHE STRING "Debug flags for Fortran" FORCE)
+if(APPLE)
+    # GNU Fortran 16 on macOS can segfault in the debug runtime when
+    # runtime descriptor checks instrument C-interoperable FFTW-backed pointers.
+    set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fcheck=do,mem -Wuninitialized -Wunused -fPIC"
+        CACHE STRING "Debug flags for Fortran" FORCE)
+else()
+    set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fbounds-check -fcheck=all -Wuninitialized -Wunused -fPIC"
+        CACHE STRING "Debug flags for Fortran" FORCE)
+endif()
 
 # ------------------------------------------------------------------------------
 # C / C++ compile flags
