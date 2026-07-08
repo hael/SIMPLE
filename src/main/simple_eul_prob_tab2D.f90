@@ -100,8 +100,7 @@ contains
         self%b_ptr     => build
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
-        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc' .or. trim(params%refine) == 'prob_prior' .or.&
-            &trim(params%refine) == 'prob_softmax'
+        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc' .or. trim(params%refine) == 'prob_prior'
         self%l_prior_mode  = trim(params%refine) == 'prob_prior'
         allocate(self%class_exists(self%nclasses))
         ! In 2D probabilistic assignment classes must be able to recover, otherwise
@@ -168,7 +167,7 @@ contains
         real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
         real    :: inpl_corr, inpl_dist, power, neigh_frac
         logical :: class_active(self%nclasses)
-        logical :: l_prob_objfun
+        logical :: l_likelihood_inpl, l_prob_objfun
         if( self%l_sparse_snhc )then
             call self%fill_tab_prob_snhc_range(i_first, i_last)
             return
@@ -178,7 +177,10 @@ contains
         if( i_to < i_from ) return
         call seed_rnd
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
-        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_prob_objfun      = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_likelihood_inpl  = trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
+            &(trim(self%p_ptr%refine) == 'prob' .or. trim(self%p_ptr%refine) == 'prob_snhc' .or.&
+            &trim(self%p_ptr%refine) == 'prob_prior')
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -238,8 +240,13 @@ contains
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     if( l_prob_objfun )then
-                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, cxy(2:3), power, ninpl_smpl,&
-                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        if( l_likelihood_inpl )then
+                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
+                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        else
+                            call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, cxy(2:3), power, ninpl_smpl,&
+                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        endif
                         self%loc_tab(icls,i)%dist = inpl_dist
                     else
                         call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, cxy(2:3), inpl_corrs)
@@ -280,8 +287,13 @@ contains
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     if( l_prob_objfun )then
-                        call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, [0.,0.], power, ninpl_smpl,&
-                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        if( l_likelihood_inpl )then
+                            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, [0.,0.], ninpl_smpl,&
+                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        else
+                            call self%b_ptr%pftc%gen_prob_power_objfun_val(icls, iptcl, [0.,0.], power, ninpl_smpl,&
+                                &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                        endif
                         self%loc_tab(icls,i)%dist = inpl_dist
                     else
                         call self%b_ptr%pftc%gen_objfun_vals(icls, iptcl, [0.,0.], inpl_corrs)
@@ -318,14 +330,17 @@ contains
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, ninpl_smpl, nrots
         integer :: i_from, i_to
         real    :: lims(2,2), lims_init(2,2), neigh_frac, power, cxy(3)
-        logical :: l_prob_objfun, prior_file_ok
+        logical :: l_likelihood_inpl, l_prob_objfun, prior_file_ok
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
         call seed_rnd
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
-        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_prob_objfun     = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
+        l_likelihood_inpl = trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
+            &(trim(self%p_ptr%refine) == 'prob' .or. trim(self%p_ptr%refine) == 'prob_snhc' .or.&
+            &trim(self%p_ptr%refine) == 'prob_prior')
         neigh_frac  = extremal_decay2D(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
         nrefs_bound = max(2, min(self%nclasses, nint(real(self%nclasses) * (1. - neigh_frac))))
         nrefs_bound = max(1, min(nrefs_bound, self%nclasses))
@@ -456,8 +471,13 @@ contains
             integer, intent(out) :: irot_loc
             integer :: order_ind_loc
             if( l_prob_objfun )then
-                call self%b_ptr%pftc%gen_prob_power_objfun_val(icls_loc, iptcl_loc, sh_loc, power, ninpl_smpl,&
-                    &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
+                if( l_likelihood_inpl )then
+                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
+                        &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
+                else
+                    call self%b_ptr%pftc%gen_prob_power_objfun_val(icls_loc, iptcl_loc, sh_loc, power, ninpl_smpl,&
+                        &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
+                endif
             else
                 call self%b_ptr%pftc%gen_objfun_vals(icls_loc, iptcl_loc, sh_loc, eval_work%inpl_corrs(:,ithr_loc))
                 call power_sampling(power, nrots, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc), ninpl_smpl,&
@@ -1410,10 +1430,9 @@ contains
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
         real    :: best_dist, power, corr_tmp, min_dist, csum, rnd, acc, weight
         logical :: l_likelihood
-        l_likelihood = trim(self%p_ptr%refine) == 'prob_softmax' .or.&
-            &(trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
+        l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
             &(trim(self%p_ptr%refine) == 'prob' .or. trim(self%p_ptr%refine) == 'prob_snhc' .or.&
-            &trim(self%p_ptr%refine) == 'prob_prior'))
+            &trim(self%p_ptr%refine) == 'prob_prior')
         if( l_likelihood .and. self%l_sparse_snhc )then
             call self%ref_assign_sparse_likelihood
             return

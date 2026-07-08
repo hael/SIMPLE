@@ -171,6 +171,7 @@ type :: polarft_calc
     procedure          :: gen_objfun_vals
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
+    procedure          :: gen_prob_likelihood_objfun_val
     procedure          :: gen_prob_power_objfun_val
     procedure, private :: gen_corrs
     procedure, private :: gen_euclids
@@ -178,9 +179,11 @@ type :: polarft_calc
     procedure, private :: gen_denoised_corrs
     procedure, private :: gen_best_euclid_val
     procedure, private :: gen_prob_euclid_val
+    procedure, private :: gen_prob_likelihood_euclid_val
     procedure, private :: gen_prob_power_euclid_val
     procedure, private :: gen_best_hybrid_val
     procedure, private :: gen_prob_hybrid_val
+    procedure, private :: gen_prob_likelihood_hybrid_val
     procedure, private :: gen_prob_power_hybrid_val
     procedure, private :: gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     generic            :: gen_corr_for_rot_8 => gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
@@ -633,6 +636,17 @@ interface
         integer,             intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_prob_objfun_val
 
+    module subroutine gen_prob_likelihood_objfun_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, nsample
+        real(sp),            intent(in)    :: shift(2)
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_likelihood_objfun_val
+
     module subroutine gen_prob_power_objfun_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)
         class(polarft_calc), intent(inout) :: self
@@ -692,6 +706,17 @@ interface
         integer,                     intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_prob_euclid_val
 
+    module subroutine gen_prob_likelihood_euclid_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_likelihood_euclid_val
+
     module subroutine gen_prob_power_euclid_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)
         class(polarft_calc), target, intent(inout) :: self
@@ -722,6 +747,17 @@ interface
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_prob_hybrid_val
+
+    module subroutine gen_prob_likelihood_hybrid_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, nsample
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist, corr
+        integer,                     intent(out)   :: irot
+        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
+        integer,                     intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_prob_likelihood_hybrid_val
 
     module subroutine gen_prob_power_hybrid_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)
