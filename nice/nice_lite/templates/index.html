@@ -51,7 +51,7 @@
                 <form method="GET">
                     <select name="selected_project_id" onchange="this.form.submit()"
                             class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                        {% if current_project_id == 0 %}
+                        {% if not current_project_id %}
                             <option disabled selected value="">select</option>
                         {% endif %}
                         <option value="-1">✚ create new</option>
@@ -68,7 +68,7 @@
                 <form method="GET">
                     <select name="selected_workspace_id" onchange="this.form.submit()"
                             class="text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                        {% if current_workspace_id == 0 %}
+                        {% if not current_workspace_id %}
                             <option disabled selected value="">select</option>
                         {% endif %}
                         <option value="-1">✚ create new</option>

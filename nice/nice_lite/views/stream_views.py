@@ -894,7 +894,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         set_desel = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, filename)
         classicjob.linkParticleSetFinal(project, link_workspace, set_proj, set_desel)
     classicjob.set_description("from " + workspace.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
-    response = redirect("nice_lite:stream")
+    response = redirect("nice_lite:index")
     response.set_cookie(key="selected_project_id", value=project.id)
     response.set_cookie(key="selected_workspace_id", value=link_workspace.id)
     return response
@@ -987,6 +987,5 @@ def view_stream_select_classification_2D(request):
     if not streamjob.selection_classification_2D(final_deselection, final_selection_ptcls):
         print_error(f"select_stream_classification_2D: failed for job {jobid}")
     return redirect("nice_lite:view_stream", jobid=jobid)
-
 
 

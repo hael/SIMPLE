@@ -31,9 +31,9 @@ from ..helpers                   import clear_checksum_cookies, get_string, prin
 def view_create_project(request):
     """
     Create a new project with one empty workspace, set session cookies,
-    and redirect to the stream view.
+    and redirect to the stream shell.
     """
-    response = redirect("nice_lite:stream")
+    response = redirect("nice_lite:index")
     username = request.user.username
     projname = get_string(request.POST, "new_project_name")
     projdirc = get_string(request.POST, "new_project_dirc")
@@ -82,4 +82,3 @@ def view_new_project(request, mode):
     # New-project page should always clear stale checksums from prior views.
     clear_checksum_cookies(request, response)
     return response
-

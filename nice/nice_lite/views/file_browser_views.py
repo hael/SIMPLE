@@ -1,7 +1,8 @@
-"""Project-scoped file browser view.
+"""File browser view.
 
-This module renders ``filebrowser.html`` for authenticated users and lists
-directories/files under the selected project root.
+This module renders ``filebrowser.html`` for authenticated users. Normal file
+and directory browsing is scoped to the selected project root; explicit external
+directory pickers can browse before or outside a project.
 """
 
 # global imports
@@ -32,7 +33,8 @@ def view_file_browser(request, type, path=None):
       2. 'selectedpath' GET parameter
       3. Root directory of the currently selected project
 
-    Browsing is restricted to the selected project root for the current user.
+    Browsing is restricted to the selected project root for the current user,
+    except for explicit external directory pickers.
     """
     template = "filebrowser.html"
     known_file_extensions = {
@@ -48,12 +50,22 @@ def view_file_browser(request, type, path=None):
     dirs = []
 
     username = request.user.username
+    purpose = request.GET.get("purpose", "")
+    is_unrestricted_picker = purpose == "external_input" or (type == "dir" and purpose == "project_root")
     selected_project_id = get_project_id(request)
     accessible_project_ids = set(
         ProjectModel.objects.filter(workspacemodel__user=username).distinct().values_list("id", flat=True)
     )
 
-    if selected_project_id is None or selected_project_id not in accessible_project_ids:
+    if is_unrestricted_picker:
+        if path is None:
+            path = request.GET.get("selectedpath", os.path.expanduser("~"))
+
+        path = (path or "").strip()
+        if path == "":
+            path = os.path.expanduser("~")
+        path = os.path.realpath(path)
+    elif selected_project_id is None or selected_project_id not in accessible_project_ids:
         error = True
         errortext = "invalid project selection"
         path = ""
@@ -90,7 +102,12 @@ def view_file_browser(request, type, path=None):
             if os.path.isdir(path):
                 path_isdir = True
                 parentdir = os.path.dirname(path)
-                if selected_project_id is not None and selected_project_id in accessible_project_ids and not error:
+                if (
+                    not is_unrestricted_picker
+                    and selected_project_id is not None
+                    and selected_project_id in accessible_project_ids
+                    and not error
+                ):
                     project = Project(id=selected_project_id)
                     base_dir = os.path.realpath(project.absdir) if project.absdir else ""
                     if base_dir and os.path.commonpath([parentdir, base_dir]) != base_dir:
@@ -124,6 +141,7 @@ def view_file_browser(request, type, path=None):
     dirs.sort()
     context = {
         "type": type,
+        "purpose": purpose,
         "path": path,
         "parentdir": parentdir,
         "error": error,

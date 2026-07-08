@@ -3,6 +3,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 from django.http import HttpResponse
+from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.test import SimpleTestCase
 
@@ -48,6 +49,22 @@ def _reverse_with_query(name, *args, **kwargs):
 class IndexViewBranchTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
+
+    def test_stream_empty_project_selector_keeps_create_new_selectable(self):
+        html = render_to_string(
+            "index.html",
+            {
+                "current_project_id": None,
+                "current_workspace_id": None,
+                "projects": [],
+                "workspaces": [],
+                "iframeurl": None,
+            },
+        )
+
+        select_index = html.index('<option disabled selected value="">select</option>')
+        create_index = html.index('<option value="-1">')
+        self.assertLess(select_index, create_index)
 
     def test_project_sentinel_routes_to_new_project(self):
         request = self.factory.get("/")

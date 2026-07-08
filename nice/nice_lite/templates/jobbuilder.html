@@ -495,7 +495,20 @@
             jobsIframe.dataset.browserTarget = targetInputId;
             jobsIframe.className = "inset-0 w-full h-full z-50 bg-streambg border-0";
             jobsIframe.setAttribute("style", "");
-            jobsIframe.setAttribute("src", "{% url 'nice_lite:file_browser' '__kind__' %}".replace("__kind__", kind));
+
+            const targetInput = document.getElementById(targetInputId);
+            const currentValue = targetInput ? targetInput.value.trim() : "";
+            let selectedPath = currentValue;
+            if (kind === "file" && selectedPath && !selectedPath.endsWith("/")) {
+                selectedPath = selectedPath.includes("/") ? selectedPath.replace(/\/[^/]*$/, "") : "";
+            }
+
+            const browserUrl = "{% url 'nice_lite:file_browser' '__kind__' %}".replace("__kind__", kind);
+            const params = new URLSearchParams({ purpose: "external_input" });
+            if (selectedPath) {
+                params.set("selectedpath", selectedPath);
+            }
+            jobsIframe.setAttribute("src", browserUrl + "?" + params.toString());
         }
 
         const ACTIVE_TAB_CLASS = "text-xs px-4 py-1.5 rounded-lg border border-streamline bg-streamaccent text-white";

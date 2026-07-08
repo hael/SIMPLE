@@ -5,6 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <style>
+        .browser-entry-selected,
+        .browser-entry-selected:hover {
+            background-color: rgba(16, 185, 129, 0.15);
+            background-color: color-mix(in oklab, var(--color-streamring) 15%, transparent);
+            color: var(--color-streamaccent);
+        }
+    </style>
 </head>
 <body class="bg-streambg min-h-screen font-sans flex flex-col">
     <div class="flex justify-center p-5 flex-1">
@@ -31,6 +39,7 @@
                     <div class="bg-streamsurface border border-streamline rounded-lg flex-1 flex items-center overflow-hidden">
                         <form method="GET" action={% url 'nice_lite:file_browser' type parentdir %} class="shrink-0">
                             {% csrf_token %}
+                            {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
                             <button type="button" onclick="this.form.submit()"
                                     class="h-8 px-2 text-streamicon hover:text-streamsubtle transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -39,8 +48,9 @@
                             </button>
                         </form>
 
-                        <form class="w-full" method="GET" action={% url 'nice_lite:file_browser' type %}>
+                        <form id="selectedpath_form" class="w-full" method="GET" action={% url 'nice_lite:file_browser' type %}>
                             {% csrf_token %}
+                            {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
                             <input id="selectedpath" name="selectedpath"
                                    class="w-full text-xs px-2 py-1 bg-transparent text-streaminput focus:outline-none"
                                    value="{{ path }}" onblur="this.form.submit()">
@@ -61,9 +71,11 @@
                             {% for dir in dirs %}
                                 <form method="GET" action={% url 'nice_lite:file_browser' type path|add:'/'|add:dir %}>
                                     {% csrf_token %}
+                                    {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
                                     <button type="button"
-                                            class="w-full text-left flex flex-row items-center whitespace-nowrap rounded px-1.5 py-1 {% if type == 'dir' %}hover:bg-streambg cursor-pointer{% endif %}"
-                                            onclick="selectDir(this, '{{ path }}', '{{ dir }}', '{{ type }}')">
+                                            class="browser-entry w-full text-left flex flex-row items-center whitespace-nowrap rounded px-1.5 py-1 hover:bg-streambg cursor-pointer"
+                                            onclick="selectDir(this, '{{ path }}', '{{ dir }}', '{{ type }}')"
+                                            ondblclick="openDir('{{ path }}', '{{ dir }}')">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 mr-1.5 text-streamicon">
                                             <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 4H12.5A1.5 1.5 0 0 1 14 5.5v1.401a2.986 2.986 0 0 0-1.5-.401h-9c-.546 0-1.059.146-1.5.401V3.5ZM2 9.5v3A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12.5 8h-9A1.5 1.5 0 0 0 2 9.5Z" />
                                         </svg>
@@ -75,7 +87,7 @@
                             {% if type == "file" %}
                                 {% for file in files %}
                                     <button type="button"
-                                            class="w-full text-left flex flex-row items-center hover:bg-streambg rounded px-1.5 py-1 cursor-pointer whitespace-nowrap"
+                                            class="browser-entry w-full text-left flex flex-row items-center hover:bg-streambg rounded px-1.5 py-1 cursor-pointer whitespace-nowrap"
                                             onclick="selectFile(this, '{{ path }}', '{{ file }}', '{{ type }}')">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4 mr-1.5 text-streamicon">
                                             <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" />
@@ -119,40 +131,39 @@
             }
         };
 
-        const selectFile = (element, path, file, type) => {
-            for (const button of document.querySelectorAll("button")) {
-                button.classList.remove("bg-nice4success");
+        const selectBrowserEntry = (element) => {
+            for (const entry of document.querySelectorAll(".browser-entry")) {
+                entry.classList.remove("browser-entry-selected");
             }
-            element.classList.add("bg-nice4success");
+            element.classList.add("browser-entry-selected");
+        };
+
+        const selectFile = (element, path, file, type) => {
+            selectBrowserEntry(element);
+            document.querySelector("#selectedpath").value = path + "/" + file;
+        };
+
+        const selectDir = (element, path, dir, type) => {
+            if (type === "dir") {
+                selectBrowserEntry(element);
+                document.querySelector("#selectedpath").value = path + "/" + dir;
+                return;
+            }
+            selectBrowserEntry(element);
             watchDouble += 1;
             setTimeout(() => {
                 if (watchDouble === 2) {
                     element.form.submit();
                 } else if (watchDouble === 1) {
-                    document.querySelector("#selectedpath").value = path + "/" + file;
+                    document.querySelector("#selectedpath").value = path + "/" + dir;
                 }
                 watchDouble = 0;
             }, 200);
         };
 
-        const selectDir = (element, path, dir, type) => {
-            if (type === "dir") {
-                for (const button of document.querySelectorAll("button")) {
-                    button.classList.remove("bg-nice4success");
-                }
-                element.classList.add("bg-nice4success");
-            }
-            watchDouble += 1;
-            setTimeout(() => {
-                if (watchDouble === 2) {
-                    element.form.submit();
-                } else if (watchDouble === 1) {
-                    if (type === "dir") {
-                        document.querySelector("#selectedpath").value = path + "/" + dir;
-                    }
-                }
-                watchDouble = 0;
-            }, 200);
+        const openDir = (path, dir) => {
+            document.querySelector("#selectedpath").value = path + "/" + dir;
+            document.querySelector("#selectedpath_form").submit();
         };
 
         const hideWindow = () => {
@@ -191,5 +202,3 @@
     </script>
 </body>
 </html>
-
-

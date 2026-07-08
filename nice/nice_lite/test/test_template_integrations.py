@@ -25,3 +25,16 @@ class TemplateIntegrationTests(SimpleTestCase):
         index = self._read_template("index.html")
         self.assertIn('target="workspace_iframe"', jobbuilder)
         self.assertIn('name="workspace_iframe"', index)
+
+    def test_file_browser_openers_forward_current_input_path(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+        newproject = self._read_template("newproject.html")
+        classic_newjob = self._read_template("nice_classic/newjob.html")
+
+        self.assertIn('params.set("selectedpath", selectedPath)', jobbuilder)
+        self.assertIn('jobsIframe.setAttribute("src", browserUrl + "?" + params.toString())', jobbuilder)
+        self.assertIn('onclick="openProjectDirectoryBrowser(this)"', newproject)
+        self.assertIn('params.set("selectedpath", selectedPath)', newproject)
+        self.assertIn('onclick="openClassicFileBrowser(this, \'dir\')"', classic_newjob)
+        self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
+        self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
