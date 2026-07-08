@@ -768,21 +768,6 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_assign; expected legacy|likelihood')
         end select
-        select case(trim(self%prob_posterior))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('unsupported prob_posterior; expected yes|no')
-        end select
-        if( trim(self%prob_posterior) == 'yes' .and. trim(self%prob_assign) /= 'likelihood' )then
-            THROW_HARD('prob_posterior=yes requires prob_assign=likelihood')
-        endif
-        if( trim(self%prob_posterior) == 'yes' )then
-            select case(trim(self%prg%to_char()))
-                case('abinitio2D','abinitio2D_chunks','prob_align2D','prob_tab2D')
-                    THROW_HARD('prob_posterior=yes is disabled for abinitio2D/2D probability tables; use prob_assign=likelihood with frontier assignment')
-                case DEFAULT
-            end select
-        endif
         if( self%nstates == 1 .and. trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'sum' )then
             self%prob_neigh_mode = 'state'
         endif

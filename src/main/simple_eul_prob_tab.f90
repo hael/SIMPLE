@@ -5,7 +5,7 @@ use simple_pftc_srch_api
 use simple_builder,          only: builder
 use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample,&
     &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
-    &sample_likelihood_index, write_seed_shift_table
+    &write_seed_shift_table
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
@@ -497,10 +497,9 @@ contains
         integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive, ithr
         integer :: alloc_stat
         real    :: projs_athres, dist_tmp, corr_tmp
-        logical :: l_likelihood, l_posterior
+        logical :: l_likelihood
         character(len=256) :: alloc_msg
         l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood'
-        l_posterior  = l_likelihood .and. trim(self%p_ptr%prob_posterior) == 'yes'
         allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_glob),&
             &score_min(self%nptcls), score_spread(self%nptcls), score_mode(self%nptcls),&
             &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
@@ -537,18 +536,7 @@ contains
             projs_athres = max(projs_athres, state_projs_athres(istate))
         enddo
         greedy_state = 0
-        if( l_posterior )then
-            ! EXPERIMENTAL (prob_posterior=yes): per-particle-row posterior assignment. Each
-            ! particle draws its projection direction independently from p(ref|X_i) ~
-            ! exp(-(dist-min))/Z over that particle's candidates (top-K), with no frontier
-            ! coupling or coverage constraint. Multi-state keeps the greedy state labelling.
-            if( self%nstates > 1 )then
-                call assign_greedy_state_labels()
-                call assign_posterior_within_states()
-            else
-                call assign_posterior_single_state()
-            endif
-        else if( self%nstates > 1 )then
+        if( self%nstates > 1 )then
             call assign_greedy_state_labels()
             do si = 1,self%nstates
                 call assign_refs_for_state(self%ssinds(si))
@@ -736,99 +724,6 @@ contains
             dist = active_dists(active_loc)
         end function active_ref_dist
 
-        ! EXPERIMENTAL per-row posterior helpers (reached only when prob_posterior=yes).
-        subroutine assign_posterior_single_state()
-            integer :: i_loc, iref_loc, ncand, pick, best_ref
-            integer :: cand_ref(self%nrefs), occ(self%nrefs)
-            real    :: cand_d(self%nrefs), invalid_dist, val, best_val
-            invalid_dist = 0.1 * huge(invalid_dist)
-            occ = 0
-            do i_loc = 1, self%nptcls
-                ncand    = 0
-                best_ref = 0
-                best_val = huge(best_val)
-                do iref_loc = 1, self%nrefs
-                    val = ref_score(iref_loc, i_loc)
-                    if( best_ref == 0 .or. val < best_val )then
-                        best_val = val
-                        best_ref = iref_loc
-                    endif
-                    if( val < invalid_dist )then
-                        ncand = ncand + 1
-                        cand_ref(ncand) = iref_loc
-                        cand_d(ncand)   = val
-                    endif
-                enddo
-                if( ncand == 0 )then
-                    if( best_ref > 0 )then
-                        occ(best_ref) = occ(best_ref) + 1
-                        call finalize_posterior_assignment(i_loc, best_ref)
-                    endif
-                    cycle
-                endif
-                call sample_likelihood_index(ncand, cand_d, likelihood_nsample(ncand, projs_athres),&
-                    &invalid_dist, dists_sorted, inds_sorted, pick)
-                occ(cand_ref(pick)) = occ(cand_ref(pick)) + 1
-                call finalize_posterior_assignment(i_loc, cand_ref(pick))
-            enddo
-            call log_posterior_occupancy('single_state', occ)
-        end subroutine assign_posterior_single_state
-
-        subroutine assign_posterior_within_states()
-            integer :: i_loc, iref_loc, ncand, pick, istate_loc, best_ref
-            integer :: cand_ref(self%nrefs), occ(self%nrefs)
-            real    :: cand_d(self%nrefs), invalid_dist, val, best_val
-            invalid_dist = 0.1 * huge(invalid_dist)
-            occ = 0
-            do i_loc = 1, self%nptcls
-                istate_loc = greedy_state(i_loc)
-                if( istate_loc < 1 ) cycle
-                ncand    = 0
-                best_ref = 0
-                best_val = huge(best_val)
-                do iref_loc = 1, self%nrefs
-                    if( self%sinds(iref_loc) /= istate_loc ) cycle
-                    val = ref_score(iref_loc, i_loc)
-                    if( best_ref == 0 .or. val < best_val )then
-                        best_val = val
-                        best_ref = iref_loc
-                    endif
-                    if( val < invalid_dist )then
-                        ncand = ncand + 1
-                        cand_ref(ncand) = iref_loc
-                        cand_d(ncand)   = val
-                    endif
-                enddo
-                if( ncand == 0 )then
-                    if( best_ref > 0 )then
-                        occ(best_ref) = occ(best_ref) + 1
-                        call finalize_posterior_assignment(i_loc, best_ref)
-                    endif
-                    cycle
-                endif
-                call sample_likelihood_index(ncand, cand_d, likelihood_nsample(ncand, state_projs_athres(istate_loc)),&
-                    &invalid_dist, dists_sorted, inds_sorted, pick)
-                occ(cand_ref(pick)) = occ(cand_ref(pick)) + 1
-                call finalize_posterior_assignment(i_loc, cand_ref(pick))
-            enddo
-            call log_posterior_occupancy('within_states', occ)
-        end subroutine assign_posterior_within_states
-
-        subroutine finalize_posterior_assignment( iptcl_loc, iref_loc )
-            integer, intent(in) :: iptcl_loc, iref_loc
-            self%assgn_map(iptcl_loc) = self%loc_tab(iref_loc, iptcl_loc)
-            call materialize_seed_shift(self%assgn_map(iptcl_loc), self%seed_shifts(:,iptcl_loc),&
-                &self%seed_has_sh(iptcl_loc), self%p_ptr%l_doshift, self%seed_nrots)
-            self%assgn_map(iptcl_loc)%frac = 100.
-        end subroutine finalize_posterior_assignment
-
-        subroutine log_posterior_occupancy( tag, occ )
-            character(len=*), intent(in) :: tag
-            integer,          intent(in) :: occ(:)
-            write(logfhandle,'(A,A,A,I0,A,I0,A,I0,A,I0)') '>>> PROB_TAB_ASSIGN [posterior_', trim(tag),&
-                &']: refs_used=', count(occ > 0), '/', size(occ), ' max_occupancy=', maxval(occ),&
-                &' assigned=', sum(occ)
-        end subroutine log_posterior_occupancy
     end subroutine ref_assign
 
     ! state normalization (same energy) of the state_tab
@@ -881,19 +776,14 @@ contains
         real    :: sorted_tab(self%nptcls, self%nstates), state_dist(self%nstates), state_dists_sorted(self%nstates)
         real    :: dist_tmp, corr_tmp
         logical :: ptcl_avail(self%nptcls)
-        logical :: l_likelihood, l_posterior
+        logical :: l_likelihood
         if( self%nstates == 1 )then
             self%assgn_map = self%state_tab(1,:)
             self%assgn_map%frac = 100.
             return
         endif
         l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood'
-        l_posterior  = l_likelihood .and. trim(self%p_ptr%prob_posterior) == 'yes'
         if( .not. l_likelihood ) call self%state_normalize
-        if( l_posterior )then
-            call assign_posterior_states()
-            return
-        endif
         ! sorting each columns
         sorted_tab = transpose(self%state_tab%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,i)
@@ -940,48 +830,6 @@ contains
             integer, intent(in) :: state_loc
             dist = state_dist(state_loc)
         end function state_frontier_dist
-
-        subroutine assign_posterior_states()
-            integer :: i_loc, is_loc, ncand, pick, best_state
-            integer :: cand_state(self%nstates), occ(self%nstates)
-            real    :: cand_d(self%nstates), invalid_dist, dval, best_val
-            invalid_dist = 0.1 * huge(invalid_dist)
-            occ = 0
-            do i_loc = 1,self%nptcls
-                ncand      = 0
-                best_state = 0
-                best_val   = huge(best_val)
-                do is_loc = 1,self%nstates
-                    dval = self%state_tab(is_loc,i_loc)%dist
-                    if( best_state == 0 .or. dval < best_val )then
-                        best_val   = dval
-                        best_state = is_loc
-                    endif
-                    if( dval < invalid_dist )then
-                        ncand = ncand + 1
-                        cand_state(ncand) = is_loc
-                        cand_d(ncand)     = dval
-                    endif
-                enddo
-                if( ncand == 0 )then
-                    if( best_state == 0 ) THROW_HARD('failed posterior state assignment in eul_prob_tab%state_assign')
-                    occ(best_state) = occ(best_state) + 1
-                    call finalize_posterior_state(i_loc, best_state)
-                    cycle
-                endif
-                call sample_likelihood_index(ncand, cand_d, self%nstates, invalid_dist, state_dists_sorted, inds_sorted, pick)
-                occ(cand_state(pick)) = occ(cand_state(pick)) + 1
-                call finalize_posterior_state(i_loc, cand_state(pick))
-            enddo
-            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PROB_TAB_STATE_ASSIGN [posterior]: states_used=',&
-                &count(occ > 0), '/', self%nstates, ' max_occupancy=', maxval(occ), ' assigned=', sum(occ)
-        end subroutine assign_posterior_states
-
-        subroutine finalize_posterior_state( iptcl_loc, istate_loc )
-            integer, intent(in) :: iptcl_loc, istate_loc
-            self%assgn_map(iptcl_loc) = self%state_tab(istate_loc,iptcl_loc)
-            self%assgn_map(iptcl_loc)%frac = 100.
-        end subroutine finalize_posterior_state
 
     end subroutine state_assign
 

@@ -5,8 +5,7 @@ use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, eulprob_dist_switch,&
-    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, sample_likelihood_index,&
-    &write_seed_shift_table
+    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, write_seed_shift_table
 use simple_decay_funs,        only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
@@ -843,12 +842,10 @@ contains
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val, dist_tmp, corr_tmp
-        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift, l_likelihood,&
-            &l_posterior
+        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift, l_likelihood
         huge_val = huge(1.0)
         l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
         l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood'
-        l_posterior  = l_likelihood .and. trim(self%p_ptr%prob_posterior) == 'yes'
         l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
             &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
         allocate(dists_inpl(self%b_ptr%pftc%get_nrots()), dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
@@ -939,14 +936,7 @@ contains
                 projs_athres = max(projs_athres, state_projs_athres(istate))
             enddo
             final_assigned = .false.
-            if( l_posterior )then
-                if( self%nstates > 1 )then
-                    call assign_greedy_state_labels()
-                    call assign_posterior_within_states()
-                else
-                    call assign_posterior_single_state()
-                endif
-            else if( self%nstates > 1 )then
+            if( self%nstates > 1 )then
                 call assign_greedy_state_labels()
                 do si = 1,self%nstates
                     call assign_particles_for_state(self%ssinds(si))
@@ -1034,88 +1024,6 @@ contains
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_for_state
-
-        subroutine assign_posterior_single_state()
-            integer :: occ(self%nrefs)
-            occ = 0
-            do i = 1,self%nptcls
-                call assign_posterior_particle(i, 0, projs_athres, occ)
-            enddo
-            call log_posterior_occupancy('single_state', occ)
-        end subroutine assign_posterior_single_state
-
-        subroutine assign_posterior_within_states()
-            integer :: occ(self%nrefs), state_filter
-            occ = 0
-            do i = 1,self%nptcls
-                state_filter = greedy_state(i)
-                if( state_filter > 0 )then
-                    call assign_posterior_particle(i, state_filter, state_projs_athres(state_filter), occ)
-                else
-                    call assign_posterior_particle(i, 0, projs_athres, occ)
-                endif
-            enddo
-            call log_posterior_occupancy('within_states', occ)
-        end subroutine assign_posterior_within_states
-
-        subroutine assign_posterior_particle( iptcl_loc, state_filter, athres_ub, occ )
-            integer, intent(in)    :: iptcl_loc, state_filter
-            real,    intent(in)    :: athres_ub
-            integer, intent(inout) :: occ(:)
-            integer :: kt, ri_loc, ncand, pick, best_ref, cand_ref(self%nrefs), work_o(self%nrefs)
-            real    :: cand_d(self%nrefs), work_d(self%nrefs), dval, best_val
-            ncand    = 0
-            best_ref = 0
-            best_val = huge(best_val)
-            do kt = 1,self%eval_touched_counts(iptcl_loc)
-                ri_loc = self%eval_touched_refs(kt,iptcl_loc)
-                if( ri_loc < 1 .or. ri_loc > self%nrefs ) cycle
-                if( self%loc_tab(ri_loc,iptcl_loc)%inpl <= 0 ) cycle
-                if( state_filter > 0 .and. self%sinds(ri_loc) /= state_filter ) cycle
-                dval = self%loc_tab(ri_loc,iptcl_loc)%dist
-                if( best_ref == 0 .or. dval < best_val )then
-                    best_val = dval
-                    best_ref = ri_loc
-                endif
-                if( dval < huge_val )then
-                    ncand = ncand + 1
-                    cand_ref(ncand) = ri_loc
-                    cand_d(ncand)   = dval
-                endif
-            enddo
-            if( ncand == 0 )then
-                if( best_ref == 0 .and. state_filter > 0 ) best_ref = pick_best_evaluated_ref(iptcl_loc)
-                if( best_ref == 0 )then
-                    call seed_fallback_if_empty(iptcl_loc)
-                    if( state_filter > 0 ) best_ref = pick_best_evaluated_ref(iptcl_loc, state_filter)
-                    if( best_ref == 0 ) best_ref = pick_best_evaluated_ref(iptcl_loc)
-                endif
-                if( best_ref == 0 ) THROW_HARD('failed posterior sparse 3D assignment in eul_prob_tab_neigh')
-                call finalize_posterior_assignment(iptcl_loc, best_ref, occ)
-                return
-            endif
-            call sample_likelihood_index(ncand, cand_d, likelihood_nsample(ncand, athres_ub), huge_val, work_d, work_o, pick)
-            call finalize_posterior_assignment(iptcl_loc, cand_ref(pick), occ)
-        end subroutine assign_posterior_particle
-
-        subroutine finalize_posterior_assignment( iptcl_loc, iref_loc, occ )
-            integer, intent(in)    :: iptcl_loc, iref_loc
-            integer, intent(inout) :: occ(:)
-            occ(iref_loc) = occ(iref_loc) + 1
-            self%assgn_map(iptcl_loc) = self%loc_tab(iref_loc,iptcl_loc)
-            call materialize_seed_shift(self%assgn_map(iptcl_loc), self%seed_shifts(:,iptcl_loc),&
-                &self%seed_has_sh(iptcl_loc), self%p_ptr%l_doshift, self%seed_nrots)
-            self%assgn_map(iptcl_loc)%frac = search_frac(iptcl_loc)
-            final_assigned(iptcl_loc) = .true.
-        end subroutine finalize_posterior_assignment
-
-        subroutine log_posterior_occupancy( tag, occ )
-            character(len=*), intent(in) :: tag
-            integer,          intent(in) :: occ(:)
-            write(logfhandle,'(A,A,A,I0,A,I0,A,I0,A,I0)') '>>> PROB_TAB_NEIGH_ASSIGN [posterior_', trim(tag),&
-                &']: refs_used=', count(occ > 0), '/', size(occ), ' max_occupancy=', maxval(occ),&
-                &' assigned=', sum(occ)
-        end subroutine log_posterior_occupancy
 
         subroutine commit_selected_assignment()
             assigned_iref = frontier%sel_refs(assigned_idx)
