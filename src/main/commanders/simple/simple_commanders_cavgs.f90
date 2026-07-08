@@ -159,18 +159,17 @@ contains
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:)
         real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
-        logical,          allocatable :: l_non_junk(:)
-        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:)
+        logical,          allocatable :: l_non_junk(:), l_states(:)
+        integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), tmp(:)
         integer,          allocatable :: clspops(:), states(:), labels4write(:), inds_glob(:)
         type(clust_info), allocatable :: clust_info_arr(:)
+        type(clust_info)              :: clust_info_junk
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        integer                       :: ncls, ncls_sel, icls, cnt, nptcls
+        real                          :: frac_good, oa_min, oa_max, smpd
+        integer                       :: ldim(3), pop, ncls, ncls_sel, icls, cnt, nptcls
         integer                       :: i, nclust, iclust, nptcls_good
-        integer                       :: ldim(3), pop
-        logical                       :: l_skip_junk_rejection
-        real                          :: frac_good
-        real                          :: oa_min, oa_max, smpd
+        logical                       :: l_skip_junk_rejection, l_cluster_only
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -182,6 +181,16 @@ contains
         ! master parameters
         call params%new(cline)
         l_skip_junk_rejection = trim(params%skip_rejection) == 'yes'
+        l_cluster_only        = trim(params%cluster_only)   == 'yes'
+        ! Clustering only presets
+        if( l_cluster_only ) then
+            ! no particle pruning, junk is identified but not rejected
+            call cline%set('prune', 'no')
+            params%prune = 'no'
+            call cline%set('skip_rejection', 'no')
+            params%skip_rejection = 'no'
+            l_skip_junk_rejection = .false.
+        endif
         ! read project file
         call spproj%read(params%projfile)
         ncls = spproj%os_cls2D%get_noris()
@@ -222,6 +231,7 @@ contains
             endif
         endif
         clust_info_arr = align_and_score_cavg_clusters( params, dmat, cavg_imgs, clspops, i_medoids, labels )
+        call dealloc_imgarr(cavg_imgs)
         ! communicate medoid indices to cls2D field of project (this have to be after scoring & ranking)
         call spproj%os_cls2D%set_all2single('medoid_ind',  0)
         do iclust = 1, nclust
@@ -229,83 +239,105 @@ contains
                 call spproj%os_cls2D%set(clsinds(i_medoids(iclust)), 'medoid_ind', iclust)
             endif
         end do
-        ! re-create cavg_imgs
-        call dealloc_imgarr(cavg_imgs)
-        cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
-        ! write aligned clusters
-        call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', params%ext%to_char())
-        ! write un-aligned clusters
-        call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', params%ext%to_char() )
-        ! update project
-        call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
-        call spproj%os_cls2D%set_all2single('cluster',  0)
-        call spproj%os_cls3D%set_all2single('cluster',  0)
-        call spproj%os_cls2D%set_all2single('accept',   0)
-        call spproj%os_cls3D%set_all2single('accept',   0)
-        call spproj%os_ptcl2D%set_all2single('cluster', 0)
-        call spproj%os_ptcl3D%set_all2single('cluster', 0)
-        do iclust = 1, nclust
-            do icls = 1, ncls_sel 
-                if( labels(icls) == iclust )then
-                    call spproj%os_cls2D%set(clsinds(icls),'cluster', iclust)                              ! 2D class field
-                    call spproj%os_cls3D%set(clsinds(icls),'cluster', iclust)                              ! 3D class field
-                    call spproj%os_cls2D%set(clsinds(icls),'jointscore', clust_info_arr(iclust)%jointscore)! 2D joint score field  
-                    call spproj%os_cls2D%set(clsinds(icls), 'pop', clust_info_arr(iclust)%pop)             ! 2D individual pop field 
-                    call spproj%os_cls2D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)      ! 2D class accepted field
-                    call spproj%os_cls3D%set(clsinds(icls),'accept', clust_info_arr(iclust)%good_bad)      ! 3D class accepted field
-                    call spproj%os_ptcl2D%set_field2single('class', clsinds(icls), 'cluster', iclust)      ! 2D particle field
-                    call spproj%os_ptcl3D%set_field2single('class', clsinds(icls), 'cluster', iclust)      ! 3D particle field
-                endif
+        ! Generate output stacks and cluster info
+        if( l_cluster_only )then
+            ! Simplified output
+            states    = spproj%os_cls2D%get_all_asint('state')
+            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=(states>0))
+            if( count(states==1) > count(l_non_junk) ) then
+                ! add junk back into a distinct cluster
+                nclust = nclust + 1
+                clust_info_junk%res         = maxval(clust_info_arr(:)%res)
+                clust_info_junk%resscore    = 0.
+                clust_info_junk%homogeneity = 0.
+                clust_info_junk%clustscore  = 0.
+                clust_info_junk%jointscore  = 0.
+                clust_info_junk%pop         = 0
+                allocate(tmp(count(states>0)), source=0)
+                tmp(1:ncls_sel) = clsinds(:)
+                cnt = ncls_sel
+                do icls = 1,ncls
+                    if( (states(icls) == 1) .and. (.not.l_non_junk(icls)) ) then
+                        cnt      = cnt + 1
+                        tmp(cnt) = icls         ! update clsinds to include junk
+                    end if
+                enddo
+                clust_info_junk%pop = cnt - ncls_sel
+                call move_alloc(tmp, clsinds)
+                allocate(tmp(cnt), source=0)
+                tmp(1:ncls_sel)     = labels(:)
+                tmp(ncls_sel+1:cnt) = nclust    ! update labels to include junk
+                call move_alloc(tmp, labels)
+                clust_info_arr = [clust_info_arr, clust_info_junk]
+                clust_info_arr(:)%good_bad  = 1 ! no rejection
+                ncls_sel = cnt
+            endif
+            do iclust = 1, nclust
+                write(logfhandle,'(A,A,f5.1,A,f5.1,A,I5)') 'Cluster '//int2str_pad(iclust,2),&
+                &' resolution(A) ',  clust_info_arr(iclust)%res,&
+                &' homogeneity(%) ', clust_info_arr(iclust)%homogeneity,&
+                &' population ',     clust_info_arr(iclust)%pop
+            end do
+            ! update project
+            call update_project
+        else
+            ! re-create cavg_imgs
+            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            ! write aligned clusters
+            call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', params%ext%to_char())
+            ! write un-aligned clusters
+            call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', params%ext%to_char() )
+            ! update project
+            call update_project
+            ! generate ranked class averages by ordering according to class resolution within clusters
+            allocate(inds_glob(ncls_sel), source=0)
+            cnt = 0
+            do iclust = 1, nclust
+                pop         = count(labels == iclust)
+                inds        = mask2inds(labels == iclust)
+                resvals_tmp = pack(resvals, mask=labels == iclust)
+                call hpsort(resvals_tmp, inds)
+                do i = 1, pop
+                    cnt = cnt + 1
+                    inds_glob(cnt) = inds(i)
+                enddo
+                deallocate(inds, resvals_tmp)
             enddo
-        enddo
-        ! generate ranked class averages by ordering according to class resolution within clusters
-        allocate(inds_glob(ncls_sel), source=0)
-        cnt = 0
-        do iclust = 1, nclust
-            pop         = count(labels == iclust)
-            inds        = mask2inds(labels == iclust) 
-            resvals_tmp = pack(resvals, mask=labels == iclust)
-            call hpsort(resvals_tmp, inds)
-            do i = 1, pop
-                cnt = cnt + 1
-                inds_glob(cnt) = inds(i)
-            enddo
-            deallocate(inds, resvals_tmp)
-        enddo
-        ! write ranked_cavgs
-        call write_imgarr(cavg_imgs, string('ranked_cavgs')//params%ext%to_char(), inds_glob)
-        deallocate(inds_glob)
-        ! report cluster info
-        do iclust = 1, nclust
-            write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
-            &' resolution(A) ',   clust_info_arr(iclust)%res,& 
-            &' resscore(%) ',     clust_info_arr(iclust)%resscore,& 
-            &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
-            &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
-            &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
-            &' good_bad_assign ', clust_info_arr(iclust)%good_bad
-        end do
-        ! check number of particles selected
-        nptcls      = sum(clust_info_arr(:)%nptcls)
-        nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
-        frac_good   = real(nptcls_good)  / real(nptcls)
-        write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
-        ! translate to state array
-        allocate(states(ncls), source=0)
-        do icls = 1, ncls_sel
-            if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
-        end do
-        ! write selection
-        allocate(labels4write(ncls_sel), source=0)
-        do icls = 1, ncls_sel
-            labels4write(icls) = clust_info_arr(labels(icls))%good_bad
-        end do
-        ! write selection
-        call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext%to_char())
-        ! map selection to project
-        call spproj%map_cavgs_selection(states)
-        ! optional pruning
-        if( trim(params%prune).eq.'yes') call spproj%prune_particles
+            ! write ranked_cavgs
+            call write_imgarr(cavg_imgs, string('ranked_cavgs')//params%ext%to_char(), inds_glob)
+            deallocate(inds_glob)
+            ! report cluster info
+            do iclust = 1, nclust
+                write(logfhandle,'(A,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,f5.1,A,I3)') 'cluster_ranked'//int2str_pad(iclust,2)//'.mrc',&
+                &' resolution(A) ',   clust_info_arr(iclust)%res,&
+                &' resscore(%) ',     clust_info_arr(iclust)%resscore,&
+                &' homogeneity(%) ',  clust_info_arr(iclust)%homogeneity,&
+                &' clustscore(%) ',   clust_info_arr(iclust)%clustscore,&
+                &' jointscore(%) ',   clust_info_arr(iclust)%jointscore,&
+                &' good_bad_assign ', clust_info_arr(iclust)%good_bad
+            end do
+            ! check number of particles selected
+            nptcls      = sum(clust_info_arr(:)%nptcls)
+            nptcls_good = sum(clust_info_arr(:)%nptcls, mask=clust_info_arr(:)%good_bad == 1)
+            frac_good   = real(nptcls_good)  / real(nptcls)
+            write(logfhandle,'(a,1x,f8.2)') '% PARTICLES CLASSIFIED AS 1ST RATE: ', frac_good  * 100.
+            ! translate to state array
+            allocate(states(ncls), source=0)
+            do icls = 1, ncls_sel
+                if( clust_info_arr(labels(icls))%good_bad == 1 ) states(clsinds(icls)) = 1
+            end do
+            ! write selection
+            allocate(labels4write(ncls_sel), source=0)
+            do icls = 1, ncls_sel
+                labels4write(icls) = clust_info_arr(labels(icls))%good_bad
+            end do
+            ! write selection
+            call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext%to_char())
+            ! map selection to project
+            call spproj%map_cavgs_selection(states)
+            ! optional pruning
+            if( trim(params%prune).eq.'yes') call spproj%prune_particles
+        endif
         ! this needs to be a full write as many segments are updated
         call spproj%write(params%projfile)
         ! destruct
@@ -315,6 +347,34 @@ contains
         deallocate(clust_info_arr, l_non_junk, labels, clsinds, i_medoids)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
+
+      contains
+
+        subroutine update_project
+            integer :: icls, iclust
+            call spproj%os_ptcl2D%transfer_class_assignment(spproj%os_ptcl3D)
+            call spproj%os_cls2D%set_all2single('cluster',  0)
+            call spproj%os_cls3D%set_all2single('cluster',  0)
+            call spproj%os_cls2D%set_all2single('accept',   0)
+            call spproj%os_cls3D%set_all2single('accept',   0)
+            call spproj%os_ptcl2D%set_all2single('cluster', 0)
+            call spproj%os_ptcl3D%set_all2single('cluster', 0)
+            do iclust = 1, nclust
+                do icls = 1, ncls_sel
+                    if( labels(icls) == iclust )then
+                        call spproj%os_cls2D%set(clsinds(icls),'cluster',    iclust)                           ! 2D class field
+                        call spproj%os_cls3D%set(clsinds(icls),'cluster',    iclust)                           ! 3D class field
+                        call spproj%os_cls2D%set(clsinds(icls),'jointscore', clust_info_arr(iclust)%jointscore)! 2D joint score field
+                        call spproj%os_cls2D%set(clsinds(icls), 'pop',       clust_info_arr(iclust)%pop)       ! 2D individual pop field
+                        call spproj%os_cls2D%set(clsinds(icls),'accept',     clust_info_arr(iclust)%good_bad)  ! 2D class accepted field
+                        call spproj%os_cls3D%set(clsinds(icls),'accept',     clust_info_arr(iclust)%good_bad)  ! 3D class accepted field
+                        call spproj%os_ptcl2D%set_field2single('class',      clsinds(icls), 'cluster', iclust) ! 2D particle field
+                        call spproj%os_ptcl3D%set_field2single('class',      clsinds(icls), 'cluster', iclust) ! 3D particle field
+                    endif
+                enddo
+            enddo
+        end subroutine update_project
+
     end subroutine exec_cluster_cavgs
 
     subroutine exec_model_cavgs_rejection( self, cline )

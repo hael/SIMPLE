@@ -57,6 +57,7 @@ contains
         call reg%add_char('cls_init', self%cls_init)
         call reg%add_char('clustinds', self%clustinds)
         call reg%add_char('clust_crit', self%clust_crit)
+        call reg%add_char('cluster_only', self%cluster_only)
         call reg%add_char('cn_type', self%cn_type)
         call reg%add_char('combine_eo', self%combine_eo)
         call reg%add_char('continue', self%continue)

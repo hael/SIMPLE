@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
+    character(len=3)          :: cluster_only='no'    !< perform clustering only (id junk but no rejection)in cluster_cavgs(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
