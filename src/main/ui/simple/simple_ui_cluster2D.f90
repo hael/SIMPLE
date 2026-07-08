@@ -73,6 +73,9 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
         &'Probabilistic assignment weighting(legacy|likelihood){legacy}',&
         &'(legacy|likelihood){legacy}', .false., 'legacy', gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, 'prob_posterior', 'binary', 'EXPERIMENTAL per-row posterior assignment',&
+        &'EXPERIMENTAL per-particle-row posterior assignment; requires prob_assign=likelihood(yes|no){no}',&
+        &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
@@ -126,6 +129,9 @@ contains
         call abinitio2D_chunks%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
         &'Probabilistic assignment weighting(legacy|likelihood){legacy}',&
         &'(legacy|likelihood){legacy}', .false., 'legacy', gui_submenu="cluster 2D", gui_advanced=.true.)
+        call abinitio2D_chunks%add_input(UI_SRCH, 'prob_posterior', 'binary', 'EXPERIMENTAL per-row posterior assignment',&
+        &'EXPERIMENTAL per-particle-row posterior assignment; requires prob_assign=likelihood(yes|no){no}',&
+        &'(yes|no){no}', .false., 'no', gui_submenu="cluster 2D", gui_advanced=.true.)
         ! filter controls
         call abinitio2D_chunks%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, lp, gui_submenu="cluster 2D")

@@ -10,7 +10,7 @@ implicit none
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
-public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist
+public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist, sample_likelihood_index
 private
 
 interface angle_sampling
@@ -316,6 +316,12 @@ contains
         corr  = exp(-dist)
     end subroutine sample_power_dist
 
+    ! Truncated, numerically-stabilized softmax over a lazily-evaluated distance function.
+    ! The distances are noise-variance-normalized negative-log-likelihoods (whitened per
+    ! Fourier shell by the estimated sigma2_noise upstream), so exp(-dist) is a properly
+    ! calibrated likelihood weight and no external temperature/tau factor is required. The
+    ! per-candidate min-shift only guards against overflow; it cancels in the normalized
+    ! weights. Only the best nsample candidates form the sampling support (top-K sampling).
     subroutine sample_likelihood_dist( n, dist_fun, nsample, dist, corr, which, pvec_sorted, sorted_inds )
         integer,   intent(in)    :: n, nsample
         procedure(dist_eval_fun)  :: dist_fun
@@ -373,6 +379,57 @@ contains
         dist  = pvec_sorted(pick)
         corr  = exp(-dist)
     end subroutine sample_likelihood_dist
+
+    ! Array-based counterpart of sample_likelihood_dist for the global assignment stage.
+    ! Given the already-evaluated distances of n candidates, draw one index with the same
+    ! truncated, min-shifted softmax exp(-(dist-min_dist)) over the best ntop candidates.
+    ! Candidates with dist >= huge_val (exhausted/sentinel entries) are excluded. sorted and
+    ! order are caller-provided work buffers of size >= n. Shared by the 2D sparse and dense
+    ! class-assignment frontiers to keep a single softmax implementation.
+    subroutine sample_likelihood_index( n, dists, ntop, huge_val, sorted, order, which )
+        integer, intent(in)    :: n, ntop
+        real,    intent(in)    :: dists(:)
+        real,    intent(in)    :: huge_val
+        real,    intent(inout) :: sorted(:)
+        integer, intent(inout) :: order(:)
+        integer, intent(out)   :: which
+        integer :: j, ntop_eff
+        real    :: min_dist, csum, rnd, acc, weight
+        if( n < 1 )then
+            which = 1
+            return
+        endif
+        do j = 1,n
+            sorted(j) = dists(j)
+            order(j)  = j
+        enddo
+        call hpsort(sorted(1:n), order(1:n))
+        min_dist = sorted(1)
+        ntop_eff = min(max(1,ntop), n)
+        csum = 0.
+        do j = 1,ntop_eff
+            if( sorted(j) >= huge_val ) cycle
+            weight = exp(-(sorted(j) - min_dist))
+            if( weight > TINY ) csum = csum + weight
+        enddo
+        if( csum < TINY )then
+            which = order(1)
+            return
+        endif
+        rnd = ran3() * csum
+        acc = 0.
+        do j = 1,ntop_eff
+            if( sorted(j) >= huge_val ) cycle
+            weight = exp(-(sorted(j) - min_dist))
+            if( weight <= TINY ) cycle
+            acc = acc + weight
+            if( acc >= rnd )then
+                which = order(j)
+                return
+            endif
+        enddo
+        which = order(1)
+    end subroutine sample_likelihood_index
 
     subroutine maxheap_sift_down( pvec_sorted, sorted_inds, root_in, heap_size )
         real,    intent(inout) :: pvec_sorted(:)

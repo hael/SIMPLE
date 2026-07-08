@@ -768,6 +768,14 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_assign; expected legacy|likelihood')
         end select
+        select case(trim(self%prob_posterior))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('unsupported prob_posterior; expected yes|no')
+        end select
+        if( trim(self%prob_posterior) == 'yes' .and. trim(self%prob_assign) /= 'likelihood' )then
+            THROW_HARD('prob_posterior=yes requires prob_assign=likelihood')
+        endif
         if( self%nstates == 1 .and. trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'sum' )then
             self%prob_neigh_mode = 'state'
         endif
