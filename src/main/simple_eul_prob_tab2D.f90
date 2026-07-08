@@ -1407,10 +1407,6 @@ contains
         l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
             &(trim(self%p_ptr%refine) == 'prob' .or. trim(self%p_ptr%refine) == 'prob_snhc' .or.&
             &trim(self%p_ptr%refine) == 'prob_prior')
-        if( l_likelihood .and. trim(self%p_ptr%prob_posterior) == 'yes' )then
-            call ref_assign_posterior_2D(self)
-            return
-        endif
         if( l_likelihood .and. self%l_sparse_snhc )then
             call self%ref_assign_sparse_likelihood
             return
@@ -1573,95 +1569,6 @@ contains
         deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, sorted_tab, cls_dists, corr_proxy,&
             &dists_raw, ptcl_avail, class_active)
     end subroutine ref_assign_pow_smpl
-
-    ! EXPERIMENTAL (prob_posterior=yes): per-particle-row posterior class assignment. Each
-    ! particle draws its class independently from p(class|X_i) ~ exp(-(dist-min))/Z over its
-    ! own candidates (top-K), with no frontier coupling or class-coverage constraint. Emits an
-    ! occupancy summary so class collapse/imbalance can be measured against the frontier path.
-    subroutine ref_assign_posterior_2D( self )
-        class(eul_prob_tab2D), intent(inout) :: self
-        integer, allocatable :: cand_cls(:), occ(:), work_o(:)
-        real,    allocatable :: cand_d(:), work_d(:)
-        logical, allocatable :: class_active(:)
-        integer :: i, icls, k, ncand, pick, ntop, assigned_icls, best_cls
-        real    :: invalid_dist, dval, best_val
-        logical :: l_sparse
-        invalid_dist = 0.1 * huge(invalid_dist)
-        l_sparse = self%l_sparse_snhc .and. allocated(self%eval_touched_counts) .and. allocated(self%eval_touched_refs)
-        allocate(class_active(self%nclasses))
-        class_active = self%class_exists
-        if( count(class_active) == 0 ) class_active = .true.
-        allocate(cand_cls(self%nclasses), cand_d(self%nclasses), work_o(self%nclasses), work_d(self%nclasses),&
-            &occ(self%nclasses))
-        occ = 0
-        write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: EXPERIMENTAL per-row posterior over ',&
-            &self%nptcls, ' particles x ', self%nclasses
-        call flush(logfhandle)
-        do i = 1, self%nptcls
-            ncand    = 0
-            best_cls = 0
-            best_val = huge(best_val)
-            if( l_sparse )then
-                do k = 1, self%eval_touched_counts(i)
-                    icls = self%eval_touched_refs(k,i)
-                    if( icls < 1 .or. icls > self%nclasses ) cycle
-                    if( .not. class_active(icls)          ) cycle
-                    if( self%loc_tab(icls,i)%inpl <= 0    ) cycle
-                    dval = self%loc_tab(icls,i)%dist
-                    call consider_candidate()
-                enddo
-            else
-                do icls = 1, self%nclasses
-                    if( .not. class_active(icls) ) cycle
-                    dval = self%loc_tab(icls,i)%dist
-                    call consider_candidate()
-                enddo
-            endif
-            if( ncand == 0 )then
-                if( best_cls == 0 ) THROW_HARD('Failed posterior particle assignment in eul_prob_tab2D%ref_assign_posterior_2D')
-                occ(best_cls) = occ(best_cls) + 1
-                call finalize_posterior(i, best_cls)
-                cycle
-            endif
-            ntop = min(self%nhood_sz, ncand)
-            if( ntop < 1 ) ntop = ncand
-            call sample_likelihood_index(ncand, cand_d, ntop, invalid_dist, work_d, work_o, pick)
-            assigned_icls = cand_cls(pick)
-            occ(assigned_icls) = occ(assigned_icls) + 1
-            call finalize_posterior(i, assigned_icls)
-        enddo
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN [posterior]: classes_used=',&
-            &count(occ>0), '/', self%nclasses, ' max_occupancy=', maxval(occ), ' assigned=', sum(occ)
-        call flush(logfhandle)
-        deallocate(class_active, cand_cls, cand_d, work_o, work_d, occ)
-
-    contains
-
-        subroutine consider_candidate()
-            if( best_cls == 0 .or. dval < best_val )then
-                best_val = dval
-                best_cls = icls
-            endif
-            if( .not.(dval < invalid_dist) ) return
-            ncand = ncand + 1
-            cand_cls(ncand) = icls
-            cand_d(ncand)   = dval
-        end subroutine consider_candidate
-
-        subroutine finalize_posterior( iptcl_loc, icls_loc )
-            integer, intent(in) :: iptcl_loc, icls_loc
-            self%assgn_map(iptcl_loc) = self%loc_tab(icls_loc, iptcl_loc)
-            call materialize_seed_shift(self%assgn_map(iptcl_loc), self%seed_shifts(:,iptcl_loc),&
-                &self%seed_has_sh(iptcl_loc), self%p_ptr%l_doshift, self%seed_nrots)
-            if( allocated(self%eval_touched_counts) )then
-                self%assgn_map(iptcl_loc)%frac   = 100. * real(self%eval_touched_counts(iptcl_loc)) / real(self%nclasses)
-                self%assgn_map(iptcl_loc)%npeaks = self%eval_touched_counts(iptcl_loc)
-            else
-                self%assgn_map(iptcl_loc)%frac = 100.
-            endif
-        end subroutine finalize_posterior
-
-    end subroutine ref_assign_posterior_2D
 
     ! DESTRUCTOR
 
