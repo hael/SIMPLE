@@ -60,7 +60,7 @@ type :: eul_prob_tab2D
     procedure, private :: fill_tab_prob_snhc_range
     procedure, private :: ref_normalize_sparse_snhc
     procedure, private :: ref_assign_sparse_snhc
-    procedure, private :: ref_assign_sparse_softmax
+    procedure, private :: ref_assign_sparse_likelihood
     procedure, private :: clear_sparse_eval_table_range
     procedure, private :: record_sparse_eval
     procedure, private :: mark_ref_touched
@@ -1074,7 +1074,7 @@ contains
 
     end subroutine ref_assign_sparse_snhc
 
-    subroutine ref_assign_sparse_softmax( self )
+    subroutine ref_assign_sparse_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
 
         type :: assign_graph_ws
@@ -1084,13 +1084,12 @@ contains
         end type assign_graph_ws
 
         type :: assign_frontier_ws
-            integer, allocatable :: order(:), work_ptcl(:), sel_classes(:), sel_pos(:), softmax_order(:)
+            integer, allocatable :: order(:), work_ptcl(:), sel_classes(:), sel_pos(:), likelihood_order(:)
             integer, allocatable :: ptcl_classes(:)
-            real,    allocatable :: class_dist(:), work_d(:), sel_dists(:), softmax_dists(:)
+            real,    allocatable :: class_dist(:), work_d(:), sel_dists(:), likelihood_dists(:)
             logical, allocatable :: ptcl_avail(:)
         end type assign_frontier_ws
 
-        real, parameter :: SOFTMAX_TAU = 1.0
         type(assign_graph_ws)    :: graph
         type(assign_frontier_ws) :: frontier
         integer, allocatable :: raw_offsets(:), raw_classes(:)
@@ -1099,8 +1098,8 @@ contains
         integer :: total_raw, total, nactive, maxclass, neligible, nassigned, last_class
         real    :: min_dist, best_dist, dist_loc, csum, rnd, acc, weight, huge_val
         if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
-            &THROW_HARD('simple_eul_prob_tab2D::ref_assign_sparse_softmax; sparse bookkeeping is not allocated')
-        write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing sparse softmax ',&
+            &THROW_HARD('simple_eul_prob_tab2D::ref_assign_sparse_likelihood; sparse bookkeeping is not allocated')
+        write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing sparse likelihood ',&
             &self%nptcls, ' particles x ', self%nclasses
         call flush(logfhandle)
         allocate(class_active(self%nclasses))
@@ -1114,7 +1113,7 @@ contains
         call build_sparse_assignment_graph()
         call assign_particles_from_frontier()
         call assign_remaining_particles()
-        write(logfhandle,'(A,I0)') '>>> PROB_TAB2D_ASSIGN: sparse softmax done; assigned ', nassigned
+        write(logfhandle,'(A,I0)') '>>> PROB_TAB2D_ASSIGN: sparse likelihood done; assigned ', nassigned
         call flush(logfhandle)
         deallocate(raw_offsets, raw_classes, class_active)
 
@@ -1135,7 +1134,7 @@ contains
                 raw_offsets(i+1) = raw_offsets(i) + raw_counts(i)
             enddo
             total_raw = raw_offsets(self%nptcls+1) - 1
-            if( total_raw < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%ref_assign_sparse_softmax')
+            if( total_raw < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%ref_assign_sparse_likelihood')
             allocate(raw_classes(total_raw))
             raw_counts = 0
             do i = 1,self%nptcls
@@ -1164,7 +1163,7 @@ contains
                 enddo
             enddo
             nactive = count(graph%class_counts > 0)
-            if( nactive < 1 ) THROW_HARD('no active sparse classes in eul_prob_tab2D%ref_assign_sparse_softmax')
+            if( nactive < 1 ) THROW_HARD('no active sparse classes in eul_prob_tab2D%ref_assign_sparse_likelihood')
             allocate(graph%active_classes(nactive))
             graph%active_classes = pack((/(icls, icls=1,self%nclasses)/), graph%class_counts > 0)
             graph%class_offsets(1) = 1
@@ -1209,8 +1208,8 @@ contains
                 enddo
             enddo
             allocate(frontier%class_dist(self%nclasses), frontier%sel_pos(self%nclasses),&
-                &frontier%sel_classes(nactive), frontier%sel_dists(nactive), frontier%softmax_dists(nactive),&
-                &frontier%softmax_order(nactive), frontier%ptcl_avail(self%nptcls))
+                &frontier%sel_classes(nactive), frontier%sel_dists(nactive), frontier%likelihood_dists(nactive),&
+                &frontier%likelihood_order(nactive), frontier%ptcl_avail(self%nptcls))
         end subroutine build_sparse_assignment_graph
 
         subroutine assign_particles_from_frontier()
@@ -1224,7 +1223,7 @@ contains
                 if( neligible <= 1 )then
                     assigned_idx = 1
                 else
-                    call sample_frontier_softmax(neligible, assigned_idx)
+                    call sample_frontier_likelihood(neligible, assigned_idx)
                 endif
                 call commit_selected_assignment()
             enddo
@@ -1242,39 +1241,39 @@ contains
             enddo
         end subroutine init_frontier
 
-        subroutine sample_frontier_softmax( neligible_loc, assigned_idx_loc )
+        subroutine sample_frontier_likelihood( neligible_loc, assigned_idx_loc )
             integer, intent(in)  :: neligible_loc
             integer, intent(out) :: assigned_idx_loc
             integer :: j, pick
-            frontier%softmax_dists(1:nsel) = frontier%sel_dists(1:nsel)
-            frontier%softmax_order(1:nsel) = (/(j,j=1,nsel)/)
-            call hpsort(frontier%softmax_dists(1:nsel), frontier%softmax_order(1:nsel))
-            min_dist = frontier%softmax_dists(1)
+            frontier%likelihood_dists(1:nsel) = frontier%sel_dists(1:nsel)
+            frontier%likelihood_order(1:nsel) = (/(j,j=1,nsel)/)
+            call hpsort(frontier%likelihood_dists(1:nsel), frontier%likelihood_order(1:nsel))
+            min_dist = frontier%likelihood_dists(1)
             csum = 0.
             do j = 1,neligible_loc
-                if( frontier%softmax_dists(j) >= huge_val ) cycle
-                weight = exp(-(frontier%softmax_dists(j) - min_dist) / SOFTMAX_TAU)
+                if( frontier%likelihood_dists(j) >= huge_val ) cycle
+                weight = exp(-(frontier%likelihood_dists(j) - min_dist))
                 if( weight > TINY ) csum = csum + weight
             enddo
             if( csum < TINY )then
-                assigned_idx_loc = frontier%softmax_order(1)
+                assigned_idx_loc = frontier%likelihood_order(1)
                 return
             endif
             rnd = ran3() * csum
             acc = 0.
             do j = 1,neligible_loc
-                if( frontier%softmax_dists(j) >= huge_val ) cycle
-                weight = exp(-(frontier%softmax_dists(j) - min_dist) / SOFTMAX_TAU)
+                if( frontier%likelihood_dists(j) >= huge_val ) cycle
+                weight = exp(-(frontier%likelihood_dists(j) - min_dist))
                 if( weight <= TINY ) cycle
                 acc = acc + weight
                 if( acc >= rnd )then
                     pick = j
-                    assigned_idx_loc = frontier%softmax_order(pick)
+                    assigned_idx_loc = frontier%likelihood_order(pick)
                     return
                 endif
             enddo
-            assigned_idx_loc = frontier%softmax_order(1)
-        end subroutine sample_frontier_softmax
+            assigned_idx_loc = frontier%likelihood_order(1)
+        end subroutine sample_frontier_likelihood
 
         subroutine commit_selected_assignment()
             assigned_icls = frontier%sel_classes(assigned_idx)
@@ -1307,7 +1306,7 @@ contains
                 if( .not. frontier%ptcl_avail(i) ) cycle
                 assigned_icls = pick_best_sparse_class(i)
                 if( assigned_icls == 0 )&
-                    &THROW_HARD('Failed sparse softmax particle assignment in eul_prob_tab2D%ref_assign_sparse_softmax')
+                    &THROW_HARD('Failed sparse likelihood particle assignment in eul_prob_tab2D%ref_assign_sparse_likelihood')
                 self%assgn_map(i) = self%loc_tab(assigned_icls,i)
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
@@ -1399,19 +1398,24 @@ contains
             l_valid = .true.
         end function valid_sparse_class
 
-    end subroutine ref_assign_sparse_softmax
+    end subroutine ref_assign_sparse_likelihood
 
-    ! ptcl -> class assignment using power_sampling (same as strategy3D_snhc_smpl projection direction step)
+    ! ptcl -> class assignment preserving class coverage across the particle set
     subroutine ref_assign_pow_smpl( self )
         class(eul_prob_tab2D), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), eligible_cls(:), inds_sorted(:)
         real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:), dists_raw(:,:)
         logical, allocatable :: ptcl_avail(:), class_active(:)
-        integer :: i, icls, assigned_icls, assigned_ptcl, order_ind, k
+        integer :: i, icls, assigned_icls, assigned_ptcl, order_ind, k, j, pick
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
-        real    :: best_dist, power, corr_tmp
-        if( trim(self%p_ptr%refine) == 'prob_softmax' )then
-            call self%ref_assign_sparse_softmax
+        real    :: best_dist, power, corr_tmp, min_dist, csum, rnd, acc, weight
+        logical :: l_likelihood
+        l_likelihood = trim(self%p_ptr%refine) == 'prob_softmax' .or.&
+            &(trim(self%p_ptr%prob_assign) == 'likelihood' .and.&
+            &(trim(self%p_ptr%refine) == 'prob' .or. trim(self%p_ptr%refine) == 'prob_snhc' .or.&
+            &trim(self%p_ptr%refine) == 'prob_prior'))
+        if( l_likelihood .and. self%l_sparse_snhc )then
+            call self%ref_assign_sparse_likelihood
             return
         endif
         if( self%l_sparse_snhc )then
@@ -1444,14 +1448,22 @@ contains
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: preserving raw distances'
         call flush(logfhandle)
         dists_raw = self%loc_tab(:,:)%dist
-        ! normalization
-        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: normalizing class distances'
-        call flush(logfhandle)
-        call self%ref_normalize
+        if( l_likelihood )then
+            write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: using likelihood weights exp(-dist)'
+            call flush(logfhandle)
+        else
+            write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: normalizing class distances'
+            call flush(logfhandle)
+            call self%ref_normalize
+        endif
         ! sort each column
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: sorting per-class particle distances'
         call flush(logfhandle)
-        sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        if( l_likelihood )then
+            sorted_tab = transpose(dists_raw)
+        else
+            sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
         do icls = 1, self%nclasses
             stab_inds(:,icls) = (/(i,i=1,self%nptcls)/)
@@ -1486,11 +1498,40 @@ contains
                 endif
             end do
             if( neligible == 0 ) exit
-            ! power_sampling: negate distances so higher = better
-            corr_proxy(1:neligible)  = -cls_dists(1:neligible)
-            inds_sorted(1:neligible) = (/(iact, iact=1,neligible)/)
-            call power_sampling(power, neligible, corr_proxy(1:neligible), inds_sorted(1:neligible),&
-                               &min(nhood_sz_loc, neligible), chosen_active, order_ind, corr_tmp)
+            if( l_likelihood )then
+                corr_proxy(1:neligible)  = cls_dists(1:neligible)
+                inds_sorted(1:neligible) = (/(iact, iact=1,neligible)/)
+                call hpsort(corr_proxy(1:neligible), inds_sorted(1:neligible))
+                min_dist = corr_proxy(1)
+                csum = 0.
+                do j = 1,min(nhood_sz_loc, neligible)
+                    weight = exp(-(corr_proxy(j) - min_dist))
+                    if( weight > TINY ) csum = csum + weight
+                enddo
+                if( csum < TINY )then
+                    chosen_active = inds_sorted(1)
+                else
+                    rnd = ran3() * csum
+                    acc = 0.
+                    pick = 1
+                    do j = 1,min(nhood_sz_loc, neligible)
+                        weight = exp(-(corr_proxy(j) - min_dist))
+                        if( weight <= TINY ) cycle
+                        acc = acc + weight
+                        if( acc >= rnd )then
+                            pick = j
+                            exit
+                        endif
+                    enddo
+                    chosen_active = inds_sorted(pick)
+                endif
+            else
+                ! power_sampling: negate distances so higher = better
+                corr_proxy(1:neligible)  = -cls_dists(1:neligible)
+                inds_sorted(1:neligible) = (/(iact, iact=1,neligible)/)
+                call power_sampling(power, neligible, corr_proxy(1:neligible), inds_sorted(1:neligible),&
+                                   &min(nhood_sz_loc, neligible), chosen_active, order_ind, corr_tmp)
+            endif
             assigned_icls = eligible_cls(chosen_active)
             assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
             ptcl_avail(assigned_ptcl)     = .false.

@@ -68,8 +68,11 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
         call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob_prior|prob_softmax|prob|snhc_smpl){prob_snhc}',&
-        &'(prob_snhc|prob_prior|prob_softmax|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="search")
+        &'Refinement mode(prob_snhc|prob_prior|prob|snhc_smpl){prob_snhc}',&
+        &'(prob_snhc|prob_prior|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="search")
+        call abinitio2D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
+        &'Probabilistic assignment weighting(legacy|likelihood){legacy}',&
+        &'(legacy|likelihood){legacy}', .false., 'legacy', gui_submenu="search", gui_advanced=.true.)
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
@@ -118,8 +121,11 @@ contains
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob_prior|prob_softmax|prob|snhc_smpl){prob_snhc}',&
-        &'(prob_snhc|prob_prior|prob_softmax|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="cluster 2D")
+        &'Refinement mode(prob_snhc|prob_prior|prob|snhc_smpl){prob_snhc}',&
+        &'(prob_snhc|prob_prior|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
+        &'Probabilistic assignment weighting(legacy|likelihood){legacy}',&
+        &'(legacy|likelihood){legacy}', .false., 'legacy', gui_submenu="cluster 2D", gui_advanced=.true.)
         ! filter controls
         call abinitio2D_chunks%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, lp, gui_submenu="cluster 2D")
