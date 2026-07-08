@@ -754,7 +754,7 @@ contains
         end select
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_state','prob_neigh','prob_snhc','prob_prior')
+            case('prob','prob_state','prob_neigh','prob_snhc','prob_prior','prob_softmax')
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select

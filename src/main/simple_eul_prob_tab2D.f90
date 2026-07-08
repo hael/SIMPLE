@@ -60,6 +60,7 @@ type :: eul_prob_tab2D
     procedure, private :: fill_tab_prob_snhc_range
     procedure, private :: ref_normalize_sparse_snhc
     procedure, private :: ref_assign_sparse_snhc
+    procedure, private :: ref_assign_sparse_softmax
     procedure, private :: clear_sparse_eval_table_range
     procedure, private :: record_sparse_eval
     procedure, private :: mark_ref_touched
@@ -99,7 +100,8 @@ contains
         self%b_ptr     => build
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
-        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc' .or. trim(params%refine) == 'prob_prior'
+        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc' .or. trim(params%refine) == 'prob_prior' .or.&
+            &trim(params%refine) == 'prob_softmax'
         self%l_prior_mode  = trim(params%refine) == 'prob_prior'
         allocate(self%class_exists(self%nclasses))
         ! In 2D probabilistic assignment classes must be able to recover, otherwise
@@ -1072,6 +1074,333 @@ contains
 
     end subroutine ref_assign_sparse_snhc
 
+    subroutine ref_assign_sparse_softmax( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+
+        type :: assign_graph_ws
+            integer, allocatable :: class_counts(:), class_offsets(:), class_fill(:), class_list(:), class_pos(:), active_classes(:)
+            integer, allocatable :: ptcl_counts(:), ptcl_offsets(:), ptcl_fill(:), ptcl_classes(:)
+            real,    allocatable :: class_dists(:)
+        end type assign_graph_ws
+
+        type :: assign_frontier_ws
+            integer, allocatable :: order(:), work_ptcl(:), sel_classes(:), sel_pos(:), softmax_order(:)
+            integer, allocatable :: ptcl_classes(:)
+            real,    allocatable :: class_dist(:), work_d(:), sel_dists(:), softmax_dists(:)
+            logical, allocatable :: ptcl_avail(:)
+        end type assign_frontier_ws
+
+        real, parameter :: SOFTMAX_TAU = 1.0
+        type(assign_graph_ws)    :: graph
+        type(assign_frontier_ws) :: frontier
+        integer, allocatable :: raw_offsets(:), raw_classes(:)
+        logical, allocatable :: class_active(:)
+        integer :: i, k, pos, idx, icls, assigned_icls, assigned_ptcl, assigned_idx, nleft, nsel
+        integer :: total_raw, total, nactive, maxclass, neligible, nassigned, last_class
+        real    :: min_dist, best_dist, dist_loc, csum, rnd, acc, weight, huge_val
+        if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
+            &THROW_HARD('simple_eul_prob_tab2D::ref_assign_sparse_softmax; sparse bookkeeping is not allocated')
+        write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing sparse softmax ',&
+            &self%nptcls, ' particles x ', self%nclasses
+        call flush(logfhandle)
+        allocate(class_active(self%nclasses))
+        class_active = self%class_exists
+        if( count(class_active) == 0 )then
+            class_active = .true.
+            THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
+        endif
+        huge_val  = huge(1.0) / 2.0
+        call build_sparse_raw_table()
+        call build_sparse_assignment_graph()
+        call assign_particles_from_frontier()
+        call assign_remaining_particles()
+        write(logfhandle,'(A,I0)') '>>> PROB_TAB2D_ASSIGN: sparse softmax done; assigned ', nassigned
+        call flush(logfhandle)
+        deallocate(raw_offsets, raw_classes, class_active)
+
+    contains
+
+        subroutine build_sparse_raw_table()
+            integer, allocatable :: raw_counts(:)
+            allocate(raw_offsets(self%nptcls+1), raw_counts(self%nptcls), source=0)
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    icls = self%eval_touched_refs(k,i)
+                    if( .not. valid_sparse_class(i, icls) ) cycle
+                    raw_counts(i) = raw_counts(i) + 1
+                enddo
+            enddo
+            raw_offsets(1) = 1
+            do i = 1,self%nptcls
+                raw_offsets(i+1) = raw_offsets(i) + raw_counts(i)
+            enddo
+            total_raw = raw_offsets(self%nptcls+1) - 1
+            if( total_raw < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%ref_assign_sparse_softmax')
+            allocate(raw_classes(total_raw))
+            raw_counts = 0
+            do i = 1,self%nptcls
+                do k = 1,self%eval_touched_counts(i)
+                    icls = self%eval_touched_refs(k,i)
+                    if( .not. valid_sparse_class(i, icls) ) cycle
+                    pos = raw_offsets(i) + raw_counts(i)
+                    raw_classes(pos) = icls
+                    raw_counts(i)    = raw_counts(i) + 1
+                enddo
+            enddo
+            deallocate(raw_counts)
+        end subroutine build_sparse_raw_table
+
+        subroutine build_sparse_assignment_graph()
+            allocate(graph%class_counts(self%nclasses), graph%class_offsets(self%nclasses+1),&
+                &graph%class_fill(self%nclasses), graph%class_pos(self%nclasses),&
+                &graph%ptcl_counts(self%nptcls), graph%ptcl_offsets(self%nptcls+1), graph%ptcl_fill(self%nptcls))
+            graph%class_counts = 0
+            graph%ptcl_counts  = 0
+            do i = 1,self%nptcls
+                do pos = raw_offsets(i), raw_offsets(i+1)-1
+                    icls = raw_classes(pos)
+                    graph%class_counts(icls) = graph%class_counts(icls) + 1
+                    graph%ptcl_counts(i)     = graph%ptcl_counts(i) + 1
+                enddo
+            enddo
+            nactive = count(graph%class_counts > 0)
+            if( nactive < 1 ) THROW_HARD('no active sparse classes in eul_prob_tab2D%ref_assign_sparse_softmax')
+            allocate(graph%active_classes(nactive))
+            graph%active_classes = pack((/(icls, icls=1,self%nclasses)/), graph%class_counts > 0)
+            graph%class_offsets(1) = 1
+            do icls = 1,self%nclasses
+                graph%class_offsets(icls+1) = graph%class_offsets(icls) + graph%class_counts(icls)
+            enddo
+            total = graph%class_offsets(self%nclasses+1) - 1
+            allocate(graph%class_list(total), graph%class_dists(total))
+            graph%ptcl_offsets(1) = 1
+            do i = 1,self%nptcls
+                graph%ptcl_offsets(i+1) = graph%ptcl_offsets(i) + graph%ptcl_counts(i)
+            enddo
+            allocate(graph%ptcl_classes(max(1,graph%ptcl_offsets(self%nptcls+1)-1)))
+            graph%class_fill = graph%class_offsets(1:self%nclasses)
+            graph%ptcl_fill  = graph%ptcl_offsets(1:self%nptcls)
+            do i = 1,self%nptcls
+                do pos = raw_offsets(i), raw_offsets(i+1)-1
+                    icls = raw_classes(pos)
+                    idx = graph%class_fill(icls)
+                    graph%class_list(idx)  = i
+                    graph%class_dists(idx) = self%loc_tab(icls,i)%dist
+                    graph%class_fill(icls) = idx + 1
+                    idx = graph%ptcl_fill(i)
+                    graph%ptcl_classes(idx) = icls
+                    graph%ptcl_fill(i)      = idx + 1
+                enddo
+            enddo
+            maxclass = max(1, maxval(graph%class_counts))
+            allocate(frontier%work_d(maxclass), frontier%order(maxclass), frontier%work_ptcl(maxclass))
+            do idx = 1,nactive
+                icls = graph%active_classes(idx)
+                k    = graph%class_counts(icls)
+                if( k <= 1 ) cycle
+                pos = graph%class_offsets(icls)
+                frontier%work_d(1:k)    = graph%class_dists(pos:pos+k-1)
+                frontier%work_ptcl(1:k) = graph%class_list(pos:pos+k-1)
+                frontier%order(1:k)     = (/(i,i=1,k)/)
+                call hpsort(frontier%work_d(1:k), frontier%order(1:k))
+                do i = 1,k
+                    graph%class_dists(pos+i-1) = frontier%work_d(i)
+                    graph%class_list(pos+i-1)  = frontier%work_ptcl(frontier%order(i))
+                enddo
+            enddo
+            allocate(frontier%class_dist(self%nclasses), frontier%sel_pos(self%nclasses),&
+                &frontier%sel_classes(nactive), frontier%sel_dists(nactive), frontier%softmax_dists(nactive),&
+                &frontier%softmax_order(nactive), frontier%ptcl_avail(self%nptcls))
+        end subroutine build_sparse_assignment_graph
+
+        subroutine assign_particles_from_frontier()
+            frontier%ptcl_avail = .true.
+            nleft     = self%nptcls
+            nassigned = 0
+            call init_frontier()
+            do while( nleft > 0 )
+                if( nsel == 0 ) exit
+                neligible = min(self%nhood_sz, nsel)
+                if( neligible <= 1 )then
+                    assigned_idx = 1
+                else
+                    call sample_frontier_softmax(neligible, assigned_idx)
+                endif
+                call commit_selected_assignment()
+            enddo
+        end subroutine assign_particles_from_frontier
+
+        subroutine init_frontier()
+            graph%class_pos      = 1
+            frontier%class_dist  = huge(1.0)
+            frontier%sel_pos     = 0
+            nsel                 = 0
+            do idx = 1,nactive
+                icls = graph%active_classes(idx)
+                call advance_class_head(icls)
+                call sync_frontier_class(icls)
+            enddo
+        end subroutine init_frontier
+
+        subroutine sample_frontier_softmax( neligible_loc, assigned_idx_loc )
+            integer, intent(in)  :: neligible_loc
+            integer, intent(out) :: assigned_idx_loc
+            integer :: j, pick
+            frontier%softmax_dists(1:nsel) = frontier%sel_dists(1:nsel)
+            frontier%softmax_order(1:nsel) = (/(j,j=1,nsel)/)
+            call hpsort(frontier%softmax_dists(1:nsel), frontier%softmax_order(1:nsel))
+            min_dist = frontier%softmax_dists(1)
+            csum = 0.
+            do j = 1,neligible_loc
+                if( frontier%softmax_dists(j) >= huge_val ) cycle
+                weight = exp(-(frontier%softmax_dists(j) - min_dist) / SOFTMAX_TAU)
+                if( weight > TINY ) csum = csum + weight
+            enddo
+            if( csum < TINY )then
+                assigned_idx_loc = frontier%softmax_order(1)
+                return
+            endif
+            rnd = ran3() * csum
+            acc = 0.
+            do j = 1,neligible_loc
+                if( frontier%softmax_dists(j) >= huge_val ) cycle
+                weight = exp(-(frontier%softmax_dists(j) - min_dist) / SOFTMAX_TAU)
+                if( weight <= TINY ) cycle
+                acc = acc + weight
+                if( acc >= rnd )then
+                    pick = j
+                    assigned_idx_loc = frontier%softmax_order(pick)
+                    return
+                endif
+            enddo
+            assigned_idx_loc = frontier%softmax_order(1)
+        end subroutine sample_frontier_softmax
+
+        subroutine commit_selected_assignment()
+            assigned_icls = frontier%sel_classes(assigned_idx)
+            assigned_ptcl = graph%class_list(graph%class_offsets(assigned_icls) + graph%class_pos(assigned_icls) - 1)
+            frontier%ptcl_avail(assigned_ptcl) = .false.
+            nleft = nleft - 1
+            nassigned = nassigned + 1
+            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls,assigned_ptcl)
+            call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
+            self%assgn_map(assigned_ptcl)%frac   = search_frac(assigned_ptcl)
+            self%assgn_map(assigned_ptcl)%npeaks = search_npeaks(assigned_ptcl)
+            call update_frontier_after_assignment(assigned_ptcl)
+        end subroutine commit_selected_assignment
+
+        subroutine update_frontier_after_assignment( iptcl_assigned )
+            integer, intent(in) :: iptcl_assigned
+            do idx = graph%ptcl_offsets(iptcl_assigned), graph%ptcl_offsets(iptcl_assigned+1)-1
+                icls = graph%ptcl_classes(idx)
+                if( graph%class_pos(icls) > graph%class_counts(icls) ) cycle
+                pos = graph%class_offsets(icls)
+                if( graph%class_list(pos + graph%class_pos(icls) - 1) /= iptcl_assigned ) cycle
+                call advance_class_head(icls)
+                call sync_frontier_class(icls)
+            enddo
+        end subroutine update_frontier_after_assignment
+
+        subroutine assign_remaining_particles()
+            do i = 1,self%nptcls
+                if( .not. frontier%ptcl_avail(i) ) cycle
+                assigned_icls = pick_best_sparse_class(i)
+                if( assigned_icls == 0 )&
+                    &THROW_HARD('Failed sparse softmax particle assignment in eul_prob_tab2D%ref_assign_sparse_softmax')
+                self%assgn_map(i) = self%loc_tab(assigned_icls,i)
+                call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
+                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
+                self%assgn_map(i)%frac   = search_frac(i)
+                self%assgn_map(i)%npeaks = search_npeaks(i)
+                frontier%ptcl_avail(i) = .false.
+                nassigned = nassigned + 1
+            enddo
+        end subroutine assign_remaining_particles
+
+        integer function pick_best_sparse_class( iptcl_loc ) result(icls_best)
+            integer, intent(in) :: iptcl_loc
+            integer :: pos_loc, icls_loc
+            icls_best = 0
+            best_dist = huge(1.0)
+            do pos_loc = raw_offsets(iptcl_loc), raw_offsets(iptcl_loc+1)-1
+                icls_loc = raw_classes(pos_loc)
+                dist_loc = self%loc_tab(icls_loc,iptcl_loc)%dist
+                if( dist_loc < best_dist )then
+                    best_dist = dist_loc
+                    icls_best = icls_loc
+                endif
+            enddo
+        end function pick_best_sparse_class
+
+        real function search_frac( iptcl_loc ) result(frac)
+            integer, intent(in) :: iptcl_loc
+            frac = 100. * real(self%eval_touched_counts(iptcl_loc)) / real(self%nclasses)
+        end function search_frac
+
+        integer function search_npeaks( iptcl_loc ) result(npeaks)
+            integer, intent(in) :: iptcl_loc
+            npeaks = 0
+            if( allocated(self%eval_touched_counts) ) npeaks = self%eval_touched_counts(iptcl_loc)
+        end function search_npeaks
+
+        subroutine advance_class_head( icls_loc )
+            integer, intent(in) :: icls_loc
+            integer :: nloc, start, cand
+            nloc = graph%class_counts(icls_loc)
+            if( graph%class_pos(icls_loc) > nloc )then
+                frontier%class_dist(icls_loc) = huge(1.0)
+                return
+            endif
+            start = graph%class_offsets(icls_loc)
+            do while( graph%class_pos(icls_loc) <= nloc )
+                cand = graph%class_list(start + graph%class_pos(icls_loc) - 1)
+                if( frontier%ptcl_avail(cand) )then
+                    frontier%class_dist(icls_loc) = graph%class_dists(start + graph%class_pos(icls_loc) - 1)
+                    return
+                endif
+                graph%class_pos(icls_loc) = graph%class_pos(icls_loc) + 1
+            enddo
+            frontier%class_dist(icls_loc) = huge(1.0)
+        end subroutine advance_class_head
+
+        subroutine sync_frontier_class( icls_loc )
+            integer, intent(in) :: icls_loc
+            if( frontier%sel_pos(icls_loc) > 0 )then
+                if( frontier%class_dist(icls_loc) >= huge(1.0) )then
+                    pos = frontier%sel_pos(icls_loc)
+                    if( pos < nsel )then
+                        last_class = frontier%sel_classes(nsel)
+                        frontier%sel_classes(pos)  = last_class
+                        frontier%sel_dists(pos)    = frontier%sel_dists(nsel)
+                        frontier%sel_pos(last_class)= pos
+                    endif
+                    frontier%sel_pos(icls_loc) = 0
+                    nsel = nsel - 1
+                else
+                    frontier%sel_dists(frontier%sel_pos(icls_loc)) = frontier%class_dist(icls_loc)
+                endif
+            else
+                if( frontier%class_dist(icls_loc) < huge(1.0) )then
+                    nsel = nsel + 1
+                    frontier%sel_classes(nsel) = icls_loc
+                    frontier%sel_dists(nsel)   = frontier%class_dist(icls_loc)
+                    frontier%sel_pos(icls_loc) = nsel
+                endif
+            endif
+        end subroutine sync_frontier_class
+
+        logical function valid_sparse_class( iptcl_loc, icls_loc ) result(l_valid)
+            integer, intent(in) :: iptcl_loc, icls_loc
+            l_valid = .false.
+            if( icls_loc < 1 .or. icls_loc > self%nclasses ) return
+            if( .not. class_active(icls_loc) ) return
+            if( self%loc_tab(icls_loc,iptcl_loc)%inpl <= 0 ) return
+            l_valid = .true.
+        end function valid_sparse_class
+
+    end subroutine ref_assign_sparse_softmax
+
     ! ptcl -> class assignment using power_sampling (same as strategy3D_snhc_smpl projection direction step)
     subroutine ref_assign_pow_smpl( self )
         class(eul_prob_tab2D), intent(inout) :: self
@@ -1081,6 +1410,10 @@ contains
         integer :: i, icls, assigned_icls, assigned_ptcl, order_ind, k
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
         real    :: best_dist, power, corr_tmp
+        if( trim(self%p_ptr%refine) == 'prob_softmax' )then
+            call self%ref_assign_sparse_softmax
+            return
+        endif
         if( self%l_sparse_snhc )then
             call self%ref_assign_sparse_snhc
             return

@@ -50,7 +50,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc','prob_prior')
+            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc','prob_prior','prob_softmax')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
@@ -264,6 +264,8 @@ contains
             cfg%refine = 'prob'
         else if( trim(params%refine) == 'prob_prior' .and. istage >= PROB_PRIOR_STAGE )then
             cfg%refine = 'prob_prior'
+        else if( trim(params%refine) == 'prob_softmax' )then
+            cfg%refine = 'prob_softmax'
         else
             cfg%refine = 'prob_snhc'
         endif
