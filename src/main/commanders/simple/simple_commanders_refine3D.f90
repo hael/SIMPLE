@@ -713,10 +713,10 @@ contains
             type(string) :: prob_neigh_mode_arg
             prob_neigh_mode_arg = cline%get_carg('prob_neigh_mode')
             select case(trim(prob_neigh_mode_arg%to_char()))
-                case('geom')
+                case('geom', 'state')
                     ! supported
                 case default
-                    THROW_HARD(WORKFLOW_LABEL//' currently supports only prob_neigh_mode=geom')
+                    THROW_HARD(WORKFLOW_LABEL//' supports prob_neigh_mode=geom|state')
             end select
             call prob_neigh_mode_arg%kill
         end subroutine validate_refine3D_multi_prob_neigh_mode

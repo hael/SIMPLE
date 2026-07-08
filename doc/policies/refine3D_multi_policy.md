@@ -117,7 +117,8 @@ value:
 - `center=no`
 - `sigma_est=global`
 - `prob_inpl=yes`
-- `prob_neigh_mode=geom`
+- `prob_neigh_mode=geom`; users may select `state` for pooled per-state
+  neighborhood refinement
 - `nsample=min(100000, 10000 * nstates)`
 - `autoscale=yes`
 - `multivol_mode=input_oris_refine`
@@ -357,7 +358,8 @@ The possible stages are:
    - `refine=prob_neigh`
    - `nspace=5000`
    - `nspace_sub=500`
-   - `prob_neigh_mode=geom`
+   - `prob_neigh_mode=geom` by default; `state` is supported for pooled
+     per-state neighborhoods
    - minimum iterations: `5`
    - maximum iterations: the planned or user-supplied stage cap
 
@@ -377,7 +379,7 @@ For every stage-level base-`refine3D` call, the wrapper sets:
 - `refine` to the stage mode
 - `nspace` to the stage projection count
 - `nspace_sub=500` for `prob_neigh`, and no `nspace_sub` for other stages
-- `prob_neigh_mode=geom`
+- `prob_neigh_mode` to the wrapper setting, defaulting to `geom`
 - `overlap` to the stage state-overlap target
 
 The wrapper deletes stale `endit` before each staged call and reads the new
@@ -594,8 +596,7 @@ When reviewing `refine3D_multi`, check these policy points first:
 - `input_oris_refine` skips `prob_state` when project multi-state labels
   already exist.
 - `input_oris_fixed` rejects existing project multi-state labels.
-- `prob_neigh_mode` is `geom`; other neighborhood modes are not supported by
-  the wrapper.
+- `prob_neigh_mode` accepts `geom` and `state`, with `geom` as the default.
 - state 0/1 initialization modes require command-line `nstates > 1`.
 - state 0/1 initialization modes use complete `vol1..volN` inputs, compatible
   project state volumes, or distributed base-`refine3D` startup reconstruction
@@ -625,7 +626,8 @@ When reviewing `refine3D_multi`, check these policy points first:
   counters.
 - stale `endit` is deleted before each stage-level base call, and the returned
   `endit` is used to advance the wrapper counter.
-- `prob_neigh` sets `nspace_sub=500` and uses `prob_neigh_mode=geom`.
+- `prob_neigh` sets `nspace_sub=500` and uses the wrapper
+  `prob_neigh_mode`.
 - stage stop logic uses `mi_state` over the latest sampled subset when
   available.
 - `prob_state` uses state-overlap target `0.95`.

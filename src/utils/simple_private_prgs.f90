@@ -429,7 +429,7 @@ contains
         call cmd_dict%push('projfile_target', 'another SIMPLE *.simple project file')
         call cmd_dict%push('projname',      'Project name (for creation of projname.simple)')
         call cmd_dict%push('prune',         'Whether to perform particles pruning')
-        call cmd_dict%push('prob_neigh_mode', 'prob_neigh neighborhood mode(state|geom|sum|shc|snhc){state}')
+        call cmd_dict%push('prob_neigh_mode', 'prob_neigh neighborhood mode(state|geom|shc|snhc){state}')
         call cmd_dict%push('pspecsz',       'size of power spectrum(in pixels)')
         call cmd_dict%push('qsys_partition', 'Name of target partition of distributed computer system (SLURM/PBS)')
         call cmd_dict%push('qsys_partition2D', 'Name of target partition of distributed computer system dedictaed to 2D analysis(SLURM/PBS)')

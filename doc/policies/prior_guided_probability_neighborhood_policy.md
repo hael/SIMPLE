@@ -520,9 +520,9 @@ the run past the default independent schedule.
 For `multivol_mode=docked`, the split starts a new multi-state update epoch.
 Do not carry pre-split top-K state/projection rows into the post-split epoch.
 The first post-split stage should either produce a fresh top-K artifact or use
-the existing full-update `prob_neigh_mode=sum` stabilization behavior. Later
-post-split stages can consume prior rows produced within the post-split epoch
-through `prob_neigh_mode=prior`.
+the full-update pooled-state `prob_neigh_mode=state` stabilization behavior.
+Later post-split stages can consume prior rows produced within the post-split
+epoch through `prob_neigh_mode=prior`.
 
 ## 7. Staleness and Compatibility
 
