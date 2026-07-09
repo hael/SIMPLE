@@ -54,12 +54,12 @@ contains
         ! high pref leads to large numbers of clusters. Frey suggests Smin - (Smax - Smin) as a threshold for fewer cluster
         ppref = self%Smin
         if( present(pref) ) ppref = pref
-        ! remove degeneracies
+        ! remove degeneracies reproducibly; volcluster/AP restarts must be deterministic
         forall(i=1:N) self%S(i,i) = ppref
         diff = (self%Smax - self%Smin) * self%ftol
         do i=1,self%N
             do j=1,self%N
-                self%S(i,j) = self%S(i,j) + ran3() * diff
+                self%S(i,j) = self%S(i,j) + deterministic_tiebreak(i, j) * diff
             end do
         end do
         ! allocate
@@ -232,16 +232,26 @@ contains
         deallocate(similarities)
     end subroutine propagate
 
+    pure real function deterministic_tiebreak( i, j ) result( val )
+        integer, intent(in) :: i, j
+        integer, parameter :: HASH_MOD = 8191, HASH_A = 37, HASH_B = 1009
+        integer :: ii, jj, h
+        ii  = mod(i - 1, HASH_MOD)
+        jj  = mod(j - 1, HASH_MOD)
+        h   = mod(HASH_A * ii + HASH_B * jj + mod(ii * jj, HASH_MOD), HASH_MOD)
+        val = real(h) / real(HASH_MOD)
+    end function deterministic_tiebreak
+
     ! UNIT TEST
 
     !>  \brief  is the aff_prop unit test
     subroutine test_aff_prop
         real,    allocatable :: datavecs(:,:)
         type(aff_prop)       :: apcls
-        real,    allocatable :: simmat(:,:)
-        real                 :: simsum
-        integer, allocatable :: centers(:), labels(:)
-        integer              :: i, j, ncls, nerr, nper, ntot
+        real,    allocatable :: simmat(:,:), simmat_ref(:,:)
+        real                 :: simsum, simsum2
+        integer, allocatable :: centers(:), centers2(:), labels(:), labels2(:)
+        integer              :: i, j, ncls, nerr, ndet, nper, ntot
         write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
 #if defined(_WIN32)
         nper = 40
@@ -249,7 +259,7 @@ contains
         nper = 300
 #endif
         ntot = 3 * nper
-        allocate(datavecs(ntot,5), simmat(ntot,ntot))
+        allocate(datavecs(ntot,5), simmat(ntot,ntot), simmat_ref(ntot,ntot))
         ! make data
         do i=1,nper
             datavecs(i,:) = 1.
@@ -268,10 +278,24 @@ contains
             end do
         end do
         simmat(ntot,ntot) = 0.
+        simmat_ref = simmat
         call apcls%new(ntot, simmat)
         call apcls%propagate(centers, labels, simsum)
+        call apcls%new(ntot, simmat_ref)
+        call apcls%propagate(centers2, labels2, simsum2)
         ncls = size(centers)
         nerr = 0
+        ndet = 0
+        if( size(centers2) /= size(centers) )then
+            ndet = ndet + 1
+        else
+            if( any(centers2 /= centers) ) ndet = ndet + 1
+        endif
+        if( size(labels2) /= size(labels) )then
+            ndet = ndet + 1
+        else
+            if( any(labels2 /= labels) ) ndet = ndet + 1
+        endif
         do i=1,nper-1
             do j=i+1,nper
                 if( labels(i) /= labels(j) ) nerr = nerr+1
@@ -289,15 +313,17 @@ contains
         end do
         write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
         write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
+        write(logfhandle,*) 'NR OF DETERMINISM ERRORS:', ndet
         write(logfhandle,*) 'CENTERS'
         do i=1,size(centers)
             write(logfhandle,*) datavecs(centers(i),:)
         end do
-        if( ncls == 3 .and. nerr == 0 )then
+        if( ncls == 3 .and. nerr == 0 .and. ndet == 0 )then
             write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
         else
             write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
         endif
+        call apcls%kill
     end subroutine test_aff_prop
 
     ! DESTRUCTOR

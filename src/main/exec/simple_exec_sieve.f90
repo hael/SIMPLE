@@ -22,6 +22,8 @@ contains
         select case(trim(adjustl(which)))
             case( 'particle_sieving' )
                 call xsieve_ptcls%execute(cline)
+            case default
+                l_did_execute = .false.
         end select
     end subroutine exec_sieve_commander
 
