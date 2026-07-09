@@ -242,7 +242,7 @@ contains
         call reg%add_file('infile2', self%infile2,'T')
         call reg%add_file('oritab', self%oritab,'T', 'O')
         call reg%add_file('oritab2', self%oritab2,'T', 'O')
-        call reg%add_file('outfile', self%outfile,'T', 'O')
+        call reg%add_file('outfile', self%outfile,'T', 'O', 'B')
         call reg%add_file('outstk', self%outstk,notAllowed='T')
         call reg%add_file('outvol', self%outvol,notAllowed='T')
         call reg%add_file('pdbfile', self%pdbfile)

@@ -199,7 +199,7 @@ contains
         type(reconstructor)              :: mean_rec
         type(reconstructor), allocatable :: basis_recs(:)
         type(fplane_type), allocatable   :: fpls(:)
-        type(string)                     :: sigma2_fname
+        type(string)                     :: sigma2_fname, basis_prefix
         integer, allocatable             :: pinds(:)
         real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
         integer                          :: nptcls, ncomp, niters, partlims(2), q
@@ -214,7 +214,9 @@ contains
         sigma2_fname = 'flex_eigenvol_sigma2_estep_part'//int2str_pad(params%part, params%numlen)//'.tmp'
         call build%esig%new(params, build%pftc, sigma2_fname, params%box_crop)
         call init_mean_reconstructor(params, build, mean_rec)
-        call init_basis_reconstructors_from_prefix(params, build, basis_recs, ncomp, params%refs)
+        basis_prefix = normalize_basis_prefix(params%refs)
+        call init_basis_reconstructors_from_prefix(params, build, basis_recs, ncomp, basis_prefix)
+        call basis_prefix%kill
         call write_estep_latent_part_file(params, build, mean_rec, basis_recs, mode_vars, pinds, nptcls, ncomp, &
             &partlims, params%outfile, fpls, log_label='FLEX_EIGENVOL_WORKER')
         call cleanup_planes(fpls)
@@ -287,14 +289,18 @@ contains
         type(qsys_env) :: qenv
         type(chash)    :: job_descr
         type(chash), allocatable :: part_params(:)
-        type(string) :: prg_string
+        type(string) :: prg_string, refs_file
         integer :: ipart, nparts_run
         nparts_run = size(part_fnames)
         allocate(part_params(nparts_run))
         do ipart = 1, nparts_run
             call part_params(ipart)%new(3)
             call part_params(ipart)%set('outfile', part_fnames(ipart)%to_char())
-            if( present(basis_prefix) ) call part_params(ipart)%set('refs', basis_prefix%to_char())
+            if( present(basis_prefix) )then
+                refs_file = flex_basis_fname(basis_prefix, 1)
+                call part_params(ipart)%set('refs', refs_file%to_char())
+                call refs_file%kill
+            endif
         end do
         prg_string = worker_prg
         call cline%gen_job_descr(job_descr, prg=prg_string)
@@ -312,6 +318,20 @@ contains
         end do
         deallocate(part_params)
     end subroutine dispatch_flex_workers
+
+    function normalize_basis_prefix( refs ) result( prefix )
+        class(string), intent(in) :: refs
+        type(string) :: prefix
+        character(len=:), allocatable :: refs_char
+        integer :: pos
+        refs_char = trim(refs%to_char())
+        pos = index(refs_char, '_comp', back=.true.)
+        if( pos > 1 )then
+            prefix = string(refs_char(:pos-1))
+        else
+            prefix = refs
+        endif
+    end function normalize_basis_prefix
 
     subroutine write_flex_state_file( fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp )
         class(string), intent(in) :: fname

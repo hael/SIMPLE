@@ -33,9 +33,11 @@ type :: file_binding
     type(string), pointer :: var => null()
     character(len=1)      :: allowed1 = ' '
     character(len=1)      :: allowed2 = ' '
+    character(len=1)      :: allowed3 = ' '
     character(len=1)      :: not_allowed = ' '
     logical               :: has_allowed1 = .false.
     logical               :: has_allowed2 = .false.
+    logical               :: has_allowed3 = .false.
     logical               :: has_not_allowed = .false.
 end type file_binding
 
@@ -134,11 +136,11 @@ contains
         self%real_bindings(self%nreals)%var => var
     end subroutine add_real
 
-    subroutine add_file(self, key, var, allowed1, allowed2, notAllowed)
+    subroutine add_file(self, key, var, allowed1, allowed2, allowed3, notAllowed)
         class(param_registry), intent(inout) :: self
         character(len=*),      intent(in)    :: key
         type(string), target,  intent(inout) :: var
-        character(len=1), optional, intent(in) :: allowed1, allowed2, notAllowed
+        character(len=1), optional, intent(in) :: allowed1, allowed2, allowed3, notAllowed
         self%nfiles = self%nfiles + 1
         call self%ensure_file_capacity(self%nfiles)
         self%file_bindings(self%nfiles)%key = trim(key)
@@ -150,6 +152,10 @@ contains
         if( present(allowed2) )then
             self%file_bindings(self%nfiles)%allowed2 = allowed2
             self%file_bindings(self%nfiles)%has_allowed2 = .true.
+        endif
+        if( present(allowed3) )then
+            self%file_bindings(self%nfiles)%allowed3 = allowed3
+            self%file_bindings(self%nfiles)%has_allowed3 = .true.
         endif
         if( present(notAllowed) )then
             self%file_bindings(self%nfiles)%not_allowed = notAllowed
@@ -308,8 +314,9 @@ contains
                 file_descr      = fname2format(self%file_bindings(i)%var)
                 raise_exception = .false.
                 if( self%file_bindings(i)%has_allowed1 )then
-                    if( self%file_bindings(i)%has_allowed2 )then
-                        if( self%file_bindings(i)%allowed1 == file_descr .or. self%file_bindings(i)%allowed2 == file_descr )then
+                    if( self%file_bindings(i)%has_allowed2 .or. self%file_bindings(i)%has_allowed3 )then
+                        if( self%file_bindings(i)%allowed1 == file_descr .or. self%file_bindings(i)%allowed2 == file_descr .or. &
+                            &self%file_bindings(i)%allowed3 == file_descr )then
                         else
                             raise_exception = .true.
                         endif
