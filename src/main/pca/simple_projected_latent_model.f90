@@ -35,6 +35,17 @@ type :: projected_latent_mstep_2d_block
     real(dp), allocatable :: latent_second(:,:,:)
 end type projected_latent_mstep_2d_block
 
+type :: projected_latent_estep_part
+    integer :: nrecords = 0
+    integer :: ncomp    = 0
+    integer, allocatable :: rows(:), pinds(:)
+    logical, allocatable :: valid(:)
+    real(dp), allocatable :: zrows(:,:)
+    real(dp), allocatable :: z_postcov(:,:,:)
+    real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
+    real(dp), allocatable :: mode_second(:,:)
+end type projected_latent_estep_part
+
 contains
 
     subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, z_postcov, pinds, nptcls, ncomp, fpls, log_label )
@@ -219,6 +230,132 @@ contains
         end do
     end subroutine insert_projected_latent_mstep_2d_block
 
+    subroutine init_projected_latent_estep_part( part, nrecords_max, ncomp )
+        type(projected_latent_estep_part), intent(inout) :: part
+        integer, intent(in) :: nrecords_max, ncomp
+        call kill_projected_latent_estep_part(part)
+        part%nrecords = 0
+        part%ncomp    = ncomp
+        allocate(part%rows(nrecords_max), part%pinds(nrecords_max), part%valid(nrecords_max), &
+            &part%zrows(ncomp,nrecords_max), part%z_postcov(ncomp,ncomp,nrecords_max), &
+            &part%resid_energy(nrecords_max), part%resid_mean_energy(nrecords_max), &
+            &part%mode_second(ncomp,nrecords_max))
+        part%rows              = 0
+        part%pinds             = 0
+        part%valid             = .false.
+        part%zrows             = 0.d0
+        part%z_postcov         = 0.d0
+        part%resid_energy      = 0.d0
+        part%resid_mean_energy = 0.d0
+        part%mode_second       = 0.d0
+    end subroutine init_projected_latent_estep_part
+
+    subroutine kill_projected_latent_estep_part( part )
+        type(projected_latent_estep_part), intent(inout) :: part
+        if( allocated(part%rows) ) deallocate(part%rows)
+        if( allocated(part%pinds) ) deallocate(part%pinds)
+        if( allocated(part%valid) ) deallocate(part%valid)
+        if( allocated(part%zrows) ) deallocate(part%zrows)
+        if( allocated(part%z_postcov) ) deallocate(part%z_postcov)
+        if( allocated(part%resid_energy) ) deallocate(part%resid_energy)
+        if( allocated(part%resid_mean_energy) ) deallocate(part%resid_mean_energy)
+        if( allocated(part%mode_second) ) deallocate(part%mode_second)
+        part%nrecords = 0
+        part%ncomp    = 0
+    end subroutine kill_projected_latent_estep_part
+
+    subroutine reset_projected_latent_estep_part( part, nrecords )
+        type(projected_latent_estep_part), intent(inout) :: part
+        integer, intent(in) :: nrecords
+        if( .not. allocated(part%valid) ) THROW_HARD('unallocated E-step part')
+        if( nrecords > size(part%valid) ) THROW_HARD('E-step part capacity exceeded')
+        part%nrecords = nrecords
+        part%rows(:nrecords)              = 0
+        part%pinds(:nrecords)             = 0
+        part%valid(:nrecords)             = .false.
+        part%zrows(:,:nrecords)           = 0.d0
+        part%z_postcov(:,:,:nrecords)     = 0.d0
+        part%resid_energy(:nrecords)      = 0.d0
+        part%resid_mean_energy(:nrecords) = 0.d0
+        part%mode_second(:,:nrecords)     = 0.d0
+    end subroutine reset_projected_latent_estep_part
+
+    subroutine prepare_projected_latent_estep_part( build, mean_rec, basis_recs, fpls_batch, mode_vars, pinds, &
+        &batchlims, batchsz, ncomp, part, basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov )
+        class(builder),      intent(inout) :: build
+        type(reconstructor), intent(inout) :: mean_rec
+        integer,             intent(in)    :: batchlims(2), batchsz, ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        type(fplane_type),   intent(inout) :: fpls_batch(batchsz)
+        real(dp),            intent(in)    :: mode_vars(ncomp)
+        integer,             intent(in)    :: pinds(:)
+        type(projected_latent_estep_part), intent(inout) :: part
+        type(fplane_type), intent(inout) :: basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob)
+        type(ori),         intent(inout) :: orientations(nthr_glob)
+        complex(dp),       intent(inout) :: gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob)
+        real(dp),          intent(inout) :: gram(ncomp,ncomp,nthr_glob), rhs(ncomp,nthr_glob)
+        real(dp),          intent(inout) :: zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob)
+        integer :: i, iptcl, q, r, row, ithr
+        call reset_projected_latent_estep_part(part, batchsz)
+        !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
+        do i = 1, batchsz
+            row   = batchlims(1) + i - 1
+            iptcl = pinds(row)
+            ithr  = omp_get_thread_num() + 1
+            part%rows(i)  = row
+            part%pinds(i) = iptcl
+            call build%spproj_field%get_ori(iptcl, orientations(ithr))
+            if( orientations(ithr)%isstatezero() ) cycle
+            call project_fplanes_mean_basis(mean_rec, basis_recs, orientations(ithr), fpls_batch(i), &
+                &mean_fpls(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
+            call subtract_plane(fpls_batch(i), mean_fpls(ithr))
+            part%resid_mean_energy(i) = plane_energy(fpls_batch(i))
+            gram_h(:,:,ithr) = DCMPLX_ZERO
+            rhs_h(:,ithr)    = DCMPLX_ZERO
+            gram(:,:,ithr)   = 0.d0
+            rhs(:,ithr)      = 0.d0
+            do q = 1, ncomp
+                rhs_h(q,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), fpls_batch(i))
+                rhs(q,ithr)   = real(rhs_h(q,ithr), dp)
+                do r = q, ncomp
+                    gram_h(q,r,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), basis_fpls(r,ithr))
+                    gram_h(r,q,ithr) = conjg(gram_h(q,r,ithr))
+                    gram(q,r,ithr)   = real(gram_h(q,r,ithr), dp)
+                    gram(r,q,ithr)   = gram(q,r,ithr)
+                end do
+                gram(q,q,ithr) = gram(q,q,ithr) + ppca_prior_precision(mode_vars(q))
+            end do
+            call solve_ppca_posterior(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr), post_cov(:,:,ithr))
+            part%zrows(:,i)         = zrow(:,ithr)
+            part%z_postcov(:,:,i)   = post_cov(:,:,ithr)
+            do q = 1, ncomp
+                part%mode_second(q,i) = zrow(q,ithr) * zrow(q,ithr) + max(0.d0, post_cov(q,q,ithr))
+            end do
+            do q = 1, ncomp
+                call subtract_scaled_plane(fpls_batch(i), basis_fpls(q,ithr), zrow(q,ithr))
+            end do
+            part%resid_energy(i) = plane_energy(fpls_batch(i))
+            part%valid(i) = .true.
+        end do
+        !$omp end parallel do
+    end subroutine prepare_projected_latent_estep_part
+
+    subroutine reduce_projected_latent_estep_part( part, z, z_postcov, resid_energy, resid_mean_energy, mode_second )
+        type(projected_latent_estep_part), intent(in) :: part
+        real(dp), intent(inout) :: z(:,:), z_postcov(:,:,:)
+        real(dp), intent(inout) :: resid_energy(:), resid_mean_energy(:), mode_second(:)
+        integer :: i, row
+        do i = 1, part%nrecords
+            if( .not. part%valid(i) ) cycle
+            row = part%rows(i)
+            z(row,:)                 = part%zrows(:,i)
+            z_postcov(row,:,:)       = part%z_postcov(:,:,i)
+            resid_mean_energy(row)   = part%resid_mean_energy(i)
+            resid_energy(row)        = part%resid_energy(i)
+            mode_second(:)           = mode_second(:) + part%mode_second(:,i)
+        end do
+    end subroutine reduce_projected_latent_estep_part
+
     subroutine infer_latents_from_basis( params, build, mean_rec, basis_recs, z, mode_vars, &
         &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label )
         class(parameters),   intent(in)    :: params
@@ -235,10 +372,12 @@ contains
         character(len=*), optional, intent(in) :: log_label
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpls(:)
         type(ori),         allocatable :: orientations(:)
+        type(projected_latent_estep_part) :: estep_part
         complex(dp), allocatable :: gram_h(:,:,:), rhs_h(:,:)
-        real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:), mode_second(:,:)
+        real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:), mode_second(:)
+        integer,     allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
-        integer           :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, row, ithr, progress_stride
+        integer           :: batchlims(2), batchsz, ibatch, ipart, ithr, nparts_eff, partlims(2), q, progress_stride
         integer(timer_int_kind) :: t_total, t_phase
         t_total = tic()
         if( present(log_label) )then
@@ -249,74 +388,51 @@ contains
         write(logfhandle,'(A)') log_prefix//' E-STEP: INFERRING LATENTS'
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
+        nparts_eff      = max(1, min(max(1, params%nparts), nptcls))
+        parts           = split_nobjs_even(nptcls, nparts_eff)
+        if( nparts_eff > 1 )then
+            write(logfhandle,'(A,I0)') log_prefix//' E-STEP LOCAL PARTITIONS: ', nparts_eff
+            call flush(logfhandle)
+        endif
         allocate(basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob), orientations(nthr_glob), &
             &gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob), gram(ncomp,ncomp,nthr_glob), &
-            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), mode_second(ncomp,nthr_glob))
+            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), mode_second(ncomp))
         resid_energy = 0.d0
         resid_mean_energy = 0.d0
         z_postcov = 0.d0
         mode_second = 0.d0
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
         t_phase = tic()
-        do ibatch = 1, nptcls, MAXIMGBATCHSZ
-            batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
-            batchsz   = batchlims(2) - batchlims(1) + 1
-            call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
-            call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
-            !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
-            do i = 1, batchsz
-                row   = batchlims(1) + i - 1
-                iptcl = pinds(row)
-                ithr  = omp_get_thread_num() + 1
-                call build%spproj_field%get_ori(iptcl, orientations(ithr))
-                if( orientations(ithr)%isstatezero() ) cycle
-                call project_fplanes_mean_basis(mean_rec, basis_recs, orientations(ithr), fpls(i), &
-                    &mean_fpls(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
-                call subtract_plane(fpls(i), mean_fpls(ithr))
-                resid_mean_energy(row) = plane_energy(fpls(i))
-                gram_h(:,:,ithr) = DCMPLX_ZERO
-                rhs_h(:,ithr)    = DCMPLX_ZERO
-                gram(:,:,ithr)   = 0.d0
-                rhs(:,ithr)      = 0.d0
-                do q = 1, ncomp
-                    rhs_h(q,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), fpls(i))
-                    rhs(q,ithr)   = real(rhs_h(q,ithr), dp)
-                    do r = q, ncomp
-                        gram_h(q,r,ithr) = hermitian_plane_inner_product(basis_fpls(q,ithr), basis_fpls(r,ithr))
-                        gram_h(r,q,ithr) = conjg(gram_h(q,r,ithr))
-                        gram(q,r,ithr)   = real(gram_h(q,r,ithr), dp)
-                        gram(r,q,ithr)   = gram(q,r,ithr)
-                    end do
-                    gram(q,q,ithr) = gram(q,q,ithr) + ppca_prior_precision(mode_vars(q))
-                end do
-                call solve_ppca_posterior(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr), post_cov(:,:,ithr))
-                z(row,:) = zrow(:,ithr)
-                z_postcov(row,:,:) = post_cov(:,:,ithr)
-                do q = 1, ncomp
-                    mode_second(q,ithr) = mode_second(q,ithr) + zrow(q,ithr) * zrow(q,ithr) + &
-                        &max(0.d0, post_cov(q,q,ithr))
-                end do
-                do q = 1, ncomp
-                    call subtract_scaled_plane(fpls(i), basis_fpls(q,ithr), zrow(q,ithr))
-                end do
-                resid_energy(row) = plane_energy(fpls(i))
+        do ipart = 1, nparts_eff
+            partlims = parts(ipart,:)
+            do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
+                batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
+                batchsz   = batchlims(2) - batchlims(1) + 1
+                call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
+                call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
+                    &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                call prepare_projected_latent_estep_part(build, mean_rec, basis_recs, fpls(:batchsz), mode_vars, pinds, &
+                    &batchlims, batchsz, ncomp, estep_part, basis_fpls, mean_fpls, orientations, &
+                    &gram_h, rhs_h, gram, rhs, zrow, post_cov)
+                call reduce_projected_latent_estep_part(estep_part, z, z_postcov, resid_energy, resid_mean_energy, mode_second)
+                if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
+                    write(logfhandle,'(A,I0,A,I0)') log_prefix//' E-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
+                    call flush(logfhandle)
+                endif
             end do
-            !$omp end parallel do
-            if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
-                write(logfhandle,'(A,I0,A,I0)') log_prefix//' E-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
-                call flush(logfhandle)
-            endif
         end do
         call log_seconds(log_prefix//' E-STEP INFERENCE SECONDS', toc(t_phase))
         do q = 1, ncomp
-            mode_vars(q) = max(MODE_VAR_FLOOR, sum(mode_second(q,:)) / real(max(1,nptcls), dp))
+            mode_vars(q) = max(MODE_VAR_FLOOR, mode_second(q) / real(max(1,nptcls), dp))
         end do
+        call kill_projected_latent_estep_part(estep_part)
         do ithr = 1, nthr_glob
             call orientations(ithr)%kill
             call cleanup_plane(mean_fpls(ithr))
         end do
+        if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
         do ithr = 1, nthr_glob
             do q = 1, ncomp
