@@ -14,7 +14,7 @@ type aff_prop
     real,    allocatable :: Aold(:,:), Rold(:,:)
     real,    allocatable :: Rp(:,:), tmp(:)
     real,    allocatable :: AS(:,:), dA(:)
-    real,    pointer     :: S(:,:)               !< pointer to similarity matrix
+    real,    allocatable :: S(:,:)               !< private similarity matrix
     real,    allocatable :: Y(:), Y2(:)          !< maxvals
     integer, allocatable :: I(:), I2(:)          !< index arrays
     integer              :: maxits=500           !< maximum number of iterations
@@ -36,26 +36,28 @@ contains
     subroutine new( self, N, S, ftol, lam, pref, maxits )
         class(aff_prop),   intent(inout) :: self
         integer,           intent(in)    :: N               ! # data entries
-        real,    target,   intent(inout) :: S(N,N)          ! similarity matrix
+        real,              intent(in)    :: S(N,N)          ! similarity matrix
         real,    optional, intent(in)    :: ftol, lam, pref ! tolerance, dampening factor, preference thres
         integer, optional, intent(in)    :: maxits
         integer :: i, j
         real    :: ppref, diff
         call self%kill
         ! set constants
-        self%S => S
         self%N = N
         if( present(ftol)    ) self%ftol    = ftol
         if( present(lam)     ) self%lam     = lam
         if( present(maxits)  ) self%maxits  = maxits
         ! calculate similarity characteristics
-        call analyze_smat(S, .false., self%Smin, self%Smax)
+        allocate(self%S(N,N), source=S)
+        call analyze_smat(self%S, .false., self%Smin, self%Smax)
         ! low pref [0.1,1] leads to small numbers of clusters and
         ! high pref leads to large numbers of clusters. Frey suggests Smin - (Smax - Smin) as a threshold for fewer cluster
         ppref = self%Smin
         if( present(pref) ) ppref = pref
         ! remove degeneracies reproducibly; volcluster/AP restarts must be deterministic
-        forall(i=1:N) self%S(i,i) = ppref
+        do i=1,N
+            self%S(i,i) = ppref
+        end do
         diff = (self%Smax - self%Smin) * self%ftol
         do i=1,self%N
             do j=1,self%N
@@ -78,7 +80,7 @@ contains
         integer, allocatable, intent(inout) :: labels(:)  !< cluster labels
         real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
-        real              :: x, realmax, maxdiff, val
+        real              :: x, realmax, maxdiff, rowmax, val
         integer           :: i, j, k, ncls
         logical           :: converged
         ! initialize
@@ -100,97 +102,126 @@ contains
             !------------------------
             ! RESPONSIBILITIES
             !------------------------
-            self%Rold = self%R
-            self%AS   = self%A + self%S
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    self%Rold(j,k) = self%R(j,k)
+                    self%AS(j,k)   = self%A(j,k) + self%S(j,k)
+                end do
+            end do
+            !$omp end parallel do
             self%I    = maxloc(self%AS, dim=2)
-            !$omp parallel do default(shared) private(j,k)
+            !$omp parallel do default(shared) private(j) schedule(static)
             do j = 1, self%N
                 self%Y(j) = self%AS(j,self%I(j))
                 self%AS(j,self%I(j)) = -realmax
             enddo
             !$omp end parallel do
             self%I2 = maxloc(self%AS, dim=2)
-            !$omp parallel default(shared) private(j)
-            !$omp do
+            !$omp parallel do default(shared) private(j) schedule(static)
             do j = 1, self%N
                 self%Y2(j) = self%AS(j,self%I2(j))
             enddo
-            !$omp end do
-            !$omp workshare
-            self%R = self%S
-            !$omp end workshare
-            !$omp do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(j,k) schedule(static)
             do j = 1, self%N
-                self%R(j,:) = self%R(j,:) - self%Y
+                do k = 1, self%N
+                    self%R(j,k) = self%S(j,k) - self%Y(k)
+                end do
             enddo
-            !$omp end do
-            !$omp do 
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(j) schedule(static)
             do j=1,self%N
                 self%R(j,self%I(j)) = self%S(j,self%I(j)) - self%Y2(j)
             end do
-            !$omp end do
-            !$omp workshare
+            !$omp end parallel do
             ! update responsibilities (in a dampened fashion)
-            self%R = (1. - self%lam) * self%R + self%lam * self%Rold
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    self%R(j,k) = (1. - self%lam) * self%R(j,k) + self%lam * self%Rold(j,k)
+                end do
+            end do
+            !$omp end parallel do
             !------------------------
             ! AVAILABILITIES
             !------------------------
-            self%Aold = self%A
-            where(self%R > 0.)
-                self%Rp = self%R
-            elsewhere
-                self%Rp = 0.
-            end where
-            !$omp end workshare
-            !$omp do
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    self%Aold(j,k) = self%A(j,k)
+                    if( self%R(j,k) > 0. )then
+                        self%Rp(j,k) = self%R(j,k)
+                    else
+                        self%Rp(j,k) = 0.
+                    endif
+                end do
+            end do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(k) schedule(static)
             do k = 1, self%N
                 self%Rp(k,k) = self%R(k,k)
             end do
-            !$omp end do
-            !$omp do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(j,k,val) schedule(static)
             do k = 1, self%N
-                self%tmp(k)  = sum(self%Rp(:,k))
+                val = 0.
+                do j = 1, self%N
+                    val = val + self%Rp(j,k)
+                end do
+                self%tmp(k) = val
             end do
-            !$omp end do
-            !$omp workshare
-            self%A = -self%Rp
-            !$omp end workshare
-            !$omp do
-            do j = 1, self%N
-                self%A(j,:) = self%A(j,:) + self%tmp
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    self%A(j,k) = -self%Rp(j,k) + self%tmp(k)
+                end do
             end do
-            !$omp end do
-            !$omp do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(k) schedule(static)
             do k = 1, self%N
                 self%dA(k) = self%A(k,k)
             end do
-            !$omp end do
-            !$omp workshare
-            where(self%A > 0.) self%A = 0.
-            !$omp end workshare
-            !$omp do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    if( self%A(j,k) > 0. ) self%A(j,k) = 0.
+                end do
+            end do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(k) schedule(static)
             do k = 1, self%N
                 self%A(k,k) = self%dA(k)
             end do
-            !$omp end do
-            !$omp workshare
+            !$omp end parallel do
             ! update availabilities (in a dampened fashion)
-            self%A = (1. - self%lam) * self%A + self%lam * self%Aold
-            !$omp end workshare
-            !$omp end parallel
+            !$omp parallel do default(shared) private(j,k) schedule(static)
+            do k = 1, self%N
+                do j = 1, self%N
+                    self%A(j,k) = (1. - self%lam) * self%A(j,k) + self%lam * self%Aold(j,k)
+                end do
+            end do
+            !$omp end parallel do
             !========================
             ! Convergence check each 5th iter
             !========================
             if (mod(i,5) == 0) then
                 maxdiff = 0.0
-                !$omp parallel do default(shared) private(j,k,val) reduction(max:maxdiff)
+                !$omp parallel do default(shared) private(j,k,rowmax,val) schedule(static)
                 do j = 1, self%N
+                    rowmax = 0.
                     do k = 1, self%N
                         val = max( abs(self%A(j,k)-self%Aold(j,k)), abs(self%R(j,k)-self%Rold(j,k)) )
-                        if (val > maxdiff) maxdiff = val
+                        if (val > rowmax) rowmax = val
                     end do
+                    self%tmp(j) = rowmax
                 end do
                 !$omp end parallel do
+                do j = 1, self%N
+                    if( self%tmp(j) > maxdiff ) maxdiff = self%tmp(j)
+                end do
                 if (maxdiff < self%ftol) then
                     write(logfhandle,'(a,i6,1x,es12.4)') 'aff_prop converged at iter=', i, maxdiff
                     converged = .true.
@@ -198,7 +229,13 @@ contains
                 end if
             endif
         end do
-        self%R = self%R + self%A ! pseudomarginals
+        !$omp parallel do default(shared) private(j,k) schedule(static)
+        do k = 1, self%N
+            do j = 1, self%N
+                self%R(j,k) = self%R(j,k) + self%A(j,k) ! pseudomarginals
+            end do
+        end do
+        !$omp end parallel do
         ! count the number of clusters
         ncls = 0
         do j=1,self%N
@@ -331,8 +368,7 @@ contains
     subroutine kill( self )
         class(aff_prop), intent(inout) :: self
         if( self%exists )then
-            self%S => null()
-            deallocate( self%A, self%R, self%Aold, self%Rp,&
+            deallocate( self%S, self%A, self%R, self%Aold, self%Rp,&
             self%Rold, self%AS, self%Y, self%Y2, self%tmp, self%I,&
             self%I2, self%dA )
             self%exists = .false.
