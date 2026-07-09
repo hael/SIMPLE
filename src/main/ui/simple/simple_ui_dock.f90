@@ -5,6 +5,7 @@ implicit none
 
 type(ui_program), target :: dock_volpair
 type(ui_program), target :: volanalyze
+type(ui_program), target :: volcluster
 
 contains
 
@@ -12,6 +13,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_dock_volpair(prgtab)
         call new_volanalyze(prgtab)
+        call new_volcluster(prgtab)
     end subroutine construct_dock_programs
 
     subroutine print_dock_programs(logfhandle)
@@ -19,6 +21,7 @@ contains
         write(logfhandle,'(A)') format_str('VOLUME DOCKING:', C_UNDERLINED)
         write(logfhandle,'(A)') dock_volpair%name%to_char()
         write(logfhandle,'(A)') volanalyze%name%to_char()
+        write(logfhandle,'(A)') volcluster%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_dock_programs
 
@@ -87,5 +90,37 @@ contains
         ! add to ui_hash
         call add_ui_program('volanalyze', volanalyze, prgtab)
     end subroutine new_volanalyze
+
+    subroutine new_volcluster( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call volcluster%new(&
+        &'volcluster',&                                                             ! name
+        &'Cluster docked volumes',&                                                 ! descr_short
+        &'is a program for affinity-propagation clustering of pre-docked volumes',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &.false.)                                                                   ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call volcluster%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
+        &'List of docked volumes to cluster', 'list input e.g. voltab.txt', .true., '')
+        ! parameter input/output
+        call volcluster%add_input(UI_PARM, smpd)
+        call volcluster%add_input(UI_PARM, outfile)
+        call volcluster%add_input(UI_PARM, ncls, required_override=.false.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call volcluster%add_input(UI_FILT, hp, required_override=.false.)
+        call volcluster%add_input(UI_FILT, lp, required_override=.true.)
+        ! mask controls
+        call volcluster%add_input(UI_MASK, mskdiam)
+        ! computer controls
+        call volcluster%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('volcluster', volcluster, prgtab)
+    end subroutine new_volcluster
 
 end module simple_ui_dock

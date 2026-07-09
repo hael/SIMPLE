@@ -58,6 +58,11 @@ type, extends(commander_base) :: commander_volanalyze
     procedure :: execute      => exec_volanalyze
 end type commander_volanalyze
 
+type, extends(commander_base) :: commander_volcluster
+  contains
+    procedure :: execute      => exec_volcluster
+end type commander_volcluster
+
 type, extends(commander_base) :: commander_volops
   contains
     procedure :: execute      => exec_volops
@@ -437,6 +442,52 @@ contains
             call dock_compare_volumes
         endif
     end subroutine exec_volanalyze
+
+    subroutine exec_volcluster( self, cline )
+        use simple_clustering_utils, only: cluster_dmat
+        use simple_volcluster,       only: read_volcluster_volumes, calc_volcluster_dmat, write_volcluster_report
+        class(commander_volcluster), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)              :: params
+        type(string),     allocatable :: volnames(:)
+        type(image),      allocatable :: vols(:)
+        real,             allocatable :: dmat(:,:)
+        integer,          allocatable :: labels(:), i_medoids(:)
+        type(string)                  :: voltab
+        integer                       :: i, ifoo, ldim(3), nclust
+        if( .not. cline%defined('filetab') ) THROW_HARD('Need filetab input for volcluster')
+        if( .not. cline%defined('smpd')    ) THROW_HARD('Need sampling distance (smpd) input for volcluster')
+        if( .not. cline%defined('lp')      ) THROW_HARD('Need low-pass limit (lp) input for volcluster')
+        if( .not. cline%defined('mskdiam') ) THROW_HARD('Need mask diameter (mskdiam) input for volcluster')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'volcluster.txt')
+        voltab = cline%get_carg('filetab')
+        if( .not. file_exists(voltab) ) THROW_HARD('filetab does not exist: '//voltab%to_char())
+        call read_filetable(voltab, volnames)
+        if( .not. allocated(volnames) ) THROW_HARD('Empty filetab input for volcluster')
+        if( size(volnames) < 2 ) THROW_HARD('Need at least 2 volumes for volcluster')
+        call find_ldim_nptcls(volnames(1), ldim, ifoo)
+        if( .not. cline%defined('box') ) call cline%set('box', real(ldim(1)))
+        call params%new(cline)
+        call read_volcluster_volumes(params, volnames, vols)
+        dmat = calc_volcluster_dmat(params, vols)
+        if( cline%defined('ncls') )then
+            nclust = params%ncls
+            call cluster_dmat(dmat, 'kmed', nclust, i_medoids, labels)
+        else
+            call cluster_dmat(dmat, 'aprop', nclust, i_medoids, labels)
+        endif
+        call write_volcluster_report(volnames, dmat, i_medoids, labels, params%outfile)
+        write(logfhandle,'(A,A)') '>>> VOLCLUSTER REPORT WRITTEN: ', params%outfile%to_char()
+        write(logfhandle,'(A)')   '>>> VOLCLUSTER DISTANCE MATRIX WRITTEN: volcluster_dmat.bin'
+        do i = 1, size(vols)
+            call vols(i)%kill
+        end do
+        deallocate(vols, dmat, labels, i_medoids)
+        call volnames%kill
+        call simple_end('**** SIMPLE_VOLCLUSTER NORMAL STOP ****', &
+            verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
+    end subroutine exec_volcluster
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
     subroutine exec_volops( self, cline )

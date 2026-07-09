@@ -1,7 +1,7 @@
 !@descr: execution of map docking commanders
 module simple_exec_dock
 use simple_cmdline,           only: cmdline
-use simple_commanders_volops, only: commander_dock_volpair, commander_volanalyze
+use simple_commanders_volops, only: commander_dock_volpair, commander_volanalyze, commander_volcluster
 implicit none
 
 public :: exec_dock_commander
@@ -9,6 +9,7 @@ private
 
 type(commander_dock_volpair) :: xdock_volpair
 type(commander_volanalyze)   :: xvolanalyze
+type(commander_volcluster)   :: xvolcluster
 
 contains
 
@@ -25,6 +26,8 @@ contains
                 call xdock_volpair%execute(cline)
             case( 'volanalyze' )
                 call xvolanalyze%execute(cline)
+            case( 'volcluster' )
+                call xvolcluster%execute(cline)
             case default
                 l_did_execute = .false.
         end select
