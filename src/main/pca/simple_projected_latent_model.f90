@@ -24,6 +24,16 @@ real(dp), parameter :: MODE_VAR_FLOOR = 1.0d-3
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_ABS = 1.0d-10
 
+type :: projected_latent_mstep_2d_block
+    integer :: nrecords = 0
+    integer :: ncomp    = 0
+    integer,  allocatable :: rows(:), pinds(:)
+    logical,  allocatable :: valid(:)
+    type(ori), allocatable :: orientations(:)
+    real(dp), allocatable :: zrows(:,:)
+    real(dp), allocatable :: latent_second(:,:,:)
+end type projected_latent_mstep_2d_block
+
 contains
 
     subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, z_postcov, pinds, nptcls, ncomp, fpls, log_label )
@@ -37,12 +47,11 @@ contains
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         character(len=*), optional, intent(in) :: log_label
         type(fplane_type) :: mean_fpl
-        type(ori)         :: orientation
+        type(projected_latent_mstep_2d_block) :: mstep_block
         real,    allocatable :: rho_cross_exp(:,:,:,:)
-        real(dp)             :: latent_second(ncomp,ncomp)
         character(len=:), allocatable :: log_prefix
         integer              :: exp_shape(3), npairs
-        integer           :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, row, progress_stride
+        integer           :: batchlims(2), batchsz, ibatch, q, progress_stride
         integer(timer_int_kind) :: t_total, t_phase, t_comp
         t_total = tic()
         if( present(log_label) )then
@@ -62,6 +71,7 @@ contains
         allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
         t_phase = tic()
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
@@ -69,29 +79,17 @@ contains
             call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
             call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
                 &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
-            do i = 1, batchsz
-                row   = batchlims(1) + i - 1
-                iptcl = pinds(row)
-                call build%spproj_field%get_ori(iptcl, orientation)
-                if( orientation%isstatezero() ) cycle
-                call mean_rec%project_fplane(orientation, fpls(i), mean_fpl, apply_ctf_amp=.true.)
-                call subtract_plane(fpls(i), mean_fpl)
-                latent_second = z_postcov(row,:,:)
-                do q = 1, ncomp
-                    do r = 1, ncomp
-                        latent_second(q,r) = latent_second(q,r) + z(row,q) * z(row,r)
-                    end do
-                end do
-                call insert_plane_oversamp_coupled_scaled(basis_recs, rho_cross_exp, build%pgrpsyms, &
-                    &orientation, fpls(i), z(row,:), latent_second)
-            end do
+            call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, z_postcov, &
+                &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
+            call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
+                &mstep_block, fpls(:batchsz))
             if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
                 write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
                 call flush(logfhandle)
             endif
         end do
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
-        call orientation%kill
+        call kill_projected_latent_mstep_2d_block(mstep_block)
         call cleanup_runtime_batch(build, fpls)
         call cleanup_plane(mean_fpl)
         t_phase = tic()
@@ -109,6 +107,105 @@ contains
         call log_seconds(log_prefix//' M-STEP FINALIZE TOTAL SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP TOTAL SECONDS', toc(t_total))
     end subroutine update_basis_from_latents
+
+    subroutine init_projected_latent_mstep_2d_block( block, nrecords_max, ncomp )
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        integer, intent(in) :: nrecords_max, ncomp
+        call kill_projected_latent_mstep_2d_block(block)
+        block%nrecords = 0
+        block%ncomp    = ncomp
+        allocate(block%rows(nrecords_max), block%pinds(nrecords_max), block%valid(nrecords_max), &
+            &block%orientations(nrecords_max), block%zrows(ncomp,nrecords_max), &
+            &block%latent_second(ncomp,ncomp,nrecords_max))
+        block%rows          = 0
+        block%pinds         = 0
+        block%valid         = .false.
+        block%zrows         = 0.d0
+        block%latent_second = 0.d0
+    end subroutine init_projected_latent_mstep_2d_block
+
+    subroutine kill_projected_latent_mstep_2d_block( block )
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        integer :: i
+        if( allocated(block%orientations) )then
+            do i = 1, size(block%orientations)
+                call block%orientations(i)%kill
+            end do
+            deallocate(block%orientations)
+        endif
+        if( allocated(block%rows) ) deallocate(block%rows)
+        if( allocated(block%pinds) ) deallocate(block%pinds)
+        if( allocated(block%valid) ) deallocate(block%valid)
+        if( allocated(block%zrows) ) deallocate(block%zrows)
+        if( allocated(block%latent_second) ) deallocate(block%latent_second)
+        block%nrecords = 0
+        block%ncomp    = 0
+    end subroutine kill_projected_latent_mstep_2d_block
+
+    subroutine reset_projected_latent_mstep_2d_block( block, nrecords )
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        integer, intent(in) :: nrecords
+        integer :: i
+        if( .not. allocated(block%valid) ) THROW_HARD('unallocated M-step 2D block')
+        if( nrecords > size(block%valid) ) THROW_HARD('M-step 2D block capacity exceeded')
+        do i = 1, size(block%orientations)
+            call block%orientations(i)%kill
+        end do
+        block%nrecords = nrecords
+        block%rows(:nrecords)          = 0
+        block%pinds(:nrecords)         = 0
+        block%valid(:nrecords)         = .false.
+        block%zrows(:,:nrecords)       = 0.d0
+        block%latent_second(:,:,:nrecords) = 0.d0
+    end subroutine reset_projected_latent_mstep_2d_block
+
+    subroutine prepare_projected_latent_mstep_2d_block( params, build, mean_rec, fpls_batch, z, z_postcov, &
+        &pinds, batchlims, batchsz, ncomp, block, mean_fpl )
+        class(parameters),   intent(in)    :: params
+        class(builder),      intent(inout) :: build
+        type(reconstructor), intent(inout) :: mean_rec
+        integer,             intent(in)    :: batchlims(2), batchsz, ncomp
+        type(fplane_type),   intent(inout) :: fpls_batch(batchsz)
+        real(dp),            intent(in)    :: z(:,:), z_postcov(:,:,:)
+        integer,             intent(in)    :: pinds(:)
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        type(fplane_type), intent(inout) :: mean_fpl
+        integer :: i, iptcl, q, r, row
+        call reset_projected_latent_mstep_2d_block(block, batchsz)
+        do i = 1, batchsz
+            row   = batchlims(1) + i - 1
+            iptcl = pinds(row)
+            block%rows(i)  = row
+            block%pinds(i) = iptcl
+            call build%spproj_field%get_ori(iptcl, block%orientations(i))
+            if( block%orientations(i)%isstatezero() ) cycle
+            call mean_rec%project_fplane(block%orientations(i), fpls_batch(i), mean_fpl, apply_ctf_amp=.true.)
+            call subtract_plane(fpls_batch(i), mean_fpl)
+            block%zrows(:,i) = z(row,:)
+            block%latent_second(:,:,i) = z_postcov(row,:,:)
+            do q = 1, ncomp
+                do r = 1, ncomp
+                    block%latent_second(q,r,i) = block%latent_second(q,r,i) + z(row,q) * z(row,r)
+                end do
+            end do
+            block%valid(i) = .true.
+        end do
+    end subroutine prepare_projected_latent_mstep_2d_block
+
+    subroutine insert_projected_latent_mstep_2d_block( build, basis_recs, rho_cross_exp, ncomp, block, fpls_batch )
+        class(builder),      intent(inout) :: build
+        integer,             intent(in)    :: ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        real,                intent(inout) :: rho_cross_exp(:,:,:,:)
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        type(fplane_type),   intent(in)    :: fpls_batch(:)
+        integer :: i
+        do i = 1, block%nrecords
+            if( .not. block%valid(i) ) cycle
+            call insert_plane_oversamp_coupled_scaled(basis_recs, rho_cross_exp, build%pgrpsyms, &
+                &block%orientations(i), fpls_batch(i), block%zrows(:,i), block%latent_second(:,:,i))
+        end do
+    end subroutine insert_projected_latent_mstep_2d_block
 
     subroutine infer_latents_from_basis( params, build, mean_rec, basis_recs, z, mode_vars, &
         &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label )
