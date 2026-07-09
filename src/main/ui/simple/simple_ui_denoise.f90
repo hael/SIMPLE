@@ -321,6 +321,8 @@ contains
             'ptcl3D', .false., 'ptcl3D')
         call flex_eigenvol%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
+        call flex_eigenvol%add_input(UI_COMP, nparts, required_override=.false., &
+            gui_submenu="compute", gui_advanced=.false.)
         call flex_eigenvol%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call add_ui_program('flex_eigenvol', flex_eigenvol, prgtab)
     end subroutine new_flex_eigenvol

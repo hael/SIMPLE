@@ -11,6 +11,7 @@ use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, project_fplanes_mean_basis
+use simple_map_reduce,       only: split_nobjs_even
 implicit none
 
 public :: update_basis_from_latents, infer_latents_from_basis
@@ -49,9 +50,10 @@ contains
         type(fplane_type) :: mean_fpl
         type(projected_latent_mstep_2d_block) :: mstep_block
         real,    allocatable :: rho_cross_exp(:,:,:,:)
+        integer, allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
         integer              :: exp_shape(3), npairs
-        integer           :: batchlims(2), batchsz, ibatch, q, progress_stride
+        integer           :: batchlims(2), batchsz, ibatch, ipart, nparts_eff, partlims(2), q, progress_stride
         integer(timer_int_kind) :: t_total, t_phase, t_comp
         t_total = tic()
         if( present(log_label) )then
@@ -62,6 +64,12 @@ contains
         write(logfhandle,'(A)') log_prefix//' M-STEP: UPDATING EIGENVOLUMES WITH COUPLED BLOCK SOLVE'
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
+        nparts_eff      = max(1, min(max(1, params%nparts), nptcls))
+        parts           = split_nobjs_even(nptcls, nparts_eff)
+        if( nparts_eff > 1 )then
+            write(logfhandle,'(A,I0)') log_prefix//' M-STEP LOCAL PARTITIONS: ', nparts_eff
+            call flush(logfhandle)
+        endif
         do q = 1, ncomp
             call basis_recs(q)%reset
             call basis_recs(q)%reset_exp
@@ -73,23 +81,27 @@ contains
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
         t_phase = tic()
-        do ibatch = 1, nptcls, MAXIMGBATCHSZ
-            batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
-            batchsz   = batchlims(2) - batchlims(1) + 1
-            call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
-            call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
-            call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, z_postcov, &
-                &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
-            call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
-                &mstep_block, fpls(:batchsz))
-            if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
-                write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
-                call flush(logfhandle)
-            endif
+        do ipart = 1, nparts_eff
+            partlims = parts(ipart,:)
+            do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
+                batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
+                batchsz   = batchlims(2) - batchlims(1) + 1
+                call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
+                call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
+                    &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, z_postcov, &
+                    &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
+                call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
+                    &mstep_block, fpls(:batchsz))
+                if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
+                    write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
+                    call flush(logfhandle)
+                endif
+            end do
         end do
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
         call kill_projected_latent_mstep_2d_block(mstep_block)
+        if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
         call cleanup_plane(mean_fpl)
         t_phase = tic()
