@@ -1,78 +1,39 @@
-!@descr: multi-tier microchunk 2D classification driver (pass-1/pass-2)
+!@descr: multi-tier particle sieve with coarse/fine 2D chunking and rejection
 !==============================================================================
-! MODULE: simple_microchunked2D
+! MODULE: simple_ptcl_sieve
 !
 ! PURPOSE:
-!   Manages creation, configuration, and submission of pass-1 and pass-2
-!   microchunks (bounded particle subsets drawn from a larger project list)
-!   for parallel ab initio 2D class averaging.
+!   Manages chunked ab initio 2D processing across two tiers:
+!   coarse chunks (pass 1) and fine chunks (pass 2), including queue
+!   submission, completion polling, rejection, compatibility filtering,
+!   and final project combination.
 !
 ! TYPES:
-!   chunk2D    - Holds the identity, particle counts (total and selected),
-!                folder path, project file path, command line, and lifecycle
-!                state flags (abinitio2D_running, abinitio2D_complete,
-!                rejection_complete, complete) for a single chunk.
-!   microchunked2D - Owns arrays of pass-1 and pass-2 microchunks, queue
-!                    environment, output directories, and shared processing
-!                    parameters.
+!   chunk2D_state - Per-chunk state container (identity, particle counts,
+!                   paths, command line, and lifecycle flags).
+!   ptcl_sieve    - Orchestrator owning coarse/fine chunk arrays, queue
+!                   environment, defaults, compatibility models, and counters.
 !
 ! WORKFLOW:
-!   1. new()                            — initialise a microchunked2D object: derives
-!                                         output directories, imports any
-!                                         existing chunks from previous runs,
-!                                         creates directories, and initialises
-!                                         the queue environment.
-!   2. cycle()                          — convenience wrapper: collects completed
-!                                         jobs and runs rejection, generates
-!                                         chunks at all active tiers, then submits
-!                                         pending chunks to the queue.
-!   3. generate_chunks_coarse()    — partition un-included records from a
-!                                         rec_list into pass-1 microchunks, each
-!                                         capped at DEFAULT_COARSE_POP_THRESHOLD
-!                                         particles; write a project file per
-!                                         chunk and update the imported-projects
-!                                         file table.
-!   4. generate_chunks_fine()    — merge rejection-complete pass-1
-!                                         microchunks into pass-2 microchunks.
-!   5. submit()                         — dispatch pending chunks to the queue up
-!                                         to the nparallel concurrency limit;
-!                                         priority order: pass-2 > pass-1.
-!   6. combine_completed_pass_1_chunks() — merge the project files of all
-!                                         rejection-complete pass-1 chunks into
-!                                         a single combined project file.
-!                                         No-op if no pass-1 chunks are
-!                                         rejection-complete or the combined
-!                                         file already exists.
-!   7. collect_and_reject()             — poll running chunks for the
-!                                         ABINITIO2D_FINISHED sentinel; transition
-!                                         completed chunks and immediately run
-!                                         class-average rejection on each newly
-!                                         finished chunk.
+!   1. new()                     - initialize object state, output dirs,
+!                                  queue environment, and optional
+!                                  compatibility pretraining.
+!   2. cycle()                   - collect completions and reject,
+!                                  generate coarse/fine chunks, submit work.
+!   3. generate_chunks_coarse()  - build coarse chunks from project list.
+!   4. generate_chunks_fine()    - merge eligible coarse chunks into fine chunks.
+!   5. submit()                  - submit pending chunks (fine prioritized).
+!   6. collect_and_reject()      - detect finished jobs and apply rejection.
+!   7. combine_completed_chunks()- combine eligible completed outputs.
 !
-! SENTINEL FILES (written to each chunk folder):
-!   ABINITIO2D_FINISHED  — written by the queue job on completion.
-!   REJECTION_FINISHED   — written by reject_cavgs on successful rejection.
-!   COMPLETE             — written when a chunk is consumed into the next tier.
-!
-! CONSTANTS:
-!   DEFAULT_COARSE_POP_THRESHOLD — maximum particles per pass-1 microchunk       (5000)
-!   DEFAULT_FINE_POP_THRESHOLD — maximum selected particles per pass-2 chunk  (10000)
-!   DEFAULT_NCLS                          — default number of 2D classes         (100)
-!   DEFAULT_LPSTART                       — shared low-pass start cutoff, Å    (15.0)
-!   DEFAULT_MICRO_P1_LP                   — pass-1 low-pass stop cutoff, Å    (15.0)
-!   DEFAULT_MICRO_P2_LP                   — pass-2 low-pass stop cutoff, Å    (10.0)
-!   DEFAULT_WALLTIME                      — per-chunk job time limit, s  (1740 / 29 min)
+! SENTINEL FILES (per chunk directory):
+!   ABINITIO2D_FINISHED - queue job completion marker.
+!   REJECTION_FINISHED  - rejection stage completion marker.
+!   COMPLETE            - chunk consumed/finalized marker.
+!   REJECTION_FAILED    - rejection failure marker.
 !
 ! ENVIRONMENT:
-!   SIMPLE_CHUNK_PARTITION — if set, overrides the queue partition used for
-!                            all chunk job submission.
-!
-! DEPENDENCIES:
-!   simple_defs, simple_image, simple_timer, simple_string, simple_fileio,
-!   simple_syslib, simple_cmdline, simple_qsys_env, simple_rec_list,
-!   simple_gui_utils, simple_parameters, simple_sp_project, simple_defs_fname,
-!   simple_string_utils, simple_imgarr_utils, simple_projfile_utils,
-!   simple_cluster2D_rejector
+!   SIMPLE_CHUNK_PARTITION - optional queue partition override.
 !==============================================================================
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
@@ -94,7 +55,6 @@ module simple_ptcl_sieve
   use simple_imgarr_utils,                only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr
   use simple_string_utils,                only: int2str
   use simple_projfile_utils,              only: merge_chunk_projfiles
-  use simple_cluster2D_rejector,          only: cluster2D_rejector
   use simple_cavg_quality_types,          only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
@@ -229,7 +189,7 @@ contains
   ! LIFECYCLE
   ! --------------------------------------------------------------------------
 
-  ! Initialises a microchunked2D object from a parameters object: derives output
+  ! Initializes a ptcl_sieve object from a parameters object: derives output
   ! directories from the current working directory, stores the concurrency
   ! limit, mask diameter, and thread count; imports any existing chunks from a
   ! previous run; creates all four output directories; allocates empty chunk
@@ -274,8 +234,8 @@ contains
     call timer_stop(t0, string('new'))
   end subroutine new
 
-  ! Kills all live command lines for pass-1 and pass-2 chunks, deallocates
-  ! all microchunk arrays,
+  ! Kills all live command lines for coarse and fine chunks, deallocates
+  ! all chunk arrays,
   ! and resets all scalar state so the object can be safely reused via new().
   subroutine kill( self )
     class(ptcl_sieve), intent(inout) :: self
@@ -309,7 +269,7 @@ contains
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
-  ! Sets the module-level final-ingestion flag. Once enabled, pass-2 final
+  ! Sets the module-level final-ingestion flag. Once enabled, fine-tier final
   ! flushing logic is allowed to run without waiting on timeout.
   subroutine set_final_ingestion(self)
     class(ptcl_sieve), intent(inout) :: self
@@ -320,8 +280,8 @@ contains
   ! IMPORT FROM PREVIOUS RUN
   ! --------------------------------------------------------------------------
 
-  ! Scans the pass-1 output directory for existing chunk subdirectories and
-  ! populates the pass-1 array with chunk records whose state is inferred from
+  ! Scans the coarse output directory for existing chunk subdirectories and
+  ! populates the coarse array with chunk records whose state is inferred from
   ! sentinel files (ABINITIO2D_FINISHED, REJECTION_FINISHED, COMPLETE).
   ! Regenerates the cline for any chunk that has not yet completed abinitio2D,
   ! so that interrupted chunks can be resubmitted after a restart.
@@ -364,8 +324,8 @@ contains
     call timer_stop(t0, string('import_existing_chunks_coarse'))
   end subroutine import_existing_chunks_coarse
 
-  ! Scans the pass-2 output directory for existing chunk subdirectories and
-  ! populates the pass-2 array with chunk records whose state is inferred from
+  ! Scans the fine output directory for existing chunk subdirectories and
+  ! populates the fine array with chunk records whose state is inferred from
   ! sentinel files. Regenerates the cline for any chunk that has not yet
   ! completed abinitio2D, so that interrupted chunks can be resubmitted.
   subroutine import_existing_chunks_fine( self )
@@ -430,21 +390,21 @@ contains
   ! QUERIES
   ! --------------------------------------------------------------------------
 
-  ! Returns the total number of pass-1 microchunks; zero if unallocated.
+  ! Returns the total number of coarse chunks; zero if unallocated.
   pure integer function get_n_chunks_coarse( self )
     class(ptcl_sieve), intent(in) :: self
     get_n_chunks_coarse = 0
     if( allocated(self%chunks_coarse) ) get_n_chunks_coarse = size(self%chunks_coarse)
   end function get_n_chunks_coarse
 
-  ! Returns the total number of pass-2 microchunks; zero if unallocated.
+  ! Returns the total number of fine chunks; zero if unallocated.
   pure integer function get_n_chunks_fine( self )
     class(ptcl_sieve), intent(in) :: self
     get_n_chunks_fine = 0
     if( allocated(self%chunks_fine) ) get_n_chunks_fine = size(self%chunks_fine)
   end function get_n_chunks_fine
 
-  ! Returns the combined number of currently running pass-1 and pass-2 chunks.
+  ! Returns the combined number of currently running coarse and fine chunks.
   pure integer function get_n_chunks_running( self )
     class(ptcl_sieve), intent(in) :: self
     integer :: i
@@ -457,9 +417,9 @@ contains
     end do
   end function get_n_chunks_running
 
-  ! Returns the total selected-particle count across all pass-1 microchunks
+  ! Returns the total selected-particle count across all coarse chunks
   ! that have completed rejection but have not yet been consumed into a
-  ! pass-2 microchunk.
+  ! fine chunk.
   pure integer function get_n_pass_1_non_rejected_ptcls( self )
     class(ptcl_sieve), intent(in) :: self
     integer :: i
@@ -473,7 +433,7 @@ contains
     end do
   end function get_n_pass_1_non_rejected_ptcls
 
-  ! Returns the total selected-particle count across all pass-2 microchunks
+  ! Returns the total selected-particle count across all fine chunks
   ! that have completed rejection but are not yet finalised.
   pure integer function get_n_pass_2_non_rejected_ptcls( self )
     class(ptcl_sieve), intent(in) :: self
@@ -489,8 +449,8 @@ contains
   end function get_n_pass_2_non_rejected_ptcls
 
   ! Returns the cumulative number of particles accepted (state > 0) across all
-  ! finalised pass-2 chunks. Updated by collect_and_reject when each pass-2 chunk
-  ! is marked complete. Pass-1 rejections are not included; use
+  ! finalised fine chunks. Updated by collect_and_reject when each fine chunk
+  ! is marked complete. Coarse rejections are not included; use
   ! get_n_pass_1/2_non_rejected_ptcls for unconsumed per-chunk selected counts.
   pure integer function get_n_accepted_ptcls( self )
     class(ptcl_sieve), intent(in) :: self
@@ -498,15 +458,15 @@ contains
   end function get_n_accepted_ptcls
 
   ! Returns the cumulative number of accepted micrographs across all
-  ! finalised pass-2 chunks.
+  ! finalised fine chunks.
   pure integer function get_n_accepted_micrographs( self )
     class(ptcl_sieve), intent(in) :: self
     get_n_accepted_micrographs = self%n_accepted_mics
   end function get_n_accepted_micrographs
 
   ! Returns the cumulative number of particles rejected (state = 0) across all
-  ! finalised pass-2 chunks. Updated alongside n_accepted_ptcls by
-  ! collect_and_reject when each pass-2 chunk is marked complete.
+  ! finalised fine chunks. Updated alongside n_accepted_ptcls by
+  ! collect_and_reject when each fine chunk is marked complete.
   pure integer function get_n_rejected_ptcls( self )
     class(ptcl_sieve), intent(in) :: self
     get_n_rejected_ptcls = self%n_rejected_ptcls
@@ -556,20 +516,20 @@ contains
   end function get_latest
 
   ! Returns true when all required tiers are complete.
-  ! In coarse_only mode, only pass-1 chunks are required.
-  ! In two-tier mode, pass-1 must be complete and pass-2 must be complete
-  ! when present; if no pass-2 chunks were generated, pass-1 completion is
+  ! In coarse_only mode, only coarse chunks are required.
+  ! In two-tier mode, coarse must be complete and fine must be complete
+  ! when present; if no fine chunks were generated, coarse completion is
   ! treated as terminal.
   logical function get_finished( self )
     class(ptcl_sieve), intent(in) :: self
-    ! pass-1: must have at least one chunk and all must be complete
+    ! Coarse tier: must have at least one chunk and all must be complete.
     get_finished = self%get_n_chunks_coarse() > 0
     if( .not. get_finished ) return
     get_finished = all(self%chunks_coarse(:)%complete .or. self%chunks_coarse(:)%failed)
     if( .not. get_finished ) return
-    ! pass-1-only runs terminate once all pass-1 chunks are done
+    ! Coarse-only runs terminate once all coarse chunks are done.
     if( self%coarse_only ) return
-    ! pass-2: when absent, pass-1 completion is terminal
+    ! Fine tier: when absent, coarse completion is terminal.
     if( self%get_n_chunks_fine() == 0 )then
       get_finished = .true.
       return
@@ -581,7 +541,7 @@ contains
   ! APPEND HELPERS
   ! --------------------------------------------------------------------------
 
-  ! Appends a single chunk2D to the end of the pass-1 microchunk array.
+  ! Appends a single chunk2D_state to the end of the coarse chunk array.
   subroutine append_chunk_coarse( self, new_chunk )
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
@@ -594,7 +554,7 @@ contains
     call move_alloc(tmp, self%chunks_coarse)
   end subroutine append_chunk_coarse
 
-  ! Appends a single chunk2D to the end of the pass-2 microchunk array.
+  ! Appends a single chunk2D_state to the end of the fine chunk array.
   subroutine append_chunk_fine( self, new_chunk )
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
@@ -612,7 +572,7 @@ contains
   ! GENERATION
   ! --------------------------------------------------------------------------
 
-  ! Partitions un-included records from project_list into pass-1 microchunks,
+  ! Partitions un-included records from project_list into coarse chunks,
   ! each holding up to coarse_defaults%pop_threshold particles. For each chunk:
   ! creates its subdirectory, accumulates micrographs until the threshold is
   ! reached, builds and writes a project file, applies any
@@ -638,7 +598,7 @@ contains
     t0 = timer_start()
 
     ! Pre-chunked mode: import existing per-chunk project files from
-    ! project_list instead of creating new pass-1 chunks from particle slices.
+    ! project_list instead of creating new coarse chunks from particle slices.
     if( self%pre_chunked ) then
       if( self%get_n_chunks_coarse() > 0 ) then
         call timer_stop(t0, string('generate_chunks_coarse'))
@@ -695,7 +655,7 @@ contains
       return
     end if
 
-    ! NOTE: pass-1 uses a soft cap. The trigger micrograph that crosses the
+    ! NOTE: coarse chunking uses a soft cap. The trigger micrograph that crosses the
     ! threshold is included in the current chunk to preserve contiguous slices.
     do while( project_list%get_nptcls_tot(l_not_included=.true.) > self%coarse_defaults%pop_threshold )
       included = project_list%get_included_flags()
@@ -755,7 +715,7 @@ contains
     end do
 
     ! Final ingestion: sweep any remaining sub-threshold un-included particles
-    ! into a pass-1 chunk flagged as rejection-complete so the pass-2 final
+    ! into a coarse chunk flagged as rejection-complete so the fine-tier final
     ! flush consumes them without running 2D classification.
     if( self%final_ingestion ) then
       included = project_list%get_included_flags()
@@ -796,7 +756,7 @@ contains
     call timer_stop(t0, string('generate_chunks_coarse'))
   end subroutine generate_chunks_coarse
 
-  ! Merges rejection-complete pass-1 microchunks into pass-2 microchunks,
+  ! Merges rejection-complete coarse chunks into fine chunks,
   ! each accumulating up to fine_defaults%pop_threshold selected particles.
   subroutine generate_chunks_fine( self )
     class(ptcl_sieve), intent(inout) :: self
@@ -853,7 +813,7 @@ contains
         call simple_touch(self%chunks_coarse(consumed(i))%folder%to_char() // '/COMPLETE')
       end do
 
-      ! flag this as the final sieve chunk once final ingestion is signaled and all pass-1 chunks are done
+      ! Flag this as the final sieve chunk once final ingestion is signaled and all coarse chunks are done.
       if( self%final_ingestion .and. all(self%chunks_coarse(:)%complete .or. self%chunks_coarse(:)%failed) )then
         if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
         call chunk_project%os_out%set(1, 'sieve_final', 'yes')
@@ -872,7 +832,7 @@ contains
       
     end do
 
-    ! Flush a final small pass-2 chunk when final ingestion is signaled.
+    ! Flush a final small fine chunk when final ingestion is signaled.
     if( self%final_ingestion .and. &
         self%get_n_pass_1_non_rejected_ptcls() > 0 .and. all(self%chunks_coarse(:)%rejection_complete .or. self%chunks_coarse(:)%failed) ) then
       allocate(projfiles(self%get_n_chunks_coarse()), consumed(self%get_n_chunks_coarse()))
@@ -905,7 +865,7 @@ contains
                                            '/chunk_fine_' // int2str(chunk_id) // METADATA_EXT)
         call self%generate_chunk_fine_cline(new_chunk, new_chunk%nptcls_selected)
         call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline)
-        ! flag this as the final sieve chunk once final ingestion is signaled and all pass-1 chunks are done
+        ! Flag this as the final sieve chunk once final ingestion is signaled and all coarse chunks are done.
         if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
         call chunk_project%os_out%set(1, 'sieve_final', 'yes')
         call chunk_project%write(new_chunk%projfile)
@@ -928,7 +888,7 @@ contains
   ! COMMAND-LINE BUILDERS
   ! --------------------------------------------------------------------------
 
-  ! Populates the abinitio2D command line for a pass-1 microchunk with:
+  ! Populates the abinitio2D command line for a coarse chunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
   ! diameter, class count, low-pass stop cutoff (DEFAULT_MICRO_P1_LP), and
   ! wall-time limit.
@@ -957,7 +917,7 @@ contains
     call server_address%kill()
   end subroutine generate_chunk_coarse_cline
 
-  ! Populates the abinitio2D command line for a pass-2 microchunk.
+  ! Populates the abinitio2D command line for a fine chunk.
   subroutine generate_chunk_fine_cline( self, new_chunk, nptcls )
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(inout) :: new_chunk
@@ -987,9 +947,9 @@ contains
   ! COMBINATION
   ! --------------------------------------------------------------------------
 
-  ! Merges completed microchunk project files into a single combined project
+  ! Merges completed chunk project files into a single combined project
   ! written to completedir. In coarse_only mode, combines rejection-complete
-  ! pass-1 chunks; otherwise combines complete pass-2 chunks.
+  ! coarse chunks; otherwise combines complete fine chunks.
   ! No-op if no eligible chunks exist or if the combined file already exists.
   subroutine combine_completed_chunks( self, combined_projfile )
     class(ptcl_sieve), intent(inout) :: self
@@ -1066,7 +1026,7 @@ contains
   ! --------------------------------------------------------------------------
 
   ! Submits pending chunks to the queue asynchronously, up to the nparallel
-  ! concurrency limit. Priority order: pass-2 > pass-1.
+  ! concurrency limit. Priority order: fine > coarse.
   ! Skips chunks that are already running or complete. For each submitted
   ! chunk: changes into its working directory, dispatches the job, marks it
   ! as running, and releases its command line. Restores the original working
@@ -1079,7 +1039,7 @@ contains
     t0 = timer_start()
     call simple_getcwd(cwd)
 
-    ! Submit pass-2 microchunks first
+    ! Submit fine chunks first.
     do i = 1, self%get_n_chunks_fine()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_fine(i) )
@@ -1095,7 +1055,7 @@ contains
       end associate
     end do
 
-    ! Submit pass-1 microchunks last — lowest priority
+    ! Submit coarse chunks last (lowest priority).
     do i = 1, self%get_n_chunks_coarse()
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_coarse(i) )
@@ -1116,7 +1076,7 @@ contains
     call timer_stop(t0, string('submit'))
   end subroutine submit
 
-  ! Polls all running pass-1 and pass-2 chunks for the ABINITIO2D_FINISHED
+  ! Polls all running coarse and fine chunks for ABINITIO2D_FINISHED,
   ! sentinel file. For each newly completed chunk: transitions it from running
   ! to complete and immediately runs class-average rejection.
   subroutine collect_and_reject( self )
@@ -1280,6 +1240,9 @@ contains
         compat_metrics%axis_a, compat_metrics%axis_b, compat_metrics%axis_c, ' da/db/dc=', &
         compat_metrics%delta_a, compat_metrics%delta_b, compat_metrics%delta_c, ' valid=', &
         compat_metrics%valid, ' delta_valid=', compat_metrics%delta_valid, ' converged=', compat_metrics%converged
+      if( compat_metrics%converged ) then
+        write(logfhandle,'(A,I6)') '>>> COARSE COMPATIBILITY MODEL CONVERGED AT CHUNK # ', chunk%id
+      end if
 
     else
       call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
@@ -1299,6 +1262,9 @@ contains
         compat_metrics%axis_a, compat_metrics%axis_b, compat_metrics%axis_c, ' da/db/dc=', &
         compat_metrics%delta_a, compat_metrics%delta_b, compat_metrics%delta_c, ' valid=', &
         compat_metrics%valid, ' delta_valid=', compat_metrics%delta_valid, ' converged=', compat_metrics%converged
+      if( compat_metrics%converged ) then
+        write(logfhandle,'(A,I6)') '>>> FINE COMPATIBILITY MODEL CONVERGED AT CHUNK # ', chunk%id
+      end if
     end if
     states = spproj%os_cls2D%get_all_asint('state')
     call spproj%map_cavgs_selection(states)

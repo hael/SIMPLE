@@ -1,10 +1,13 @@
-!@descr: task 5 in the stream pipeline: multi-pass chunk-based 2D classification with automatic sieving of low-quality class averages
+!@descr: stream task 5: continuous particle-sieving with staged chunk generation and class-average rejection
+!@header: Watches completed stream projects, imports new particles, and drives
+!         the ptcl_sieve cycle (collect/reject, coarse, optional fine,
+!         submit) until termination.
 !==============================================================================
 ! MODULE: simple_stream_p05_sieve_cavgs_new
 !
 ! PURPOSE:
 !   Implements stream pipeline task 5: continuously ingests incoming project
-!   files and drives a four-stage chunked2D classification pipeline that
+!   files and drives a staged ptcl_sieve classification pipeline that
 !   produces progressively refined class averages, automatically rejecting
 !   low-quality averages after each stage (sieving).
 !
@@ -13,18 +16,17 @@
 !                            sieve-cavgs stream task.
 !
 ! WORKFLOW:
-!   1. Initialise parameters, queue environment, and chunked2D object.
+!   1. Initialise parameters, queue environment, and ptcl_sieve object.
 !   2. Restore previously imported project history (if present).
 !   3. Enter main loop (runs until termination signal):
 !      a. Watch dir_target for newly completed project files.
 !      b. Import new projects into the rec_list.
-!      c. Call chunked_2D%cycle(), which performs per-cycle:
-!           i.  collect_and_reject   — harvest completed chunks, sieve cavgs
-!           ii. generate_microchunks_pass_1 — seed pass-1 chunks from new records
-!           iii.generate_microchunks_pass_2 — promote pass-1 results to pass-2
-!           iv. generate_refchunk          — build reference chunk from pass-2
-!           v.  generate_microchunks_match — match-refine against reference
-!           vi. submit                     — dispatch pending chunks to queue
+!      c. Call sieve%cycle(), which performs per-cycle:
+!           i.   collect_and_reject   — harvest completed chunks and sieve cavgs
+!           ii.  generate_chunks_coarse — seed coarse chunks from new records
+!           iii. generate_chunks_fine   — promote coarse outputs to fine chunks
+!                                         (skipped when coarse_only is enabled)
+!           iv.  submit                 — dispatch pending chunks to queue
 !      d. Sleep for WAITTIME before the next cycle.
 !
 ! PARAMETERS (hard-coded):
@@ -34,15 +36,14 @@
 !   SIMPLE_STREAM_CHUNK_PARTITION — queue partition for chunk jobs
 !
 ! DEPENDENCIES:
-!   simple_stream_api, simple_microchunked2D, simple_stream_pool2D_utils
+!   simple_stream_api, simple_ptcl_sieve, simple_stream_pool2D_utils
 !==============================================================================
 module simple_stream_p05_sieve_cavgs_new
-use unix,                        only: SIGTERM
 use simple_stream_api
+use unix,                        only: SIGTERM
 use simple_fileio,               only: read_filetable
+use simple_ptcl_sieve,           only: ptcl_sieve
 use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
-use simple_microchunked2D,       only: microchunked2D
-use simple_microchunked2D_fast,  only: microchunked2D_fast
 use simple_stream_pool2D_utils,  only: set_lpthres_type
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
                                        gui_metadata_stream_particle_sieving,                   &
@@ -65,16 +66,16 @@ end type stream_p05_sieve_cavgs
     
 contains
     
-    ! Entry point for stream task 5. Continuously watches dir_target for
-    ! completed project files, imports their micrographs and particles into a
-    ! growing rec_list, and drives the four-stage chunked2D pipeline
-    ! (collect/reject → pass-1 → pass-2 → refchunk → match → submit) on each
-    ! loop cycle until a termination signal is detected.
+    ! Entry point for stream task 5.
+    ! Watches dir_target for completed project files, imports their micrographs
+    ! and particles into a growing rec_list, and drives the staged ptcl_sieve
+    ! cycle (collect/reject -> coarse -> optional fine -> submit) until a
+    ! termination signal is detected.
     subroutine exec_stream_p05_sieve_cavgs( self, cline )
         class(stream_p05_sieve_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         
-        ! Hard-coded classification and import parameters
+        ! Hard-coded import/scheduling parameters.
         integer,            parameter   :: MAX_MOVIE_IMPORT          = 20   ! max movies imported per cycle
         integer,            parameter   :: FINAL_INGESTION_IDLE_TIME = 5 * 60 ! idle time (s) since last import before signalling final ingestion
         type(string),       allocatable :: projects(:)
@@ -88,7 +89,7 @@ contains
         type(sp_project)                :: spproj_glob, spproj_tmp
         type(project_rec)               :: prec
         type(rec_iterator)              :: it
-        type(microchunked2D_fast)       :: chunked_2D
+        type(ptcl_sieve)                :: sieve
         type(stream_watcher)            :: project_buff
         type(gui_metadata_cavg2D)       :: meta_cavg2D
         type(gui_metadata_stream_particle_sieving) :: meta_particle_sieving
@@ -103,18 +104,18 @@ contains
         if( .not. cline%defined('walltime') ) call cline%set('walltime', 29 * 60)
         if( .not. cline%defined('outdir')   ) call cline%set('outdir',        '')
         if( .not. cline%defined('nmics')    ) call cline%set('nmics',        100)
-        ! initialise counters
+        ! Initialise counters.
         n_ptcls_imported = 0
         n_mics_imported  = 0
         last_import_time = simple_gettime()
-        ! initialise metadata
+        ! Initialise GUI metadata publisher.
         call meta_particle_sieving%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
         call send_meta(string('initialising'))
         ! Create project file, folder structure, and initialise parameters
         call create_stream_project(spproj_glob, cline, string('sieve_cavgs'))
         call params%new(cline)
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
-        ! initialise the queue environment and worker pool
+        ! Initialise the queue environment and worker pool.
         params%workers     = params%nchunks
         params%worker_nthr = params%nthr
         call init_stream_qenv(params, qenv, string(SIMPLE_STREAM_CHUNK_PARTITION))
@@ -122,11 +123,11 @@ contains
         call spproj_glob%read(params%projfile)
         if( spproj_glob%os_mic%get_noris() /= 0 ) &
         THROW_HARD('stream_p05_sieve_cavgs must start from an empty project (e.g. from root project folder)')
-        ! wait if dir_target doesn't exist yet
+        ! Wait until the upstream extraction output becomes available.
         call send_meta(string('waiting on reference picking'))
         call wait_for_folder2(params%dir_target)
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
-        ! Initialise the project watcher 
+        ! Initialise the project watcher.
         project_buff = stream_watcher(LONGTIME, params%dir_target // '/' // DIR_STREAM_COMPLETED, &
         spproj=.true., nretries=10)
         ! Restore previously imported project history to avoid re-importing on restart
@@ -134,7 +135,7 @@ contains
             call send_meta(string('importing previous run'))
             call read_filetable(string('imported_projects.txt'), projects)
             if( allocated(projects) ) then
-                do i=1, size(projects)
+                do i = 1, size(projects)
                     call project_buff%add2history(projects(i))
                 end do
                 deallocate(projects)
@@ -143,7 +144,7 @@ contains
         ! Main processing loop — runs until a termination signal is detected
         do
             if( file_exists(TERM_STREAM) .or. l_terminate ) then
-                ! termination
+                ! Termination requested.
                 write(logfhandle,'(A)')'>>> TERMINATING PROCESS'
                 exit
             endif
@@ -159,7 +160,7 @@ contains
                 write(logfhandle,'(A,A)') '>>> LAST IMPORT AT                     : ', cast_time_char(last_import_time)
             end if
             ! Signal final ingestion once the idle timeout has elapsed since the last import
-            if( simple_gettime() - last_import_time >= FINAL_INGESTION_IDLE_TIME ) call chunked_2D%set_final_ingestion()
+            if( simple_gettime() - last_import_time >= FINAL_INGESTION_IDLE_TIME ) call sieve%set_final_ingestion()
             if( l_once ) then
                 if( project_list%size() > 0 ) then
                     it = project_list%begin()
@@ -168,33 +169,33 @@ contains
                     call spproj_tmp%get_mskdiam('pickrefs', params%mskdiam)
                     write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
                     call spproj_tmp%kill()
-                    ! Initialise and drive the chunk pipeline for this first cycle
+                    ! Initialise ptcl_sieve once and run two warm-up cycles.
                     if( params%pickrefs%strlen() > 0 ) then
-                        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), compatibility_refs=params%pickrefs)
+                        call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), compatibility_refs=params%pickrefs)
                     else
-                        call chunked_2D%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
+                        call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
                     end if
-                    call chunked_2D%cycle(project_list)
-                    call chunked_2D%cycle(project_list)
+                    call sieve%cycle(project_list)
+                    call sieve%cycle(project_list)
                     l_once = .false.
                 end if 
             else
-                ! Drive the chunk pipeline for this cycle
-                call chunked_2D%cycle(project_list)
+                ! Drive one ptcl_sieve cycle for this loop iteration.
+                call sieve%cycle(project_list)
             end if
-            if( n_ptcls_imported > 0) then
+            if( n_ptcls_imported > 0 ) then
                 call send_meta(string('importing and sieving particles'))
             else
                 call send_meta(string('waiting on reference picking'))
             endif
-            if( chunked_2D%get_latest(jpeg_inds, jpeg_pops, jpeg_res, latest_jpeg, latest_stk, xtiles, ytiles, jpeg_selection) ) then
+            if( sieve%get_latest(jpeg_inds, jpeg_pops, jpeg_res, latest_jpeg, latest_stk, xtiles, ytiles, jpeg_selection) ) then
                 call send_cavgs2D_batch(latest_jpeg, latest_stk, size(jpeg_inds), GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
             end if
             call sleep(WAITTIME)
         end do
         call meta_particle_sieving%set_user_input(.false.)
         call send_meta(string('terminating'))
-        call chunked_2D%kill()
+        call sieve%kill()
         call project_buff%kill()
         call project_list%kill()
         call qenv%kill()
@@ -208,13 +209,13 @@ contains
         subroutine send_meta( my_stage )
             type(string), intent(in) :: my_stage
             call meta_particle_sieving%set(                         &
-            stage              = my_stage,                          &
-            particles_imported = n_ptcls_imported,                  &
-            particles_accepted = chunked_2D%get_n_accepted_ptcls(), &
-            particles_rejected = chunked_2D%get_n_rejected_ptcls())
+                stage              = my_stage,                      &
+                particles_imported = n_ptcls_imported,              &
+                particles_accepted = sieve%get_n_accepted_ptcls(),  &
+                particles_rejected = sieve%get_n_rejected_ptcls())
             call meta_particle_sieving%clear_selection()
             if( allocated(jpeg_inds) ) then
-                do i=1, size(jpeg_inds)
+                do i = 1, size(jpeg_inds)
                     if( jpeg_selection(i) /= 0 ) call meta_particle_sieving%set_selection(jpeg_inds(i))
                 end do
             endif
@@ -262,6 +263,7 @@ contains
             endif
         end subroutine send_cavg2D_meta
 
+        ! Broadcast all currently selected class-average tiles in one pass.
         subroutine send_cavgs2D_batch( my_path, my_stk, n, meta_type )
             type(string), intent(in) :: my_path, my_stk
             integer,      intent(in) :: n, meta_type

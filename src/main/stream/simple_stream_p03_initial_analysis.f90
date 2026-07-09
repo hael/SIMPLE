@@ -42,9 +42,9 @@ use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
 use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs_reject, commander_abinitio3D_cavgs
 use simple_commanders_reproject,  only: commander_reproject
-use simple_commanders_denoise, only: commander_cls_split
+use simple_commanders_denoise,    only: commander_cls_split
 use simple_commanders_mkcavgs,    only: commander_make_cavgs
-use simple_stream_cluster2D_microchunked, only: stream_cluster2D_microchunked
+use simple_commanders_sieve,      only: commander_sieve_ptcls
 use simple_mini_stream_utils,     only: segdiampick_mics_multi
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
@@ -247,10 +247,10 @@ contains
                 call send_meta(string('complete'))
                 cycle_plan(n_cycles) = 3
             end if
-            ! cycle stage 3: run microchunked 2D to sieve bad particles
+            ! cycle stage 3: run sieve_ptcls to remove worst particles
             if( cycle_plan(n_cycles) == 3 ) then
                 call send_meta2D(string('sieving particles'), box_in_pix, vis_cycle)
-                call run_abinitio2D_microchunked(spproj, cycle_projfile, string('abinitio2D_microchunked'), nint(mskdiam))
+                call run_sieve_ptcls(spproj, cycle_projfile, string('sieve_ptcls'), nint(mskdiam))
                 cycle_plan(n_cycles) = 4
             end if
             ! cycle stage 4: run abinitio 2D to obtain best classes
@@ -485,35 +485,35 @@ contains
                 call spproj_inout%read(cluster_projfile)
             end subroutine run_abinitio2D
             
-            subroutine run_abinitio2D_microchunked( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+            subroutine run_sieve_ptcls( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(stream_cluster2D_microchunked) :: xcluster2D_microchunked
-                type(cmdline)                   :: cline_abinitio2D_microchunked
+                type(commander_sieve_ptcls)     :: xsieve_ptcls
+                type(cmdline)                   :: cline_sieve_ptcls
                 type(string)                    :: cwd
                 integer :: nptcls, ncls_job, nthr2D
                 call simple_getcwd(cwd)
                 call simple_mkdir(outdir)
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
                 call simple_chdir(outdir)
-                call cline_abinitio2D_microchunked%kill()
-                call cline_abinitio2D_microchunked%set('prg',               'abinitio2D_microchunked')
-                call cline_abinitio2D_microchunked%set('mkdir',                     'no')
-                call cline_abinitio2D_microchunked%set('nmics',                       50)
-                call cline_abinitio2D_microchunked%set('maxnptcls',                 5000)
-                call cline_abinitio2D_microchunked%set('mskdiam',             mskdiam_in)
-                call cline_abinitio2D_microchunked%set('nthr',                        16)
-                call cline_abinitio2D_microchunked%set('nchunks',                      2)
-                call cline_abinitio2D_microchunked%set('projfile',      cluster_projfile)
-                call cline_abinitio2D_microchunked%printline()
-                call xcluster2D_microchunked%execute(cline_abinitio2D_microchunked)
+                call cline_sieve_ptcls%kill()
+                call cline_sieve_ptcls%set('prg',               'sieve_ptcls')
+                call cline_sieve_ptcls%set('mkdir',                     'no')
+                call cline_sieve_ptcls%set('nmics',                       50)
+                call cline_sieve_ptcls%set('maxnptcls',                 5000)
+                call cline_sieve_ptcls%set('mskdiam',             mskdiam_in)
+                call cline_sieve_ptcls%set('nthr',                        16)
+                call cline_sieve_ptcls%set('nchunks',                      2)
+                call cline_sieve_ptcls%set('projfile',      cluster_projfile)
+                call cline_sieve_ptcls%printline()
+                call xsieve_ptcls%execute(cline_sieve_ptcls)
                 call simple_chdir(cwd)
                 call simple_copy_file(outdir//'/'//cluster_projfile, cluster_projfile) ! copy abinitio2D output back to main projfile for downstream steps
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
-            end subroutine run_abinitio2D_microchunked
+            end subroutine run_sieve_ptcls
 
             subroutine run_cls_split( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout

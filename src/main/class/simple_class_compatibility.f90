@@ -1,4 +1,8 @@
-!@descr: class-average compatibility analysis, support-model training, and rejection
+!@descr: class-average compatibility analysis, support-model fitting, and size-based rejection
+!@header: Builds a size-based support model from class averages, then applies
+!         fitted Feret-axis bounds (c, b, a) to reject incompatible classes.
+!         Includes convergence and metric reporting helpers for monitoring.
+
 module simple_class_compatibility
 
 use simple_defs,                  only: logfhandle
@@ -19,11 +23,11 @@ public :: class_compatibility, support_model_metrics
 private
 #include "simple_local_flags.inc"
 
-! Constants for cavg compatibility analysis
+! Preprocessing constants for class-average compatibility analysis.
 integer, parameter :: PREPROCESS_BOXSIZE             = 128    ! Working box size for resized class averages (pixels)
 integer, parameter :: PREPROCESS_MORPH_SIZE          = 5      ! Number of dilate/erode passes for morphological closing
 
-! Size-subset support model constants.
+! Support-model search and convergence constants.
 integer, parameter :: NRELAX                 = 5                             ! Number of relaxation candidates in support-model grid
 integer, parameter :: NQ                     = 3                             ! Number of lower/upper quantile candidates in grid
 real,    parameter :: DEFAULT_RELAX          = 0.07
@@ -38,11 +42,13 @@ real,    parameter :: QLOW_GRID(NQ)          = [0.05, 0.1, 0.15]             ! L
 real,    parameter :: QHIGH_GRID(NQ)         = [0.85, 0.9, 0.95]             ! Upper-quantile candidates for a-axis estimate
 
 type :: support_model_training_set
+    ! Per-training-batch Feret bounds extracted from selected class averages.
     real,    allocatable :: min_dim(:)
     real,    allocatable :: max_dim(:)
 end type support_model_training_set
 
 type :: support_model_metrics
+    ! Snapshot of current fitted axes and their latest update deltas.
     real    :: axis_c      = 0.0
     real    :: axis_b      = 0.0
     real    :: axis_a      = 0.0
@@ -55,6 +61,7 @@ type :: support_model_metrics
 end type support_model_metrics
 
 type :: support_model
+    ! History of appended training batches; each batch is reweighted equally.
     type(support_model_training_set), allocatable :: training_set(:)
     logical                                       :: valid       = .false.
     logical                                       :: converged   = .false.
@@ -72,7 +79,7 @@ end type support_model
 
 type :: class_compatibility
     private
-    type(support_model) :: support_model        ! Support model used by infer() through apply_support_model().
+    type(support_model) :: support_model        ! Internal support model used by infer() via apply_support_model().
 
 contains
     procedure, public  :: new
@@ -137,12 +144,13 @@ contains
     ! getters
     ! ----------------------------------------------------------------
 
+    ! Expose convergence status of the fitted support model.
     logical function converged( self ) result( l_converged )
         class(class_compatibility), intent(in) :: self
         l_converged = self%support_model%converged
     end function converged
 
-    ! Return fitted axes and latest axis deltas for monitoring.
+    ! Return fitted axes and latest axis deltas for monitoring/logging.
     subroutine get_support_model_metrics( self, metrics )
         class(class_compatibility), intent(in)  :: self
         type(support_model_metrics), intent(out) :: metrics
@@ -191,6 +199,7 @@ contains
     ! model inference
     ! ----------------------------------------------------------------
 
+    ! Apply current support model to active classes and update project selection.
     subroutine infer( self, spproj )
         class(class_compatibility), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
@@ -215,6 +224,7 @@ contains
     ! data preparation
     ! ----------------------------------------------------------------
 
+    ! Build one training batch from active classes and append it to model history.
     subroutine new_support_training_set( self, imgs, states )
         class(class_compatibility), intent(inout) :: self
         type(image),                intent(in)    :: imgs(:)
@@ -247,6 +257,7 @@ contains
         end if    
     end subroutine new_support_training_set
 
+    ! Extract Feret min/max dimensions from a preprocessed class-average mask.
     subroutine preprocess_img( self, img, min_dim, max_dim )
         class(class_compatibility), intent(inout) :: self
         type(image),                intent(in)    :: img
@@ -298,13 +309,15 @@ contains
         ! Compute Feret diameters of the largest connected component in the mask.
         call mask_loc%feret_minmax(min_dim, max_dim)
 
-        ! Tidy
+        ! Cleanup temporary mask/CC buffers.
         if( allocated(cc_sizes) ) deallocate(cc_sizes)
         call cc_img%kill_bimg()
         call mask_loc%kill_bimg()
     end subroutine preprocess_img
 
     ! Apply support-model bounds and mark size-based rejections.
+    ! A candidate is compatible when b falls in its relaxed [min,max] interval
+    ! and [min,max] stays within relaxed global c/a bounds.
     subroutine apply_support_model( self, state, min_dim, max_dim )
         class(class_compatibility), intent(inout) :: self
         integer,                    intent(inout) :: state
@@ -333,7 +346,7 @@ contains
         end if
     end subroutine apply_support_model
 
-    ! Fit latent support-model axes from cached training dimensions.
+    ! Fit latent support-model axes (c <= b <= a) from cached training batches.
     subroutine update_support_model( self )
         class(class_compatibility), intent(inout) :: self
         integer,                    allocatable   :: batch_id(:), batch_counts(:)
@@ -364,6 +377,8 @@ contains
             return
         end if
 
+        ! Flatten all valid batches into one working view while retaining batch ids
+        ! so each batch can contribute with equal total weight.
         ntot = 0
         nbatches = 0
         do nset = 1, size(self%support_model%training_set)
@@ -439,6 +454,7 @@ contains
         qlo_best   = DEFAULT_QLO
         qhi_best   = DEFAULT_QHI
 
+        ! Grid search over relaxation and quantile hyperparameters.
         do ir = 1, NRELAX
             relax_cur = RELAX_GRID(ir)
 
@@ -455,6 +471,7 @@ contains
                     b_cur = 0.0
                     support_cur = .false.
 
+                    ! First stage: pick b that maximizes weighted in-interval support.
                     do i = 1, k
                         b_cand = cands(i)
                         final_count = 0
@@ -496,6 +513,7 @@ contains
                         w_sup(j) = sample_weights(i)
                     end do
 
+                    ! Second stage: estimate c/a from weighted support quantiles.
                     c_cur = percentile_weighted_real(mins_sup, w_sup, qlo_cur)
                     a_cur = percentile_weighted_real(maxs_sup, w_sup, qhi_cur)
                     if( c_cur > b_cur ) c_cur = minval(mins_sup)
@@ -522,6 +540,7 @@ contains
                         end if
                     end do
 
+                    ! Prefer high weighted support, then compactness, then less relaxation.
                     score = weighted_count - 0.01 * spread - 0.10 * relax_cur
                     if( score > best_score .or. (abs(score - best_score) <= 1.0e-6 .and. weighted_count > best_final_weighted_count) )then
                         best_score = score
@@ -553,6 +572,7 @@ contains
         self%support_model%used_qhi   = qhi_best
         self%support_model%valid = .true.
 
+        ! Convergence requires a previous fit and stable c/b/a updates.
         dc = abs(self%support_model%axis_c - c_prev)
         db = abs(self%support_model%axis_b - b_prev)
         da = abs(self%support_model%axis_a - a_prev)

@@ -6,7 +6,6 @@ implicit none
 type(ui_program), target :: abinitio2D
 type(ui_program), target :: cluster2D
 type(ui_program), target :: abinitio2D_chunks
-type(ui_program), target :: cluster2D_microchunked
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: bootstrap_cavgs
 type(ui_program), target :: unbootstrap_cavgs
@@ -20,7 +19,6 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
         call new_abinitio2D_chunks(prgtab)
-        call new_cluster2D_microchunked(prgtab)
         call new_make_cavgs(prgtab)
         call new_bootstrap_cavgs(prgtab)
         call new_unbootstrap_cavgs(prgtab)
@@ -34,7 +32,6 @@ contains
         write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
         write(logfhandle,'(A)') abinitio2D%name%to_char()
         write(logfhandle,'(A)') abinitio2D_chunks%name%to_char()
-        write(logfhandle,'(A)') cluster2D_microchunked%name%to_char()
         write(logfhandle,'(A)') make_cavgs%name%to_char()
         write(logfhandle,'(A)') bootstrap_cavgs%name%to_char()
         write(logfhandle,'(A)') unbootstrap_cavgs%name%to_char()
@@ -139,46 +136,6 @@ contains
         ! add to ui_hash
         call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab)
     end subroutine new_abinitio2D_chunks
-
-    subroutine new_cluster2D_microchunked( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call cluster2D_microchunked%new(&
-        &'cluster2D_microchunked',&                                                                                                     ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode using micro chunks',&                    ! descr_short
-        &'implements multi-tier microchunked 2D classification: particles are split into bounded chunks, each independently &
-        &classified, then progressively merged through pass-1, pass-2, reference and match tiers without a final global &
-        &reclustering step',&                                                                                                           ! descr_long
-        &'simple_exec',&                                                                                                                ! executable
-        &.true.,&                                                                                                                       ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                                                                 ! GUI
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cluster2D_microchunked%add_input(UI_SRCH, 'nmics', 'num', 'Max # of micrographs per chunk', &
-        &'Maximum number of micrographs accumulated into one chunk{50}', &
-        &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_microchunked%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles per chunk', 'Max # of particles per chunk{5000}',&
-        &'max # of particles per chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
-        call cluster2D_microchunked%add_input(UI_SRCH, 'maxnchunks', 'num', 'Max # of chunks to process', &
-        &'Cap on the total number of chunks processed, 0 = no limit{0}', &
-        &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        ! filter controls
-        ! mask controls
-        call cluster2D_microchunked%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
-        ! computer controls
-        call cluster2D_microchunked%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_microchunked%add_input(UI_COMP, nchunks, gui_submenu="compute", gui_advanced=.false.)
-        call cluster2D_microchunked%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
-        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
-        ! add to ui_hash
-        call add_ui_program('cluster2D_microchunked', cluster2D_microchunked, prgtab)
-    end subroutine new_cluster2D_microchunked
 
     subroutine new_make_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

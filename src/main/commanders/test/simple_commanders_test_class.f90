@@ -57,8 +57,6 @@ subroutine exec_test_units( self, cline )
     use simple_ori_tester
     use simple_oris_tester
     use simple_rec_list_tester
-    use simple_microchunked2D_tester,     only: run_all_microchunked2D_tests
-    use simple_cluster2D_rejector_tester, only: run_all_cluster2D_rejector_tests
     use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
     use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
     ! hand-written unit tests
@@ -108,8 +106,6 @@ subroutine exec_test_units( self, cline )
     call run_all_http_post_tests
     call run_all_persistent_worker_message_tests
     call run_all_persistent_worker_server_tests
-    call run_all_microchunked2D_tests
-    call run_all_cluster2D_rejector_tests
     call run_all_starfile_tests
     call run_all_project_merge_tests
     call report_summary()

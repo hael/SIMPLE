@@ -1,3 +1,4 @@
+!@descr: helper routines for sieve sub-project partitioning and chunk-map generation
 module simple_ptcl_sieve_utils
 use simple_stream_api
 use simple_string,          only: string
@@ -13,14 +14,13 @@ private
 
 contains
 
-    ! Scans the global project in three passes:
-    !   pass 1 — counts active particles per stack; determines ntot_chunks
-    !   pass 2 — records [first_stk, last_stk] boundaries for each chunk
-    !   pass 3 — writes one self-contained sub-project per chunk and registers
-    !             each active micrograph in project_list for microchunked2D tracking
+    ! Build sieve sub-projects from a global project in three passes:
+    !   pass 1 - count selected particles per active stack and determine chunk count
+    !   pass 2 - record [first_stk, last_stk] stack boundaries for each chunk
+    !   pass 3 - write one self-contained sub-project per chunk and register
+    !            each active micrograph in project_list for ptcl_sieve chunk tracking
     ! Only stacks with state > 0 and nptcls > 0 are considered; inactive stacks
-    ! are skipped in all three passes. The selected-particle count logged per
-    ! chunk is summed directly from stk_nptcls.
+    ! are skipped in all three passes.
     subroutine generate_sieve_projects( project_list, params, spproj_glob, ntot_chunks )
         type(rec_list),       intent(inout) :: project_list
         type(parameters),     intent(in)    :: params
@@ -40,7 +40,7 @@ contains
         nptcls = spproj_glob%os_ptcl2D%get_noris()
         if( nstks == 0  ) THROW_HARD('No stacks found in project file: '//params%projfile%to_char())
         if( nptcls == 0 ) THROW_HARD('No particles found in project file: '//params%projfile%to_char())
-        ! --- pass 1: count active particles per stack; tally chunks ---
+        ! --- pass 1: count selected particles per active stack; tally chunks ---
         allocate(stk_all_nptcls(nstks), stk_nptcls(nstks), source=0)
         ntot_chunks = 0
         cnt         = 0
@@ -51,7 +51,7 @@ contains
             fromp = spproj_glob%os_stk%get_fromp(istk)
             top   = spproj_glob%os_stk%get_top(istk)
             stk_all_nptcls(istk) = top - fromp + 1          ! all particles (any state)
-            do iptcl = fromp, top                            ! selected particles (state > 0)
+            do iptcl = fromp, top                           ! selected particles (state > 0)
                 if( spproj_glob%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                 stk_nptcls(istk) = stk_nptcls(istk) + 1
             enddo
@@ -141,7 +141,7 @@ contains
             projfile = path//projname//METADATA_EXT
             call spproj%projinfo%set(1,'projname', projname)
             call spproj%projinfo%set(1,'projfile', projfile)
-            ! size the oris objects for this chunk's active stacks only
+            ! Size orientation containers for this chunk's active stacks only.
             nstks_chunk = 0
             do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
                 if( spproj_glob%os_stk%get_state(istk) == 0        ) cycle
@@ -160,19 +160,19 @@ contains
                 if( spproj_glob%os_stk%get_int(istk,'nptcls') == 0 ) cycle
                 cnt = cnt + 1
                 n   = stk_all_nptcls(istk)
-                ! transfer micrograph metadata (or synthesise from stack if absent)
+                ! Transfer micrograph metadata (or synthesize from stack if absent).
                 if( has_mic )then
                     call spproj%os_mic%transfer_ori(cnt, spproj_glob%os_mic, istk)
                 else
                     call spproj%os_mic%set(cnt,'nptcls', n)
                     call spproj%os_mic%set_state(cnt, spproj_glob%os_stk%get_state(istk))
                 endif
-                ! transfer stack metadata; convert stack path to absolute
+                ! Transfer stack metadata; convert stack path to absolute.
                 call spproj%os_stk%transfer_ori(cnt, spproj_glob%os_stk, istk)
                 call spproj%os_stk%getter(cnt,'stk', fname)
                 absfname = simple_abspath(fname)
                 call spproj%os_stk%set(cnt,'stk', absfname)
-                ! transfer particle orientations, re-indexing into the local project
+                ! Transfer particle orientations, re-indexing into the local project.
                 fromp = spproj_glob%os_stk%get_fromp(istk)
                 top   = spproj_glob%os_stk%get_top(istk)
                 !$omp parallel do private(iptcl,kptcl) default(shared)
@@ -182,13 +182,13 @@ contains
                     call spproj%os_ptcl2D%set_stkind(kptcl, cnt)
                 enddo
                 !$omp end parallel do
-                ! update local fromp/top in the sub-project stack record
+                ! Update local fromp/top in the sub-project stack record.
                 jptcl  = jptcl  + n
                 cfromp = ctop   + 1
                 ctop   = cfromp + n - 1
                 call spproj%os_stk%set(cnt,'fromp', cfromp)
                 call spproj%os_stk%set(cnt,'top',   ctop)
-                ! register micrograph in project_list for microchunked2D tracking
+                ! Register micrograph in project_list for ptcl_sieve chunk tracking.
                 prec%id         = project_list%size() + 1
                 prec%projname   = projfile
                 prec%micind     = cnt
@@ -197,10 +197,10 @@ contains
                 prec%included   = .false.
                 call project_list%push_back(prec)
             enddo
-            ! strip any prior 2D results before writing the sub-project
+            ! Strip any prior 2D results before writing the sub-project.
             call spproj%os_ptcl2D%delete_2Dclustering(keepshifts=.false., keepcls=.false.)
             call spproj%write(projfile)
-            ! report selected-particle count for this chunk
+            ! Report selected-particle count for this chunk.
             nptcls_chunk = 0
             do istk = chunks_map(ichunk,1), chunks_map(ichunk,2)
                 nptcls_chunk = nptcls_chunk + stk_nptcls(istk)
