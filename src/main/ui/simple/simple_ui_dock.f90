@@ -118,7 +118,7 @@ contains
         ! mask controls
         call volcluster%add_input(UI_MASK, mskdiam)
         ! computer controls
-        call volcluster%add_input(UI_COMP, nthr)
+        call volcluster%add_input(UI_COMP, nthr, required_override=.false.)
         ! add to ui_hash
         call add_ui_program('volcluster', volcluster, prgtab)
     end subroutine new_volcluster
