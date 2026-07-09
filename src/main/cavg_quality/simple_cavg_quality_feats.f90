@@ -1,7 +1,7 @@
 !@descr: feature inventory and feature extraction for 2D class-average quality
 module simple_cavg_quality_feats
 !$ use omp_lib
-use simple_defs,               only: nthr_glob
+use simple_defs,               only: nthr_glob, COSMSKHALFWIDTH
 use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_image_bin,          only: image_bin
@@ -10,9 +10,10 @@ use simple_segmentation,       only: otsu_img
 use simple_stat,               only: median, mad_gau
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_CONTEXT_CHUNK, &
     CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_feature_def, &
-    cavg_quality_result, CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP_NONPOS, &
-    CAVG_REJECT_REASON_POP_LOWFRAC, CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, &
-    CAVG_REJECT_REASON_MASK_GEOMETRY, CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
+    cavg_quality_result, CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP, &
+    CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, &
+    CAVG_REJECT_REASON_MASK_GEOMETRY, CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW,&
+    CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
 implicit none
 private
 
@@ -150,29 +151,27 @@ contains
     end subroutine write_cavg_quality_feature_inventory
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, quality, quality_context )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        type(cavg_quality_result), intent(inout) :: quality
-        real,                 intent(in)    :: mskdiam
-        ! real,    allocatable, intent(inout) :: raw(:,:)
-        ! logical, allocatable, intent(inout) :: hard_reject(:)
-        character(len=*), optional, intent(in) :: quality_context
-        integer, allocatable :: pop(:), disc_area(:)
-        real,    allocatable :: res(:), corr(:), corr_in(:)
-        integer              :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold
-        real                 :: smpd, rad_px
-        character(len=32)    :: context
-        type(image_bin), allocatable :: bin_img(:), cc_img(:), disc_img(:)
-        real, allocatable    :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
-        real                 :: centroid_norm, locvar_fg, locvar_bg
-        real                 :: cc_area_frac
-        real                 :: center_edge_snr, presence_score, bp_center_edge_var
-        integer              :: ithr
-        logical              :: no_component, mask_hard_reject, bad_pixels
+        class(image),               intent(inout) :: imgs(:)
+        type(cavg_quality_result),  intent(inout) :: quality
+        type(oris),                 intent(in)    :: cls_oris
+        real,                       intent(in)    :: mskdiam
+        character(len=*), optional, intent(in)    :: quality_context
+        type(image_bin),            allocatable   :: bin_img(:), cc_img(:), disc_img(:)
+        integer,                    allocatable   :: pop(:), disc_area(:)
+        real,                       allocatable   :: res(:), corr(:), corr_in(:)
+        real,                       allocatable   :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
+        character(len=32) :: context
+        integer           :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold
+        real              :: smpd, rad_px
+        real              :: centroid_norm, locvar_fg, locvar_bg
+        real              :: cc_area_frac
+        real              :: center_edge_snr, presence_score, bp_center_edge_var
+        integer           :: ithr
+        logical           :: no_component, mask_hard_reject, bad_pixels
         ncls = size(imgs)
-        if( ncls == 0 ) THROW_HARD('extract_cavg_quality_features: no class averages')
+        if( ncls == 0                    ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
-        if( mskdiam <= 0.0 ) THROW_HARD('extract_cavg_quality_features: mskdiam must be positive')
+        if( mskdiam < 0.0                ) THROW_HARD('extract_cavg_quality_features: mskdiam must be positive or 0 to use box size')
         context = CAVG_QUALITY_CONTEXT_CHUNK
         if( present(quality_context) ) context = trim(quality_context)
         call validate_quality_context(context)
@@ -198,7 +197,11 @@ contains
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         if( smpd <= 0.0 ) THROW_HARD('extract_cavg_quality_features: non-positive smpd')
-        rad_px = (mskdiam / smpd) / 2.0
+        if( mskdiam == 0.0 ) then
+            rad_px = real(ldim(1) / 2) - COSMSKHALFWIDTH - 1.
+        else
+            rad_px = (mskdiam / smpd) / 2.0
+        endif
         call imgs(1)%memoize_mask_coords()
         allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
         allocate(disc_area(nthr_glob), source=0)
@@ -252,7 +255,7 @@ contains
                                                          quality%raw(i, I_BP40_100_CENTER_EDGE_VAR)
             quality%hard_reject(i) = cavg_hard_reject_for_context(context, pop(i), pop_hard_threshold, &
                 pool_pop_hard_threshold, res(i), bad_pixels, no_component, mask_hard_reject, &
-                locvar_fg, locvar_bg, bp_center_edge_var, quality%reasons(i))
+                locvar_fg, locvar_bg, bp_center_edge_var, quality%raw(i, I_FUZZY_BALL_SIGNAL),quality%reasons(i))
         end do
         !$omp end parallel do
         do ithr = 1, nthr_glob
@@ -275,10 +278,10 @@ contains
 
     logical function cavg_hard_reject_for_context( quality_context, pop, pop_hard_threshold, pool_pop_hard_threshold, &
                                                    res, bad_pixels, no_component, mask_hard_reject, locvar_fg, locvar_bg, &
-                                                   bp_center_edge_var, reason )
+                                                   bp_center_edge_var, fuzzy_ball_signal, reason )
         character(len=*), intent(in)  :: quality_context
         integer,          intent(in)  :: pop, pop_hard_threshold, pool_pop_hard_threshold
-        real,             intent(in)  :: res, locvar_fg, locvar_bg, bp_center_edge_var
+        real,             intent(in)  :: res, locvar_fg, locvar_bg, bp_center_edge_var, fuzzy_ball_signal
         logical,          intent(in)  :: bad_pixels, no_component, mask_hard_reject
         integer,          intent(out) :: reason
         reason = CAVG_REJECT_REASON_NONE
@@ -302,12 +305,28 @@ contains
                 ! chunk/pool validity gates, because no learned model is meant to
                 ! rescue or reinterpret these very small 2D runs.
                 cavg_hard_reject_for_context = .false.
+                reason                       = CAVG_REJECT_REASON_NONE
                 if( pop < pop_hard_threshold ) then
                     cavg_hard_reject_for_context = .true.
-                    reason = CAVG_REJECT_REASON_POP_LOWFRAC
-                else if( bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN ) then
+                    reason = CAVG_REJECT_REASON_POP
+                else if( bad_pixels ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_BAD_PIXELS
+                else if( no_component ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_NO_COMPONENT
+                else if( mask_hard_reject ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_MASK_GEOMETRY
+                else if( bp_center_edge_var < 4.0 ) then
                     cavg_hard_reject_for_context = .true.
                     reason = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
+                else if( locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_LOCVAR_FG_LOW
+                else if( fuzzy_ball_signal < 0.0 ) then
+                    cavg_hard_reject_for_context = .true.
+                    reason = CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
                 end if
             case(CAVG_QUALITY_CONTEXT_POOL)
                 ! Pool is the final pre-3D 2D selection stage after highly cleaned

@@ -8,6 +8,7 @@ type(ui_program), target :: ctf_estimate
 type(ui_program), target :: extract
 type(ui_program), target :: gen_pspecs_and_thumbs
 type(ui_program), target :: motion_correct
+type(ui_program), target :: particle_sieving
 type(ui_program), target :: pick
 type(ui_program), target :: preprocess
 type(ui_program), target :: reextract
@@ -21,6 +22,7 @@ contains
         call new_extract(prgtab)
         call new_gen_pspecs_and_thumbs(prgtab)
         call new_motion_correct(prgtab)
+        call new_particle_sieving(prgtab)
         call new_pick(prgtab)
         call new_preprocess(prgtab)
         call new_reextract(prgtab)
@@ -34,6 +36,7 @@ contains
         write(logfhandle,'(A)') extract%name%to_char()
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
         write(logfhandle,'(A)') motion_correct%name%to_char()
+        write(logfhandle,'(A)') particle_sieving%name%to_char()
         write(logfhandle,'(A)') pick%name%to_char()
         write(logfhandle,'(A)') preprocess%name%to_char()
         write(logfhandle,'(A)') reextract%name%to_char()
@@ -226,6 +229,44 @@ contains
         ! add to ui_hash
         call add_ui_program('motion_correct', motion_correct, prgtab)
     end subroutine new_motion_correct
+
+    subroutine new_particle_sieving( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call particle_sieving%new(&
+        &'particle_sieving', &                                               ! name
+        &'Particle sieving',&                                                ! descr_short
+        &'workflow for automated particle sieving',& ! descr_long
+        &'simple_exec',&                                                   ! executable
+        &.true.,&                                                          ! requires sp_project
+        &gui_advanced=.false., gui_submenu_list = "picking,compute")       ! GUI         
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call particle_sieving%add_input(UI_SRCH, 'nmics', 'num', 'Max # of micrographs per chunk', &
+        &'Maximum number of micrographs accumulated into one chunk{50}', &
+        &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles per chunk', 'Max # of particles per chunk{5000}',&
+        &'max # of particles per chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'maxnchunks', 'num', 'Max # of chunks to process', &
+        &'Cap on the total number of chunks processed, 0 = no limit{0}', &
+        &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        ! filter controls
+        ! mask controls
+        call particle_sieving%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! computer controls
+        call particle_sieving%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
+        call particle_sieving%add_input(UI_COMP, nchunks, gui_submenu="compute", gui_advanced=.false.)
+        call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        ! add to ui_hash
+        call add_ui_program('particle_sieving', particle_sieving, prgtab)
+    end subroutine new_particle_sieving
 
     subroutine new_pick( prgtab )
         class(ui_hash), intent(inout) :: prgtab

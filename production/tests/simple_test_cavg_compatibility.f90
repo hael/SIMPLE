@@ -5,11 +5,13 @@ use simple_parameters,               only: parameters
 use simple_cmdline, only: cmdline
 use simple_sp_project,              only: sp_project
 use simple_string,                  only: string
+use simple_commanders_sieve,        only: commander_sieve_ptcls
 
 implicit none
 #include "simple_local_flags.inc"
 
 type(cavg_compatibility_analysis) :: analysis
+type(commander_sieve_ptcls) :: sieve_commander
 type(parameters) :: params
 type(sp_project) :: spproj
 type(cmdline) :: cline
@@ -29,17 +31,21 @@ if( command_argument_count() >= 2 )then
   if( len_trim(refstk) == 0 ) THROW_HARD('simple_test_cavg_compatibility: empty reference stack path')
 end if
 
-call cline%set('projfile', trim(projfile))
-call params%new(cline)
-call spproj%read(params%projfile)
-call analysis%new()
-if( len_trim(refstk) > 0 )then
-  call analysis%train(string(trim(refstk)))
-end if
-call analysis%train(spproj)
-call analysis%infer(spproj)
-call analysis%kill()
+call cline%set('prg',        'sieve_ptcls')
+call cline%set('projfile',   trim(projfile))
+call cline%set('maxnchunks', 5)
 
-write(logfhandle,'(A,A)') 'simple_test_cavg_compatibility complete for project: ', trim(projfile)
+call sieve_commander%execute(cline)
+! call params%new(cline)
+! call spproj%read(params%projfile)
+! call analysis%new()
+! if( len_trim(refstk) > 0 )then
+!   call analysis%train(string(trim(refstk)))
+! end if
+! call analysis%train(spproj)
+! call analysis%infer(spproj)
+! call analysis%kill()
+
+! write(logfhandle,'(A,A)') 'simple_test_cavg_compatibility complete for project: ', trim(projfile)
 
 end program simple_test_cavg_compatibility

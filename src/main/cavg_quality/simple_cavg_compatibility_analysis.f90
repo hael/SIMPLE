@@ -18,7 +18,6 @@ use simple_sp_project,            only: sp_project
 use simple_imgarr_utils,          only: read_cavgs_into_imgarr, read_stk_into_imgarr, write_imgarr, dealloc_imgarr
 use simple_segmentation,          only: otsu_img
 use simple_srch_sort_loc,         only: hpsort
-use simple_commanders_cavgs,      only: commander_cluster_cavgs
 use simple_cavg_quality_types,    only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE
 use simple_cavg_quality_helpers,  only: cavg_rejection_reason_string
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality_hard_reject
@@ -326,7 +325,7 @@ contains
             if( quality%states(iimg) == 0 ) then
                 self%imagesets(iimg)%is_rejected      = .true.
                 reason = cavg_rejection_reason_string(quality%reasons(iimg))
-                write(logfhandle,'(A,I0,A,A)') 'cavg_compat: train_1 hard_reject iimg=', iimg, ' reason=quality_hard_reject', reason%to_char()
+                write(logfhandle,'(A,I0,A,A)') 'cavg_compat: train_1 hard_reject iimg=', iimg, ' reason=', reason%to_char()
                 self%imagesets(iimg)%rejection_reason = REJECT_REASON_QUALITY_HARD_REJECT
             end if
             call imgs(iimg)%set_smpd(smpd)
@@ -929,7 +928,7 @@ contains
         type(string)                                      :: projname
         type(cmdline)                                     :: cline
         type(sp_project)                                  :: spproj
-        type(commander_cluster_cavgs)                     :: commander
+
         integer                                           :: i, nclustered, nclusters, k, iclust
         real                                              :: thr_in, thr_out, med_in_all, med_out_all, mad_in_all, mad_out_all
         real                                              :: vin, vout, frac_lowvar
@@ -945,7 +944,7 @@ contains
         call cline%set('projfile', projname)
         call cline%set('mskdiam', mskdiam)
         if( present(nclust_in) ) call cline%set('ncls', nclust_in)
-        call commander%execute(cline)
+      !  call commander%execute(cline)
         call spproj%read(projname)
         clusters = spproj%os_cls2D%get_all_asint('cluster')
         if( size(clusters) == self%nimagesets )then

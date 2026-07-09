@@ -13,12 +13,13 @@ public :: CAVG_QUALITY_CONTEXT_CHUNK
 public :: CAVG_QUALITY_CONTEXT_SIEVE
 public :: CAVG_QUALITY_CONTEXT_POOL
 public :: CAVG_REJECT_REASON_NONE
-public :: CAVG_REJECT_REASON_POP_NONPOS
-public :: CAVG_REJECT_REASON_POP_LOWFRAC
+public :: CAVG_REJECT_REASON_POP
 public :: CAVG_REJECT_REASON_BAD_PIXELS
 public :: CAVG_REJECT_REASON_NO_COMPONENT
 public :: CAVG_REJECT_REASON_MASK_GEOMETRY
 public :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
+public :: CAVG_REJECT_REASON_LOCVAR_FG_LOW
+public :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -43,13 +44,14 @@ character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'
 
-integer, parameter :: CAVG_REJECT_REASON_NONE               = 0
-integer, parameter :: CAVG_REJECT_REASON_POP_NONPOS         = 1
-integer, parameter :: CAVG_REJECT_REASON_POP_LOWFRAC        = 2
-integer, parameter :: CAVG_REJECT_REASON_BAD_PIXELS         = 3
-integer, parameter :: CAVG_REJECT_REASON_NO_COMPONENT       = 4
-integer, parameter :: CAVG_REJECT_REASON_MASK_GEOMETRY      = 5
-integer, parameter :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW = 6
+integer, parameter :: CAVG_REJECT_REASON_NONE                  = 0
+integer, parameter :: CAVG_REJECT_REASON_POP                   = 1
+integer, parameter :: CAVG_REJECT_REASON_BAD_PIXELS            = 2
+integer, parameter :: CAVG_REJECT_REASON_NO_COMPONENT          = 3
+integer, parameter :: CAVG_REJECT_REASON_MASK_GEOMETRY         = 4
+integer, parameter :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW    = 5
+integer, parameter :: CAVG_REJECT_REASON_LOCVAR_FG_LOW         = 6
+integer, parameter :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG = 7
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:
