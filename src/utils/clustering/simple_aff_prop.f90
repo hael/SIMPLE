@@ -80,9 +80,9 @@ contains
         integer, allocatable, intent(inout) :: labels(:)  !< cluster labels
         real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
-        real              :: x, realmax, maxdiff, rowmax, val
-        integer           :: i, j, k, ncls
-        logical           :: converged
+        real              :: x, realmax, maxdiff, rowmax, val, best, second, exemplar_tol, diag_absmax
+        integer           :: i, j, k, ncls, nborder, fallback_center
+        logical           :: converged, use_fallback_center
         ! initialize
         realmax   = huge(x)
         self%A    = 0.
@@ -110,18 +110,27 @@ contains
                 end do
             end do
             !$omp end parallel do
-            self%I    = maxloc(self%AS, dim=2)
-            !$omp parallel do default(shared) private(j) schedule(static)
+            !$omp parallel do default(shared) private(j,k,best,second,val) schedule(static)
             do j = 1, self%N
-                self%Y(j) = self%AS(j,self%I(j))
-                self%AS(j,self%I(j)) = -realmax
-            enddo
-            !$omp end parallel do
-            self%I2 = maxloc(self%AS, dim=2)
-            !$omp parallel do default(shared) private(j) schedule(static)
-            do j = 1, self%N
-                self%Y2(j) = self%AS(j,self%I2(j))
-            enddo
+                self%I(j)  = 1
+                self%I2(j) = 1
+                best       = self%AS(j,1)
+                second     = -realmax
+                do k = 2, self%N
+                    val = self%AS(j,k)
+                    if( val > best )then
+                        second     = best
+                        self%I2(j) = self%I(j)
+                        best       = val
+                        self%I(j)  = k
+                    else if( val > second )then
+                        second     = val
+                        self%I2(j) = k
+                    endif
+                end do
+                self%Y(j)  = best
+                self%Y2(j) = second
+            end do
             !$omp end parallel do
             !$omp parallel do default(shared) private(j,k) schedule(static)
             do j = 1, self%N
@@ -236,22 +245,41 @@ contains
             end do
         end do
         !$omp end parallel do
+        diag_absmax = 0.
+        do j=1,self%N
+            diag_absmax = max(diag_absmax, abs(self%R(j,j)))
+        end do
+        exemplar_tol = max(10. * epsilon(exemplar_tol), self%ftol) * max(1., diag_absmax)
+        nborder = 0
+        fallback_center = 1
         ! count the number of clusters
         ncls = 0
         do j=1,self%N
-            if( self%R(j,j) > 0. ) ncls = ncls + 1
+            if( self%R(j,j) > self%R(fallback_center,fallback_center) ) fallback_center = j
+            if( self%R(j,j) > exemplar_tol )then
+                ncls = ncls + 1
+            else if( abs(self%R(j,j)) <= exemplar_tol )then
+                nborder = nborder + 1
+            endif
         end do
+        use_fallback_center = ncls == 0
+        if( use_fallback_center ) ncls = 1
+        if( nborder > 0 ) write(logfhandle,'(a,i0,1x,es12.4)') 'aff_prop near-zero exemplar candidates ignored: ', nborder, exemplar_tol
         if( allocated(centers) ) deallocate(centers)
         if( allocated(labels) )  deallocate(labels)
         allocate( centers(ncls), similarities(ncls), labels(self%N) )
         ! set the cluster centers
-        ncls = 0
-        do j=1,self%N
-            if( self%R(j,j) > 0. )then
-                ncls = ncls + 1
-                centers(ncls) = j
-            endif
-        end do
+        if( use_fallback_center )then
+            centers(1) = fallback_center
+        else
+            ncls = 0
+            do j=1,self%N
+                if( self%R(j,j) > exemplar_tol )then
+                    ncls = ncls + 1
+                    centers(ncls) = j
+                endif
+            end do
+        endif
         ! report back the labeling
         simsum = 0.
         do j=1,self%N
@@ -262,7 +290,10 @@ contains
                     similarities(k) = realmax
                 endif
             end do
-            labels(j) = maxloc(similarities,dim=1)
+            labels(j) = 1
+            do k=2,ncls
+                if( similarities(k) > similarities(labels(j)) ) labels(j) = k
+            end do
             if( j .ne. centers(labels(j)) ) simsum = simsum + similarities(labels(j))
         end do
         simsum = simsum / real(self%N)
