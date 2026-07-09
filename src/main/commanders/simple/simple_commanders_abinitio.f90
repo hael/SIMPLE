@@ -1173,8 +1173,7 @@ contains
         type(commander_refine3D)        :: xrefine3D
         type(commander_rec3D)           :: xrec3D
         ! other
-        real,               allocatable :: rstates(:)
-        integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:)
+        integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:), cls_states(:)
         type(class_sample), allocatable :: clssmp(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
@@ -1194,17 +1193,18 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('nu_refine',     'no') ! no nonuniform refinement
-        if( .not. cline%defined('mkdir')               ) call cline%set('mkdir',                    'yes')
-        if( .not. cline%defined('overlap')             ) call cline%set('overlap',                   0.95)
-        if( .not. cline%defined('prob_athres')         ) call cline%set('prob_athres',                10.)
-        if( .not. cline%defined('center')              ) call cline%set('center',                    'no')
-        if( .not. cline%defined('cenlp')               ) call cline%set('cenlp', abinitio_cenlp_default())
-        if( .not. cline%defined('oritype')             ) call cline%set('oritype',               'ptcl3D')
-        if( .not. cline%defined('pgrp')                ) call cline%set('pgrp',                      'c1')
-        if( .not. cline%defined('pgrp_start')          ) call cline%set('pgrp_start',                'c1')
-        if( .not. cline%defined('filt_mode')           ) call cline%set('filt_mode',         'nonuniform')
-        if( .not. cline%defined('automsk')             ) call cline%set('automsk',                   'no')
-        if( .not. cline%defined('gauref')              ) call cline%set('gauref',                   'yes')
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)
+        if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)
+        if( .not. cline%defined('center')      ) call cline%set('center',                    'no')
+        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', abinitio_cenlp_default())
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype',               'ptcl3D')
+        if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',                      'c1')
+        if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',                'c1')
+        if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')
+        if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
+        if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
+        if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
             THROW_HARD('nsample_start/nsample_stop are no longer supported for abinitio3D; set nsample instead')
         endif
@@ -1399,23 +1399,26 @@ contains
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(abinitio_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
                 ! generate a data structure for class sampling on disk
-                rstates = spproj%os_cls2D%get_all('state')
                 if( trim(params%partition).eq.'yes' )then
-                    tmpinds = nint(spproj%os_cls2D%get_all('cluster'))
-                    where( rstates < 0.5 ) tmpinds = 0
+                    if( .not. spproj%os_cls2D%isthere('cluster') )then
+                        THROW_HARD('Missing CLUSTER metadata in CLS2D field needed for PARTITION=YES')
+                    endif
+                    cls_states = nint(spproj%os_cls2D%get_all('state'))
+                    tmpinds    = nint(spproj%os_cls2D%get_all('cluster'))
+                    where( cls_states == 0 ) tmpinds = 0
                     clsinds = (/(icls,icls=1,maxval(tmpinds))/)
                     do icls = 1,size(clsinds)
                         if(count(tmpinds==icls) == 0) clsinds(icls) = 0
                     enddo
                     clsinds = pack(clsinds, mask=clsinds>0)
                     call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
-                    deallocate(tmpinds)
+                    deallocate(cls_states,tmpinds)
                 else
                     clsinds = spproj%get_selected_clsinds()
                     call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
                 endif
                 call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-                deallocate(rstates, clsinds)
+                deallocate(clsinds)
             endif
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
@@ -1714,6 +1717,7 @@ contains
                 call cline_missing%set('extr_iter',       iter_missing)
                 call cline_missing%delete('endit')
                 call cline_missing%delete('greedy_sampling')
+                call cline_missing%delete('partition')
                 call xrefine3D%execute(cline_missing)
                 call del_files(DIST_FBODY,      params%nparts, ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
@@ -1761,10 +1765,10 @@ contains
             call cline_missing%set('refine',            'greedy')
             call cline_missing%set('balance',               'no')
             call cline_missing%set('greedy_sampling',      'yes')
-            call cline_missing%set('frac_best',             1.0)
-            call cline_missing%set('fillin',               'no')
+            call cline_missing%set('frac_best',              1.0)
+            call cline_missing%set('fillin',                'no')
             call cline_missing%set('update_missing',       'yes')
-            call cline_missing%set('update_frac',           1.0)
+            call cline_missing%set('update_frac',            1.0)
             call cline_missing%set('trail_rec',             'no')
             call cline_missing%set('volrec',                'no')
             call cline_missing%set('maxits',                   1)
@@ -1772,6 +1776,7 @@ contains
             call cline_missing%set('which_iter',    iter_missing)
             call cline_missing%set('extr_iter',     iter_missing)
             call cline_missing%delete('endit')
+            call cline_missing%delete('partition')
             call xrefine3D%execute(cline_missing)
             call del_files(DIST_FBODY,      params%nparts, ext='.dat')
             call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')

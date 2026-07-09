@@ -191,7 +191,9 @@ reconstruction requires every active particle to have a post-split update.
 `sample_ptcls4update3D` applies the normal 3D subset policy:
 
 - if fractional update is off, select all active particles
-- if `balance=yes`, use class-balanced sampling
+- if `balance=yes`, use class-balanced sampling. If the sampling had been setup
+  with `partition=yes`, the class-balancing is based of the clustering of the
+  underlying classes as materialized by `cluster_cavgs`
 - otherwise use update-count-biased sampling
 
 `sample_ptcls4fillin` is a separate late-stage coverage policy. Its purpose is

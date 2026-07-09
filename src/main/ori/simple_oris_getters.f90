@@ -966,6 +966,7 @@ contains
         else
             flag = 'class'
         endif
+        if( .not. self%isthere(flag) ) THROW_HARD('label not found: '//trim(flag))
         n = size(clsinds)
         if( allocated(clssmp) )then
             nc = size(clssmp)

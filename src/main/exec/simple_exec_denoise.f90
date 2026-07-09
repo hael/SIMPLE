@@ -18,7 +18,7 @@ type(commander_ppca_denoise)              :: xppca_denoise
 type(commander_ppca_denoise_classes)      :: xppca_denoise_classes
 type(commander_cls_split)                 :: xcls_split
 type(commander_denoise_project)           :: xdenoise_project
-type(commander_map_params_from_den)        :: xmap_params_from_den
+type(commander_map_params_from_den)       :: xmap_params_from_den
 type(commander_flex_eigenvol)             :: xflex_eigenvol
 type(commander_ppca_volvar)               :: xppca_volvar
 

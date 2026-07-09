@@ -52,8 +52,8 @@ real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-act
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
-    type(string) :: ml_reg, fillin, conical_fsc
-    type(string) :: refine, trail_rec, pgrp, balance, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
+    type(string) :: pgrp, refine, ml_reg, trail_rec, fillin, conical_fsc
+    type(string) :: balance, partition, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -175,7 +175,7 @@ contains
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage )
-        call set_refine3D_balance_policy( cfg )
+        call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
@@ -264,9 +264,11 @@ contains
         endif
     end subroutine set_refine3D_mode_policy
 
-    subroutine set_refine3D_balance_policy( cfg )
+    subroutine set_refine3D_balance_policy( cfg, params )
         type(refine3D_stage_cfg), intent(inout) :: cfg
-        cfg%balance = 'yes'
+        class(parameters),        intent(in)    :: params
+        cfg%balance   = 'yes'
+        cfg%partition = trim(params%partition)
     end subroutine set_refine3D_balance_policy
 
     subroutine set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
@@ -450,6 +452,7 @@ contains
             call cline_refine3D%delete('prob_neigh_mode')
         endif
         call cline_refine3D%set('balance',                cfg%balance)
+        call cline_refine3D%set('partition',              cfg%partition)
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%set('ptcl_src',               ptcl_src_eff)

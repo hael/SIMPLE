@@ -1181,6 +1181,7 @@ contains
             call cline_missing%set('which_iter', iter_missing)
             call cline_missing%set('extr_iter',  iter_missing)
             call cline_missing%delete('endit')
+            call cline_missing%delete('partition')
             select case(trim(multivol_mode%to_char()))
                 case('input_oris_fixed')
                     call cline_missing%set('refine', 'prob_state')

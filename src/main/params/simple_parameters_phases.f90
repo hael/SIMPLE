@@ -490,6 +490,9 @@ contains
     module subroutine derive_sampling_settings(self, cline)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
+        if( (trim(self%balance).eq.'no') .and. (trim(self%partition).eq.'yes') )then
+            THROW_HARD('balance=no and partition=yes are incompatible; derive_sampling_settings')
+        endif
         self%l_ufrac_trec_defined = cline%defined('ufrac_trec')
         if( self%update_frac <= .99 )then
             self%l_update_frac = .true.

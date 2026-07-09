@@ -60,7 +60,6 @@ contains
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
         type(fplane_type),         allocatable :: fpls(:)
-        type(class_sample),        allocatable :: clssmp(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
@@ -177,7 +176,6 @@ contains
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         call eulprob_obj_part%kill
-        call deallocate_class_samples(clssmp)
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
