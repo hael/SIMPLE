@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_reconstructor, only: reconstructor
 implicit none
 
-public :: insert_plane_oversamp_multi_scaled, insert_plane_oversamp_coupled_scaled, project_fplanes_mean_basis
+public :: insert_plane_oversamp_multi_scaled, insert_plane_oversamp_coupled_scaled, project_fplane_mean, project_fplanes_mean_basis
 private
 #include "simple_local_flags.inc"
 
@@ -342,6 +342,165 @@ contains
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp_coupled_scaled
+
+    subroutine project_fplane_mean( mean_rec, o, fpl_ref, mean_fpl, apply_ctf_amp )
+        use simple_math, only: ceil_div, floor_div
+        type(reconstructor), intent(in)    :: mean_rec
+        class(ori),          intent(inout) :: o
+        class(fplane_type),  intent(in)    :: fpl_ref
+        type(fplane_type),   intent(inout) :: mean_fpl
+        logical, optional,   intent(in)    :: apply_ctf_amp
+        type(kbinterpol) :: kbwin
+        complex :: transfer
+        real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
+        real    :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
+        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf
+        integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
+        logical :: l_apply_ctf_amp
+        if( .not. allocated(mean_rec%cmat_exp) )then
+            THROW_HARD('expanded mean matrix does not exist; project_fplane_mean')
+        endif
+        if( .not. allocated(fpl_ref%cmplx_plane) )then
+            THROW_HARD('reference Fourier plane does not exist; project_fplane_mean')
+        endif
+        l_apply_ctf_amp = .false.
+        if( present(apply_ctf_amp) ) l_apply_ctf_amp = apply_ctf_amp
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        call ensure_projection_plane(fpl_ref, mean_fpl)
+        rotmat      = o%get_mat()
+        pf          = OSMPL_PAD_FAC
+        fpllims_pd  = fpl_ref%frlims
+        fpllims     = fpllims_pd
+        fpllims(1,1)= ceil_div (fpllims_pd(1,1), pf)
+        fpllims(1,2)= floor_div(fpllims_pd(1,2), pf)
+        fpllims(2,1)= ceil_div (fpllims_pd(2,1), pf)
+        fpllims(2,2)= floor_div(fpllims_pd(2,2), pf)
+        nyq_eff = mean_rec%get_lfny(1)
+        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
+        nyq_disk = nyq_eff * (nyq_eff + 1)
+        do h = fpllims(1,1), fpllims(1,2)
+            h_sq = h*h
+            if( h_sq > nyq_disk ) cycle
+            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+            k_lo    = max(fpllims(2,1), -k_max_h)
+            k_hi    = min(0, min(fpllims(2,2), k_max_h))
+            hp      = h * pf
+            hrow(1) = real(h) * rotmat(1,1)
+            hrow(2) = real(h) * rotmat(1,2)
+            hrow(3) = real(h) * rotmat(1,3)
+            do k = k_lo, k_hi
+                kp     = k * pf
+                loc(1) = hrow(1) + real(k) * rotmat(2,1)
+                loc(2) = hrow(2) + real(k) * rotmat(2,2)
+                loc(3) = hrow(3) + real(k) * rotmat(2,3)
+                call projection_weights(loc, win, wx, wy, wz)
+                transfer = cmplx(1., 0.)
+                if( l_apply_ctf_amp )then
+                    if( allocated(fpl_ref%transfer_plane) )then
+                        transfer = fpl_ref%transfer_plane(hp,kp)
+                    else
+                        ctfamp   = sqrt(max(0., fpl_ref%ctfsq_plane(hp,kp)))
+                        transfer = cmplx(ctfamp, 0.)
+                    endif
+                endif
+                mean_fpl%cmplx_plane(hp,kp) = transfer * weighted_cmat_cyclic(mean_rec, win, wx, wy, wz)
+            end do
+        end do
+
+    contains
+
+        subroutine ensure_projection_plane( fpl_in, fpl_out )
+            type(fplane_type), intent(in)    :: fpl_in
+            type(fplane_type), intent(inout) :: fpl_out
+            logical :: l_realloc
+            l_realloc = .not. allocated(fpl_out%cmplx_plane)
+            if( .not. l_realloc )then
+                l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_in%cmplx_plane)) .or. &
+                    &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_in%cmplx_plane))
+            endif
+            if( l_realloc )then
+                if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
+                allocate(fpl_out%cmplx_plane(lbound(fpl_in%cmplx_plane,1):ubound(fpl_in%cmplx_plane,1), &
+                    &lbound(fpl_in%cmplx_plane,2):ubound(fpl_in%cmplx_plane,2)))
+            endif
+            if( allocated(fpl_out%ctfsq_plane) ) deallocate(fpl_out%ctfsq_plane)
+            if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
+            fpl_out%frlims  = fpl_in%frlims
+            fpl_out%shconst = fpl_in%shconst
+            fpl_out%nyq     = fpl_in%nyq
+            fpl_out%cmplx_plane = CMPLX_ZERO
+        end subroutine ensure_projection_plane
+
+        subroutine projection_weights( loc, win, wx, wy, wz )
+            real,    intent(in)  :: loc(3)
+            integer, intent(out) :: win(2,3)
+            real,    intent(out) :: wx(:), wy(:), wz(:)
+            integer :: i, iwinsz, win_lo(3)
+            real    :: base(3), ww3(3), sx, sy, sz, inv_wdim, eps_norm
+            iwinsz   = ceiling(KBWINSZ - 0.5)
+            win(1,:) = nint(loc)
+            win(2,:) = win(1,:) + iwinsz
+            win(1,:) = win(1,:) - iwinsz
+            win_lo   = win(1,:)
+            base     = real(win_lo) - loc
+            do i = 1, LATENT_WDIM
+                ww3   = kbwin%apod_fast(base + real(i-1))
+                wx(i) = ww3(1)
+                wy(i) = ww3(2)
+                wz(i) = ww3(3)
+            end do
+            sx        = sum(wx)
+            sy        = sum(wy)
+            sz        = sum(wz)
+            inv_wdim  = 1.0 / real(LATENT_WDIM)
+            eps_norm  = epsilon(1.0)
+            if( abs(sx) > eps_norm )then
+                wx = wx * (1.0 / sx)
+            else
+                wx = inv_wdim
+            endif
+            if( abs(sy) > eps_norm )then
+                wy = wy * (1.0 / sy)
+            else
+                wy = inv_wdim
+            endif
+            if( abs(sz) > eps_norm )then
+                wz = wz * (1.0 / sz)
+            else
+                wz = inv_wdim
+            endif
+        end subroutine projection_weights
+
+        function weighted_cmat_cyclic( rec, win, wx, wy, wz ) result( val )
+            type(reconstructor), intent(in) :: rec
+            integer,             intent(in) :: win(2,3)
+            real,                intent(in) :: wx(:), wy(:), wz(:)
+            complex :: val
+            integer :: ix, iy, iz, hx, ky, mz, logi(3), phys(3), cyc_lims(3,2)
+            real    :: wyz
+            val = CMPLX_ZERO
+            cyc_lims = rec%loop_lims(3)
+            do iz = 1, LATENT_WDIM
+                mz = win(1,3) + iz - 1
+                logi(3) = mz
+                if( mz < cyc_lims(3,1) .or. mz > cyc_lims(3,2) ) logi(3) = cyci_1d(cyc_lims(3,:), mz)
+                do iy = 1, LATENT_WDIM
+                    ky = win(1,2) + iy - 1
+                    logi(2) = ky
+                    if( ky < cyc_lims(2,1) .or. ky > cyc_lims(2,2) ) logi(2) = cyci_1d(cyc_lims(2,:), ky)
+                    wyz = wy(iy) * wz(iz)
+                    do ix = 1, LATENT_WDIM
+                        hx = win(1,1) + ix - 1
+                        logi(1) = hx
+                        if( hx < cyc_lims(1,1) .or. hx > cyc_lims(1,2) ) logi(1) = cyci_1d(cyc_lims(1,:), hx)
+                        phys = rec%comp_addr_phys(logi(1),logi(2),logi(3))
+                        val  = val + rec%get_fcomp(logi, phys) * (wx(ix) * wyz)
+                    end do
+                end do
+            end do
+        end function weighted_cmat_cyclic
+
+    end subroutine project_fplane_mean
 
     subroutine project_fplanes_mean_basis( mean_rec, basis_recs, o, fpl_ref, mean_fpl, basis_fpls, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div

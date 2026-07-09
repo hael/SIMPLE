@@ -10,7 +10,7 @@ use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatc
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
-use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, project_fplanes_mean_basis
+use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, project_fplane_mean, project_fplanes_mean_basis
 use simple_map_reduce,       only: split_nobjs_even
 implicit none
 
@@ -191,7 +191,7 @@ contains
             block%pinds(i) = iptcl
             call build%spproj_field%get_ori(iptcl, block%orientations(i))
             if( block%orientations(i)%isstatezero() ) cycle
-            call mean_rec%project_fplane(block%orientations(i), fpls_batch(i), mean_fpl, apply_ctf_amp=.true.)
+            call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpl, apply_ctf_amp=.true.)
             call subtract_plane(fpls_batch(i), mean_fpl)
             block%zrows(:,i) = z(row,:)
             block%latent_second(:,:,i) = z_postcov(row,:,:)
