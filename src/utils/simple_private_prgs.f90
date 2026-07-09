@@ -759,7 +759,46 @@ contains
         ! optional keys
         call private_prgs(26)%push_opt_key('nthr')
 
-        n_private_prgs = 26
+        ! FLEX_EIGENVOL_MSTEP, for producing one flex_eigenvol 2D M-step part
+        call private_prgs(27)%set_name('flex_eigenvol_mstep')
+        ! required keys
+        call private_prgs(27)%push_req_key('projfile')
+        call private_prgs(27)%push_req_key('vol1')
+        call private_prgs(27)%push_req_key('infile')
+        call private_prgs(27)%push_req_key('outfile')
+        call private_prgs(27)%push_req_key('part')
+        call private_prgs(27)%push_req_key('nparts')
+        call private_prgs(27)%push_req_key('fromp')
+        call private_prgs(27)%push_req_key('top')
+        call private_prgs(27)%push_req_key('numlen')
+        ! optional keys
+        call private_prgs(27)%push_opt_key('nthr')
+        call private_prgs(27)%push_opt_key('neigs')
+        call private_prgs(27)%push_opt_key('maxits')
+        call private_prgs(27)%push_opt_key('lp')
+        call private_prgs(27)%push_opt_key('outvol')
+
+        ! FLEX_EIGENVOL_ESTEP, for producing one flex_eigenvol latent E-step part
+        call private_prgs(28)%set_name('flex_eigenvol_estep')
+        ! required keys
+        call private_prgs(28)%push_req_key('projfile')
+        call private_prgs(28)%push_req_key('vol1')
+        call private_prgs(28)%push_req_key('infile')
+        call private_prgs(28)%push_req_key('outfile')
+        call private_prgs(28)%push_req_key('refs')
+        call private_prgs(28)%push_req_key('part')
+        call private_prgs(28)%push_req_key('nparts')
+        call private_prgs(28)%push_req_key('fromp')
+        call private_prgs(28)%push_req_key('top')
+        call private_prgs(28)%push_req_key('numlen')
+        ! optional keys
+        call private_prgs(28)%push_opt_key('nthr')
+        call private_prgs(28)%push_opt_key('neigs')
+        call private_prgs(28)%push_opt_key('maxits')
+        call private_prgs(28)%push_opt_key('lp')
+        call private_prgs(28)%push_opt_key('outvol')
+
+        n_private_prgs = 28
     end subroutine new_private_prgs
 
 end module simple_private_prgs
