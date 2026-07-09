@@ -18,6 +18,8 @@ use simple_cmdline_tester
 use simple_ori_tester
 use simple_oris_tester
 use simple_rec_list_tester
+use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
+use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
 ! hand-written unit tests
@@ -59,6 +61,8 @@ call run_all_multi_dendro_tests
 call run_all_cmdline_tests
 call run_all_ori_tests
 call run_all_oris_tests
+call run_all_class_compatibility_tests
+call run_all_ptcl_sieve_tests
 call run_all_rec_list_tests
 call run_all_ipc_mq_tests
 call run_all_ipc_tcp_socket_tests
