@@ -3,6 +3,7 @@ module simple_clustering_utils
 use simple_kmedoids, only: kmedoids
 use simple_aff_prop, only: aff_prop
 use simple_hclust,   only: hclust
+use simple_stat,     only: calc_ap_pref
 use simple_core_module_api
 implicit none
 
@@ -34,8 +35,9 @@ contains
                 if( allocated(labels) ) deallocate(labels)
                 write(logfhandle,'(A)') '>>> CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
                 smat = dmat2smat(dmat)
-                pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
+                pref = calc_ap_pref(smat, 'median')
                 if( present(ap_pref) ) pref = ap_pref
+                write(logfhandle,'(A,ES14.6)') '>>> AFFINITY PROPAGATION PREFERENCE: ', pref
                 call aprop%new(n, smat, pref=pref)
                 call aprop%propagate(i_medoids, labels, simsum)
                 call aprop%kill
@@ -69,8 +71,9 @@ contains
                 if( allocated(labels) ) deallocate(labels)
                 write(logfhandle,'(A)') '>>> PRE-CLUSTERING DISTANCE MATRIX WITH AFFINITY PROPAGATION'
                 smat = dmat2smat(dmat)
-                pref = 0. ! assuming normalized distance matrix, pref=0. because this is the minimal score
+                pref = calc_ap_pref(smat, 'median')
                 if( present(ap_pref) ) pref = ap_pref
+                write(logfhandle,'(A,ES14.6)') '>>> AFFINITY PROPAGATION PREFERENCE: ', pref
                 call aprop%new(n, smat, pref=pref)
                 call aprop%propagate(i_medoids, labels, simsum)
                 call aprop%kill
