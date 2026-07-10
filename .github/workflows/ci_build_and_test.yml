@@ -97,7 +97,7 @@ jobs:
              export SIMPLE_PATH=$GITHUB_WORKSPACE/build
              export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
              echo "-------------------- TEST COARRAYS -------------------------"
-             cafrun -np 2 simple_test_exec test=coarrays
+             simple_test_exec test=coarrays
 
   Build_and_Test:
     name: Build SIMPLE and Test 
