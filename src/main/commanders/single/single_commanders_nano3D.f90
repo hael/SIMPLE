@@ -52,6 +52,7 @@ contains
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commanders_atoms, only: commander_detect_atoms
+        use simple_abinitio_utils,   only: gen_ortho_reprojs4viz
         class(commander_autorefine3D_nano), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)              :: params
@@ -166,6 +167,8 @@ contains
         call simple_copy_file(fname_binary,      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
         call simple_copy_file(fname_ccs,         string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(string(SPLITTED), string(FINAL_MAPS)//fbody_split//'_iter'//int2str_pad(iter,3)//'.mrc')
+        ! for visualization - generate three-view volume JPEGs
+        call gen_ortho_reprojs4viz(params, spproj)
         ! clean
         call del_file(fname_simvol)
         call del_file(fname_atoms)
