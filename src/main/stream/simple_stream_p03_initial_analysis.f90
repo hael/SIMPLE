@@ -499,10 +499,11 @@ contains
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
                 call simple_chdir(outdir)
                 call cline_sieve_ptcls%kill()
-                call cline_sieve_ptcls%set('prg',               'sieve_ptcls')
+                call cline_sieve_ptcls%set('prg',              'sieve_ptcls')
                 call cline_sieve_ptcls%set('mkdir',                     'no')
                 call cline_sieve_ptcls%set('nmics',                       50)
-                call cline_sieve_ptcls%set('maxnptcls',                 5000)
+                call cline_sieve_ptcls%set('nptcls_coarse',             5000)
+                call cline_sieve_ptcls%set('nptcls_fine',              10000)
                 call cline_sieve_ptcls%set('mskdiam',             mskdiam_in)
                 call cline_sieve_ptcls%set('nthr',                        16)
                 call cline_sieve_ptcls%set('nchunks',                      2)

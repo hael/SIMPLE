@@ -57,7 +57,7 @@ contains
             enddo
             cnt     = cnt     + stk_nptcls(istk)
             cnt_stk = cnt_stk + 1
-            if( (cnt_stk >= params%nmics) .or. (cnt >= params%maxnptcls) )then
+            if( (cnt_stk >= params%nmics) .or. (cnt >= params%nptcls_coarse) )then
                 ntot_chunks = ntot_chunks + 1
                 cnt         = 0
                 cnt_stk     = 0
@@ -68,7 +68,7 @@ contains
         if( cnt > 0 ) then
             if( ntot_chunks == 0 ) then
                 ntot_chunks = 1
-            else if( real(cnt) > 0.5 * real(params%maxnptcls) ) then
+            else if( real(cnt) > 0.5 * real(params%nptcls_coarse) ) then
                 ntot_chunks = ntot_chunks + 1
             endif
         endif
@@ -100,7 +100,7 @@ contains
             tail_end = istk
             cnt     = cnt     + stk_nptcls(istk)
             cnt_stk = cnt_stk + 1
-            if( (cnt_stk >= params%nmics) .or. (cnt >= params%maxnptcls) )then
+            if( (cnt_stk >= params%nmics) .or. (cnt >= params%nptcls_coarse) )then
                 if( ichunk >= ntot_chunks ) then
                     if( l_truncate ) then
                         exit
@@ -121,7 +121,7 @@ contains
             if( ichunk == 0 ) then
                 chunks_map(1,1) = tail_start
                 chunks_map(1,2) = tail_end
-            else if( real(cnt) > 0.5 * real(params%maxnptcls) .and. ichunk < ntot_chunks ) then
+            else if( real(cnt) > 0.5 * real(params%nptcls_coarse) .and. ichunk < ntot_chunks ) then
                 chunks_map(ichunk+1,1) = tail_start
                 chunks_map(ichunk+1,2) = tail_end
             else

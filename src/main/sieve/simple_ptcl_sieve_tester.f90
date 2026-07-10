@@ -20,6 +20,8 @@ contains
         call test_new_kill_and_empty_queries()
         call test_import_existing_chunks_and_counts()
         call test_finished_semantics()
+        call test_single_pass_ignores_incomplete_fine()
+        call test_new_accepts_tuning_overrides()
         call test_cycle_empty_project_list()
     end subroutine run_all_ptcl_sieve_tests
 
@@ -41,6 +43,7 @@ contains
         call assert_int(0, sieve%get_n_chunks_coarse(), 'new() initializes zero coarse chunks')
         call assert_int(0, sieve%get_n_chunks_fine(),   'new() initializes zero fine chunks')
         call assert_int(0, sieve%get_n_chunks_running(),'new() initializes zero running chunks')
+        call assert_int(0, sieve%get_n_total_particles(),'new() initializes zero total particles')
         call assert_false(sieve%get_finished(),         'fresh sieve is not finished')
 
         ok = sieve%get_latest(inds, pops, res, jpeg, stk, xtiles, ytiles, sel)
@@ -117,11 +120,6 @@ contains
 
         call init_test_params(params)
 
-        ! coarse_only: all coarse chunks complete/failed => finished.
-        call sieve%new(params, string('completed'), coarse_only=.true.)
-        call assert_true(sieve%get_finished(), 'coarse_only run finishes when all coarse chunks are complete/failed')
-        call sieve%kill()
-
         ! two-tier mode: no fine chunks => coarse completion is terminal.
         call sieve%new(params, string('completed'))
         call assert_true(sieve%get_finished(), 'two-tier run with no fine chunks finishes at coarse completion')
@@ -145,6 +143,61 @@ contains
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_finished_semantics
 
+    subroutine test_single_pass_ignores_incomplete_fine()
+        type(ptcl_sieve) :: sieve
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved
+
+        write(*,'(A)') 'test_single_pass_ignores_incomplete_fine'
+
+        call setup_workspace(string('single_pass'), ws_dir, cwd_saved)
+
+        ! Coarse chunk is complete.
+        call make_chunk_project('coarse', 1, 10, 6, 2)
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED'))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/COMPLETE'))
+
+        ! Fine chunk exists but is incomplete.
+        call make_chunk_project('fine', 1, 9, 4, 1)
+        call simple_touch(string('chunks_fine/chunk_fine_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
+
+        ! Baseline (two-tier): incomplete fine chunk prevents finished state.
+        call init_test_params(params)
+        call sieve%new(params, string('completed'))
+        call assert_false(sieve%get_finished(), 'two-tier run is not finished when fine chunk is incomplete')
+        call sieve%kill()
+
+        ! single_pass=yes: coarse-only terminal semantics apply.
+        call init_test_params(params, single_pass='yes')
+        call sieve%new(params, string('completed'))
+        call assert_true(sieve%get_finished(), 'single_pass run ignores incomplete fine tier for finished state')
+        call sieve%kill()
+
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_single_pass_ignores_incomplete_fine
+
+    subroutine test_new_accepts_tuning_overrides()
+        type(ptcl_sieve) :: sieve
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved
+
+        write(*,'(A)') 'test_new_accepts_tuning_overrides'
+
+        call setup_workspace(string('override_init'), ws_dir, cwd_saved)
+        call init_test_params(params, lpstart=12.0, lpstop_coarse=18.0, lpstop_fine=9.0, &
+                              box_coarse=96, box_fine=80, nsample_coarse=500, nsample_fine=250, &
+                              ncls_coarse=64, ncls_fine=48)
+        call sieve%new(params, string('completed'))
+
+        call assert_int(0, sieve%get_n_chunks_coarse(), 'override init keeps empty coarse chunk list')
+        call assert_int(0, sieve%get_n_chunks_fine(),   'override init keeps empty fine chunk list')
+
+        call sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_new_accepts_tuning_overrides
+
     subroutine test_cycle_empty_project_list()
         type(ptcl_sieve) :: sieve
         type(parameters) :: params
@@ -165,9 +218,13 @@ contains
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_cycle_empty_project_list
 
-    subroutine init_test_params(params)
+    subroutine init_test_params(params, single_pass, lpstart, lpstop_coarse, lpstop_fine, box_coarse, box_fine, &
+                                nsample_coarse, nsample_fine, ncls_coarse, ncls_fine)
         type(parameters), intent(inout) :: params
         type(cmdline)                   :: cline
+        character(len=*), optional, intent(in) :: single_pass
+        real, optional, intent(in) :: lpstart, lpstop_coarse, lpstop_fine
+        integer, optional, intent(in) :: box_coarse, box_fine, nsample_coarse, nsample_fine, ncls_coarse, ncls_fine
 
         call cline%set('prg',        'abinitio2D')
         call cline%set('mkdir',      'yes')
@@ -179,6 +236,16 @@ contains
         call cline%set('mskdiam',    120.0)
         call cline%set('walltime',   60)
         call cline%set('qsys_name',  'local')
+        if( present(single_pass)   ) call cline%set('single_pass',    trim(single_pass))
+        if( present(lpstart)       ) call cline%set('lpstart',        lpstart)
+        if( present(lpstop_coarse) ) call cline%set('lpstop_coarse',  lpstop_coarse)
+        if( present(lpstop_fine)   ) call cline%set('lpstop_fine',    lpstop_fine)
+        if( present(box_coarse)    ) call cline%set('box_coarse',     box_coarse)
+        if( present(box_fine)      ) call cline%set('box_fine',       box_fine)
+        if( present(nsample_coarse)) call cline%set('nsample_coarse', nsample_coarse)
+        if( present(nsample_fine)  ) call cline%set('nsample_fine',   nsample_fine)
+        if( present(ncls_coarse)   ) call cline%set('ncls_coarse',    ncls_coarse)
+        if( present(ncls_fine)     ) call cline%set('ncls_fine',      ncls_fine)
         call params%new(cline)
     end subroutine init_test_params
 

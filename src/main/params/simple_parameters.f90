@@ -82,6 +82,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
+    character(len=3)          :: fine_model='no'      !< use model for class-average rejection in fine sieve(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
@@ -145,6 +146,7 @@ type :: parameters
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -330,6 +332,8 @@ type :: parameters
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
     integer :: box_extract
+    integer :: box_coarse=0
+    integer :: box_fine=0
     integer :: boxpd=0
     integer :: class=1             !< 2D class identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -363,7 +367,6 @@ type :: parameters
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
-    integer :: maxnptcls=0
     integer :: maxpop=0            !< max population of an optics group
     integer :: minits=0            !< minimum # iterations
     integer :: nboxes_max=0
@@ -372,6 +375,10 @@ type :: parameters
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
     integer :: ncls_sub=10         !< # sub-clusters
+    integer :: ncls_coarse=0       !< # coarse clusters
+    integer :: ncls_fine=0         !< # fine clusters
+    integer :: nptcls_coarse=0     !< # coarse particles
+    integer :: nptcls_fine=0       !< # fine particles
     integer :: nsubcls_min=3       !< minimum subclasses per parent class for class splitting
     integer :: nsubcls_max=10      !< maximum subclasses per parent class for class splitting
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
@@ -412,6 +419,8 @@ type :: parameters
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
     integer :: nsample_start=0     !< # particles to sample in refinement with fractional update, lower bound
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
+    integer :: nsample_coarse=0    !< # particles to sample in refinement with fractional update, coarse search
+    integer :: nsample_fine=0      !< # particles to sample in refinement with fractional update, fine search
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
@@ -519,6 +528,8 @@ type :: parameters
     real    :: lpstart_ini3D=0.    !< start low-pass limit(in A){15}
     real    :: lpstop_ini3D=8.0    !< stop low-pass limit(in A){8}
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
+    real    :: lpstop_coarse=0.    !< stop low-pass limit(in A){0}
+    real    :: lpstop_fine=0.      !< stop low-pass limit(in A){0}
     real    :: lpthres=STREAM_RES_THRESHOLD
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)

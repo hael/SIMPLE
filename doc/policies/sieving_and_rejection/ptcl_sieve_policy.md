@@ -32,6 +32,16 @@ Public API surface (type-bound methods on `ptcl_sieve`):
 5. status/query: `get_*` family (`get_finished`, counters, latest JPEG payload)
 6. restart recovery: `import_existing_chunks_coarse`, `import_existing_chunks_fine`
 
+Constructor policy (`new`):
+
+- `new(params, completedir, pre_chunked)` derives mode and tuning from `params`.
+- `single_pass=yes` enables coarse-only terminal semantics.
+- `fine_model=yes` enables learned class-average rejection in the fine tier.
+- `refs=<file>` pre-seeds coarse/fine compatibility models when the file exists.
+- tier tuning overrides may be provided by params: `lpstart`, `lpstop_coarse`,
+  `lpstop_fine`, `box_coarse`, `box_fine`, `nsample_coarse`, `nsample_fine`,
+  `ncls_coarse`, and `ncls_fine`.
+
 Policy note: callers should use `cycle` and query methods as the normal
 contract. Lower-level generation/submission calls are exposed for controlled
 workflow composition and testing.
@@ -45,8 +55,8 @@ The sieve has two tiers:
 
 Mode controls:
 
-- `coarse_only=.true.`: execution and terminal accounting stop at coarse tier.
-- `coarse_only=.false.`: fine tier is enabled when chunks are produced.
+- `single_pass=yes`: execution and terminal accounting stop at coarse tier.
+- `single_pass=no`: fine tier is enabled when chunks are produced.
 - `pre_chunked=.true.`: coarse chunks are imported from pre-existing project
   files rather than partitioned from a record list.
 
@@ -132,12 +142,32 @@ Queue partition override policy:
 2. compatibility model filtering (`class_compatibility`) for the respective
    tier model (`coarse_compatibility_model` or `fine_compatibility_model`).
 
+Fine-tier model policy:
+
+- when `fine_model=yes`, fine rejection additionally runs model-based quality
+  scoring (`evaluate_cavg_quality`) after hard rejection.
+- when `fine_model=no`, fine rejection uses hard rejection only.
+
 Rejection outputs and artifacts:
 
 1. project state is mapped through `map_cavgs_selection` and persisted;
 2. selected and rejected class-average stacks/JPEGs are written;
 3. `REJECTION_FINISHED` sentinel is emitted on completion;
 4. chunk selected-count is updated from particle states.
+
+Cleanup retention policy (`cleanup_chunk`):
+
+1. cleanup runs after rejection completes;
+2. keep lifecycle sentinels used by restart/import recovery:
+  `ABINITIO2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`,
+  `REJECTION_FAILED`;
+3. keep chunk project metadata file and `frcs.bin`;
+4. keep selected/rejected JPEG renderings;
+5. keep latest iteration JPEG for the chunk;
+6. keep final iteration stacks for all three stack variants when present:
+  whole stack (non-`_even`/`_odd`), `_even`, and `_odd`;
+7. keep the highest-rank sigma STAR candidate (`sigma*.star`, preferring
+  `_iterNNN` when available).
 
 Compatibility observability policy:
 
@@ -185,6 +215,10 @@ Counters must remain monotonic and query-safe:
   `get_n_accepted_micrographs` are cumulative terminal counters.
 - `get_n_pass_1_non_rejected_ptcls` and `get_n_pass_2_non_rejected_ptcls`
   reflect non-terminal per-tier selected counts.
+- `get_n_coarse_accepted_ptcls` and `get_n_coarse_rejected_ptcls` are
+  cumulative coarse-tier rejection results.
+- `get_n_fine_accepted_ptcls` and `get_n_fine_rejected_ptcls` are cumulative
+  fine-tier rejection results.
 - `get_latest` must return `.false.` safely when latest payload is incomplete
   or uninitialized.
 
@@ -218,5 +252,8 @@ When changing `ptcl_sieve` behavior:
 3. preserve sentinel-driven state recovery contracts;
 4. keep `get_finished` semantics backward compatible;
 5. keep counter meaning stable (`terminal cumulative` vs `tier snapshot`);
-6. update tester coverage for behavior changes;
-7. update this policy document in the same change.
+6. preserve cleanup artifact retention semantics (including sentinel files and
+  whole/even/odd final iteration stack retention) unless policy is explicitly
+  revised;
+7. update tester coverage for behavior changes;
+8. update this policy document in the same change.

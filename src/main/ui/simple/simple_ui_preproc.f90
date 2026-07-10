@@ -251,14 +251,32 @@ contains
         call particle_sieving%add_input(UI_SRCH, 'nmics', 'num', 'Max # of micrographs per chunk', &
         &'Maximum number of micrographs accumulated into one chunk{50}', &
         &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'maxnptcls', 'num', 'Maximum # of particles per chunk', 'Max # of particles per chunk{5000}',&
-        &'max # of particles per chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'nptcls_coarse', 'num', 'Target # of particles per coarse chunk', 'Target # of particles per coarse chunk{5000}',&
+        &'Target # of particles per coarse chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'nptcls_fine', 'num', 'Target # of particles per fine chunk', 'Target # of particles per fine chunk{10000}',&
+        &'Target # of particles per fine chunk{10000}', .false., 10000., gui_submenu="search", gui_advanced=.true.)
         call particle_sieving%add_input(UI_SRCH, 'maxnchunks', 'num', 'Max # of chunks to process', &
         &'Cap on the total number of chunks processed, 0 = no limit{0}', &
         &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'box_fine', 'num', 'Box size for fine sieving', 'Box size for fine sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'box_coarse', 'num', 'Box size for coarse sieving', 'Box size for coarse sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'ncls_coarse', 'num', 'Number of clusters for coarse sieving', 'Number of clusters for coarse sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'ncls_fine', 'num', 'Number of clusters for fine sieving', 'Number of clusters for fine sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
+        ! alternative inputs
+        call particle_sieving%add_input(UI_SRCH, 'nsample_coarse', 'num', 'Number of particles to sample in coarse sieving', 'Number of particles to sample in coarse sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'nsample_fine', 'num', 'Number of particles to sample in fine sieving', 'Number of particles to sample in fine sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'fine_model', 'str', 'Use model for class-average rejection in fine sieving', 'Use model for class-average rejection in fine sieving(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'refs', 'file', 'Reference class averages to initialise size compatibility model', 'Reference class averages to initialise size compatibility model', 'e.g. refs.mrcs', .false., '', gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'single_pass', 'str', 'Coarse pass only', 'Coarse pass only(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
         ! filter controls
+        call particle_sieving%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of particle sieving (in Angstroms){15.0}', 'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_FILT, 'lpstop_coarse', 'num', 'Final low-pass limit for coarse sieving', 'Low-pass limit to be applied in the last iterations of coarse particle sieving (in Angstroms){15.0}',&
+        &'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_FILT, 'lpstop_fine', 'num', 'Final low-pass limit for fine sieving', 'Low-pass limit to be applied in the last iterations of fine particle sieving (in Angstroms){10.0}',&
+        &'in Angstroms{10.0}', .false., 10., gui_submenu="filter", gui_advanced=.true.)
         ! mask controls
-        call particle_sieving%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        ! <empty>
         ! computer controls
         call particle_sieving%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
         call particle_sieving%add_input(UI_COMP, nchunks, gui_submenu="compute", gui_advanced=.false.)

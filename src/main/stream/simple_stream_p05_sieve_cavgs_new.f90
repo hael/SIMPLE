@@ -170,11 +170,8 @@ contains
                     write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
                     call spproj_tmp%kill()
                     ! Initialise ptcl_sieve once and run two warm-up cycles.
-                    if( params%pickrefs%strlen() > 0 ) then
-                        call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), compatibility_refs=params%pickrefs)
-                    else
-                        call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
-                    end if
+                    if( params%pickrefs%strlen() > 0 ) params%refs = params%pickrefs
+                    call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
                     call sieve%cycle(project_list)
                     call sieve%cycle(project_list)
                     l_once = .false.
