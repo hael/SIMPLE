@@ -51,7 +51,10 @@ contains
         ! mask controls
         !call coarrays%add_input(UI_MASK, )
         ! computer controls
-        !call coarrays%add_input(UI_COMP, )
+        call coarrays%add_input(UI_COMP, nparts, required_override=.false.)
+        call coarrays%add_input(UI_COMP, 'ncunits', 'num', 'Number of coarray images',&
+        &'Number of coarray images to launch concurrently; defaults to nparts',&
+        &'# coarray images', .false., 0.)
         ! add to ui_hash
         call add_ui_program('coarrays', coarrays, tsttab)
     end subroutine new_coarrays
