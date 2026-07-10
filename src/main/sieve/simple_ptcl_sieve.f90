@@ -37,7 +37,7 @@
 !==============================================================================
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
-  use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB
+  use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB, JPEG_DIM
   use simple_error,                       only: simple_exception
   use simple_image,                       only: image
   use simple_timer,                       only: timer_int_kind, tic, toc
@@ -56,7 +56,11 @@ module simple_ptcl_sieve
   use simple_string_utils,                only: int2str
   use simple_projfile_utils,              only: merge_chunk_projfiles
   use simple_cavg_quality_model,          only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model
-  use simple_cavg_quality_types,          only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE
+  use simple_cavg_quality_types,          only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE, &
+                                                CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
+                                                CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
+                                                CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
+                                                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
@@ -1361,6 +1365,8 @@ contains
     call mrc2jpeg_tiled(stkname, jpgname)
     write(logfhandle,'(A,A)') '>>> JPEG ', jpgname%to_char()
 
+    call write_rejection_reason_overlay_jpg(chunk, label, cavg_imgs, states, quality)
+
     ! write rejected
     allocate(out_imgs(count(states == 0)))
     nout    = 0
@@ -1473,6 +1479,7 @@ contains
       if( fname_keep_sigma%strlen()          > 0 .and. fname == fname_keep_sigma          ) cycle
       if( fname%has_substr('_selected.jpg') .or. fname%has_substr('_rejected.jpg') ) cycle
       if( fname%has_substr('_selected.jpeg') .or. fname%has_substr('_rejected.jpeg') ) cycle
+      if( fname%has_substr('_all_reasons') ) cycle
       if( file_exists(files(i)) ) then
         call del_file(files(i))
         ndeleted = ndeleted + 1
@@ -1581,6 +1588,187 @@ contains
     end function sigma_file_rank
     
   end subroutine cleanup_chunk
+
+  ! Writes a third JPEG containing all class averages with reason-coded borders
+  ! and emits a sidecar key file documenting the color mapping.
+  subroutine write_rejection_reason_overlay_jpg( chunk, label, cavg_imgs, states, quality )
+    type(chunk2D_state), intent(in)    :: chunk
+    type(string),        intent(in)    :: label
+    type(image),         intent(inout) :: cavg_imgs(:)
+    integer,             intent(in)    :: states(:)
+    type(cavg_quality_result), intent(in) :: quality
+    type(image)                      :: tile_img, work_img
+    type(string)                     :: jpgname, keyname
+    real, allocatable                :: rgb_map(:,:,:)
+    integer                          :: ncls, xtiles, ytiles
+    integer                          :: icls, ix, iy, ldim(3), borderw, g8
+    integer                          :: x_start, x_end, y_start, y_end, iu
+    integer                          :: reason_code
+
+    ncls = size(cavg_imgs)
+    if( ncls == 0 ) return
+
+    xtiles = max(1, floor(sqrt(real(ncls))))
+    ytiles = ceiling(real(ncls) / real(xtiles))
+    call tile_img%new([xtiles * JPEG_DIM, ytiles * JPEG_DIM, 1], cavg_imgs(1)%get_smpd())
+
+    ldim = cavg_imgs(1)%get_ldim()
+    call work_img%new(ldim, cavg_imgs(1)%get_smpd())
+
+    do icls = 1, ncls
+      call work_img%copy(cavg_imgs(icls))
+      call work_img%fft
+      if( ldim(1) > JPEG_DIM ) then
+        call work_img%clip_inplace([JPEG_DIM, JPEG_DIM, 1])
+      else
+        call work_img%pad_inplace([JPEG_DIM, JPEG_DIM, 1], backgr=0., antialiasing=.false.)
+      end if
+      call work_img%ifft
+      ix = mod(icls - 1, xtiles) + 1
+      iy = (icls - 1) / xtiles + 1
+      call tile_img%tile(work_img, ix, iy)
+    end do
+
+    rgb_map = tile_img%get_rmat()
+    rgb_map(:,:,1) = max(0.0, min(255.0, rgb_map(:,:,1))) / 255.0
+
+    ! Encode all class pixels as neutral RGB so the tile content stays grayscale
+    ! while allowing colored overlays on selected border pixels.
+    do iy = 1, size(rgb_map,2)
+      do ix = 1, size(rgb_map,1)
+        g8 = nint(max(0.0, min(1.0, rgb_map(ix,iy,1))) * 255.0)
+        rgb_map(ix,iy,1) = rgb_code(g8, g8, g8)
+      end do
+    end do
+
+    borderw = 3
+    do icls = 1, ncls
+      ix = mod(icls - 1, xtiles) + 1
+      iy = (icls - 1) / xtiles + 1
+      x_start = (ix - 1) * JPEG_DIM + 1
+      x_end   = ix * JPEG_DIM
+      y_start = (iy - 1) * JPEG_DIM + 1
+      y_end   = iy * JPEG_DIM
+
+      if( states(icls) > 0 ) then
+        reason_code = -1
+      else if( quality%states(icls) == 0 ) then
+        reason_code = quality%reasons(icls)
+      else
+        reason_code = 100
+      end if
+      call paint_reason_border(rgb_map, x_start, x_end, y_start, y_end, borderw, reason_code)
+    end do
+
+    call draw_reason_key_swatches(rgb_map)
+    ! Force deterministic [0,1] range for RGB packing in simple_jpg.
+    rgb_map(1,1,1) = 0.0
+    rgb_map(1,2,1) = 1.0
+
+    call tile_img%set_rmat(rgb_map, .false.)
+    jpgname = swap_suffix(chunk%projfile, '_all_reasons'//JPG_EXT, METADATA_EXT)
+    call tile_img%write_jpg(jpgname, colorspec=3)
+    write(logfhandle,'(A,A)') '>>> JPEG ', jpgname%to_char()
+
+    keyname = string(jpgname%to_char() // '.key.txt')
+    open(newunit=iu, file=keyname%to_char(), status='replace', action='write')
+    write(iu,'(A)') 'Rejection Reason Color Key'
+    write(iu,'(A)') 'Selected (state>0): green'
+    write(iu,'(A)') 'Compatibility reject: orange'
+    write(iu,'(A)') 'POP: red'
+    write(iu,'(A)') 'BAD_PIXELS: magenta'
+    write(iu,'(A)') 'NO_COMPONENT: cyan'
+    write(iu,'(A)') 'MASK_GEOMETRY: yellow'
+    write(iu,'(A)') 'BP_CENTER_EDGE_LOW: blue'
+    write(iu,'(A)') 'LOCVAR_FG_LOW: purple'
+    write(iu,'(A)') 'FUZZY_BALL_SIGNAL_NEG: brown'
+    close(iu)
+    write(logfhandle,'(A,A)') '>>> KEY  ', keyname%to_char()
+
+    if( allocated(rgb_map) ) deallocate(rgb_map)
+    call tile_img%kill()
+    call work_img%kill()
+
+  contains
+
+    pure real function rgb_code(r, g, b)
+      integer, intent(in) :: r, g, b
+      integer :: packed
+      packed = ishft(max(0, min(255, r)), 16) + ishft(max(0, min(255, g)), 8) + max(0, min(255, b))
+      rgb_code = real(packed) / 16777215.0
+    end function rgb_code
+
+    pure real function reason_color(code)
+      integer, intent(in) :: code
+      select case(code)
+      case(-1)
+        reason_color = rgb_code( 46, 204, 113) ! selected
+      case(100)
+        reason_color = rgb_code(255, 165,   0) ! compatibility reject
+      case(CAVG_REJECT_REASON_POP)
+        reason_color = rgb_code(220,  20,  60)
+      case(CAVG_REJECT_REASON_BAD_PIXELS)
+        reason_color = rgb_code(255,   0, 255)
+      case(CAVG_REJECT_REASON_NO_COMPONENT)
+        reason_color = rgb_code(  0, 200, 200)
+      case(CAVG_REJECT_REASON_MASK_GEOMETRY)
+        reason_color = rgb_code(255, 220,   0)
+      case(CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW)
+        reason_color = rgb_code( 30, 144, 255)
+      case(CAVG_REJECT_REASON_LOCVAR_FG_LOW)
+        reason_color = rgb_code(153,  50, 204)
+      case(CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG)
+        reason_color = rgb_code(139,  69,  19)
+      case default
+        reason_color = rgb_code(180, 180, 180)
+      end select
+    end function reason_color
+
+    pure subroutine paint_reason_border(rmap, xs, xe, ys, ye, width, code)
+      real,    intent(inout) :: rmap(:,:,:)
+      integer, intent(in)    :: xs, xe, ys, ye, width, code
+      integer :: i, j
+      real    :: col
+      col = reason_color(code)
+      do j = ys, ye
+        do i = xs, min(xe, xs + width - 1)
+          rmap(i,j,1) = col
+        end do
+        do i = max(xs, xe - width + 1), xe
+          rmap(i,j,1) = col
+        end do
+      end do
+      do i = xs, xe
+        do j = ys, min(ye, ys + width - 1)
+          rmap(i,j,1) = col
+        end do
+        do j = max(ys, ye - width + 1), ye
+          rmap(i,j,1) = col
+        end do
+      end do
+    end subroutine paint_reason_border
+
+    pure subroutine draw_reason_key_swatches(rmap)
+      real, intent(inout) :: rmap(:,:,:)
+      integer, parameter  :: ncolors = 9, box = 12, gap = 4, margin = 6
+      integer             :: i, x0, y0, x1, y1, c
+      integer             :: codes(ncolors)
+      codes = [ -1, 100, CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
+                CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
+                CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
+                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG ]
+      y0 = margin
+      do i = 1, ncolors
+        x0 = margin + (i - 1) * (box + gap)
+        x1 = min(size(rmap,1), x0 + box - 1)
+        y1 = min(size(rmap,2), y0 + box - 1)
+        do c = x0, x1
+          rmap(c, y0:y1, 1) = reason_color(codes(i))
+        end do
+      end do
+    end subroutine draw_reason_key_swatches
+
+  end subroutine write_rejection_reason_overlay_jpg
 
   ! ============================================================================
   ! MODULE-LEVEL HELPERS

@@ -152,8 +152,10 @@ Rejection outputs and artifacts:
 
 1. project state is mapped through `map_cavgs_selection` and persisted;
 2. selected and rejected class-average stacks/JPEGs are written;
-3. `REJECTION_FINISHED` sentinel is emitted on completion;
-4. chunk selected-count is updated from particle states.
+3. an all-class JPEG (`*_all_reasons.jpg`) is written with reason-coded
+  borders plus a sidecar key file (`*_all_reasons.jpg.key.txt`);
+4. `REJECTION_FINISHED` sentinel is emitted on completion;
+5. chunk selected-count is updated from particle states.
 
 Cleanup retention policy (`cleanup_chunk`):
 
@@ -163,10 +165,11 @@ Cleanup retention policy (`cleanup_chunk`):
   `REJECTION_FAILED`;
 3. keep chunk project metadata file and `frcs.bin`;
 4. keep selected/rejected JPEG renderings;
-5. keep latest iteration JPEG for the chunk;
-6. keep final iteration stacks for all three stack variants when present:
+5. keep all-reasons reason-overlay JPEG and its sidecar key file;
+6. keep latest iteration JPEG for the chunk;
+7. keep final iteration stacks for all three stack variants when present:
   whole stack (non-`_even`/`_odd`), `_even`, and `_odd`;
-7. keep the highest-rank sigma STAR candidate (`sigma*.star`, preferring
+8. keep the highest-rank sigma STAR candidate (`sigma*.star`, preferring
   `_iterNNN` when available).
 
 Compatibility observability policy:

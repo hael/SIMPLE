@@ -640,7 +640,7 @@ contains
                 ! pre-cleaned chunks, and pool is learned rejection before 3D.
                 context = trim(model%context)
                 model_name = lowercase(trim(model%name))
-                if( index(model_name, CAVG_QUALITY_CONTEXT_POOL) > 0 ) context = CAVG_QUALITY_CONTEXT_POOL
+                if( index(model_name, CAVG_QUALITY_CONTEXT_POOL) > 0  ) context = CAVG_QUALITY_CONTEXT_POOL
                 if( index(model_name, CAVG_QUALITY_CONTEXT_SIEVE) > 0 ) context = CAVG_QUALITY_CONTEXT_SIEVE
                 if( index(model_name, CAVG_QUALITY_CONTEXT_CHUNK) > 0 ) context = CAVG_QUALITY_CONTEXT_CHUNK
                 if( trim(context) == '' ) context = CAVG_QUALITY_CONTEXT_CHUNK

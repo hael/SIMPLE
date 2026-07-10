@@ -259,7 +259,7 @@ contains
         integer, optional, intent(in)    :: quality, colorspec
         type(c_ptr)                      :: img
         real                          :: lo, hi
-        integer                       :: status, w, h,c, i, j
+        integer                       :: status, w, h,c, i, j, idx
         integer(c_int)                :: pixel
         character(len=:), allocatable :: fstr
         integer(1),       pointer     :: img_buffer(:) => NULL()
@@ -281,14 +281,16 @@ contains
                 if  (self%colorspace == 3) then
                     c=3
                     pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
-                    img_buffer((i-1)*c + (j-1) * w * c+ 1)  = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8_c_int) , boz_00ff) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , boz_00ff) ,kind=c_char)
+                    idx = i*c + (j*w*c) + 1
+                    img_buffer(idx)     = INT( ISHFT( pixel , -16) ,kind=c_char)
+                    img_buffer(idx + 1) = INT( IAND( ISHFT( pixel , -8_c_int) , boz_00ff) ,kind=c_char)
+                    img_buffer(idx + 2) = INT( IAND( pixel , boz_00ff) ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , boz_ffff)
-                    img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
+                    idx = i*c + (j*w*c) + 1
+                    img_buffer(idx) = INT(pixel,kind=1)
                 end if
 
             end do
@@ -308,7 +310,7 @@ contains
         integer, intent(in)             :: in_buffer(:,:)
         integer, intent(in), optional   :: quality, colorspec
         type(c_ptr)                   :: img
-        integer                       :: w,h,j,i,c, lo,hi, status
+        integer                       :: w,h,j,i,c, lo,hi, status, idx
         integer(c_int)                :: pixel
         character(len=:), allocatable :: fstr
         integer(1),       pointer     :: img_buffer(:) => NULL()
@@ -317,7 +319,7 @@ contains
         h            = size(in_buffer,2)
         if(w == 0 .or. h == 0) return
         if(present(quality)) self%quality = quality
-        if(present(quality)) self%colorspace = colorspec
+        if(present(colorspec)) self%colorspace = colorspec
         self%width = w
         self%height = h
         lo = minval(in_buffer)
@@ -328,14 +330,16 @@ contains
                 if  (self%colorspace == 3) then
                     c=3
                     pixel = NINT( REAL(2**24) * REAL(in_buffer(i+1,j+1)-lo)/REAL(hi-lo),kind=4)
-                    img_buffer((i-1)*c + (j-1) * w * c+ 1) = INT( ISHFT( pixel , -16) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 2) =  INT( IAND( ISHFT( pixel , -8) , boz_00ff) ,kind=c_char)
-                    img_buffer((i-1)*c + (j-1) * w * c + 3) =  INT( IAND( pixel , boz_00ff) ,kind=c_char)
+                    idx = i*c + (j*w*c) + 1
+                    img_buffer(idx)     = INT( ISHFT( pixel , -16) ,kind=c_char)
+                    img_buffer(idx + 1) = INT( IAND( ISHFT( pixel , -8) , boz_00ff) ,kind=c_char)
+                    img_buffer(idx + 2) = INT( IAND( pixel , boz_00ff) ,kind=c_char)
                 else
                     c=1
                     pixel =  INT( REAL( max_colors - 1)*( REAL(in_buffer(i+1,j+1)-lo) / REAL(hi - lo) ) ,kind=c_int)
                     pixel =  IAND( pixel , boz_ffff)
-                    img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
+                    idx = i*c + (j*w*c) + 1
+                    img_buffer(idx) = INT(pixel,kind=1)
                 end if
             end do
         end do
