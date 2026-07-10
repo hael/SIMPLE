@@ -42,7 +42,9 @@ module simple_stream_p05_sieve_cavgs_new
 use simple_stream_api
 use unix,                        only: SIGTERM
 use simple_fileio,               only: read_filetable
-use simple_ptcl_sieve,           only: ptcl_sieve
+use simple_ptcl_sieve,           only: ptcl_sieve, DEFAULT_COARSE_POP_THRESHOLD, DEFAULT_FINE_POP_THRESHOLD, &
+                                      DEFAULT_COARSE_BOX, DEFAULT_FINE_BOX, DEFAULT_COARSE_NSAMPLE, DEFAULT_FINE_NSAMPLE, &
+                                      DEFAULT_LPSTART, DEFAULT_COARSE_LP, DEFAULT_FINE_LP, DEFAULT_NCLS
 use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
 use simple_stream_pool2D_utils,  only: set_lpthres_type
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
@@ -104,6 +106,20 @@ contains
         if( .not. cline%defined('walltime') ) call cline%set('walltime', 29 * 60)
         if( .not. cline%defined('outdir')   ) call cline%set('outdir',        '')
         if( .not. cline%defined('nmics')    ) call cline%set('nmics',        100)
+        if( .not. cline%defined('nptcls_coarse')  ) call cline%set('nptcls_coarse',  DEFAULT_COARSE_POP_THRESHOLD)
+        if( .not. cline%defined('nptcls_fine')    ) call cline%set('nptcls_fine',      DEFAULT_FINE_POP_THRESHOLD)
+        if( .not. cline%defined('maxnchunks')     ) call cline%set('maxnchunks',                                0)
+        if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',                     DEFAULT_LPSTART)
+        if( .not. cline%defined('lpstop_coarse')  ) call cline%set('lpstop_coarse',             DEFAULT_COARSE_LP)
+        if( .not. cline%defined('lpstop_fine')    ) call cline%set('lpstop_fine',                 DEFAULT_FINE_LP)
+        if( .not. cline%defined('box_coarse')     ) call cline%set('box_coarse',               DEFAULT_COARSE_BOX)
+        if( .not. cline%defined('box_fine')       ) call cline%set('box_fine',                   DEFAULT_FINE_BOX)
+        if( .not. cline%defined('nsample_coarse') ) call cline%set('nsample_coarse',       DEFAULT_COARSE_NSAMPLE)
+        if( .not. cline%defined('nsample_fine')   ) call cline%set('nsample_fine',           DEFAULT_FINE_NSAMPLE)
+        if( .not. cline%defined('ncls_coarse')    ) call cline%set('ncls_coarse',                    DEFAULT_NCLS)
+        if( .not. cline%defined('ncls_fine')      ) call cline%set('ncls_fine',                      DEFAULT_NCLS)
+        if( .not. cline%defined('fine_model')     ) call cline%set('fine_model',                             'no')
+        if( .not. cline%defined('single_pass')    ) call cline%set('single_pass',                            'no')
         ! Initialise counters.
         n_ptcls_imported = 0
         n_mics_imported  = 0
