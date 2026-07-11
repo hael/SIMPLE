@@ -440,13 +440,12 @@ contains
             integer(int64) :: peak_rss
             real(real64)    :: peak_rss_gib
             if( .not. ctrl%do_bench ) return
+            if( p_ptr%part /= 1 ) return
             rt_tot = toc(t_tot)
             peak_rss = get_peak_rss_bytes()
             peak_rss_gib = -1.0_real64
             if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)
-            if( p_ptr%part > 1 ) benchfname = benchfname//'_PART'//int2str_pad(p_ptr%part,max(1,p_ptr%numlen))
-            benchfname = benchfname//'.txt'
+            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match2D refine mode                 : ', trim(ctrl%refine_flag)

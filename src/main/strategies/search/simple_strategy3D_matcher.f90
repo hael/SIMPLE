@@ -200,12 +200,13 @@ contains
         call b_ptr%esig%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
+            if( p_ptr%part /= 1 ) return
             rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
             peak_rss = get_peak_rss_bytes()
             peak_rss_gib = -1.0_real64
             if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-            benchfname = refine3D_bench_fname(which_iter, p_ptr%part, p_ptr%numlen)
+            benchfname = refine3D_bench_fname(which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
