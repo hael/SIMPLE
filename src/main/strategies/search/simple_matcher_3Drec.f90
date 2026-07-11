@@ -3,6 +3,7 @@ module simple_matcher_3Drec
 use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
+use simple_classaverager,  only: fourier_2d_accumulator
 use simple_cmdline,         only: cmdline
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
@@ -10,7 +11,7 @@ use simple_parameters,      only: parameters
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
 implicit none
 
-public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec
+public :: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -117,6 +118,125 @@ contains
             print *,'Total rec time: ', t_tot
         endif
     end subroutine calc_3Drec
+
+    !> Volumetric 3D reconstruction from compact projection-direction sums.
+    !! Particles are first accumulated on the native 2D Fourier grid with the
+    !! exact KB numerator/CTF^2 machinery used for class averages.  Those raw
+    !! sums are then inserted directly into the 3D reconstruction; they are
+    !! never CTF-density corrected and never transformed through real space.
+    subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fourier_2d_accumulator) :: projdir_sums(2)
+        type(fplane_type), allocatable :: fpls(:)
+        type(fplane_type) :: compact_fpl
+        type(ori) :: orientation
+        integer, allocatable :: eopops(:,:,:), states(:), state_pinds(:), proj2slice(:,:)
+        integer :: batchlims(2), batchsz, ibatch, i, j, iptcl, iproj, eo, peo, state, s, nproj_eo(2)
+        logical :: l_den_src
+        if( nptcls < 1 ) return
+        if( params%nspace /= build%eulspace%get_noris() )then
+            THROW_HARD('nspace/eulspace mismatch; calc_projdir3Drec')
+        endif
+        ! Store the closest discrete projection direction in the orientation
+        ! field.  The residual in-plane angle is accumulated by the 2D kernel.
+        call build%spproj_field%set_projs(build%eulspace)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
+        call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        allocate(eopops(params%nspace,2,params%nstates), states(nptcls), &
+            &proj2slice(params%nspace,2), source=0)
+        !$omp parallel do default(shared) private(i,iptcl,iproj,eo,state) &
+        !$omp schedule(static) proc_bind(close) reduction(+:eopops)
+        do i = 1,nptcls
+            iptcl = pinds(i)
+            state = build%spproj_field%get_state(iptcl)
+            if( state < 1 .or. state > params%nstates ) cycle
+            iproj = build%spproj_field%get_int(iptcl, 'proj')
+            if( iproj < 1 .or. iproj > params%nspace ) cycle
+            eo = build%spproj_field%get_eo(iptcl) + 1
+            if( eo < 1 .or. eo > 2 ) cycle
+            states(i) = state
+            eopops(iproj,eo,state) = eopops(iproj,eo,state) + 1
+        enddo
+        !$omp end parallel do
+        l_den_src = params%l_ptcl_src_den
+        do s = 1,params%nstates
+            if( sum(eopops(:,:,s)) == 0 ) cycle
+            ! Allocate only populated projection directions for this state.
+            ! proj2slice keeps the external eulspace index while avoiding a
+            ! dense nspace*box^2 allocation when sampling is sparse.
+            proj2slice = 0
+            nproj_eo   = 0
+            do eo = 1,2
+                do iproj = 1,params%nspace
+                    if( eopops(iproj,eo,s) == 0 ) cycle
+                    nproj_eo(eo) = nproj_eo(eo) + 1
+                    proj2slice(iproj,eo) = nproj_eo(eo)
+                enddo
+                call projdir_sums(eo)%new([params%box_crop,params%box_crop], max(1,nproj_eo(eo)))
+            enddo
+            if( allocated(state_pinds) ) deallocate(state_pinds)
+            state_pinds = pack(pinds, mask=(states == s))
+            do ibatch = 1,size(state_pinds),MAXIMGBATCHSZ
+                batchlims = [ibatch, min(size(state_pinds),ibatch+MAXIMGBATCHSZ-1)]
+                batchsz   = batchlims(2) - batchlims(1) + 1
+                if( l_den_src )then
+                    call discrete_read_imgbatch_source(params, build, 'den', batchsz, &
+                        &state_pinds(batchlims(1):batchlims(2)), [1,batchsz], build%imgbatch(:batchsz))
+                else
+                    call discrete_read_imgbatch(params, build, size(state_pinds), state_pinds, batchlims)
+                endif
+                call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
+                    &state_pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                ! Each OpenMP iteration owns one projection-direction/even-odd
+                ! slice, matching the race-free class-average accumulation policy.
+                !$omp parallel do default(shared) private(j,iproj,eo,i,iptcl,peo) &
+                !$omp schedule(dynamic) proc_bind(close)
+                do j = 1,2*params%nspace
+                    eo    = merge(1,2,j<=params%nspace)
+                    iproj = j - (eo-1)*params%nspace
+                    if( eopops(iproj,eo,s) == 0 ) cycle
+                    do i = batchlims(1),batchlims(2)
+                        iptcl = state_pinds(i)
+                        if( build%spproj_field%get_int(iptcl,'proj') /= iproj ) cycle
+                        peo = build%spproj_field%get_eo(iptcl) + 1
+                        if( peo /= eo ) cycle
+                        call projdir_sums(eo)%add_fplane(build%spproj_field%e3get(iptcl), &
+                            &fpls(i-batchlims(1)+1), proj2slice(iproj,eo))
+                    enddo
+                enddo
+                !$omp end parallel do
+            enddo
+            ! The compact phase: at most 2*nspace native 2D sums are inserted
+            ! for this state, carrying their accumulated numerator and CTF^2.
+            do iproj = 1,params%nspace
+                call build%eulspace%get_ori(iproj, orientation)
+                call orientation%set_state(s)
+                if( eopops(iproj,1,s) > 0 )then
+                    call orientation%set('eo',0)
+                    call projdir_sums(1)%export_fplane(proj2slice(iproj,1), compact_fpl)
+                    call build%eorecvols(s)%grid_plane_compact(build%pgrpsyms, orientation, compact_fpl, 0)
+                endif
+                if( eopops(iproj,2,s) > 0 )then
+                    call orientation%set('eo',1)
+                    call projdir_sums(2)%export_fplane(proj2slice(iproj,2), compact_fpl)
+                    call build%eorecvols(s)%grid_plane_compact(build%pgrpsyms, orientation, compact_fpl, 1)
+                endif
+            enddo
+            call projdir_sums(1)%kill
+            call projdir_sums(2)%kill
+        enddo
+        if( allocated(compact_fpl%cmplx_plane) ) deallocate(compact_fpl%cmplx_plane)
+        if( allocated(compact_fpl%ctfsq_plane) ) deallocate(compact_fpl%ctfsq_plane)
+        if( allocated(state_pinds) ) deallocate(state_pinds)
+        deallocate(eopops, states, proj2slice)
+        call orientation%kill
+        call write_partial_recs(params, build, cline, fpls)
+        call finalize_rec_objs(params, build)
+    end subroutine calc_projdir3Drec
 
     !>  Initiates objects required for online volumetric 3d reconstruction
     !>  Does not read images

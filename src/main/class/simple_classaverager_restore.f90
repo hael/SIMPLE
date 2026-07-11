@@ -152,8 +152,6 @@ contains
             call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
             call apply_weights2cavgs(class_update_fracs)
         endif
-        ! Interpolation variables
-        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         ! Work images
         call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
         ! particle records
@@ -161,10 +159,6 @@ contains
         precs(:)%pind = 0
         ! populations
         eo_pops(:,:) = 0
-        ! Memoization for cropped image, is overwritten just below
-        call memoize_ft_maps(ldim_crop(1:2), p_ptr%smpd_crop)
-        phys_addrh_crop = ft_map_phys_addrh
-        phys_addrk_crop = ft_map_phys_addrk
         ! Memoization for cropped padded image, will be overwritten during search
         call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
     end subroutine cavger_init_online
@@ -252,29 +246,20 @@ contains
         if( allocated(tmp_pad_imgs))then
             call forget_ft_maps
             call dealloc_imgarr(tmp_pad_imgs)
-            deallocate(precs,phys_addrh_crop,phys_addrk_crop)
+            deallocate(precs)
         endif
     end subroutine cavger_dealloc_online
 
     subroutine cavger_update_sums( nptcls, ptcl_imgs )
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
-        real,   parameter :: KB2 = KBALPHA**2
         type(fplane_type) :: fplanes(nthr_glob)
-        integer :: flims_crop(3,2), cyc_lims_cropR(2,2), cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: cshape(2), iptcl, ithr, icls, i, iwinsz, wdim, nyq_crop, nyq_disk
-        ! Interpolation parameters
-        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
-        wdim   = kbwin%get_wdim()
+        integer :: sigma2_kfromto(2)
+        integer :: iptcl, ithr, icls, i, nyq_crop
         ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
         call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
         ! Dimensions & limits
-        flims_crop     = cavgs%even%flims
         nyq_crop       = cavgs%even%fit%get_lfny(1)
-        nyq_disk       = nyq_crop * (nyq_crop + 1)
-        cyc_lims_crop  = cavgs%even%fit%loop_lims(3)
-        cyc_lims_cropR = transpose(cyc_lims_crop(1:2,:))
-        cshape         = cavgs%even%cshape
         sigma2_kfromto = [1, nyq_crop]
         if( p_ptr%l_ml_reg ) then
             sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
@@ -303,94 +288,14 @@ contains
                 select case(precs(i)%eo)
                 case(0,-1)
                     eo_pops(1,icls) = eo_pops(1,icls) + 1
-                    call update_cluster_with_fplane( precs(i)%e3, fplanes(ithr), &
-                        cshape(1), cshape(2), cavgs%even%slices(icls)%c(:,:), cavgs%even%ctfsq(:,:,icls))
+                    call cavgs%even%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)
                 case(1)
                     eo_pops(2,icls) = eo_pops(2,icls) + 1
-                    call update_cluster_with_fplane( precs(i)%e3, fplanes(ithr), &
-                        cshape(1), cshape(2), cavgs%odd%slices(icls)%c(:,:), cavgs%odd%ctfsq(:,:,icls))
+                    call cavgs%odd%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)
                 end select
             enddo
         enddo
         !$omp end parallel do
-    contains
-
-        ! Rotation and Kaiser-Bessel interpolation
-        subroutine update_cluster_with_fplane( e3, fpl, nh, nk, cmat, ctfsq )
-            real,              intent(in)    :: e3
-            type(fplane_type), intent(in)    :: fpl
-            integer,           intent(in)    :: nh, nk
-            complex,           intent(inout) :: cmat(1:nh,1:nk)
-            real,              intent(inout) :: ctfsq(1:nh,1:nk)
-            complex :: fcomp, fc
-            real    :: loc(2), mat(2,2), hrow(2), wx(wdim), wy(wdim), base(2)
-            real    :: m11, m12, m21, m22, tvalsq, w, rh, rk, h_sq, sx, sy
-            integer :: win(2,2), physh, physk, hh, kk, hp, kp, l, m, h,k, iapod
-            ! Rotation matrix
-            call rotmat2d( e3, mat )
-            m11 = mat(1,1); m12 = mat(1,2)
-            m21 = mat(2,1); m22 = mat(2,2)
-            ! loop over cropped original image limits
-            do h = flims_crop(1,1), flims_crop(1,2)
-                rh   = real(h)
-                h_sq = rh*rh
-                if( h_sq > real(nyq_disk) ) cycle
-                hp = int(rh * real(OSMPL_PAD_FAC))
-                hrow(1) = rh * m11
-                hrow(2) = rh * m12
-                do k = flims_crop(2,1), flims_crop(2,2)
-                    rk = real(k)
-                    if( h_sq + rk*rk > real(nyq_disk) ) cycle
-                    kp = int(rk * real(OSMPL_PAD_FAC))
-                    ! rotation on original lattice
-                    loc(1) = hrow(1) + rk * m21
-                    loc(2) = hrow(2) + rk * m22
-                    ! interpolation window limits on original lattice
-                    win(1,:) = nint(loc)
-                    win(2,:) = win(1,:) + iwinsz
-                    win(1,:) = win(1,:) - iwinsz
-                    ! kernel window
-                    base = real(win(1,:)) - loc
-                    sx = 0.; sy = 0.
-                    do iapod = 1, wdim
-                        wx(iapod) = kbwin%apod_fast(base(1) + real(iapod-1))
-                        wy(iapod) = kbwin%apod_fast(base(2) + real(iapod-1))
-                        sx = sx + wx(iapod)
-                        sy = sy + wy(iapod)
-                    end do
-                    wx = wx / sx; wy = wy / sy
-                    ! Read from the generated Fourier plane.
-                    ! gen_fplane4rec stores only k<=0, so use Friedel symmetry for kp>0.
-                    if( kp <= 0 ) then
-                        fcomp  = KB2 * fpl%cmplx_plane(hp, kp)
-                        tvalsq =       fpl%ctfsq_plane(hp, kp)
-                    else
-                        fcomp  = KB2 * conjg(fpl%cmplx_plane(-hp, -kp))
-                        tvalsq =       fpl%ctfsq_plane(-hp, -kp)
-                    endif
-                    ! Splat update
-                    do l = 1, wdim
-                        hh = win(1,1) + l - 1
-                        if( hh < 0 ) then
-                            fc = conjg(fcomp)
-                        else
-                            fc = fcomp
-                        endif
-                        hh = cyci_1d(cyc_lims_cropR(:,1), hh)
-                        do m = 1, wdim
-                            kk    = win(1,2) + m - 1
-                            kk    = cyci_1d(cyc_lims_cropR(:,2), kk)
-                            physh = phys_addrh_crop(hh,kk)
-                            physk = phys_addrk_crop(hh,kk)
-                            w     = wx(l) * wy(m)
-                            cmat(physh,physk)  = cmat(physh,physk)  + w * fc
-                            ctfsq(physh,physk) = ctfsq(physh,physk) + w * tvalsq
-                        enddo
-                    enddo
-                enddo
-            enddo
-        end subroutine update_cluster_with_fplane
-
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline

@@ -71,6 +71,9 @@ contains
         call abinitio3D%add_input(UI_SRCH, objfun_den, gui_submenu="search")
         call abinitio3D%add_input(UI_SRCH, objfun_den_w, gui_submenu="search")
         call abinitio3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
+        call abinitio3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
+            &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}', &
+            &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call abinitio3D%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

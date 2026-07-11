@@ -23,6 +23,8 @@ public :: cavger_assemble_sums, cavger_restore_cavgs
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
 public :: cavger_pad_partial_sums
+! Reusable reciprocal-space 2D sums (no restoration or real-space conversion)
+public :: fourier_2d_accumulator
 ! Stacks used for alignment
 public :: cavgs_even, cavgs_odd, cavgs_merged
 ! Separate public utility to rotate particles
@@ -45,6 +47,7 @@ type :: stack
     type(c_ptr)                            :: plan_fwd    = c_null_ptr  ! forward plan
     type(c_ptr)                            :: plan_bwd    = c_null_ptr  ! backward plan
     type(ftiter)                           :: fit                       ! convenience fourier iterator
+    type(kbinterpol)                       :: kbwin                     ! shared 2D KB interpolation kernel
     real(kind=c_float),            pointer :: rmat(:,:,:) => null()     ! pointer to real cavgs array
     complex(kind=c_float_complex), pointer :: cmat(:,:,:) => null()     ! pointer to complex cavgs array
     type(matrix_ptrs),         allocatable :: slices(:)                 ! pointers to individual slices/cavgs
@@ -71,8 +74,25 @@ type :: stack
     procedure          :: softmask
     procedure          :: insert_lowres_serial
     procedure          :: add_invnoisepower2rho
+    procedure, private :: accumulate_fplane => stack_accumulate_fplane
+    procedure, private :: export_fplane      => stack_export_fplane
     procedure          :: kill_stack
 end type stack
+
+! Compact Fourier numerator/CTF^2 sums assembled with the same 2D
+! Kaiser-Bessel machinery used for class averages.  This deliberately exposes
+! only accumulation/export operations, keeping the class-average stack internals
+! private and avoiding any FFT/IFFT or CTF-density correction.
+type :: fourier_2d_accumulator
+    private
+    type(stack) :: sums
+  contains
+    procedure :: new           => fourier_accumulator_new
+    procedure :: zero          => fourier_accumulator_zero
+    procedure :: add_fplane    => fourier_accumulator_add_fplane
+    procedure :: export_fplane => fourier_accumulator_export_fplane
+    procedure :: kill          => fourier_accumulator_kill
+end type fourier_2d_accumulator
 
 ! To handle even, odd & merged cavgs
 type cavgs_set
@@ -102,6 +122,7 @@ end type ptcl_record
 
 ! Module constantsvariables
 integer,               parameter :: READBUFFSZ = 1024
+integer,               parameter :: CAVG_KB_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
 
 ! Module variables
 type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
@@ -110,11 +131,9 @@ type(image), target, allocatable :: cavgs_odd(:)              !< Odd class avera
 type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
 type(image),         allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
 type(cavgs_set)                  :: cavgs                     !< Class averages
-type(kbinterpol)                 :: kbwin                     !< Kaiser-Bessel interpolation object
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
-integer,             allocatable :: phys_addrh_crop(:,:), phys_addrk_crop(:,:)  !< Fourier mapping memoization matrices
 integer                          :: ncls       = 0            !< # classes
 integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
 integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
@@ -255,9 +274,50 @@ interface
         real,         intent(in)    :: frc(1:frcsz)
     end subroutine add_invnoisepower2rho
 
+    module subroutine stack_accumulate_fplane( self, e3, fpl, islice, weight )
+        class(stack),      intent(inout) :: self
+        real,              intent(in)    :: e3
+        type(fplane_type), intent(in)    :: fpl
+        integer,           intent(in)    :: islice
+        real, optional,    intent(in)    :: weight
+    end subroutine stack_accumulate_fplane
+
+    module subroutine stack_export_fplane( self, islice, fpl )
+        class(stack),      intent(in)    :: self
+        integer,           intent(in)    :: islice
+        type(fplane_type), intent(inout) :: fpl
+    end subroutine stack_export_fplane
+
     module subroutine kill_stack( self )
         class(stack), intent(inout) :: self
     end subroutine kill_stack
+
+    module subroutine fourier_accumulator_new( self, ldim, nslices )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        integer,                       intent(in)    :: ldim(2), nslices
+    end subroutine fourier_accumulator_new
+
+    module subroutine fourier_accumulator_zero( self )
+        class(fourier_2d_accumulator), intent(inout) :: self
+    end subroutine fourier_accumulator_zero
+
+    module subroutine fourier_accumulator_add_fplane( self, e3, fpl, islice, weight )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        real,                          intent(in)    :: e3
+        type(fplane_type),             intent(in)    :: fpl
+        integer,                       intent(in)    :: islice
+        real, optional,                intent(in)    :: weight
+    end subroutine fourier_accumulator_add_fplane
+
+    module subroutine fourier_accumulator_export_fplane( self, islice, fpl )
+        class(fourier_2d_accumulator), intent(in)    :: self
+        integer,                       intent(in)    :: islice
+        type(fplane_type),             intent(inout) :: fpl
+    end subroutine fourier_accumulator_export_fplane
+
+    module subroutine fourier_accumulator_kill( self )
+        class(fourier_2d_accumulator), intent(inout) :: self
+    end subroutine fourier_accumulator_kill
 
     !
     ! Module public routines

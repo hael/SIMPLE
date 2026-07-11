@@ -161,6 +161,7 @@ contains
         call reg%add_char('prob_inpl', self%prob_inpl)
         call reg%add_char('prob_neigh_mode', self%prob_neigh_mode)
         call reg%add_char('proj_is_class', self%proj_is_class)
+        call reg%add_char('projrec', self%projrec)
         call reg%add_char('projfile_merged', self%projfile_merged)
         call reg%add_char('projfile_optics', self%projfile_optics)
         call reg%add_char('projname', self%projname)

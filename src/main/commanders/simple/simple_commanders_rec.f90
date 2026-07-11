@@ -2,7 +2,7 @@
 module simple_commanders_rec
 use simple_commanders_api
 use simple_matcher_2Dprep
-use simple_matcher_3Drec, only: calc_3Drec
+use simple_matcher_3Drec, only: calc_3Drec, calc_projdir3Drec
 use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_state_halfvol_fname, refine3D_state_vol_fname
 implicit none
 #include "simple_local_flags.inc"
@@ -364,7 +364,11 @@ contains
             call build%esig%new(params, build%pftc, fname, params%box)
             call build%esig%read_groups(build%spproj_field)
         end if
-        call calc_3Drec( params, build, cline, nptcls2update, pinds )
+        if( trim(params%projrec) == 'yes' )then
+            call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
+        else
+            call calc_3Drec(params, build, cline, nptcls2update, pinds)
+        endif
         ! cleanup
         call build%esig%kill
         call build%kill_strategy3D_tbox

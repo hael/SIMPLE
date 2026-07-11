@@ -1820,6 +1820,7 @@ contains
                 call cline_ini3D%delete('nthr_ini3D')
             endif
             call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
+            call cline_ini3D%delete('projrec') ! compact projection sums are for particle refinement stages
             call cline_ini3D%delete('oritype')
             call cline_ini3D%delete('imgkind')
             call cline_ini3D%delete('prob_athres')

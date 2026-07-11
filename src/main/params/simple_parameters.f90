@@ -129,6 +129,7 @@ type :: parameters
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
+    character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}

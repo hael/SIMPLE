@@ -60,6 +60,7 @@ type :: reconstructor_eo
     procedure, private :: read_odd
     ! INTERPOLATION
     procedure          :: grid_plane
+    procedure          :: grid_plane_compact
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: project_polar
@@ -397,6 +398,23 @@ contains
                 THROW_HARD('unsupported eo flag; grid_plane')
         end select
     end subroutine grid_plane
+
+    !> \brief grid a compact native-grid 2D KB numerator/CTF^2 sum
+    subroutine grid_plane_compact( self, se, o, fpl, eo )
+        class(reconstructor_eo), intent(inout) :: self
+        class(sym),              intent(inout) :: se
+        class(ori),              intent(inout) :: o
+        class(fplane_type),      intent(in)    :: fpl
+        integer,                 intent(in)    :: eo
+        select case(eo)
+            case(-1,0)
+                call self%even%insert_plane_oversamp(se, o, fpl, compact_source=.true.)
+            case(1)
+                call self%odd%insert_plane_oversamp(se, o, fpl, compact_source=.true.)
+            case DEFAULT
+                THROW_HARD('unsupported eo flag; grid_plane_compact')
+        end select
+    end subroutine grid_plane_compact
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )

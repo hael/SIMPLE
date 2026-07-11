@@ -68,6 +68,7 @@ contains
         self%rshape   = [2*self%cshape(1), self%ldim(2)]    ! FFTW convention
         self%nslices  = nslices
         self%fit      = ftiter([self%ldim(1), self%ldim(2), 1], 1.0)
+        self%kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         self%flims    = self%fit%loop_lims(2)
         ! Array allocation
         self%p = fftwf_alloc_complex(int(self%nslices*product(self%cshape),c_size_t))
@@ -132,6 +133,173 @@ contains
         self%slices(:)%ft = ft
         !$omp end parallel workshare
     end subroutine zero
+
+    ! Accumulate a padded particle Fourier plane into one compact 2D
+    ! numerator/CTF^2 sum.  This is the common KB interpolation primitive used
+    ! by both class averaging and projection-direction reconstruction.
+    module subroutine stack_accumulate_fplane( self, e3, fpl, islice, weight )
+        class(stack),      intent(inout) :: self
+        real,              intent(in)    :: e3
+        type(fplane_type), intent(in)    :: fpl
+        integer,           intent(in)    :: islice
+        real, optional,    intent(in)    :: weight
+        complex :: fcomp, fc
+        real    :: loc(2), mat(2,2), hrow(2), wx(CAVG_KB_WDIM), wy(CAVG_KB_WDIM), base(2)
+        real    :: m11, m12, m21, m22, tvalsq, w, w_particle, rh, rk, h_sq, sx, sy
+        integer :: flims(3,2), cyc_lims(3,2), cyc_lims_r(2,2)
+        integer :: win(2,2), phys(2), hh, kk, hp, kp, l, m, h, k, iapod
+        integer :: iwinsz, wdim, nyq, nyq_disk
+        if( islice < 1 .or. islice > self%nslices ) THROW_HARD('invalid slice; stack_accumulate_fplane')
+        if( .not. allocated(fpl%cmplx_plane) .or. .not. allocated(fpl%ctfsq_plane) ) return
+        w_particle = 1.0
+        if( present(weight) ) w_particle = weight
+        if( w_particle <= TINY ) return
+        iwinsz      = ceiling(self%kbwin%get_winsz() - 0.5)
+        wdim        = self%kbwin%get_wdim()
+        if( wdim /= CAVG_KB_WDIM ) THROW_HARD('unexpected KB window dimension; stack_accumulate_fplane')
+        flims       = self%flims
+        cyc_lims    = self%fit%loop_lims(3)
+        cyc_lims_r  = transpose(cyc_lims(1:2,:))
+        nyq         = self%fit%get_lfny(1)
+        nyq_disk    = nyq * (nyq + 1)
+        call rotmat2d(e3, mat)
+        m11 = mat(1,1); m12 = mat(1,2)
+        m21 = mat(2,1); m22 = mat(2,2)
+        do h = flims(1,1), flims(1,2)
+            rh   = real(h)
+            h_sq = rh * rh
+            if( h_sq > real(nyq_disk) ) cycle
+            hp = h * OSMPL_PAD_FAC
+            hrow(1) = rh * m11
+            hrow(2) = rh * m12
+            do k = flims(2,1), flims(2,2)
+                rk = real(k)
+                if( h_sq + rk*rk > real(nyq_disk) ) cycle
+                kp = k * OSMPL_PAD_FAC
+                loc(1) = hrow(1) + rk * m21
+                loc(2) = hrow(2) + rk * m22
+                win(1,:) = nint(loc) - iwinsz
+                win(2,:) = nint(loc) + iwinsz
+                base = real(win(1,:)) - loc
+                sx = 0.0
+                sy = 0.0
+                do iapod = 1, wdim
+                    wx(iapod) = self%kbwin%apod_fast(base(1) + real(iapod-1))
+                    wy(iapod) = self%kbwin%apod_fast(base(2) + real(iapod-1))
+                    sx = sx + wx(iapod)
+                    sy = sy + wy(iapod)
+                end do
+                if( abs(sx) > epsilon(1.0) ) wx = wx / sx
+                if( abs(sy) > epsilon(1.0) ) wy = wy / sy
+                ! gen_fplane4rec stores k<=0.  The factor accounts for the
+                ! padded FFT normalization when accumulating on the native 2D grid.
+                if( kp <= 0 )then
+                    fcomp  = KBALPHA**2 * fpl%cmplx_plane(hp,kp)
+                    tvalsq =              fpl%ctfsq_plane(hp,kp)
+                else
+                    fcomp  = KBALPHA**2 * conjg(fpl%cmplx_plane(-hp,-kp))
+                    tvalsq =              fpl%ctfsq_plane(-hp,-kp)
+                endif
+                fcomp  = w_particle * fcomp
+                tvalsq = w_particle * tvalsq
+                do l = 1, wdim
+                    hh = win(1,1) + l - 1
+                    fc = fcomp
+                    if( hh < 0 ) fc = conjg(fc)
+                    hh = cyci_1d(cyc_lims_r(:,1), hh)
+                    do m = 1, wdim
+                        kk = cyci_1d(cyc_lims_r(:,2), win(1,2) + m - 1)
+                        phys = self%fit%comp_addr_phys(hh,kk)
+                        w = wx(l) * wy(m)
+                        self%cmat(phys(1),phys(2),islice) = self%cmat(phys(1),phys(2),islice) + w * fc
+                        self%ctfsq(phys(1),phys(2),islice) = self%ctfsq(phys(1),phys(2),islice) + w * tvalsq
+                    enddo
+                enddo
+            enddo
+        enddo
+        self%slices(islice)%ft = .true.
+    end subroutine stack_accumulate_fplane
+
+    ! Export an un-restored native-grid numerator/CTF^2 sum as a compact
+    ! half-plane fplane.  No CTF-density correction or real-space transform is
+    ! performed; the result is ready for compact 3D KB insertion.
+    module subroutine stack_export_fplane( self, islice, fpl )
+        class(stack),      intent(in)    :: self
+        integer,           intent(in)    :: islice
+        type(fplane_type), intent(inout) :: fpl
+        integer :: lims(3,2), hmin, hmax, kmin, h, k, phys(2)
+        if( islice < 1 .or. islice > self%nslices ) THROW_HARD('invalid slice; stack_export_fplane')
+        lims = self%fit%loop_lims(3)
+        hmin = lims(1,1)
+        hmax = lims(1,2)
+        kmin = lims(2,1)
+        if( allocated(fpl%cmplx_plane) )then
+            if( lbound(fpl%cmplx_plane,1) /= hmin .or. ubound(fpl%cmplx_plane,1) /= hmax .or. &
+                &lbound(fpl%cmplx_plane,2) /= kmin .or. ubound(fpl%cmplx_plane,2) /= 0 )then
+                deallocate(fpl%cmplx_plane)
+            endif
+        endif
+        if( allocated(fpl%ctfsq_plane) )then
+            if( lbound(fpl%ctfsq_plane,1) /= hmin .or. ubound(fpl%ctfsq_plane,1) /= hmax .or. &
+                &lbound(fpl%ctfsq_plane,2) /= kmin .or. ubound(fpl%ctfsq_plane,2) /= 0 )then
+                deallocate(fpl%ctfsq_plane)
+            endif
+        endif
+        if( .not. allocated(fpl%cmplx_plane) ) allocate(fpl%cmplx_plane(hmin:hmax,kmin:0))
+        if( .not. allocated(fpl%ctfsq_plane) ) allocate(fpl%ctfsq_plane(hmin:hmax,kmin:0))
+        if( allocated(fpl%transfer_plane) ) deallocate(fpl%transfer_plane)
+        fpl%frlims  = lims
+        fpl%nyq     = self%fit%get_lfny(1)
+        fpl%shconst = 0.0
+        do k = kmin, 0
+            do h = hmin, hmax
+                phys = self%fit%comp_addr_phys(h,k)
+                if( h < 0 )then
+                    fpl%cmplx_plane(h,k) = conjg(self%cmat(phys(1),phys(2),islice))
+                else
+                    fpl%cmplx_plane(h,k) = self%cmat(phys(1),phys(2),islice)
+                endif
+                fpl%ctfsq_plane(h,k) = self%ctfsq(phys(1),phys(2),islice)
+            enddo
+        enddo
+    end subroutine stack_export_fplane
+
+    module subroutine fourier_accumulator_new( self, ldim, nslices )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        integer,                       intent(in)    :: ldim(2), nslices
+        call self%sums%new_stack(ldim, nslices)
+        call self%sums%zero(.true.)
+    end subroutine fourier_accumulator_new
+
+    module subroutine fourier_accumulator_zero( self )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        call self%sums%zero(.true.)
+    end subroutine fourier_accumulator_zero
+
+    module subroutine fourier_accumulator_add_fplane( self, e3, fpl, islice, weight )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        real,                          intent(in)    :: e3
+        type(fplane_type),             intent(in)    :: fpl
+        integer,                       intent(in)    :: islice
+        real, optional,                intent(in)    :: weight
+        if( present(weight) )then
+            call self%sums%accumulate_fplane(e3, fpl, islice, weight)
+        else
+            call self%sums%accumulate_fplane(e3, fpl, islice)
+        endif
+    end subroutine fourier_accumulator_add_fplane
+
+    module subroutine fourier_accumulator_export_fplane( self, islice, fpl )
+        class(fourier_2d_accumulator), intent(in)    :: self
+        integer,                       intent(in)    :: islice
+        type(fplane_type),             intent(inout) :: fpl
+        call self%sums%export_fplane(islice, fpl)
+    end subroutine fourier_accumulator_export_fplane
+
+    module subroutine fourier_accumulator_kill( self )
+        class(fourier_2d_accumulator), intent(inout) :: self
+        call self%sums%kill_stack
+    end subroutine fourier_accumulator_kill
 
     module subroutine zero_slice( self, is, ft )
         class(stack), intent(inout) :: self

@@ -8,7 +8,8 @@ use simple_builder,                 only: builder
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align
-use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs
+use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, &
+    &calc_projdir3Drec
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
@@ -34,6 +35,7 @@ type :: refine3D_ctrl
     character(len=:), allocatable :: oritype
     logical :: do_write_partial_recs
     logical :: do_prob_align
+    logical :: do_projrec
     logical :: do_sigma_mode
     logical :: do_write_oris
     logical :: do_bench
@@ -182,8 +184,12 @@ contains
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
-            call write_partial_recs(params, build, cline, fpls)
-            call finalize_rec_objs(params, build)
+            if( ctrl%do_projrec )then
+                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
+            else
+                call write_partial_recs(params, build, cline, fpls)
+                call finalize_rec_objs(params, build)
+            endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%pftc%kill
@@ -226,6 +232,7 @@ contains
             ctrl%refine_mode   = trim(p_ptr%refine)
             ctrl%oritype       = trim(p_ptr%oritype)
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
+            ctrl%do_projrec    = trim(p_ptr%projrec) == 'yes'
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
@@ -291,13 +298,15 @@ contains
         end subroutine prepare_refs_sigmas_and_pftc
 
         subroutine maybe_init_reconstruction()
-            if( ctrl%do_write_partial_recs ) call init_rec(params, build, batchsz_max, fpls)
-            if( ctrl%do_write_partial_recs ) call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            if( ctrl%do_write_partial_recs .and. .not. ctrl%do_projrec )then
+                call init_rec(params, build, batchsz_max, fpls)
+                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
+            endif
         end subroutine maybe_init_reconstruction
 
         subroutine build_batch_particles_local()
             logical :: need_rec_imgs
-            need_rec_imgs = ctrl%do_write_partial_recs
+            need_rec_imgs = ctrl%do_write_partial_recs .and. .not. ctrl%do_projrec
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             if( need_rec_imgs )then
                 call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
@@ -368,6 +377,7 @@ contains
 
         subroutine maybe_restore_batch()
             if( .not. ctrl%do_write_partial_recs ) return
+            if( ctrl%do_projrec ) return
             if( ctrl%do_bench ) t_rec = tic()
             call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
                 pinds(batch_start:batch_end), fpls(:batchsz))
@@ -404,6 +414,7 @@ contains
         write(logfhandle,*) 'oritype               : ', ctrl%oritype
         write(logfhandle,*) 'do_write_partial_recs : ', ctrl%do_write_partial_recs
         write(logfhandle,*) 'do_prob_align         : ', ctrl%do_prob_align
+        write(logfhandle,*) 'do_projrec            : ', ctrl%do_projrec
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench

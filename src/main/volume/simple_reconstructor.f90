@@ -214,12 +214,13 @@ contains
     !! It preserves the original h-strided OpenMP race-avoidance scheme, but
     !! scalarizes rotation, inlines fplane access, and updates the two expanded
     !! matrices in one explicit separable-KB stencil pass.
-    subroutine insert_plane_oversamp( self, se, o, fpl )
+    subroutine insert_plane_oversamp( self, se, o, fpl, compact_source )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
+        logical, optional,    intent(in)    :: compact_source
         type(ori) :: o_sym
         complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
@@ -228,7 +229,8 @@ contains
         integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
         integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
-        real      :: pf2, eps_norm, inv_wdim
+        real      :: source_scale, eps_norm, inv_wdim
+        logical   :: l_compact_source
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
         ! stride along h dimension for interpolation: all threads are at least
@@ -244,9 +246,18 @@ contains
             end do
         endif
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
-        fpllims_pd   = fpl%frlims
-        pf           = OSMPL_PAD_FAC
-        pf2          = real(pf*pf)
+        fpllims_pd      = fpl%frlims
+        l_compact_source = .false.
+        if( present(compact_source) ) l_compact_source = compact_source
+        if( l_compact_source )then
+            ! The source is already a native-grid 2D KB numerator/CTF^2 sum.
+            ! Its padded-FFT amplitude scaling was applied during 2D assembly.
+            pf           = 1
+            source_scale = 1.0
+        else
+            pf           = OSMPL_PAD_FAC
+            source_scale = real(pf*pf)
+        endif
         fpllims      = fpllims_pd
         fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
         fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
@@ -298,7 +309,7 @@ contains
                         win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) ) cycle
-                        comp   = pf2 * cmplx_raw
+                        comp   = source_scale * cmplx_raw
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
                         ctfval = ctfsq_raw
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)

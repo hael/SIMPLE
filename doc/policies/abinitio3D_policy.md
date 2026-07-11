@@ -15,6 +15,17 @@ maps.
 It owns stage scheduling. It does not own a separate particle matcher or volume
 assembly implementation.
 
+### Projection-direction reconstruction
+
+`projrec=yes` enables an experimental compact reconstruction path for the
+particle refinement stages. It first assembles raw Fourier numerator and
+CTF-squared sums for each discrete projection direction, state, and even/odd
+half using the same native-grid 2D Kaiser-Bessel interpolation machinery as
+class averaging. Those un-restored sums are inserted directly into the 3D
+partial reconstructions with the 3D Kaiser-Bessel kernel. They are never
+CTF-density corrected and never transformed through real space between the 2D
+and 3D assembly steps. The default is `projrec=no`.
+
 ## 2. Defaults
 
 `abinitio3D` sets:
