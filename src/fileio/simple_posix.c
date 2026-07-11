@@ -75,8 +75,10 @@ static int waitpid(pid_t pid, int *status, int options) { return -1; }
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #ifndef _WIN32
 #include <unistd.h>       /* getpid()  */
+#include <sys/resource.h>
 #else
 #include <process.h>
 #endif
@@ -813,6 +815,25 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
         }
 #endif
         return 0;
+}
+
+/* Peak resident set size for the current process, normalized to bytes.
+ * Linux reports ru_maxrss in KiB while macOS reports bytes.  The kernel
+ * maintains this high-water mark, so callers only need to query it once at
+ * the end of a profiled region. */
+int64_t simple_peak_rss_bytes(void)
+{
+#ifdef _WIN32
+    return -1;
+#else
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return -1;
+#ifdef __APPLE__
+    return (int64_t)usage.ru_maxrss;
+#else
+    return (int64_t)usage.ru_maxrss * 1024;
+#endif
+#endif
 }
 
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)

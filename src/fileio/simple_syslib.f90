@@ -143,6 +143,12 @@ interface
         integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
 
+    function get_peak_rss_bytes() bind(c,name="simple_peak_rss_bytes")
+        use, intrinsic :: iso_c_binding, only: c_int64_t
+        implicit none
+        integer(c_int64_t) :: get_peak_rss_bytes
+    end function get_peak_rss_bytes
+
     function simple_redirect_output_c(filename, len) bind(c,name="simple_redirect_output")
         use, intrinsic :: iso_c_binding
         implicit none

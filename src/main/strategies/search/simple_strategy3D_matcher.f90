@@ -1,4 +1,5 @@
 module simple_strategy3D_matcher
+use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_pftc_srch_api
 use simple_matcher_refvol_utils
 use simple_matcher_ptcl_batch
@@ -13,6 +14,7 @@ use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, w
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
+use simple_syslib,                  only: get_peak_rss_bytes
 use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
@@ -69,9 +71,11 @@ contains
         real                :: frac_greedy
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
-        logical             :: doprint, has_been_searched
+        logical             :: has_been_searched
         logical             :: l_write_partial_recs_present, l_write_partial_recs_value
         ! benchmarking
+        integer(int64) :: peak_rss
+        real(real64)    :: peak_rss_gib
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
@@ -198,32 +202,35 @@ contains
         if( ctrl%do_bench )then
             rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
-            doprint = .true.
-            if( p_ptr%part /= 1 ) doprint = .false.
-            if( doprint )then
-                benchfname = refine3D_bench_fname(which_iter)
-                call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
-                write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
-                write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
-                write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
-                write(fnr,'(a,i0)') 'match3D nspace                      : ', p_ptr%nspace
-                write(fnr,'(a,i0)') 'match3D nstates                     : ', p_ptr%nstates
-                write(fnr,'(a,i0)') 'match3D kfrom                       : ', p_ptr%kfromto(1)
-                write(fnr,'(a,i0)') 'match3D kto                         : ', p_ptr%kfromto(2)
-                write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,t52,f9.2)') 'match3D startup/setup              : ', rt_startup
-                write(fnr,'(a,t52,f9.2)') 'match3D particle preparation       : ', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
-                write(fnr,'(a,t52,f9.2)') 'match3D reference preparation      : ', rt_prep_refs + rt_memoize_refs
-                write(fnr,'(a,t52,f9.2)') 'match3D orientation search         : ', rt_prep_orisrch + rt_align
-                write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O       : ', rt_projio
-                write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction     : ', rt_rec
-                write(fnr,'(a,t52,f9.2)') 'match3D total time                 : ', rt_tot
-                write(fnr,'(a,t52,f9.2)') 'match3D % accounted for            : ', &
-                    &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
-                    &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
-                call fclose(fnr)
-            endif
+            peak_rss = get_peak_rss_bytes()
+            peak_rss_gib = -1.0_real64
+            if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
+            benchfname = refine3D_bench_fname(which_iter, p_ptr%part, p_ptr%numlen)
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
+            write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
+            write(fnr,'(a,i0)') 'match3D nspace                      : ', p_ptr%nspace
+            write(fnr,'(a,i0)') 'match3D nstates                     : ', p_ptr%nstates
+            write(fnr,'(a,i0)') 'match3D kfrom                       : ', p_ptr%kfromto(1)
+            write(fnr,'(a,i0)') 'match3D kto                         : ', p_ptr%kfromto(2)
+            write(fnr,'(a,i0)') 'match3D process partition           : ', p_ptr%part
+            write(fnr,'(a,i0)') 'match3D process pid                 : ', p_ptr%pid
+            write(fnr,'(a,i0)') 'match3D peak RSS (bytes)            : ', peak_rss
+            write(fnr,'(a,f12.3)') 'match3D peak RSS (GiB)              : ', peak_rss_gib
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,t52,f9.2)') 'match3D startup/setup              : ', rt_startup
+            write(fnr,'(a,t52,f9.2)') 'match3D particle preparation       : ', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
+            write(fnr,'(a,t52,f9.2)') 'match3D reference preparation      : ', rt_prep_refs + rt_memoize_refs
+            write(fnr,'(a,t52,f9.2)') 'match3D orientation search         : ', rt_prep_orisrch + rt_align
+            write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O       : ', rt_projio
+            write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction     : ', rt_rec
+            write(fnr,'(a,t52,f9.2)') 'match3D total time                 : ', rt_tot
+            write(fnr,'(a,t52,f9.2)') 'match3D % accounted for            : ', &
+                &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
+                &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
+            call fclose(fnr)
         endif
 
     contains

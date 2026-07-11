@@ -31,6 +31,7 @@ contains
         call test_getenv_wrapper()
         call test_exec_cmdline()
         call test_get_process_id()
+        call test_get_peak_rss_bytes()
         call test_syslib_c2fortran_string()
         call test_find_next_int_dir_prefix()
         call test_print_slurm_env_smoke()
@@ -339,6 +340,18 @@ contains
         pid = get_process_id()
         call assert_true(pid > 0, 'get_process_id: positive pid')
     end subroutine test_get_process_id
+
+    subroutine test_get_peak_rss_bytes()
+        use, intrinsic :: iso_c_binding, only: c_int64_t
+        integer(c_int64_t) :: peak_rss
+        write(*,'(A)') 'test_get_peak_rss_bytes'
+        peak_rss = get_peak_rss_bytes()
+#if defined(_WIN32)
+        call assert_true(peak_rss == -1_c_int64_t, 'get_peak_rss_bytes: unsupported Windows sentinel')
+#else
+        call assert_true(peak_rss > 0_c_int64_t, 'get_peak_rss_bytes: positive process high-water mark')
+#endif
+    end subroutine test_get_peak_rss_bytes
 
     !---------------- syslib_c2fortran_string ----------------
 

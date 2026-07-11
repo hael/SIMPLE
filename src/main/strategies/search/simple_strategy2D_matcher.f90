@@ -8,6 +8,7 @@ use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_bat
                                            s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
 use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_job_finished
+use simple_syslib,                   only: get_peak_rss_bytes
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, cluster2D_requires_full_assignment, &
@@ -434,11 +435,18 @@ contains
         end subroutine finalize_restoration_and_convergence
 
         subroutine maybe_write_bench(which_iter)
+            use, intrinsic :: iso_fortran_env, only: int64, real64
             integer, intent(in) :: which_iter
+            integer(int64) :: peak_rss
+            real(real64)    :: peak_rss_gib
             if( .not. ctrl%do_bench ) return
-            if( p_ptr%part /= 1 ) return
             rt_tot = toc(t_tot)
-            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
+            peak_rss = get_peak_rss_bytes()
+            peak_rss_gib = -1.0_real64
+            if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
+            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)
+            if( p_ptr%part > 1 ) benchfname = benchfname//'_PART'//int2str_pad(p_ptr%part,max(1,p_ptr%numlen))
+            benchfname = benchfname//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match2D refine mode                 : ', trim(ctrl%refine_flag)
@@ -449,6 +457,10 @@ contains
             write(fnr,'(a,i0)') 'match2D nclasses                    : ', p_ptr%ncls
             write(fnr,'(a,i0)') 'match2D kfrom                       : ', p_ptr%kfromto(1)
             write(fnr,'(a,i0)') 'match2D kto                         : ', p_ptr%kfromto(2)
+            write(fnr,'(a,i0)') 'match2D process partition           : ', p_ptr%part
+            write(fnr,'(a,i0)') 'match2D process pid                 : ', p_ptr%pid
+            write(fnr,'(a,i0)') 'match2D peak RSS (bytes)            : ', peak_rss
+            write(fnr,'(a,f12.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,t52,f9.2)') 'match2D startup/setup               : ', rt_startup

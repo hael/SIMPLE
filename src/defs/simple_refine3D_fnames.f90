@@ -177,9 +177,19 @@ contains
         fname = string('reprojection_model')//half_suffix(half)//BIN_EXT
     end function refine3D_reproj_model_fname
 
-    type(string) function refine3D_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
+    type(string) function refine3D_bench_fname( iter, part, numlen ) result(fname)
+        integer, intent(in)           :: iter
+        integer, intent(in), optional :: part, numlen
         fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//TXT_EXT
+        if( present(part) )then
+            if( part > 1 )then
+                if( present(numlen) )then
+                    fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//'_PART'//part_tag(part,numlen)//TXT_EXT
+                else
+                    fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//'_PART'//int2str_pad(part,1)//TXT_EXT
+                endif
+            endif
+        endif
     end function refine3D_bench_fname
 
     type(string) function refine3D_strategy_bench_fname( iter ) result(fname)
