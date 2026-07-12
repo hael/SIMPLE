@@ -1,5 +1,6 @@
 !@descr: 2D probability table routines for multi-reference class assignment with probabilistic sampling
 module simple_eul_prob_tab2D
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
@@ -79,18 +80,14 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, params, build, pinds, empty_okay )
+    subroutine new( self, params, build, pinds )
         class(eul_prob_tab2D),     intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: empty_okay
         integer :: i, icls, iptcl, nactive
         real    :: x
-        logical :: l_empty
         call self%kill
-        l_empty = .false.
-        if( present(empty_okay) ) l_empty = empty_okay
         self%p_ptr     => params
         self%b_ptr     => build
         self%nptcls    = size(pinds)
@@ -1031,7 +1028,8 @@ contains
     subroutine write_tab( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
         class(string),         intent(in) :: binfname
-        integer :: funit, addr, io_stat, file_header(2)
+        integer :: funit, io_stat, file_header(2)
+        integer(int64) :: addr
         if( self%l_sparse_snhc )then
             call self%write_sparse_tab(binfname)
             return
@@ -1051,7 +1049,8 @@ contains
         class(string),         intent(in) :: binfname
         type(ptcl_ref), allocatable :: sparse_tab(:)
         integer,        allocatable :: sparse_refs(:), sparse_counts(:)
-        integer :: funit, addr, io_stat, file_header(3), i, k, icls, nnz, pos
+        integer :: funit, io_stat, file_header(3), i, k, icls, nnz, pos
+        integer(int64) :: addr
         if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
             &THROW_HARD('eul_prob_tab2D%write_sparse_tab; sparse bookkeeping is not allocated')
         nnz = 0
@@ -1103,7 +1102,8 @@ contains
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:), pinds_loc(:)
-        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
+        integer :: funit, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
+        integer(int64) :: addr
         if( self%l_sparse_snhc )then
             call self%read_sparse_tab_to_glob(binfname)
             return
@@ -1154,7 +1154,8 @@ contains
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
         integer,        allocatable :: pinds_loc(:), sparse_counts(:), sparse_refs(:), pind2glob(:)
-        integer :: funit, addr, io_stat, file_header(3), nclasses_loc, nptcls_loc, nnz
+        integer :: funit, io_stat, file_header(3), nclasses_loc, nptcls_loc, nnz
+        integer(int64) :: addr
         integer :: i_loc, i_glob, k, pos, icls, pind, max_pind, seed_nrots_loc
         if( file_exists(binfname) )then
             call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
@@ -1227,10 +1228,9 @@ contains
         call fclose(funit)
     end subroutine write_assignment
 
-    subroutine write_prior_topk( self, binfname, kmax_in )
+    subroutine write_prior_topk( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
         class(string),         intent(in) :: binfname
-        integer, optional,     intent(in) :: kmax_in
         integer, allocatable :: rec_ints(:)
         integer, allocatable :: cand_cls(:), top_ind(:)
         real,    allocatable :: cand_dist(:)
@@ -1239,7 +1239,6 @@ contains
         integer :: i, k, icls, ncand, pick, k_use, k_this, npeaks_detected
         if( self%nptcls < 1 .or. self%nclasses < 1 ) return
         k_use = max(1, nint(PRIOR2D_TOPK_FRAC * real(self%nclasses)))
-        if( present(kmax_in) ) k_use = max(1, min(self%nclasses, kmax_in))
         allocate(rec_ints(k_use), source=0)
         allocate(cand_cls(self%nclasses), cand_dist(self%nclasses))
         allocate(top_ind(k_use))

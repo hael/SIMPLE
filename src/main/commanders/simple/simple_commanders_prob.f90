@@ -74,8 +74,9 @@ contains
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
         l_state_only = str_has_substr(params%refine, 'prob_state')
-        call eulprob_obj_part%new(params, build, pinds, state_only=l_state_only)
+        call eulprob_obj_part%new_worker(params,build,pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part%begin_write(fname)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -87,11 +88,7 @@ contains
                 call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
             endif
         end do
-        if( l_state_only )then
-            call eulprob_obj_part%write_state_tab(fname)
-        else
-            call eulprob_obj_part%write_tab(fname)
-        endif
+        call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
         if( allocated(batches) ) deallocate(batches)
         call build%pftc%kill
@@ -157,7 +154,8 @@ contains
             batches     = split_nobjs_even(nptcls, nbatches)
             batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
             call prepare_prob_neigh_workspace(batchsz_max)
-            call eulprob_obj_part_neigh%new_neigh(params, build, pinds)
+            call eulprob_obj_part_neigh%new_neigh(params,build,pinds)
+            call eulprob_obj_part_neigh%begin_write(outfname)
             do ibatch = 1, nbatches
                 batch_start = batches(ibatch,1)
                 batch_end   = batches(ibatch,2)
@@ -220,7 +218,11 @@ contains
         ! Build the global table only after worker tables are complete.  Keeping it
         ! live while workers build dense partition tables roughly doubles peak RSS.
         l_state_only = str_has_substr(params%refine, 'prob_state')
-        call eulprob_obj_glob%new(params, build, pinds, state_only=l_state_only)
+        if( l_state_only )then
+            call eulprob_obj_glob%new_state(params,build,pinds)
+        else
+            call eulprob_obj_glob%new(params,build,pinds)
+        endif
         ! reading corrs from all parts
         if( l_state_only )then
             do ipart = 1, params%nparts
@@ -276,9 +278,6 @@ contains
         endif
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .true.)
-        ! Global object only needs sampled-set maps before reading partition sparse tables.
-        ! The neighborhood scoring itself is performed in each prob_tab_neigh partition job.
-        call eulprob_obj_glob_neigh%new_neigh(params, build, pinds)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then
@@ -288,6 +287,8 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        ! Construct global storage only after worker scoring has released its table.
+        call eulprob_obj_glob_neigh%new_neigh_global(params,build,pinds)
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
         ! write the iptcl->(iref,istate) assignment

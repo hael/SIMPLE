@@ -36,15 +36,20 @@ contains
         class(builder),    intent(inout) :: build
         integer :: istate, ithr, nrefs, nrefs_sub
         real    :: areal
+        logical :: l_prob_assign
         ! clean all class arrays & types
         call clean_strategy3D()
         ! parameters
         nrefs     = params%nspace     * params%nstates
         nrefs_sub = params%nspace_sub * params%nstates
-        ! shared-memory arrays
-        allocate(s3D%proj_space_shift(2,nrefs,nthr_glob),&
-            &s3D%proj_space_corrs(nrefs,nthr_glob),&
-            &s3D%proj_space_inplinds(nrefs,nthr_glob))
+        l_prob_assign = str_has_substr(params%refine,'prob')
+        ! Probabilistic matching consumes an assignment map directly and never
+        ! produces a per-thread reference-search solution table.
+        if( .not. l_prob_assign )then
+            allocate(s3D%proj_space_shift(2,nrefs,nthr_glob),&
+                &s3D%proj_space_corrs(nrefs,nthr_glob),&
+                &s3D%proj_space_inplinds(nrefs,nthr_glob))
+        endif
         ! states existence
         if( .not.build%spproj%is_virgin_field(params%oritype) )then
             if( str_has_substr(params%refine,'greedy') )then
@@ -55,8 +60,8 @@ contains
         else
             allocate(s3D%state_exists(params%nstates), source=.true.)
         endif
-        s3D%proj_space_shift = 0.
-        s3D%proj_space_corrs = -HUGE(areal)
+        if( allocated(s3D%proj_space_shift) ) s3D%proj_space_shift = 0.
+        if( allocated(s3D%proj_space_corrs) ) s3D%proj_space_corrs = -HUGE(areal)
         ! search orders allocation
         select case( trim(params%refine) )
             case( 'cluster','clustersym','clustersoft','prob','prob_state','prob_neigh')
@@ -80,20 +85,22 @@ contains
         ! calculate peak thresholds for probabilistic searches
         if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
-        allocate(s3D%smpl_refs_athres(params%nstates), s3D%smpl_inpl_athres(params%nstates))
-        do istate = 1, params%nstates
-            s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params%prob_athres, state=istate)
-            s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', prob_athres=params%prob_athres, state=istate)
-        enddo
+        if( .not. l_prob_assign )then
+            allocate(s3D%smpl_refs_athres(params%nstates), s3D%smpl_inpl_athres(params%nstates))
+            do istate = 1, params%nstates
+                s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params%prob_athres, state=istate)
+                s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', prob_athres=params%prob_athres, state=istate)
+            enddo
+        endif
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in) :: ithr
         real(sp)            :: areal
-        s3D%proj_space_corrs(   :,ithr) = -HUGE(areal)
-        s3D%proj_space_shift( :,:,ithr) = 0.
-        s3D%proj_space_inplinds(:,ithr) = 0
+        if( allocated(s3D%proj_space_corrs) )    s3D%proj_space_corrs(:,ithr)       = -HUGE(areal)
+        if( allocated(s3D%proj_space_shift) )    s3D%proj_space_shift(:,:,ithr)     = 0.
+        if( allocated(s3D%proj_space_inplinds) ) s3D%proj_space_inplinds(:,ithr)    = 0
         if(srch_order_allocated)then
             s3D%srch_order(    :,ithr) = 0
             if( allocated(s3D%srch_order_sub) ) s3D%srch_order_sub(:,ithr) = 0

@@ -1,6 +1,8 @@
 !@descr: shared utility routines for probabilistic alignment tables
 module simple_eul_prob_tab_utils
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,      only: TINY
+use simple_error,     only: simple_exception
 use simple_math,      only: hpsort, rotmat2d
 use simple_oris,      only: oris
 use simple_rnd,       only: ran3
@@ -11,7 +13,43 @@ public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist, sample_likelihood_index
+public :: prob_candidate, prob_candidate_buffer, prob_candidate_store
 private
+#include "simple_local_flags.inc"
+
+type :: prob_candidate
+    integer :: iref   = 0
+    integer :: inpl   = 0
+    real    :: dist   = huge(1.0)
+    real    :: x      = 0.
+    real    :: y      = 0.
+    logical :: has_sh = .false.
+end type prob_candidate
+
+! Thread-owned append buffer used while candidate counts are not known in advance.
+! Keeping this common and mode-independent avoids per-search table variants.
+type :: prob_candidate_buffer
+    integer, allocatable              :: particle_indices(:)
+    type(prob_candidate), allocatable :: candidates(:)
+    integer                           :: nused = 0
+contains
+    procedure :: append            => append_candidate
+    procedure :: append_or_replace => append_or_replace_candidate
+    procedure :: get_inpl          => get_buffer_candidate_inpl
+    procedure :: kill              => kill_candidate_buffer
+end type prob_candidate_buffer
+
+type :: prob_candidate_store
+    integer,                 allocatable :: pinds(:)
+    integer(int64),          allocatable :: offsets(:)
+    type(prob_candidate),    allocatable :: candidates(:)
+    real,                    allocatable :: seed_shifts(:,:)
+    logical,                 allocatable :: seed_has_sh(:)
+contains
+    procedure :: new_fixed => new_fixed_candidate_store
+    procedure :: new_ragged => new_ragged_candidate_store
+    procedure :: kill      => kill_candidate_store
+end type prob_candidate_store
 
 interface angle_sampling
     module procedure angle_sampling_1
@@ -26,6 +64,117 @@ abstract interface
 end interface
 
 contains
+
+    subroutine append_candidate( self, particle_index, candidate )
+        class(prob_candidate_buffer), intent(inout) :: self
+        integer,                      intent(in)    :: particle_index
+        type(prob_candidate),         intent(in)    :: candidate
+        integer, allocatable :: particle_indices_tmp(:)
+        type(prob_candidate), allocatable :: candidates_tmp(:)
+        integer :: old_capacity, new_capacity
+        if( .not. allocated(self%candidates) )then
+            allocate(self%particle_indices(256), self%candidates(256))
+        else if( self%nused == size(self%candidates) )then
+            old_capacity = size(self%candidates)
+            new_capacity = max(old_capacity + 1, 2 * old_capacity)
+            allocate(particle_indices_tmp(new_capacity), candidates_tmp(new_capacity))
+            particle_indices_tmp(1:old_capacity) = self%particle_indices
+            candidates_tmp(1:old_capacity)       = self%candidates
+            call move_alloc(particle_indices_tmp, self%particle_indices)
+            call move_alloc(candidates_tmp,       self%candidates)
+        endif
+        self%nused = self%nused + 1
+        self%particle_indices(self%nused) = particle_index
+        self%candidates(self%nused)       = candidate
+    end subroutine append_candidate
+
+    subroutine append_or_replace_candidate( self, particle_index, candidate )
+        class(prob_candidate_buffer), intent(inout) :: self
+        integer,                      intent(in)    :: particle_index
+        type(prob_candidate),         intent(in)    :: candidate
+        integer :: i
+        do i = self%nused, 1, -1
+            if( self%particle_indices(i) /= particle_index ) exit
+            if( self%candidates(i)%iref == candidate%iref )then
+                self%candidates(i) = candidate
+                return
+            endif
+        enddo
+        call self%append(particle_index,candidate)
+    end subroutine append_or_replace_candidate
+
+    integer function get_buffer_candidate_inpl( self, particle_index, full_ref ) result(inpl)
+        class(prob_candidate_buffer), intent(in) :: self
+        integer, intent(in) :: particle_index, full_ref
+        integer :: i
+        inpl = 0
+        do i = self%nused, 1, -1
+            if( self%particle_indices(i) /= particle_index ) exit
+            if( self%candidates(i)%iref == full_ref )then
+                inpl = self%candidates(i)%inpl
+                return
+            endif
+        enddo
+    end function get_buffer_candidate_inpl
+
+    subroutine kill_candidate_buffer( self )
+        class(prob_candidate_buffer), intent(inout) :: self
+        if( allocated(self%particle_indices) ) deallocate(self%particle_indices)
+        if( allocated(self%candidates)        ) deallocate(self%candidates)
+        self%nused = 0
+    end subroutine kill_candidate_buffer
+
+    subroutine new_fixed_candidate_store( self, pinds, ncandidates_per_particle )
+        class(prob_candidate_store), intent(inout) :: self
+        integer,                     intent(in)    :: pinds(:)
+        integer,                     intent(in)    :: ncandidates_per_particle
+        integer :: i, nptcls
+        integer(int64) :: ntot
+        call self%kill
+        if( ncandidates_per_particle < 0 ) THROW_HARD('negative candidate count in new_fixed_candidate_store')
+        nptcls = size(pinds)
+        ntot   = int(nptcls,int64) * int(ncandidates_per_particle,int64)
+        if( ntot > int(huge(1),int64) ) THROW_HARD('candidate store exceeds default-integer array bounds')
+        allocate(self%pinds(nptcls), source=pinds)
+        allocate(self%offsets(nptcls+1))
+        allocate(self%candidates(int(ntot)))
+        allocate(self%seed_shifts(2,nptcls), source=0.)
+        allocate(self%seed_has_sh(nptcls), source=.false.)
+        do i = 1,nptcls+1
+            self%offsets(i) = 1_int64 + int(i-1,int64) * int(ncandidates_per_particle,int64)
+        enddo
+    end subroutine new_fixed_candidate_store
+
+    subroutine new_ragged_candidate_store( self, pinds, candidate_counts )
+        class(prob_candidate_store), intent(inout) :: self
+        integer,                     intent(in)    :: pinds(:), candidate_counts(:)
+        integer :: i, nptcls
+        integer(int64) :: ntot
+        call self%kill
+        nptcls = size(pinds)
+        if( size(candidate_counts) /= nptcls ) THROW_HARD('candidate-count size mismatch in new_ragged_candidate_store')
+        if( any(candidate_counts < 0) ) THROW_HARD('negative candidate count in new_ragged_candidate_store')
+        allocate(self%pinds(nptcls), source=pinds)
+        allocate(self%offsets(nptcls+1))
+        self%offsets(1) = 1_int64
+        do i = 1,nptcls
+            self%offsets(i+1) = self%offsets(i) + int(candidate_counts(i),int64)
+        enddo
+        ntot = self%offsets(nptcls+1) - 1_int64
+        if( ntot > int(huge(1),int64) ) THROW_HARD('candidate store exceeds default-integer array bounds')
+        allocate(self%candidates(int(ntot)))
+        allocate(self%seed_shifts(2,nptcls), source=0.)
+        allocate(self%seed_has_sh(nptcls), source=.false.)
+    end subroutine new_ragged_candidate_store
+
+    subroutine kill_candidate_store( self )
+        class(prob_candidate_store), intent(inout) :: self
+        if( allocated(self%pinds)        ) deallocate(self%pinds)
+        if( allocated(self%offsets)      ) deallocate(self%offsets)
+        if( allocated(self%candidates)   ) deallocate(self%candidates)
+        if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)
+        if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
+    end subroutine kill_candidate_store
 
     subroutine build_pind_lookup( glob_pinds, loc_pinds, pind2glob, max_pind )
         integer,              intent(in)  :: glob_pinds(:), loc_pinds(:)
@@ -71,7 +220,7 @@ contains
 
     subroutine write_seed_shift_table( funit, addr, seed_nrots, seed_shifts, seed_has_sh )
         integer, intent(in)    :: funit
-        integer, intent(inout) :: addr
+        integer(int64), intent(inout) :: addr
         integer, intent(in)    :: seed_nrots
         real,    intent(in)    :: seed_shifts(:,:)
         logical, intent(in)    :: seed_has_sh(:)
@@ -85,7 +234,7 @@ contains
 
     subroutine read_seed_shift_table( funit, addr, seed_nrots, seed_shifts, seed_has_sh )
         integer, intent(in)    :: funit
-        integer, intent(inout) :: addr
+        integer(int64), intent(inout) :: addr
         integer, intent(out)   :: seed_nrots
         real,    intent(out)   :: seed_shifts(:,:)
         logical, intent(out)   :: seed_has_sh(:)

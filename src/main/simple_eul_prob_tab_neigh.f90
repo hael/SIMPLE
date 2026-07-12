@@ -1,11 +1,13 @@
 !@descr: neighborhood extension of probabilistic 3D search table.
 ! The sparse neighborhood is geometrically sparse and searched independently per state.
 module simple_eul_prob_tab_neigh
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, eulprob_dist_switch,&
-    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, write_seed_shift_table
+    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
+    &prob_candidate, prob_candidate_store
 use simple_decay_funs,        only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
@@ -17,18 +19,17 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
-    integer, allocatable    :: eval_touched_refs(:,:)
-    integer, allocatable    :: eval_touched_counts(:)
-    integer                 :: eval_max_touched     = 0
+    type(prob_candidate_store) :: candidate_store
+    integer, allocatable        :: candidate_fill_counts(:)
     logical                 :: l_direct_stoch_neigh = .false.
 contains
     procedure :: new_neigh
+    procedure :: new_neigh_global
     procedure :: fill_tab      => fill_tab_neigh
     procedure :: fill_tab_range => fill_tab_neigh_range
     procedure :: ref_normalize => ref_normalize_neigh
     procedure :: ref_assign    => ref_assign_neigh
     procedure :: kill          => kill_neigh
-    procedure :: write_tab     => write_tab_neigh
     procedure :: read_tabs_to_glob
     procedure, private :: read_sparse_tab_to_glob
 end type eul_prob_tab_neigh
@@ -66,24 +67,32 @@ end type coarse_search_ws
 
 contains
 
-    subroutine new_neigh( self, params, build, pinds, empty_okay )
+    subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: empty_okay
+        call self%eul_prob_tab%new_worker(params,build,pinds)
+        call validate_neigh_mode(self)
+    end subroutine new_neigh
+
+    subroutine new_neigh_global( self, params, build, pinds )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        call self%eul_prob_tab%new_compact_global(params,build,pinds)
+        call validate_neigh_mode(self)
+    end subroutine new_neigh_global
+
+    subroutine validate_neigh_mode( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
         integer :: nsubs
-        logical :: l_empty_okay
-        call self%kill
-        select case(trim(params%prob_neigh_mode))
+        select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
                 self%l_direct_stoch_neigh = .true.
-                call self%eul_prob_tab%new(params, build, pinds, .true.)
             case('geom','state')
                 self%l_direct_stoch_neigh = .false.
-                l_empty_okay = .false.
-                if( present(empty_okay) ) l_empty_okay = empty_okay
-                call self%eul_prob_tab%new(params, build, pinds, l_empty_okay)
                 if( .not. allocated(self%b_ptr%subspace_inds) )then
                     THROW_HARD('simple_eul_prob_tab_neigh::new_neigh; missing subspace indices')
                 endif
@@ -94,11 +103,7 @@ contains
             case DEFAULT
                 THROW_HARD('simple_eul_prob_tab_neigh::new_neigh; unsupported prob_neigh_mode')
         end select
-        ! Sparse support now spans neighborhoods across all active states.
-        self%eval_max_touched = max(1, self%nrefs)
-        allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-        allocate(self%eval_touched_counts(self%nptcls),                     source=0)
-    end subroutine new_neigh
+    end subroutine validate_neigh_mode
 
     ! Fills the full particle range by delegating to fill_tab_neigh_range(1, nptcls).
     subroutine fill_tab_neigh( self )
@@ -110,11 +115,6 @@ contains
     subroutine fill_tab_neigh_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
-        if( self%eval_max_touched < 1 ) self%eval_max_touched = 1
-        if( .not. allocated(self%eval_touched_refs) )&
-            &allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-        if( .not. allocated(self%eval_touched_counts) )&
-            &allocate(self%eval_touched_counts(self%nptcls), source=0)
         ! Search paths
         select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
@@ -126,6 +126,7 @@ contains
             case DEFAULT
                 THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_neigh_range; unsupported prob_neigh_mode')
         end select
+        if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_neigh_range
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
@@ -154,7 +155,6 @@ contains
         if( i_to < i_from ) return
         call seed_rnd
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
-        call clear_sparse_eval_table_range(self, i_from, i_to)
         allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
         allocate(dists_inpl(nrots,nthr_glob), dists_inpl_sorted(nrots,nthr_glob),&
             &corrs_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
@@ -272,7 +272,7 @@ contains
                 if( ri_loc < 1 ) cycle
                 call score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed, l_with_shift,&
                     &l_snhc_neigh, power_loc, smpl_ninpl, dist_loc, corr_loc, irot_loc)
-                call record_sparse_eval(self, i_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
+                call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
                 neval_loc = neval_loc + 1
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
                 eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
@@ -381,7 +381,6 @@ contains
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         npooled_capacity = min(nsubs, max(1, npeak_target * max(1, self%nstates)))
-        call clear_sparse_eval_table_range(self, i_from, i_to)
         allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
         allocate(dists_inpl(nrots,nthr_glob), dists_inpl_sorted(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
         max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
@@ -474,7 +473,7 @@ contains
                     call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace)
                     if( ri_loc > 0 )&
-                        &call record_sparse_eval(self, i_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
+                        &call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                 enddo
             enddo
         end subroutine find_peak_subspaces
@@ -628,8 +627,8 @@ contains
                     do kref_loc = 1,nrefs_sub_loc
                         ri_loc = eval_work%sub_ref_list(offset_loc + kref_loc - 1)
                         if( ri_loc < 1 ) cycle
-                        iproj_loc = self%jinds(ri_loc)
-                        iref_loc  = (istate_loc-1)*self%p_ptr%nspace + iproj_loc
+                        iproj_loc = self%ref_proj(ri_loc)
+                        iref_loc  = self%ref_full(ri_loc)
                         if( l_likelihood_inpl )then
                             if( l_with_shift )then
                                 call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
@@ -662,7 +661,7 @@ contains
                                 &inpl_athres(istate_loc), self%p_ptr%prob_athres)
                             dist = dists_inpl(irot_loc,ithr_loc)
                         endif
-                        call record_sparse_eval(self, i_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
+                        call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                         neval = neval + 1
                         eval_work%evaluated_ref_ids(neval,ithr_loc)   = ri_loc
                         eval_work%evaluated_ref_dists(neval,ithr_loc) = dist
@@ -686,28 +685,26 @@ contains
     subroutine ref_normalize_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
-        integer :: i, iref, k
+        integer :: i, pos, first, last
         logical :: any_eval
         ! normalize only over evaluated refs (inpl > 0)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref,sum_dist_all)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last,sum_dist_all)
         do i = 1, self%nptcls
+            first = int(self%candidate_store%offsets(i))
+            last  = int(self%candidate_store%offsets(i+1)) - 1
             sum_dist_all = 0.
-            do k = 1,self%eval_touched_counts(i)
-                iref = self%eval_touched_refs(k,i)
-                if( iref < 1 .or. iref > self%nrefs ) cycle
-                if( self%loc_tab(iref,i)%inpl > 0 ) sum_dist_all = sum_dist_all + self%loc_tab(iref,i)%dist
+            do pos = first,last
+                if( self%candidate_store%candidates(pos)%inpl > 0 )&
+                    &sum_dist_all = sum_dist_all + self%candidate_store%candidates(pos)%dist
             enddo
             if( sum_dist_all < TINY )then
-                do k = 1,self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
-                    if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = 0.
+                do pos = first,last
+                    if( self%candidate_store%candidates(pos)%inpl > 0 ) self%candidate_store%candidates(pos)%dist = 0.
                 enddo
             else
-                do k = 1,self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
-                    if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = self%loc_tab(iref,i)%dist / sum_dist_all
+                do pos = first,last
+                    if( self%candidate_store%candidates(pos)%inpl > 0 )&
+                        &self%candidate_store%candidates(pos)%dist = self%candidate_store%candidates(pos)%dist / sum_dist_all
                 enddo
             endif
         enddo
@@ -715,15 +712,15 @@ contains
         min_dist = huge(1.0)
         max_dist = -huge(1.0)
         any_eval = .false.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)&
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)&
         !$omp reduction(min:min_dist) reduction(max:max_dist) reduction(.or.:any_eval)
         do i = 1,self%nptcls
-            do k = 1,self%eval_touched_counts(i)
-                iref = self%eval_touched_refs(k,i)
-                if( iref < 1 .or. iref > self%nrefs ) cycle
-                if( self%loc_tab(iref,i)%inpl <= 0 ) cycle
-                min_dist = min(min_dist, self%loc_tab(iref,i)%dist)
-                max_dist = max(max_dist, self%loc_tab(iref,i)%dist)
+            first = int(self%candidate_store%offsets(i))
+            last  = int(self%candidate_store%offsets(i+1)) - 1
+            do pos = first,last
+                if( self%candidate_store%candidates(pos)%inpl <= 0 ) cycle
+                min_dist = min(min_dist, self%candidate_store%candidates(pos)%dist)
+                max_dist = max(max_dist, self%candidate_store%candidates(pos)%dist)
                 any_eval = .true.
             enddo
         enddo
@@ -732,23 +729,24 @@ contains
         if( (max_dist - min_dist) < TINY )then
             THROW_WARN('WARNING: numerical unstability in eul_prob_tab_neigh normalize')
             ! dense-style stochastic tie break over evaluated entries only.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)
             do i = 1,self%nptcls
-                do k = 1,self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
-                    if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%loc_tab(iref,i)%inpl > 0 ) self%loc_tab(iref,i)%dist = ran3()
+                first = int(self%candidate_store%offsets(i))
+                last  = int(self%candidate_store%offsets(i+1)) - 1
+                do pos = first,last
+                    if( self%candidate_store%candidates(pos)%inpl > 0 ) self%candidate_store%candidates(pos)%dist = ran3()
                 enddo
             enddo
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,k,iref)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)
             do i = 1,self%nptcls
-                do k = 1,self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
-                    if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%loc_tab(iref,i)%inpl > 0 )&
-                    &self%loc_tab(iref,i)%dist = (self%loc_tab(iref,i)%dist - min_dist) / (max_dist - min_dist)
+                first = int(self%candidate_store%offsets(i))
+                last  = int(self%candidate_store%offsets(i+1)) - 1
+                do pos = first,last
+                    if( self%candidate_store%candidates(pos)%inpl > 0 )&
+                        &self%candidate_store%candidates(pos)%dist = &
+                        &(self%candidate_store%candidates(pos)%dist - min_dist) / (max_dist - min_dist)
                 enddo
             enddo
             !$omp end parallel do
@@ -768,11 +766,12 @@ contains
         type :: assign_graph_ws
             integer, allocatable :: ref_counts(:), ref_offsets(:), ref_fill(:), ref_list(:), ref_pos(:), active_refs(:)
             integer, allocatable :: ptcl_counts(:), ptcl_offsets(:), ptcl_fill(:), ptcl_refs(:)
+            integer, allocatable :: ref_candidate_pos(:)
             real,    allocatable :: ref_dists(:)
         end type assign_graph_ws
 
         type :: assign_frontier_ws
-            integer, allocatable :: inds_sorted(:), order(:), work_ptcl(:), sel_refs(:), sel_pos(:)
+            integer, allocatable :: inds_sorted(:), order(:), work_ptcl(:), work_cpos(:), sel_refs(:), sel_pos(:)
             real,    allocatable :: iref_dist(:), dists_sorted(:), work_d(:), sel_dists(:), sel_dists_sorted(:)
             logical, allocatable :: ptcl_avail(:)
         end type assign_frontier_ws
@@ -783,6 +782,7 @@ contains
         integer, allocatable :: inds_sorted(:)
         integer   :: i, iref, assigned_iref, assigned_ptcl, istate, si, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
+        integer   :: candidate_pos, first_candidate, last_candidate
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val, dist_tmp, corr_tmp
@@ -811,10 +811,12 @@ contains
             graph%ref_counts = 0
             graph%ptcl_counts = 0
             do i = 1, self%nptcls
-                do k = 1, self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
+                first_candidate = int(self%candidate_store%offsets(i))
+                last_candidate  = int(self%candidate_store%offsets(i+1)) - 1
+                do candidate_pos = first_candidate,last_candidate
+                    iref = self%full_to_compact_ref(self%candidate_store%candidates(candidate_pos)%iref)
                     if( iref < 1 .or. iref > self%nrefs       ) cycle
-                    if( self%loc_tab(iref,i)%inpl <= 0        ) cycle
+                    if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 ) cycle
                     graph%ref_counts(iref) = graph%ref_counts(iref) + 1
                     graph%ptcl_counts(i)   = graph%ptcl_counts(i) + 1
                 enddo
@@ -827,7 +829,7 @@ contains
                 graph%ref_offsets(iref+1) = graph%ref_offsets(iref) + graph%ref_counts(iref)
             enddo
             total = graph%ref_offsets(self%nrefs+1) - 1
-            allocate(graph%ref_list(max(1,total)), graph%ref_dists(max(1,total)))
+            allocate(graph%ref_list(max(1,total)), graph%ref_candidate_pos(max(1,total)), graph%ref_dists(max(1,total)))
             graph%ptcl_offsets(1) = 1
             do i = 1, self%nptcls
                 graph%ptcl_offsets(i+1) = graph%ptcl_offsets(i) + graph%ptcl_counts(i)
@@ -836,13 +838,16 @@ contains
             graph%ref_fill = graph%ref_offsets(1:self%nrefs)
             graph%ptcl_fill = graph%ptcl_offsets(1:self%nptcls)
             do i = 1, self%nptcls
-                do k = 1, self%eval_touched_counts(i)
-                    iref = self%eval_touched_refs(k,i)
+                first_candidate = int(self%candidate_store%offsets(i))
+                last_candidate  = int(self%candidate_store%offsets(i+1)) - 1
+                do candidate_pos = first_candidate,last_candidate
+                    iref = self%full_to_compact_ref(self%candidate_store%candidates(candidate_pos)%iref)
                     if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%loc_tab(iref,i)%inpl <= 0   ) cycle
+                    if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 ) cycle
                     idx = graph%ref_fill(iref)
-                    graph%ref_list(idx)  = i
-                    graph%ref_dists(idx) = self%loc_tab(iref,i)%dist
+                    graph%ref_list(idx)          = i
+                    graph%ref_candidate_pos(idx) = candidate_pos
+                    graph%ref_dists(idx)         = self%candidate_store%candidates(candidate_pos)%dist
                     graph%ref_fill(iref) = idx + 1
                     idx = graph%ptcl_fill(i)
                     graph%ptcl_refs(idx) = iref
@@ -850,7 +855,7 @@ contains
                 enddo
             enddo
             maxref = max(1, maxval(graph%ref_counts))
-            allocate(frontier%work_d(maxref), frontier%order(maxref), frontier%work_ptcl(maxref))
+            allocate(frontier%work_d(maxref), frontier%order(maxref), frontier%work_ptcl(maxref), frontier%work_cpos(maxref))
             allocate(frontier%sel_refs(max(1,nactive)), frontier%sel_pos(self%nrefs), frontier%sel_dists(max(1,nactive)),&
             &frontier%sel_dists_sorted(max(1,nactive)))
             frontier%sel_pos = 0
@@ -861,11 +866,13 @@ contains
                 start = graph%ref_offsets(iref)
                 frontier%work_d(1:m)    = graph%ref_dists(start:start+m-1)
                 frontier%work_ptcl(1:m) = graph%ref_list(start:start+m-1)
+                frontier%work_cpos(1:m) = graph%ref_candidate_pos(start:start+m-1)
                 frontier%order(1:m)     = (/(k,k=1,m)/)
                 call hpsort(frontier%work_d(1:m), frontier%order(1:m))
                 do k = 1, m
                     graph%ref_dists(start+k-1) = frontier%work_d(k)
                     graph%ref_list(start+k-1)  = frontier%work_ptcl(frontier%order(k))
+                    graph%ref_candidate_pos(start+k-1) = frontier%work_cpos(frontier%order(k))
                 enddo
             enddo
         end subroutine build_sparse_assignment_graph
@@ -919,7 +926,7 @@ contains
                 assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
-                greedy_state(assigned_ptcl) = self%sinds(assigned_iref)
+                greedy_state(assigned_ptcl) = self%ref_state(assigned_iref)
                 frontier%ptcl_avail(assigned_ptcl) = .false.
                 nleft = nleft - 1
                 call update_frontier_after_assignment(assigned_ptcl)
@@ -927,7 +934,7 @@ contains
             do i = 1,self%nptcls
                 if( greedy_state(i) == 0 )then
                     fallback_ref = pick_best_evaluated_ref(i)
-                    if( fallback_ref > 0 ) greedy_state(i) = self%sinds(fallback_ref)
+                    if( fallback_ref > 0 ) greedy_state(i) = self%ref_state(fallback_ref)
                 endif
             enddo
         end subroutine assign_greedy_state_labels
@@ -971,11 +978,12 @@ contains
 
         subroutine commit_selected_assignment()
             assigned_iref = frontier%sel_refs(assigned_idx)
-            assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
+            idx = graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1
+            assigned_ptcl = graph%ref_list(idx)
             frontier%ptcl_avail(assigned_ptcl) = .false.
             final_assigned(assigned_ptcl) = .true.
             nleft = nleft - 1
-            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
+            call self%assign_candidate(assigned_ptcl, self%candidate_store%candidates(graph%ref_candidate_pos(idx)))
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
@@ -999,21 +1007,23 @@ contains
             do i = 1, self%nptcls
                 if( .not. frontier%ptcl_avail(i) ) cycle
                 if( self%nstates > 1 .and. greedy_state(i) > 0 )then
-                    fallback_ref = pick_best_evaluated_ref(i, greedy_state(i))
+                    fallback_ref = pick_best_evaluated_ref_for_state(i,greedy_state(i))
                 else
                     fallback_ref = pick_best_evaluated_ref(i)
                 endif
                 if( fallback_ref == 0 )then
                     call seed_fallback_if_empty(i)
                     if( self%nstates > 1 .and. greedy_state(i) > 0 )then
-                        fallback_ref = pick_best_evaluated_ref(i, greedy_state(i))
+                        fallback_ref = pick_best_evaluated_ref_for_state(i,greedy_state(i))
                     else
                         fallback_ref = pick_best_evaluated_ref(i)
                     endif
                 endif
                 if( fallback_ref == 0 ) fallback_ref = pick_best_evaluated_ref(i)
                 if( fallback_ref == 0 ) fallback_ref = 1
-                self%assgn_map(i) = self%loc_tab(fallback_ref,i)
+                candidate_pos = find_candidate_position(i, fallback_ref)
+                if( candidate_pos < 1 ) THROW_HARD('missing fallback candidate in sparse assignment')
+                call self%assign_candidate(i, self%candidate_store%candidates(candidate_pos))
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 self%assgn_map(i)%frac = search_frac(i)
@@ -1024,32 +1034,66 @@ contains
         real function search_frac(iptcl_loc)
             integer, intent(in) :: iptcl_loc
             if( self%l_direct_stoch_neigh .and. self%nrefs > 0 )then
-                search_frac = 100.0 * real(self%eval_touched_counts(iptcl_loc)) / real(self%nrefs)
+                search_frac = 100.0 * real(particle_evaluated_count(iptcl_loc)) / real(self%nrefs)
             else
                 search_frac = 100.0
             endif
         end function search_frac
 
-        integer function pick_best_evaluated_ref(iptcl_loc, state_filter) result(ri_best)
+        integer function pick_best_evaluated_ref(iptcl_loc) result(ri_best)
             integer, intent(in) :: iptcl_loc
-            integer, intent(in), optional :: state_filter
-            integer :: kt, ri_loc
+            ri_best = pick_best_evaluated_ref_filtered(iptcl_loc,0)
+        end function pick_best_evaluated_ref
+
+        integer function pick_best_evaluated_ref_for_state(iptcl_loc,state_filter) result(ri_best)
+            integer, intent(in) :: iptcl_loc, state_filter
+            ri_best = pick_best_evaluated_ref_filtered(iptcl_loc,state_filter)
+        end function pick_best_evaluated_ref_for_state
+
+        integer function pick_best_evaluated_ref_filtered(iptcl_loc,state_filter) result(ri_best)
+            integer, intent(in) :: iptcl_loc
+            integer, intent(in) :: state_filter
+            integer :: pos_loc, ri_loc, first_loc, last_loc
             real    :: best_dist
             ri_best = 0
             best_dist = huge(1.0)
-            do kt = 1, self%eval_touched_counts(iptcl_loc)
-                ri_loc = self%eval_touched_refs(kt,iptcl_loc)
+            first_loc = int(self%candidate_store%offsets(iptcl_loc))
+            last_loc  = int(self%candidate_store%offsets(iptcl_loc+1)) - 1
+            do pos_loc = first_loc,last_loc
+                ri_loc = self%full_to_compact_ref(self%candidate_store%candidates(pos_loc)%iref)
                 if( ri_loc < 1 .or. ri_loc > self%nrefs ) cycle
-                if( self%loc_tab(ri_loc,iptcl_loc)%inpl <= 0 ) cycle
-                if( present(state_filter) )then
-                    if( self%sinds(ri_loc) /= state_filter ) cycle
-                endif
-                if( self%loc_tab(ri_loc,iptcl_loc)%dist < best_dist )then
-                    best_dist = self%loc_tab(ri_loc,iptcl_loc)%dist
+                if( self%candidate_store%candidates(pos_loc)%inpl <= 0 ) cycle
+                if( state_filter > 0 .and. self%ref_state(ri_loc) /= state_filter ) cycle
+                if( self%candidate_store%candidates(pos_loc)%dist < best_dist )then
+                    best_dist = self%candidate_store%candidates(pos_loc)%dist
                     ri_best   = ri_loc
                 endif
             enddo
-        end function pick_best_evaluated_ref
+        end function pick_best_evaluated_ref_filtered
+
+        integer function find_candidate_position(iptcl_loc, iref_loc) result(pos_found)
+            integer, intent(in) :: iptcl_loc, iref_loc
+            integer :: pos_loc, first_loc, last_loc
+            pos_found = 0
+            first_loc = int(self%candidate_store%offsets(iptcl_loc))
+            last_loc  = int(self%candidate_store%offsets(iptcl_loc+1)) - 1
+            do pos_loc = first_loc,last_loc
+                if( self%full_to_compact_ref(self%candidate_store%candidates(pos_loc)%iref) == iref_loc )then
+                    pos_found = pos_loc
+                    return
+                endif
+            enddo
+        end function find_candidate_position
+
+        integer function particle_evaluated_count(iptcl_loc) result(nevaluated)
+            integer, intent(in) :: iptcl_loc
+            integer :: pos_loc
+            nevaluated = 0
+            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)),&
+                &int(self%candidate_store%offsets(iptcl_loc+1))-1
+                if( self%candidate_store%candidates(pos_loc)%inpl > 0 ) nevaluated = nevaluated + 1
+            enddo
+        end function particle_evaluated_count
 
         subroutine seed_fallback_if_empty(iptcl_loc)
             integer, intent(in) :: iptcl_loc
@@ -1065,23 +1109,25 @@ contains
             iproj_loc = max(1, min(self%p_ptr%nspace, iproj_loc))
             fallback_ref_loc = 0
             do ri_loc = 1, self%nrefs
-                if( self%sinds(ri_loc) == istate_loc .and. self%jinds(ri_loc) == iproj_loc )then
+                if( self%ref_state(ri_loc) == istate_loc .and. self%ref_proj(ri_loc) == iproj_loc )then
                     fallback_ref_loc = ri_loc
                     exit
                 endif
             enddo
             if( fallback_ref_loc == 0 )then
                 do ri_loc = 1, self%nrefs
-                    if( self%sinds(ri_loc) == istate_loc )then
+                    if( self%ref_state(ri_loc) == istate_loc )then
                         fallback_ref_loc = ri_loc
                         exit
                     endif
                 enddo
             endif
             if( fallback_ref_loc == 0 ) fallback_ref_loc = 1
-            if( self%loc_tab(fallback_ref_loc,iptcl_loc)%inpl <= 0 )then
-                fallback_state    = self%sinds(fallback_ref_loc)
-                fallback_proj     = self%jinds(fallback_ref_loc)
+            candidate_pos = find_candidate_position(iptcl_loc, fallback_ref_loc)
+            if( candidate_pos < 1 ) candidate_pos = int(self%candidate_store%offsets(iptcl_loc))
+            if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 )then
+                fallback_state    = self%ref_state(fallback_ref_loc)
+                fallback_proj     = self%ref_proj(fallback_ref_loc)
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
@@ -1117,13 +1163,13 @@ contains
                     dist = dists_inpl(irot_loc)
                 endif
                 if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%dist   = dist
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%inpl   = irot_loc
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%x      = sh_seed(1)
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%y      = sh_seed(2)
-                self%loc_tab(fallback_ref_loc,iptcl_loc)%has_sh = self%p_ptr%l_doshift
+                self%candidate_store%candidates(candidate_pos)%iref   = self%ref_full(fallback_ref_loc)
+                self%candidate_store%candidates(candidate_pos)%dist   = dist
+                self%candidate_store%candidates(candidate_pos)%inpl   = irot_loc
+                self%candidate_store%candidates(candidate_pos)%x      = sh_seed(1)
+                self%candidate_store%candidates(candidate_pos)%y      = sh_seed(2)
+                self%candidate_store%candidates(candidate_pos)%has_sh = self%p_ptr%l_doshift
             endif
-            call mark_ref_touched(self, iptcl_loc, fallback_ref_loc)
             call o_prev%kill
         end subroutine seed_fallback_if_empty
 
@@ -1143,7 +1189,7 @@ contains
                         frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
                         return
                     endif
-                    if( greedy_state(cand) == self%sinds(iref) )then
+                    if( greedy_state(cand) == self%ref_state(iref) )then
                         frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
                         return
                     endif
@@ -1196,65 +1242,19 @@ contains
 
     ! Table & Assignment I/O
 
-    ! Serialises the sparse evaluation table to a binary file
-    subroutine write_tab_neigh( self, binfname )
-        class(eul_prob_tab_neigh), intent(in) :: self
-        class(string),             intent(in) :: binfname
-        type(ptcl_ref), allocatable :: sparse_tab(:)
-        integer,        allocatable :: sparse_refs(:), sparse_counts(:)
-        integer :: funit, addr, io_stat, file_header(3), i, k, ri, nnz, pos
-        nnz = 0
-        allocate(sparse_counts(self%nptcls), source=0)
-        do i = 1,self%nptcls
-            do k = 1,self%eval_touched_counts(i)
-                ri = self%eval_touched_refs(k,i)
-                if( ri < 1 .or. ri > self%nrefs ) cycle
-                if( self%loc_tab(ri,i)%inpl <= 0 ) cycle
-                sparse_counts(i) = sparse_counts(i) + 1
-                nnz = nnz + 1
-            enddo
-        enddo
-        if( nnz < 1 ) THROW_HARD('eul_prob_tab_neigh%write_tab_neigh; empty sparse table')
-        allocate(sparse_refs(nnz), sparse_tab(nnz))
-        pos = 0
-        do i = 1,self%nptcls
-            do k = 1,self%eval_touched_counts(i)
-                ri = self%eval_touched_refs(k,i)
-                if( ri < 1 .or. ri > self%nrefs ) cycle
-                if( self%loc_tab(ri,i)%inpl <= 0 ) cycle
-                pos = pos + 1
-                sparse_refs(pos) = ri
-                sparse_tab(pos)  = self%loc_tab(ri,i)
-            enddo
-        enddo
-        file_header(1) = self%nrefs
-        file_header(2) = self%nptcls
-        file_header(3) = nnz
-        call fopen(funit,binfname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1) file_header
-        addr = sizeof(file_header) + 1
-        write(funit, pos=addr) self%pinds
-        addr = addr + sizeof(self%pinds)
-        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
-        write(funit, pos=addr) sparse_counts
-        addr = addr + sizeof(sparse_counts)
-        write(funit, pos=addr) sparse_refs
-        addr = addr + sizeof(sparse_refs)
-        write(funit, pos=addr) sparse_tab
-        call fclose(funit)
-        deallocate(sparse_tab, sparse_refs, sparse_counts)
-    end subroutine write_tab_neigh
-
-    ! Reads one partition sparse table and merges it into self%loc_tab
+    ! Reads one partition candidate stream into the compact global store.
     subroutine read_sparse_tab_to_glob( self, binfname )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string),             intent(in)    :: binfname
-        type(ptcl_ref), allocatable :: sparse_tab(:)
+        integer, parameter :: IO_CHUNK = 65536
+        type(prob_candidate), allocatable :: candidates_loc(:)
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
-        integer,        allocatable :: pinds_loc(:), sparse_counts(:), sparse_refs(:), pind2glob(:)
-        integer :: funit, addr, io_stat, file_header(3), nrefs_loc, nptcls_loc, nnz
-        integer :: i_loc, i_glob, k, pos, ri, pind, max_pind, seed_nrots_loc
+        integer,        allocatable :: pinds_loc(:), particle_indices(:), pind2glob(:)
+        integer :: funit, io_stat, nrefs_loc, nptcls_loc, nchunks
+        integer :: i_loc, i_glob, ichunk, chunk_n, first, last, nread, j, pind, max_pind, seed_nrots_loc
+        integer :: candidate_pos
+        integer(int64) :: file_header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
         if( file_exists(binfname) )then
             call fopen(funit,binfname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab_neigh; read_sparse_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -1262,33 +1262,25 @@ contains
             THROW_HARD( 'sparse corr/rot files of partitions should be ready! ' )
         endif
         read(unit=funit,pos=1) file_header
-        nrefs_loc  = file_header(1)
-        nptcls_loc = file_header(2)
+        nrefs_loc  = int(file_header(1))
+        nptcls_loc = int(file_header(2))
         nnz        = file_header(3)
+        nchunks    = int(file_header(4))
         if( nrefs_loc .ne. self%nrefs ) THROW_HARD('nrefs mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         if( nnz < 1 ) THROW_HARD('empty sparse table in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
-        allocate(sparse_counts(nptcls_loc), sparse_refs(nnz), sparse_tab(nnz))
         addr = sizeof(file_header) + 1
         read(funit, pos=addr) pinds_loc
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        read(funit, pos=addr) sparse_counts
-        addr = addr + sizeof(sparse_counts)
-        read(funit, pos=addr) sparse_refs
-        addr = addr + sizeof(sparse_refs)
-        read(funit, pos=addr) sparse_tab
-        call fclose(funit)
-        if( any(sparse_counts < 0) .or. sum(sparse_counts) /= nnz )&
-            &THROW_HARD('sparse table count mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
         if( max_pind < 1 )then
-            deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
+            call fclose(funit)
+            deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob)
             return
         endif
-        pos = 0
         do i_loc = 1,nptcls_loc
             pind = pinds_loc(i_loc)
             i_glob = 0
@@ -1296,23 +1288,43 @@ contains
             if( i_glob > 0 )then
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+                self%candidate_store%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
+                self%candidate_store%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
             endif
-            do k = 1,sparse_counts(i_loc)
-                pos = pos + 1
-                if( i_glob < 1 ) cycle
-                ri = sparse_refs(pos)
-                if( ri < 1 .or. ri > self%nrefs ) cycle
-                self%loc_tab(ri,i_glob) = sparse_tab(pos)
-                if( allocated(self%eval_touched_counts) .and. allocated(self%eval_touched_refs) )then
-                    if( self%eval_touched_counts(i_glob) >= size(self%eval_touched_refs,1) )&
-                        &THROW_HARD('eval_touched overflow in eul_prob_tab_neigh%read_sparse_tab_to_glob')
-                    self%eval_touched_counts(i_glob) = self%eval_touched_counts(i_glob) + 1
-                    self%eval_touched_refs(self%eval_touched_counts(i_glob),i_glob) = ri
-                endif
-            enddo
         enddo
-        if( pos /= nnz ) THROW_HARD('sparse table count mismatch in eul_prob_tab_neigh%read_sparse_tab_to_glob')
-        deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
+        allocate(particle_indices(IO_CHUNK), candidates_loc(IO_CHUNK))
+        nnz_read = 0
+        do ichunk = 1,nchunks
+            read(funit,pos=addr) chunk_n
+            addr = addr + sizeof(chunk_n)
+            if( chunk_n < 1 ) THROW_HARD('invalid empty candidate chunk')
+            chunk_indices_addr    = addr
+            chunk_candidates_addr = chunk_indices_addr + chunk_n * sizeof(chunk_n)
+            do first = 1,chunk_n,IO_CHUNK
+                last  = min(chunk_n, first + IO_CHUNK - 1)
+                nread = last - first + 1
+                read(funit,pos=chunk_indices_addr + (first-1)*sizeof(chunk_n)) particle_indices(1:nread)
+                read(funit,pos=chunk_candidates_addr + (first-1)*sizeof(candidates_loc(1))) candidates_loc(1:nread)
+                do j = 1,nread
+                    i_loc = particle_indices(j)
+                    if( i_loc < 1 .or. i_loc > nptcls_loc ) THROW_HARD('invalid particle index in sparse candidate stream')
+                    pind = pinds_loc(i_loc)
+                    i_glob = 0
+                    if( pind >= 1 .and. pind <= max_pind ) i_glob = pind2glob(pind)
+                    if( i_glob < 1 ) cycle
+                    self%candidate_fill_counts(i_glob) = self%candidate_fill_counts(i_glob) + 1
+                    candidate_pos = int(self%candidate_store%offsets(i_glob)) + self%candidate_fill_counts(i_glob) - 1
+                    if( candidate_pos >= int(self%candidate_store%offsets(i_glob+1)) )&
+                        &THROW_HARD('candidate-store overflow in read_sparse_tab_to_glob')
+                    self%candidate_store%candidates(candidate_pos) = candidates_loc(j)
+                enddo
+            enddo
+            addr = chunk_candidates_addr + chunk_n * sizeof(candidates_loc(1))
+            nnz_read = nnz_read + int(chunk_n,int64)
+        enddo
+        if( nnz_read /= nnz ) THROW_HARD('candidate stream count mismatch')
+        call fclose(funit)
+        deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, particle_indices, candidates_loc, pind2glob)
     end subroutine read_sparse_tab_to_glob
 
     ! Aggregates nparts tables into the global table
@@ -1321,41 +1333,72 @@ contains
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
         type(string) :: fname
-        integer :: ipart
-        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
-        if( .not. allocated(self%eval_touched_refs)   ) allocate(self%eval_touched_refs(self%nrefs,self%nptcls), source=0)
-        if( allocated(self%eval_touched_counts) ) self%eval_touched_counts = 0
-        if( allocated(self%eval_touched_refs)   ) self%eval_touched_refs   = 0
+        integer, parameter :: IO_CHUNK = 65536
+        integer, allocatable :: counts_glob(:), particle_indices(:), pinds_loc(:), pind2glob(:)
+        real,    allocatable :: seed_shifts_loc(:,:)
+        logical, allocatable :: seed_has_sh_loc(:)
+        type(prob_candidate) :: candidate_dummy
+        integer :: ipart, funit, io_stat, nptcls_loc, nchunks, ichunk, chunk_n
+        integer :: i, j, first, last, nread
+        integer(int64) :: header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
+        integer :: pind, i_glob, max_pind, seed_nrots_loc
+        allocate(counts_glob(self%nptcls), source=0)
+        do ipart = 1,nparts
+                fname = fbody//int2str_pad(ipart,numlen)//'.dat'
+                call fopen(funit,fname,access='STREAM',action='READ',status='OLD',iostat=io_stat)
+                call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob header; file: '//fname%to_char(), io_stat)
+                read(funit,pos=1) header
+                if( header(1) /= self%nrefs ) THROW_HARD('nrefs mismatch in read_tabs_to_glob')
+                nptcls_loc = int(header(2))
+                nnz = header(3)
+                nchunks = int(header(4))
+                allocate(pinds_loc(nptcls_loc))
+                allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
+                addr = sizeof(header) + 1
+                read(funit,pos=addr) pinds_loc
+                addr = addr + sizeof(pinds_loc)
+                call read_seed_shift_table(funit,addr,seed_nrots_loc,seed_shifts_loc,seed_has_sh_loc)
+                allocate(particle_indices(IO_CHUNK))
+                call build_pind_lookup(self%pinds,pinds_loc,pind2glob,max_pind)
+                nnz_read = 0
+                do ichunk = 1,nchunks
+                    read(funit,pos=addr) chunk_n
+                    addr = addr + sizeof(chunk_n)
+                    if( chunk_n < 1 ) THROW_HARD('invalid empty candidate chunk')
+                    chunk_indices_addr    = addr
+                    chunk_candidates_addr = chunk_indices_addr + chunk_n * sizeof(chunk_n)
+                    do first = 1,chunk_n,IO_CHUNK
+                        last  = min(chunk_n, first + IO_CHUNK - 1)
+                        nread = last - first + 1
+                        read(funit,pos=chunk_indices_addr + (first-1)*sizeof(chunk_n)) particle_indices(1:nread)
+                        do j = 1,nread
+                            i = particle_indices(j)
+                            if( i < 1 .or. i > nptcls_loc ) THROW_HARD('invalid particle index in sparse candidate stream')
+                            pind = pinds_loc(i)
+                            if( pind < 1 .or. pind > max_pind ) cycle
+                            i_glob = pind2glob(pind)
+                            if( i_glob > 0 ) counts_glob(i_glob) = counts_glob(i_glob) + 1
+                        enddo
+                    enddo
+                    addr = chunk_candidates_addr + chunk_n * sizeof(candidate_dummy)
+                    nnz_read = nnz_read + int(chunk_n,int64)
+                enddo
+                if( nnz_read /= nnz ) THROW_HARD('candidate stream count mismatch')
+                call fclose(funit)
+                deallocate(pinds_loc,particle_indices,seed_shifts_loc,seed_has_sh_loc,pind2glob)
+        enddo
+        where( counts_glob < 1 ) counts_glob = 1
+        call self%candidate_store%new_ragged(self%pinds,counts_glob)
+        allocate(self%candidate_fill_counts(self%nptcls), source=0)
+        deallocate(counts_glob)
         do ipart = 1, nparts
             fname = fbody//int2str_pad(ipart,numlen)//'.dat'
             call self%read_sparse_tab_to_glob(fname)
         enddo
-        self%eval_max_touched = size(self%eval_touched_refs,1)
+        deallocate(self%candidate_fill_counts)
     end subroutine read_tabs_to_glob
 
     ! COMMON STOCHASTIC/SUBSPACE ROUTINES
-
-    ! Resets entries for the particle range
-    subroutine clear_sparse_eval_table_range( self, i_from, i_to )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer,                   intent(in)    :: i_from, i_to
-        integer :: i, k, iref
-        !$omp parallel do default(shared) private(i,k,iref) proc_bind(close) schedule(static)
-        do i = i_from, i_to
-            do k = 1, self%eval_touched_counts(i)
-                iref = self%eval_touched_refs(k,i)
-                if( iref > 0 )then
-                    self%loc_tab(iref,i)%dist   = huge(1.0)
-                    self%loc_tab(iref,i)%inpl   = 0
-                    self%loc_tab(iref,i)%x      = 0.
-                    self%loc_tab(iref,i)%y      = 0.
-                    self%loc_tab(iref,i)%has_sh = .false.
-                endif
-            enddo
-            self%eval_touched_counts(i) = 0
-        enddo
-        !$omp end parallel do
-    end subroutine clear_sparse_eval_table_range
 
     ! Reads the previous orientation metadata for one particle
     subroutine get_particle_context( self, iptcl, o_prev, prev_state, prev_proj )
@@ -1368,18 +1411,20 @@ contains
         prev_proj  = self%b_ptr%eulspace%find_closest_proj(o_prev)
     end subroutine get_particle_context
 
-    ! Records one particle vs. ref evaluation result
-    subroutine record_sparse_eval( self, i, ri, dist, irot, x, y, has_sh )
+    ! Records one particle vs. ref evaluation result in its thread-owned buffer.
+    subroutine record_sparse_eval( self, i, ithr, ri, dist, irot, x, y, has_sh )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer,                   intent(in)    :: i, ri, irot
+        integer,                   intent(in)    :: i, ithr, ri, irot
         real,                      intent(in)    :: dist, x, y
         logical,                   intent(in)    :: has_sh
-        self%loc_tab(ri,i)%dist   = dist
-        self%loc_tab(ri,i)%inpl   = irot
-        self%loc_tab(ri,i)%x      = x
-        self%loc_tab(ri,i)%y      = y
-        self%loc_tab(ri,i)%has_sh = has_sh
-        call mark_ref_touched(self, i, ri)
+        type(prob_candidate) :: candidate
+        candidate%iref   = self%ref_full(ri)
+        candidate%dist   = dist
+        candidate%inpl   = irot
+        candidate%x      = x
+        candidate%y      = y
+        candidate%has_sh = has_sh
+        call self%candidate_buffers(ithr)%append_or_replace(i, candidate)
     end subroutine record_sparse_eval
 
     ! Minimizes shift at the previous best orientation
@@ -1426,7 +1471,7 @@ contains
             do j = 1, neval
                 ri = ew%evaluated_ref_ids(j,ithr)
                 if( ri < 1 ) cycle
-                if( self%sinds(ri) /= state_eval ) cycle
+                if( self%ref_state(ri) /= state_eval ) cycle
                 nstate_eval = nstate_eval + 1
                 ew%state_eval_dists(j,ithr) = ew%evaluated_ref_dists(j,ithr)
             enddo
@@ -1439,10 +1484,10 @@ contains
                 if( eval_slot < 1 ) cycle
                 ri = ew%evaluated_ref_ids(eval_slot,ithr)
                 if( ri < 1 ) cycle
-                istate = self%sinds(ri)
-                iproj  = self%jinds(ri)
-                call grad_obj(ithr)%set_indices((istate-1)*self%p_ptr%nspace + iproj, iptcl)
-                irot = self%loc_tab(ri,i)%inpl
+                istate = self%ref_state(ri)
+                iproj  = self%ref_proj(ri)
+                call grad_obj(ithr)%set_indices(self%ref_full(ri), iptcl)
+                irot = self%candidate_buffers(ithr)%get_inpl(i, self%ref_full(ri))
                 if( l_seed_sh_first )then
                     refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.,&
                         &xy_in=shift_seed(2:3))
@@ -1450,7 +1495,7 @@ contains
                     refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                 endif
                 if( irot > 0 )then
-                    call record_sparse_eval(self, i, ri, &
+                    call record_sparse_eval(self, i, ithr, ri, &
                         &eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun), &
                         &irot, refined_shift(2), refined_shift(3), .true.)
                 endif
@@ -1458,28 +1503,12 @@ contains
         enddo
     end subroutine refine_best_neighbors
 
-    ! Appends refernce index to the particle list of evaluated references
-    subroutine mark_ref_touched( self, i, ri )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer,                   intent(in)    :: i, ri
-        integer :: kt
-        do kt = 1, self%eval_touched_counts(i)
-            if( self%eval_touched_refs(kt,i) == ri ) return
-        enddo
-        if( self%eval_touched_counts(i) >= self%eval_max_touched )then
-            THROW_HARD('simple_eul_prob_tab_neigh::mark_ref_touched; eval_touched overflow')
-        endif
-        self%eval_touched_counts(i) = self%eval_touched_counts(i) + 1
-        self%eval_touched_refs(self%eval_touched_counts(i),i) = ri
-    end subroutine mark_ref_touched
-
     ! DESTRUCTOR
     
     subroutine kill_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        if( allocated(self%eval_touched_refs)   ) deallocate(self%eval_touched_refs)
-        if( allocated(self%eval_touched_counts) ) deallocate(self%eval_touched_counts)
-        self%eval_max_touched     = 0
+        call self%candidate_store%kill
+        if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
         self%l_direct_stoch_neigh = .false.
         call self%eul_prob_tab%kill
     end subroutine kill_neigh
@@ -1518,7 +1547,7 @@ contains
         integer :: iref, iref_full
         call self%alloc_eval_stoch_ws(tabneigh%nrefs, tabneigh%p_ptr%nstates, tabneigh%p_ptr%nspace, max_refs_to_refine, nthr_glob)
         do iref = 1, tabneigh%nrefs
-            iref_full = (tabneigh%sinds(iref)-1)*tabneigh%p_ptr%nspace + tabneigh%jinds(iref)
+            iref_full = tabneigh%ref_full(iref)
             if( iref_full >= 1 .and. iref_full <= size(self%fullref_to_sparse_ref) )&
                 &self%fullref_to_sparse_ref(iref_full) = iref
         enddo
@@ -1533,13 +1562,13 @@ contains
         call self%alloc_eval_subspace_ws(tabneigh%nrefs, tabneigh%p_ptr%nstates, tabneigh%p_ptr%nspace,&
             &nsubs, max_refs_to_refine, nthr_glob)
         do iref = 1, tabneigh%nrefs
-            iref_full = (tabneigh%sinds(iref)-1)*tabneigh%p_ptr%nspace + tabneigh%jinds(iref)
+            iref_full = tabneigh%ref_full(iref)
             if( iref_full >= 1 .and. iref_full <= size(self%fullref_to_sparse_ref) )&
                 &self%fullref_to_sparse_ref(iref_full) = iref
         enddo
         do ri = 1,tabneigh%nrefs
-            istate = tabneigh%sinds(ri)
-            isub   = tabneigh%b_ptr%subspace_full2sub_map(tabneigh%jinds(ri))
+            istate = tabneigh%ref_state(ri)
+            isub   = tabneigh%b_ptr%subspace_full2sub_map(tabneigh%ref_proj(ri))
             if( isub < 1 .or. isub > nsubs ) cycle
             self%sub_ref_counts(isub,istate) = self%sub_ref_counts(isub,istate) + 1
         enddo
@@ -1552,8 +1581,8 @@ contains
         enddo
         self%sub_ref_counts = 0
         do ri = 1,tabneigh%nrefs
-            istate = tabneigh%sinds(ri)
-            isub   = tabneigh%b_ptr%subspace_full2sub_map(tabneigh%jinds(ri))
+            istate = tabneigh%ref_state(ri)
+            isub   = tabneigh%b_ptr%subspace_full2sub_map(tabneigh%ref_proj(ri))
             if( isub < 1 .or. isub > nsubs ) cycle
             i = self%sub_ref_offsets(isub,istate) + self%sub_ref_counts(isub,istate)
             self%sub_ref_list(i) = ri
