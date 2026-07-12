@@ -9,8 +9,7 @@ use simple_builder,                 only: builder
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align
-use simple_matcher_3Drec,           only: init_rec, prep_imgs4rec, update_rec, write_partial_recs, finalize_rec_objs, &
-    &calc_projdir3Drec
+use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
@@ -62,8 +61,7 @@ contains
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
-        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_rec_imgs(:)
-        type(fplane_type),         allocatable :: fpls(:)
+        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
@@ -139,7 +137,6 @@ contains
             rt_build_batch_ptcls= 0.0
             rt_align            = 0.0
         endif
-        call maybe_init_reconstruction()
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
         allocate(incr_shifts(2,batchsz_max), source=0.0)
         do ibatch = 1, nbatches
@@ -168,7 +165,6 @@ contains
             enddo
             !$omp end parallel do
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
-            call maybe_restore_batch()
         enddo
         frac_greedy = 0.0
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
@@ -181,22 +177,26 @@ contains
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
+        deallocate(cnt_greedy, cnt_all, incr_shifts)
         call eulprob_obj_part%kill
         call clean_strategy3D
         call b_ptr%vol%kill
         call orientation%kill
-        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, ptcl_rec_imgs)
+        call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
+        ! Registration is complete.  Release the all-state reprojection model,
+        ! particle PFTs, memoized correlations, and PFTC thread workspaces
+        ! before constructing the first state reconstruction.
+        call b_ptr%pftc%kill
+        if( b_ptr%pftc%exists() ) THROW_HARD('PFTC still allocated at reconstruction phase boundary')
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_projrec )then
                 call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
             else
-                call write_partial_recs(params, build, cline, fpls)
-                call finalize_rec_objs(params, build)
+                call calc_3Drec(params, build, cline, nptcls2update, pinds)
             endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
-        call b_ptr%pftc%kill
         call b_ptr%esig%kill
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
@@ -305,24 +305,10 @@ contains
             call build%vol2%kill
         end subroutine prepare_refs_sigmas_and_pftc
 
-        subroutine maybe_init_reconstruction()
-            if( ctrl%do_write_partial_recs .and. .not. ctrl%do_projrec )then
-                call init_rec(params, build, batchsz_max, fpls)
-                call alloc_imgarr(batchsz_max, [p_ptr%box,p_ptr%box,1], p_ptr%smpd, ptcl_rec_imgs)
-            endif
-        end subroutine maybe_init_reconstruction
-
         subroutine build_batch_particles_local()
-            logical :: need_rec_imgs
-            need_rec_imgs = ctrl%do_write_partial_recs .and. .not. ctrl%do_projrec
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
-            if( need_rec_imgs )then
-                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                    ptcl_match_imgs, ptcl_match_imgs_pad, imgs4rec=ptcl_rec_imgs(:batchsz))
-            else
-                call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                    ptcl_match_imgs, ptcl_match_imgs_pad)
-            endif
+            call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+                ptcl_match_imgs, ptcl_match_imgs_pad)
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)
         end subroutine build_batch_particles_local
 
@@ -382,16 +368,6 @@ contains
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
-
-        subroutine maybe_restore_batch()
-            if( .not. ctrl%do_write_partial_recs ) return
-            if( ctrl%do_projrec ) return
-            if( ctrl%do_bench ) t_rec = tic()
-            call prep_imgs4rec(params, b_ptr, batchsz, ptcl_rec_imgs(:batchsz), &
-                pinds(batch_start:batch_end), fpls(:batchsz))
-            call update_rec(params, b_ptr, batchsz, pinds(batch_start:batch_end), fpls(:batchsz))
-            if( ctrl%do_bench ) rt_rec_accum = rt_rec_accum + toc(t_rec)
-        end subroutine maybe_restore_batch
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return

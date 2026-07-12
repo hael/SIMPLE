@@ -14,6 +14,7 @@ Related workflow policies:
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)
+- [separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md](separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md)
 
 ## 1. Scope
 

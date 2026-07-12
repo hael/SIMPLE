@@ -5,6 +5,9 @@ particle-based ab initio 3D workflow. The base `refine3D` contracts are in
 [refine3D_policy.md](refine3D_policy.md); this document describes how
 `abinitio3D` configures and chains those stages.
 
+Multi-state matcher and reconstruction lifetimes follow
+[separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md](separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md).
+
 ## 1. Scope
 
 `abinitio3D` builds initial 3D models from particles by preparing starting
