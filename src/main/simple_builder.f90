@@ -44,7 +44,6 @@ type :: builder
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
-    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction ()
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
@@ -397,7 +396,6 @@ contains
         class(parameters),      intent(inout) :: params
         real    :: rot
         call self%kill_strategy3D_tbox
-        allocate( self%eorecvols(params%nstates))
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         rot = 0.
         params%nrots = 0
@@ -419,14 +417,7 @@ contains
 
     subroutine kill_strategy3D_tbox( self )
         class(builder), intent(inout) :: self
-        integer :: i
         if( self%strategy3D_tbox_exists )then
-            if( allocated(self%eorecvols) )then
-                do i=1,size(self%eorecvols)
-                    call self%eorecvols(i)%kill
-                end do
-                deallocate(self%eorecvols)
-            endif
             if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%strategy3D_tbox_exists = .false.
         endif

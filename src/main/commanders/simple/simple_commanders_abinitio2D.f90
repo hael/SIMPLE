@@ -414,17 +414,17 @@ contains
             write(fnr,'(a,i0)') 'abinitio2D sampled target          : ', nsample_target_2D
             write(fnr,'(a,i0)') 'abinitio2D effective particles     : ', nptcls_eff
             if( stage >= 1 .and. stage <= size(stage_parms) )then
-                write(fnr,'(a,f9.3)') 'abinitio2D stage update fraction   : ', stage_parms(stage)%update_frac
-                write(fnr,'(a,f9.2)') 'abinitio2D stage low-pass          : ', stage_parms(stage)%lp
+                write(fnr,'(a,f0.3)') 'abinitio2D stage update fraction   : ', stage_parms(stage)%update_frac
+                write(fnr,'(a,f0.2)') 'abinitio2D stage low-pass          : ', stage_parms(stage)%lp
             endif
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D setup/preparation        : ', rt_setup
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D calc_pspec               : ', rt_calc_pspec
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D cluster2D stage          : ', rt_cluster2D
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D final class assembly     : ', rt_final_cavgs
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D total time               : ', rt_tot
-            write(fnr,'(a,t52,f9.2)') 'abinitio2D % accounted for          : ', &
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D setup/preparation        :', rt_setup
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D calc_pspec               :', rt_calc_pspec
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D cluster2D stage          :', rt_cluster2D
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D final class assembly     :', rt_final_cavgs
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D total time               :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'abinitio2D % accounted for          :', &
                 &((rt_setup + rt_calc_pspec + rt_cluster2D + rt_final_cavgs) / rt_tot) * 100.
             call fclose(fnr)
             call cluster_refine%kill

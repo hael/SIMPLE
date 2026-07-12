@@ -112,7 +112,7 @@ contains
         npairs    = (ncomp * (ncomp + 1)) / 2
         exp_shape = shape(basis_recs(1)%cmat_exp)
         allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
         t_phase = tic()
@@ -501,7 +501,7 @@ contains
             &' -> ', fname%to_char()
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
         call init_flexvol_part(part_out, partlims(2) - partlims(1) + 1, ncomp)
@@ -616,7 +616,7 @@ contains
         allocate(basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob), orientations(nthr_glob), &
             &gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob), gram(ncomp,ncomp,nthr_glob), &
             &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob))
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
         call init_projected_latent_estep_part(estep_out, partlims(2) - partlims(1) + 1, ncomp)
@@ -925,7 +925,7 @@ contains
         resid_mean_energy = 0.d0
         z_postcov = 0.d0
         mode_second = 0.d0
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, init_volumes=.false.)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
         t_phase = tic()

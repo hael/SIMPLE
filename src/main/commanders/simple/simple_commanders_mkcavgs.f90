@@ -884,15 +884,15 @@ contains
             write(fnr,'(a,i0)') 'cavgassemble kto                    : ', params%kfromto(2)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble setup/init             : ', rt_init
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble reduce partial sums    : ', rt_reduce_partials
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble class document         : ', rt_classdoc
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble write class averages   : ', rt_write_cavgs
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble export cls2D star      : ', rt_export_star
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble project update         : ', rt_project_update
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble cleanup                : ', rt_cleanup
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble total time             : ', rt_tot
-            write(fnr,'(a,t52,f9.2)') 'cavgassemble % accounted for        : ', &
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble setup/init             :', rt_init
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble reduce partial sums    :', rt_reduce_partials
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble class document         :', rt_classdoc
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble write class averages   :', rt_write_cavgs
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble export cls2D star      :', rt_export_star
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble project update         :', rt_project_update
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble cleanup                :', rt_cleanup
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble total time             :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'cavgassemble % accounted for        :', &
                 &((rt_init + rt_reduce_partials + rt_classdoc + rt_write_cavgs + &
                 &  rt_export_star + rt_project_update + rt_cleanup) / rt_tot) * 100.
             call fclose(fnr)

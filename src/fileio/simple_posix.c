@@ -836,6 +836,37 @@ int64_t simple_peak_rss_bytes(void)
 #endif
 }
 
+/* Current resident set size for the current process, normalized to bytes.
+ * Unlike the peak query this value may decrease after phase-local teardown,
+ * although an allocator is free to retain released pages. */
+int64_t simple_current_rss_bytes(void)
+{
+#ifdef _WIN32
+    return -1;
+#elif defined(__APPLE__)
+    struct task_basic_info info;
+    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return -1;
+    return (int64_t)info.resident_size;
+#elif defined(__linux__)
+    FILE *stream;
+    unsigned long ignored_pages, resident_pages;
+    long page_size;
+    stream = fopen("/proc/self/statm", "r");
+    if (stream == NULL) return -1;
+    if (fscanf(stream, "%lu %lu", &ignored_pages, &resident_pages) != 2) {
+        fclose(stream);
+        return -1;
+    }
+    fclose(stream);
+    page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) return -1;
+    return (int64_t)resident_pages * (int64_t)page_size;
+#else
+    return -1;
+#endif
+}
+
 int unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
     int rv = remove(fpath);

@@ -459,18 +459,18 @@ contains
             write(fnr,'(a,i0)') 'match2D process partition           : ', p_ptr%part
             write(fnr,'(a,i0)') 'match2D process pid                 : ', p_ptr%pid
             write(fnr,'(a,i0)') 'match2D peak RSS (bytes)            : ', peak_rss
-            write(fnr,'(a,f12.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
+            write(fnr,'(a,f0.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'match2D startup/setup               : ', rt_startup
-            write(fnr,'(a,t52,f9.2)') 'match2D particle allocation         : ', rt_alloc_ptcl_imgs2D
-            write(fnr,'(a,t52,f9.2)') 'match2D reference preparation       : ', rt_prep_pftc_refs2D
-            write(fnr,'(a,t52,f9.2)') 'match2D particle preparation        : ', rt_build_batch_particles2D
-            write(fnr,'(a,t52,f9.2)') 'match2D alignment search            : ', rt_align
-            write(fnr,'(a,t52,f9.2)') 'match2D class averaging             : ', rt_cavg
-            write(fnr,'(a,t52,f9.2)') 'match2D cavg FFT/CTF/interpolation  : ', rt_cavg_interp_splat
-            write(fnr,'(a,t52,f9.2)') 'match2D total time                  : ', rt_tot
-            write(fnr,'(a,t52,f9.2)') 'match2D % accounted for             : ', &
+            write(fnr,'(a,1x,f0.2)') 'match2D startup/setup               :', rt_startup
+            write(fnr,'(a,1x,f0.2)') 'match2D particle allocation         :', rt_alloc_ptcl_imgs2D
+            write(fnr,'(a,1x,f0.2)') 'match2D reference preparation       :', rt_prep_pftc_refs2D
+            write(fnr,'(a,1x,f0.2)') 'match2D particle preparation        :', rt_build_batch_particles2D
+            write(fnr,'(a,1x,f0.2)') 'match2D alignment search            :', rt_align
+            write(fnr,'(a,1x,f0.2)') 'match2D class averaging             :', rt_cavg
+            write(fnr,'(a,1x,f0.2)') 'match2D cavg FFT/CTF/interpolation  :', rt_cavg_interp_splat
+            write(fnr,'(a,1x,f0.2)') 'match2D total time                  :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'match2D % accounted for             :', &
                 ((rt_startup + rt_alloc_ptcl_imgs2D + rt_prep_pftc_refs2D + rt_build_batch_particles2D + &
                   rt_align + rt_cavg) / rt_tot) * 100.
 

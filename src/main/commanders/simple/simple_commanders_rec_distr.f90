@@ -770,21 +770,21 @@ contains
             write(fnr,'(a,i0)') 'volassemble kto                       : ', params%kfromto(2)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'volassemble reduce_partials           : ', rt_reduce_partials
-            write(fnr,'(a,t52,f9.2)') 'volassemble sum_eos                   : ', rt_sum_eos
-            write(fnr,'(a,t52,f9.2)') 'volassemble restore_eos_and_write_fsc : ', &
+            write(fnr,'(a,1x,f0.2)') 'volassemble reduce_partials           :', rt_reduce_partials
+            write(fnr,'(a,1x,f0.2)') 'volassemble sum_eos                   :', rt_sum_eos
+            write(fnr,'(a,1x,f0.2)') 'volassemble restore_eos_and_write_fsc :', &
                 rt_restore_eos_and_write_fsc
-            write(fnr,'(a,t52,f9.2)') 'volassemble restore_merged_volume     : ', rt_restore_merged_volume
-            write(fnr,'(a,t52,f9.2)') 'volassemble trail_restored_halves     : ', rt_trail_restored_halves
-            write(fnr,'(a,t52,f9.2)') 'volassemble automask3D                : ', rt_automask3D
-            write(fnr,'(a,t52,f9.2)') 'volassemble nonuniform_filter         : ', rt_nonuniform_filter
-            write(fnr,'(a,t52,f9.2)') 'volassemble init_context              : ', rt_init_context
-            write(fnr,'(a,t52,f9.2)') 'volassemble trail_frac_read           : ', rt_trail_frac
-            write(fnr,'(a,t52,f9.2)') 'volassemble gridcorr_prep             : ', rt_gridcorr
-            write(fnr,'(a,t52,f9.2)') 'volassemble update_proj_metadata      : ', rt_upd_proj
-            write(fnr,'(a,t52,f9.2)') 'volassemble cleanup                   : ', rt_cleanup
-            write(fnr,'(a,t52,f9.2)') 'volassemble total time                : ', rt_tot
-            write(fnr,'(a,t52,f9.2)') 'volassemble % accounted for           : ', &
+            write(fnr,'(a,1x,f0.2)') 'volassemble restore_merged_volume     :', rt_restore_merged_volume
+            write(fnr,'(a,1x,f0.2)') 'volassemble trail_restored_halves     :', rt_trail_restored_halves
+            write(fnr,'(a,1x,f0.2)') 'volassemble automask3D                :', rt_automask3D
+            write(fnr,'(a,1x,f0.2)') 'volassemble nonuniform_filter         :', rt_nonuniform_filter
+            write(fnr,'(a,1x,f0.2)') 'volassemble init_context              :', rt_init_context
+            write(fnr,'(a,1x,f0.2)') 'volassemble trail_frac_read           :', rt_trail_frac
+            write(fnr,'(a,1x,f0.2)') 'volassemble gridcorr_prep             :', rt_gridcorr
+            write(fnr,'(a,1x,f0.2)') 'volassemble update_proj_metadata      :', rt_upd_proj
+            write(fnr,'(a,1x,f0.2)') 'volassemble cleanup                   :', rt_cleanup
+            write(fnr,'(a,1x,f0.2)') 'volassemble total time                :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'volassemble % accounted for           :', &
                 &((rt_reduce_partials + rt_sum_eos + rt_restore_eos_and_write_fsc +               &
                 &  rt_restore_merged_volume + rt_trail_restored_halves + rt_automask3D +          &
                 &  rt_nonuniform_filter +                                                         &

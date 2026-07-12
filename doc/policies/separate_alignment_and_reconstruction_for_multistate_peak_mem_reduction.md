@@ -15,20 +15,24 @@ This policy is implemented for the normal CPU paths:
   constructing or updating reconstruction volumes;
 - alignment images, strategies, batch workspaces, and the complete PFTC are
   destroyed at the assignment barrier;
+- the now alignment-only strategy3D toolbox is also destroyed at that barrier;
 - the matcher verifies that PFTC teardown completed before reconstruction;
+- benchmark output for the representative worker records current RSS after
+  alignment teardown and after reconstruction, alongside peak RSS;
+- `projrec=yes` finalizes discrete projection labels before worker orientation
+  metadata is written;
 - `calc_3Drec` and `calc_projdir3Drec` group the final selected particles by
-  hard state;
-- both routines use `init_rec(..., init_volumes=.false.)` and one singleton
-  `build%eorecvol` at a time;
+  hard state and report the resulting state populations;
+- both routines use `init_rec` and one singleton `build%eorecvol` at a time;
 - each state partial is written through the existing Cartesian artifact
   contract and the singleton reconstructor is killed before the next state;
 - the complete Euclidean sigma object remains available through reconstruction
   for both standard and non-standard consumers.
 
-The legacy `build%eorecvols(:)` helpers remain temporarily for the separate
-OpenMP-offload implementation. Removing that descriptor array is still the
-follow-up described in Phase 5. Compact 2D part output also remains a later
-refactor.
+`build%eorecvols(:)` and its legacy multi-volume reconstruction helpers have
+been removed. The OpenMP-offload path uses the singleton for a single state
+and dispatches multi-state work to the common state-homogeneous CPU kernel.
+Compact 2D part output remains a later refactor.
 
 ## Policy
 
@@ -163,9 +167,9 @@ freeze reconstruction metadata
 
 This phase must not:
 
-- call `init_rec` with volume initialization enabled;
+- construct any reconstruction volume through `init_rec`;
 - allocate `ptcl_rec_imgs` solely to update partial volumes;
-- call `prep_imgs4rec` or `update_rec`;
+- call `prep_imgs4rec` or any particle-to-volume insertion routine;
 - construct or reset any state reconstructor;
 - insert any Fourier plane into a reconstruction.
 
@@ -261,10 +265,9 @@ particle banks, CTF matrices, and per-thread heaps. It should therefore be
 called at the barrier, not after partial reconstruction as in the current
 matcher ordering.
 
-If the strategy3D toolbox contains only alignment state after singleton
-reconstruction ownership is introduced, `build%kill_strategy3D_tbox` can also
-be called at the barrier. This requires first separating the current
-`eorecvols(:)` ownership from that toolbox.
+The strategy3D toolbox no longer owns reconstruction storage. It may therefore
+be destroyed at the barrier once no remaining alignment consumer needs its
+in-plane rotation metadata.
 
 ### Metadata retained across the barrier
 
@@ -375,10 +378,9 @@ in state order. This adds reconstruction I/O and preprocessing, but removes the
 state-multiplied volume allocation and prevents reconstruction from observing
 intermediate assignments.
 
-The state-homogeneous routine should not inspect the particle state to select
-an element of `build%eorecvols(:)`. The caller has already selected one state,
-and all valid input particles must belong to it. A mismatched state is an
-invariant violation.
+The state-homogeneous routine receives one current-state reconstructor. The
+caller has already selected one state, and all valid input particles must
+belong to it. A mismatched state is an invariant violation.
 
 ## `projrec=yes` policy
 
@@ -408,12 +410,6 @@ build%eorecvol
 
 or an equivalent local `reconstructor_eo`. The reconstruction code must not
 index an array of live reconstructors by state.
-
-`builder%eorecvols(:)` is currently part of the strategy3D toolbox. The first
-implementation may leave the lightweight descriptor array in place while
-removing every multi-state `new` call, but the reconstruction path must not use
-it. After remaining consumers, including the OpenMP-offload path, are audited,
-the array should be removed or replaced by explicit singleton ownership.
 
 The scientific state number remains an argument used for filenames, metadata,
 and state validation. It must not imply persistent ownership of a separate
@@ -514,8 +510,8 @@ Owns state-local reconstruction:
 - write that state's existing Cartesian partial;
 - release the state reconstructor and buffers.
 
-The module should expose state-oriented entry points rather than routines that
-implicitly allocate and write every state through `build%eorecvols(:)`.
+The module exposes state-oriented entry points and never implicitly allocates
+or writes an array of state reconstructors.
 
 ## Migration sequence
 
@@ -560,12 +556,12 @@ implicitly allocate and write every state through `build%eorecvols(:)`.
 - Release all current-state projection lookup and accumulator storage before
   initializing the next state.
 
-### Phase 5: remove obsolete array ownership
+### Phase 5: remove obsolete array ownership (complete)
 
-- Audit all `build%eorecvols(:)` consumers.
-- Convert remaining compatible worker consumers to singleton ownership.
-- Remove the array from the strategy3D toolbox when no supported path depends
-  on it.
+- Removed `build%eorecvols(:)` from the strategy3D toolbox.
+- Removed the legacy multi-volume reconstruction helpers.
+- Converted the OpenMP-offload single-state path to singleton ownership and
+  routed its multi-state case to the common state-homogeneous CPU kernel.
 - Keep `build%eorecvol` as the explicit current reconstruction object.
 
 ## Validation

@@ -3,9 +3,8 @@ module simple_reconstructor_openmpoffload
 use simple_core_module_api
 use simple_builder,          only: builder
 use simple_parameters,       only: parameters
-use simple_reconstructor_eo, only: reconstructor_eo
 use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
-use simple_matcher_3Drec,    only: prep_imgs4rec, update_rec, init_rec, write_partial_recs, finalize_rec_objs
+use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_partial, cleanup_rec_buffers
 use simple_cmdline,          only: cmdline
 use simple_math,             only: ceil_div, floor_div
 use simple_kbinterpol,       only: apod_kb15_a2
@@ -36,15 +35,25 @@ contains
 #ifndef USE_OPENMP_OFFLOAD
         THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
 #else
+        ! The offload kernel owns one expanded even/odd pair.  Keep multi-state
+        ! reconstruction on the common state-homogeneous CPU path until an
+        ! equivalent state-local offload loop is introduced.
+        if( params%nstates > 1 )then
+            write(logfhandle,'(A)') '>>> OPENMP-OFFLOAD: multi-state reconstruction uses the state-homogeneous CPU path'
+            call calc_3Drec(params, build, cline, nptcls, pinds)
+            return
+        endif
         if( DEBUG ) t0 = tic()
-        ! Initialize objects for recontruction
+        ! Initialize reconstruction objects
         if( DEBUG ) t = tic()
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
+        call build%eorecvol%new(params, build%spproj)
+        call build%eorecvol%reset_all
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         l_den_src = params%l_ptcl_src_den
         ! 3D limits
-        vollims = build%eorecvols(1)%even%loop_lims(2)
+        vollims = build%eorecvol%even%loop_lims(2)
         h_edge  = vollims(1,1)
         ! Setup rotation matrices
         allocate(symmats(3,3,build%pgrpsyms%get_nsym()))
@@ -54,9 +63,9 @@ contains
         end do
         allocate(rotmats(2,3,MAXIMGBATCHSZ))
         ! Arrays
-        clb  = lbound(build%eorecvols(1)%even%cmat_exp)
-        cdim = ubound(build%eorecvols(1)%even%cmat_exp) - clb + 1
-        nyq  = build%eorecvols(1)%even%get_lfny(1)
+        clb  = lbound(build%eorecvol%even%cmat_exp)
+        cdim = ubound(build%eorecvol%even%cmat_exp) - clb + 1
+        nyq  = build%eorecvol%even%get_lfny(1)
         if( DEBUG ) then
             t_init     = toc(t)
             t_read     = 0.d0
@@ -70,15 +79,14 @@ contains
         endif
         ! Gridding interpolation of all particles
         call insert_all_slices(params, build, nptcls, pinds, fpls,&
-            & build%eorecvols(1)%even%cmat_exp, build%eorecvols(1)%odd%cmat_exp,&
-            & build%eorecvols(1)%even%rho_exp, build%eorecvols(1)%odd%rho_exp,&
+            & build%eorecvol%even%cmat_exp, build%eorecvol%odd%cmat_exp,&
+            & build%eorecvol%even%rho_exp, build%eorecvol%odd%rho_exp,&
             & cdim, clb, h_edge, nyq, symmats, rotmats, nsym)
         if( DEBUG ) t = tic()
         deallocate(symmats, rotmats)
-        ! Write partial reconstructions
-        call write_partial_recs(params, build, cline, fpls)
-        ! Clean up
-        call finalize_rec_objs(params, build)
+        call write_state_partial(params, build, cline, 1)
+        call build%eorecvol%kill
+        call cleanup_rec_buffers(build, fpls)
         ! Timings
         if( DEBUG .and. (params%part==1) )then
             t_finalize = toc(t)

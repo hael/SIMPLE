@@ -417,12 +417,12 @@ contains
         write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
-        write(fnr,'(a,t52,f9.2)') 'refine3D strategy setup/init        : ', bench%rt_init
-        write(fnr,'(a,t52,f9.2)') 'refine3D probabilistic pre-step     : ', bench%rt_prob
-        write(fnr,'(a,t52,f9.2)') 'refine3D matcher/scheduler          : ', bench%rt_sched
-        write(fnr,'(a,t52,f9.2)') 'refine3D assembly/postprocess       : ', bench%rt_assemble
-        write(fnr,'(a,t52,f9.2)') 'refine3D total time                 : ', bench%rt_tot
-        write(fnr,'(a,t52,f9.2)') 'refine3D % accounted for            : ', rt_accounted
+        write(fnr,'(a,1x,f0.2)') 'refine3D strategy setup/init        :', bench%rt_init
+        write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
+        write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
+        write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
+        write(fnr,'(a,1x,f0.2)') 'refine3D total time                 :', bench%rt_tot
+        write(fnr,'(a,1x,f0.2)') 'refine3D % accounted for            :', rt_accounted
         call fclose(fnr)
         call benchfname%kill
     end subroutine write_strategy_bench_report

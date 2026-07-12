@@ -13,7 +13,7 @@ use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
-use simple_syslib,                  only: get_peak_rss_bytes
+use simple_syslib,                  only: get_peak_rss_bytes, get_current_rss_bytes
 use simple_strategy3D_eval,         only: strategy3D_eval
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
@@ -52,7 +52,7 @@ contains
         class(cmdline),            intent(inout) :: cline
         integer,                   intent(in)    :: which_iter
         logical,                   intent(inout) :: converged
-        logical,                   intent(in), optional :: l_write_partial_recs
+        logical,                   intent(in) :: l_write_partial_recs
         class(parameters), pointer :: p_ptr => null()
         class(builder),    pointer :: b_ptr => null()
         type(eul_prob_tab), target :: eulprob_obj_part
@@ -70,10 +70,9 @@ contains
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: has_been_searched
-        logical             :: l_write_partial_recs_present, l_write_partial_recs_value
         ! benchmarking
-        integer(int64) :: peak_rss
-        real(real64)    :: peak_rss_gib
+        integer(int64) :: peak_rss, rss_after_teardown, rss_after_reconstruction
+        real(real64)    :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
@@ -83,9 +82,8 @@ contains
         real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write
         p_ptr => params
         b_ptr => build
-        l_write_partial_recs_present = present(l_write_partial_recs)
-        l_write_partial_recs_value   = .false.
-        if( l_write_partial_recs_present ) l_write_partial_recs_value = l_write_partial_recs
+        rss_after_teardown      = -1_int64
+        rss_after_reconstruction = -1_int64
         call init_ctrl()
         converged = .false.
         if( ctrl%do_bench )then
@@ -172,6 +170,7 @@ contains
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
+        if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -180,6 +179,7 @@ contains
         deallocate(cnt_greedy, cnt_all, incr_shifts)
         call eulprob_obj_part%kill
         call clean_strategy3D
+        call b_ptr%kill_strategy3D_tbox
         call b_ptr%vol%kill
         call orientation%kill
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -188,6 +188,7 @@ contains
         ! before constructing the first state reconstruction.
         call b_ptr%pftc%kill
         if( b_ptr%pftc%exists() ) THROW_HARD('PFTC still allocated at reconstruction phase boundary')
+        if( ctrl%do_bench .and. p_ptr%part == 1 ) rss_after_teardown = get_current_rss_bytes()
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_projrec )then
@@ -198,6 +199,7 @@ contains
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%esig%kill
+        if( ctrl%do_bench .and. p_ptr%part == 1 ) rss_after_reconstruction = get_current_rss_bytes()
         call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
             if( p_ptr%part /= 1 ) return
@@ -206,6 +208,14 @@ contains
             peak_rss = get_peak_rss_bytes()
             peak_rss_gib = -1.0_real64
             if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
+            rss_after_teardown_gib = -1.0_real64
+            if( rss_after_teardown >= 0_int64 )then
+                rss_after_teardown_gib = real(rss_after_teardown,real64) / real(1024_int64**3,real64)
+            endif
+            rss_after_reconstruction_gib = -1.0_real64
+            if( rss_after_reconstruction >= 0_int64 )then
+                rss_after_reconstruction_gib = real(rss_after_reconstruction,real64) / real(1024_int64**3,real64)
+            endif
             benchfname = refine3D_bench_fname(which_iter)
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
@@ -218,17 +228,21 @@ contains
             write(fnr,'(a,i0)') 'match3D process partition           : ', p_ptr%part
             write(fnr,'(a,i0)') 'match3D process pid                 : ', p_ptr%pid
             write(fnr,'(a,i0)') 'match3D peak RSS (bytes)            : ', peak_rss
-            write(fnr,'(a,f12.3)') 'match3D peak RSS (GiB)              : ', peak_rss_gib
+            write(fnr,'(a,f0.3)') 'match3D peak RSS (GiB)              : ', peak_rss_gib
+            write(fnr,'(a,i0)') 'match3D RSS after align teardown (bytes): ', rss_after_teardown
+            write(fnr,'(a,f0.3)') 'match3D RSS after align teardown (GiB)  : ', rss_after_teardown_gib
+            write(fnr,'(a,i0)') 'match3D RSS after reconstruction (bytes): ', rss_after_reconstruction
+            write(fnr,'(a,f0.3)') 'match3D RSS after reconstruction (GiB)  : ', rss_after_reconstruction_gib
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,t52,f9.2)') 'match3D startup/setup              : ', rt_startup
-            write(fnr,'(a,t52,f9.2)') 'match3D particle preparation       : ', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
-            write(fnr,'(a,t52,f9.2)') 'match3D reference preparation      : ', rt_prep_refs + rt_memoize_refs
-            write(fnr,'(a,t52,f9.2)') 'match3D orientation search         : ', rt_prep_orisrch + rt_align
-            write(fnr,'(a,t52,f9.2)') 'match3D project metadata I/O       : ', rt_projio
-            write(fnr,'(a,t52,f9.2)') 'match3D partial reconstruction     : ', rt_rec
-            write(fnr,'(a,t52,f9.2)') 'match3D total time                 : ', rt_tot
-            write(fnr,'(a,t52,f9.2)') 'match3D % accounted for            : ', &
+            write(fnr,'(a,1x,f0.2)') 'match3D startup/setup              :', rt_startup
+            write(fnr,'(a,1x,f0.2)') 'match3D particle preparation       :', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
+            write(fnr,'(a,1x,f0.2)') 'match3D reference preparation      :', rt_prep_refs + rt_memoize_refs
+            write(fnr,'(a,1x,f0.2)') 'match3D orientation search         :', rt_prep_orisrch + rt_align
+            write(fnr,'(a,1x,f0.2)') 'match3D project metadata I/O       :', rt_projio
+            write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction     :', rt_rec
+            write(fnr,'(a,1x,f0.2)') 'match3D total time                 :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &
                 &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
                 &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
             call fclose(fnr)
@@ -248,11 +262,7 @@ contains
                 case('eval','sigma')
                     ctrl%do_write_partial_recs = .false.
                 case default
-                    if( l_write_partial_recs_present )then
-                        ctrl%do_write_partial_recs = l_write_partial_recs_value
-                    else
-                        ctrl%do_write_partial_recs = .true.
-                    endif
+                    ctrl%do_write_partial_recs = l_write_partial_recs
             end select
         end subroutine init_ctrl
 

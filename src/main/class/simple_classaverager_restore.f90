@@ -681,18 +681,18 @@ contains
             benchfname = 'CAVGASSEMBLE_BENCH.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'I/O                  : ', rt_io
-            write(fnr,'(a,1x,f9.2)') 'workshare sum        : ', rt_sum
-            write(fnr,'(a,1x,f9.2)') 'merge eo-pairs & norm: ', rt_merge_eos_and_norm
-            write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'initialisation       :', rt_init
+            write(fnr,'(a,1x,f0.2)') 'I/O                  :', rt_io
+            write(fnr,'(a,1x,f0.2)') 'workshare sum        :', rt_sum
+            write(fnr,'(a,1x,f0.2)') 'merge eo-pairs & norm:', rt_merge_eos_and_norm
+            write(fnr,'(a,1x,f0.2)') 'total time           :', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'initialisation        : ', (rt_init/rt_tot)               * 100.
-            write(fnr,'(a,1x,f9.2)') 'I/O                   : ', (rt_io/rt_tot)                 * 100.
-            write(fnr,'(a,1x,f9.2)') 'workshare sum         : ', (rt_sum/rt_tot)                * 100.
-            write(fnr,'(a,1x,f9.2)') 'merge eo-pairs & norm : ', (rt_merge_eos_and_norm/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for       : ',&
+            write(fnr,'(a,1x,f0.2)') 'initialisation        :', (rt_init/rt_tot)               * 100.
+            write(fnr,'(a,1x,f0.2)') 'I/O                   :', (rt_io/rt_tot)                 * 100.
+            write(fnr,'(a,1x,f0.2)') 'workshare sum         :', (rt_sum/rt_tot)                * 100.
+            write(fnr,'(a,1x,f0.2)') 'merge eo-pairs & norm :', (rt_merge_eos_and_norm/rt_tot) * 100.
+            write(fnr,'(a,1x,f0.2)') '% accounted for       :',&
             &((rt_init+rt_io+rt_sum+rt_merge_eos_and_norm)/rt_tot) * 100.
             call fclose(fnr)
         endif

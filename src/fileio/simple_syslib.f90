@@ -149,6 +149,12 @@ interface
         integer(c_int64_t) :: get_peak_rss_bytes
     end function get_peak_rss_bytes
 
+    function get_current_rss_bytes() bind(c,name="simple_current_rss_bytes")
+        use, intrinsic :: iso_c_binding, only: c_int64_t
+        implicit none
+        integer(c_int64_t) :: get_current_rss_bytes
+    end function get_current_rss_bytes
+
     function simple_redirect_output_c(filename, len) bind(c,name="simple_redirect_output")
         use, intrinsic :: iso_c_binding
         implicit none
