@@ -90,8 +90,8 @@ barrier.
 - Combining probability-table construction with reconstruction.
 - Removing ML sigma data.
 - Creating one new candidate/table class for every probability mode.
-- Refactoring `simple_eul_prob_tab2D` in the first implementation. It may reuse
-  the common structures later.
+- Applying the 3D sparse-store or streamed-I/O machinery to
+  `simple_eul_prob_tab2D` without a measured 2D memory or filesystem need.
 
 ## Current memory problem
 
@@ -249,6 +249,11 @@ not require separate data types for dense, state, and neighborhood modes.
 Constructor role is expressed by dedicated procedures (`new_worker`,
 `new_state`, `new_neigh_global`, and `new_assignment`), not optional ownership
 flags such as `with_assignment` or `compact_global`.
+
+`simple_eul_prob_tab2D` follows the same ownership vocabulary for readability:
+its worker owns a table but no assignment map, its global object owns both,
+and its matcher reader owns only the assignment map. It intentionally retains
+its dense/sparse table formats and `ptcl_ref` records.
 
 ## Worker batching policy
 

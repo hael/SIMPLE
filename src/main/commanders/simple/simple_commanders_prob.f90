@@ -351,7 +351,7 @@ contains
         call cavger_read_all
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false.)
         ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
-        call eulprob_obj_part%new(params, build, pinds)
+        call eulprob_obj_part%new_worker(params,build,pinds)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)

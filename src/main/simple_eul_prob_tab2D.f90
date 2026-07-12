@@ -41,7 +41,9 @@ type :: eul_prob_tab2D
     integer                     :: nhood_sz = 1      !< probabilistic neighborhood size used in fill_tab/ref_assign
     contains
     ! CONSTRUCTOR
-    procedure :: new
+    procedure :: new => new_global
+    procedure :: new_worker
+    procedure :: new_assignment
     ! MAIN PROCEDURES
     procedure :: fill_tab
     procedure :: fill_tab_range
@@ -62,6 +64,10 @@ type :: eul_prob_tab2D
     procedure, private :: mark_ref_touched
     procedure, private :: write_sparse_tab
     procedure, private :: read_sparse_tab_to_glob
+    procedure, private :: new_common
+    procedure, private :: initialize_storage
+    procedure, private :: allocate_sparse_bookkeeping
+    procedure, private :: finalize_assignment
 end type eul_prob_tab2D
 
 type :: eval2D_sparse_ws
@@ -80,13 +86,61 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, params, build, pinds )
+    subroutine new_global( self, params, build, pinds )
         class(eul_prob_tab2D),     intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        integer :: i, icls, iptcl, nactive
+        call self%new_common(params,build,pinds)
+        allocate(self%loc_tab(self%nclasses,self%nptcls),self%assgn_map(self%nptcls))
+        call self%allocate_sparse_bookkeeping
+        call self%initialize_storage
+    end subroutine new_global
+
+    subroutine new_worker( self, params, build, pinds )
+        class(eul_prob_tab2D),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        call self%new_common(params,build,pinds)
+        allocate(self%loc_tab(self%nclasses,self%nptcls))
+        call self%allocate_sparse_bookkeeping
+        call self%initialize_storage
+    end subroutine new_worker
+
+    subroutine new_assignment( self, params, build, pinds )
+        class(eul_prob_tab2D),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        integer :: i
         real    :: x
+        call self%kill
+        self%p_ptr  => params
+        self%b_ptr  => build
+        self%nptcls = size(pinds)
+        allocate(self%pinds(self%nptcls),source=pinds)
+        allocate(self%assgn_map(self%nptcls))
+        do i = 1,self%nptcls
+            self%assgn_map(i)%pind   = self%pinds(i)
+            self%assgn_map(i)%icls   = 0
+            self%assgn_map(i)%istate = 0
+            self%assgn_map(i)%inpl   = 0
+            self%assgn_map(i)%dist   = huge(x)
+            self%assgn_map(i)%x      = 0.
+            self%assgn_map(i)%y      = 0.
+            self%assgn_map(i)%has_sh = .false.
+            self%assgn_map(i)%frac   = 100.
+            self%assgn_map(i)%npeaks = 0
+        enddo
+    end subroutine new_assignment
+
+    subroutine new_common( self, params, build, pinds )
+        class(eul_prob_tab2D),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        integer :: nactive
         call self%kill
         self%p_ptr     => params
         self%b_ptr     => build
@@ -104,41 +158,54 @@ contains
         self%nhood_sz = min(self%nhood_sz, nactive)
         self%nhood_sz = min(self%nhood_sz, params%npeaks_inpl)
         allocate(self%pinds(self%nptcls), source=pinds)
-        allocate(self%loc_tab(self%nclasses, self%nptcls), self%assgn_map(self%nptcls))
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
+    end subroutine new_common
+
+    subroutine allocate_sparse_bookkeeping( self )
+        class(eul_prob_tab2D), intent(inout) :: self
         if( self%l_sparse_snhc )then
             self%eval_max_touched = max(1, self%nclasses)
             allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
             allocate(self%eval_touched_counts(self%nptcls), source=0)
         endif
+    end subroutine allocate_sparse_bookkeeping
+
+    subroutine initialize_storage( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer :: i, icls, iptcl
+        real    :: x
         !$omp parallel do default(shared) private(i,iptcl,icls) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             iptcl = self%pinds(i)
-            self%assgn_map(i)%pind   = iptcl
-            self%assgn_map(i)%icls   = 0
-            self%assgn_map(i)%istate = 0
-            self%assgn_map(i)%inpl   = 0
-            self%assgn_map(i)%dist   = huge(x)
-            self%assgn_map(i)%x      = 0.
-            self%assgn_map(i)%y      = 0.
-            self%assgn_map(i)%has_sh = .false.
-            self%assgn_map(i)%frac   = 100.
-            self%assgn_map(i)%npeaks = 0
-            do icls = 1, self%nclasses
-                self%loc_tab(icls,i)%pind   = iptcl
-                self%loc_tab(icls,i)%icls   = icls
-                self%loc_tab(icls,i)%inpl   = 0
-                self%loc_tab(icls,i)%dist   = huge(x)
-                self%loc_tab(icls,i)%x      = 0.
-                self%loc_tab(icls,i)%y      = 0.
-                self%loc_tab(icls,i)%has_sh = .false.
-                self%loc_tab(icls,i)%frac   = 100.
-                self%loc_tab(icls,i)%npeaks = 0
-            end do
+            if( allocated(self%assgn_map) )then
+                self%assgn_map(i)%pind   = iptcl
+                self%assgn_map(i)%icls   = 0
+                self%assgn_map(i)%istate = 0
+                self%assgn_map(i)%inpl   = 0
+                self%assgn_map(i)%dist   = huge(x)
+                self%assgn_map(i)%x      = 0.
+                self%assgn_map(i)%y      = 0.
+                self%assgn_map(i)%has_sh = .false.
+                self%assgn_map(i)%frac   = 100.
+                self%assgn_map(i)%npeaks = 0
+            endif
+            if( allocated(self%loc_tab) )then
+                do icls = 1, self%nclasses
+                    self%loc_tab(icls,i)%pind   = iptcl
+                    self%loc_tab(icls,i)%icls   = icls
+                    self%loc_tab(icls,i)%inpl   = 0
+                    self%loc_tab(icls,i)%dist   = huge(x)
+                    self%loc_tab(icls,i)%x      = 0.
+                    self%loc_tab(icls,i)%y      = 0.
+                    self%loc_tab(icls,i)%has_sh = .false.
+                    self%loc_tab(icls,i)%frac   = 100.
+                    self%loc_tab(icls,i)%npeaks = 0
+                end do
+            endif
         end do
         !$omp end parallel do
-    end subroutine new
+    end subroutine initialize_storage
 
     ! table filling for 2D multi-class assignment
     subroutine fill_tab( self )
@@ -573,6 +640,17 @@ contains
     end subroutine mark_ref_touched
 
 
+    subroutine finalize_assignment( self, iptcl_loc, icls_loc, frac, npeaks )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,                intent(in)    :: iptcl_loc, icls_loc, npeaks
+        real,                   intent(in)    :: frac
+        self%assgn_map(iptcl_loc) = self%loc_tab(icls_loc,iptcl_loc)
+        call materialize_seed_shift(self%assgn_map(iptcl_loc),self%seed_shifts(:,iptcl_loc),&
+            &self%seed_has_sh(iptcl_loc),self%p_ptr%l_doshift,self%seed_nrots)
+        self%assgn_map(iptcl_loc)%frac   = frac
+        self%assgn_map(iptcl_loc)%npeaks = npeaks
+    end subroutine finalize_assignment
+
     subroutine ref_assign_sparse_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
 
@@ -754,11 +832,8 @@ contains
             frontier%ptcl_avail(assigned_ptcl) = .false.
             nleft = nleft - 1
             nassigned = nassigned + 1
-            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls,assigned_ptcl)
-            call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
-            self%assgn_map(assigned_ptcl)%frac   = search_frac(assigned_ptcl)
-            self%assgn_map(assigned_ptcl)%npeaks = search_npeaks(assigned_ptcl)
+            call self%finalize_assignment(assigned_ptcl,assigned_icls,search_frac(assigned_ptcl),&
+                &search_npeaks(assigned_ptcl))
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
 
@@ -780,11 +855,7 @@ contains
                 assigned_icls = pick_best_sparse_class(i)
                 if( assigned_icls == 0 )&
                     &THROW_HARD('Failed sparse likelihood particle assignment in eul_prob_tab2D%ref_assign_sparse_likelihood')
-                self%assgn_map(i) = self%loc_tab(assigned_icls,i)
-                call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
-                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
-                self%assgn_map(i)%frac   = search_frac(i)
-                self%assgn_map(i)%npeaks = search_npeaks(i)
+                call self%finalize_assignment(i,assigned_icls,search_frac(i),search_npeaks(i))
                 frontier%ptcl_avail(i) = .false.
                 nassigned = nassigned + 1
             enddo
@@ -877,7 +948,7 @@ contains
     subroutine ref_assign_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), eligible_cls(:), inds_sorted(:)
-        real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:), dists_raw(:,:)
+        real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:)
         logical, allocatable :: ptcl_avail(:), class_active(:)
         integer :: i, icls, assigned_icls, assigned_ptcl
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
@@ -905,17 +976,14 @@ contains
             endif
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
-        allocate(dists_raw(self%nclasses,self%nptcls), sorted_tab(self%nptcls,self%nclasses),&
-            &stab_inds(self%nptcls,self%nclasses), ptcl_avail(self%nptcls))
-        write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: preserving raw distances'
-        call flush(logfhandle)
-        dists_raw = self%loc_tab(:,:)%dist
+        allocate(sorted_tab(self%nptcls,self%nclasses),stab_inds(self%nptcls,self%nclasses),&
+            &ptcl_avail(self%nptcls))
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: using likelihood weights exp(-dist)'
         call flush(logfhandle)
         ! sort each column
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: sorting per-class particle distances'
         call flush(logfhandle)
-        sorted_tab = transpose(dists_raw)
+        sorted_tab = transpose(self%loc_tab(:,:)%dist)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
         do icls = 1, self%nclasses
             stab_inds(:,icls) = (/(i,i=1,self%nptcls)/)
@@ -956,11 +1024,7 @@ contains
             assigned_icls = eligible_cls(chosen_active)
             assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
             ptcl_avail(assigned_ptcl)     = .false.
-            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_icls, assigned_ptcl)
-            self%assgn_map(assigned_ptcl)%dist = dists_raw(assigned_icls, assigned_ptcl)
-            call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
-            self%assgn_map(assigned_ptcl)%frac = 100.
+            call self%finalize_assignment(assigned_ptcl,assigned_icls,100.,0)
             nassigned = nassigned + 1
         end do
         if( any(ptcl_avail) )then
@@ -986,11 +1050,7 @@ contains
                     end do
                 endif
                 if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_likelihood')
-                self%assgn_map(i) = self%loc_tab(assigned_icls, i)
-                self%assgn_map(i)%dist = dists_raw(assigned_icls, i)
-                call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
-                    &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
-                self%assgn_map(i)%frac = 100.
+                call self%finalize_assignment(i,assigned_icls,100.,0)
                 ptcl_avail(i)     = .false.
                 nassigned = nassigned + 1
             end do
@@ -998,7 +1058,7 @@ contains
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: done'
         call flush(logfhandle)
         deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, sorted_tab, cls_dists, corr_proxy,&
-            &dists_raw, ptcl_avail, class_active)
+            &ptcl_avail, class_active)
     end subroutine ref_assign_likelihood
 
     ! DESTRUCTOR
