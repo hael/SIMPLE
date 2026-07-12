@@ -1,7 +1,7 @@
 !@descr: 3D strategy for neighborhood projection matching with exhaustive subspace initialization
 module simple_strategy3D_greedy_sub
 use simple_core_module_api
-use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_alloc, only: s3D, ref_state_from_index
 use simple_strategy3D_utils, only: extract_peak_ori, extract_peak_oris
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
@@ -56,7 +56,7 @@ contains
             ! search
             do isample=1,self%s%nrefs_sub
                 iref = s3D%srch_order_sub(isample,self%s%ithr) ! set the reference index
-                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                if( s3D%state_exists(ref_state_from_index(iref,self%s%nprojs)) )then
                     ! identify the top scoring in-plane angle
                     if( l_prob_objfun )then
                         if( self%s%l_sh_first )then
@@ -93,16 +93,16 @@ contains
             do iproj=1,self%s%p_ptr%nspace
                 if( .not. lnns(iproj) ) cycle
                 iref = (self%s%prev_state - 1) * self%s%p_ptr%nspace + iproj
-                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                if( s3D%state_exists(ref_state_from_index(iref,self%s%nprojs)) )then
                     ! identify the top scoring in-plane angle
                     if( l_prob_objfun .and. self%s%p_ptr%l_prob_inpl )then
                         if( self%s%l_sh_first )then
                             call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
-                                &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres,&
+                                &s3D%smpl_inpl_athres(ref_state_from_index(iref,self%s%nprojs)), self%s%p_ptr%prob_athres,&
                                 &dist, loc(1), sorted_corrs, inds)
                         else
                             call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, [0.,0.],&
-                                &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres,&
+                                &s3D%smpl_inpl_athres(ref_state_from_index(iref,self%s%nprojs)), self%s%p_ptr%prob_athres,&
                                 &dist, loc(1), sorted_corrs, inds)
                         endif
                         corr = exp(-dist)
@@ -121,7 +121,7 @@ contains
                         endif
                         if( self%s%p_ptr%l_prob_inpl )then
                             loc = angle_sampling(eulprob_dist_switch(inpl_corrs, self%s%p_ptr%cc_objfun), sorted_corrs, inds,&
-                                &s3D%smpl_inpl_athres(s3D%proj_space_state(iref)), self%s%p_ptr%prob_athres)
+                                &s3D%smpl_inpl_athres(ref_state_from_index(iref,self%s%nprojs)), self%s%p_ptr%prob_athres)
                         else
                             loc = maxloc(inpl_corrs)
                         endif

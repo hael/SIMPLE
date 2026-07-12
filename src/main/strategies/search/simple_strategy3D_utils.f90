@@ -1,7 +1,7 @@
 !@descr: utility routines for 3D strategies
 module simple_strategy3D_utils
 use simple_core_module_api
-use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_alloc, only: s3D, ref_state_from_index, ref_proj_from_index
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
@@ -17,19 +17,21 @@ contains
         real,                   intent(in)    :: corr
         real,                   intent(in)    :: sh(2)
         type(ori) :: osym, o_prev, o_new
-        integer   :: state, neff_states, nrefs_eval, nrefs_tot
-        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
+        integer   :: state, proj, neff_states, nrefs_eval, nrefs_tot
+        real      :: euler(3), shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
         logical   :: l_multistates
-        s3D%proj_space_euls(3,ref,s%ithr) = 360. - s%b_ptr%pftc%get_rot(inpl)
         ! stash previous ori
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
         if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; assign_ori')
-        call s%b_ptr%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
+        proj = ref_proj_from_index(ref, s%nprojs)
+        call s%b_ptr%spproj_field%set(s%iptcl, 'proj', real(proj))
         ! in-plane (inpl)
         call s%b_ptr%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
-        call s%b_ptr%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
+        euler    = s%b_ptr%eulspace%get_euler(proj)
+        euler(3) = 360. - s%b_ptr%pftc%get_rot(inpl)
+        call s%b_ptr%spproj_field%set_euler(s%iptcl, euler)
         ! shift
         shvec      = s%prev_shvec
         shvec_incr = 0.
@@ -44,7 +46,7 @@ contains
         state = 1
         l_multistates = s%nstates > 1
         if( l_multistates )then
-            state = s3D%proj_space_state(ref)
+            state = ref_state_from_index(ref, s%nprojs)
             if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; assign_ori')
         endif
         mi_state = 0.
@@ -120,21 +122,25 @@ contains
     subroutine extract_peak_oris( s, npeaks )
         class(strategy3D_srch), intent(inout) :: s
         integer,               intent(in)    :: npeaks
-        integer   :: refs(npeaks), state, ipeak
-        real      :: shvec(2), corr
+        integer   :: refs(npeaks), state, proj, inpl, ipeak
+        real      :: euler(3), shvec(2), corr
         logical   :: l_multistates
         refs = maxnloc(s3D%proj_space_corrs(:,s%ithr), npeaks)
         if( any(refs < 1) .or. any(refs > s%nrefs) ) THROW_HARD('at least one refs index out of bound; extract_peak_oris')
         l_multistates = s%nstates > 1
         do ipeak = 1, npeaks
-            call s%opeaks%set_euler(ipeak, s3D%proj_space_euls(:,refs(ipeak),s%ithr))
+            proj     = ref_proj_from_index(refs(ipeak), s%nprojs)
+            inpl     = s3D%proj_space_inplinds(refs(ipeak),s%ithr)
+            euler    = s%b_ptr%eulspace%get_euler(proj)
+            if( inpl > 0 ) euler(3) = 360. - s%b_ptr%pftc%get_rot(inpl)
+            call s%opeaks%set_euler(ipeak, euler)
             shvec = s%prev_shvec
             if( s%doshift ) shvec = shvec + s3D%proj_space_shift(:,refs(ipeak),s%ithr)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             call s%opeaks%set_shift(ipeak, shvec)
             state = 1
             if( l_multistates )then
-                state = s3D%proj_space_state(refs(ipeak))
+                state = ref_state_from_index(refs(ipeak), s%nprojs)
                 if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peak_oris')
             endif
             call s%opeaks%set_state(ipeak, state)

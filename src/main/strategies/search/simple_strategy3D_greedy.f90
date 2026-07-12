@@ -1,7 +1,7 @@
 !@descr: 3D strategy for exhaustive projection matching
 module simple_strategy3D_greedy
 use simple_core_module_api
-use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_alloc, only: s3D, ref_state_from_index
 use simple_strategy3D_utils, only: extract_peak_ori
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
@@ -49,7 +49,7 @@ contains
             ! search
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(isample,self%s%ithr) ! set the reference index
-                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                if( s3D%state_exists(ref_state_from_index(iref,self%s%nprojs)) )then
                     ! identify the top scoring in-plane angle
                     if( self%s%l_sh_first )then
                         call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, inpl_corrs)

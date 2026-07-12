@@ -2,7 +2,7 @@
 module simple_strategy3D_snhc_smpl
 ! use simple_core_module_api
 use simple_pftc_srch_api
-use simple_strategy3D_alloc, only: s3D
+use simple_strategy3D_alloc, only: s3D, ref_state_from_index
 use simple_strategy3D_utils, only: extract_peak_ori
 use simple_decay_funs,       only: extremal_decay
 use simple_parameters,       only: parameters
@@ -43,7 +43,7 @@ contains
         integer,                     intent(in)    :: ithr
         real    :: sorted_corrs(self%s%nrefs), inpl_corrs(self%s%nrots)
         real    :: cxy(3), inpl_corr, inpl_dist, neigh_frac, power
-        integer :: vec_nrots(self%s%nrots), sorted_inds(self%s%nrefs)
+        integer :: vec_nrots(self%s%nrots)
         integer :: iref, isample, nrefs_bound, inpl_ind, order_ind, smpl_nrefs, smpl_ninpl, smpl_rank
         logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
@@ -72,7 +72,7 @@ contains
                 ! neighbourhood size
                 if(self%s%nrefs_eval > nrefs_bound) exit
                 ! empty space
-                if( .not.s3D%state_exists(s3D%proj_space_state(iref)) )cycle
+                if( .not.s3D%state_exists(ref_state_from_index(iref,self%s%nprojs)) )cycle
                 ! In-plane sampling
                 if( l_prob_objfun )then
                     call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, [0.,0.], power,&
@@ -88,12 +88,12 @@ contains
             if( self%s%doshift )then
                 ! Sort
                 sorted_corrs = s3D%proj_space_corrs(:, self%s%ithr)
-                sorted_inds  = (/(iref, iref=1,self%s%nrefs)/)
-                call hpsort(sorted_corrs, sorted_inds)
+                s3D%srch_order(:,self%s%ithr) = (/(iref, iref=1,self%s%nrefs)/)
+                call hpsort(sorted_corrs, s3D%srch_order(:,self%s%ithr))
                 ! Subset offset search
                 s3D%proj_space_corrs(:,self%s%ithr) = -1.0
                 do isample = self%s%nrefs-smpl_nrefs+1, self%s%nrefs
-                    iref = sorted_inds(isample)
+                    iref = s3D%srch_order(isample,self%s%ithr)
                     call self%s%grad_shsrch_obj2%set_indices(iref, self%s%iptcl)
                     inpl_ind = s3D%proj_space_inplinds(iref,self%s%ithr)
                     cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
@@ -106,7 +106,7 @@ contains
             endif
             ! Projection direction samling
             sorted_corrs = s3D%proj_space_corrs(:,self%s%ithr)
-            call power_sampling( power, self%s%nrefs, sorted_corrs, sorted_inds, smpl_nrefs,&
+            call power_sampling( power, self%s%nrefs, sorted_corrs, s3D%srch_order(:,self%s%ithr), smpl_nrefs,&
                                 &iref, smpl_rank, inpl_corr )
             self%s%nrefs_eval = nrefs_bound
             ! In-plane search

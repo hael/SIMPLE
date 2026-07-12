@@ -143,7 +143,7 @@ contains
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
         real      :: corrs(self%nrots), corr
-        integer   :: ipeak, tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
+        integer   :: ipeak, iref_sub, iref_sub_rand, prev_proj_sub
         ! previous parameters
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
@@ -167,12 +167,13 @@ contains
         call put_last(self%prev_ref, s3D%srch_order(:,self%ithr))
         ! --> subspace
         if( self%l_neigh )then
-            call s3D%rts_sub(self%ithr)%ne_ran_iarr(tmp_inds)
+            call s3D%rts_sub(self%ithr)%ne_ran_iarr(s3D%srch_order_sub(:,self%ithr))
             ! --> do the mapping
             do iref_sub = 1, self%nrefs_sub
+                iref_sub_rand = s3D%srch_order_sub(iref_sub,self%ithr)
                 ! index for b_ptr%subspace_inds needs to be a projection direction
                 prev_proj_sub = self%b_ptr%subspace_inds(&
-                &tmp_inds(iref_sub) - (self%prev_state - 1) * self%p_ptr%nspace_sub)
+                &iref_sub_rand - (self%prev_state - 1) * self%p_ptr%nspace_sub)
                 ! but then we need to turn it back into a reference index in the full search space
                 s3D%srch_order_sub(iref_sub,self%ithr) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
             enddo
@@ -271,7 +272,6 @@ contains
         endif
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
-        s3D%proj_space_euls(  3,ref,self%ithr) = 360. - self%b_ptr%pftc%get_rot(inpl_ind)
         s3D%proj_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 
