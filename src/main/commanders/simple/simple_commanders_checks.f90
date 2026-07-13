@@ -61,9 +61,35 @@ contains
         call params%new(cline)
         call cline%set('nptcls', params%nptcls)
         write(logfhandle,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
+        call check_euler_shift
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
+
+    !> Regression check executed in each coarray workflow partition. This must
+    !! run in simple_private_exec so it exercises the coarray-enabled ori code.
+    subroutine check_euler_shift
+        use simple_ori, only: ori
+        use simple_rnd, only: ran3
+        type(ori) :: o
+        integer   :: i
+        real      :: euls(3), euls_shifted(3)
+        call o%new(is_ptcl=.false.)
+        do i = 1, 100000
+            euls(1) = ran3() * 800. - 400.
+            euls(2) = ran3() * 500. - 250.
+            euls(3) = ran3() * 800. - 400.
+            call o%set_euler(euls)
+            euls_shifted = o%get_euler()
+            if( euls_shifted(1) < 0. .or. euls_shifted(1) > 360. .or. &
+                euls_shifted(2) < 0. .or. euls_shifted(2) > 180. .or. &
+                euls_shifted(3) < 0. .or. euls_shifted(3) > 360. )then
+                THROW_HARD('coarray Euler shifting does not work')
+            endif
+        end do
+        call o%kill
+        write(logfhandle,'(A)') '>>> COARRAY EULER SHIFT CHECK: PASSED'
+    end subroutine check_euler_shift
 
     subroutine exec_check_stoch_update( self, cline )
         use simple_decay_funs

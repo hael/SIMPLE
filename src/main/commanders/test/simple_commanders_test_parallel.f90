@@ -71,6 +71,7 @@ subroutine exec_test_coarrays( self, cline )
     call qenv%gen_scripts_and_schedule_jobs(job_descr, extra_params=params)
     call qenv%kill
     call job_descr%kill
+    write(logfhandle,'(A)') '>>> coarray Euler shift checks passed on all partitions'
     call simple_end('**** SIMPLE_TEST_COARRAYS_WORKFLOW NORMAL STOP ****')
 #else
     THROW_HARD('exec_test_coarrays requires a USE_COARRAYS build')

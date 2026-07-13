@@ -39,11 +39,22 @@ foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     set_target_properties(${exe} PROPERTIES
         LINKER_LANGUAGE Fortran
     )
-    target_link_libraries(${exe}
-        PRIVATE
-            ${SIMPLELIB}
-            ${SIMPLE_LIBRARIES}
-    )
+    if(USE_COARRAYS AND exe STREQUAL SIMPLE_PRIVATE_EXE)
+        set_target_properties(${exe} PROPERTIES
+            Fortran_MODULE_DIRECTORY "${SIMPLE_COARRAY_MODULE_DIRECTORY}"
+        )
+        target_link_libraries(${exe}
+            PRIVATE
+                ${SIMPLE_COARRAYLIB}
+                ${SIMPLE_LIBRARIES}
+        )
+    else()
+        target_link_libraries(${exe}
+            PRIVATE
+                ${SIMPLELIB}
+                ${SIMPLE_LIBRARIES}
+        )
+    endif()
     if( USE_OPENMP )
       target_link_options(${exe} PUBLIC -fopenmp)
     endif()
@@ -89,11 +100,22 @@ if(BUILD_TESTS)
     set_target_properties(${test_exe} PROPERTIES
       LINKER_LANGUAGE Fortran
     )
-    target_link_libraries(${test_exe}
-      PRIVATE
-        ${SIMPLELIB}
-        ${SIMPLE_LIBRARIES}
-    )
+    if(USE_COARRAYS AND test_id STREQUAL "coarrays")
+      set_target_properties(${test_exe} PROPERTIES
+        Fortran_MODULE_DIRECTORY "${SIMPLE_COARRAY_MODULE_DIRECTORY}"
+      )
+      target_link_libraries(${test_exe}
+        PRIVATE
+          ${SIMPLE_COARRAYLIB}
+          ${SIMPLE_LIBRARIES}
+      )
+    else()
+      target_link_libraries(${test_exe}
+        PRIVATE
+          ${SIMPLELIB}
+          ${SIMPLE_LIBRARIES}
+      )
+    endif()
     if( USE_OPENMP )
       target_link_options(${test_exe} PUBLIC -fopenmp)
     endif()
@@ -110,6 +132,13 @@ if(BUILD_TESTS)
         DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/${test_id}"
       )
     endif()
-    add_test(NAME ${test_name} COMMAND ${test_exe})
+    if(USE_COARRAYS AND test_id STREQUAL "coarrays")
+      add_test(
+        NAME ${test_name}
+        COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${test_exe}>
+      )
+    else()
+      add_test(NAME ${test_name} COMMAND ${test_exe})
+    endif()
   endforeach()
 endif()

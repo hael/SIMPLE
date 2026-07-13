@@ -112,6 +112,43 @@ target_link_libraries(${SIMPLELIB}
         $<$<PLATFORM_ID:Windows>:ws2_32>
 )
 
+# GNU Fortran module files and derived-type initialization metadata are not safe
+# to mix between normal and -fcoarray=lib compilation modes. Keep the primary
+# library in normal mode for controllers and unit tests, and build a separate
+# consistently coarray-enabled copy only for coarray image executables.
+if(USE_COARRAYS)
+    file(MAKE_DIRECTORY "${SIMPLE_COARRAY_MODULE_DIRECTORY}")
+
+    add_library(${SIMPLE_COARRAYLIB} STATIC ${SIMPLE_ALL_SOURCES})
+
+    add_dependencies(${SIMPLE_COARRAYLIB} simple_args simple_git)
+    if(SIMPLE_DEPENDENCY_TARGETS)
+        add_dependencies(${SIMPLE_COARRAYLIB} ${SIMPLE_DEPENDENCY_TARGETS})
+    endif()
+
+    set_target_properties(${SIMPLE_COARRAYLIB} PROPERTIES
+        VERSION                  ${PROJECT_VERSION}
+        SOVERSION                ${PROJECT_VERSION_MAJOR}
+        Fortran_MODULE_DIRECTORY "${SIMPLE_COARRAY_MODULE_DIRECTORY}"
+        POSITION_INDEPENDENT_CODE ON
+    )
+
+    target_link_libraries(${SIMPLE_COARRAYLIB}
+        PUBLIC
+            ${SIMPLE_LIBRARIES}
+            Coarray::Coarray
+            $<$<PLATFORM_ID:Windows>:ws2_32>
+    )
+
+    target_include_directories(${SIMPLE_COARRAYLIB}
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+            $<BUILD_INTERFACE:${SIMPLE_COARRAY_MODULE_DIRECTORY}>
+            $<INSTALL_INTERFACE:include>
+            $<BUILD_INTERFACE:${SIMPLE_GEN_DIR}>
+    )
+endif()
+
 target_include_directories(${SIMPLELIB}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>

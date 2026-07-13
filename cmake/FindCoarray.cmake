@@ -3,10 +3,12 @@
 # Provides:
 #   Coarray_FOUND
 #   Coarray::Coarray
+#   Coarray_CAFRUN_EXECUTABLE
 
 find_package(MPI QUIET COMPONENTS Fortran)
 
 find_program(Coarray_CAF_EXECUTABLE NAMES caf)
+find_program(Coarray_CAFRUN_EXECUTABLE NAMES cafrun)
 
 set(_Coarray_LIBRARY_HINTS)
 set(_Coarray_LIBRARY_FROM_CAF)
@@ -50,7 +52,7 @@ find_library(Coarray_CAF_LIBRARY
 )
 
 set(Coarray_FOUND FALSE)
-if(Coarray_CAF_LIBRARY AND MPI_Fortran_FOUND)
+if(Coarray_CAFRUN_EXECUTABLE AND Coarray_CAF_LIBRARY AND MPI_Fortran_FOUND)
     set(Coarray_FOUND TRUE)
 endif()
 
@@ -70,5 +72,6 @@ endif()
 
 mark_as_advanced(
     Coarray_CAF_EXECUTABLE
+    Coarray_CAFRUN_EXECUTABLE
     Coarray_CAF_LIBRARY
 )

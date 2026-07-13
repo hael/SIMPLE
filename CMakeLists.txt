@@ -101,6 +101,8 @@ include(CompilerConfig)
 include(Dependencies)
 # # Library target name used in subdirs
 set(SIMPLELIB "SIMPLE${PROJECT_VERSION}")
+set(SIMPLE_COARRAYLIB "${SIMPLELIB}_coarray")
+set(SIMPLE_COARRAY_MODULE_DIRECTORY "${PROJECT_BINARY_DIR}/modules_coarray")
 
 # ------------------------------------------------------------------------------
 # Subdirectories
@@ -169,4 +171,3 @@ message(STATUS "========================================")
 
 # Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
-
