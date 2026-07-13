@@ -19,7 +19,7 @@ public :: CAVG_REJECT_REASON_NO_COMPONENT
 public :: CAVG_REJECT_REASON_MASK_GEOMETRY
 public :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
 public :: CAVG_REJECT_REASON_LOCVAR_FG_LOW
-public :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
+public :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
 public :: EPS
 public :: CLIP_Z
 public :: cavg_quality_feature_def
@@ -51,7 +51,7 @@ integer, parameter :: CAVG_REJECT_REASON_NO_COMPONENT          = 3
 integer, parameter :: CAVG_REJECT_REASON_MASK_GEOMETRY         = 4
 integer, parameter :: CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW    = 5
 integer, parameter :: CAVG_REJECT_REASON_LOCVAR_FG_LOW         = 6
-integer, parameter :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG = 7
+integer, parameter :: CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW = 7
 
 type :: cavg_quality_feature_def
     ! Keep these fixed-width fields within the current inventory limits:

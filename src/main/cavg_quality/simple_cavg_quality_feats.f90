@@ -13,7 +13,7 @@ use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUAL
     cavg_quality_result, CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP, &
     CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, &
     CAVG_REJECT_REASON_MASK_GEOMETRY, CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW,&
-    CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
+    CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
 implicit none
 private
 
@@ -56,6 +56,8 @@ real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
 real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
 real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
 real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5
+real,    parameter :: FUZZY_BALL_SIGNAL_HARD_REJECT_MIN  = -0.5
+real,    parameter :: SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.0
 real,    parameter :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX = exp(-4.5)
 real,    parameter :: POOL_RES_HARD_REJECT_A    = 25.0
 real,    parameter :: POOL_POP_FRACTION_HARD_REJECT = 5.0e-4
@@ -318,15 +320,15 @@ contains
                 else if( mask_hard_reject ) then
                     cavg_hard_reject_for_context = .true.
                     reason = CAVG_REJECT_REASON_MASK_GEOMETRY
-                else if( bp_center_edge_var < 4.0 ) then
+                else if( bp_center_edge_var < SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN ) then
                     cavg_hard_reject_for_context = .true.
                     reason = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
                 else if( locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX ) then
                     cavg_hard_reject_for_context = .true.
                     reason = CAVG_REJECT_REASON_LOCVAR_FG_LOW
-                else if( fuzzy_ball_signal < 0.0 ) then
+                else if( fuzzy_ball_signal < FUZZY_BALL_SIGNAL_HARD_REJECT_MIN ) then
                     cavg_hard_reject_for_context = .true.
-                    reason = CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
+                    reason = CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
                 end if
             case(CAVG_QUALITY_CONTEXT_POOL)
                 ! Pool is the final pre-3D 2D selection stage after highly cleaned

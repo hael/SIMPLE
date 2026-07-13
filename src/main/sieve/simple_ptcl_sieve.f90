@@ -60,7 +60,7 @@ module simple_ptcl_sieve
                                                 CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
                                                 CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
                                                 CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
-                                                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG
+                                                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
@@ -1717,7 +1717,7 @@ contains
         reason_color = rgb_code( 30, 144, 255)
       case(CAVG_REJECT_REASON_LOCVAR_FG_LOW)
         reason_color = rgb_code(153,  50, 204)
-      case(CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG)
+      case(CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW)
         reason_color = rgb_code(139,  69,  19)
       case default
         reason_color = rgb_code(180, 180, 180)
@@ -1756,7 +1756,7 @@ contains
       codes = [ -1, 100, CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
                 CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
                 CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
-                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_NEG ]
+                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW ]
       y0 = margin
       do i = 1, ncolors
         x0 = margin + (i - 1) * (box + gap)
