@@ -10,16 +10,17 @@ use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatc
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
-use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, project_fplane_mean, project_fplanes_mean_basis
+use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, accumulate_plane_oversamp_coupled_stats, &
+    &project_fplane_mean, project_fplanes_mean_basis
 use simple_map_reduce,       only: split_nobjs_even
 implicit none
 
 public :: update_basis_from_latents, infer_latents_from_basis
-public :: write_mstep_flexvol_part_file, update_basis_from_flexvol_part_files
+public :: write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files
 public :: write_estep_latent_part_file, reduce_estep_latent_part_files
 public :: initialize_latents, orthonormalize_latents, latent_sdev, latent_covariance
 public :: basis_fourier_energy, cleanup_planes, projected_model_kfromto
-public :: flexvol_part, write_flexvol_part, read_flexvol_part
+public :: test_projected_latent_mstep_stats_io
 private
 #include "simple_local_flags.inc"
 
@@ -27,8 +28,11 @@ real(dp), parameter :: LATENT_RIDGE = 1.0d-3
 real(dp), parameter :: MODE_VAR_FLOOR = 1.0d-3
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_ABS = 1.0d-10
-integer,  parameter :: FLEXVOL_PART_MAGIC = 1180053580
-integer,  parameter :: FLEXVOL_PART_VERSION = 1
+integer,  parameter :: MSTEP_STATS_MAGIC = 1180053581
+integer,  parameter :: MSTEP_STATS_VERSION = 1
+integer,  parameter :: ESTEP_PART_MAGIC = 1180053580
+integer,  parameter :: ESTEP_PART_VERSION = 1
+integer(longer), parameter :: MSTEP_STATS_IO_TARGET_BYTES = 64_longer * 1024_longer * 1024_longer
 
 type :: projected_latent_mstep_2d_block
     integer :: nrecords = 0
@@ -40,20 +44,16 @@ type :: projected_latent_mstep_2d_block
     real(dp), allocatable :: latent_second(:,:,:)
 end type projected_latent_mstep_2d_block
 
-type :: flexvol_part
-    integer :: nrecords     = 0
-    integer :: nrecords_max = 0
-    integer :: ncomp        = 0
-    integer :: plane_lb(2)  = 0
-    integer :: plane_ub(2)  = -1
-    integer,  allocatable :: rows(:), pinds(:), nyq(:)
-    integer,  allocatable :: frlims(:,:,:)
-    real,     allocatable :: shconst(:,:)
-    real(dp), allocatable :: zrows(:,:)
-    real(dp), allocatable :: latent_second(:,:,:)
-    complex,  allocatable :: cmplx_planes(:,:,:)
-    real,     allocatable :: ctfsq_planes(:,:,:)
-end type flexvol_part
+type :: projected_latent_mstep_stats
+    integer :: nrecords  = 0
+    integer :: ncomp     = 0
+    integer :: npairs    = 0
+    integer :: exp_lb(3) = 0
+    integer :: exp_ub(3) = -1
+    integer :: model_nyq = 0
+    complex, allocatable :: basis_rhs(:,:,:,:)
+    real,    allocatable :: rho_cross(:,:,:,:)
+end type projected_latent_mstep_stats
 
 type :: projected_latent_estep_part
     integer :: nrecords = 0
@@ -80,14 +80,11 @@ contains
         character(len=*), optional, intent(in) :: log_label
         type(fplane_type) :: mean_fpl
         type(projected_latent_mstep_2d_block) :: mstep_block
-        type(flexvol_part) :: part_out, part_in
         real,    allocatable :: rho_cross_exp(:,:,:,:)
         integer, allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
-        type(string)       :: part_fname
         integer              :: exp_shape(3), npairs
         integer           :: batchlims(2), batchsz, ibatch, ipart, nparts_eff, partlims(2), q, progress_stride
-        logical           :: write_parts
         integer(timer_int_kind) :: t_total, t_phase, t_comp
         t_total = tic()
         if( present(log_label) )then
@@ -99,7 +96,6 @@ contains
         call flush(logfhandle)
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
         nparts_eff      = max(1, min(max(1, params%nparts), nptcls))
-        write_parts     = nparts_eff > 1
         parts           = split_nobjs_even(nptcls, nparts_eff)
         if( nparts_eff > 1 )then
             write(logfhandle,'(A,I0)') log_prefix//' M-STEP LOCAL PARTITIONS: ', nparts_eff
@@ -118,7 +114,6 @@ contains
         t_phase = tic()
         do ipart = 1, nparts_eff
             partlims = parts(ipart,:)
-            if( write_parts ) call init_flexvol_part(part_out, partlims(2) - partlims(1) + 1, ncomp)
             do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
@@ -127,31 +122,16 @@ contains
                     &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
                 call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, z_postcov, &
                     &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
-                if( write_parts )then
-                    call append_mstep_block_to_flexvol_part(part_out, mstep_block, fpls(:batchsz))
-                else
-                    call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
-                        &mstep_block, fpls(:batchsz))
-                endif
+                call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
+                    &mstep_block, fpls(:batchsz))
                 if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
                     write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
                     call flush(logfhandle)
                 endif
             end do
-            if( write_parts )then
-                part_fname = flexvol_part_fname(ipart, nparts_eff)
-                call write_flexvol_part(part_fname, part_out)
-                call kill_flexvol_part(part_out)
-                call read_flexvol_part(part_fname, part_in)
-                call insert_flexvol_part(build, basis_recs, rho_cross_exp, ncomp, part_in)
-                call kill_flexvol_part(part_in)
-                call part_fname%kill
-            endif
         end do
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
         call kill_projected_latent_mstep_2d_block(mstep_block)
-        call kill_flexvol_part(part_out)
-        call kill_flexvol_part(part_in)
         if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
         call cleanup_plane(mean_fpl)
@@ -270,208 +250,94 @@ contains
         end do
     end subroutine insert_projected_latent_mstep_2d_block
 
-    subroutine init_flexvol_part( part, nrecords_max, ncomp )
-        type(flexvol_part), intent(inout) :: part
-        integer,            intent(in)    :: nrecords_max, ncomp
-        call kill_flexvol_part(part)
-        part%nrecords     = 0
-        part%nrecords_max = nrecords_max
-        part%ncomp        = ncomp
-        part%plane_lb     = 0
-        part%plane_ub     = -1
-        allocate(part%rows(nrecords_max), part%pinds(nrecords_max), part%nyq(nrecords_max), &
-            &part%frlims(3,2,nrecords_max), part%shconst(3,nrecords_max), &
-            &part%zrows(ncomp,nrecords_max), part%latent_second(ncomp,ncomp,nrecords_max))
-        part%rows          = 0
-        part%pinds         = 0
-        part%nyq           = 0
-        part%frlims        = 0
-        part%shconst       = 0.
-        part%zrows         = 0.d0
-        part%latent_second = 0.d0
-    end subroutine init_flexvol_part
+    subroutine init_projected_latent_mstep_stats( stats, exp_lb, exp_ub, model_nyq, ncomp )
+        type(projected_latent_mstep_stats), intent(inout) :: stats
+        integer, intent(in) :: exp_lb(3), exp_ub(3), model_nyq, ncomp
+        integer :: exp_shape(3)
+        call kill_projected_latent_mstep_stats(stats)
+        exp_shape = exp_ub - exp_lb + 1
+        if( ncomp < 1 .or. model_nyq < 1 .or. any(exp_shape < 1) )then
+            THROW_HARD('invalid projected latent M-step statistics dimensions')
+        endif
+        stats%ncomp     = ncomp
+        stats%npairs    = (ncomp * (ncomp + 1)) / 2
+        stats%exp_lb    = exp_lb
+        stats%exp_ub    = exp_ub
+        stats%model_nyq = model_nyq
+        allocate(stats%basis_rhs(exp_shape(1),exp_shape(2),exp_shape(3),ncomp), source=CMPLX_ZERO)
+        allocate(stats%rho_cross(stats%npairs,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
+    end subroutine init_projected_latent_mstep_stats
 
-    subroutine kill_flexvol_part( part )
-        type(flexvol_part), intent(inout) :: part
-        if( allocated(part%rows) ) deallocate(part%rows)
-        if( allocated(part%pinds) ) deallocate(part%pinds)
-        if( allocated(part%nyq) ) deallocate(part%nyq)
-        if( allocated(part%frlims) ) deallocate(part%frlims)
-        if( allocated(part%shconst) ) deallocate(part%shconst)
-        if( allocated(part%zrows) ) deallocate(part%zrows)
-        if( allocated(part%latent_second) ) deallocate(part%latent_second)
-        if( allocated(part%cmplx_planes) ) deallocate(part%cmplx_planes)
-        if( allocated(part%ctfsq_planes) ) deallocate(part%ctfsq_planes)
-        part%nrecords     = 0
-        part%nrecords_max = 0
-        part%ncomp        = 0
-        part%plane_lb     = 0
-        part%plane_ub     = -1
-    end subroutine kill_flexvol_part
+    subroutine kill_projected_latent_mstep_stats( stats )
+        type(projected_latent_mstep_stats), intent(inout) :: stats
+        if( allocated(stats%basis_rhs) ) deallocate(stats%basis_rhs)
+        if( allocated(stats%rho_cross) ) deallocate(stats%rho_cross)
+        stats%nrecords  = 0
+        stats%ncomp     = 0
+        stats%npairs    = 0
+        stats%exp_lb    = 0
+        stats%exp_ub    = -1
+        stats%model_nyq = 0
+    end subroutine kill_projected_latent_mstep_stats
 
-    subroutine append_mstep_block_to_flexvol_part( part, block, fpls_batch )
-        type(flexvol_part), intent(inout) :: part
-        type(projected_latent_mstep_2d_block), intent(in) :: block
-        type(fplane_type),  intent(in)    :: fpls_batch(:)
-        integer :: i, irec
-        if( part%ncomp /= block%ncomp ) THROW_HARD('latent component mismatch in flexvol_part append')
+    integer(longer) function projected_latent_mstep_stats_nbytes( stats ) result( nbytes )
+        type(projected_latent_mstep_stats), intent(in) :: stats
+        integer(longer) :: ncells, cbytes, rbytes
+        integer :: exp_shape(3)
+        nbytes = 0_longer
+        if( stats%ncomp < 1 .or. stats%npairs < 1 ) return
+        exp_shape = stats%exp_ub - stats%exp_lb + 1
+        if( any(exp_shape < 1) ) return
+        ncells = product(int(exp_shape, longer))
+        cbytes = int(storage_size(CMPLX_ZERO) / 8, longer)
+        rbytes = int(storage_size(0.) / 8, longer)
+        nbytes = ncells * (cbytes * int(stats%ncomp,longer) + rbytes * int(stats%npairs,longer))
+    end function projected_latent_mstep_stats_nbytes
+
+    subroutine accumulate_projected_latent_mstep_2d_block( build, stats, block, fpls_batch )
+        class(builder), intent(inout) :: build
+        type(projected_latent_mstep_stats), intent(inout) :: stats
+        type(projected_latent_mstep_2d_block), intent(inout) :: block
+        type(fplane_type), intent(in) :: fpls_batch(:)
+        integer :: i
+        if( block%ncomp /= stats%ncomp ) THROW_HARD('M-step block/statistics component mismatch')
         do i = 1, block%nrecords
             if( .not. block%valid(i) ) cycle
-            if( .not. allocated(fpls_batch(i)%cmplx_plane) .or. .not. allocated(fpls_batch(i)%ctfsq_plane) )then
-                THROW_HARD('unallocated Fourier plane in flexvol_part append')
-            endif
-            call ensure_flexvol_plane_storage(part, fpls_batch(i))
-            if( part%nrecords >= part%nrecords_max ) THROW_HARD('flexvol_part capacity exceeded')
-            irec = part%nrecords + 1
-            part%nrecords = irec
-            part%rows(irec)                 = block%rows(i)
-            part%pinds(irec)                = block%pinds(i)
-            part%nyq(irec)                  = fpls_batch(i)%nyq
-            part%frlims(:,:,irec)           = fpls_batch(i)%frlims
-            part%shconst(:,irec)            = fpls_batch(i)%shconst
-            part%zrows(:,irec)              = block%zrows(:,i)
-            part%latent_second(:,:,irec)    = block%latent_second(:,:,i)
-            part%cmplx_planes(:,:,irec)     = fpls_batch(i)%cmplx_plane
-            part%ctfsq_planes(:,:,irec)     = fpls_batch(i)%ctfsq_plane
+            call accumulate_plane_oversamp_coupled_stats(stats%basis_rhs, stats%rho_cross, stats%exp_lb, &
+                &stats%model_nyq, build%pgrpsyms, block%orientations(i), fpls_batch(i), &
+                &block%zrows(:,i), block%latent_second(:,:,i))
+            stats%nrecords = stats%nrecords + 1
         end do
-    end subroutine append_mstep_block_to_flexvol_part
+    end subroutine accumulate_projected_latent_mstep_2d_block
 
-    subroutine ensure_flexvol_plane_storage( part, fpl )
-        type(flexvol_part), intent(inout) :: part
-        type(fplane_type),  intent(in)    :: fpl
-        integer :: plane_lb(2), plane_ub(2)
-        plane_lb = [lbound(fpl%cmplx_plane,1), lbound(fpl%cmplx_plane,2)]
-        plane_ub = [ubound(fpl%cmplx_plane,1), ubound(fpl%cmplx_plane,2)]
-        if( any(plane_lb /= [lbound(fpl%ctfsq_plane,1), lbound(fpl%ctfsq_plane,2)]) .or. &
-            &any(plane_ub /= [ubound(fpl%ctfsq_plane,1), ubound(fpl%ctfsq_plane,2)]) )then
-            THROW_HARD('Fourier plane bounds mismatch in flexvol_part append')
+    subroutine write_projected_latent_mstep_stats( fname, stats )
+        class(string), intent(in) :: fname
+        type(projected_latent_mstep_stats), intent(in) :: stats
+        type(string) :: tmp_fname
+        integer :: funit, io_stat, q, header(12)
+        if( .not. allocated(stats%basis_rhs) .or. .not. allocated(stats%rho_cross) )then
+            THROW_HARD('unallocated projected latent M-step statistics')
         endif
-        if( allocated(part%cmplx_planes) )then
-            if( any(part%plane_lb /= plane_lb) .or. any(part%plane_ub /= plane_ub) )then
-                THROW_HARD('mixed Fourier plane bounds in flexvol_part')
-            endif
-            return
-        endif
-        part%plane_lb = plane_lb
-        part%plane_ub = plane_ub
-        allocate(part%cmplx_planes(plane_lb(1):plane_ub(1), plane_lb(2):plane_ub(2), part%nrecords_max))
-        allocate(part%ctfsq_planes(plane_lb(1):plane_ub(1), plane_lb(2):plane_ub(2), part%nrecords_max))
-        part%cmplx_planes = CMPLX_ZERO
-        part%ctfsq_planes = 0.
-    end subroutine ensure_flexvol_plane_storage
-
-    subroutine allocate_flexvol_plane_storage( part, plane_lb, plane_ub )
-        type(flexvol_part), intent(inout) :: part
-        integer,            intent(in)    :: plane_lb(2), plane_ub(2)
-        if( allocated(part%cmplx_planes) ) deallocate(part%cmplx_planes)
-        if( allocated(part%ctfsq_planes) ) deallocate(part%ctfsq_planes)
-        part%plane_lb = plane_lb
-        part%plane_ub = plane_ub
-        if( part%nrecords_max < 1 ) return
-        allocate(part%cmplx_planes(plane_lb(1):plane_ub(1), plane_lb(2):plane_ub(2), part%nrecords_max))
-        allocate(part%ctfsq_planes(plane_lb(1):plane_ub(1), plane_lb(2):plane_ub(2), part%nrecords_max))
-        part%cmplx_planes = CMPLX_ZERO
-        part%ctfsq_planes = 0.
-    end subroutine allocate_flexvol_plane_storage
-
-    subroutine write_flexvol_part( fname, part )
-        class(string),      intent(in) :: fname
-        type(flexvol_part), intent(in) :: part
-        integer :: funit, io_stat, header(8), nrec
-        nrec = part%nrecords
-        if( nrec > 0 .and. (.not. allocated(part%cmplx_planes) .or. .not. allocated(part%ctfsq_planes)) )then
-            THROW_HARD('flexvol_part with records has no Fourier plane storage')
-        endif
-        header = [FLEXVOL_PART_MAGIC, FLEXVOL_PART_VERSION, nrec, part%ncomp, &
-            &part%plane_lb(1), part%plane_ub(1), part%plane_lb(2), part%plane_ub(2)]
-        call fopen(funit, file=fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk('write_flexvol_part; open '//fname%to_char(), io_stat)
+        header = [MSTEP_STATS_MAGIC, MSTEP_STATS_VERSION, stats%nrecords, stats%ncomp, stats%npairs, &
+            &stats%exp_lb, stats%exp_ub, stats%model_nyq]
+        tmp_fname = fname%to_char()//'.tmp'
+        call del_file(tmp_fname)
+        call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('write_projected_latent_mstep_stats; open '//tmp_fname%to_char(), io_stat)
         write(funit, iostat=io_stat) header
-        call fileiochk('write_flexvol_part; header '//fname%to_char(), io_stat)
-        if( nrec > 0 )then
-            write(funit, iostat=io_stat) part%rows(:nrec), part%pinds(:nrec), part%nyq(:nrec)
-            call fileiochk('write_flexvol_part; particle fields '//fname%to_char(), io_stat)
-            write(funit, iostat=io_stat) part%frlims(:,:,:nrec), part%shconst(:,:nrec)
-            call fileiochk('write_flexvol_part; plane metadata '//fname%to_char(), io_stat)
-            write(funit, iostat=io_stat) part%zrows(:,:nrec), part%latent_second(:,:,:nrec)
-            call fileiochk('write_flexvol_part; latent fields '//fname%to_char(), io_stat)
-            write(funit, iostat=io_stat) part%cmplx_planes(:,:,:nrec), part%ctfsq_planes(:,:,:nrec)
-            call fileiochk('write_flexvol_part; planes '//fname%to_char(), io_stat)
-        endif
-        call fclose(funit)
-    end subroutine write_flexvol_part
-
-    subroutine read_flexvol_part( fname, part )
-        class(string),      intent(in)    :: fname
-        type(flexvol_part), intent(inout) :: part
-        integer :: funit, io_stat, header(8), nrec, ncomp, plane_lb(2), plane_ub(2)
-        call kill_flexvol_part(part)
-        if( .not. file_exists(fname) ) THROW_HARD('missing flexvol_part file: '//fname%to_char())
-        call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('read_flexvol_part; open '//fname%to_char(), io_stat)
-        read(funit, iostat=io_stat) header
-        call fileiochk('read_flexvol_part; header '//fname%to_char(), io_stat)
-        if( header(1) /= FLEXVOL_PART_MAGIC ) THROW_HARD('bad flexvol_part magic: '//fname%to_char())
-        if( header(2) /= FLEXVOL_PART_VERSION ) THROW_HARD('bad flexvol_part version: '//fname%to_char())
-        nrec     = header(3)
-        ncomp    = header(4)
-        plane_lb = [header(5), header(7)]
-        plane_ub = [header(6), header(8)]
-        if( nrec < 0 .or. ncomp < 1 ) THROW_HARD('invalid flexvol_part header: '//fname%to_char())
-        call init_flexvol_part(part, nrec, ncomp)
-        part%nrecords = nrec
-        if( nrec > 0 )then
-            call allocate_flexvol_plane_storage(part, plane_lb, plane_ub)
-            read(funit, iostat=io_stat) part%rows(:nrec), part%pinds(:nrec), part%nyq(:nrec)
-            call fileiochk('read_flexvol_part; particle fields '//fname%to_char(), io_stat)
-            read(funit, iostat=io_stat) part%frlims(:,:,:nrec), part%shconst(:,:nrec)
-            call fileiochk('read_flexvol_part; plane metadata '//fname%to_char(), io_stat)
-            read(funit, iostat=io_stat) part%zrows(:,:nrec), part%latent_second(:,:,:nrec)
-            call fileiochk('read_flexvol_part; latent fields '//fname%to_char(), io_stat)
-            read(funit, iostat=io_stat) part%cmplx_planes(:,:,:nrec), part%ctfsq_planes(:,:,:nrec)
-            call fileiochk('read_flexvol_part; planes '//fname%to_char(), io_stat)
-        endif
-        call fclose(funit)
-    end subroutine read_flexvol_part
-
-    subroutine insert_flexvol_part( build, basis_recs, rho_cross_exp, ncomp, part )
-        class(builder),      intent(inout) :: build
-        integer,             intent(in)    :: ncomp
-        type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real,                intent(inout) :: rho_cross_exp(:,:,:,:)
-        type(flexvol_part),  intent(inout) :: part
-        type(fplane_type) :: fpl
-        type(ori) :: orientation
-        integer :: i
-        if( part%nrecords < 1 ) return
-        if( part%ncomp /= ncomp ) THROW_HARD('latent component mismatch in flexvol_part insert')
-        allocate(fpl%cmplx_plane(part%plane_lb(1):part%plane_ub(1), part%plane_lb(2):part%plane_ub(2)))
-        allocate(fpl%ctfsq_plane(part%plane_lb(1):part%plane_ub(1), part%plane_lb(2):part%plane_ub(2)))
-        do i = 1, part%nrecords
-            call orientation%kill
-            call build%spproj_field%get_ori(part%pinds(i), orientation)
-            if( orientation%isstatezero() ) cycle
-            fpl%cmplx_plane = part%cmplx_planes(:,:,i)
-            fpl%ctfsq_plane = part%ctfsq_planes(:,:,i)
-            fpl%frlims      = part%frlims(:,:,i)
-            fpl%shconst     = part%shconst(:,i)
-            fpl%nyq         = part%nyq(i)
-            call insert_plane_oversamp_coupled_scaled(basis_recs, rho_cross_exp, build%pgrpsyms, &
-                &orientation, fpl, part%zrows(:,i), part%latent_second(:,:,i))
+        call fileiochk('write_projected_latent_mstep_stats; header '//tmp_fname%to_char(), io_stat)
+        do q = 1, stats%ncomp
+            write(funit, iostat=io_stat) stats%basis_rhs(:,:,:,q)
+            call fileiochk('write_projected_latent_mstep_stats; RHS '//tmp_fname%to_char(), io_stat)
         end do
-        call orientation%kill
-        call cleanup_plane(fpl)
-    end subroutine insert_flexvol_part
+        write(funit, iostat=io_stat) stats%rho_cross
+        call fileiochk('write_projected_latent_mstep_stats; cross density '//tmp_fname%to_char(), io_stat)
+        call fclose(funit)
+        call simple_rename(tmp_fname, fname, overwrite=.true.)
+        call tmp_fname%kill
+    end subroutine write_projected_latent_mstep_stats
 
-    function flexvol_part_fname( ipart, nparts ) result( fname )
-        integer, intent(in) :: ipart, nparts
-        type(string) :: fname
-        integer :: numlen
-        numlen = max(1, len(int2str(max(1, nparts))))
-        fname = 'flexvol_part'//int2str_pad(ipart, numlen)//'.bin'
-    end function flexvol_part_fname
-
-    subroutine write_mstep_flexvol_part_file( params, build, mean_rec, z, z_postcov, pinds, nptcls, ncomp, &
+    subroutine write_mstep_stats_part_file( params, build, mean_rec, z, z_postcov, pinds, nptcls, ncomp, &
         &partlims, fname, fpls, log_label )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
@@ -484,7 +350,7 @@ contains
         character(len=*), optional, intent(in) :: log_label
         type(fplane_type) :: mean_fpl
         type(projected_latent_mstep_2d_block) :: mstep_block
-        type(flexvol_part) :: part_out
+        type(projected_latent_mstep_stats) :: stats
         character(len=:), allocatable :: log_prefix
         integer :: batchlims(2), batchsz, ibatch, progress_stride
         integer(timer_int_kind) :: t_total
@@ -495,7 +361,7 @@ contains
             log_prefix = projected_model_log_prefix()
         endif
         if( partlims(1) < 1 .or. partlims(2) > nptcls .or. partlims(1) > partlims(2) )then
-            THROW_HARD('invalid M-step flexvol part limits')
+            THROW_HARD('invalid M-step statistics part limits')
         endif
         write(logfhandle,'(A,I0,A,I0,A,A)') log_prefix//' M-STEP WORKER ROWS: ', partlims(1), ' / ', partlims(2), &
             &' -> ', fname%to_char()
@@ -504,7 +370,11 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
-        call init_flexvol_part(part_out, partlims(2) - partlims(1) + 1, ncomp)
+        call init_projected_latent_mstep_stats(stats, lbound(mean_rec%cmat_exp), ubound(mean_rec%cmat_exp), &
+            &mean_rec%get_lfny(1), ncomp)
+        write(logfhandle,'(A,I0)') log_prefix//' M-STEP WORKER STATISTICS BYTES: ', &
+            &projected_latent_mstep_stats_nbytes(stats)
+        call flush(logfhandle)
         do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
             batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
@@ -513,30 +383,27 @@ contains
                 &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
             call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, z_postcov, &
                 &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
-            call append_mstep_block_to_flexvol_part(part_out, mstep_block, fpls(:batchsz))
+            call accumulate_projected_latent_mstep_2d_block(build, stats, mstep_block, fpls(:batchsz))
             if( batchlims(2) == partlims(2) .or. mod(batchlims(2) - partlims(1) + 1, progress_stride) == 0 )then
                 write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP WORKER PARTICLES: ', &
                     &batchlims(2) - partlims(1) + 1, ' / ', partlims(2) - partlims(1) + 1
                 call flush(logfhandle)
             endif
         end do
-        call del_file(fname)
-        call write_flexvol_part(fname, part_out)
+        call write_projected_latent_mstep_stats(fname, stats)
         call kill_projected_latent_mstep_2d_block(mstep_block)
-        call kill_flexvol_part(part_out)
+        call kill_projected_latent_mstep_stats(stats)
         call cleanup_runtime_batch(build, fpls)
         call cleanup_plane(mean_fpl)
         call log_seconds(log_prefix//' M-STEP WORKER TOTAL SECONDS', toc(t_total))
-    end subroutine write_mstep_flexvol_part_file
+    end subroutine write_mstep_stats_part_file
 
-    subroutine update_basis_from_flexvol_part_files( params, build, basis_recs, ncomp, part_fnames, nparts, log_label )
+    subroutine update_basis_from_mstep_stats_part_files( params, basis_recs, ncomp, part_fnames, nparts, log_label )
         class(parameters),   intent(in)    :: params
-        class(builder),      intent(inout) :: build
         integer,             intent(in)    :: ncomp, nparts
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
         class(string),       intent(in)    :: part_fnames(nparts)
         character(len=*), optional, intent(in) :: log_label
-        type(flexvol_part) :: part_in
         real, allocatable :: rho_cross_exp(:,:,:,:)
         character(len=:), allocatable :: log_prefix
         integer :: exp_shape(3), npairs, ipart, q
@@ -547,7 +414,7 @@ contains
         else
             log_prefix = projected_model_log_prefix()
         endif
-        write(logfhandle,'(A,I0)') log_prefix//' M-STEP MASTER ASSEMBLING FLEXVOL PARTS: ', nparts
+        write(logfhandle,'(A,I0)') log_prefix//' M-STEP MASTER REDUCING STATISTICS PARTS: ', nparts
         call flush(logfhandle)
         do q = 1, ncomp
             call basis_recs(q)%reset
@@ -559,13 +426,12 @@ contains
         t_phase = tic()
         do ipart = 1, nparts
             if( .not. file_exists(part_fnames(ipart)) )then
-                THROW_HARD('missing M-step flexvol part: '//part_fnames(ipart)%to_char())
+                THROW_HARD('missing M-step statistics part: '//part_fnames(ipart)%to_char())
             endif
-            call read_flexvol_part(part_fnames(ipart), part_in)
-            call insert_flexvol_part(build, basis_recs, rho_cross_exp, ncomp, part_in)
-            call kill_flexvol_part(part_in)
+            call reduce_projected_latent_mstep_stats_file(part_fnames(ipart), basis_recs, rho_cross_exp, ncomp)
+            call del_file(part_fnames(ipart))
         end do
-        call log_seconds(log_prefix//' M-STEP MASTER INSERT SECONDS', toc(t_phase))
+        call log_seconds(log_prefix//' M-STEP MASTER REDUCE SECONDS', toc(t_phase))
         t_phase = tic()
         call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
         call log_seconds(log_prefix//' M-STEP MASTER COUPLED SOLVE SECONDS', toc(t_phase))
@@ -578,7 +444,130 @@ contains
         end do
         call log_seconds(log_prefix//' M-STEP MASTER FINALIZE SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP MASTER TOTAL SECONDS', toc(t_total))
-    end subroutine update_basis_from_flexvol_part_files
+    end subroutine update_basis_from_mstep_stats_part_files
+
+    subroutine reduce_projected_latent_mstep_stats_file( fname, basis_recs, rho_cross_exp, ncomp )
+        class(string), intent(in) :: fname
+        integer, intent(in) :: ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        real, intent(inout) :: rho_cross_exp(:,:,:,:)
+        complex, allocatable :: rhs_buf(:,:,:)
+        real,    allocatable :: rho_buf(:,:,:,:)
+        integer :: funit, io_stat, header(12), exp_lb(3), exp_ub(3), exp_shape(3)
+        integer :: npairs, q, im1, im2, nread, mlo, mhi, nz_rhs, nz_rho
+        integer(longer) :: rhs_plane_bytes, rho_plane_bytes, expected_bytes, file_bytes
+        if( .not. file_exists(fname) ) THROW_HARD('missing M-step statistics file: '//fname%to_char())
+        call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('reduce_projected_latent_mstep_stats_file; open '//fname%to_char(), io_stat)
+        read(funit, iostat=io_stat) header
+        call fileiochk('reduce_projected_latent_mstep_stats_file; header '//fname%to_char(), io_stat)
+        if( header(1) /= MSTEP_STATS_MAGIC ) THROW_HARD('bad M-step statistics magic: '//fname%to_char())
+        if( header(2) /= MSTEP_STATS_VERSION ) THROW_HARD('bad M-step statistics version: '//fname%to_char())
+        if( header(3) < 0 ) THROW_HARD('negative M-step statistics record count: '//fname%to_char())
+        if( header(4) /= ncomp ) THROW_HARD('M-step statistics component mismatch: '//fname%to_char())
+        npairs = (ncomp * (ncomp + 1)) / 2
+        if( header(5) /= npairs ) THROW_HARD('M-step statistics pair-count mismatch: '//fname%to_char())
+        exp_lb    = header(6:8)
+        exp_ub    = header(9:11)
+        exp_shape = exp_ub - exp_lb + 1
+        if( any(exp_shape < 1) ) THROW_HARD('invalid M-step statistics bounds: '//fname%to_char())
+        if( any(exp_lb /= lbound(basis_recs(1)%cmat_exp)) .or. &
+            &any(exp_ub /= ubound(basis_recs(1)%cmat_exp)) )then
+            THROW_HARD('M-step statistics grid mismatch: '//fname%to_char())
+        endif
+        if( header(12) /= basis_recs(1)%get_lfny(1) )then
+            THROW_HARD('M-step statistics Nyquist mismatch: '//fname%to_char())
+        endif
+        expected_bytes = int(size(header),longer) * int(storage_size(header(1))/8,longer) + &
+            &product(int(exp_shape,longer)) * (int(storage_size(CMPLX_ZERO)/8,longer) * int(ncomp,longer) + &
+            &int(storage_size(0.)/8,longer) * int(npairs,longer))
+        inquire(file=fname%to_char(), size=file_bytes, iostat=io_stat)
+        call fileiochk('reduce_projected_latent_mstep_stats_file; size '//fname%to_char(), io_stat)
+        if( file_bytes /= expected_bytes ) THROW_HARD('truncated or oversized M-step statistics file: '//fname%to_char())
+        rhs_plane_bytes = int(storage_size(CMPLX_ZERO)/8,longer) * int(exp_shape(1),longer) * int(exp_shape(2),longer)
+        rho_plane_bytes = int(storage_size(0.)/8,longer) * int(npairs,longer) * &
+            &int(exp_shape(1),longer) * int(exp_shape(2),longer)
+        nz_rhs = max(1, min(exp_shape(3), int(MSTEP_STATS_IO_TARGET_BYTES / max(1_longer,rhs_plane_bytes))))
+        nz_rho = max(1, min(exp_shape(3), int(MSTEP_STATS_IO_TARGET_BYTES / max(1_longer,rho_plane_bytes))))
+        allocate(rhs_buf(exp_shape(1),exp_shape(2),nz_rhs))
+        do q = 1, ncomp
+            do im1 = 1, exp_shape(3), nz_rhs
+                im2   = min(exp_shape(3), im1 + nz_rhs - 1)
+                nread = im2 - im1 + 1
+                read(funit, iostat=io_stat) rhs_buf(:,:,1:nread)
+                call fileiochk('reduce_projected_latent_mstep_stats_file; RHS '//fname%to_char(), io_stat)
+                mlo = exp_lb(3) + im1 - 1
+                mhi = exp_lb(3) + im2 - 1
+                basis_recs(q)%cmat_exp(exp_lb(1):exp_ub(1),exp_lb(2):exp_ub(2),mlo:mhi) = &
+                    &basis_recs(q)%cmat_exp(exp_lb(1):exp_ub(1),exp_lb(2):exp_ub(2),mlo:mhi) + rhs_buf(:,:,1:nread)
+            end do
+        end do
+        deallocate(rhs_buf)
+        allocate(rho_buf(npairs,exp_shape(1),exp_shape(2),nz_rho))
+        do im1 = 1, exp_shape(3), nz_rho
+            im2   = min(exp_shape(3), im1 + nz_rho - 1)
+            nread = im2 - im1 + 1
+            read(funit, iostat=io_stat) rho_buf(:,:,:,1:nread)
+            call fileiochk('reduce_projected_latent_mstep_stats_file; cross density '//fname%to_char(), io_stat)
+            rho_cross_exp(:,:,:,im1:im2) = rho_cross_exp(:,:,:,im1:im2) + rho_buf(:,:,:,1:nread)
+        end do
+        deallocate(rho_buf)
+        call fclose(funit)
+    end subroutine reduce_projected_latent_mstep_stats_file
+
+    subroutine test_projected_latent_mstep_stats_io()
+        integer, parameter :: TEST_BOX = 16, TEST_NCOMP = 3
+        type(projected_latent_mstep_stats) :: stats
+        type(reconstructor) :: basis_recs(TEST_NCOMP)
+        type(string) :: fname
+        character(len=256) :: padded_fname
+        real, allocatable :: rho_cross(:,:,:,:)
+        integer :: exp_lb(3), exp_ub(3), exp_shape(3), npairs, q, ipair, i, j, k
+        real :: rhs_err, rho_err
+        exp_lb    = [-3, -TEST_BOX/2-2, -TEST_BOX/2-2]
+        exp_ub    = [ TEST_BOX/2+2, TEST_BOX/2+2, TEST_BOX/2+2]
+        exp_shape = exp_ub - exp_lb + 1
+        npairs    = (TEST_NCOMP * (TEST_NCOMP + 1)) / 2
+        do q = 1, TEST_NCOMP
+            call basis_recs(q)%new([TEST_BOX,TEST_BOX,TEST_BOX], 1.)
+            allocate(basis_recs(q)%cmat_exp(exp_lb(1):exp_ub(1),exp_lb(2):exp_ub(2),exp_lb(3):exp_ub(3)), &
+                &source=CMPLX_ZERO)
+        end do
+        call init_projected_latent_mstep_stats(stats, exp_lb, exp_ub, basis_recs(1)%get_lfny(1), TEST_NCOMP)
+        stats%nrecords = 7
+        do q = 1, TEST_NCOMP
+            do k = 1, exp_shape(3)
+                do j = 1, exp_shape(2)
+                    do i = 1, exp_shape(1)
+                        stats%basis_rhs(i,j,k,q) = cmplx(0.001*real(i+2*j+3*k+5*q), -0.002*real(2*i-j+k+q))
+                    end do
+                end do
+            end do
+        end do
+        do ipair = 1, npairs
+            stats%rho_cross(ipair,:,:,:) = 0.01 * real(ipair)
+        end do
+        allocate(rho_cross(npairs,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
+        padded_fname = 'test_projected_latent_mstep_stats_io.bin'
+        fname = padded_fname
+        call write_projected_latent_mstep_stats(fname, stats)
+        call reduce_projected_latent_mstep_stats_file(fname, basis_recs, rho_cross, TEST_NCOMP)
+        rhs_err = 0.
+        do q = 1, TEST_NCOMP
+            rhs_err = max(rhs_err, maxval(abs(basis_recs(q)%cmat_exp - stats%basis_rhs(:,:,:,q))))
+        end do
+        rho_err = maxval(abs(rho_cross - stats%rho_cross))
+        if( rhs_err > epsilon(1.) ) THROW_HARD('projected latent M-step statistics RHS I/O mismatch')
+        if( rho_err > epsilon(1.) ) THROW_HARD('projected latent M-step statistics density I/O mismatch')
+        call del_file(fname)
+        call fname%kill
+        call kill_projected_latent_mstep_stats(stats)
+        deallocate(rho_cross)
+        do q = 1, TEST_NCOMP
+            if( allocated(basis_recs(q)%cmat_exp) ) deallocate(basis_recs(q)%cmat_exp)
+            call basis_recs(q)%kill
+        end do
+    end subroutine test_projected_latent_mstep_stats_io
 
     subroutine write_estep_latent_part_file( params, build, mean_rec, basis_recs, mode_vars, pinds, nptcls, ncomp, &
         &partlims, fname, fpls, log_label )
@@ -710,7 +699,7 @@ contains
         type(projected_latent_estep_part), intent(in) :: part
         integer :: funit, io_stat, header(4), nrec
         nrec = part%nrecords
-        header = [FLEXVOL_PART_MAGIC, FLEXVOL_PART_VERSION, nrec, part%ncomp]
+        header = [ESTEP_PART_MAGIC, ESTEP_PART_VERSION, nrec, part%ncomp]
         call fopen(funit, file=fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk('write_projected_latent_estep_part; open '//fname%to_char(), io_stat)
         write(funit, iostat=io_stat) header
@@ -736,8 +725,8 @@ contains
         call fileiochk('read_projected_latent_estep_part; open '//fname%to_char(), io_stat)
         read(funit, iostat=io_stat) header
         call fileiochk('read_projected_latent_estep_part; header '//fname%to_char(), io_stat)
-        if( header(1) /= FLEXVOL_PART_MAGIC ) THROW_HARD('bad projected latent E-step part magic: '//fname%to_char())
-        if( header(2) /= FLEXVOL_PART_VERSION ) THROW_HARD('bad projected latent E-step part version: '//fname%to_char())
+        if( header(1) /= ESTEP_PART_MAGIC ) THROW_HARD('bad projected latent E-step part magic: '//fname%to_char())
+        if( header(2) /= ESTEP_PART_VERSION ) THROW_HARD('bad projected latent E-step part version: '//fname%to_char())
         nrec  = header(3)
         ncomp = header(4)
         if( nrec < 0 .or. ncomp < 1 ) THROW_HARD('invalid projected latent E-step part header: '//fname%to_char())

@@ -4,11 +4,18 @@ use simple_core_module_api
 use simple_reconstructor, only: reconstructor
 implicit none
 
-public :: insert_plane_oversamp_multi_scaled, insert_plane_oversamp_coupled_scaled, project_fplane_mean, project_fplanes_mean_basis
+public :: insert_plane_oversamp_multi_scaled, insert_plane_oversamp_coupled_scaled
+public :: accumulate_plane_oversamp_coupled_stats, project_fplane_mean, project_fplanes_mean_basis
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: LATENT_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
+! Source h-lines in one OpenMP colour must map to non-overlapping 3-D
+! interpolation windows for every rotation. A separation of LATENT_WDIM in
+! the source plane is not sufficient after rotation; sqrt(3)*LATENT_WDIM
+! guarantees that at least one target-grid coordinate differs by a full
+! window width.
+integer, parameter :: LATENT_SAFE_STRIDE = ceiling(sqrt(3.0) * real(LATENT_WDIM))
 
 contains
 
@@ -40,7 +47,7 @@ contains
         endif
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         iwinsz   = ceiling(KBWINSZ - 0.5)
-        stride   = LATENT_WDIM
+        stride   = LATENT_SAFE_STRIDE
         exp_lb   = lbound(recs(1)%cmat_exp)
         exp_ub   = ubound(recs(1)%cmat_exp)
         nsym     = se%get_nsym()
@@ -205,7 +212,7 @@ contains
         endif
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         iwinsz   = ceiling(KBWINSZ - 0.5)
-        stride   = LATENT_WDIM
+        stride   = LATENT_SAFE_STRIDE
         nsym     = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
         if( nsym > 1 )then
@@ -342,6 +349,181 @@ contains
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp_coupled_scaled
+
+    subroutine accumulate_plane_oversamp_coupled_stats( basis_rhs, rho_cross_exp, exp_lb, model_nyq, &
+        &se, o, fpl, data_scales, density_scales )
+        use simple_math, only: ceil_div, floor_div
+        complex,            intent(inout) :: basis_rhs(:,:,:,:)
+        real,               intent(inout) :: rho_cross_exp(:,:,:,:)
+        integer,            intent(in)    :: exp_lb(3), model_nyq
+        class(sym),         intent(inout) :: se
+        class(ori),         intent(inout) :: o
+        class(fplane_type), intent(in)    :: fpl
+        real(dp),           intent(in)    :: data_scales(:), density_scales(:,:)
+        type(kbinterpol) :: kbwin
+        type(ori) :: o_sym
+        complex   :: comp_base, cmplx_raw
+        real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfsq_raw
+        real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
+        real      :: data_scale_sp(size(basis_rhs,4)), density_scale_sp(size(basis_rhs,4),size(basis_rhs,4))
+        real      :: r11, r12, r13, r21, r22, r23
+        integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
+        integer   :: fpllims(3,2), hp, kp, pf, ix, iy, iz, hx, ky, mz, q, r, ncomp, ipair
+        integer   :: nyq_disk, nyq_eff, h_sq, k_max_h, k_lo, k_hi, ih, ik, im
+        integer   :: exp_ub(3), exp_shape(3), npairs
+        real      :: pf2, eps_norm, inv_wdim
+        ncomp = size(basis_rhs,4)
+        if( ncomp <= 0 ) return
+        npairs   = (ncomp * (ncomp + 1)) / 2
+        exp_shape = shape(basis_rhs(:,:,:,1))
+        exp_ub    = exp_lb + exp_shape - 1
+        if( model_nyq < 1 ) THROW_HARD('invalid model Nyquist; accumulate_plane_oversamp_coupled_stats')
+        if( size(data_scales) < ncomp .or. size(density_scales,1) < ncomp .or. size(density_scales,2) < ncomp )then
+            THROW_HARD('scale array smaller than statistics component count; accumulate_plane_oversamp_coupled_stats')
+        endif
+        if( size(rho_cross_exp,1) < npairs .or. size(rho_cross_exp,2) < exp_shape(1) .or. &
+            &size(rho_cross_exp,3) < exp_shape(2) .or. size(rho_cross_exp,4) < exp_shape(3) )then
+            THROW_HARD('cross-density array shape mismatch; accumulate_plane_oversamp_coupled_stats')
+        endif
+        kbwin    = kbinterpol(KBWINSZ, KBALPHA)
+        iwinsz   = ceiling(KBWINSZ - 0.5)
+        stride   = LATENT_SAFE_STRIDE
+        nsym     = se%get_nsym()
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 )then
+            do isym = 2, nsym
+                call se%apply(o, isym, o_sym)
+                rotmats(isym,:,:) = o_sym%get_mat()
+            end do
+        endif
+        fpllims_pd   = fpl%frlims
+        pf           = OSMPL_PAD_FAC
+        pf2          = real(pf*pf)
+        fpllims      = fpllims_pd
+        fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
+        fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
+        fpllims(2,1) = ceil_div (fpllims_pd(2,1), pf)
+        fpllims(2,2) = floor_div(fpllims_pd(2,2), pf)
+        nyq_eff = model_nyq
+        if( fpl%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl%nyq / pf))
+        nyq_disk = nyq_eff * (nyq_eff + 1)
+        eps_norm = epsilon(1.0)
+        inv_wdim = 1.0 / real(LATENT_WDIM)
+        do q = 1, ncomp
+            data_scale_sp(q) = real(data_scales(q))
+            do r = 1, ncomp
+                density_scale_sp(q,r) = real(density_scales(q,r))
+            end do
+        end do
+        !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,&
+        !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
+        !$omp& isym,ix,iy,iz,hx,ky,mz,ih,ik,im,q,r,ipair) proc_bind(close)
+        do isym = 1, nsym
+            r11 = rotmats(isym,1,1); r12 = rotmats(isym,1,2); r13 = rotmats(isym,1,3)
+            r21 = rotmats(isym,2,1); r22 = rotmats(isym,2,2); r23 = rotmats(isym,2,3)
+            do l = 0, stride-1
+                !$omp do schedule(static,1)
+                do h = fpllims(1,1)+l, fpllims(1,2), stride
+                    h_sq = h*h
+                    if( h_sq > nyq_disk ) cycle
+                    k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                    k_lo    = max(fpllims(2,1), -k_max_h)
+                    k_hi    = min(fpllims(2,2),  k_max_h)
+                    hp      = h * pf
+                    hrow(1) = real(h) * r11
+                    hrow(2) = real(h) * r12
+                    hrow(3) = real(h) * r13
+                    do k = k_lo, k_hi
+                        kp = k * pf
+                        if( kp <= 0 )then
+                            cmplx_raw = fpl%cmplx_plane(hp,kp)
+                            ctfsq_raw = fpl%ctfsq_plane(hp,kp)
+                        else
+                            cmplx_raw = conjg(fpl%cmplx_plane(-hp,-kp))
+                            ctfsq_raw = fpl%ctfsq_plane(-hp,-kp)
+                        endif
+                        if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                            &ctfsq_raw <= TINY ) cycle
+                        loc(1) = hrow(1) + real(k) * r21
+                        loc(2) = hrow(2) + real(k) * r22
+                        loc(3) = hrow(3) + real(k) * r23
+                        win(1,:) = nint(loc)
+                        win(2,:) = win(1,:) + iwinsz
+                        win(1,:) = win(1,:) - iwinsz
+                        if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
+                        comp_base = pf2 * cmplx_raw
+                        call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
+                        do iz = 1, LATENT_WDIM
+                            mz = win(1,3) + iz - 1
+                            im = mz - exp_lb(3) + 1
+                            do iy = 1, LATENT_WDIM
+                                ky = win(1,2) + iy - 1
+                                ik = ky - exp_lb(2) + 1
+                                do ix = 1, LATENT_WDIM
+                                    hx = win(1,1) + ix - 1
+                                    ih = hx - exp_lb(1) + 1
+                                    ww = wx(ix) * (wy(iy) * wz(iz))
+                                    do q = 1, ncomp
+                                        basis_rhs(ih,ik,im,q) = basis_rhs(ih,ik,im,q) + &
+                                            &(data_scale_sp(q) * comp_base) * ww
+                                        do r = q, ncomp
+                                            ipair = pair_index(q, r)
+                                            rho_cross_exp(ipair,ih,ik,im) = rho_cross_exp(ipair,ih,ik,im) + &
+                                                &(density_scale_sp(q,r) * ctfsq_raw) * ww
+                                        end do
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+                !$omp end do
+            end do
+        end do
+        !$omp end parallel
+        call o_sym%kill
+
+    contains
+
+        integer pure function pair_index( q, r ) result( ipair )
+            integer, intent(in) :: q, r
+            ipair = (r * (r - 1)) / 2 + q
+        end function pair_index
+
+        subroutine kb_apod_vecs_3d_fast( loc, wx, wy, wz )
+            real, intent(in)  :: loc(3)
+            real, intent(out) :: wx(:), wy(:), wz(:)
+            integer :: i, win_lo(3)
+            real    :: base(3), ww3(3), sx, sy, sz
+            win_lo = nint(loc) - iwinsz
+            base   = real(win_lo) - loc
+            do i = 1, LATENT_WDIM
+                ww3   = kbwin%apod_fast(base + real(i-1))
+                wx(i) = ww3(1)
+                wy(i) = ww3(2)
+                wz(i) = ww3(3)
+            end do
+            sx = sum(wx)
+            sy = sum(wy)
+            sz = sum(wz)
+            if( abs(sx) > eps_norm )then
+                wx = wx * (1.0 / sx)
+            else
+                wx = inv_wdim
+            endif
+            if( abs(sy) > eps_norm )then
+                wy = wy * (1.0 / sy)
+            else
+                wy = inv_wdim
+            endif
+            if( abs(sz) > eps_norm )then
+                wz = wz * (1.0 / sz)
+            else
+                wz = inv_wdim
+            endif
+        end subroutine kb_apod_vecs_3d_fast
+
+    end subroutine accumulate_plane_oversamp_coupled_stats
 
     subroutine project_fplane_mean( mean_rec, o, fpl_ref, mean_fpl, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div

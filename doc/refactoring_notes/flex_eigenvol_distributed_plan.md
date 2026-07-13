@@ -1,6 +1,6 @@
 # Distributed `flex_eigenvol` Refactoring Plan
 
-Date: 2026-07-09
+Date: 2026-07-10
 
 ## Executive Summary
 
@@ -9,15 +9,17 @@ outer EM loop lives in `src/main/strategies/parallelization/simple_flex_eigenvol
 and the particle-dependent expectation/maximization kernels live in
 `src/main/pca/simple_projected_latent_model.f90`.
 
-The distributed implementation will use partitions only as 2D information
-providers. Each partition prepares particle-local Fourier-plane products and
-latent posterior products. The shared-memory master owns all 3D global state:
-mean/basis reconstructors, M-step insertion into global 3D accumulators,
-`rho_cross_exp`, the coupled per-voxel linear solve, basis finalization, latent
-orthonormalization, and final output writing.
+The distributed implementation keeps particle Fourier planes bounded to the
+worker's current batch. For the M-step, each worker immediately reduces those
+planes into fixed-size sufficient statistics: one complex RHS grid per latent
+component and one real cross-density grid per upper-triangular component pair.
+The worker writes a binary M-step statistics stream and releases its particle buffers. The
+master streams and sums those grids directly into its global accumulators,
+then performs the existing coupled solve and basis finalization.
 
-This is the only planned distributed shape. Workers must not build or write 3D
-partial basis volumes or 3D partial `rho_cross_exp` tensors.
+This avoids the former whole-part plane bundle, whose size grew with the number
+of particles. Worker M-step memory is now independent of partition size, while
+the shared-memory implementation remains the numerical reference path.
 
 ## Current Shape
 
@@ -68,14 +70,15 @@ entrypoint rather than knowing about execution mode details.
 
 ### Numerical Layer
 
-Refactor `simple_projected_latent_model` around explicit 2D partition products
-and master-only stitching routines:
+Refactor `simple_projected_latent_model` around worker-local sufficient
+statistics and master reduction routines:
 
-- `projected_latent_mstep_prepare_2d`: for a particle subset or bounded batch,
-  build CTF/shift-corrected Fourier planes, subtract the projected mean, and
-  pair each residual plane with its latent first/second moments.
-- `projected_latent_mstep_insert_2d`: master-only routine that inserts prepared
-  2D records into global `basis_recs(:)%cmat_exp` and global `rho_cross_exp`.
+- `write_mstep_stats_part_file`: stream bounded particle batches, build
+  CTF/shift-corrected residual planes, and accumulate raw sufficient statistics
+  into a fixed-size `.bin` file.
+- `update_basis_from_mstep_stats_part_files`: validate and stream each part's
+  RHS/cross-density grids into the master accumulators, deleting each file once
+  consumed.
 - `projected_latent_mstep_solve`: master-only routine that runs the existing
   coupled solve and basis finalization.
 - `projected_latent_estep_part`: particle-local E-step routine that projects the
@@ -90,7 +93,12 @@ single-process algorithm as the reference implementation.
 
 ## Partition Products
 
-### Per-Part Bundle
+The M-step plane-bundle design below is retained as historical context only.
+The implemented M-step interchange is the fixed-size binary sufficient-
+statistics stream described above. E-step posterior products continue to use
+their own compact part files.
+
+### Historical Per-Part Plane Bundle (Superseded)
 
 Partition output should be represented as one typed bundle per part and PPCA
 iteration, not as a family of loose files. The bundle is the interchange object
@@ -165,7 +173,7 @@ calls the existing coupled solver. In other words:
 part bundle -> master 3D assembly -> global normal equations -> linear solve
 ```
 
-### M-step 2D Records
+### Historical M-step 2D Records (Superseded)
 
 Each M-step partition provides bounded batches of 2D records inside its part
 bundle. For local workstation execution, the same data structure can also be
@@ -208,7 +216,7 @@ resid_energy(row)
 sum_q(z_q**2 + postcov_qq) contribution
 ```
 
-These products live in the same per-part bundle's E-step section. The master
+These products live in E-step-specific per-part files. The master
 reduces them by particle index or selected-particle row map into the global
 arrays. Workers do not write project segments or mutate global orientation
 state.
@@ -254,7 +262,8 @@ Distributed worker:
 ## Memory Policy
 
 The purpose of partitioning on a single workstation is to limit live
-particle-local 2D state, not to replicate 3D model state.
+particle-local 2D state. Each M-step worker now owns one fixed-size set of raw
+3D sufficient statistics rather than retaining a particle-sized plane bundle.
 
 Required memory rules:
 
@@ -262,15 +271,15 @@ Required memory rules:
   resident at once.
 - `ncunits` or the local scheduler must cap concurrent workers. For large boxes
   or many eigenvolumes, the expected workstation setting is often `ncunits=1`.
-- The master is the only owner of M-step global 3D accumulators,
-  `rho_cross_exp`, solved basis reconstructors, and basis finalization scratch.
-- M-step partition code owns only the mean projection context, particle image
-  batch buffers, prepared residual 2D records, and latent row data needed for
-  its current bounded batch.
+- The master owns the solved basis reconstructors, the reduced global
+  `rho_cross_exp`, and basis-finalization scratch.
+- Each M-step worker owns one raw RHS grid per component, one raw cross-density
+  grid per component pair, its mean projection context, and only the particle
+  buffers/latent rows for the current bounded batch.
 - E-step partition code may read/project the current solved basis but must not
   allocate M-step accumulator tensors.
-- Master-side assembly streams one partition bundle and one internal block at a
-  time.
+- Master-side reduction streams one M-step statistics file in bounded z-slabs and
+  deletes it immediately after successful consumption.
 
 The default workstation recommendation is:
 
@@ -301,14 +310,18 @@ Expected code touch points:
   - Keep output/log helpers here.
   - Add cleanup of temporary per-part bundle artifacts.
 - `src/main/pca/simple_projected_latent_model.f90`
-  - Introduce 2D M-step record types and bounded-batch preparation/insertion
-    helpers.
-  - Split particle-local preparation from master-only 3D solve/finalize.
+  - Accumulate bounded M-step particle batches into fixed-size worker-local
+    sufficient statistics.
+  - Write, validate, and slab-reduce binary statistics files before the existing
+    master-only 3D solve/finalize.
   - Add compact E-step product write/read/reduce helpers.
   - Keep existing shared-memory wrappers behavior-compatible.
-- `src/main/pca/simple_flexvol_part.f90`
-  - Add a focused bundle I/O type with header validation, section-table I/O,
-    M-step block streaming, and E-step product reading.
+- `src/main/volume/simple_reconstructor_latent_ops.f90`
+  - Add a raw-statistics insertion kernel numerically equivalent to direct
+    reconstructor insertion.
+- `production/tests/simple_test_projected_latent_mstep_stats.f90`
+  - Compare direct and sufficient-statistics insertion and round-trip the
+    stats stream.
 - `src/main/ui/simple/simple_ui_denoise.f90`
   - Add `nparts` to `flex_eigenvol`.
 - `production/simple_private_exec_driver.f90` and/or exec API wiring

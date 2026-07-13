@@ -8,7 +8,7 @@ use simple_parameters,       only: parameters
 use simple_projected_latent_model, only: update_basis_from_latents, infer_latents_from_basis, &
     &initialize_latents, orthonormalize_latents, latent_sdev, latent_covariance, &
     &basis_fourier_energy, cleanup_planes, projected_model_kfromto, &
-    &write_mstep_flexvol_part_file, update_basis_from_flexvol_part_files, &
+    &write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files, &
     &write_estep_latent_part_file, reduce_estep_latent_part_files
 use simple_qsys_env,        only: qsys_env
 use simple_reconstructor,    only: reconstructor
@@ -186,7 +186,7 @@ contains
         sigma2_fname = 'flex_eigenvol_sigma2_mstep_part'//int2str_pad(params%part, params%numlen)//'.tmp'
         call build%esig%new(params, build%pftc, sigma2_fname, params%box_crop)
         call init_mean_reconstructor(params, build, mean_rec)
-        call write_mstep_flexvol_part_file(params, build, mean_rec, z, z_postcov, pinds, nptcls, ncomp, &
+        call write_mstep_stats_part_file(params, build, mean_rec, z, z_postcov, pinds, nptcls, ncomp, &
             &partlims, params%outfile, fpls, log_label='FLEX_EIGENVOL_WORKER')
         call cleanup_planes(fpls)
         call cleanup_worker_state(mean_rec, sigma2_fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy)
@@ -239,17 +239,29 @@ contains
         type(string), allocatable :: part_fnames(:)
         type(string) :: state_fname
         real(dp), allocatable :: dummy_mode_vars(:), dummy_resid(:), dummy_mean_resid(:)
+        integer :: exp_shape(3), npairs
+        integer(longer) :: stats_bytes
         allocate(dummy_mode_vars(ncomp), dummy_resid(nptcls), dummy_mean_resid(nptcls), source=0.d0)
         dummy_mode_vars = 1.d0
+        exp_shape  = shape(basis_recs(1)%cmat_exp)
+        npairs     = (ncomp * (ncomp + 1)) / 2
+        stats_bytes = product(int(exp_shape,longer)) * &
+            &(int(storage_size(CMPLX_ZERO)/8,longer) * int(ncomp,longer) + &
+            &int(storage_size(0.)/8,longer) * int(npairs,longer))
+        write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL M-STEP STATISTICS BYTES PER WORKER: ', stats_bytes
+        write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL M-STEP LOCAL CONCURRENT STATISTICS BYTES: ', &
+            &stats_bytes * int(max(1,params%ncunits),longer)
+        call flush(logfhandle)
         state_fname = flex_state_fname(iter)
         call write_flex_state_file(state_fname, pinds, z, z_postcov, &
             &dummy_mode_vars, dummy_resid, dummy_mean_resid, nptcls, ncomp)
-        call make_part_fnames('flexvol_mstep', iter, params%nparts, params%numlen, '.bin', part_fnames)
+        call make_part_fnames('flexvol_mstep_stats', iter, params%nparts, params%numlen, '.bin', part_fnames)
         call dispatch_flex_workers(params, cline, 'flex_eigenvol_mstep', state_fname, part_fnames, nptcls)
-        call update_basis_from_flexvol_part_files(params, build, basis_recs, ncomp, part_fnames, params%nparts, &
+        call update_basis_from_mstep_stats_part_files(params, basis_recs, ncomp, part_fnames, params%nparts, &
             &log_label='FLEX_EIGENVOL')
         call cleanup_string_array(part_fnames)
         deallocate(dummy_mode_vars, dummy_resid, dummy_mean_resid)
+        call del_file(state_fname)
         call state_fname%kill
     end subroutine distributed_mstep
 
@@ -403,15 +415,19 @@ contains
         integer,             intent(in)    :: ncomp
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
         class(string),       intent(in)    :: prefix
+        type(image)  :: basis_img
         type(string) :: fname
         integer :: q
         do q = 1, ncomp
             fname = flex_basis_fname(prefix, q)
             if( .not. file_exists(fname) ) THROW_HARD('missing flex_eigenvol basis volume: '//fname%to_char())
-            call basis_recs(q)%read_and_crop(fname, params%smpd_crop, params%box_crop, params%smpd_crop)
-            call basis_recs(q)%fft
+            call basis_img%read_and_crop(fname, params%smpd_crop, params%box_crop, params%smpd_crop)
+            call basis_img%fft
+            call basis_recs(q)%new(basis_img%get_ldim(), basis_img%get_smpd())
             call basis_recs(q)%alloc_rho(params, build%spproj, expand=.true.)
+            call basis_recs(q)%set_cmat(basis_img)
             call basis_recs(q)%expand_exp
+            call basis_img%kill
             call fname%kill
         end do
     end subroutine init_basis_reconstructors_from_prefix
