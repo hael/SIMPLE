@@ -202,13 +202,29 @@
 
                 <div id="simple_selector_panel" class="flex-1 flex flex-col mx-4 overflow-hidden">
                     {% if simple_programs %}
-                    <div class="mb-3 text-xs text-streamsubtle text-left">select a simple program</div>
-                    <div class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
+                    <div class="relative mb-3">
+                        <input id="simple_program_search"
+                               type="text"
+                               role="searchbox"
+                               aria-label="search simple programs"
+                               autocomplete="off"
+                               placeholder="search simple programs"
+                               oninput="filterSimplePrograms(this.value)"
+                               class="w-full text-xs pl-2 pr-7 py-1.5 border border-streamline rounded-lg bg-streamsurface text-streaminput placeholder:text-streamsubtle focus:outline-none focus:ring-1 focus:ring-streamring">
+                        <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-streamicon"
+                             viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="7" cy="7" r="4.25"/>
+                            <path d="m10.25 10.25 3 3"/>
+                        </svg>
+                    </div>
+                    <div id="simple_program_list" class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
                         {% for program in simple_programs %}
                         <div class="flex items-start gap-2 p-2 rounded-lg border border-streamline bg-streamsurface cursor-pointer hover:border-streamring transition-colors"
                              role="button"
                              tabindex="0"
                              data-simple-program-key="{{ program.prg }}"
+                             data-simple-program-search="{{ program.prg }} {{ program.disp }} {{ program.desc }}"
                              onclick="showSimpleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSimpleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
@@ -217,6 +233,9 @@
                             </span>
                         </div>
                         {% endfor %}
+                        <div id="simple_program_no_results" class="hidden py-6 text-center text-xs text-streamsubtle">
+                            no matching SIMPLE programs
+                        </div>
                     </div>
                     {% else %}
                     <div class="text-center text-xs text-streamsubtle mb-1">
@@ -331,13 +350,29 @@
 
                 <div id="single_selector_panel" class="flex-1 flex flex-col mx-4 overflow-hidden">
                     {% if single_programs %}
-                    <div class="mb-3 text-xs text-streamsubtle text-left">select a single program</div>
-                    <div class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
+                    <div class="relative mb-3">
+                        <input id="single_program_search"
+                               type="text"
+                               role="searchbox"
+                               aria-label="search single programs"
+                               autocomplete="off"
+                               placeholder="search single programs"
+                               oninput="filterSinglePrograms(this.value)"
+                               class="w-full text-xs pl-2 pr-7 py-1.5 border border-streamline rounded-lg bg-streamsurface text-streaminput placeholder:text-streamsubtle focus:outline-none focus:ring-1 focus:ring-streamring">
+                        <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-streamicon"
+                             viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="7" cy="7" r="4.25"/>
+                            <path d="m10.25 10.25 3 3"/>
+                        </svg>
+                    </div>
+                    <div id="single_program_list" class="space-y-2 overflow-y-auto pr-1 flex-1 mb-2">
                         {% for program in single_programs %}
                         <div class="flex items-start gap-2 p-2 rounded-lg border border-streamline bg-streamsurface cursor-pointer hover:border-streamring transition-colors"
                              role="button"
                              tabindex="0"
                              data-single-program-key="{{ program.prg }}"
+                             data-single-program-search="{{ program.prg }} {{ program.disp }} {{ program.desc }}"
                              onclick="showSingleProgramConfig('{{ program.prg }}')"
                              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSingleProgramConfig('{{ program.prg }}'); }">
                             <span class="min-w-0">
@@ -346,6 +381,9 @@
                             </span>
                         </div>
                         {% endfor %}
+                        <div id="single_program_no_results" class="hidden py-6 text-center text-xs text-streamsubtle">
+                            no matching SINGLE programs
+                        </div>
                     </div>
                     {% else %}
                     <div class="text-center text-xs text-streamsubtle mb-1">
@@ -576,6 +614,22 @@
             configs.forEach((el) => el.classList.add("hidden"));
         }
 
+        function filterSimplePrograms(query) {
+            const normalizedQuery = query.trim().toLowerCase();
+            const programs = document.querySelectorAll("[data-simple-program-key]");
+            let visiblePrograms = 0;
+
+            programs.forEach((program) => {
+                const searchableText = (program.dataset.simpleProgramSearch || "").toLowerCase();
+                const matches = !normalizedQuery || searchableText.includes(normalizedQuery);
+                program.classList.toggle("hidden", !matches);
+                if (matches) visiblePrograms += 1;
+            });
+
+            const noResults = document.getElementById("simple_program_no_results");
+            if (noResults) noResults.classList.toggle("hidden", visiblePrograms !== 0);
+        }
+
         function showSimpleProgramConfig(programKey) {
             const selectorPanel = document.getElementById("simple_selector_panel");
             const configPanel = document.getElementById("simple_config_panel");
@@ -602,6 +656,22 @@
             if (title) title.textContent = "";
             const configs = document.querySelectorAll(".single-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
+        }
+
+        function filterSinglePrograms(query) {
+            const normalizedQuery = query.trim().toLowerCase();
+            const programs = document.querySelectorAll("[data-single-program-key]");
+            let visiblePrograms = 0;
+
+            programs.forEach((program) => {
+                const searchableText = (program.dataset.singleProgramSearch || "").toLowerCase();
+                const matches = !normalizedQuery || searchableText.includes(normalizedQuery);
+                program.classList.toggle("hidden", !matches);
+                if (matches) visiblePrograms += 1;
+            });
+
+            const noResults = document.getElementById("single_program_no_results");
+            if (noResults) noResults.classList.toggle("hidden", visiblePrograms !== 0);
         }
 
         function showSingleProgramConfig(programKey) {

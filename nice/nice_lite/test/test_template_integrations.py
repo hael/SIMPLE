@@ -49,3 +49,24 @@ class TemplateIntegrationTests(SimpleTestCase):
         for opener in (jobbuilder, newproject, classic_newjob):
             self.assertIn('localStorage.getItem("niceFileBrowserLastDirectory")', opener)
             self.assertIn('params.set("remembered", "1")', opener)
+
+    def test_batch_program_selectors_have_search_filters(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertIn('id="simple_program_search"', jobbuilder)
+        self.assertIn('placeholder="search simple programs"', jobbuilder)
+        self.assertIn('oninput="filterSimplePrograms(this.value)"', jobbuilder)
+        self.assertIn('data-simple-program-search=', jobbuilder)
+        self.assertIn('id="simple_program_no_results"', jobbuilder)
+        self.assertIn('function filterSimplePrograms(query)', jobbuilder)
+
+        self.assertNotIn("select a single program", jobbuilder)
+        self.assertIn('id="single_program_search"', jobbuilder)
+        self.assertIn('placeholder="search single programs"', jobbuilder)
+        self.assertIn('oninput="filterSinglePrograms(this.value)"', jobbuilder)
+        self.assertIn('data-single-program-search=', jobbuilder)
+        self.assertIn('id="single_program_no_results"', jobbuilder)
+        self.assertIn('function filterSinglePrograms(query)', jobbuilder)
+
+        self.assertGreaterEqual(jobbuilder.count('absolute right-2'), 2)
+        self.assertIn('program.classList.toggle("hidden", !matches)', jobbuilder)
