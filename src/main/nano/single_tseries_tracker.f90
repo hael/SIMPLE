@@ -2,7 +2,7 @@
 module single_tseries_tracker
 use simple_core_module_api
 use simple_parameters, only: parameters
-use simple_image,      only: image
+use simple_image,      only: image, unmemoize_mask_coords
 use simple_tvfilter
 implicit none
 
@@ -159,6 +159,7 @@ contains
                 call aligner%align(reference)
             endif
             call aligner%get_opt_shifts(opt_shifts)
+            call aligner%kill
             ! generate reference
             call reference%zero_and_flag_ft
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
@@ -197,6 +198,7 @@ contains
                 particle_locations(i,1) = pos(1) - opt_shifts(cnt,1) + xyz(1)
                 particle_locations(i,2) = pos(2) - opt_shifts(cnt,2) + xyz(2)
             enddo
+            if( allocated(opt_shifts) ) deallocate(opt_shifts)
             particle_locations(last_frame+1:,1) = particle_locations(last_frame,1)
             particle_locations(last_frame+1:,2) = particle_locations(last_frame,2)
             if( mod(iframe-1,5*track_freq) == 0 )then
@@ -204,7 +206,6 @@ contains
                 call flush(6)
             endif
         enddo
-        call aligner%kill
         write(logfhandle,'(a)') ">>> WRITING PARTICLES, NEIGHBOURS & SPECTRUM"
         ! Second pass write box file, tracked particles, neighbours & update spectrum
         call pspec%zero_and_unflag_ft
@@ -371,6 +372,7 @@ contains
         integer, allocatable :: sz(:)
         real                 :: shift(3), thresh(3), cen_cc(2), dist_cc, threshold
         integer              :: loc, ldim
+        shift = 0.
         ldim = p_ptr%box
         call img%transfer2bimg(reference)
         ! low-pass
@@ -393,6 +395,10 @@ contains
         call tmp%set_imat
         call tmp%find_ccs(tmpcc)
         sz  = tmpcc%size_ccs()
+        if( maxval(sz) <= 0 )then
+            call cleanup_centering_images
+            return
+        endif
         loc = maxloc(sz,dim=1)
         call tmpcc%masscen_cc(loc,cen_cc)
         dist_cc = sqrt(sum(cen_cc**2))
@@ -400,15 +406,19 @@ contains
             ! if CC identified is too off centered (artefact)
             ! we fall back on the second or do nothing
             if( size(sz) == 1 )then
-                shift = 0.
+                call cleanup_centering_images
                 return
             else
                 sz(loc) = 0
+                if( maxval(sz) <= 0 )then
+                    call cleanup_centering_images
+                    return
+                endif
                 loc = maxloc(sz,dim=1)
                 call tmpcc%masscen_cc(loc,cen_cc)
                 dist_cc = sqrt(sum(cen_cc**2))
                 if( dist_cc > threshold )then
-                    shift = 0.
+                    call cleanup_centering_images
                     return
                 endif
             endif
@@ -424,9 +434,16 @@ contains
         call img%mul(tmpcc)
         call img%masscen(shift)
         ! cleanup
-        call tmp%kill
-        call tmpcc%kill
-        call img%kill
+        call cleanup_centering_images
+
+        contains
+
+            subroutine cleanup_centering_images
+                call tmp%kill_bimg
+                call tmpcc%kill_bimg
+                call img%kill_bimg
+            end subroutine cleanup_centering_images
+
     end function center_reference
 
     ! GETTERS
@@ -454,13 +471,26 @@ contains
             call tmp_imgs(i)%kill
             call backgr_imgs(i)%kill
         enddo
-        do i=1,p_ptr%nframesgrp
-            call ptcls(i)%kill
-            call ptcls_saved(i)%kill
-            if(trim(p_ptr%filter).eq.'tv') call tv(i)%kill
-        end do
-        if(trim(p_ptr%filter).eq.'tv') deallocate(tv)
-        deallocate(particle_locations,ptcls,ptcls_saved)
+        if( allocated(ptcls) )then
+            do i=1,size(ptcls)
+                call ptcls(i)%kill
+            enddo
+            deallocate(ptcls)
+        endif
+        if( allocated(ptcls_saved) )then
+            do i=1,size(ptcls_saved)
+                call ptcls_saved(i)%kill
+            enddo
+            deallocate(ptcls_saved)
+        endif
+        if( allocated(tv) )then
+            do i=1,size(tv)
+                call tv(i)%kill
+            enddo
+            deallocate(tv)
+        endif
+        if( allocated(particle_locations) ) deallocate(particle_locations)
+        call unmemoize_mask_coords
         call frame_img%kill
         call frame_avg%kill
         call reference%kill
@@ -468,6 +498,7 @@ contains
         call pspec%kill
         call pspec_nn%kill
         call tester_img%kill
+        p_ptr => null()
     end subroutine kill_tracker
 
 end module single_tseries_tracker
