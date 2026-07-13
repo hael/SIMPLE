@@ -104,6 +104,16 @@
     </div>
 
     <script>
+        const FILE_BROWSER_LAST_DIRECTORY_KEY = "niceFileBrowserLastDirectory";
+        const directoryToRemember = "{{ remember_directory|escapejs }}";
+        if (directoryToRemember) {
+            try {
+                window.localStorage.setItem(FILE_BROWSER_LAST_DIRECTORY_KEY, directoryToRemember);
+            } catch (error) {
+                // The browser can disable storage without disabling the picker.
+            }
+        }
+
         let watchDouble = 0;
 
         const getHostIframe = () => {

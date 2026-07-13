@@ -150,10 +150,22 @@
             if (kind === "file" && selectedPath && !selectedPath.endsWith("/")) {
                 selectedPath = selectedPath.includes("/") ? selectedPath.replace(/\/[^/]*$/, "") : "";
             }
+            let usingRememberedPath = false;
+            if (!selectedPath) {
+                try {
+                    selectedPath = window.localStorage.getItem("niceFileBrowserLastDirectory") || "";
+                    usingRememberedPath = Boolean(selectedPath);
+                } catch (error) {
+                    selectedPath = "";
+                }
+            }
 
             const browserUrl = iframe.dataset.browserUrl;
             if (selectedPath) {
                 const params = new URLSearchParams({ selectedpath: selectedPath });
+                if (usingRememberedPath) {
+                    params.set("remembered", "1");
+                }
                 iframe.setAttribute("src", browserUrl + "?" + params.toString());
             } else {
                 iframe.setAttribute("src", browserUrl);

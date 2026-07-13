@@ -38,3 +38,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('onclick="openClassicFileBrowser(this, \'dir\')"', classic_newjob)
         self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
         self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
+
+    def test_file_browser_openers_share_last_directory(self):
+        filebrowser = self._read_template("filebrowser.html")
+        jobbuilder = self._read_template("jobbuilder.html")
+        newproject = self._read_template("newproject.html")
+        classic_newjob = self._read_template("nice_classic/newjob.html")
+
+        self.assertIn('localStorage.setItem(FILE_BROWSER_LAST_DIRECTORY_KEY, directoryToRemember)', filebrowser)
+        for opener in (jobbuilder, newproject, classic_newjob):
+            self.assertIn('localStorage.getItem("niceFileBrowserLastDirectory")', opener)
+            self.assertIn('params.set("remembered", "1")', opener)

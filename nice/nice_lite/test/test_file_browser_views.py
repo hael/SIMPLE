@@ -30,8 +30,8 @@ class FileBrowserViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def _request(self):
-        request = self.factory.get("/filebrowser/file")
+    def _request(self, params=None):
+        request = self.factory.get("/filebrowser/file", params or {})
         request.user = _AuthUser()
         return request
 
@@ -128,6 +128,43 @@ class FileBrowserViewTests(SimpleTestCase):
         context = mock_render.call_args[0][2]
         self.assertTrue(context["error"])
         self.assertEqual(context["errortext"], "path outside project")
+
+    def test_requested_directory_is_exposed_for_shared_browser_storage(self):
+        with tempfile.TemporaryDirectory() as selected_dir:
+            request = self._request({
+                "purpose": "external_input",
+                "selectedpath": selected_dir,
+            })
+
+            with patch.object(file_browser_views, "get_project_id", return_value=None), patch.object(file_browser_views.ProjectModel.objects, "filter", return_value=_ProjectIdQuery([])), patch.object(file_browser_views, "render", return_value=HttpResponse("ok")) as mock_render:
+                file_browser_views.view_file_browser(request, "dir")
+
+        context = mock_render.call_args[0][2]
+        self.assertEqual(context["remember_directory"], selected_dir)
+
+    def test_preloaded_browser_does_not_replace_remembered_directory(self):
+        request = self._request()
+        with tempfile.TemporaryDirectory() as base_dir:
+            with patch.object(file_browser_views, "get_project_id", return_value=1), patch.object(file_browser_views.ProjectModel.objects, "filter", return_value=_ProjectIdQuery([1])), patch.object(file_browser_views, "Project", return_value=SimpleNamespace(absdir=base_dir)), patch.object(file_browser_views, "render", return_value=HttpResponse("ok")) as mock_render:
+                file_browser_views.view_file_browser(request, "file")
+
+        context = mock_render.call_args[0][2]
+        self.assertEqual(context["remember_directory"], "")
+
+    def test_remembered_directory_outside_project_falls_back_to_project_root(self):
+        with tempfile.TemporaryDirectory() as base_dir, tempfile.TemporaryDirectory() as other_dir:
+            request = self._request({
+                "selectedpath": other_dir,
+                "remembered": "1",
+            })
+
+            with patch.object(file_browser_views, "get_project_id", return_value=1), patch.object(file_browser_views.ProjectModel.objects, "filter", return_value=_ProjectIdQuery([1])), patch.object(file_browser_views, "Project", return_value=SimpleNamespace(absdir=base_dir)), patch.object(file_browser_views, "render", return_value=HttpResponse("ok")) as mock_render:
+                file_browser_views.view_file_browser(request, "file")
+
+        context = mock_render.call_args[0][2]
+        self.assertFalse(context["error"])
+        self.assertEqual(context["path"], base_dir)
+        self.assertEqual(context["remember_directory"], base_dir)
 
     def test_directory_listing_hides_dotfiles_and_sorts(self):
         request = self._request()

@@ -90,11 +90,23 @@
             const container = trigger.parentElement;
             const iframe = container.querySelector(".dirselector");
             const input = container.querySelector("input");
-            const selectedPath = input ? input.value.trim() : "";
+            let selectedPath = input ? input.value.trim() : "";
+            let usingRememberedPath = false;
+            if (!selectedPath) {
+                try {
+                    selectedPath = window.localStorage.getItem("niceFileBrowserLastDirectory") || "";
+                    usingRememberedPath = Boolean(selectedPath);
+                } catch (error) {
+                    selectedPath = "";
+                }
+            }
             const browserUrl = iframe.dataset.browserUrl;
             const params = new URLSearchParams({ purpose: "project_root" });
             if (selectedPath) {
                 params.set("selectedpath", selectedPath);
+            }
+            if (usingRememberedPath) {
+                params.set("remembered", "1");
             }
             iframe.setAttribute("src", browserUrl + "?" + params.toString());
             iframe.classList.remove("hidden");

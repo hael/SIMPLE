@@ -52,6 +52,9 @@ def view_file_browser(request, type, path=None):
     username = request.user.username
     purpose = request.GET.get("purpose", "")
     is_unrestricted_picker = purpose == "external_input" or (type == "dir" and purpose == "project_root")
+    selected_path = request.GET.get("selectedpath")
+    path_was_requested = path is not None or selected_path is not None
+    using_remembered_path = request.GET.get("remembered") == "1"
     selected_project_id = get_project_id(request)
     accessible_project_ids = set(
         ProjectModel.objects.filter(workspacemodel__user=username).distinct().values_list("id", flat=True)
@@ -59,12 +62,14 @@ def view_file_browser(request, type, path=None):
 
     if is_unrestricted_picker:
         if path is None:
-            path = request.GET.get("selectedpath", os.path.expanduser("~"))
+            path = selected_path if selected_path is not None else os.path.expanduser("~")
 
         path = (path or "").strip()
         if path == "":
             path = os.path.expanduser("~")
         path = os.path.realpath(path)
+        if using_remembered_path and not os.path.isdir(path):
+            path = os.path.realpath(os.path.expanduser("~"))
     elif selected_project_id is None or selected_project_id not in accessible_project_ids:
         error = True
         errortext = "invalid project selection"
@@ -79,7 +84,7 @@ def view_file_browser(request, type, path=None):
             base_dir = os.path.realpath(project.absdir)
 
             if path is None:
-                path = request.GET.get("selectedpath", base_dir)
+                path = selected_path if selected_path is not None else base_dir
 
             path = (path or "").strip()
             if path == "":
@@ -90,8 +95,13 @@ def view_file_browser(request, type, path=None):
             path = os.path.realpath(path)
             # Keep browsing constrained to the selected project root.
             if os.path.commonpath([path, base_dir]) != base_dir:
-                error = True
-                errortext = "path outside project"
+                if using_remembered_path:
+                    path = base_dir
+                else:
+                    error = True
+                    errortext = "path outside project"
+                    path = base_dir
+            elif using_remembered_path and not os.path.isdir(path):
                 path = base_dir
 
     try:
@@ -148,6 +158,7 @@ def view_file_browser(request, type, path=None):
         "errortext": errortext,
         "files": files,
         "dirs": dirs,
+        "remember_directory": path if not error and path_isdir and path_was_requested else "",
     }
     response = render(request, template, context)
     return response

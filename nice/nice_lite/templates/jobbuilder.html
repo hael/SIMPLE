@@ -502,11 +502,23 @@
             if (kind === "file" && selectedPath && !selectedPath.endsWith("/")) {
                 selectedPath = selectedPath.includes("/") ? selectedPath.replace(/\/[^/]*$/, "") : "";
             }
+            let usingRememberedPath = false;
+            if (!selectedPath) {
+                try {
+                    selectedPath = window.localStorage.getItem("niceFileBrowserLastDirectory") || "";
+                    usingRememberedPath = Boolean(selectedPath);
+                } catch (error) {
+                    selectedPath = "";
+                }
+            }
 
             const browserUrl = "{% url 'nice_lite:file_browser' '__kind__' %}".replace("__kind__", kind);
             const params = new URLSearchParams({ purpose: "external_input" });
             if (selectedPath) {
                 params.set("selectedpath", selectedPath);
+            }
+            if (usingRememberedPath) {
+                params.set("remembered", "1");
             }
             jobsIframe.setAttribute("src", browserUrl + "?" + params.toString());
         }
