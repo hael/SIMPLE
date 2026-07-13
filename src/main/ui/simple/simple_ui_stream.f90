@@ -160,6 +160,7 @@ contains
         call master%add_input(UI_PARM, 'pickrefs',       'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')
         call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')
         call master%add_input(UI_PARM, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '')     
+        call master%add_input(UI_PARM, 'nicedispid',     'hidden_int',    'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '')
         ! alternative inputs
         ! search controls
         ! filter controls

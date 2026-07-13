@@ -212,6 +212,7 @@ contains
         call reg%add_char('trail_rec', self%trail_rec)
         call reg%add_char('transp_pca', self%transp_pca)
         call reg%add_char('trsstats', self%trsstats)
+        call reg%add_char('trust_header', self%trust_header)
         call reg%add_char('tseries', self%tseries)
         call reg%add_char('use_thres', self%use_thres)
         call reg%add_char('vis', self%vis)

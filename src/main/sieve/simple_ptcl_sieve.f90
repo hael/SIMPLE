@@ -1404,10 +1404,11 @@ contains
     type(string), allocatable          :: files(:)
     type(string)                       :: fname_keep, fname_keep_last_iter_jpeg, fname_keep_last_iter_stk
     type(string)                       :: fname_keep_last_iter_even_stk, fname_keep_last_iter_odd_stk
-    type(string)                       :: fname_keep_sigma, fname
+    type(string)                       :: fname_keep_sigma_final, fname_keep_sigma_iter_1, fname_keep_sigma_iter_2, fname
     integer(timer_int_kind)            :: t0
-    integer                            :: i, ndeleted, iter_idx, max_iter_jpeg, max_iter_stk, sigma_rank, max_sigma_rank
-    integer                            :: max_iter_even_stk, max_iter_odd_stk
+    integer                            :: i, ndeleted, iter_idx, sigma_rank
+    integer                            :: max_sigma_final_rank, max_sigma_iter_rank_1, max_sigma_iter_rank_2
+    integer                            :: max_iter_even_stk, max_iter_odd_stk, max_iter_stk, max_iter_jpeg
     t0 = timer_start()
 
     call simple_list_files(chunk%folder%to_char() // '/*', files)
@@ -1421,12 +1422,16 @@ contains
     fname_keep_last_iter_stk  = ''
     fname_keep_last_iter_even_stk = ''
     fname_keep_last_iter_odd_stk  = ''
-    fname_keep_sigma          = ''
+    fname_keep_sigma_final    = ''
+    fname_keep_sigma_iter_1   = ''
+    fname_keep_sigma_iter_2   = ''
     max_iter_jpeg             = -1
     max_iter_stk              = -1
     max_iter_even_stk         = -1
     max_iter_odd_stk          = -1
-    max_sigma_rank            = -1
+    max_sigma_final_rank      = -1
+    max_sigma_iter_rank_1     = -1
+    max_sigma_iter_rank_2     = -1
     do i = 1, size(files)
       fname = basename(files(i))
 
@@ -1457,9 +1462,21 @@ contains
       end if
 
       sigma_rank = sigma_file_rank(fname)
-      if( sigma_rank > max_sigma_rank ) then
-        max_sigma_rank = sigma_rank
-        fname_keep_sigma = fname
+      if( sigma_rank >= 1000000 ) then
+        if( sigma_rank > max_sigma_final_rank ) then
+          max_sigma_final_rank = sigma_rank
+          fname_keep_sigma_final = fname
+        end if
+      else if( sigma_rank > 0 ) then
+        if( sigma_rank > max_sigma_iter_rank_1 ) then
+          max_sigma_iter_rank_2   = max_sigma_iter_rank_1
+          fname_keep_sigma_iter_2 = fname_keep_sigma_iter_1
+          max_sigma_iter_rank_1   = sigma_rank
+          fname_keep_sigma_iter_1 = fname
+        else if( sigma_rank > max_sigma_iter_rank_2 ) then
+          max_sigma_iter_rank_2   = sigma_rank
+          fname_keep_sigma_iter_2 = fname
+        end if
       end if
     end do
 
@@ -1476,7 +1493,9 @@ contains
       if( fname_keep_last_iter_stk%strlen()  > 0 .and. fname == fname_keep_last_iter_stk  ) cycle
       if( fname_keep_last_iter_even_stk%strlen() > 0 .and. fname == fname_keep_last_iter_even_stk ) cycle
       if( fname_keep_last_iter_odd_stk%strlen()  > 0 .and. fname == fname_keep_last_iter_odd_stk  ) cycle
-      if( fname_keep_sigma%strlen()          > 0 .and. fname == fname_keep_sigma          ) cycle
+      if( fname_keep_sigma_final%strlen()    > 0 .and. fname == fname_keep_sigma_final    ) cycle
+      if( fname_keep_sigma_iter_1%strlen()   > 0 .and. fname == fname_keep_sigma_iter_1   ) cycle
+      if( fname_keep_sigma_iter_2%strlen()   > 0 .and. fname == fname_keep_sigma_iter_2   ) cycle
       if( fname%has_substr('_selected.jpg') .or. fname%has_substr('_rejected.jpg') ) cycle
       if( fname%has_substr('_selected.jpeg') .or. fname%has_substr('_rejected.jpeg') ) cycle
       if( fname%has_substr('_all_reasons') ) cycle
@@ -1556,12 +1575,13 @@ contains
 
     ! Returns a rank for sigma candidate files.
     ! -1: not a sigma .star file
-    !  0: sigma .star without an iteration suffix
-    ! >0: sigma .star with _iterNNN (rank = NNN + 1)
+    ! >0 and <1000000: sigma .star with _iterNNN or _it_NNN (rank = NNN + 1)
+    ! 1000000: sigma .star without an iteration suffix
+    ! 2000000: sigma .star explicitly marked as final/combined
     pure integer function sigma_file_rank( fname )
       type(string), intent(in) :: fname
       character(len=:), allocatable :: s
-      integer :: n, p_iter, i, ch
+      integer :: n, p_iter, i, ch, iter_val, ndigits
 
       sigma_file_rank = -1
       s = fname%to_char()
@@ -1570,21 +1590,44 @@ contains
       if( s(n-4:n) /= '.star' ) return
       if( index(s, 'sigma') == 0 ) return
 
-      sigma_file_rank = 0
-      p_iter = index(s, '_iter', back=.true.)
-      if( p_iter == 0 ) return
-      i = p_iter + 5
-      if( i > n ) return
+      ! Explicit final/combined files should win over all iter files.
+      if( index(s, 'final') > 0 .or. index(s, 'combined') > 0 ) then
+        sigma_file_rank = 2000000
+        return
+      end if
 
-      sigma_file_rank = 1
+      p_iter = index(s, '_iter', back=.true.)
+      if( p_iter > 0 ) then
+        i = p_iter + 5
+      else
+        p_iter = index(s, '_it_', back=.true.)
+        if( p_iter > 0 ) then
+          i = p_iter + 4
+        else
+          sigma_file_rank = 1000000
+          return
+        end if
+      end if
+      if( i > n ) then
+        sigma_file_rank = 1000000
+        return
+      end if
+
+      iter_val = 0
+      ndigits = 0
       do while( i <= n )
         ch = iachar(s(i:i))
         if( ch < iachar('0') .or. ch > iachar('9') ) exit
-        sigma_file_rank = 10 * sigma_file_rank + ch - iachar('0')
+        iter_val = 10 * iter_val + ch - iachar('0')
+        ndigits = ndigits + 1
         i = i + 1
       end do
 
-      if( i == p_iter + 5 ) sigma_file_rank = 0
+      if( ndigits > 0 ) then
+        sigma_file_rank = iter_val + 1
+      else
+        sigma_file_rank = 1000000
+      end if
     end function sigma_file_rank
     
   end subroutine cleanup_chunk

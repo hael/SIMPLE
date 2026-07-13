@@ -176,18 +176,20 @@ contains
     ! --------------------------------------------------------------------
     subroutine make_pickrefs_impl(cline)
         use simple_image_msk, only: automask2D
+        use simple_imghead,   only: find_img_smpd
         class(cmdline), intent(inout) :: cline
         type(parameters)         :: params
         type(stack_io)           :: stkio_r
         type(oris)               :: moldiamori
-        type(image)              :: ref2D, ref2D_clip
+        type(image)              :: ref2D, ref2D_clip, img_in
         type(image), allocatable :: projs(:), masks(:)
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, LP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS = 100
-        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam
-        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
+        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read
+        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_stk(3), ncavgs, icavg
         integer :: cnt, norefs, box_for_pick, box_for_extract
+        logical :: do_rescale
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
@@ -201,16 +203,50 @@ contains
         ! read project and check stream mode
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs)
-        ldim(3) = 1
+        call find_ldim_nptcls(params%pickrefs, ldim_stk, ncavgs)
+        ldim_stk(3) = 1
+        ldim        = ldim_stk
+        smpd_read   = params%smpd
+        do_rescale  = .false.
+        if( params%trust_header.eq.'yes' ) then
+            smpd_stk = find_img_smpd(params%pickrefs)
+            if( smpd_stk <= 0. ) THROW_HARD('Could not determine SMPD from PICKREFS stack header')
+            if( params%smpd <= 0. ) THROW_HARD('Invalid target SMPD for make_pickrefs')
+            smpd_read = smpd_stk
+            write(logfhandle,'(A,F8.4)') '>>> TRUSTING SMPD FROM PICKREFS STACK: ', smpd_stk
+            if( abs(smpd_stk - params%smpd) > TINY ) then
+                do_rescale = .true.
+                ldim(1) = round2even(real(ldim_stk(1)) * smpd_stk / params%smpd)
+                ldim(2) = ldim(1)
+                if( ldim(1) <= 0 ) THROW_HARD('Invalid scaled PICKREFS box size')
+                write(logfhandle,'(A,F8.4,A,F8.4,A,I6)') '>>> RESCALING PICKREFS FROM SMPD ', &
+                    &smpd_stk, ' TO ', params%smpd, '; TARGET BOX: ', ldim(1)
+            endif
+        end if
+        call cline%set('smpd', params%smpd)
         params%msk = real(ldim(1)/2) - COSMSKHALFWIDTH ! for automasking
         allocate( projs(ncavgs), masks(ncavgs) )
-        call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
+
+        call stkio_r%open(params%pickrefs, smpd_read, 'read', bufsz=ncavgs)
+        call img_in%new(ldim_stk, smpd_read)
         do icavg = 1, ncavgs
             call projs(icavg)%new(ldim, params%smpd)
-            call stkio_r%read(icavg, projs(icavg))
+            call stkio_r%read(icavg, img_in)
+            if( do_rescale ) then
+                call img_in%fft()
+                if( all(ldim <= ldim_stk) ) then
+                    call img_in%clip(projs(icavg))
+                else
+                    call img_in%pad(projs(icavg))
+                endif
+                call projs(icavg)%ifft()
+                call projs(icavg)%set_smpd(params%smpd)
+            else
+                call projs(icavg)%copy(img_in)
+            endif
             call masks(icavg)%copy(projs(icavg))
         end do
+        call img_in%kill
         call stkio_r%close
         ! automasking
         call automask2D(params, masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)

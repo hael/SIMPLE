@@ -76,6 +76,7 @@ class SIMPLEStream:
         self.args        = args    # user-supplied argument dict
         self.skip_refgen = False   # True when pickrefs are supplied externally
         self.jobid       = 0
+        self.dispid      = 0
         if args is not None and "pickrefs" in args:
             self.skip_refgen = True
 
@@ -134,7 +135,7 @@ class SIMPLEStream:
     # Launch / restart
     # ------------------------------------------------------------------
 
-    def start(self, absdir, jobid):
+    def start(self, absdir, jobid, dispid):
         """
         Validate state, record the job directory and id, then dispatch.
         loadUIJSON() must have been called successfully before start().
@@ -152,8 +153,12 @@ class SIMPLEStream:
         if jobid <= 0:
             print_error("invalid job id")
             return False
+        if dispid <= 0:
+            print_error("invalid dispatch id")
+            return False
         self.absdir = absdir
         self.jobid  = jobid
+        self.dispid = dispid
         if not directory_exists(self.absdir):
             return False
         return self.dispatch()
@@ -206,13 +211,24 @@ class SIMPLEStream:
         if self.tplt_simple_motif not in dispatchmodel.tplt:
             print_error("simple motif missing from dispatch template")
             return False
-
+ 
         # build the command string: executable + user args + static args + API args
         command_string = self.executable
         if "user_inputs" in self.ui:
+            nicedispid_found = False
             for user_input in self.ui["user_inputs"]:
                 if user_input["key"] in self.args and user_input["keytype"] != "hidden":
-                    command_string += " " + user_input["key"] + "=" + self.args[user_input["key"]]
+                    arg_key = user_input["key"]
+                    arg_val = self.args[arg_key]
+                    if "nicedispid" == arg_key:
+                        if str(arg_val).strip() != "0":
+                            nicedispid_found = True
+                            command_string += " " + arg_key + "=" + str(arg_val)
+                    else:
+                        command_string += " " + arg_key + "=" + str(arg_val)
+            # if nicedispid is not supplied by the user or is 0, add it to the command string
+            if not nicedispid_found:
+                command_string += " nicedispid=" + str(self.dispid)
         command_string += " mkdir=no nparts=1 nthr=" + str(self.nthr_master)
         command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + dispatchmodel.url + "/api"
         command_string += " >> stream_master.log 2>> stream_master.error\n"

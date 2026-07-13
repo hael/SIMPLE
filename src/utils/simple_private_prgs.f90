@@ -477,6 +477,7 @@ contains
         call cmd_dict%push('trs',           'maximum halfwidth shift(in pixels)')
         call cmd_dict%push('trsstats',      'provide origin shift statistics(yes|no){no}')
         call cmd_dict%push('tseries',       'images represent a time-series(yes|no){no}')
+        call cmd_dict%push('trust_header',  'trust the smpd value in the image header(yes|no){no}')
         call cmd_dict%push('unidoc',        'unified resources and orientations doc')
         call cmd_dict%push('update_frac',   'fraction of particles to update(0.-1.){1.}')
         call cmd_dict%push('user_account',  'Name of user account in distributed computer system (SLURM/PBS)')
@@ -615,6 +616,7 @@ contains
         call private_prgs(11)%push_opt_key('neg')
         call private_prgs(11)%push_opt_key('nrots')
         call private_prgs(11)%push_opt_key('mirr')
+        call private_prgs(11)%push_opt_key('trust_header')
 
         ! MAP_CAVGS_SELECTION, for mapping class average selection to project
         call private_prgs(12)%set_name('map_cavgs_selection')

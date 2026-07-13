@@ -118,7 +118,7 @@ class StreamJob(Job):
         self.id     = jobmodel.id
         self.absdir = absdir
 
-        if not simplestream.start(absdir, self.id):
+        if not simplestream.start(absdir, self.id, disp):
             return False
         return True
 
