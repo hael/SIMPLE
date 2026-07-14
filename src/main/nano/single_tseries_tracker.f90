@@ -3,7 +3,6 @@ module single_tseries_tracker
 use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_image,      only: image, unmemoize_mask_coords
-use simple_memory_monitor, only: mem_report
 use simple_tvfilter
 implicit none
 
@@ -98,7 +97,6 @@ contains
         end do
         particle_locations(:,1) = real(boxcoord(1))
         particle_locations(:,2) = real(boxcoord(2))
-        call mem_report('track_particles:initialized')
     end subroutine init_tracker
 
     subroutine track_particle( fname_forctf, frame_start )
@@ -208,7 +206,6 @@ contains
                 call flush(6)
             endif
         enddo
-        call mem_report('track_particles:tracking_complete')
         write(logfhandle,'(a)') ">>> WRITING PARTICLES, NEIGHBOURS & SPECTRUM"
         ! Second pass write box file, tracked particles, neighbours & update spectrum
         call pspec%zero_and_unflag_ft
@@ -254,7 +251,6 @@ contains
             if( l_neg ) call ptcl_target%neg()
             call ptcl_target%write(stkframes_name, cnt)
         end do
-        call mem_report('track_particles:writing_complete')
         call fclose(funit)
         call fclose(funit2)
         ! average and write power spectrum for CTF estimation
@@ -468,7 +464,6 @@ contains
 
     subroutine kill_tracker
         integer :: i
-        call mem_report('track_particles:cleanup_start')
         intg_names => null()
         frame_names => null()
         do i=1,NNN
@@ -504,7 +499,6 @@ contains
         call pspec_nn%kill
         call tester_img%kill
         p_ptr => null()
-        call mem_report('track_particles:cleanup_complete')
     end subroutine kill_tracker
 
 end module single_tseries_tracker
