@@ -155,6 +155,35 @@ interface
         integer(c_int64_t) :: get_current_rss_bytes
     end function get_current_rss_bytes
 
+    function memory_monitor_start_c(filename, filename_length, program, program_length, &
+        &interval_seconds, run_id) bind(c,name="simple_memory_monitor_start_c")
+        use, intrinsic :: iso_c_binding, only: c_char, c_int
+        implicit none
+        integer(c_int) :: memory_monitor_start_c
+        character(kind=c_char,len=1), dimension(*), intent(in) :: filename, program
+        integer(c_int), value :: filename_length, program_length, interval_seconds, run_id
+    end function memory_monitor_start_c
+
+    function memory_monitor_report_c(phase, phase_length, elapsed, current_rss, peak_rss) &
+        &bind(c,name="simple_memory_monitor_report_c")
+        use, intrinsic :: iso_c_binding, only: c_char, c_double, c_int, c_int64_t
+        implicit none
+        integer(c_int) :: memory_monitor_report_c
+        character(kind=c_char,len=1), dimension(*), intent(in) :: phase
+        integer(c_int), value :: phase_length
+        real(c_double), intent(out) :: elapsed
+        integer(c_int64_t), intent(out) :: current_rss, peak_rss
+    end function memory_monitor_report_c
+
+    function memory_monitor_stop_c(elapsed, current_rss, peak_rss) &
+        &bind(c,name="simple_memory_monitor_stop_c")
+        use, intrinsic :: iso_c_binding, only: c_double, c_int, c_int64_t
+        implicit none
+        integer(c_int) :: memory_monitor_stop_c
+        real(c_double), intent(out) :: elapsed
+        integer(c_int64_t), intent(out) :: current_rss, peak_rss
+    end function memory_monitor_stop_c
+
     function simple_redirect_output_c(filename, len) bind(c,name="simple_redirect_output")
         use, intrinsic :: iso_c_binding
         implicit none

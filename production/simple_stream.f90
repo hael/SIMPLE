@@ -8,6 +8,7 @@ use simple_exec_helpers,   only: script_exec, update_job_descriptions_in_project
 use simple_jiffys,         only: simple_print_git_version, simple_print_timer
 use simple_ui,             only: make_ui, list_stream_prgs_in_ui
 use simple_persistent_worker_server,   only: persistent_worker
+use simple_memory_monitor,             only: mem_monitor_init, mem_monitor_finish
 use simple_stream_p00_master,          only: stream_p00_master
 use simple_stream_p01_preprocess,      only: stream_p01_preprocess
 use simple_stream_p02_assign_optics,   only: stream_p02_assign_optics
@@ -59,6 +60,7 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_stream'))
+call mem_monitor_init(cline, 'simple_stream:'//trim(prg))
 select case(trim(prg))
     case( 'master' )
         call xmaster%execute(cline)
@@ -82,6 +84,7 @@ call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg
 if( associated(persistent_worker%server) )then
     call persistent_worker%server%kill
 endif
+call mem_monitor_finish
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)

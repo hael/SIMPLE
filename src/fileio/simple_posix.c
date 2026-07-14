@@ -79,6 +79,7 @@ static int waitpid(pid_t pid, int *status, int options) { return -1; }
 #ifndef _WIN32
 #include <unistd.h>       /* getpid()  */
 #include <sys/resource.h>
+#include <pthread.h>
 #else
 #include <process.h>
 #endif
@@ -864,6 +865,213 @@ int64_t simple_current_rss_bytes(void)
     return (int64_t)resident_pages * (int64_t)page_size;
 #else
     return -1;
+#endif
+}
+
+/* Process-wide periodic memory telemetry.  The sampler and its file I/O stay
+ * entirely in C so it is safe to use alongside both the Fortran and coarray
+ * runtimes.  Named phase samples are serialized through the same mutex. */
+#ifndef _WIN32
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+    pthread_t thread;
+    FILE *stream;
+    struct timespec start_time;
+    int running;
+    int stop_requested;
+    int interval_seconds;
+    int run_id;
+    int process_id;
+    char program[4096];
+} simple_memory_monitor_state;
+
+static simple_memory_monitor_state memory_monitor = {
+    PTHREAD_MUTEX_INITIALIZER,
+    PTHREAD_COND_INITIALIZER,
+    (pthread_t)0,
+    NULL,
+    {0, 0},
+    0,
+    0,
+    30,
+    0,
+    0,
+    {0}
+};
+
+static void memory_monitor_copy_safe(char *output, size_t output_size,
+                                     const char *input, int input_length)
+{
+    size_t i, count;
+    if (output_size == 0) return;
+    count = input_length > 0 ? (size_t)input_length : 0;
+    if (count >= output_size) count = output_size - 1;
+    for (i = 0; i < count; ++i) {
+        char value = input[i];
+        output[i] = (value == ',' || value == '"' || value == '\n' || value == '\r') ? '_' : value;
+    }
+    output[count] = '\0';
+}
+
+static double memory_monitor_elapsed(const struct timespec *timestamp)
+{
+    return (double)(timestamp->tv_sec - memory_monitor.start_time.tv_sec) +
+           (double)(timestamp->tv_nsec - memory_monitor.start_time.tv_nsec) / 1000000000.0;
+}
+
+static int memory_monitor_write_sample_locked(const char *phase, int phase_length,
+                                              int print_line, double *elapsed_out,
+                                              int64_t *current_out, int64_t *peak_out)
+{
+    struct timespec timestamp;
+    int64_t current_rss, peak_rss;
+    double elapsed, current_mib, peak_mib;
+    char safe_phase[4096];
+    if (!memory_monitor.running || memory_monitor.stream == NULL) return -1;
+    if (clock_gettime(CLOCK_MONOTONIC, &timestamp) != 0) return -2;
+    current_rss = simple_current_rss_bytes();
+    peak_rss = simple_peak_rss_bytes();
+    if (current_rss < 0 || peak_rss < 0) return -3;
+    elapsed = memory_monitor_elapsed(&timestamp);
+    if (elapsed < 0.0) elapsed = 0.0;
+    current_mib = (double)current_rss / 1048576.0;
+    peak_mib = (double)peak_rss / 1048576.0;
+    memory_monitor_copy_safe(safe_phase, sizeof(safe_phase), phase, phase_length);
+    fprintf(memory_monitor.stream, "%d,%.3f,%d,%s,%s,%lld,%lld,%.3f,%.3f\n",
+            memory_monitor.run_id, elapsed, memory_monitor.process_id,
+            memory_monitor.program, safe_phase, (long long)current_rss,
+            (long long)peak_rss, current_mib, peak_mib);
+    fflush(memory_monitor.stream);
+    if (print_line) {
+        fprintf(stdout, ">>> MEMORY elapsed=%10.3f s pid=%d program=%s phase=%s current=%10.1f MiB peak=%10.1f MiB\n",
+                elapsed, memory_monitor.process_id, memory_monitor.program,
+                safe_phase, current_mib, peak_mib);
+        fflush(stdout);
+    }
+    if (elapsed_out != NULL) *elapsed_out = elapsed;
+    if (current_out != NULL) *current_out = current_rss;
+    if (peak_out != NULL) *peak_out = peak_rss;
+    return 0;
+}
+
+static void *memory_monitor_sampler(void *unused)
+{
+    (void)unused;
+    pthread_mutex_lock(&memory_monitor.mutex);
+    while (!memory_monitor.stop_requested) {
+        struct timespec deadline;
+        int wait_status;
+        if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) break;
+        deadline.tv_sec += memory_monitor.interval_seconds;
+        wait_status = 0;
+        while (!memory_monitor.stop_requested && wait_status == 0)
+            wait_status = pthread_cond_timedwait(&memory_monitor.condition,
+                                                &memory_monitor.mutex, &deadline);
+        if (!memory_monitor.stop_requested && wait_status == ETIMEDOUT)
+            memory_monitor_write_sample_locked("periodic", 8, 1, NULL, NULL, NULL);
+    }
+    pthread_mutex_unlock(&memory_monitor.mutex);
+    return NULL;
+}
+#endif
+
+int simple_memory_monitor_start_c(const char *filename, int filename_length,
+                                  const char *program, int program_length,
+                                  int interval_seconds, int run_id)
+{
+#ifdef _WIN32
+    (void)filename; (void)filename_length; (void)program; (void)program_length;
+    (void)interval_seconds; (void)run_id;
+    return -1;
+#else
+    struct stat file_status;
+    char filename_buffer[4096];
+    int file_is_empty, thread_status;
+    memory_monitor_copy_safe(filename_buffer, sizeof(filename_buffer), filename, filename_length);
+    pthread_mutex_lock(&memory_monitor.mutex);
+    if (memory_monitor.running) {
+        pthread_mutex_unlock(&memory_monitor.mutex);
+        return -2;
+    }
+    file_is_empty = stat(filename_buffer, &file_status) != 0 || file_status.st_size == 0;
+    memory_monitor.stream = fopen(filename_buffer, "a");
+    if (memory_monitor.stream == NULL) {
+        pthread_mutex_unlock(&memory_monitor.mutex);
+        return -3;
+    }
+    memory_monitor_copy_safe(memory_monitor.program, sizeof(memory_monitor.program), program, program_length);
+    memory_monitor.interval_seconds = interval_seconds > 0 ? interval_seconds : 1;
+    memory_monitor.run_id = run_id;
+    memory_monitor.process_id = (int)getpid();
+    memory_monitor.stop_requested = 0;
+    if (clock_gettime(CLOCK_MONOTONIC, &memory_monitor.start_time) != 0) {
+        fclose(memory_monitor.stream);
+        memory_monitor.stream = NULL;
+        pthread_mutex_unlock(&memory_monitor.mutex);
+        return -4;
+    }
+    if (file_is_empty) {
+        fprintf(memory_monitor.stream,
+                "run_id,elapsed_s,pid,program,phase,current_rss_bytes,peak_rss_bytes,current_rss_mib,peak_rss_mib\n");
+        fflush(memory_monitor.stream);
+    }
+    memory_monitor.running = 1;
+    thread_status = pthread_create(&memory_monitor.thread, NULL, memory_monitor_sampler, NULL);
+    if (thread_status != 0) {
+        memory_monitor.running = 0;
+        fclose(memory_monitor.stream);
+        memory_monitor.stream = NULL;
+        pthread_mutex_unlock(&memory_monitor.mutex);
+        return -5;
+    }
+    pthread_mutex_unlock(&memory_monitor.mutex);
+    return 0;
+#endif
+}
+
+int simple_memory_monitor_report_c(const char *phase, int phase_length,
+                                   double *elapsed, int64_t *current_rss,
+                                   int64_t *peak_rss)
+{
+#ifdef _WIN32
+    (void)phase; (void)phase_length; (void)elapsed; (void)current_rss; (void)peak_rss;
+    return -1;
+#else
+    int status;
+    pthread_mutex_lock(&memory_monitor.mutex);
+    status = memory_monitor_write_sample_locked(phase, phase_length, 0,
+                                                elapsed, current_rss, peak_rss);
+    pthread_mutex_unlock(&memory_monitor.mutex);
+    return status;
+#endif
+}
+
+int simple_memory_monitor_stop_c(double *elapsed, int64_t *current_rss,
+                                 int64_t *peak_rss)
+{
+#ifdef _WIN32
+    (void)elapsed; (void)current_rss; (void)peak_rss;
+    return -1;
+#else
+    int status;
+    pthread_mutex_lock(&memory_monitor.mutex);
+    if (!memory_monitor.running) {
+        pthread_mutex_unlock(&memory_monitor.mutex);
+        return -1;
+    }
+    memory_monitor.stop_requested = 1;
+    pthread_cond_signal(&memory_monitor.condition);
+    pthread_mutex_unlock(&memory_monitor.mutex);
+    pthread_join(memory_monitor.thread, NULL);
+    pthread_mutex_lock(&memory_monitor.mutex);
+    status = memory_monitor_write_sample_locked("finish", 6, 0,
+                                                elapsed, current_rss, peak_rss);
+    fclose(memory_monitor.stream);
+    memory_monitor.stream = NULL;
+    memory_monitor.running = 0;
+    pthread_mutex_unlock(&memory_monitor.mutex);
+    return status;
 #endif
 }
 

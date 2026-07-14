@@ -2,6 +2,7 @@
 module simple_private_exec_driver
 use simple_private_exec_api
 use simple_syslib, only: redirect_stdout_stderr, restore_stdout_stderr
+use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
 implicit none
 private
 public :: run_private_exec_from_command_line, run_private_exec_line, run_coarray_direct
@@ -27,10 +28,12 @@ contains
         prg = xarg(pos+1:)
         call ensure_private_exec_ui
         call cline%parse_private
+        call mem_monitor_init(cline, 'simple_private_exec:'//trim(prg))
         call print_slurm_env
         call dispatch_private_prg(prg, cline, l_silent)
         rt_exec = toc(t0)
         if( .not. l_silent ) call simple_print_timer(rt_exec)
+        call mem_monitor_finish
         call cline%kill
     end subroutine run_private_exec_from_command_line
 
@@ -53,10 +56,12 @@ contains
         call extract_prg_from_line(job_arg_line, prg)
         call ensure_private_exec_ui
         call cline%parse_private_line(job_arg_line)
+        call mem_monitor_init(cline, 'simple_private_exec:'//trim(prg))
         call print_slurm_env
         call dispatch_private_prg(prg, cline, l_silent)
         rt_exec = toc(t0)
         if( .not. l_silent ) call simple_print_timer(rt_exec)
+        call mem_monitor_finish
         call cline%kill
     end subroutine run_private_exec_line_unredirected
 

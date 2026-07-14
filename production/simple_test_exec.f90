@@ -2,6 +2,7 @@
 program simple_test_exec
 use simple_test_exec_api
 use simple_parameters, only: parameters
+use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)             :: xarg, prg
@@ -36,6 +37,7 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_test_exec'))
+call mem_monitor_init(cline, 'simple_test_exec:'//trim(prg))
 l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
 call exec_test_class_commander(    trim(prg), cline, l_silent, l_did_execute)
@@ -55,6 +57,7 @@ if( .not. l_did_execute )then
     THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use test=list to see available programs.')
 endif
 call update_job_descriptions_in_project(string('simple_test_exec'), string(trim(prg)), cline)
+call mem_monitor_finish
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)

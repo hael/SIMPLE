@@ -3,6 +3,7 @@ program single_exec
 use single_exec_api
 use simple_parameters,               only: parameters
 use simple_persistent_worker_server, only: persistent_worker
+use simple_memory_monitor,          only: mem_monitor_init, mem_monitor_finish
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)      :: args, prg
@@ -37,6 +38,7 @@ endif
 call cline%parse
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('single_exec'))
+call mem_monitor_init(cline, 'single_exec:'//trim(prg))
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 l_silent      = .false.
@@ -56,6 +58,7 @@ call update_job_descriptions_in_project(string('single_exec'), string(trim(prg))
 if( associated(persistent_worker%server) )then
     call persistent_worker%server%kill
 endif
+call mem_monitor_finish
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)

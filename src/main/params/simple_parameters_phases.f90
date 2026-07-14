@@ -662,6 +662,12 @@ contains
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         type(atoms) :: atoms_obj
+        select case(trim(self%memreport))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('memreport must be yes or no')
+        end select
+        if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then
             THROW_HARD('Walltime cannot be negative!')
         else if( self%walltime > WALLTIME_DEFAULT )then

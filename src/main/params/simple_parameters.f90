@@ -105,6 +105,7 @@ type :: parameters
     character(len=3)          :: makemovie='no'
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
+    character(len=3)          :: memreport='no'       !< enable per-process runtime memory telemetry(yes|no){no}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)          :: mirr_proj='no'       !< mirror projections(no|x|y){no}
     character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
@@ -371,6 +372,7 @@ type :: parameters
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
     integer :: maxnchunks=0
     integer :: maxpop=0            !< max population of an optics group
+    integer :: memreport_interval=30 !< minimum runtime memory report interval in seconds
     integer :: minits=0            !< minimum # iterations
     integer :: nboxes_max=0
     integer :: nchunks=0
