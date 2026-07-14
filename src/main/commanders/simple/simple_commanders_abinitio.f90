@@ -1526,7 +1526,17 @@ contains
             call nice_comm%cycle()
             ! Splitting stage of docked mode
             if( params%multivol_mode.eq.'docked' )then
-                if( istage == split_stage )then
+                if( istage == split_stage-1 )then
+                    ! update pre-split sampling
+                    if( l_force_full_sampling )then
+                        update_frac = 1.0
+                    else
+                        update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
+                        update_frac = min(abinitio_update_frac_max(), update_frac)
+                    endif
+                    write(logfhandle,'(A,I0,A,F8.4)') &
+                        &'>>> ABINITIO3D DOCKED SPLIT STAGE/PRE-SPLIT_UPDATE_FRAC: ',istage, '/',update_frac
+                else if( istage == split_stage )then
                     ! map all particles to a projection direction
                     call ensure_docked_multistate_particle_assignments
                     ! update post-split sampling and reset nstates in params
