@@ -101,10 +101,11 @@ contains
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MODE RESIDUAL ENERGY', resid_energy, nptcls)
             call log_residual_reduction('>>> FLEX_EIGENVOL ITER RESIDUAL REDUCTION', resid_mean_energy, resid_energy, nptcls)
-            call log_latent_sdevs('>>> FLEX_EIGENVOL ITER RAW LATENT SD', z, nptcls, ncomp)
+            call log_latent_sdevs('>>> FLEX_EIGENVOL ITER LATENT SD', z, nptcls, ncomp)
             call log_mode_vars('>>> FLEX_EIGENVOL ITER PPCA MODE VAR', mode_vars, ncomp)
-            call orthonormalize_latents(z, nptcls, ncomp)
-            call log_latent_sdevs('>>> FLEX_EIGENVOL ITER NORM LATENT SD', z, nptcls, ncomp)
+            ! Do not center, rotate, or rescale z independently here.  The
+            ! posterior covariance, prior variance, and basis must remain in
+            ! the same latent coordinate system for the next M-step.
         end do
         write(logfhandle,'(A)') '>>> FLEX_EIGENVOL FINAL REFIT'
         call flush(logfhandle)
@@ -129,13 +130,10 @@ contains
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MODE RESIDUAL ENERGY', resid_energy, nptcls)
         call log_residual_reduction('>>> FLEX_EIGENVOL FINAL RESIDUAL REDUCTION', resid_mean_energy, resid_energy, nptcls)
-        call log_latent_sdevs('>>> FLEX_EIGENVOL RAW FINAL LATENT SD', z, nptcls, ncomp)
-        call log_latent_means('>>> FLEX_EIGENVOL RAW FINAL LATENT MEAN', z, nptcls, ncomp)
+        call log_latent_sdevs('>>> FLEX_EIGENVOL FINAL LATENT SD', z, nptcls, ncomp)
+        call log_latent_means('>>> FLEX_EIGENVOL FINAL LATENT MEAN', z, nptcls, ncomp)
         call log_mode_vars('>>> FLEX_EIGENVOL FINAL PPCA MODE VAR', mode_vars, ncomp)
         call log_latent_covariance_eigs('>>> FLEX_EIGENVOL FINAL LATENT COV EIGVAL', z, nptcls, ncomp)
-        call orthonormalize_latents(z, nptcls, ncomp)
-        call log_latent_sdevs('>>> FLEX_EIGENVOL OUTPUT LATENT SD', z, nptcls, ncomp)
-        call log_latent_means('>>> FLEX_EIGENVOL OUTPUT LATENT MEAN', z, nptcls, ncomp)
         call log_basis_fourier_norms('>>> FLEX_EIGENVOL OUTPUT BASIS FOURIER NORM', basis_recs, ncomp)
         zfname = output_prefix(params)//'_zcoords.txt'
         t_step = tic()

@@ -645,7 +645,7 @@ contains
 
     !> Project this volume into the same Cartesian Fourier-plane storage used
     !! by gen_fplane4rec.  If apply_ctf_amp is true, the model is multiplied by
-    !! the stored shift/CTF/sigma transfer plane when available, falling back to
+    !! the stored forward transfer plane when available, falling back to
     !! sqrt(ctf^2) only for legacy fplanes that do not carry the transfer.
     subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div

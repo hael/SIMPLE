@@ -203,6 +203,9 @@ contains
         if( .not. allocated(recs(1)%cmat_exp) )then
             THROW_HARD('expanded matrix does not exist; insert_plane_oversamp_coupled_scaled')
         endif
+        if( .not. allocated(fpl%transfer_plane) )then
+            THROW_HARD('forward transfer plane does not exist; insert_plane_oversamp_coupled_scaled')
+        endif
         exp_lb    = lbound(recs(1)%cmat_exp)
         exp_ub    = ubound(recs(1)%cmat_exp)
         exp_shape = shape(recs(1)%cmat_exp)
@@ -261,10 +264,10 @@ contains
                     do k = k_lo, k_hi
                         kp = k * pf
                         if( kp <= 0 )then
-                            cmplx_raw = fpl%cmplx_plane(hp,kp)
+                            cmplx_raw = conjg(fpl%transfer_plane(hp,kp)) * fpl%cmplx_plane(hp,kp)
                             ctfsq_raw = fpl%ctfsq_plane(hp,kp)
                         else
-                            cmplx_raw = conjg(fpl%cmplx_plane(-hp,-kp))
+                            cmplx_raw = conjg(conjg(fpl%transfer_plane(-hp,-kp)) * fpl%cmplx_plane(-hp,-kp))
                             ctfsq_raw = fpl%ctfsq_plane(-hp,-kp)
                         endif
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
@@ -385,6 +388,9 @@ contains
             &size(rho_cross_exp,3) < exp_shape(2) .or. size(rho_cross_exp,4) < exp_shape(3) )then
             THROW_HARD('cross-density array shape mismatch; accumulate_plane_oversamp_coupled_stats')
         endif
+        if( .not. allocated(fpl%transfer_plane) )then
+            THROW_HARD('forward transfer plane does not exist; accumulate_plane_oversamp_coupled_stats')
+        endif
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         iwinsz   = ceiling(KBWINSZ - 0.5)
         stride   = LATENT_SAFE_STRIDE
@@ -436,10 +442,10 @@ contains
                     do k = k_lo, k_hi
                         kp = k * pf
                         if( kp <= 0 )then
-                            cmplx_raw = fpl%cmplx_plane(hp,kp)
+                            cmplx_raw = conjg(fpl%transfer_plane(hp,kp)) * fpl%cmplx_plane(hp,kp)
                             ctfsq_raw = fpl%ctfsq_plane(hp,kp)
                         else
-                            cmplx_raw = conjg(fpl%cmplx_plane(-hp,-kp))
+                            cmplx_raw = conjg(conjg(fpl%transfer_plane(-hp,-kp)) * fpl%cmplx_plane(-hp,-kp))
                             ctfsq_raw = fpl%ctfsq_plane(-hp,-kp)
                         endif
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &

@@ -1141,10 +1141,11 @@ contains
             shift = build%spproj_field%get_2Dshift(iptcl)
             if( params%l_ml_reg .and. allocated(build%esig%sigma2_noise) )then
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
-                    &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), store_transfer=.true.)
+                    &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), &
+                    &store_transfer=.true., observation_model=.true.)
             else
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
-                    &shift, fplanes(i), store_transfer=.true.)
+                    &shift, fplanes(i), store_transfer=.true., observation_model=.true.)
             endif
             call cap_fplane_for_projected_model(fplanes(i), kfromto)
         end do

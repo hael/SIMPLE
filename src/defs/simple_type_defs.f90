@@ -85,9 +85,9 @@ type stats_struct
 end type stats_struct
 
 type fplane_type
-    complex, allocatable :: cmplx_plane(:,:)    !< On output image pre-multiplied by CTF
-    real,    allocatable :: ctfsq_plane(:,:)    !< On output CTF normalization
-    complex, allocatable :: transfer_plane(:,:) !< Shift/CTF/sigma transfer applied to model projections
+    complex, allocatable :: cmplx_plane(:,:)    !< Reconstruction numerator or whitened observation
+    real,    allocatable :: ctfsq_plane(:,:)    !< CTF normalization or squared forward transfer
+    complex, allocatable :: transfer_plane(:,:) !< Optional forward transfer applied to model projections
     integer              :: frlims(3,2) = 0     !< Redundant Fourier limits
     real                 :: shconst(3)  = 0.    !< memoized constants for origin shifting
     integer              :: nyq         = 0     !< Nyqvist Fourier index

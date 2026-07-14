@@ -94,10 +94,26 @@ where:
   optional ML/sigma weighting
 - `eps_i(q)` is noise, preferably shell-dependent or particle/shell dependent
 
-In the reconstruction code path, much of `H_i` is already applied when
-`gen_fplane4rec` builds `fplane%cmplx_plane` and `fplane%ctfsq_plane`. A first
-implementation should reuse those prepared planes rather than inventing another
-CTF/shift convention.
+The ordinary reconstruction path from `gen_fplane4rec` stores an
+adjoint-weighted numerator, not an observation vector:
+
+```text
+fplane%cmplx_plane = C_i^* y_i / sigma_i^2
+fplane%ctfsq_plane = |C_i|^2 / sigma_i^2
+```
+
+That representation must not be compared directly with `H_i`-projected model
+planes. The projected latent model uses the opt-in observation representation:
+
+```text
+fplane%cmplx_plane    = shifted y_i / sigma_i
+fplane%transfer_plane = C_i / sigma_i
+fplane%ctfsq_plane    = |C_i / sigma_i|^2
+```
+
+This reuses the established CTF, phase-flip, shift, and noise conventions while
+keeping observations, forward projections, and adjoint backprojections in one
+weighted least-squares space.
 
 For physical interpretability, the recommended first model is:
 
