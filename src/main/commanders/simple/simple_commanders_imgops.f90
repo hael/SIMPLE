@@ -271,6 +271,16 @@ contains
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
                 end select
+            else if( cline%defined('denoise') )then
+                if( trim(params%denoise) .eq. 'yes' )then
+                    if( cline%defined('k_nn') )then
+                        call diffmap_denoise_imgfile(params%stk, params%outstk, params%smpd, params%k_nn)
+                    else
+                        call diffmap_denoise_imgfile(params%stk, params%outstk, params%smpd)
+                    endif
+                else
+                    THROW_HARD('Nothing to do!')
+                endif
             else if( params%phrand .eq. 'no')then
                 ! Band pass
                 if( cline%defined('lp') .and. cline%defined('hp') )then
@@ -826,8 +836,22 @@ contains
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
                     call del_file(params%outstk)
                     ! Rescaling
-                    ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
+                    if( cline%defined('newbox') )then
+                        if( params%ldim(1)==params%ldim(2) )then
+                            params%scale = real(params%newbox) / real(params%box)
+                        else
+                            THROW_HARD('NEWBOX only designed for square images')
+                        endif
+                        ldim_scaled = [params%newbox,params%newbox,1]
+                    else
+                        ldim_scaled(1) = round2even(real(params%ldim(1))*params%scale)
+                        ldim_scaled(2) = round2even(real(params%ldim(2))*params%scale)
+                        ldim_scaled(3) = 1
+                    endif
                     if( cline%defined('clip') )then
+                        if( params%ldim(1)/=params%ldim(2) )then
+                            THROW_HARD('CLIP only designed for square images')
+                        endif
                         call scale_and_clip_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,&
                         [params%clip,params%clip,1],smpd_new)
                     else

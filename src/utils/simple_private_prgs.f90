@@ -412,6 +412,7 @@ contains
         call cmd_dict%push('outstk',        'output image stack')
         call cmd_dict%push('outvol',        'output volume{outvol.ext}')
         call cmd_dict%push('part',          'partition in distributed execution{1}')
+        call cmd_dict%push('partition',     'Whether sampling balancing is based on clusters partition or directly on clusters(yes|no){no}')
         call cmd_dict%push('pcontrast',     'particle contrast(black|white){black}')
         call cmd_dict%push('pca_mode',      'PCA/diffusion method(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){ppca}')
         call cmd_dict%push('pdbfile',       'input PDB formatted file')

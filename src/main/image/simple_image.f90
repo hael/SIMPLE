@@ -202,6 +202,7 @@ contains
     procedure          :: bp
     procedure          :: lp_background
     procedure          :: bpgau2D, bpgau3D
+    procedure          :: gabor_filter2D
     procedure          :: tophat
     procedure          :: phase_rand
     procedure          :: ran_phases_below_noise_power
@@ -1291,6 +1292,12 @@ interface
         class(image), intent(inout) :: self
         real,         intent(in)    :: hp, lp
     end subroutine bpgau3D
+
+    module subroutine gabor_filter2D( self, freqs, angstep, img_out )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: freqs(:), angstep
+        class(image),   intent(inout) :: img_out
+    end subroutine gabor_filter2D
 
     module subroutine tophat( self, shell, halfwidth )
         class(image),   intent(inout) :: self

@@ -20,7 +20,8 @@ type stack_io
     real          :: smpd    = 0.
     logical       :: ft = .false., l_read = .false., l_open = .false.
 contains
-    procedure          :: open
+    procedure, private :: open_1, open_2
+    generic            :: open => open_1, open_2
     procedure          :: stk_is_open
     procedure          :: get_nptcls
     procedure          :: get_ldim
@@ -35,13 +36,28 @@ end type stack_io
 
 contains
 
-    subroutine open( self, stkname, smpd, rwaction, is_ft, box, bufsz )
+    subroutine open_1( self, stkname, smpd, rwaction, is_ft, box, bufsz )
         class(stack_io),   intent(inout) :: self
         class(string),     intent(in)    :: stkname
         character(len=*),  intent(in)    :: rwaction
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: box
+        integer, optional, intent(in)    :: bufsz
+        if( present(box) ) then
+            call self%open_2( stkname, smpd, rwaction, [box, box], is_ft=is_ft, bufsz=bufsz)
+        else
+            call self%open_2( stkname, smpd, rwaction, [0,0], is_ft=is_ft, bufsz=bufsz)
+        endif
+    end subroutine open_1
+
+    subroutine open_2( self, stkname, smpd, rwaction, ldim, is_ft, bufsz )
+        class(stack_io),   intent(inout) :: self
+        class(string),     intent(in)    :: stkname
+        character(len=*),  intent(in)    :: rwaction
+        real,              intent(in)    :: smpd
+        integer,           intent(in)    :: ldim(2)
+        logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: bufsz
         integer          :: mode ! FT or not in MRC file lingo
         call self%close
@@ -59,12 +75,9 @@ contains
                 if( mode == 3 .or. mode == 4 ) self%ft = .true.
                 self%l_read = .true.
             case DEFAULT
-                if( present(box) )then
-                    self%ldim = [box,box,1]
-                    call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.false.)
-                else
-                    THROW_HARD('optional box dummy argument needed to write to stack')
-                endif
+                if( ldim(1) <= 0 .or. ldim(2) <= 0 ) THROW_HARD('invalid ldim values')
+                self%ldim = [ldim(1),ldim(2),1]
+                call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.false.)
                 self%l_read = .false.
         end select
         if( present(is_ft) ) self%ft = is_ft
@@ -76,7 +89,7 @@ contains
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
         self%l_open = .true.
-    end subroutine open
+    end subroutine open_2
 
     logical function stk_is_open( self )
         class(stack_io), intent(in) :: self

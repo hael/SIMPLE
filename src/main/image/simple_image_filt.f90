@@ -196,6 +196,122 @@ contains
         !$omp end parallel do
     end subroutine bpgau3D
 
+    !> Match a 2D image against a bank of phase-insensitive Gabor filters.
+    module subroutine gabor_filter2D( self, freqs, angstep, img_out )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: freqs(:), angstep
+        class(image),   intent(inout) :: img_out
+        real, parameter :: sigma_prefactor = sqrt(log(2.) / 2.) * 3. / PI
+        type(image)     :: filt_even, filt_odd, response_even, response_odd, response_freq
+        integer :: h, k, ifreq, iang, nangs, lims(3,2), phys(2), freq_ind, nvalid_freqs
+        real    :: angle, theta, cang, sang, fpar, fperp, freq_shell, sig_shell
+        real    :: energy_even, energy_odd, weight, val_even, val_odd, wplus, wminus
+        real    :: response_median
+        logical :: didft, self_conjg
+        if( .not.self%existence ) THROW_HARD('image must exist; gabor_filter2D')
+        if( .not.self%is_2d() )   THROW_HARD('2D images only; gabor_filter2D')
+        if( size(freqs) == 0 )    THROW_HARD('empty frequency bank; gabor_filter2D')
+        if( any(freqs <= TINY) )  THROW_HARD('frequencies must be positive resolutions; gabor_filter2D')
+        if( angstep <= TINY .or. angstep > 360. ) THROW_HARD('invalid angular step; gabor_filter2D')
+        nangs = max(1, ceiling(360. / angstep))
+        if( img_out%exists() )then
+            if( .not.(self.eqdims.img_out) ) THROW_HARD('non-equal dims; gabor_filter2D')
+            if( .not.(self.eqsmpd.img_out) ) THROW_HARD('non-equal sampling; gabor_filter2D')
+        else
+            call img_out%new(self%ldim, self%smpd, self%wthreads)
+        endif
+        call img_out%zero_and_unflag_ft
+        didft = .false.
+        if( .not.self%ft )then
+            call self%fft()
+            didft = .true.
+        endif
+        call filt_even%new(self%ldim, self%smpd, .false.)
+        call filt_odd%new(self%ldim, self%smpd, .false.)
+        call response_even%new(self%ldim, self%smpd, .false.)
+        call response_odd%new(self%ldim, self%smpd, .false.)
+        call response_freq%new(self%ldim, self%smpd, .false.)
+        lims = self%fit%loop_lims(2)
+        nvalid_freqs = 0
+        do ifreq = 1,size(freqs)
+            freq_ind = self%fit%get_find(1, freqs(ifreq))
+            if( freq_ind < 1 .or. freq_ind > self%fit%get_lfny(1) )then
+                THROW_HARD('frequency resolution lies outside the sampled Fourier range; gabor_filter2D')
+            endif
+            freq_shell = real(freq_ind)
+            sig_shell  = freq_shell / (2. * PI * sigma_prefactor)
+            call response_freq%zero_and_unflag_ft
+            do iang = 1,nangs
+                angle = min(real(iang - 1) * angstep, 359.999)
+                theta = deg2rad(angle)
+                cang  = cos(theta)
+                sang  = sin(theta)
+                energy_even = 0.
+                energy_odd  = 0.
+                call filt_even%zero_and_flag_ft
+                call filt_odd%zero_and_flag_ft
+                !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
+                !$omp private(h,k,phys,fpar,fperp,weight,val_even,val_odd,wplus,wminus,self_conjg)&
+                !$omp reduction(+:energy_even,energy_odd)
+                do h = lims(1,1),lims(1,2)
+                    do k = lims(2,1),lims(2,2)
+                        phys  = self%comp_addr_phys(h,k)
+                        fpar  =  real(h) * cang + real(k) * sang
+                        fperp = -real(h) * sang + real(k) * cang
+                        wplus  = exp(-0.5 * (((fpar - freq_shell) / sig_shell)**2. + (fperp / sig_shell)**2.))
+                        wminus = exp(-0.5 * (((fpar + freq_shell) / sig_shell)**2. + (fperp / sig_shell)**2.))
+                        val_even = wplus + wminus
+                        val_odd  = wplus - wminus
+                        if( h == 0 .and. k == 0 ) val_even = 0.
+                        self_conjg = (h == 0 .or. (is_even(self%ldim(1)) .and. h == self%ldim(1) / 2)) .and.&
+                                    &(k == 0 .or. (is_even(self%ldim(2)) .and. k == -self%ldim(2) / 2))
+                        if( self_conjg ) val_odd = 0.
+                        filt_even%cmat(phys(1),phys(2),1) = cmplx(val_even, 0.)
+                        filt_odd%cmat(phys(1),phys(2),1)  = cmplx(0., val_odd)
+                        weight = 2.
+                        if( h == 0 ) weight = 1.
+                        if( is_even(self%ldim(1)) .and. h == self%ldim(1) / 2 ) weight = 1.
+                        energy_even = energy_even + weight * val_even * val_even
+                        energy_odd  = energy_odd  + weight * val_odd  * val_odd
+                    enddo
+                enddo
+                !$omp end parallel do
+                ! Normalize each phase to unit spatial energy
+                energy_even = sqrt(real(product(self%ldim)) * energy_even)
+                energy_odd  = sqrt(real(product(self%ldim)) * energy_odd)
+                if( min(energy_even, energy_odd) <= TINY ) THROW_HARD('zero-energy filter; gabor_filter2D')
+                filt_even%cmat = filt_even%cmat / energy_even
+                filt_odd%cmat  = filt_odd%cmat  / energy_odd
+                call response_even%zero_and_flag_ft
+                response_even%cmat = self%cmat * filt_even%cmat
+                call response_even%ifft()
+                call response_odd%zero_and_flag_ft
+                response_odd%cmat = self%cmat * filt_odd%cmat
+                call response_odd%ifft()
+                response_freq%rmat = max(response_freq%rmat(:,:,:), &
+                    &sqrt(response_even%rmat(:,:,:)**2. + response_odd%rmat(:,:,:)**2.))
+            enddo
+            ! Normalize this frequency by its response level, then
+            ! accumulate squared responses so all valid bands have equal weight
+            response_median = median(reshape(response_freq%rmat(1:self%ldim(1),1:self%ldim(2),1), &
+                &[product(self%ldim)]))
+            if( response_median > TINY )then
+                nvalid_freqs = nvalid_freqs + 1
+                img_out%rmat(1:self%ldim(1),1:self%ldim(2),1) = &
+                    &img_out%rmat(1:self%ldim(1),1:self%ldim(2),1) + &
+                    &(response_freq%rmat(1:self%ldim(1),1:self%ldim(2),1) / response_median)**2.
+            endif
+        enddo
+        if( nvalid_freqs > 0 ) img_out%rmat(1:self%ldim(1),1:self%ldim(2),1) = &
+            &sqrt(img_out%rmat(1:self%ldim(1),1:self%ldim(2),1) / real(nvalid_freqs))
+        call filt_even%kill
+        call filt_odd%kill
+        call response_even%kill
+        call response_odd%kill
+        call response_freq%kill
+        if( didft ) call self%ifft()
+    end subroutine gabor_filter2D
+
     module subroutine tophat( self, shell, halfwidth )
         class(image),   intent(inout) :: self
         integer,        intent(in)    :: shell

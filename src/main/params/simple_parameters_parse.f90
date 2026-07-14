@@ -65,6 +65,7 @@ contains
         call reg%add_char('ctfpatch', self%ctfpatch)
         call reg%add_char('conical_fsc', self%conical_fsc)
         call reg%add_char('ctfstats', self%ctfstats)
+        call reg%add_char('denoise', self%denoise)
         call reg%add_char('detector', self%detector)
         call reg%add_char('dfunit', self%dfunit)
         call reg%add_char('dir_exec', self%dir_exec)

@@ -125,7 +125,7 @@ contains
                 call img_scaled%ifft()
                 if( i == prange(1) )then
                     smpd_new = img_scaled%get_smpd()
-                    call stkio_w%open(fname, smpd_new, 'write', box=ldim_new(1))
+                    call stkio_w%open(fname, smpd_new, 'write', ldim_new(1:2))
                 endif
                 call stkio_w%write(cnt, img_scaled)
             end do
@@ -563,6 +563,42 @@ contains
         call stkio_w%close
         call img%kill
     end subroutine nlmean_imgfile
+
+    subroutine diffmap_denoise_imgfile( fname2process, fname, smpd, k_nn )
+        use simple_denoise_movies, only: diffmap_denoise_image_stack
+        class(string),     intent(in) :: fname2process, fname
+        real,              intent(in) :: smpd
+        integer, optional, intent(in) :: k_nn
+        type(image), allocatable :: imgs(:), den_imgs(:)
+        type(stack_io)           :: stkio_r, stkio_w
+        integer                  :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'diffmap_denoise_imgfile' )
+        ! Read
+        call stkio_r%open(fname2process, smpd, 'read')
+        allocate(imgs(n))
+        write(logfhandle,'(a)') '>>> DENOISING IMAGES WITH DIFFUSION MAPS'
+        do i = 1,n
+            call imgs(i)%new(ldim, smpd, wthreads=.false.)
+            call stkio_r%read(i, imgs(i))
+        end do
+        call stkio_r%close
+        ! Denoise
+        call diffmap_denoise_image_stack(imgs, den_imgs, k_nn=k_nn)
+        ! Write
+        call stkio_w%open(fname, smpd, 'write', ldim(1:2))
+        do i = 1,n
+            call stkio_w%write(i, den_imgs(i))
+        end do
+        call stkio_w%close
+        ! cleanup
+        do i = 1,n
+            call imgs(i)%kill
+            call den_imgs(i)%kill
+        end do
+        deallocate(imgs,den_imgs)
+    end subroutine diffmap_denoise_imgfile
 
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_ctf,   only: ctf

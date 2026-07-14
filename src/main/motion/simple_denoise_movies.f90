@@ -17,34 +17,33 @@ integer, parameter :: DEFAULT_DIFFMAP_STACK_KNN = 6
 contains
 
     subroutine diffmap_denoise_image_stack(frames, den_imgs, k_nn)
-        type(image), intent(inout) :: frames(:)
-        type(image), allocatable, intent(out) :: den_imgs(:)
-        integer, optional, intent(in) :: k_nn
+        type(image),              intent(inout) :: frames(:)
+        type(image), allocatable, intent(out)   :: den_imgs(:)
+        integer,     optional,    intent(in)    :: k_nn
         type(diffmap_graph) :: graph
-        type(image) :: avg_img
-        real, allocatable :: center(:), residuals(:,:), features(:,:), coords(:,:), eigvals(:), frame_vec(:)
+        type(image)         :: avg_img
+        real,   allocatable :: center(:), features(:,:), coords(:,:), eigvals(:), frame_vec(:)
         integer :: ldim(3), nframes_here, npix, iframe, rank_scan, rank_keep, k_nn_eff
-        real :: rms
-        real :: smpd
+        real    :: rms, smpd, feature_avg
         call validate_realspace_2d_stack(frames, ldim, smpd)
         nframes_here = size(frames)
         k_nn_eff = DEFAULT_DIFFMAP_STACK_KNN
         if( present(k_nn) ) k_nn_eff = k_nn
         npix = product(ldim)
-        allocate(center(npix), residuals(npix,nframes_here), features(npix,nframes_here))
+        allocate(center(npix), features(npix,nframes_here))
         center = 0.0
         do iframe = 1,nframes_here
-            frame_vec = frames(iframe)%serialize()
-            residuals(:,iframe) = frame_vec
-            center = center + frame_vec
+            frame_vec          = frames(iframe)%serialize()
+            features(:,iframe) = frame_vec
+            center             = center + frame_vec
             deallocate(frame_vec)
         end do
         center = center / real(nframes_here)
-        !$omp parallel do default(shared) private(iframe,rms) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iframe,rms,feature_avg) schedule(static) proc_bind(close)
         do iframe = 1,nframes_here
-            residuals(:,iframe) = residuals(:,iframe) - center
-            features(:,iframe)  = residuals(:,iframe)
-            features(:,iframe)  = features(:,iframe) - sum(features(:,iframe)) / real(npix)
+            features(:,iframe) = features(:,iframe) - center    ! residuals
+            feature_avg = sum(features(:,iframe)) / real(npix)
+            features(:,iframe) = features(:,iframe) - feature_avg
             rms = sqrt(sum(features(:,iframe)**2) / real(npix))
             if( rms > TINY ) features(:,iframe) = features(:,iframe) / rms
         end do
@@ -59,7 +58,7 @@ contains
         call graph_nystrom_residual_preimage(frames, avg_img, graph, den_imgs, rank_keep)
         call avg_img%kill()
         call graph%kill()
-        deallocate(center, residuals, features, coords, eigvals)
+        deallocate(center, features, coords, eigvals)
     end subroutine diffmap_denoise_image_stack
 
     subroutine validate_realspace_2d_stack(frames, ldim, smpd)
