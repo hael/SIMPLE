@@ -93,6 +93,7 @@ module simple_ptcl_sieve
   real,    parameter :: DEFAULT_LPSTART                       = 15.0
   real,    parameter :: DEFAULT_COARSE_LP                     = 15.0
   real,    parameter :: DEFAULT_FINE_LP                       = 10.0
+  real,    parameter :: OVERFIT_CLUSTER_REJECT_FRAC           = 0.60
 
   ! Labels used to route rejection strategy inside reject_cavgs
   character(len=*), parameter :: LABEL_COARSE     = 'COARSE CHUNK'
@@ -190,6 +191,7 @@ module simple_ptcl_sieve
     procedure :: get_latest
     procedure :: get_finished
     procedure :: set_final_ingestion
+    procedure :: unset_final_ingestion
     procedure :: append_chunk_coarse
     procedure :: append_chunk_fine
     procedure :: generate_chunks_coarse
@@ -309,6 +311,12 @@ contains
     class(ptcl_sieve), intent(inout) :: self
     self%final_ingestion = .true.
   end subroutine set_final_ingestion
+
+  ! Clears the module-level final-ingestion flag.
+  subroutine unset_final_ingestion(self)
+    class(ptcl_sieve), intent(inout) :: self
+    self%final_ingestion = .false.
+  end subroutine unset_final_ingestion
 
   ! --------------------------------------------------------------------------
   ! IMPORT FROM PREVIOUS RUN
@@ -1275,6 +1283,8 @@ contains
     type(string)                       :: stkname, jpgname
     integer(timer_int_kind)            :: t0
     integer                            :: ncls, iimg, nout, non_zero_ptcls, n_total_ptcls
+    integer                            :: n_overfit_fail, n_quality_eval
+    real                               :: overfit_fail_frac
     real                               :: smpd_dummy
 
     if( .not. chunk%abinitio2D_complete ) return
@@ -1293,6 +1303,8 @@ contains
               call spproj%os_cls2D%set(iimg, 'rejection_reason', string('coarse_reject: ')//cavg_rejection_reason_string(quality%reasons(iimg)))
           end if
       end do
+      
+
       if( .not. self%coarse_compatibility_model%converged() ) then
         call self%coarse_compatibility_model%train(spproj)
         call self%coarse_compatibility_model%get_support_model_metrics(compat_metrics)
@@ -1336,6 +1348,25 @@ contains
       end if
       call self%fine_compatibility_model%infer(spproj)
     end if
+    n_overfit_fail = 0
+    n_quality_eval = size(cavg_imgs)
+    do iimg = 1, n_quality_eval
+      if( quality%states(iimg) == 0 .and. is_overfit_reason(quality%reasons(iimg)) ) then
+        n_overfit_fail = n_overfit_fail + 1
+      end if
+    end do
+    overfit_fail_frac = 0.0
+    if( n_quality_eval > 0 ) overfit_fail_frac = real(n_overfit_fail) / real(n_quality_eval)
+
+    if( overfit_fail_frac > OVERFIT_CLUSTER_REJECT_FRAC ) then
+      do iimg = 1, size(cavg_imgs)
+        call spproj%os_cls2D%set(iimg, 'state', 0)
+        call spproj%os_cls2D%set(iimg, 'rejection_reason', string(label%to_char()//'_reject: overfit_cluster_frac_gt_0.60'))
+      end do
+      write(logfhandle,'(A,A,A,I6,A,I6,A,F6.3,A)') '>>> REJECTED ', label%to_char(), ' # ', chunk%id, &
+        ' DUE TO OVERFIT FAIL RATE ', n_overfit_fail, '/', overfit_fail_frac, ' (> 0.60)'
+    end if
+
     states = spproj%os_cls2D%get_all_asint('state')
     call spproj%map_cavgs_selection(states)
     non_zero_ptcls = spproj%os_ptcl2D%count_state_gt_zero()
@@ -1396,6 +1427,13 @@ contains
     if( allocated(states) ) deallocate(states)
     call timer_stop(t0, string('reject_cavgs'))
   end subroutine reject_cavgs
+
+  pure logical function is_overfit_reason( reason_code )
+    integer, intent(in) :: reason_code
+    is_overfit_reason = reason_code == CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW .or. &
+      reason_code == CAVG_REJECT_REASON_LOCVAR_FG_LOW .or. &
+      reason_code == CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
+  end function is_overfit_reason
 
   subroutine cleanup_chunk( self, chunk, label )
     class(ptcl_sieve),   intent(inout) :: self

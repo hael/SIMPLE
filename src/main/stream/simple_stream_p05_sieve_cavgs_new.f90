@@ -79,7 +79,7 @@ contains
         
         ! Hard-coded import/scheduling parameters.
         integer,            parameter   :: MAX_MOVIE_IMPORT          = 20   ! max movies imported per cycle
-        integer,            parameter   :: FINAL_INGESTION_IDLE_TIME = 5 * 60 ! idle time (s) since last import before signalling final ingestion
+        integer,            parameter   :: FINAL_INGESTION_IDLE_TIME = 10 * 60 ! idle time (s) since last import before signalling final ingestion
         type(string),       allocatable :: projects(:)
         character(len=:),   allocatable :: meta_buffer
         integer,            allocatable :: jpeg_inds(:), jpeg_pops(:), jpeg_selection(:)
@@ -169,6 +169,7 @@ contains
             if( nprojects > 0 ) then
                 call import_new_projects(project_list, projects, n_mics_imported, n_ptcls_imported)
                 call project_buff%add2history(projects)
+                call sieve%unset_final_ingestion()
 
                 write(logfhandle,'(A,I6,I9)') &
                 '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', n_mics_imported, n_ptcls_imported

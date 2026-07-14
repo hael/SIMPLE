@@ -259,6 +259,7 @@ contains
                         &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
                         call send_pickrefs(cwd_job//'/'//PICKREFS_FBODY//'.jpeg', n_pickrefs)
                         write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                        write(logfhandle,'(A)')'>>> JPEG '//cwd_job%to_char()//'/'//trim(PICKREFS_FBODY)//'.jpeg'
                         call qsys_cleanup(params)
                         l_once = .false.
                     endif
