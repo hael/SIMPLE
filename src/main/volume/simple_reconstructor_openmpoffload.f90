@@ -35,11 +35,12 @@ contains
 #ifndef USE_OPENMP_OFFLOAD
         THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
 #else
-        ! The offload kernel owns one expanded even/odd pair.  Keep multi-state
-        ! reconstruction on the common state-homogeneous CPU path until an
-        ! equivalent state-local offload loop is introduced.
+        ! The offload kernel owns one expanded even/odd pair.  Multi-state
+        ! work dispatches before this allocation to the common state/half-
+        ! homogeneous CPU path until an equivalent half-local offload loop is
+        ! introduced.
         if( params%nstates > 1 )then
-            write(logfhandle,'(A)') '>>> OPENMP-OFFLOAD: multi-state reconstruction uses the state-homogeneous CPU path'
+            write(logfhandle,'(A)') '>>> OPENMP-OFFLOAD: multi-state reconstruction uses the state/even-odd-homogeneous CPU path'
             call calc_3Drec(params, build, cline, nptcls, pinds)
             return
         endif
