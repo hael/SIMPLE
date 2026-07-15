@@ -540,8 +540,6 @@ contains
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img
         integer                      :: n, i, ldim(3)
-        logical                      :: noise_sdev_present
-        noise_sdev_present = present(noise_sdev)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'nlmean_imgfile' )
@@ -552,11 +550,7 @@ contains
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
-            if( noise_sdev_present )then
-                call img%nlmean2D(sdev_noise=noise_sdev)
-            else
-                call img%nlmean2D
-            endif
+            call img%nlmean2D(sdev_noise=noise_sdev)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close

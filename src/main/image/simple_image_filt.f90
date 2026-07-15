@@ -811,19 +811,31 @@ contains
     end subroutine apply_filter_serial
 
     ! don't touch default parameters here. This routine is being actively used
-    module subroutine NLmean2D( self, msk, sdev_noise )
+    module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius )
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
+        integer, optional, intent(in) :: patch_size, search_radius
         real, optional, intent(in)    :: sdev_noise
-        real,  allocatable :: rmat_pad(:,:), rmat_threads(:,:,:,:)
-        integer, parameter :: DIM_SW  = 3   ! good if use Euclidean distance
-        integer, parameter :: CFR_BOX = 10  ! as suggested in the paper, use a box 21x21
-        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
-        real    :: z, sigma, h, h_sq, avg, mmsk
-        integer :: i, j, m, n, pad, ithr
+        real,  allocatable :: rmat_pad(:,:), rmat_filt(:,:), patch_means(:,:)
+        integer, parameter :: DEFAULT_PATCH_SIZE    = 3  ! current default
+        integer, parameter :: DEFAULT_SEARCH_RADIUS = 10 ! current default, gives a 21x21 search box
+        real,    parameter :: DEFAULT_WEIGHT_THRESH = 1.e-3
+        real,    parameter :: MEAN_GATE_NSIGMA      = 3.
+        real    :: z, sigma, h, h_sq, avg, mmsk, min_weight, mean_gate, noise_bias
+        real    :: ref_mean, dist, w
+        integer :: i, j, m, n, ii, jj, pad, patch_rad, patch_sz, search_rad, npatch
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean2D')
         if( self%ft )      THROW_HARD('Real space only;NLmean2D')
-        mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
+        patch_sz  = DEFAULT_PATCH_SIZE
+        search_rad = DEFAULT_SEARCH_RADIUS
+        min_weight = DEFAULT_WEIGHT_THRESH
+        if( present(patch_size) )      patch_sz   = patch_size
+        if( present(search_radius) )   search_rad = search_radius
+        if( patch_sz < 1 .or. mod(patch_sz,2) == 0 ) THROW_HARD('patch_size must be a positive odd integer; NLmean2D')
+        if( search_rad < 0 ) THROW_HARD('search_radius must be non-negative; NLmean2D')
+        patch_rad = patch_sz / 2
+        npatch    = patch_sz * patch_sz
+        mmsk      = real(minval(self%ldim(1:2))) / 2. - real(patch_sz)
         if( present(msk) ) mmsk = msk
         if( present(sdev_noise) )then
             if( sdev_noise > SMALL )then
@@ -834,33 +846,78 @@ contains
         else
             sigma = self%noisesdev(mmsk) ! estimation of noise
         endif
-        pad   = CFR_BOX + 2
-        h     = 4.*sigma
-        h_sq  = h**2.
-        avg   = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / real(product(self%ldim))
-        allocate(rmat_threads(nthr_glob,self%ldim(1),self%ldim(2),1), source=0.)
-        allocate(rmat_pad(-pad:self%ldim(1)+pad,-pad:self%ldim(2)+pad), source=avg)
-        rmat_pad(1:self%ldim(1),1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
-        !$omp parallel do schedule(static) default(shared) private(m,n,ithr,sw_px,exponentials,i,j,z)&
-        !$omp proc_bind(close) firstprivate(rmat_pad) collapse(2)
+        if( sigma <= SMALL ) return
+        pad       = search_rad + patch_rad
+        h         = 4.*sigma
+        h_sq      = h**2.
+        mean_gate = MEAN_GATE_NSIGMA * sqrt(2.0) * sigma / sqrt(real(npatch))
+        noise_bias = 2. * sigma**2. * real(npatch)
+        allocate(rmat_pad(1-pad:self%ldim(1)+pad,1-pad:self%ldim(2)+pad))
+        allocate(patch_means(1-search_rad:self%ldim(1)+search_rad,1-search_rad:self%ldim(2)+search_rad))
+        allocate(rmat_filt(self%ldim(1),self%ldim(2)))
+        do n = 1-pad,self%ldim(2)+pad
+            jj = reflect_ind(n, self%ldim(2))
+            do m = 1-pad,self%ldim(1)+pad
+                ii = reflect_ind(m, self%ldim(1))
+                rmat_pad(m,n) = self%rmat(ii,jj,1)
+            enddo
+        enddo
+        do n = 1-search_rad,self%ldim(2)+search_rad
+            do m = 1-search_rad,self%ldim(1)+search_rad
+                patch_means(m,n) = sum(rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad)) / real(npatch)
+            enddo
+        enddo
+        !$omp parallel do schedule(static) default(shared) private(m,n,i,j,ii,jj,z,avg,ref_mean,dist,w)&
+        !$omp proc_bind(close) collapse(2)
         do n = 1,self%ldim(2)
             do m = 1,self%ldim(1)
-                ithr  = omp_get_thread_num() + 1
-                sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
-                exponentials = 0.
-                do j = -CFR_BOX,CFR_BOX
-                    do i = -CFR_BOX,CFR_BOX
-                      exponentials(i,j) = &
-                      & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) ! Euclidean norm
-                  enddo
+                ref_mean = patch_means(m,n)
+                z   = 0.
+                avg = 0.
+                do j = -search_rad,search_rad
+                    jj = n + j
+                    do i = -search_rad,search_rad
+                        ii = m + i
+                        ! Cheap Gaussian patch-mean gate: avoids full SSDs for candidates
+                        ! whose mean difference is unlikely under stationary white noise.
+                        if( abs(ref_mean - patch_means(ii,jj)) > mean_gate ) cycle
+                        ! For stationary white Gaussian noise, the SSD between two
+                        ! identical clean patches has expected noise energy 2*sigma^2*npatch.
+                        dist = max(sum((rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad) - &
+                                  &rmat_pad(ii-patch_rad:ii+patch_rad,jj-patch_rad:jj+patch_rad))**2.) - noise_bias, 0.)
+                        w = exp(-dist / h_sq)
+                        if( w < min_weight ) cycle
+                        z   = z + w
+                        avg = avg + w * rmat_pad(ii,jj)
+                    enddo
                 enddo
-                z = sum(exponentials)
-                if( z < 0.0000001 ) cycle
-                rmat_threads(ithr,m,n,1) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX)) / z
+                if( z > 0.0000001 )then
+                    rmat_filt(m,n) = avg / z
+                else
+                    rmat_filt(m,n) = self%rmat(m,n,1)
+                endif
             enddo
         enddo
         !$omp end parallel do
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
+        self%rmat(:self%ldim(1),:self%ldim(2),1) = rmat_filt
+    contains
+
+        pure integer function reflect_ind( ind, n ) result( rind )
+            integer, intent(in) :: ind, n
+            if( n <= 1 )then
+                rind = 1
+                return
+            endif
+            rind = ind
+            do while( rind < 1 .or. rind > n )
+                if( rind < 1 )then
+                    rind = 2 - rind
+                else
+                    rind = 2 * n - rind
+                endif
+            enddo
+        end function reflect_ind
+
     end subroutine NLmean2D
 
     module subroutine NLmean2D_eo( even, odd, avg )
