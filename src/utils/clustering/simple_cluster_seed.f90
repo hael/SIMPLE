@@ -22,7 +22,7 @@ contains
         real, optional,    intent(in)    :: power
         character(len=STDLEN) :: method_here
         real                  :: power_here
-        if(nclasses<=1) THROW_HARD('Inconstsistent number of classes; gen_labelling')
+        if(nclasses<=1) THROW_HARD('Inconsistent number of classes; gen_labelling')
         ! init
         call seed_rnd
         nlabels = nclasses
@@ -39,7 +39,7 @@ contains
         endif
         power_here = 2.
         if( present(power) )power_here = power
-        select case(trim(method))
+        select case(trim(method_here))
             case('uniform')
                 call draw_uniform
             case('uniform_corr')
@@ -52,11 +52,18 @@ contains
                 call draw_ranked(os)
             case('squared_uniform')
                 call draw_squared_uniform(os, power_here)
+            case('squared_uniform_proj')
+                if( .not.os%isthere('proj') )then
+                    write(logfhandle,'(A)') '>>> WARNING: no projection direction information; falling back to uniform'
+                    call draw_uniform
+                else
+                    call draw_squared_uniform_projdir(os, power_here)
+                endif
             case DEFAULT
                 THROW_HARD('Unsupported method; gen_labelling')
         end select
         ! updates labelling
-        call os%set_all('state',real(states))
+        call os%set_all('state', states)
         ! cleanup
         deallocate(states)
     end subroutine gen_labelling
@@ -165,7 +172,7 @@ contains
             if(sum(pops)==nincl_ptcls)exit
             pops(s) = pops(s)+1
         enddo
-        ! 99% of the data is sampled following: first parttion follos squared distribution sampling,
+        ! 99% of the data is sampled following: first partition follows squared distribution sampling,
         ! all others are uniformly sampled
         n99   = nint(0.99*real(nincl_ptcls)) + nlabels
         iptcl = 0
@@ -214,6 +221,97 @@ contains
         where((states > 0) .and. (states <= nlabels)) states = config
         ! cleanup
     end subroutine draw_squared_uniform
+
+    !>  first partition squared, all others uniform, simultaneous sampling by projection direction
+    subroutine draw_squared_uniform_projdir(os, power)
+        type(oris), intent(inout) :: os
+        real,       intent(in)    :: power
+        integer, allocatable      :: order(:), config(:), projs(:), inds(:)
+        real,    allocatable      :: corrs(:), projcorrs(:)
+        real           :: rnincl
+        integer        :: iptcl, s, i, n95, ninproj, iproj, nprojs
+        logical        :: mask(nptcls)
+        write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM PROJECTION DIRECTION SAMPLING'
+        allocate(order(nptcls), config(nptcls), corrs(nptcls), projs(nptcls))
+        config = 0
+        mask   = (states > 0) .and. (states <= nlabels)
+        corrs  = os%get_all('corr')
+        projs  = os%get_all('proj')
+        order  = (/(iptcl,iptcl=1,nptcls)/)
+        where( .not.mask )
+            corrs = -1.
+            projs = 0
+        end where
+        nprojs = maxval(projs)
+        do iproj = 1,nprojs
+            inds = pack((/(iptcl,iptcl=1,nptcls)/), projs(:)==iproj)
+            if( .not. allocated(inds) ) cycle
+            ninproj = size(inds)
+            if( ninproj == 0 ) cycle
+
+            if( ninproj <= 2*nlabels )then
+                ! random uniform
+                s = irnd_uni(nlabels)
+                do i = 1, ninproj
+                    iptcl = inds(i)
+                    s = s + 1
+                    if( s > nlabels ) s = 1
+                    config(iptcl) = s
+                    mask(iptcl)   = .false.
+                enddo
+            else
+                order     = inds
+                projcorrs = corrs(order)
+                call hpsort(projcorrs, order)
+                call reverse(order)
+                ! First 95%, stochastic rank-powered for first partition
+                n95    = min(ninproj-1, nint(0.95*real(ninproj)) + nlabels)
+                rnincl = real(ninproj-1)
+                iptcl  = 0
+                do i = 1, n95, nlabels
+                    if( i > ninproj )exit
+                    call draw(power, 1)
+                    iptcl = i
+                    do s = 2, nlabels
+                        iptcl = iptcl+1
+                        if( iptcl > ninproj )exit
+                        call draw(1.0, s)
+                    enddo
+                enddo
+                ! Leftovers: random uniform
+                s = irnd_uni(nlabels)
+                do i = 1, ninproj
+                    iptcl = inds(i)
+                    if( mask(iptcl) )then
+                        s = s + 1
+                        if( s > nlabels ) s = 1
+                        config(iptcl) = s
+                        mask(iptcl)   = .false.
+                    endif
+                enddo
+                deallocate(projcorrs,order,inds)
+            endif
+        enddo
+        where((states > 0) .and. (states <= nlabels)) states = config
+        ! cleanup
+        deallocate(config,corrs,projs)
+    contains
+
+        subroutine draw( p, s )
+            real,    intent(in) :: p
+            integer, intent(in) :: s
+            integer :: ind, j
+            j   = ceiling(ran3()**p * rnincl) + 1
+            ind = order(j)
+            do while(.not.mask(ind))
+                j   = ceiling(ran3()**p * rnincl) + 1
+                ind = order(j)
+            enddo
+            config(ind) = s
+            mask(ind)   = .false.
+        end subroutine draw
+
+    end subroutine draw_squared_uniform_projdir
 
     ! Loose adaptation of k++ seeding procedure
     subroutine draw_squared(os, power)
