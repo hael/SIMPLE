@@ -65,8 +65,7 @@ module simple_ptcl_sieve
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
-  use simple_cavg_quality_feats,          only: I_LOG_LOCVAR_FG_BG_RATIO, I_BP40_100_CENTER_EDGE_VAR, I_FUZZY_BALL_SIGNAL, &
-                                                FUZZY_BALL_SIGNAL_HARD_REJECT_MIN, SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
+  use simple_cavg_quality_feats,          only: I_BP40_100_CENTER_EDGE_VAR, SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
 
   implicit none
   public :: ptcl_sieve
@@ -1295,8 +1294,9 @@ contains
     integer                            :: nuniq, ic, cid, n_in_cluster, n_fail_cluster
     real                               :: overfit_fail_frac
     real                               :: smpd_dummy
+    real                               :: bp_score
+    logical                            :: bp_fail
     real, parameter                    :: SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG = log(max(SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN, tiny(1.0)))
-    real, parameter                    :: LOCVAR_FG_BG_RATIO_MIN_LOG = 0.0
 
     if( .not. chunk%abinitio2D_complete ) return
     if( chunk%failed )                    return
@@ -1317,8 +1317,8 @@ contains
       ! Map the coarse selection to the cluster-average level and write out the updated project file.
       states = spproj%os_cls2D%get_all_asint('state')
       call spproj%map_cavgs_selection(states)
-      if( .false. ) then
-        ! This branch is disabled for testing purposes. It would write out the updated project file after mapping the selection to cluster averages.
+      if( .true. ) then
+        ! This branch is enabled for testing purposes. It would write out the updated project file after mapping the selection to cluster averages.
         call spproj%write()
         ! Run cluster-average quality evaluation
         call cline_cluster_cavgs%set('prg', 'cluster_cavgs')
@@ -1345,9 +1345,7 @@ contains
           clusters = spproj_cluster%os_cls2D%get_all_asint('cluster')
           allocate(overfit_metric_fail(size(cavg_imgs)), source=.false.)
           do iimg = 1, size(cavg_imgs)
-            if( quality%raw(iimg, I_FUZZY_BALL_SIGNAL) < FUZZY_BALL_SIGNAL_HARD_REJECT_MIN .or. &
-                quality%raw(iimg, I_BP40_100_CENTER_EDGE_VAR) < SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG .or. &
-                quality%raw(iimg, I_LOG_LOCVAR_FG_BG_RATIO) < LOCVAR_FG_BG_RATIO_MIN_LOG ) then
+            if( quality%raw(iimg, I_BP40_100_CENTER_EDGE_VAR) < SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG) then
               overfit_metric_fail(iimg) = .true.
             end if
           end do
@@ -1368,15 +1366,30 @@ contains
             if( n_in_cluster == 0 ) cycle
             n_fail_cluster = count((clusters == cid) .and. overfit_metric_fail)
             overfit_fail_frac = real(n_fail_cluster) / real(n_in_cluster)
-            if( overfit_fail_frac >= OVERFIT_CLUSTER_REJECT_FRAC ) then
+            if( n_in_cluster == 1 ) then
+              do iimg = 1, size(clusters)
+                if( clusters(iimg) == cid ) then
+                  call spproj%os_cls2D%set(iimg, 'state', 1)
+                  call spproj%os_cls2D%set(iimg, 'rejection_reason', '')
+                end if
+              end do
+              write(logfhandle,'(A,I6,A,I6,A)') '>>> KEPT CLUSTER ', cid, ' IN COARSE CHUNK # ', chunk%id, &
+                ' (SINGLE AVERAGE EXEMPT FROM OVERFIT CLUSTER GATE)'
+            else if( overfit_fail_frac >= OVERFIT_CLUSTER_REJECT_FRAC ) then
               do iimg = 1, size(clusters)
                 if( clusters(iimg) == cid ) then
                   call spproj%os_cls2D%set(iimg, 'state', 0)
                   call spproj%os_cls2D%set(iimg, 'rejection_reason', string('coarse_reject: overfit_cluster_frac_ge_0.70'))
+                  bp_score    = quality%raw(iimg, I_BP40_100_CENTER_EDGE_VAR)
+                  bp_fail     = bp_score    < SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG
+                  write(logfhandle,'(A,I6,A,I6,A,F8.3,A,L1)') &
+                    '>>> REJECTED CLUSTER CLASS chunk#', chunk%id, ' cls=', iimg, &
+                    ' bp40_100=', bp_score, ' fail=', bp_fail
                 end if
               end do
               write(logfhandle,'(A,I6,A,I6,A,I6,A,F6.3,A)') '>>> REJECTED CLUSTER ', cid, ' IN COARSE CHUNK # ', chunk%id, &
                 ' DUE TO OVERFIT FAIL RATE ', n_fail_cluster, '/', overfit_fail_frac, ' (>= 0.70)'
+                
             else
               do iimg = 1, size(clusters)
                 if( clusters(iimg) == cid ) then
@@ -1500,7 +1513,7 @@ contains
       label%to_char(), ' # ', chunk%id, ' : ', &
       chunk%nptcls_selected, '/', chunk%nptcls, ' PARTICLES SELECTED'
       
-   ! call self%cleanup_chunk(chunk, label)
+    call self%cleanup_chunk(chunk, label)
     call dealloc_imgarr(cavg_imgs)
     call spproj%kill()
     if( allocated(states) ) deallocate(states)
