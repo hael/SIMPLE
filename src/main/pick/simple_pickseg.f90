@@ -3,7 +3,7 @@ module simple_pickseg
 use simple_core_module_api
 use simple_parameters,   only: parameters
 use simple_image,        only: image
-use simple_tvfilter,     only: tvfilter
+use simple_bspline_smoother, only: bspline_smoother
 use simple_segmentation, only: otsu_img, sauvola
 use simple_image_bin,    only: image_bin
 implicit none
@@ -51,9 +51,9 @@ contains
         class(string),     intent(in)    :: micname !< micrograph file name
         real,             allocatable :: diams(:)
         integer,          allocatable :: sz(:)
-        type(string)    :: ext
-        type(tvfilter)  :: tvf
-        type(image)     :: img_win
+        type(string)           :: ext
+        type(bspline_smoother) :: bs
+        type(image)            :: img_win
         type(image_bin) :: img_sdevs
         real    :: px(3), otsu_t
         integer :: i, boxcoord(2), sz_max, sz_min, nframes, box
@@ -99,9 +99,9 @@ contains
         call mic_raw%ifft
         if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp.mrc')
         ! TV denoising
-        call tvf%new()
-        call tvf%apply_filter(self%mic_shrink, LAMBDA)
-        call tvf%kill
+        call bs%new()
+        call bs%smooth(self%mic_shrink, LAMBDA)
+        call bs%kill
         if( L_WRITE ) call self%mic_shrink%write(fbody//'_lp_tv.mrc')
         if( l_winsz )then
             call sauvola(self%mic_shrink, winsz, img_sdevs)

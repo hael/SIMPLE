@@ -132,21 +132,21 @@ contains
     end subroutine cascade_filter_biomol
 
     subroutine cascade_filter( mic_shrink, damp_below_zero, lp, lam_tv, lam_icm, winsz_med, mic4viz )
-        use simple_tvfilter, only: tvfilter
+        use simple_bspline_smoother, only: bspline_smoother
         class(image),           intent(inout) :: mic_shrink
         real,                   intent(in)    :: damp_below_zero, lp, lam_tv, lam_icm
         integer,                intent(in)    :: winsz_med
         class(image), optional, intent(inout) :: mic4viz
-        type(tvfilter) :: tvf
+        type(bspline_smoother) :: bs
         call mic_shrink%zero_edgeavg
         ! dampens below zero
         call mic_shrink%div_below(0.,damp_below_zero)
         ! low-pass filter
         call mic_shrink%bp(0.,lp)
         ! TV denoising
-        call tvf%new()
-        call tvf%apply_filter(mic_shrink, lam_tv)
-        call tvf%kill
+        call bs%new()
+        call bs%smooth(mic_shrink, lam_tv)
+        call bs%kill
         call mic4viz%copy(mic_shrink)
         ! Non-local-means denoising
         call mic_shrink%NLmean2D
@@ -156,28 +156,28 @@ contains
         call mic_shrink%real_space_filter(winsz_med, 'median')
     end subroutine cascade_filter
 
-    subroutine tv_filter_biomol( mic_shrink )
+    subroutine bs_smoother_biomol( mic_shrink )
         class(image), intent(inout) :: mic_shrink
         real,    parameter :: LP_UB = 15., DAMP = 10., LAM_TV = 7.
         integer, parameter :: WINSZ_MED = 3
-        call tv_filter(mic_shrink, DAMP, LP_UB, LAM_TV)
-    end subroutine tv_filter_biomol
+        call bs_smoother(mic_shrink, DAMP, LP_UB, LAM_TV)
+    end subroutine bs_smoother_biomol
 
-    subroutine tv_filter( mic_shrink, damp_below_zero, lp, lam_tv )
-        use simple_tvfilter, only: tvfilter
+    subroutine bs_smoother( mic_shrink, damp_below_zero, lp, lam_tv )
+        use simple_bspline_smoother, only: bspline_smoother
         class(image), intent(inout) :: mic_shrink
         real,         intent(in)    :: damp_below_zero, lp, lam_tv
-        type(tvfilter) :: tvf
+        type(bspline_smoother) :: bs
         call mic_shrink%zero_edgeavg
         ! dampens below zero
         call mic_shrink%div_below(0.,damp_below_zero)
         ! low-pass filter
         call mic_shrink%bp(0.,lp) 
-        ! TV denoising
-        call tvf%new()
-        call tvf%apply_filter(mic_shrink, lam_tv)
-        call tvf%kill
-    end subroutine tv_filter
+        ! B-spline smoother denoising
+        call bs%new()
+        call bs%smooth(mic_shrink, lam_tv)
+        call bs%kill
+    end subroutine bs_smoother
 
     subroutine binarize_mic_den( mic_den, frac_fg, mic_bin )
         class(image),    intent(in)  :: mic_den

@@ -239,12 +239,12 @@ contains
 
     subroutine exec_filter( self, cline )
         use simple_procimgstk
-        use simple_tvfilter, only: tvfilter
+        use simple_bspline_smoother, only: bspline_smoother
         class(commander_filter), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(parameters)  :: params
-        type(builder)     :: build
-        type(tvfilter)    :: tvfilt
+        type(parameters)       :: params
+        type(builder)          :: build
+        type(bspline_smoother) :: bs
         real, allocatable :: fsc(:), optlp(:), res(:)
         real, parameter   :: SIGMA_DEFAULT=1.0
         real              :: fsc05, fsc0143
@@ -258,8 +258,8 @@ contains
             if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
             if( cline%defined('filter') )then
                 select case(trim(params%filter))
-                    case('tv')
-                        call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
+                    case('bs')
+                        call bs_smoother_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
                     case('nlmean')
                         if( cline%defined('sigma') )then
                             call nlmean_imgfile(params%stk, params%outstk, params%smpd, params%sigma)
@@ -334,10 +334,10 @@ contains
                     call build%vol%apply_filter(optlp)
                 else if( cline%defined('filter') )then
                     select case(trim(params%filter))
-                        case('tv')
-                            call tvfilt%new
-                            call tvfilt%apply_filter_3d(build%vol, params%lambda)
-                            call tvfilt%kill
+                        case('bs')
+                            call bs%new
+                            call bs%smooth_3d(build%vol, params%lambda)
+                            call bs%kill
                         case('nlmean')
                             call build%vol%NLmean3D()
                         case('icm')

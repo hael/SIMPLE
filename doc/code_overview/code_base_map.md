@@ -542,7 +542,7 @@
         - `simple_fsc.f90` — various Fourier Shell Correlation utilities
         - `simple_opt_filter.f90` — optimization(search)-based filtering
         - `simple_tent_smooth.f90`
-        - `simple_tvfilter.f90` — filter based on total variation in real space
+        - `simple_bspline_smoother.f90` — filter based on Tikhonov regularization
       - **gui/** — utilities for feeding information to the GUI
         - `simple_gui_assembler.f90` — assembles gui metadata objects into json to be sent to nice
         - `simple_gui_assembler_tester.f90` — unit tests for gui_assembler

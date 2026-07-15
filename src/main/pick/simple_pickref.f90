@@ -583,11 +583,11 @@ contains
     end subroutine write_boxfile
 
     subroutine report_thumb_den( self, fname_thumb_den )
-        use simple_micproc,   only: tv_filter_biomol
+        use simple_micproc,   only: bs_smoother_biomol
         use simple_gui_utils, only: mic2thumb
         class(pickref), intent(inout) :: self
         class(string),  intent(in)    :: fname_thumb_den 
-        call tv_filter_biomol(self%mic_copy)
+        call bs_smoother_biomol(self%mic_copy)
         call mic2thumb(self%mic_copy, fname_thumb_den, l_neg=self%l_black_ptcls_input) ! particles black
     end subroutine report_thumb_den
     

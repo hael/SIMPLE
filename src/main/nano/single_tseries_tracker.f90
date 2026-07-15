@@ -3,7 +3,7 @@ module single_tseries_tracker
 use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_image,      only: image, unmemoize_mask_coords
-use simple_tvfilter
+use simple_bspline_smoother
 implicit none
 
 public :: init_tracker, track_particle, tracker_get_nnn
@@ -12,25 +12,25 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SPECW    = 0.0001
-real,    parameter :: TVLAMBDA = 10.
+real,    parameter :: BSLAMBDA = 10.
 real,    parameter :: BFACTOR  = 5.
 integer, parameter :: NNN      = 8
 integer, parameter :: TESTER_WRITE_MULT = 5
 
-type(image),       allocatable :: ptcls(:), ptcls_saved(:)
-type(tvfilter),    allocatable :: tv(:)
-real,              allocatable :: particle_locations(:,:)
-class(parameters), pointer     :: p_ptr => null()
-type(string),      pointer     :: intg_names(:), frame_names(:)
-type(string)                   :: dir, fbody, fbody_raw
-type(image)                    :: frame_img      ! individual frame image
-type(image)                    :: frame_avg      ! average over time window
-type(image)                    :: reference, ptcl_target, pspec, pspec_nn, tester_img
-type(image)                    :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
-type(string)                   :: neighstknames(NNN), stkname, stkframes_name
-real                           :: msk
-integer                        :: ldim(3), nframes, track_freq
-logical                        :: l_neg
+type(image),            allocatable :: ptcls(:), ptcls_saved(:)
+type(bspline_smoother), allocatable :: bs(:)
+real,                   allocatable :: particle_locations(:,:)
+class(parameters),      pointer     :: p_ptr => null()
+type(string),           pointer     :: intg_names(:), frame_names(:)
+type(string)                        :: dir, fbody, fbody_raw
+type(image)                         :: frame_img      ! individual frame image
+type(image)                         :: frame_avg      ! average over time window
+type(image)                         :: reference, ptcl_target, pspec, pspec_nn, tester_img
+type(image)                         :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
+type(string)                        :: neighstknames(NNN), stkname, stkframes_name
+real                                :: msk
+integer                             :: ldim(3), nframes, track_freq
+logical                             :: l_neg
 
 contains
 
@@ -53,10 +53,10 @@ contains
         select case(trim(p_ptr%filter))
             case('no','nlmean')
                 ! all good
-            case('tv')
-                allocate(tv(p_ptr%nframesgrp))
+            case('bs')
+                allocate(bs(p_ptr%nframesgrp))
                 do i=1,p_ptr%nframesgrp
-                    call tv(i)%new()
+                    call bs(i)%new()
                 enddo
             case DEFAULT
                 THROW_HARD('Unsupported filter in init_tracker!')
@@ -136,8 +136,8 @@ contains
                 select case(trim(p_ptr%filter))
                     case('nlmean')
                         call ptcls(i)%nlmean2D
-                    case('tv')
-                        call tv(i)%apply_filter(ptcls(i), TVLAMBDA)
+                    case('bs')
+                        call bs(i)%smooth(ptcls(i), BSLAMBDA)
                     case DEFAULT
                         ! nothing to do
                 end select
@@ -179,9 +179,9 @@ contains
                 case('nlmean')
                     call reference%nlmean2D
                     call reference%fft
-                case('tv')
+                case('bs')
                     call reference%fft
-                    call tv(1)%apply_filter(reference, TVLAMBDA)
+                    call bs(1)%smooth(reference, BSLAMBDA)
                 case DEFAULT
                     call reference%fft
             end select
@@ -483,11 +483,11 @@ contains
             enddo
             deallocate(ptcls_saved)
         endif
-        if( allocated(tv) )then
-            do i=1,size(tv)
-                call tv(i)%kill
+        if( allocated(bs) )then
+            do i=1,size(bs)
+                call bs(i)%kill
             enddo
-            deallocate(tv)
+            deallocate(bs)
         endif
         if( allocated(particle_locations) ) deallocate(particle_locations)
         call unmemoize_mask_coords

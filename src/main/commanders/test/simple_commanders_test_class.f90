@@ -75,6 +75,7 @@ subroutine exec_test_units( self, cline )
     use simple_ui,                    only: validate_ui_json
     use simple_starfile_tester,       only: run_all_starfile_tests
     use simple_project_merge_tester,  only: run_all_project_merge_tests
+    use simple_bspline_smoother,      only: test_bspline_smoother, test_bspline_smoother_3d
     class(commander_test_units),  intent(inout) :: self
     class(cmdline),               intent(inout) :: cline
     character(8)          :: datestr
@@ -119,6 +120,8 @@ subroutine exec_test_units( self, cline )
     call test_image(.false.)
     call test_ftexp_shsrch
     call test_ftiter
+    call test_bspline_smoother([64,64,1], 1.0, 0.2)
+    call test_bspline_smoother_3d([64,64,64], 1.0, 0.2)
     ! local test functions
     call test_multinomal
     call test_euler_shift

@@ -198,7 +198,7 @@ contains
 
     subroutine exec_tseries_make_pickavg( self, cline )
         use simple_motion_correct_iter, only: motion_correct_iter
-        use simple_tvfilter,            only: tvfilter
+        use simple_bspline_smoother,            only: bspline_smoother
         class(commander_tseries_make_pickavg), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         real, parameter :: LAM_TV = 1.5
@@ -209,7 +209,7 @@ contains
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
         type(ori)                 :: o
-        type(tvfilter)            :: tvfilt
+        type(bspline_smoother)    :: bs
         type(image)               :: img_intg, img_frame
         integer                   :: istart, istop, period, win_start, win_stop, nwin, win_nframes
         integer                   :: i, nframes, frame_counter, ldim(3), ifoo, numlen_nframes, iwin
@@ -285,14 +285,14 @@ contains
                     call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'), tseries='yes')
                 endif
                 call o%kill
-                ! apply TV filter for de-noising
+                ! apply B-spline smoother for de-noising
                 fname_intg = fbody_mc//'_intg.mrc'
                 call find_ldim_nptcls(fname_intg,ldim,ifoo)
                 call img_intg%new(ldim, smpd_win)
                 call img_intg%read(fname_intg,1)
-                call tvfilt%new
-                call tvfilt%apply_filter(img_intg, LAM_TV)
-                call tvfilt%kill
+                call bs%new
+                call bs%smooth(img_intg, LAM_TV)
+                call bs%kill
                 fname_denoised = fbody_mc//'_intg_denoised.mrc'
                 call img_intg%write(fname_denoised)
                 call img_intg%kill
@@ -342,13 +342,13 @@ contains
                 call mciter%iterate(params_mc, cline_mcorr, ctfvars, o, fbody_mc, frame_counter, stkname, string('./'), tseries='yes')
             endif
             call o%kill
-            ! apply TV filter for de-noising
+            ! apply B-spline smoother for de-noising
             call find_ldim_nptcls(string('frames2align_intg.mrc'),ldim,ifoo)
             call img_intg%new(ldim, smpd_win)
             call img_intg%read(string('frames2align_intg.mrc'),1)
-            call tvfilt%new
-            call tvfilt%apply_filter(img_intg, LAM_TV)
-            call tvfilt%kill
+            call bs%new
+            call bs%smooth(img_intg, LAM_TV)
+            call bs%kill
             call img_intg%write(string('frames2align_intg_denoised.mrc'))
             call img_intg%kill
             call del_file(stkname)

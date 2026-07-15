@@ -39,6 +39,7 @@ use simple_ui,                    only: validate_ui_json
 use simple_srchspace_map2D_io,    only: test_srchspace_map2D_io
 use simple_starfile_tester,       only: run_all_starfile_tests
 use simple_project_merge_tester,  only: run_all_project_merge_tests
+use simple_bspline_smoother,      only: test_bspline_smoother, test_bspline_smoother_3d
 implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr
@@ -85,6 +86,8 @@ call test_oris(.false.)
 call test_image(.false.)
 call test_ftexp_shsrch
 call test_ftiter
+call test_bspline_smoother([64,64,1], 1.0, 0.2)
+call test_bspline_smoother_3d([64,64,64], 1.0, 0.2)
 ! local test functions
 call test_multinomal
 call test_euler_shift

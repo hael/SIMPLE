@@ -3,7 +3,7 @@ module simple_procimgstk
 use simple_core_module_api
 use simple_image,    only: image
 use simple_stack_io, only: stack_io
-use simple_tvfilter
+use simple_bspline_smoother
 implicit none
 #include "simple_local_flags.inc"
 
@@ -473,32 +473,32 @@ contains
         call img%kill
     end subroutine phase_rand_imgfile
 
-    subroutine tvfilter_imgfile( fname2process, fname, smpd, lambda )
+    subroutine bs_smoother_imgfile( fname2process, fname, smpd, lambda )
         class(string), intent(in) :: fname2process, fname
         real,          intent(in) :: smpd, lambda
-        type(stack_io) :: stkio_r, stkio_w
-        type(tvfilter) :: tv
-        type(image)    :: img
-        integer        :: n, i, ldim(3)
+        type(stack_io)         :: stkio_r, stkio_w
+        type(bspline_smoother) :: bs
+        type(image)            :: img
+        integer                :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'tvfilter_imgfile' )
+        call raise_exception_imgfile( n, ldim, 'bs_smoother_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
-        call tv%new()
-        write(logfhandle,'(a)') '>>> APPLYING TV FILTER TO IMAGES'
+        call bs%new()
+        write(logfhandle,'(a)') '>>> APPLYING B-SPLINE SMOOTHER TO IMAGES'
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
-            call tv%apply_filter(img,lambda)
+            call bs%smooth(img,lambda)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close
         call stkio_w%close
         call img%kill
-        call tv%kill
-    end subroutine tvfilter_imgfile
+        call bs%kill
+    end subroutine bs_smoother_imgfile
 
     subroutine icm_imgfile( fname2process, fname, smpd, lambda )
         class(string), intent(in) :: fname2process, fname

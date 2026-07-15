@@ -60,8 +60,8 @@ contains
         &'Real-space filter(median|average|stdev|bman|NLmean|no){no}', '(median|average|stdev|bman|NLmean|no){no}', .false., 'no')
         call filter%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
         call filter%add_input(UI_FILT, frcs)
-        call filter%add_input(UI_FILT, 'filter', 'multi', 'Filter type(tv|nlmean|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|no){no}', .false., 'no')
-        call filter%add_input(UI_FILT, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
+        call filter%add_input(UI_FILT, 'filter', 'multi', 'Filter type(bs|nlmean|no){no}', 'Filter type(bs|nlmean|corr|no){no}', '(bs|nlmean|no){no}', .false., 'no')
+        call filter%add_input(UI_FILT, 'lambda', 'num', 'BS smoother lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         call filter%add_input(UI_FILT, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
         ! mask controls
