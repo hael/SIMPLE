@@ -6,6 +6,10 @@ use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
+use simple_flex_eigenvol_strategy, only: run_flex_eigenvol_linear
+use simple_projected_latent_result, only: projected_latent_fit_result
+use simple_trajectory_chunker, only: trajectory_chunk_plan, make_trajectory_chunk_plan, &
+    &trajectory_chunks_to_parts, write_trajectory_chunks_csv
 use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
     &refine3D_state_vol_fbody, refine3D_state_vol_fname
 implicit none
@@ -308,21 +312,39 @@ contains
         type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
-        type(string)          :: recname, fname, str_state, recname_even, res_fname
+        type(string)          :: recname, fname, str_state, recname_even, res_fname, chunk_mode_arg
         type(string)          :: recname_odd, vol_fname_even, vol_fname_odd
         type(commander_rec3D) :: xrec3D
         type(parameters)      :: params
         type(sp_project)      :: spproj
+        type(builder)         :: chunk_build
+        type(projected_latent_fit_result) :: latent_fit
+        type(trajectory_chunk_plan) :: chunk_plan
         type(cmdline)         :: cline_rec
         type(image)           :: vol1, vol2
+        integer, allocatable :: frame_inds(:)
         integer :: state, ipart, istate, nptcls, frame_start, frame_end
-        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
+        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime, nchunks_eff
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
         if( .not. cline%defined('objfun')  ) call cline%set('objfun',      'cc') ! best objfun
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('chunk_mode') ) call cline%set('chunk_mode', 'balanced')
+        chunk_mode_arg = cline%get_carg('chunk_mode')
+        select case(chunk_mode_arg%to_char())
+            case('balanced')
+            case('latent')
+                if( .not. cline%defined('vol1') ) THROW_HARD('trajectory_reconstruct3D chunk_mode=latent requires vol1=<mean map>')
+                if( .not. cline%defined('neigs')   ) call cline%set('neigs',   3)
+                if( .not. cline%defined('maxits')  ) call cline%set('maxits',  3)
+                if( .not. cline%defined('lp')      ) call cline%set('lp',      8.0)
+                if( .not. cline%defined('outvol')  ) call cline%set('outvol', 'trajectory_chunk_flex_001.mrc')
+                if( .not. cline%defined('nstates') ) call cline%set('nstates', 1)
+            case DEFAULT
+                THROW_HARD('trajectory_reconstruct3D chunk_mode must be balanced or latent')
+        end select
         call cline%delete('refine')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -337,12 +359,37 @@ contains
         if( any(rstates < 0.5) ) THROW_HARD('state=0 entries not allowed, prune project beforehand')
         ! states/stepz
         nptcls = size(rstates)
-        if( cline%defined('nparts') )then
+        if( trim(params%chunk_mode) == 'latent' )then
+            if( cline%defined('nchunks') .and. params%nchunks > 0 )then
+                nchunks_eff = params%nchunks
+            else
+                nchunks_eff = max(1, nint(real(nptcls) / real(max(1,params%stepsz))))
+            endif
+            call chunk_build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+            call run_flex_eigenvol_linear(params, chunk_build, cline, latent_fit)
+            allocate(frame_inds(latent_fit%nptcls), source=0)
+            do i = 1, latent_fit%nptcls
+                frame_inds(i) = nint(spproj%os_ptcl3D%get(latent_fit%pinds(i), 'pind'))
+            end do
+            call make_trajectory_chunk_plan(latent_fit, frame_inds, nchunks_eff, &
+                &max(1, nint(real(nptcls) / real(nchunks_eff))), &
+                &params%chunk_min_len, params%chunk_max_len, params%chunk_max_shift, chunk_plan)
+            call trajectory_chunks_to_parts(chunk_plan, parts)
+            call write_trajectory_chunks_csv(chunk_plan, 'trajectory_chunks.csv')
+            call latent_fit%kill
+            deallocate(frame_inds)
+            call chunk_build%kill_general_tbox
+            nparts = size(parts,dim=1)
+        else if( cline%defined('nchunks') .and. params%nchunks > 0 )then
+            nparts = params%nchunks
+            parts = split_nobjs_even(nptcls, nparts)
+        else if( cline%defined('nparts') )then
             nparts = params%nparts
+            parts = split_nobjs_even(nptcls, nparts)
         else
-            nparts = nint(real(nptcls)/real(params%stepsz))
+            nparts = max(1, nint(real(nptcls)/real(max(1,params%stepsz))))
+            parts = split_nobjs_even(nptcls, nparts)
         endif
-        parts = split_nobjs_even(nptcls, nparts)
         allocate(vol_fnames(nparts), rad_cc(params%box/2), rad_dists(params%box/2))
         recname      = refine3D_state_vol_fname(1)
         recname_even = refine3D_state_halfvol_fname(1, 'even')
@@ -428,6 +475,7 @@ contains
             end do
             call fclose(funit)
         enddo
+        call chunk_plan%kill
         call simple_end('**** SIMPLE_trajectory_reconstruct3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_commander_trajectory_reconstruct3D_distr
 

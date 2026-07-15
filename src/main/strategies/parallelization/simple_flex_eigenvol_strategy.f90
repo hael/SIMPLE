@@ -10,6 +10,7 @@ use simple_projected_latent_model, only: update_basis_from_latents, infer_latent
     &basis_fourier_energy, cleanup_planes, projected_model_kfromto, &
     &write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files, &
     &write_estep_latent_part_file, reduce_estep_latent_part_files
+use simple_projected_latent_result, only: projected_latent_fit_result
 use simple_qsys_env,        only: qsys_env
 use simple_reconstructor,    only: reconstructor
 implicit none
@@ -24,10 +25,11 @@ integer,  parameter :: FLEX_STATE_VERSION = 1
 
 contains
 
-    subroutine run_flex_eigenvol_linear( params, build, cline )
+    subroutine run_flex_eigenvol_linear( params, build, cline, fit_result )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
+        type(projected_latent_fit_result), optional, intent(inout) :: fit_result
         type(reconstructor)              :: mean_rec
         type(reconstructor), allocatable :: basis_recs(:)
         type(fplane_type),  allocatable  :: fpls(:)
@@ -134,6 +136,10 @@ contains
         call log_latent_means('>>> FLEX_EIGENVOL FINAL LATENT MEAN', z, nptcls, ncomp)
         call log_mode_vars('>>> FLEX_EIGENVOL FINAL PPCA MODE VAR', mode_vars, ncomp)
         call log_latent_covariance_eigs('>>> FLEX_EIGENVOL FINAL LATENT COV EIGVAL', z, nptcls, ncomp)
+        if( present(fit_result) )then
+            call capture_fit_result(fit_result, pinds, z, z_postcov, resid_energy, resid_mean_energy, &
+                &mode_vars, basis_recs, nptcls, ncomp)
+        endif
         call log_basis_fourier_norms('>>> FLEX_EIGENVOL OUTPUT BASIS FOURIER NORM', basis_recs, ncomp)
         zfname = output_prefix(params)//'_zcoords.txt'
         t_step = tic()
@@ -164,6 +170,30 @@ contains
         call sigma2_fname%kill
         call zfname%kill
     end subroutine run_flex_eigenvol_linear
+
+    subroutine capture_fit_result( fit, pinds, z, z_postcov, resid_energy, resid_mean_energy, &
+        &mode_vars, basis_recs, nptcls, ncomp )
+        type(projected_latent_fit_result), intent(inout) :: fit
+        integer,             intent(in) :: nptcls, ncomp
+        integer,             intent(in) :: pinds(nptcls)
+        real(dp),            intent(in) :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
+        real(dp),            intent(in) :: resid_energy(nptcls), resid_mean_energy(nptcls), mode_vars(ncomp)
+        type(reconstructor), intent(in) :: basis_recs(ncomp)
+        integer :: q
+        call fit%kill
+        fit%nptcls = nptcls
+        fit%ncomp  = ncomp
+        allocate(fit%pinds(nptcls), source=pinds)
+        allocate(fit%z(nptcls,ncomp), source=z)
+        allocate(fit%z_postcov(nptcls,ncomp,ncomp), source=z_postcov)
+        allocate(fit%resid_energy(nptcls), source=resid_energy)
+        allocate(fit%resid_mean_energy(nptcls), source=resid_mean_energy)
+        allocate(fit%mode_vars(ncomp), source=mode_vars)
+        allocate(fit%basis_energy(ncomp), source=0.d0)
+        do q = 1, ncomp
+            fit%basis_energy(q) = basis_fourier_energy(basis_recs(q))
+        end do
+    end subroutine capture_fit_result
 
     subroutine run_flex_eigenvol_mstep_worker( params, build, cline )
         class(parameters), intent(inout) :: params

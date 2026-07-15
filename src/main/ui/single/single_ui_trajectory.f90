@@ -207,17 +207,32 @@ contains
         &.true., gui_advanced=.false.)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
+        &'Mean volume used by flex_eigenvol when chunk_mode=latent', 'input mean volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         call trajectory_reconstruct3D%add_input(UI_PARM, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
+        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_mode', 'multi', 'Trajectory chunking mode', &
+        &'Use balanced windows or time-constrained flex-latent segmentation(balanced|latent){balanced}', &
+        &'balanced or latent', .false., 'balanced')
+        call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks', 'num', 'Number of temporal chunks', &
+        &'Fixed number of contiguous chunks; when omitted it is derived from stepsz', '# chunks', .false., 0.)
+        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_min_len', 'num', 'Minimum latent chunk length', &
+        &'Minimum number of consecutive frames in a latent chunk; 0 uses half the average chunk length', '# frames', .false., 0.)
+        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_max_len', 'num', 'Maximum latent chunk length', &
+        &'Maximum number of consecutive frames in a latent chunk; 0 uses twice the average chunk length', '# frames', .false., 0.)
+        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_max_shift', 'num', 'Maximum boundary shift', &
+        &'Maximum displacement from a balanced boundary; 0 uses half the average chunk length', '# frames', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
         call trajectory_reconstruct3D%add_input(UI_SRCH, pgrp)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, 'neigs', 'num', 'Flex latent dimensions', &
+        &'Maximum flex_eigenvol latent dimensions used for chunking{3}', '# modes', .false., 3.)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, maxits, required_override=.false.)
         ! filter controls
-        ! <empty>
+        call trajectory_reconstruct3D%add_input(UI_FILT, lp, required_override=.false.)
         ! mask controls
         call trajectory_reconstruct3D%add_input(UI_MASK, mskdiam)
         ! computer controls

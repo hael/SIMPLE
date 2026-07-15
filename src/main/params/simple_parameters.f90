@@ -268,6 +268,7 @@ type :: parameters
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
+    character(len=STDLEN)     :: chunk_mode='balanced' !< trajectory chunking mode(balanced|latent)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
@@ -347,6 +348,9 @@ type :: parameters
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
+    integer :: chunk_max_len=0     !< maximum frames in a flex-latent trajectory chunk
+    integer :: chunk_max_shift=0   !< maximum boundary displacement from balanced chunking
+    integer :: chunk_min_len=0     !< minimum frames in a flex-latent trajectory chunk
     integer :: device=-1           !< Device id for OpenMP offloading
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of EER raw frames to sum into a movie fraction
