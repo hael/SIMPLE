@@ -377,7 +377,7 @@ contains
             call spproj%write(stack_mode_projfile)
             write(logfhandle,'(A,A)') '>>> WROTE STACK-MODE PROJECT: ', stack_mode_projfile%to_char()
         else
-            call spproj%write(params%projfile)
+            call spproj%write(basename(params%projfile))
         endif
         ! destruct
         call spproj%kill
