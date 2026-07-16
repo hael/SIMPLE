@@ -285,7 +285,6 @@ type :: parameters
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
-    character(len=STDLEN)     :: model_family='logistic' !< class-average rejection learner family
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=4)          :: objfun_den='no'      !< augment raw Euclidean objective with denoised-particle correlation(yes|no){no}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -312,7 +311,7 @@ type :: parameters
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
     ! class-average quality context: sieve=small hard-gate-only chunks, chunk=larger learned chunks, pool=pre-3D pooled classes
     character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool|sieve){chunk}
-    ! class-average quality model preset(chunk100mics|chunk100mics_linear|pool){chunk100mics}
+    ! class-average quality model preset(chunk100mics){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}

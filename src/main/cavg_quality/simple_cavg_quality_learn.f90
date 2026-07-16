@@ -9,8 +9,8 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_fea
 use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, &
     build_classify_cache, kill_classify_cache, cached_decision_confusion, apply_cached_decision_to_quality
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CAVG_MODEL_FAMILY_LINEAR, &
-    CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, &
+    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
     CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME
@@ -94,13 +94,11 @@ end type cavg_quality_logistic_problem
 
 contains
 
-    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname, model_family, &
-                                         quality_context )
+    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname, quality_context )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
-        character(len=*), optional,intent(in)    :: model_family
-        character(len=*), optional,intent(in)    :: quality_context
+        character(len=*), intent(in)             :: quality_context
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         type(cavg_quality_classify_cache),   allocatable :: caches(:)
         type(cavg_quality_model_spec) :: base_spec, candidate_spec, best_spec
@@ -111,23 +109,12 @@ contains
         real :: best_score, learn_score
         integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
         integer :: n_grid, n_top, n_best_ties
-        character(len=32) :: requested_family
         character(len=32) :: context
-        requested_family = 'logistic'
-        if( present(model_family) ) requested_family = trim(model_family)
-        context = CAVG_QUALITY_CONTEXT_CHUNK
-        if( present(quality_context) ) context = trim(quality_context)
+        context = trim(quality_context)
         call validate_quality_context(context, 'learn_cavg_quality_model')
-        select case(trim(requested_family))
-        case('linear', CAVG_MODEL_FAMILY_LINEAR)
-            THROW_HARD('new model training requires relational logistic input; linear presets are apply-only')
-        case('logistic', CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC)
-            call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname, &
-                trim(context))
-            return
-        case default
-            THROW_HARD('learn_cavg_quality_model: unsupported model family: '//trim(requested_family))
-        end select
+        call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname, &
+            trim(context))
+        return
         call load_quality_training_datasets(analysis_files, dsets)
         base_spec = abinitio_learn_base_spec()
         base_spec%context = trim(context)
@@ -436,7 +423,6 @@ contains
         spec = abinitio_learn_base_spec()
         spec%name               = 'learned_pairwise_logistic_v1'
         spec%feature_policy     = trim(feature_policy)
-        spec%model_family       = CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
         spec%weights            = 0.0
         spec%intercept          = real(solution(1))
         spec%linear_coefficients = 0.0
@@ -1389,10 +1375,8 @@ contains
         integer,                             intent(out)   :: tp, fp, tn, fn
         logical, allocatable :: pred(:), ref(:)
         integer :: nfit
-        if( trim(model%model_family) /= CAVG_MODEL_FAMILY_LINEAR )then
-            call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
-            return
-        endif
+        call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
+        return
         call quality%kill()
         quality%hard_reject = dset%hard_reject
         call apply_cached_decision_to_quality(cache, model, quality)
@@ -1539,7 +1523,6 @@ contains
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection pairwise-logistic learn report'
         write(funit,'(A,A)') 'learned_model=', trim(learned_model%name)
-        write(funit,'(A,A)') 'model_family=', trim(learned_model%model_family)
         write(funit,'(A,A)') 'model_context=', trim(learned_model%context)
         write(funit,'(A,F10.5)') 'macro_learn_score=', best_score
         write(funit,'(A,ES14.6)') 'best_weighted_logistic_objective=', best_objective
@@ -1651,7 +1634,6 @@ contains
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
         integer :: i
-        write(funit,'(A,A)') 'model_family=', trim(model%model_family)
         write(funit,'(A,A)') 'model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') 'model_feature_weights='
         do i = 1, CAVG_QUALITY_NFEATS
@@ -1669,8 +1651,7 @@ contains
         write(funit,'(A,L1)') 'model_use_otsu_window=', model%use_otsu_window
         write(funit,'(A,L1)') 'model_use_cluster_rescue=', model%use_cluster_rescue
         write(funit,'(A,L1)') 'model_enforce_min_accept_frac=', model%enforce_min_accept_frac
-        if( trim(model%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC )then
-            write(funit,'(A,ES14.6)') 'model_intercept=', model%intercept
+        write(funit,'(A,ES14.6)') 'model_intercept=', model%intercept
             write(funit,'(A)', advance='no') 'model_linear_coefficients='
             do i = 1, CAVG_QUALITY_NFEATS
                 if( i > 1 ) write(funit,'(A)', advance='no') ','
@@ -1695,14 +1676,11 @@ contains
             write(funit,'(A,ES14.6)') 'model_regularization_lambda=', model%regularization_lambda
             write(funit,'(A,ES14.6)') 'model_calibration_temperature=', model%calibration_temperature
             write(funit,'(A,A)') 'model_relational_feature_schema=', trim(model%relational_feature_schema)
-            if( model%supports_relational() )then
-                write(funit,'(A,I0)') 'model_relational_knn=', model%relational_knn
-                write(funit,'(A,ES14.6)') 'model_relational_corr_hp=', model%relational_corr_hp
-                write(funit,'(A,ES14.6)') 'model_relational_corr_lp=', model%relational_corr_lp
-                write(funit,'(A,ES14.6)') 'model_relational_corr_trs=', model%relational_corr_trs
-                write(funit,'(A,ES14.6)') 'model_relational_coefficient=', model%relational_coefficient
-            end if
-        endif
+        write(funit,'(A,I0)') 'model_relational_knn=', model%relational_knn
+        write(funit,'(A,ES14.6)') 'model_relational_corr_hp=', model%relational_corr_hp
+        write(funit,'(A,ES14.6)') 'model_relational_corr_lp=', model%relational_corr_lp
+        write(funit,'(A,ES14.6)') 'model_relational_corr_trs=', model%relational_corr_trs
+        write(funit,'(A,ES14.6)') 'model_relational_coefficient=', model%relational_coefficient
     end subroutine write_fixed_model_summary
 
     subroutine write_dataset_metric_table( funit, dsets, model, score_name )

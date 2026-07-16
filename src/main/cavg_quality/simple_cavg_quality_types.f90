@@ -7,8 +7,6 @@ private
 
 public :: CAVG_QUALITY_NFEATS
 public :: CAVG_QUALITY_MAX_INTERACTIONS
-public :: CAVG_MODEL_FAMILY_LINEAR
-public :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
 public :: CAVG_RELATIONAL_SCHEMA_NONE
 public :: CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
 public :: CAVG_RELATIONAL_DEFAULT_KNN
@@ -39,8 +37,6 @@ integer, parameter :: CAVG_QUALITY_NFEATS  = 14
 integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
-character(len=*), parameter :: CAVG_MODEL_FAMILY_LINEAR               = 'linear_score'
-character(len=*), parameter :: CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC    = 'pairwise_logistic'
 character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_NONE            = 'none'
 character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1 = 'corr_knn_signal_v1'
 integer,          parameter :: CAVG_RELATIONAL_DEFAULT_KNN             = 5
@@ -78,7 +74,6 @@ type :: cavg_quality_model_spec
     character(len=64) :: name                         = ''
     character(len=32) :: context                      = 'chunk'
     character(len=64) :: feature_policy               = 'microchunk_plus_score_signal'
-    character(len=32) :: model_family                 = CAVG_MODEL_FAMILY_LINEAR
     real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
     real              :: intercept                    = 0.0
     real              :: linear_coefficients(CAVG_QUALITY_NFEATS) = 0.0

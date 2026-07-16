@@ -493,7 +493,6 @@ contains
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
-        character(len=32)         :: learn_model
         character(len=32)         :: quality_context
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',      'no')
@@ -524,12 +523,11 @@ contains
             call read_filetable(params%filetab, analysis_files)
             if( .not. allocated(analysis_files) ) &
                 THROW_HARD('model_cavgs_rejection quality_mode=learn received an empty filetab')
-            learn_model = trim(params%model_family)
             model_fname = 'cavgs_quality_model_learned.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
             report_fname = 'cavgs_quality_learn_report.txt'
             call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
-                trim(learn_model), trim(params%quality_context))
+                trim(params%quality_context))
             write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
             if( allocated(analysis_files) ) deallocate(analysis_files)
             call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
@@ -584,7 +582,6 @@ contains
             ! only the conservative sieve hard gates and skip model scoring.
             model%name = 'sieve_hard_gates'
             model%context = CAVG_QUALITY_CONTEXT_SIEVE
-            model%model_family = 'hard_gates_only'
             model%feature_policy = 'sieve_hard_gates'
             model%weights = 0.0
             call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, trim(quality_context))

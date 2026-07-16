@@ -129,7 +129,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=analyze` computes the same model output but treats the existing `cls2D` state as the manual reference. It writes the single canonical learner input `cavgs_quality_training.txt`, the selected/rejected stacks, `hard_gate_rejections.mrc`, and the score-ranked class-average stack plus rank table. The project selection is left unchanged.
 
-`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits a relational pairwise-logistic model from a neutral `abinitio_learn_base` foundation. Every input must declare `relational_feature_schema=corr_knn_signal_v1` and contain the normalized CC-neighbour signal-statistics feature; missing or mixed relational schemas are rejected. `quality_context=chunk|pool` labels the learned version-10 model context. `quality_context=sieve` is intentionally rejected because sieve is a hard-gates-only screening phase. Linear presets remain available for application compatibility but new linear training is disabled. Learn mode does not accept `quality_model` or `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
+`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits the relational logistic model from a neutral `abinitio_learn_base` foundation. Every input must declare `relational_feature_schema=corr_knn_signal_v1` and contain the normalized CC-neighbour signal-statistics feature; missing or mixed relational schemas are rejected. `quality_context=chunk|pool` labels the learned version-10 model context. `quality_context=sieve` is intentionally rejected because sieve is a hard-gates-only screening phase. Learn mode does not accept `quality_model` or `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
 `quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_training.txt` files. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
@@ -141,15 +141,13 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 
 ## Model Selection
 
-`quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
+`quality_model` selects the built-in preset outside learn mode. The promoted built-in is:
 
 - `chunk100mics`: default chunk/stream-style version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
-- `chunk100mics_linear`: interpretable linear chunk/stream-style model trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data`.
-- `pool`: late pooled-refinement pairwise logistic model trained from `/Users/elmlundho/cavgs_quality/pool_training3` with the current pool hard-gate policy applied.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
-Linear model files use `model_version=8`, pairwise logistic model files use `model_version=9`, and both use explicit key-value fields:
+Relational logistic model files use `model_version=10` and explicit key-value fields:
 
 - `name`
 - `context`
@@ -261,10 +259,9 @@ Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rej
 
 ## Built-In Presets
 
-`chunk100mics` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, with low-separation Otsu, Otsu windowing, cluster rescue, and minimum accepted fraction enforcement disabled. It was trained from `/Users/elmlundho/cavgs_quality/chunk100mic_training_data_v4` with the chunk learn objective in effect at the time of promotion.
+`chunk100mics` uses feature policy `microchunk_plus_score_signal` and the relational logistic model. It was trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`.
 
 ```text
-model_family        pairwise_logistic
 prob_threshold      3.500000E-01
 regularization      1.000000E-03
 feature_weights     uniform over all 14 microchunk_plus_score_signal features
@@ -285,68 +282,9 @@ enforce_min_accept_frac false
 
 On the refreshed v4 chunk-training table, this promoted preset scored `macro_evaluate_score=0.50847`, improving over the previous built-in chunk preset (`-0.80859`). The main gain was selected-class protection: soft-classification totals moved from `tp=297, fp=95, tn=151, fn=33` to `tp=324, fp=83, tn=163, fn=6`.
 
-`pool` uses feature policy `microchunk_plus_score_signal` and the pairwise logistic family, but is tuned for late pooled-refinement data from `/Users/elmlundho/cavgs_quality/pool_training3` after applying the current pool hard gates.
-
-```text
-model_family        pairwise_logistic
-prob_threshold      3.500000E-01
-regularization      3.000000E-04
-feature_weights     uniform over all 14 microchunk_plus_score_signal features
-```
-
-On the refreshed pool3 evaluation table with those current gates applied, this promoted preset scored `macro_evaluate_score=0.49028`, with trainable soft-classification totals `tp=1173, fp=78, tn=253, fn=33`.
-
-`chunk100mics_linear` preserves the previous linear score-and-threshold model as an interpretability tool. Its feature weights can be read directly as non-negative contributions to the normalized scalar quality score.
-
-```text
-log_pop             9.978756E-02
-neg_log_res         1.167914E-01
-centered            3.642511E-02
-log_locvar_fg       1.329548E-01
-log_locvar_bg       1.402481E-01
-corr_frc_proxy      1.610645E-01
-log_center_edge_snr 6.630784E-02
-cc_area_frac        6.981037E-02
-presence            1.294257E-01
-neg_log_locvar_fg   0.000000E+00
-neg_log_locvar_bg   0.000000E+00
-log_locvar_fg_bg_ratio 4.718454E-02
-log_bp40_100_center_edge_var 0.000000E+00
-fuzzy_ball_signal   0.000000E+00
-```
-
-```text
-boundary_margin         0.30
-min_score_separation    0.05
-otsu_min_offset         0.05
-otsu_max_offset         0.40
-cluster_rescue_margin   0.20
-min_accept_frac         0.60
-use_lowsep_otsu         false
-use_otsu_window         true
-use_cluster_rescue      false
-enforce_min_accept_frac true
-```
-
-Linear model weights are clipped to non-negative values and normalized to sum to one when a linear model is initialized or read.
-
 ## Classification
 
-For non-hard-rejected class averages, `model_family=linear_score` uses the historical score-and-cluster path:
-
-1. Compute a linear quality score with `matmul(normalized_features, weights)`.
-2. Build a pairwise Euclidean distance matrix in normalized feature space using nonzero-weight features.
-3. Robustly normalize the distance matrix.
-4. Run two-cluster k-medoids clustering.
-5. Choose the good cluster as the cluster with the higher mean model score. If the score means tie, choose the larger cluster; if cluster sizes also tie, choose the cluster with the higher medoid score.
-6. Place the raw threshold halfway between the good-cluster and bad-cluster mean scores.
-7. If cluster separation is below `min_score_separation`, use the Otsu score threshold only when `use_lowsep_otsu` is enabled and Otsu separation is sufficient. Otherwise, accept all trainable class averages as a single cluster.
-8. If cluster separation is sufficient, start from `raw_threshold - boundary_margin`.
-9. If `use_otsu_window` is enabled, replace the threshold with Otsu when the Otsu threshold is at least `otsu_min_offset` and at most `otsu_max_offset` above the raw threshold, and Otsu separation is sufficient.
-10. If `use_cluster_rescue` is enabled, also accept good-cluster members within `cluster_rescue_margin` below the threshold.
-11. If `enforce_min_accept_frac` is enabled, accept enough top-scoring trainable rows to satisfy `min_accept_frac`.
-
-For `model_family=pairwise_logistic`, the model computes:
+For each non-hard-rejected class average, the relational logistic model computes:
 
 ```text
 prob_accept = sigmoid(intercept + sum(linear_coefficients * features)
@@ -354,8 +292,7 @@ prob_accept = sigmoid(intercept + sum(linear_coefficients * features)
                     + relational_coefficient * relational_feature)
 ```
 
-The last term is present only when the artifact declares a relational schema.
-Non-hard-rejected rows are accepted when `prob_accept >= prob_threshold`.
+Every supported artifact declares the relational schema. Non-hard-rejected rows are accepted when `prob_accept >= prob_threshold`.
 Standard hard gates still run before the logistic model.
 
 If there are fewer than four trainable rows, the distance matrix is degenerate, clustering fails, or the low-separation branch has no acceptable Otsu threshold, all non-hard-rejected rows are accepted as a single cluster.
@@ -470,7 +407,6 @@ Train from a file table of canonical outputs:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=learn \
-  model_family=logistic \
   filetab=cavgs_quality_training_filetab.txt \
   fname=cavgs_quality_model_learned.txt \
   mkdir=yes

@@ -818,11 +818,6 @@ contains
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' )then
             if( cline%defined('quality_model') ) &
                 THROW_HARD('quality_mode=learn uses relational logistic training; quality_model is unsupported')
-            select case(trim(self%model_family))
-                case('logistic')
-                case DEFAULT
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn requires model_family=logistic')
-            end select
         endif
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
             select case(trim(self%quality_context))
