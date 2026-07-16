@@ -158,7 +158,7 @@ def view_delete_workspace(request):
         messages.add_message(request, messages.INFO, "workspace deleted successfully")
     else:
         messages.add_message(request, messages.ERROR, "failed to delete workspace")
-    response = redirect("nice_lite:workspace")
+    response = redirect("nice_lite:index")
     return response
 
 
@@ -178,7 +178,7 @@ def view_update_workspace_name(request):
         messages.add_message(request, messages.INFO, "workspace renamed successfully")
     else:
         messages.add_message(request, messages.ERROR, "failed to rename workspace")
-    response = redirect("nice_lite:workspace")
+    response = redirect("nice_lite:index")
     return response
 
 
@@ -198,5 +198,5 @@ def view_update_workspace_description(request):
         messages.add_message(request, messages.INFO, "description updated successfully")
     else:
         messages.add_message(request, messages.ERROR, "failed to update description")
-    response = redirect("nice_lite:workspace")
+    response = redirect("nice_lite:index")
     return response
