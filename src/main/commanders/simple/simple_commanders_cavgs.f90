@@ -2,13 +2,14 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_hard_reject, &
-    write_cavg_quality_analysis, write_cavg_quality_feature_table
+    write_cavg_quality_training_table, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
-    CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_result
+    CAVG_QUALITY_CONTEXT_SIEVE, CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
+    CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
 use simple_string_utils,          only: lowercase
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
@@ -588,7 +589,8 @@ contains
             model%weights = 0.0
             call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, trim(quality_context))
         else
-            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, trim(quality_context))
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
+                trim(quality_context), params, relation_analysis)
         endif
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
@@ -610,24 +612,12 @@ contains
                     params%projfile%to_char(), trim(report_fname))
                 write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
             else
-                call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', &
-                    params%projfile%to_char())
-                if( trim(params%relational_features) == 'corr_knn_v1' )then
-                    call relation_analysis%calculate(cavg_imgs, spproj%os_cls2D, quality, params)
-                    call relation_analysis%write_pair_table('cavgs_pairwise_relations.txt')
-                    call relation_analysis%write_neighbour_table('cavgs_relational_neighbours.txt')
-                    call relation_analysis%write_feature_table('cavgs_relational_features.txt')
-                    call relation_analysis%write_candidate_table('cavgs_relational_candidates.txt')
-                    call relation_analysis%kill()
-                    write(logfhandle,'(A)') &
-                        '>>> WROTE CAVG PAIRWISE RELATIONS       : cavgs_pairwise_relations.txt'
-                    write(logfhandle,'(A)') &
-                        '>>> WROTE CAVG RELATIONAL NEIGHBOURS    : cavgs_relational_neighbours.txt'
-                    write(logfhandle,'(A)') &
-                        '>>> WROTE CAVG RELATIONAL FEATURES      : cavgs_relational_features.txt'
-                    write(logfhandle,'(A)') &
-                        '>>> WROTE CAVG RELATIONAL CANDIDATES    : cavgs_relational_candidates.txt'
-                endif
+                if( .not. allocated(relation_analysis%feature) ) &
+                    call relation_analysis%calculate(cavg_imgs, quality, params, CAVG_RELATIONAL_DEFAULT_KNN, &
+                        CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
+                        CAVG_RELATIONAL_DEFAULT_CORR_TRS)
+                call write_cavg_quality_training_table(quality, reference_states, model, &
+                    'cavgs_quality_training.txt', params%projfile%to_char(), relation_analysis)
             endif
         else
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
@@ -650,6 +640,7 @@ contains
             call spproj%write(params%projfile)
         endif
         call spproj%kill()
+        call relation_analysis%kill()
         call dealloc_imgarr(cavg_imgs)
         call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)

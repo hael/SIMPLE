@@ -8,7 +8,10 @@ use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CLIP_Z, &
     CAVG_MODEL_FAMILY_LINEAR, CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, CAVG_QUALITY_CONTEXT_CHUNK, &
-    CAVG_QUALITY_CONTEXT_POOL, cavg_quality_model_spec, cavg_quality_result
+    CAVG_QUALITY_CONTEXT_POOL, CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
+    CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
+    CAVG_RELATIONAL_DEFAULT_CORR_TRS, &
+    cavg_quality_model_spec, cavg_quality_result
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
@@ -90,7 +93,7 @@ real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
 ! Default chunk class-average quality model, promoted from the pairwise
 ! logistic artifact learned from
-! /Users/elmlundho/cavgs_quality/chunk100mic_training_data_v4.
+! /Users/elmlundho/model_cavgs_rejection/chunk_training5.
 character(len=*), parameter :: CHUNK100MICS_FEATURE_POLICY = 'microchunk_plus_score_signal'
 real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     7.142857E-02, 7.142857E-02, 7.142857E-02, 7.142857E-02, &
@@ -133,6 +136,12 @@ type :: cavg_quality_model
     real              :: prob_threshold          = 0.5
     real              :: regularization_lambda   = 0.0
     real              :: calibration_temperature = 1.0
+    character(len=64) :: relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
+    integer           :: relational_knn            = 0
+    real              :: relational_corr_hp        = 0.0
+    real              :: relational_corr_lp        = 0.0
+    real              :: relational_corr_trs       = 0.0
+    real              :: relational_coefficient    = 0.0
     real              :: boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
     real              :: min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
     real              :: otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
@@ -149,6 +158,7 @@ contains
     procedure :: get_spec
     procedure :: normalize
     procedure :: classify
+    procedure :: supports_relational
     procedure :: write => write_model
     procedure :: read  => read_model
     ! Destructor-style clear: after kill, call init_preset or init_spec
@@ -205,6 +215,12 @@ contains
         self%prob_threshold          = spec%prob_threshold
         self%regularization_lambda   = spec%regularization_lambda
         self%calibration_temperature = spec%calibration_temperature
+        self%relational_feature_schema = trim(spec%relational_feature_schema)
+        self%relational_knn          = spec%relational_knn
+        self%relational_corr_hp      = spec%relational_corr_hp
+        self%relational_corr_lp      = spec%relational_corr_lp
+        self%relational_corr_trs     = spec%relational_corr_trs
+        self%relational_coefficient  = spec%relational_coefficient
         self%boundary_margin         = spec%boundary_margin
         self%min_score_separation    = spec%min_score_separation
         self%otsu_min_offset         = spec%otsu_min_offset
@@ -234,6 +250,12 @@ contains
         spec%prob_threshold          = self%prob_threshold
         spec%regularization_lambda   = self%regularization_lambda
         spec%calibration_temperature = self%calibration_temperature
+        spec%relational_feature_schema = self%relational_feature_schema
+        spec%relational_knn          = self%relational_knn
+        spec%relational_corr_hp      = self%relational_corr_hp
+        spec%relational_corr_lp      = self%relational_corr_lp
+        spec%relational_corr_trs     = self%relational_corr_trs
+        spec%relational_coefficient  = self%relational_coefficient
         spec%boundary_margin         = self%boundary_margin
         spec%min_score_separation    = self%min_score_separation
         spec%otsu_min_offset         = self%otsu_min_offset
@@ -253,39 +275,45 @@ contains
         spec%feature_policy          = CHUNK100MICS_FEATURE_POLICY
         spec%model_family            = CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC
         spec%weights                 = CAVG_QUALITY_LOGISTIC_WEIGHTS
-        spec%intercept               = 2.681497E+00
+        spec%intercept               = 2.802381E+00
         spec%linear_coefficients     = [ &
-           -6.286113E-01,  6.247919E-01, -2.818124E-01,  1.076405E+00, &
-           -7.464533E-01,  6.145704E-01, -6.273948E-02,  1.407827E-01, &
-            2.027739E-01, -4.221159E-01,  7.574302E-01, -2.793084E-01, &
-            2.794536E+00,  7.073164E-01 ]
+           -5.841123E-01,  6.280109E-01, -2.764060E-01,  1.036179E+00, &
+           -7.276409E-01,  5.576301E-01, -1.771272E-01, -4.475693E-02, &
+            2.538559E-01, -4.135939E-01,  7.407248E-01, -3.170226E-01, &
+            2.768010E+00,  5.132661E-01 ]
         call set_pairwise_interactions_for_feature_count(spec, 14, [ &
-           -5.405482E-01,  2.232487E-02,  6.679537E-01, -9.844879E-01, &
-            4.016007E-01,  8.536045E-01,  6.862369E-01, -3.145630E-01, &
-           -6.455917E-01,  8.791583E-01, -4.676543E-01,  4.777114E-01, &
-            5.521021E-01,  1.271381E-02, -1.254850E-01,  6.664535E-02, &
-           -2.221981E-01, -6.056051E-02, -4.815833E-01,  1.268961E-01, &
-           -1.271788E-01,  2.494773E-01, -1.269121E-01,  1.350642E+00, &
-           -1.692577E-01, -9.738522E-02,  1.265601E-01, -5.409655E-01, &
-            2.652861E-01,  4.474671E-01, -2.019620E-01, -4.014040E-01, &
-           -3.299867E-01,  3.392396E-01, -2.475521E-01, -2.321465E-01, &
-           -2.825888E-01, -3.237399E-01,  8.590719E-01, -1.205967E-01, &
-           -2.884976E-01, -4.536750E-01,  2.778712E-01, -7.639435E-01, &
-           -2.127371E-01, -4.576955E-01,  2.047243E-01,  7.392398E-02, &
-            6.617538E-01, -2.564861E-01, -2.180120E-02,  1.481527E-02, &
-            2.854128E-01, -1.482570E-01,  3.309094E-01, -8.375521E-01, &
-           -6.958253E-01, -1.989315E-02, -1.469698E-01,  8.772197E-02, &
-            2.987876E-02, -4.436344E-01,  2.778504E-01,  1.992271E-01, &
-           -5.480839E-01, -5.014452E-01, -1.514034E-01, -7.361591E-01, &
-           -6.602764E-01, -1.696232E-01, -1.325360E-01,  9.232772E-02, &
-           -5.104917E-01, -3.444873E-01, -8.808707E-01,  7.508239E-02, &
-            3.759776E-02,  3.667796E-01,  6.808946E-01,  7.423107E-01, &
-           -3.577121E-01, -6.254713E-03,  9.768074E-02, -5.226645E-01, &
-            1.452297E-01, -6.939387E-01,  1.408253E-01, -3.367719E-01, &
-           -1.496779E-01,  2.686394E-01,  2.973516E-02 ])
+           -5.016133E-01,  2.286104E-03,  6.567349E-01, -9.844457E-01, &
+            4.001724E-01,  8.693924E-01,  7.284134E-01, -2.955010E-01, &
+           -5.959087E-01,  8.986003E-01, -4.522021E-01,  5.249431E-01, &
+            4.998736E-01,  7.446390E-03, -1.947948E-01,  7.215320E-02, &
+           -1.647213E-01, -1.089008E-01, -5.241460E-01,  1.061381E-01, &
+           -1.016107E-01,  2.078417E-01, -1.008714E-01,  1.364482E+00, &
+           -1.701328E-01, -5.651891E-02,  1.481122E-01, -5.923793E-01, &
+            2.441176E-01,  3.966064E-01, -1.921423E-01, -3.747033E-01, &
+           -3.324885E-01,  3.396430E-01, -2.124085E-01, -2.583523E-01, &
+           -2.673632E-01, -3.769121E-01,  9.726956E-01, -8.286975E-02, &
+           -2.729041E-01, -4.568700E-01,  2.382788E-01, -6.906177E-01, &
+           -1.946201E-01, -4.144796E-01,  2.073843E-01,  4.982973E-02, &
+            6.386595E-01, -3.007336E-01, -1.482573E-02,  4.862371E-02, &
+            2.569429E-01, -1.767143E-01,  2.898083E-01, -9.003410E-01, &
+           -6.977128E-01,  6.913373E-02, -8.214340E-02,  5.055159E-02, &
+            1.103404E-01, -4.825652E-01,  3.560530E-01,  2.035851E-01, &
+           -5.634665E-01, -5.736839E-01, -1.286691E-01, -8.029981E-01, &
+           -7.644567E-01, -4.376983E-02, -1.081729E-01, -1.196917E-02, &
+           -4.971317E-01, -3.948403E-01, -1.028552E+00,  1.349212E-01, &
+            2.116886E-02,  4.029729E-01,  7.093447E-01,  6.204602E-01, &
+           -3.332528E-01,  1.358440E-02,  1.395677E-01, -5.286202E-01, &
+            1.052782E-01, -6.519729E-01,  1.541351E-01, -2.955521E-01, &
+           -1.872015E-01,  2.358026E-01,  2.090225E-02 ])
         spec%prob_threshold          = 3.500000E-01
         spec%regularization_lambda   = 1.000000E-03
         spec%calibration_temperature = 1.000000E+00
+        spec%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
+        spec%relational_knn          = CAVG_RELATIONAL_DEFAULT_KNN
+        spec%relational_corr_hp      = CAVG_RELATIONAL_DEFAULT_CORR_HP
+        spec%relational_corr_lp      = CAVG_RELATIONAL_DEFAULT_CORR_LP
+        spec%relational_corr_trs     = CAVG_RELATIONAL_DEFAULT_CORR_TRS
+        spec%relational_coefficient  = -3.941003E-01
         spec%boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
         spec%min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
         spec%otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
@@ -392,36 +420,24 @@ contains
         spec%interaction_coefficients(1:expected_terms) = coefficients
     end subroutine set_pairwise_interactions_for_feature_count
 
-    subroutine set_pairwise_interactions_for_feature_indices( spec, feature_indices, coefficients )
-        type(cavg_quality_model_spec), intent(inout) :: spec
-        integer,                       intent(in)    :: feature_indices(:)
-        real,                          intent(in)    :: coefficients(:)
-        integer :: i, j, iterm, nfeatures, expected_terms
-        nfeatures = size(feature_indices)
-        if( nfeatures < 1 .or. nfeatures > CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('set_pairwise_interactions_for_feature_indices: invalid feature count')
-        do i = 1, nfeatures
-            if( feature_indices(i) < 1 .or. feature_indices(i) > CAVG_QUALITY_NFEATS ) &
-                THROW_HARD('set_pairwise_interactions_for_feature_indices: invalid feature index')
-        end do
-        expected_terms = (nfeatures * (nfeatures - 1)) / 2
-        if( size(coefficients) /= expected_terms ) &
-            THROW_HARD('set_pairwise_interactions_for_feature_indices: coefficient count mismatch')
-        spec%n_interactions          = expected_terms
-        spec%interaction_terms       = 0
-        spec%interaction_coefficients = 0.0
-        iterm = 0
-        do i = 1, nfeatures - 1
-            do j = i + 1, nfeatures
-                iterm = iterm + 1
-                spec%interaction_terms(iterm,:) = [feature_indices(i), feature_indices(j)]
-            end do
-        end do
-        spec%interaction_coefficients(1:expected_terms) = coefficients
-    end subroutine set_pairwise_interactions_for_feature_indices
-
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
+        select case(trim(self%relational_feature_schema))
+        case(CAVG_RELATIONAL_SCHEMA_NONE)
+            self%relational_knn         = 0
+            self%relational_corr_hp     = 0.0
+            self%relational_corr_lp     = 0.0
+            self%relational_corr_trs    = 0.0
+            self%relational_coefficient = 0.0
+        case(CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1)
+            if( self%relational_knn < 1 ) THROW_HARD('normalize: relational_knn must be positive')
+            if( self%relational_corr_hp <= 0.0 .or. self%relational_corr_lp <= 0.0 .or. &
+                self%relational_corr_hp < self%relational_corr_lp ) &
+                THROW_HARD('normalize: invalid relational correlation limits')
+            if( self%relational_corr_trs < 0.0 ) THROW_HARD('normalize: relational shift range must be nonnegative')
+        case default
+            THROW_HARD('normalize: unknown relational feature schema: '//trim(self%relational_feature_schema))
+        end select
         select case(trim(self%model_family))
         case(CAVG_MODEL_FAMILY_LINEAR)
             self%weights = max(0.0, self%weights)
@@ -441,9 +457,16 @@ contains
         end select
     end subroutine normalize
 
-    subroutine classify( self, quality )
+    logical function supports_relational( self )
+        class(cavg_quality_model), intent(in) :: self
+        supports_relational = trim(self%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC .and. &
+            trim(self%relational_feature_schema) /= CAVG_RELATIONAL_SCHEMA_NONE
+    end function supports_relational
+
+    subroutine classify( self, quality, relational_feature )
         class(cavg_quality_model), intent(in)    :: self
         type(cavg_quality_result), intent(inout) :: quality
+        real, optional,            intent(in)    :: relational_feature(:)
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         quality%model_name     = self%name
@@ -451,7 +474,11 @@ contains
         case(CAVG_MODEL_FAMILY_LINEAR)
             call apply_linear_boundary(quality, self)
         case(CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC)
-            call apply_pairwise_logistic(quality, self)
+            if( present(relational_feature) )then
+                call apply_pairwise_logistic(quality, self, relational_feature)
+            else
+                call apply_pairwise_logistic(quality, self)
+            end if
         case default
             THROW_HARD('classify: unknown model_family: '//trim(self%model_family))
         end select
@@ -463,7 +490,9 @@ contains
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
-        if( trim(self%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC )then
+        if( self%supports_relational() )then
+            write(funit,'(A)') 'model_version=10'
+        else if( trim(self%model_family) == CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC )then
             write(funit,'(A)') 'model_version=9'
         else
             write(funit,'(A)') 'model_version=8'
@@ -496,6 +525,14 @@ contains
             write(funit,'(A,ES14.6)') 'prob_threshold=', self%prob_threshold
             write(funit,'(A,ES14.6)') 'regularization_lambda=', self%regularization_lambda
             write(funit,'(A,ES14.6)') 'calibration_temperature=', self%calibration_temperature
+            write(funit,'(A,A)') 'relational_feature_schema=', trim(self%relational_feature_schema)
+            if( self%supports_relational() )then
+                write(funit,'(A,I0)') 'relational_knn=', self%relational_knn
+                write(funit,'(A,ES14.6)') 'relational_corr_hp=', self%relational_corr_hp
+                write(funit,'(A,ES14.6)') 'relational_corr_lp=', self%relational_corr_lp
+                write(funit,'(A,ES14.6)') 'relational_corr_trs=', self%relational_corr_trs
+                write(funit,'(A,ES14.6)') 'relational_coefficient=', self%relational_coefficient
+            end if
         endif
         close(funit)
     end subroutine write_model
@@ -581,6 +618,15 @@ contains
         write(funit,'(A,ES14.6)') '        spec%prob_threshold          = ', model%prob_threshold
         write(funit,'(A,ES14.6)') '        spec%regularization_lambda   = ', model%regularization_lambda
         write(funit,'(A,ES14.6)') '        spec%calibration_temperature = ', model%calibration_temperature
+        write(funit,'(A,A)') '        spec%relational_feature_schema = ', &
+            trim(fortran_quote(model%relational_feature_schema))
+        if( model%supports_relational() )then
+            write(funit,'(A,I0)') '        spec%relational_knn          = ', model%relational_knn
+            write(funit,'(A,ES14.6)') '        spec%relational_corr_hp      = ', model%relational_corr_hp
+            write(funit,'(A,ES14.6)') '        spec%relational_corr_lp      = ', model%relational_corr_lp
+            write(funit,'(A,ES14.6)') '        spec%relational_corr_trs     = ', model%relational_corr_trs
+            write(funit,'(A,ES14.6)') '        spec%relational_coefficient  = ', model%relational_coefficient
+        end if
     end subroutine write_logistic_spec_assignments
 
     subroutine write_weights_assignment( funit, weights )
@@ -662,13 +708,14 @@ contains
         character(len=LONGSTRLEN)  :: key, preset_name
         character(len=XLONGSTRLEN) :: val
         integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients
-        logical :: have_model_family, have_preset, ok_line
+        logical :: have_model_family, have_relational_schema, have_preset, ok_line
         ! Model files are complete model definitions. Start from chunk defaults,
         ! apply any preset found in the file, then apply explicit key overrides.
         call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
         if( ios /= 0 ) THROW_HARD('read_model: failed to open '//trim(fname))
         have_model_family = .false.
+        have_relational_schema = .false.
         have_preset       = .false.
         model_version     = 0
         preset_name       = ''
@@ -682,6 +729,8 @@ contains
                 read(val,*,iostat=parse_ios) model_version
             case('model_family')
                 have_model_family = .true.
+            case('relational_feature_schema')
+                have_relational_schema = .true.
             case('preset')
                 preset_name = trim(val)
                 have_preset = .true.
@@ -699,6 +748,14 @@ contains
             self%regularization_lambda    = 0.0
             self%calibration_temperature  = 1.0
         endif
+        if( .not. have_relational_schema )then
+            self%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
+            self%relational_knn             = 0
+            self%relational_corr_hp         = 0.0
+            self%relational_corr_lp         = 0.0
+            self%relational_corr_trs        = 0.0
+            self%relational_coefficient     = 0.0
+        end if
         rewind(funit)
         n_interaction_coefficients = 0
         do
@@ -746,6 +803,23 @@ contains
                 case('calibration_temperature')
                     read(val,*,iostat=parse_ios) self%calibration_temperature
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse calibration_temperature')
+                case('relational_feature_schema')
+                    self%relational_feature_schema = trim(val)
+                case('relational_knn')
+                    read(val,*,iostat=parse_ios) self%relational_knn
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_knn')
+                case('relational_corr_hp')
+                    read(val,*,iostat=parse_ios) self%relational_corr_hp
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_corr_hp')
+                case('relational_corr_lp')
+                    read(val,*,iostat=parse_ios) self%relational_corr_lp
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_corr_lp')
+                case('relational_corr_trs')
+                    read(val,*,iostat=parse_ios) self%relational_corr_trs
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_corr_trs')
+                case('relational_coefficient')
+                    read(val,*,iostat=parse_ios) self%relational_coefficient
+                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_coefficient')
                 case('boundary_margin')
                     read(val,*,iostat=parse_ios) self%boundary_margin
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse boundary_margin')
@@ -972,6 +1046,12 @@ contains
         self%prob_threshold          = 0.0
         self%regularization_lambda   = 0.0
         self%calibration_temperature = 1.0
+        self%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
+        self%relational_knn          = 0
+        self%relational_corr_hp      = 0.0
+        self%relational_corr_lp      = 0.0
+        self%relational_corr_trs     = 0.0
+        self%relational_coefficient  = 0.0
         self%boundary_margin         = 0.0
         self%min_score_separation    = 0.0
         self%otsu_min_offset         = 0.0
@@ -997,9 +1077,10 @@ contains
         call kill_classify_cache(cache)
     end subroutine apply_linear_boundary
 
-    subroutine apply_pairwise_logistic( quality, model )
+    subroutine apply_pairwise_logistic( quality, model, relational_feature )
         type(cavg_quality_result), intent(inout) :: quality
         class(cavg_quality_model), intent(in)    :: model
+        real, optional,            intent(in)    :: relational_feature(:)
         integer :: ncls, icls
         real    :: prob
         if( .not. allocated(quality%features)    ) THROW_HARD('apply_pairwise_logistic: missing features')
@@ -1007,6 +1088,12 @@ contains
         if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_pairwise_logistic: invalid feature count')
         ncls = size(quality%features, dim=1)
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_pairwise_logistic: invalid mask size')
+        if( model%supports_relational() )then
+            if( .not. present(relational_feature) ) &
+                THROW_HARD('apply_pairwise_logistic: model requires relational feature')
+            if( size(relational_feature) /= ncls ) &
+                THROW_HARD('apply_pairwise_logistic: relational feature size mismatch')
+        end if
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
@@ -1024,7 +1111,11 @@ contains
         ! exactly when P(accept) >= prob_threshold.
         do icls = 1, ncls
             if( quality%hard_reject(icls) ) cycle
-            prob = pairwise_logistic_probability(model, quality%features(icls,:))
+            if( model%supports_relational() )then
+                prob = pairwise_logistic_probability(model, quality%features(icls,:), relational_feature(icls))
+            else
+                prob = pairwise_logistic_probability(model, quality%features(icls,:))
+            end if
             quality%scores(icls) = prob
             if( prob >= model%prob_threshold )then
                 quality%states(icls) = 1
@@ -1043,17 +1134,24 @@ contains
         quality%model_name       = model%name
         quality%soft_decision    = 'probability_threshold'
         quality%soft_reason      = 'pairwise_logistic'
+        if( model%supports_relational() ) quality%soft_reason = 'pairwise_logistic_relational'
     end subroutine apply_pairwise_logistic
 
-    real function pairwise_logistic_probability( model, feat )
+    real function pairwise_logistic_probability( model, feat, relational_feature )
         class(cavg_quality_model), intent(in) :: model
         real,                      intent(in) :: feat(:)
+        real, optional,            intent(in) :: relational_feature
         integer :: iterm, ifeat, jfeat
         real    :: eta
         if( size(feat) /= CAVG_QUALITY_NFEATS ) THROW_HARD('pairwise_logistic_probability: invalid feature count')
         if( model%n_interactions < 0 .or. model%n_interactions > CAVG_QUALITY_MAX_INTERACTIONS ) &
             THROW_HARD('pairwise_logistic_probability: invalid n_interactions')
         eta = model%intercept + dot_product(model%linear_coefficients, feat)
+        if( model%supports_relational() )then
+            if( .not. present(relational_feature) ) &
+                THROW_HARD('pairwise_logistic_probability: missing relational feature')
+            eta = eta + model%relational_coefficient * relational_feature
+        end if
         do iterm = 1, model%n_interactions
             ifeat = model%interaction_terms(iterm,1)
             jfeat = model%interaction_terms(iterm,2)

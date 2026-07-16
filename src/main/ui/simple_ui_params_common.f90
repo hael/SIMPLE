@@ -669,8 +669,8 @@ subroutine set_ui_params
                                    'Class-average quality mode(apply|analyze|learn|evaluate|promote){apply}', .false., 'apply')
 
     call model_family%set_param(   'model_family',    'multi',  'Class-average learner family', &
-                                   'Learner family for quality_mode=learn(linear|logistic){logistic}', &
-                                   'Class-average learner family(linear|logistic){logistic}', .false., 'logistic')
+                                   'Relational learner family for quality_mode=learn(logistic){logistic}', &
+                                   'Class-average learner family(logistic){logistic}', .false., 'logistic')
 
     call quality_context%set_param('quality_context', 'multi',  'Class-average quality context', &
                                    'Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}', &

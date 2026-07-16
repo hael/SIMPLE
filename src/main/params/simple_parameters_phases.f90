@@ -817,11 +817,11 @@ contains
         end select
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' )then
             if( cline%defined('quality_model') ) &
-                THROW_HARD('quality_mode=learn requires model_family=linear|logistic; quality_model is unsupported')
+                THROW_HARD('quality_mode=learn uses relational logistic training; quality_model is unsupported')
             select case(trim(self%model_family))
-                case('linear','logistic')
+                case('logistic')
                 case DEFAULT
-                    THROW_HARD('model_cavgs_rejection quality_mode=learn supports model_family=linear|logistic')
+                    THROW_HARD('model_cavgs_rejection quality_mode=learn requires model_family=logistic')
             end select
         endif
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
@@ -829,21 +829,6 @@ contains
                 case('chunk','pool','sieve')
                 case DEFAULT
                     THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, or sieve')
-            end select
-            select case(trim(self%relational_features))
-                case('none')
-                case('corr_knn_v1')
-                    if( trim(self%quality_mode) /= 'analyze' ) &
-                        THROW_HARD('relational_features=corr_knn_v1 currently supports quality_mode=analyze only')
-                    if( self%relational_knn < 1 ) THROW_HARD('relational_knn must be positive')
-                    if( self%relational_corr_hp <= 0.0 .or. self%relational_corr_lp <= 0.0 ) &
-                        THROW_HARD('relational correlation limits must be positive')
-                    if( self%relational_corr_hp < self%relational_corr_lp ) &
-                        THROW_HARD('relational_corr_hp must be >= relational_corr_lp')
-                    if( self%relational_corr_trs < 0.0 ) THROW_HARD('relational_corr_trs must be nonnegative')
-                    if( self%relational_weight_tau <= 0.0 ) THROW_HARD('relational_weight_tau must be positive')
-                case DEFAULT
-                    THROW_HARD('relational_features must be none or corr_knn_v1')
             end select
         endif
         self%l_ptcl_src_den = trim(self%ptcl_src) == 'den'

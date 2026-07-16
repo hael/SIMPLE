@@ -802,7 +802,8 @@ contains
                 cavg_imgs_local = read_cavgs_into_imgarr(spproj_inout)
                 smpd_stk_out    = spproj_inout%get_smpd()
                 call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, model_local)
+                call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
+                    model_local, relation_params=params)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)

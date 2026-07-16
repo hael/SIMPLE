@@ -2,68 +2,176 @@
 
 Date: 2026-07-16
 
-Status: analyze-only CC/FRC and signal-channel foundation implemented;
-train/validate/apply model path pending
+Status: Stage 1 implemented end to end. Analyze writes one canonical training
+table, the pairwise learner reads it directly, model artifact version 10 stores
+the relational schema and coefficient, and `chunk100mics` uses relational
+scoring by default. Independent-dataset validation remains the next step.
 
-## Implemented First Slice
+## Implemented Stage 1
 
-The initial analyze-only foundation is now implemented behind
-`relational_features=corr_knn_v1`. It does not alter class states or the
-existing 14-feature model path. The implementation currently provides:
-
-- named parameters for the correlation policy and neighbourhood definition;
-- a shared `calc_cavg_pairwise_algninfo` provider reused by the existing
-  CC/FRC distance calculation, so the full-search transform is not discarded;
-- `model_cavgs_rejection` mirrors the `cluster_cavgs` defaults
-  `ctf=no,objfun=cc` before constructing `parameters`, and the provider rejects
-  callers that violate that CC contract;
-- upper-triangular CC, FRC, rotation, shift, and mirror primitives;
-- explicit neighbour identities, correlations, FRC distances, and normalized
-  CC weights;
-- the eight recommended wide `corr_knn_v1` summaries;
-- a long-form candidate bank over several `k` values for CC and CC-anchored
-  FRC reducers;
-- a self-contained reducer regression test.
-
-The opt-in command is:
+The implemented feature is deliberately smaller than the exploratory feature
+bank:
 
 ```text
-simple_exec prg=model_cavgs_rejection quality_mode=analyze \
-  relational_features=corr_knn_v1 projfile=<project> mskdiam=<diameter>
+schema  = corr_knn_signal_v1
+anchor  = rotational-max CC
+k       = 5
+feature = signal_stats_anchor_topk_mean
 ```
 
-The default search policy is `hp=100 Å`, `lp=15 Å`, `trs=10 px`, matching
-Joe's coarse-sieve defaults. `relational_knn=5` and
-`relational_weight_tau=0.05` remain explicit analysis parameters.
+For every class surviving the unchanged hard gates, the code finds the five
+other classes with the highest full-search rotational-max CC and averages the
+existing composite signal-statistics distance to those neighbours. The result
+is robust-normalized within the dataset and enters the current pairwise
+logistic model as one additional scalar coefficient. There is no clustering,
+cluster identifier, cluster-level decision, or relational interaction bank.
 
-## Implemented Second Slice: Signal-Statistics Channels
+The model owns the search fingerprint: `ctf=no`, `objfun=cc`, `hp=100 Å`,
+`lp=15 Å`, `trs=10 px`, and `k=5`. These values mirror Joe's POC defaults and
+are recorded in both the canonical table and version-10 model artifact. They
+are not user-facing tuning knobs in the production route.
 
-The pairwise layer now also exposes every component produced by the existing
-`calc_sigstats_dmats` pass:
+The shared pairwise layer still exposes rotational-max CC/FRC plus the power,
+TVD, JSD, Hellinger, histogram-composite, and final signal-statistics component
+matrices. That extensible in-memory boundary is retained for future feature
+experiments, but analyze no longer emits the exploratory pair, neighbour,
+candidate, or wide-feature sidecars.
 
-- raw radial power-spectrum Euclidean distance;
-- native histogram TVD, JSD, and Hellinger distance;
-- the equal-weight, min-max-normalized histogram composite;
-- the existing equal-weight power/histogram signal-statistics composite.
+`quality_mode=analyze` now writes exactly one learner input per dataset:
 
-The legacy clustering calculation now consumes the new component result and
-moves out the same final composite, preserving its numerical path. Analyze
-schema version 2 persists all component values in the upper-triangular pair
-table and on each CC-selected neighbour row. The long-form candidate bank
-applies `anchor_nearest`, mean, median, quartiles, and spread reducers to FRC
-and every signal distance channel while keeping rotational-max CC as the sole
-neighbourhood anchor.
+```text
+cavgs_quality_training.txt
+```
 
-Metadata records the channel semantics, provider version, raw versus composite
-scales, histogram bin count, power band, mask radius, and histogram intensity
-range. This is sufficient to interpret or recompute reducers without reading
-the images again.
+It contains labels, hard-gate state, all fourteen raw and normalized base
+features, the raw and normalized promoted relational feature, and the complete
+schema/provider metadata needed by training. Existing visual MRC stacks remain
+diagnostics, not learner inputs.
 
-The implementation boundary now stops before relational artifact I/O,
-learning, grouped validation, or apply. It also stops before weighted
-aggregation of every base quality feature and cross-channel rank-agreement
-statistics; those remain cheap additions if the first empirical runs justify
-them.
+The one-time `scripts/pack_cavgs_quality_training.py` utility converts the old
+five-file bundles to this canonical format and can remove the legacy text
+artifacts only after the canonical file is written successfully.
+
+### Relational Training Invariant
+
+Relational evidence is now an invariant of newly generated training data, not
+a property inherited accidentally from the model used during analyze:
+
+- every `quality_mode=analyze` run computes and writes
+  `corr_knn_signal_v1`, even when the scoring route is pool, sieve, linear, or
+  a version-9 artifact;
+- `quality_mode=learn` accepts only logistic training and requires every file
+  to declare the same supported relational schema and policy;
+- newly trained chunk and pool artifacts therefore write model version 10 and
+  apply through the relational path;
+- existing pool, sieve, linear, and version-9 artifacts remain valid for
+  application and evaluation, but do not define the contents of new training
+  tables.
+
+## First Empirical Result: `chunk_training5`
+
+The first analysis corpus contains twelve datasets and 1,200 class averages.
+The unchanged hard gate removes 624 classes, leaving 576 trainable rows: 330
+manual accepts and 246 manual rejects. All eligible pair tables are complete,
+all eligible classes have the expected five neighbour rows, and the relational
+tables join one-to-one by class. The `not` dataset has sixteen eligible accepts
+and no eligible reject, so it can contribute training rows but cannot produce a
+within-dataset AUC.
+
+A project-held-out regularized logistic comparison was performed on the eleven
+measurable datasets. The reference model was retrained from the existing
+fourteen normalized base features for every fold; relational statistics were
+calculated without labels and normalized within each dataset. Training projects
+received equal total weight. The reference L2 penalty was 1.0, with sensitivity
+checked from 0.1 through 100. The main result is:
+
+| Feature set | Macro held-out AUC | Change from base |
+| --- | ---: | ---: |
+| fourteen base features | 0.836 | - |
+| base + CC local density | 0.848 | +0.012 |
+| base + FRC distance, CC-anchor top-five mean | 0.847 | +0.011 |
+| base + signal-statistics distance, CC-anchor top-five mean | **0.860** | **+0.024** |
+| base + all eight current CC-wide features | 0.821 | -0.015 |
+
+The signal-statistics feature improved ten of eleven measurable held-out
+datasets. A dataset-level bootstrap of the paired AUC change gave a 95% interval
+of +0.012 to +0.035 at the reference regularization strength, and the direction
+of improvement persisted across the tested regularization range. Adding
+density or FRC on top of that feature did not improve macro AUC further.
+Because the feature was selected on this corpus, the interval is descriptive;
+it is not a substitute for evaluation on a new frozen holdout.
+
+The exposed signal components justify retaining the existing composite rather
+than promoting every component:
+
+| Added CC-anchor top-five mean | Macro held-out AUC |
+| --- | ---: |
+| radial power distance | 0.837 |
+| histogram TVD | 0.853 |
+| histogram JSD | 0.852 |
+| histogram Hellinger | 0.856 |
+| all four component features | 0.849 |
+| existing signal-statistics composite | **0.860** |
+
+TVD, JSD, and Hellinger are highly redundant in this corpus (pairwise Spearman
+correlations above 0.95 for their top-five median summaries), while radial
+power is nearly independent but adds little by itself. The individual
+components therefore remain analysis diagnostics rather than trainable schema
+members.
+
+The current frozen `chunk100mics` score already has macro AUC 0.971 on these
+files. Recalibrating that score and adding relational statistics changes AUC by
+at most about 0.002. This corpus is suitable for choosing a compact candidate
+schema, but it is not sufficient evidence for final coefficients or a claim of
+improvement over the frozen production model; the current score may already
+encode closely related training information. Final acceptance requires a
+frozen artifact and genuinely independent project-held-out evaluation.
+
+### Promoted Schema
+
+Promote one relational statistic for the first learner implementation:
+
+```text
+relational_feature_schema=corr_knn_signal_v1
+relation_anchor=rotmax_cc
+relational_knn=5
+feature=signal_stats_distance|anchor_topk_mean
+```
+
+For class `i`, this is the unweighted mean signal-statistics distance to the
+five other classes having the highest rotational-max CC with `i`. It is then
+normalized across hard-gate survivors using the existing robust normalization.
+Lower distance is evidence for acceptance; the fitted logistic coefficient,
+not a hard rule, determines its contribution. The CC search fingerprint and
+the complete signal-statistics provider fingerprint remain part of the schema.
+
+This keeps rotational-max CC as the neighbourhood definition, uses the best
+empirical secondary channel, performs no clustering, and adds only one degree
+of freedom to the fourteen-feature model. FRC and the individual
+power/histogram components remain available through the pairwise provider for
+future datasets and ablations; they are not persisted by routine analyze runs.
+
+### Full-Corpus Training and Promotion
+
+After the schema was frozen, all twelve `chunk_training5` datasets were packed
+to canonical files and used for the requested full-corpus fit, with no holdout
+at this stage. The selected model has:
+
+```text
+model_family=pairwise_logistic
+feature_policy=microchunk_plus_score_signal
+prob_threshold=0.35
+regularization_lambda=0.001
+relational_coefficient=-0.3941003
+macro_learn_score=0.50786
+```
+
+The negative coefficient is consistent with the feature semantics: larger
+signal-statistics distance from the five CC-nearest neighbours is rejection
+evidence. These coefficients are now the built-in `chunk100mics` preset.
+Training and built-in evaluation reports agree exactly apart from the model
+name. This is a training-set result, not independent validation; the other
+assembled datasets should be used for that assessment.
 
 ## Goal
 
@@ -548,44 +656,29 @@ No clustering criterion or clustering method belongs in the relational schema.
 The graph depends only on the rotational-max correlation matrix and the
 neighbourhood parameters.
 
-Expose the policy through named parameters:
-
-```text
-relational_features        = none | corr_knn_v1       (default: none)
-relational_channels        = rotmax_cc                 (fixed by corr_knn_v1)
-relational_anchor          = rotmax_cc                 (fixed by corr_knn_v1)
-relational_corr_hp         = <Angstrom>               (default: 100.0)
-relational_corr_lp         = <Angstrom>               (default: 15.0)
-relational_corr_trs        = <pixels>                 (default: 10.0)
-relational_knn             = <integer>                (default: 5)
-relational_weight_tau      = <correlation units>      (schema default)
-```
-
-For `apply`, these values come from the learned model artifact. Command-line
-overrides must match the artifact exactly or fail clearly. `analyze` is the
-mode in which alternative low-pass limits, shift ranges, `k`, and `tau` are
-deliberately explored and recorded.
-
-Future schemas may expose multiple values in `relational_channels`. Channel
-selection belongs to analysis/schema creation; `apply` always uses the exact
-ordered channel list and provider parameters embedded in the trained artifact.
+The policy is model-owned rather than exposed as ordinary application
+parameters. A model either declares `corr_knn_signal_v1` and its fixed
+`hp/lp/trs/k` fingerprint or declares `none`. This prevents analyze, training,
+and application from silently using different neighbourhoods. Future schemas
+can add other named pairwise channels without changing the current artifact.
 
 ## Analyze, Learn, Evaluate, and Apply
 
-The existing `model_cavgs_rejection` program remains the entry point. The
-current `quality_context=sieve` hard-gate route remains unchanged when
-`relational_features=none`. Selecting `corr_knn_v1` opts that context into
-relational feature extraction and logistic scoring.
+The existing `model_cavgs_rejection` program remains the entry point. Relational
+calculation is automatic when the selected model supports it.
 
 | Mode | Relational behaviour |
 | --- | --- |
-| `quality_mode=analyze` | Build and persist pairwise primitives, write the broad candidate statistic bank plus the recommended wide feature table, optionally score a supplied relational model, compare with manual states, and leave the project unchanged. |
-| `quality_mode=learn` | Read a file table of schema-compatible analysis files, fit regularized logistic models, perform grouped cross-validation and feature ablations, and write a versioned artifact. |
+| `quality_mode=analyze` | Compute the model-required neighbourhood statistic, compare with manual states, write `cavgs_quality_training.txt`, and leave the project unchanged. |
+| `quality_mode=learn` | Read a file table of schema-compatible canonical files, fit the regularized pairwise logistic model including the relational scalar, and write a versioned artifact and report. |
 | `quality_mode=evaluate` | Apply a frozen relational artifact to independent analysis files and report project-level and macro metrics without modifying projects. |
-| `quality_mode=apply` | Recompute the artifact-defined graph, calculate probabilities, annotate class averages, map accepted classes to particles, and write the project. A trained relational artifact is required. |
+| normal application | Recompute the artifact-defined neighbourhood, calculate probabilities, and use the existing class/particle update path. |
 
-This lifecycle also applies later to `chunk` and `pool`; the initial validation
-target is the coarse sieve data for which Joe has the twelve-dataset test set.
+The built-in `chunk100mics` preset declares the relational schema and therefore
+uses this route by default. Existing pool, sieve, linear, and version-9
+artifacts declare no relational schema and retain their existing base-only
+application behaviour. A newly trained pool-context artifact carries the
+schema and uses the relational route.
 
 ## Artifact and Backward Compatibility
 
@@ -593,59 +686,52 @@ Do not increase `CAVG_QUALITY_NFEATS` in place or reinterpret current model
 files. Existing models have fixed 14-element arrays and a fixed interaction
 layout.
 
-Introduce a versioned relational model artifact and dispatch by its header:
+Artifact version 10 extends the existing pairwise-logistic format without
+changing the fourteen-feature arrays or interaction layout:
 
 ```text
 model_version=10
-model_family=relational_logistic
-context=sieve
-base_feature_schema=cavg_quality_base_v1
-relational_feature_schema=corr_knn_v1
-relation_channels=rotmax_cc
-relation_anchor=rotmax_cc
-relation_channel.rotmax_cc.semantics=similarity
-relation_channel.rotmax_cc.provider=rotmax_cc_v1
-relation_channel.rotmax_cc.parameters=hp,lp,trs,mskdiam,mirror,objfun
-base_feature_names=...
-relational_feature_names=...
-neighbourhood_policy=knn,tau
-base_coefficients=...
-relational_coefficients=...
-interactions=...
-intercept=...
-prob_threshold=...
-regularization_lambda=...
-calibration_temperature=...
+model_family=pairwise_logistic
+context=chunk
+relational_feature_schema=corr_knn_signal_v1
+relational_knn=5
+relational_corr_hp=100.0
+relational_corr_lp=15.0
+relational_corr_trs=10.0
+relational_coefficient=...
 ```
 
 The current model reader, writer, learner, and classifier continue to own
-legacy artifacts through version 9. A relational header selects a separate
-schema-aware model path. The trainer rejects file tables that mix feature
-schemas, channel order, provider versions, channel parameters, low-pass limits,
-shift ranges, masks, `k`, `tau`, or feature order.
+legacy artifacts through version 9. A version-9 file has no relational schema
+and is deliberately evaluated through the unchanged base-only path. The
+trainer rejects file tables that mix relational schemas, neighbour counts, or
+correlation-policy values.
 
-The artifact for Stage 2 additionally embeds the frozen baseline model needed
-to reproduce `neighbour_quality`. This keeps apply deterministic and prevents
-the runtime from substituting a different baseline.
+Provider metadata distinguishes schema-fixed policy from dataset-resolved
+geometry. For example, the twelve initial files share the signal mask policy
+but have resolved mask radii from 56 to 136 pixels because particle diameter,
+sampling, and box geometry differ. The learner must validate each resolved
+value against the declared policy, not require the same pixel radius across
+datasets. The artifact stores the policy; each canonical training file records
+both its inputs and resolved value.
+
+If Stage 2 neighbour quality is ever added, its artifact must additionally
+embed the frozen baseline model needed to reproduce that feature.
 
 ## Implementation Ownership
 
 ```text
-simple_ui_params_common / simple_ui_cavgproc
-    relational feature and correlation-policy parameters
-                 |
 simple_commanders_cavgs: model_cavgs_rejection
-    mode validation and legacy/relational dispatch
+    mode validation, canonical output, and model-driven dispatch
                  |
 simple_strategy2D_utils
     rotational-max CC/FRC relationship provider
                  |
 simple_cavg_quality_relations
-    current analyze provider result, reducers, and diagnostic output;
-    evolve into channel contract plus schema declarations
+    signal-component matrices, CC-neighbour selection, and promoted reducer
                  |
-relational model and learning code
-    artifact I/O, training, scoring, grouped validation
+simple_cavg_quality_model / simple_cavg_quality_learn
+    artifact I/O, training, scoring, evaluation, and compatibility fallback
 ```
 
 Refactor `calc_cc_and_res_dmats` to consume the shared raw-correlation helper,
@@ -653,51 +739,38 @@ then verify that its resulting `dmat_cc` is unchanged. The relational extractor
 uses the same helper directly. It must not invoke clustering code or a
 commander, and must not alter class states while extracting features.
 
-The CC helper is the first relationship provider. Keep channel construction
-separate from reducers so the existing FRC matrix and future signal-statistics
-or power-spectrum providers can populate the same validated contract.
+The CC helper remains the neighbourhood anchor. Channel construction stays
+separate from reduction so future relationship matrices can populate the same
+validated contract without reworking model I/O.
 
 ## Analysis and Validation Outputs
 
-Relational analysis files extend the current row-oriented output with schema
-and policy metadata:
+Analyze has one unambiguous tabular output:
 
 ```text
-# relational_feature_schema=corr_knn_v1
-# relation_channels=rotmax_cc
-# relation_anchor=rotmax_cc
-# relation_channel.rotmax_cc.provider=rotmax_cc_v1
-# relational_corr_hp=...
-# relational_corr_lp=...
-# relational_corr_trs=...
-# relational_knn=...
-# relational_weight_tau=...
-class,manual_state,hard_reject,base_probability,relational_probability,
-corr_local_density,corr_local_cohesion,corr_to_local_medoid,
-corr_neighbourhood_margin,corr_effective_support,corr_population_support,
-corr_isolation,corr_neighbour_bp_fail_fraction
+cavgs_quality_training.txt
 ```
 
-Also write the actual neighbour indices, correlations, and normalized weights
-for every class in a separate diagnostic table. This is essential for visual
-inspection and for verifying that a false decision is supported by sensible
-neighbours rather than a numerical summary alone.
+This is the only per-dataset file required by `quality_mode=learn` and
+`quality_mode=evaluate`. It contains:
 
-When additional diagnostic channels are present, write their value and
-validity for the same neighbour pairs in that table. This makes cross-channel
-agreement inspectable before a new matrix becomes part of a trainable feature
-schema.
+- dataset identity, context, label semantics, base schema, relational schema,
+  and normalization policy;
+- the CC-anchor and signal-statistics provider fingerprints;
+- one row per class with `class`, `manual_state`, and `hard_reject` fields;
+- all fourteen base raw and normalized features in their declared order;
+- the raw and normalized `signal_stats_anchor_topk_mean` columns.
 
-The complete analyze artifact set is therefore:
+Analyze writes this table directly from the in-memory base and relational
+results. The learner receives a file table containing one canonical path per
+dataset and validates the schema-fixed policy before fitting. Hard-rejected
+rows remain in the file for diagnostics but do not enter the soft model fit.
 
-```text
-cavgs_quality_analysis.txt
-cavgs_pairwise_relations.txt          upper-triangular pairwise primitives
-cavgs_relational_candidates.txt       long-form reducer/channel/parameter bank
-cavgs_relational_features.txt         recommended wide per-class schema
-cavgs_relational_neighbours.txt       neighbour identities, values, weights
-selected/rejected/ranked MRC stacks   existing visual diagnostics
-```
+The migration packer recognizes the old five-file layout, extracts the frozen
+CC-anchor top-five signal-statistics statistic, writes the canonical table,
+and can then remove the legacy text artifacts. The migrated `chunk_training5`
+corpus now contains one canonical training table in each of its twelve dataset
+directories.
 
 Validation holds out complete projects or specimens and compares models on
 identical hard-gate survivors. Report macro AUC, balanced accuracy, F1,
@@ -709,7 +782,8 @@ stacks, with particular attention to:
 - overfit classes that survive Joe's hard group rule;
 - coherent fuzzy-ball or ice neighbourhoods;
 - genuinely good but isolated classes;
-- sensitivity to low-pass limit, shift range, `k`, and `tau`;
+- sensitivity to low-pass limit, shift range, and `k` in a separately named
+  experimental schema;
 - stability when classes are added to or removed from a project.
 
 ## Defocus–Power Diagnostic
@@ -722,7 +796,7 @@ beyond the image-quality and graph features.
 
 ## Implementation Sequence
 
-Completed in the analyze-only foundation:
+Completed:
 
 1. Extract and test the shared symmetric rotational-max correlation matrix,
    reproducing Joe's POC search settings without running `cluster_cavgs`.
@@ -730,19 +804,20 @@ Completed in the analyze-only foundation:
    and FRC outputs from the same match as the first provider.
 3. Expose the power-spectrum, TVD, JSD, Hellinger, and merged signal-statistics
    distances already calculated by `calc_sigstats_dmats`.
-4. Write the persisted pair table and neighbour diagnostic table in
-   `quality_mode=analyze`.
-5. Implement the reusable reducer bank, long-form candidate output, and the
-   recommended wide `corr_knn_v1` table.
+4. Analyze Joe's twelve datasets and promote a compact relational feature
+   schema based on grouped empirical evidence: the
+   CC-anchor top-five mean `signal_stats_distance` as `corr_knn_signal_v1`.
+5. Write the self-contained `cavgs_quality_training.txt` table natively in
+   analyze and provide a one-time packer for the current five-file corpus.
+6. Remove the exploratory sidecar writers and obsolete relational parameter
+   surface so routine analyze has one training artifact.
+7. Implement version-10 artifact I/O, relational training/evaluation, automatic
+   chunk application, and base-only fallback for unsupported models.
+8. Pack and retrain the full `chunk_training5` corpus and promote the result as
+   the built-in `chunk100mics` model.
 
 Next:
 
-6. Analyze Joe's twelve datasets and promote a compact relational feature
-   schema based on grouped empirical evidence.
-7. Implement the versioned relational logistic learner, grouped evaluation,
-   and feature-ablation report.
-8. Implement `apply`, enforcing the artifact's channel and neighbourhood
-   policies.
-9. Validate the trained Stage 1 model on held-out projects. Add cross-fitted
+9. Validate the trained Stage 1 model on independent datasets. Add cross-fitted
    `neighbour_quality` only if the label-free model demonstrates held-out
    value.

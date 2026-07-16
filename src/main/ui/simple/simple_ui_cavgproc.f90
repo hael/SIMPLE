@@ -82,20 +82,15 @@ contains
         ! <empty>
         ! parameter input/output
         call model_cavgs_rejection%add_input(UI_PARM, quality_mode)
-        call model_cavgs_rejection%add_input(UI_PARM, model_family, gui_active_flags='quality_mode=learn')
         call model_cavgs_rejection%add_input(UI_PARM, quality_model, &
             gui_active_flags='quality_mode=apply|analyze|evaluate|promote')
         call model_cavgs_rejection%add_input(UI_PARM, quality_context, &
             gui_active_flags='quality_mode=apply|analyze|learn|evaluate|promote')
-        call model_cavgs_rejection%add_input(UI_PARM, 'relational_features', 'multi', &
-            'Relational feature analysis', &
-            'Optional pairwise class-average neighborhood analysis(none|corr_knn_v1){none}', &
-            '(none|corr_knn_v1){none}', .false., 'none', gui_active_flags='quality_mode=analyze')
         call model_cavgs_rejection%add_input(UI_PARM, prune)
         ! alternative inputs
         call model_cavgs_rejection%add_input(UI_ALT, 'filetab', 'file', 'Analysis file table', &
-        &'File table of cavgs_quality_analysis.txt files for quality_mode=learn|evaluate', &
-        &'e.g. cavgs_quality_analyses.txt', .false., '', gui_active_flags='quality_mode=learn|evaluate')
+        &'File table of canonical cavgs_quality_training.txt files for quality_mode=learn|evaluate', &
+        &'e.g. cavgs_quality_training_filetab.txt', .false., '', gui_active_flags='quality_mode=learn|evaluate')
         call model_cavgs_rejection%add_input(UI_ALT, 'infile', 'file', 'Quality model input', &
         &'Optional learned quality model file for apply/analyze/evaluate or promotion-code generation', &
         &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', &
@@ -104,23 +99,6 @@ contains
         &'Output quality model file, evaluation report, or promotion-code snippet for quality_mode=learn|evaluate|promote', &
         &'e.g. cavgs_quality_model_chunk_learned.txt, cavgs_quality_evaluate_report.txt, or cavgs_quality_model_builtin_code.txt', &
         &.false., '', gui_active_flags='quality_mode=learn|evaluate|promote')
-        ! search controls
-        call model_cavgs_rejection%add_input(UI_SRCH, 'relational_corr_trs', 'num', &
-            'Relational shift range', 'Maximum half-range for pairwise class-average shifts', &
-            'in pixels{10}', .false., 10.0, gui_active_flags='relational_features=corr_knn_v1')
-        call model_cavgs_rejection%add_input(UI_SRCH, 'relational_knn', 'num', &
-            'Relational neighbor count', 'Nearest-neighbor count for relational feature analysis', &
-            '# neighbors{5}', .false., 5.0, gui_active_flags='relational_features=corr_knn_v1')
-        call model_cavgs_rejection%add_input(UI_SRCH, 'relational_weight_tau', 'num', &
-            'Relational weight temperature', 'Softmax temperature for correlation-neighbor weights', &
-            'correlation units{0.05}', .false., 0.05, gui_active_flags='relational_features=corr_knn_v1')
-        ! filter controls
-        call model_cavgs_rejection%add_input(UI_FILT, 'relational_corr_hp', 'num', &
-            'Relational high-pass limit', 'High-pass limit for pairwise class-average correlations', &
-            'in Angstroms{100}', .false., 100.0, gui_active_flags='relational_features=corr_knn_v1')
-        call model_cavgs_rejection%add_input(UI_FILT, 'relational_corr_lp', 'num', &
-            'Relational low-pass limit', 'Low-pass limit for pairwise class-average correlations', &
-            'in Angstroms{15}', .false., 15.0, gui_active_flags='relational_features=corr_knn_v1')
         ! mask controls
         call model_cavgs_rejection%add_input(UI_MASK, mskdiam, gui_active_flags='quality_mode=apply|analyze|evaluate')
         ! computer controls

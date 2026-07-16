@@ -598,7 +598,8 @@ contains
         subroutine evaluate_quality
             cavg_imgs = read_cavgs_into_imgarr(spproj)
             if( size(cavg_imgs) /= ncls ) THROW_HARD('abinitio3D_cavgs_reject: # cavgs /= # cls2D entries')
-            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model)
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
+                relation_params=params)
             quality_scores      = quality%scores
             quality_auto_states = quality%states
             write(logfhandle,'(A,A)') '>>> CAVGS REJECT QUALITY MODEL         : ', trim(model%name)

@@ -11,7 +11,9 @@ use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_c
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CAVG_MODEL_FAMILY_LINEAR, &
     CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC, CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
+    CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
+use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME
 use simple_srch_sort_loc,      only: hpsort
 use simple_optimizer,          only: optimizer
 use simple_opt_factory,        only: opt_factory
@@ -76,6 +78,11 @@ type :: cavg_quality_logistic_problem
     integer :: n_interactions = 0
     integer :: linear_features(CAVG_QUALITY_NFEATS) = 0
     integer :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
+    logical :: has_relational = .false.
+    integer :: relational_knn = 0
+    real    :: relational_corr_hp = 0.0
+    real    :: relational_corr_lp = 0.0
+    real    :: relational_corr_trs = 0.0
     real(kind=8) :: lambda       = 0.0d0
     real(kind=8) :: total_weight = 0.0d0
     real(kind=8), allocatable :: design(:,:)
@@ -113,7 +120,7 @@ contains
         call validate_quality_context(context, 'learn_cavg_quality_model')
         select case(trim(requested_family))
         case('linear', CAVG_MODEL_FAMILY_LINEAR)
-            continue
+            THROW_HARD('new model training requires relational logistic input; linear presets are apply-only')
         case('logistic', CAVG_MODEL_FAMILY_PAIRWISE_LOGISTIC)
             call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname, &
                 trim(context))
@@ -208,6 +215,7 @@ contains
         real :: score, best_score, objective, best_objective, learn_score
         integer :: ipol, ilambda, ithresh, n_candidates
         call load_quality_training_datasets(analysis_files, dsets)
+        call require_relational_training_datasets(dsets)
         best_score      = -huge(1.0)
         best_objective  = huge(1.0)
         n_candidates    = 0
@@ -273,7 +281,14 @@ contains
                 problem%interaction_terms(problem%n_interactions,2) = problem%linear_features(jlinear)
             end do
         end do
-        problem%ndim = 1 + problem%n_linear + problem%n_interactions
+        problem%has_relational = allocated(dsets(1)%relational_feature)
+        if( problem%has_relational )then
+            problem%relational_knn      = dsets(1)%relational_knn
+            problem%relational_corr_hp  = dsets(1)%relational_corr_hp
+            problem%relational_corr_lp  = dsets(1)%relational_corr_lp
+            problem%relational_corr_trs = dsets(1)%relational_corr_trs
+        end if
+        problem%ndim = 1 + problem%n_linear + problem%n_interactions + merge(1, 0, problem%has_relational)
         problem%lambda = real(lambda, kind=8)
         problem%nobs = 0
         do ids = 1, size(dsets)
@@ -307,6 +322,8 @@ contains
                     problem%design(iobs, 1 + problem%n_linear + iterm) = &
                         real(dsets(ids)%features(irow, ifeat) * dsets(ids)%features(irow, jfeat), kind=8)
                 end do
+                if( problem%has_relational ) problem%design(iobs,problem%ndim) = &
+                    real(dsets(ids)%relational_feature(irow), kind=8)
                 if( dsets(ids)%manual_states(irow) > 0 )then
                     problem%labels(iobs)  = 1.0d0
                     problem%weights(iobs) = good_weight
@@ -435,6 +452,14 @@ contains
             spec%interaction_terms(iterm,:) = problem%interaction_terms(iterm,:)
             spec%interaction_coefficients(iterm) = real(solution(1 + problem%n_linear + iterm))
         end do
+        if( problem%has_relational )then
+            spec%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
+            spec%relational_knn             = problem%relational_knn
+            spec%relational_corr_hp         = problem%relational_corr_hp
+            spec%relational_corr_lp         = problem%relational_corr_lp
+            spec%relational_corr_trs        = problem%relational_corr_trs
+            spec%relational_coefficient     = real(solution(problem%ndim))
+        end if
         spec%prob_threshold          = 0.5
         spec%regularization_lambda   = real(problem%lambda)
         spec%calibration_temperature = 1.0
@@ -538,6 +563,11 @@ contains
         self%n_interactions    = 0
         self%linear_features   = 0
         self%interaction_terms = 0
+        self%has_relational     = .false.
+        self%relational_knn     = 0
+        self%relational_corr_hp = 0.0
+        self%relational_corr_lp = 0.0
+        self%relational_corr_trs = 0.0
         self%lambda            = 0.0d0
         self%total_weight      = 0.0d0
     end subroutine kill_logistic_problem
@@ -612,7 +642,34 @@ contains
         do i = 1, size(analysis_files)
             call read_quality_training_dataset(analysis_files(i)%to_char(), dsets(i))
         end do
+        call validate_training_dataset_schemas(dsets)
     end subroutine load_quality_training_datasets
+
+    subroutine validate_training_dataset_schemas( dsets )
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        integer :: i
+        do i = 2, size(dsets)
+            if( trim(dsets(i)%relational_feature_schema) /= trim(dsets(1)%relational_feature_schema) ) &
+                THROW_HARD('quality training files mix relational feature schemas')
+            if( dsets(i)%relational_knn /= dsets(1)%relational_knn ) &
+                THROW_HARD('quality training files mix relational neighbour counts')
+            if( abs(dsets(i)%relational_corr_hp - dsets(1)%relational_corr_hp) > EPS .or. &
+                abs(dsets(i)%relational_corr_lp - dsets(1)%relational_corr_lp) > EPS .or. &
+                abs(dsets(i)%relational_corr_trs - dsets(1)%relational_corr_trs) > EPS ) &
+                THROW_HARD('quality training files mix relational correlation policies')
+        end do
+    end subroutine validate_training_dataset_schemas
+
+    subroutine require_relational_training_datasets( dsets )
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        integer :: i
+        if( trim(dsets(1)%relational_feature_schema) /= CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1 ) &
+            THROW_HARD('pairwise logistic training requires relational_feature_schema=corr_knn_signal_v1')
+        do i = 1, size(dsets)
+            if( .not. allocated(dsets(i)%relational_feature) ) &
+                THROW_HARD('pairwise logistic training file is missing the promoted relational feature')
+        end do
+    end subroutine require_relational_training_datasets
 
     integer function n_otsu_grid_combinations()
         integer :: ilow, iwin, iomin, iomax
@@ -799,7 +856,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
         integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS)
-        integer :: dataset_col, hard_reject_col, manual_state_col
+        integer :: dataset_col, hard_reject_col, manual_state_col, relational_col
         logical :: have_feature_header
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
@@ -808,25 +865,30 @@ contains
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
+            call parse_training_metadata_line(line, dset)
             if( is_analysis_data_line(line) ) nrows = nrows + 1
         end do
         if( nrows == 0 ) THROW_HARD('read_quality_training_dataset: no class rows in '//trim(fname))
         allocate(dset%features(nrows, CAVG_QUALITY_NFEATS), source=0.0)
         allocate(dset%manual_states(nrows), source=0)
         allocate(dset%hard_reject(nrows), source=.false.)
+        if( trim(dset%relational_feature_schema) /= CAVG_RELATIONAL_SCHEMA_NONE ) &
+            allocate(dset%relational_feature(nrows), source=0.0)
         rewind(funit)
         irow = 0
         feat_col = 0
         dataset_col     = 0
         hard_reject_col = 0
         manual_state_col = 0
+        relational_col = 0
         have_feature_header = .false.
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
             if( is_analysis_header_line(line) )then
-                call map_analysis_columns(line, dataset_col, hard_reject_col, manual_state_col, feat_col)
-                call require_analysis_columns(dataset_col, hard_reject_col, manual_state_col, feat_col, trim(fname))
+                call map_analysis_columns(line, dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col)
+                call require_analysis_columns(dataset_col, hard_reject_col, manual_state_col, relational_col, &
+                    feat_col, dset%relational_feature_schema, trim(fname))
                 have_feature_header = .true.
                 cycle
             endif
@@ -845,10 +907,44 @@ contains
                 field = csv_field(line, feat_col(ifeat))
                 if( len_trim(field) > 0 ) dset%features(irow, ifeat) = str2real(trim(field))
             end do
+            if( allocated(dset%relational_feature) )then
+                field = csv_field(line, relational_col)
+                dset%relational_feature(irow) = str2real(trim(field))
+            end if
         end do
         dset%ncls = irow
         close(funit)
     end subroutine read_quality_training_dataset
+
+    subroutine parse_training_metadata_line( line, dset )
+        character(len=*),                    intent(in)    :: line
+        type(cavg_quality_training_dataset), intent(inout) :: dset
+        character(len=XLONGSTRLEN) :: tmp
+        character(len=64) :: key, value
+        integer :: ieq, ios
+        tmp = adjustl(line)
+        if( len_trim(tmp) < 4 .or. tmp(1:2) /= '# ' ) return
+        ieq = index(tmp, '=')
+        if( ieq < 4 ) return
+        key   = trim(adjustl(tmp(3:ieq-1)))
+        value = trim(adjustl(tmp(ieq+1:)))
+        select case(trim(key))
+        case('relational_feature_schema')
+            dset%relational_feature_schema = trim(value)
+        case('relational_knn')
+            read(value,*,iostat=ios) dset%relational_knn
+            if( ios /= 0 ) THROW_HARD('invalid relational_knn training metadata')
+        case('relational_corr_hp')
+            read(value,*,iostat=ios) dset%relational_corr_hp
+            if( ios /= 0 ) THROW_HARD('invalid relational_corr_hp training metadata')
+        case('relational_corr_lp')
+            read(value,*,iostat=ios) dset%relational_corr_lp
+            if( ios /= 0 ) THROW_HARD('invalid relational_corr_lp training metadata')
+        case('relational_corr_trs')
+            read(value,*,iostat=ios) dset%relational_corr_trs
+            if( ios /= 0 ) THROW_HARD('invalid relational_corr_trs training metadata')
+        end select
+    end subroutine parse_training_metadata_line
 
     logical function is_analysis_data_line( line )
         character(len=*), intent(in) :: line
@@ -868,9 +964,9 @@ contains
         is_analysis_header_line = index(tmp, 'dataset_id,') == 1
     end function is_analysis_header_line
 
-    subroutine map_analysis_columns( line, dataset_col, hard_reject_col, manual_state_col, feat_col )
+    subroutine map_analysis_columns( line, dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col )
         character(len=*), intent(in)  :: line
-        integer,          intent(out) :: dataset_col, hard_reject_col, manual_state_col
+        integer,          intent(out) :: dataset_col, hard_reject_col, manual_state_col, relational_col
         integer,          intent(out) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=LONGSTRLEN) :: field, name
         integer :: icol, ifeat
@@ -878,6 +974,7 @@ contains
         dataset_col = 0
         hard_reject_col = 0
         manual_state_col = 0
+        relational_col = 0
         do icol = 1, 512
             field = csv_field(line, icol)
             if( len_trim(field) == 0 ) exit
@@ -888,6 +985,8 @@ contains
                     hard_reject_col = icol
                 case('manual_state')
                     manual_state_col = icol
+                case('z_'//CAVG_RELATIONAL_FEATURE_NAME)
+                    relational_col = icol
             end select
             if( len_trim(field) < 3 ) cycle
             if( field(1:2) /= 'z_' ) cycle
@@ -901,10 +1000,11 @@ contains
         end do
     end subroutine map_analysis_columns
 
-    subroutine require_analysis_columns( dataset_col, hard_reject_col, manual_state_col, feat_col, fname )
-        integer,          intent(in) :: dataset_col, hard_reject_col, manual_state_col
+    subroutine require_analysis_columns( dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col, &
+                                         relational_schema, fname )
+        integer,          intent(in) :: dataset_col, hard_reject_col, manual_state_col, relational_col
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
-        character(len=*), intent(in) :: fname
+        character(len=*), intent(in) :: relational_schema, fname
         character(len=LONGSTRLEN) :: errmsg
         integer :: ifeat
         if( dataset_col == 0 ) THROW_HARD('read_quality_training_dataset: missing dataset_id column in '//trim(fname))
@@ -912,6 +1012,8 @@ contains
             THROW_HARD('read_quality_training_dataset: missing hard_reject column in '//trim(fname))
         if( manual_state_col == 0 ) &
             THROW_HARD('read_quality_training_dataset: missing manual_state column in '//trim(fname))
+        if( trim(relational_schema) /= CAVG_RELATIONAL_SCHEMA_NONE .and. relational_col == 0 ) &
+            THROW_HARD('read_quality_training_dataset: missing promoted relational feature in '//trim(fname))
         do ifeat = 1, CAVG_QUALITY_NFEATS
             if( feat_col(ifeat) == 0 )then
                 if( trim(cavg_quality_feature_family(ifeat)) == 'overfit' ) cycle
@@ -1279,20 +1381,6 @@ contains
         call quality%kill()
     end subroutine classify_training_dataset
 
-    ! Fast path: skip the heavy k-medoids / Otsu work and re-use a cache
-    ! that was built once per (feature policy, dataset) by the grid driver.
-    subroutine classify_training_dataset_cached( dset, cache, model, tp, fp, tn, fn )
-        type(cavg_quality_training_dataset), intent(in) :: dset
-        type(cavg_quality_classify_cache),   intent(in) :: cache
-        type(cavg_quality_model),            intent(in) :: model
-        integer,                             intent(out):: tp, fp, tn, fn
-        if( trim(model%model_family) == CAVG_MODEL_FAMILY_LINEAR )then
-            call cached_decision_confusion(cache, model, dset%manual_states, tp, fp, tn, fn)
-        else
-            call classify_training_dataset(dset, model, tp, fp, tn, fn)
-        endif
-    end subroutine classify_training_dataset_cached
-
     subroutine classify_training_dataset_cached_detail( dset, cache, model, quality, tp, fp, tn, fn )
         type(cavg_quality_training_dataset), intent(in)    :: dset
         type(cavg_quality_classify_cache),   intent(in)    :: cache
@@ -1333,7 +1421,13 @@ contains
         call quality%kill()
         quality%features    = dset%features
         quality%hard_reject = dset%hard_reject
-        call model%classify(quality)
+        if( model%supports_relational() )then
+            if( .not. allocated(dset%relational_feature) ) &
+                THROW_HARD('classify_training_dataset_detail: model requires relational feature')
+            call model%classify(quality, dset%relational_feature)
+        else
+            call model%classify(quality)
+        end if
         nfit = count_trainable_classes(dset)
         if( nfit == 0 )then
             tp = 0
@@ -1502,6 +1596,9 @@ contains
             write(funit,'(A,A,A,ES14.6)') 'logistic_coefficient,linear,', &
                 trim(cavg_quality_feature_name(ifeat)), ',,', model%linear_coefficients(ifeat)
         end do
+        if( model%supports_relational() ) write(funit,'(A,A,A,ES14.6)') &
+            'logistic_coefficient,relational,', CAVG_RELATIONAL_FEATURE_NAME, ',,', &
+            model%relational_coefficient
         do iterm = 1, model%n_interactions
             if( abs(model%interaction_coefficients(iterm)) <= EPS ) cycle
             write(funit,'(A,A,A,A,A,ES14.6)') 'logistic_coefficient,pairwise,', &
@@ -1597,6 +1694,14 @@ contains
             write(funit,'(A,ES14.6)') 'model_prob_threshold=', model%prob_threshold
             write(funit,'(A,ES14.6)') 'model_regularization_lambda=', model%regularization_lambda
             write(funit,'(A,ES14.6)') 'model_calibration_temperature=', model%calibration_temperature
+            write(funit,'(A,A)') 'model_relational_feature_schema=', trim(model%relational_feature_schema)
+            if( model%supports_relational() )then
+                write(funit,'(A,I0)') 'model_relational_knn=', model%relational_knn
+                write(funit,'(A,ES14.6)') 'model_relational_corr_hp=', model%relational_corr_hp
+                write(funit,'(A,ES14.6)') 'model_relational_corr_lp=', model%relational_corr_lp
+                write(funit,'(A,ES14.6)') 'model_relational_corr_trs=', model%relational_corr_trs
+                write(funit,'(A,ES14.6)') 'model_relational_coefficient=', model%relational_coefficient
+            end if
         endif
     end subroutine write_fixed_model_summary
 
@@ -2452,6 +2557,7 @@ contains
         integer :: i
         do i = 1, size(dsets)
             if( allocated(dsets(i)%features)      ) deallocate(dsets(i)%features)
+            if( allocated(dsets(i)%relational_feature) ) deallocate(dsets(i)%relational_feature)
             if( allocated(dsets(i)%manual_states) ) deallocate(dsets(i)%manual_states)
             if( allocated(dsets(i)%hard_reject)   ) deallocate(dsets(i)%hard_reject)
         end do
