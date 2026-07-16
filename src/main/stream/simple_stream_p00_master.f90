@@ -1,12 +1,28 @@
 !@descr: task 00 in the stream pipeline: master controller used when running from GUI
+!==============================================================================
+! MODULE: simple_stream_p00_master
+!
+! PURPOSE:
+!   Orchestrates the full stream pipeline from the GUI side. The master process
+!   launches stage workers, aggregates metadata from stage->master pipes,
+!   assembles heartbeat/progress payloads for NICE, and routes GUI updates back
+!   to workers via master->stage pipes.
+!
+! RESPONSIBILITIES:
+!   - Initialise stream stage command lines and metadata containers.
+!   - Create and manage IPC pipes for all stages.
+!   - Spawn/terminate/restart forked stage processes.
+!   - Run a metadata listener thread and merge framed pipe messages.
+!   - Poll NICE for control updates and broadcast framed update messages.
+!   - Perform orderly shutdown (thread join, pipe close, mutex cleanup).
+!==============================================================================
 module simple_stream_p00_master
 use unix
 use simple_syslib,                         only: symlink
 use simple_stream_api
-use simple_stream_mq_defs             
+use simple_stream_state             
 use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
 use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
-use simple_stream_p03_opening2D_new,       only: stream_p03_opening2D
 use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
 use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
@@ -38,10 +54,10 @@ type, extends(forked_process) :: assign_optics_fork
     procedure :: execute => xassign_optics
 end type assign_optics_fork
 
-type, extends(forked_process) :: opening2D_fork
+type, extends(forked_process) :: initial_analysis_fork
     contains
-    procedure :: execute => xopening2D
-end type opening2D_fork
+    procedure :: execute => xinitial_analysis
+end type initial_analysis_fork
 
 type, extends(forked_process) :: reference_picking_fork
     contains
@@ -57,6 +73,13 @@ type, extends(forked_process) :: pool2D_fork
     contains
     procedure :: execute => xpool2D
 end type pool2D_fork
+
+!================ STATE TYPES =================
+
+type pipe_rx_state
+    character(len=:), allocatable :: pending
+    integer                       :: expected_len = -1
+end type pipe_rx_state
 
 !=========================================================
 
@@ -74,6 +97,7 @@ contains
         class(preprocess_fork), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(stream_p01_preprocess)           :: commander
+        call close_child_pipe_fds(ipc_pipe_preprocess_in(2), ipc_pipe_preprocess_out(1))
         call commander%execute(cline)
     end subroutine xpreprocess
 
@@ -81,21 +105,23 @@ contains
         class(assign_optics_fork), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(stream_p02_assign_optics)           :: commander
+        call close_child_pipe_fds(ipc_pipe_assign_optics_in(2), ipc_pipe_assign_optics_out(1))
         call commander%execute(cline)
     end subroutine xassign_optics
 
-    subroutine xopening2D( self, cline )
-        class(opening2D_fork), intent(inout) :: self
+    subroutine xinitial_analysis( self, cline )
+        class(initial_analysis_fork), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-       ! type(stream_p03_opening2D)           :: commander
         type(stream_p03_initial_analysis)           :: commander
+        call close_child_pipe_fds(ipc_pipe_initial_analysis_in(2), ipc_pipe_initial_analysis_out(1))
         call commander%execute(cline)
-    end subroutine xopening2D
+    end subroutine xinitial_analysis
 
     subroutine xreference_picking( self, cline )
         class(reference_picking_fork), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(stream_p04_refpick_extract)             :: commander
+        call close_child_pipe_fds(ipc_pipe_refpick_in(2), ipc_pipe_refpick_out(1))
         call commander%execute(cline)
     end subroutine xreference_picking
  
@@ -103,6 +129,7 @@ contains
         class(particle_sieving_fork), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(stream_p05_sieve_cavgs)                :: commander
+        call close_child_pipe_fds(ipc_pipe_sieve_cavgs_in(2), ipc_pipe_sieve_cavgs_out(1))
         call commander%execute(cline)
     end subroutine xparticle_sieving  
 
@@ -110,12 +137,53 @@ contains
         class(pool2D_fork),   intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(stream_p06_pool2D)             :: commander
+        call close_child_pipe_fds(ipc_pipe_pool2D_in(2), ipc_pipe_pool2D_out(1))
         call commander%execute(cline)
     end subroutine xpool2D   
+
+    subroutine close_child_pipe_fds( keep_fd, keep_fd2 )
+        integer, intent(in)           :: keep_fd
+        integer, intent(in), optional :: keep_fd2
+        call close_pipe_except_fd(ipc_pipe_preprocess_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_preprocess_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_assign_optics_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_assign_optics_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_initial_analysis_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_initial_analysis_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_refpick_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_refpick_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_sieve_cavgs_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_sieve_cavgs_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_pool2D_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_pool2D_out, keep_fd, keep_fd2)
+    end subroutine close_child_pipe_fds
+
+    subroutine close_pipe_except_fd(pipe, keep_fd, keep_fd2)
+        integer, intent(inout) :: pipe(2)
+        integer, intent(in)    :: keep_fd
+        integer, intent(in), optional :: keep_fd2
+
+        if( pipe(1) >= 0 .and. pipe(1) /= keep_fd ) then
+            if( .not.(present(keep_fd2) .and. pipe(1) == keep_fd2) ) call close_fd_silent(pipe(1))
+        endif
+        if( pipe(2) >= 0 .and. pipe(2) /= keep_fd ) then
+            if( .not.(present(keep_fd2) .and. pipe(2) == keep_fd2) ) call close_fd_silent(pipe(2))
+        endif
+    end subroutine close_pipe_except_fd
+
+    subroutine close_fd_silent(fd)
+        integer, intent(inout) :: fd
+            integer                :: rc_close
+
+        if( fd < 0 ) return
+            rc_close = c_close(fd)
+        fd = -1
+    end subroutine close_fd_silent
 
     subroutine exec_stream_p00_master( self, cline )
         class(stream_p00_master), intent(inout)    :: self
         class(cmdline),           intent(inout)    :: cline
+        integer, parameter                        :: N_STREAM_PIPES = 6
         type(parameters)                           :: params
         type(cmdline)                              :: cline_preprocess, cline_assign_optics
         type(cmdline)                              :: cline_opening2D, cline_reference_picking
@@ -149,7 +217,7 @@ contains
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
         type(assign_optics_fork)                   :: fork_assign_optics
-        type(opening2D_fork)                       :: fork_opening2D
+        type(initial_analysis_fork)                :: fork_initial_analysis
         type(reference_picking_fork)               :: fork_reference_picking
         type(particle_sieving_fork)                :: fork_particle_sieving
         type(pool2D_fork)                          :: fork_pool2D
@@ -164,6 +232,7 @@ contains
         logical                                    :: l_existing_pickrefs, l_existing_box, l_existing_preprocess
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         real(kind=dp)                              :: r_val
+        type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
         ! check cline arguments 
         l_existing_pickrefs   = .false.
         l_existing_box        = .false.
@@ -205,12 +274,21 @@ contains
         call init_cline_reference_picking()
         call init_cline_particle_sieving()
         call init_cline_pool2D()
-        ! create message queues
+        ! create ipc pipes
         max_msgsize = max_metadata_size()
-        call mq_stream_master_in%new(name=string('stream_master_in'), max_msgsize=max_msgsize)
-        if( .not.mq_stream_master_in%is_active() ) THROW_HARD('failed to create stream_master_in message queue')
-        call mq_stream_master_out%new(name=string('stream_master_out'), max_msgsize=max_msgsize)
-        if( .not.mq_stream_master_out%is_active() ) THROW_HARD('failed to create stream_master_out message queue')
+        write(logfhandle, *)"Max metadata size: ", max_msgsize
+        call init_ipc_pipe(ipc_pipe_preprocess_in)
+        call init_ipc_pipe(ipc_pipe_preprocess_out)
+        call init_ipc_pipe(ipc_pipe_assign_optics_in)
+        call init_ipc_pipe(ipc_pipe_assign_optics_out)
+        call init_ipc_pipe(ipc_pipe_initial_analysis_in)
+        call init_ipc_pipe(ipc_pipe_initial_analysis_out)
+        call init_ipc_pipe(ipc_pipe_refpick_in)
+        call init_ipc_pipe(ipc_pipe_refpick_out)
+        call init_ipc_pipe(ipc_pipe_sieve_cavgs_in)
+        call init_ipc_pipe(ipc_pipe_sieve_cavgs_out)
+        call init_ipc_pipe(ipc_pipe_pool2D_in)
+        call init_ipc_pipe(ipc_pipe_pool2D_out)
         ! spawn metadata listener thread
         stat = c_pthread_create(thread        = meta_listener_thread, &
                                 attr          = c_null_ptr, &
@@ -230,9 +308,9 @@ contains
         call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
         call fork_pool2D%start(           name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D,           restart=.false.)
         if( l_existing_pickrefs ) then
-            call fork_opening2D%skip()
+            call fork_initial_analysis%skip()
         else
-            call fork_opening2D%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D, restart=.false.)
+            call fork_initial_analysis%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'), cline=cline_opening2D, restart=.false.)
         endif
         ! test stream processes started successfully
         if( .not. l_existing_preprocess ) then
@@ -243,7 +321,7 @@ contains
         if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()            /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D'           )
         if( .not. l_existing_pickrefs ) then
-           if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
+           if( fork_initial_analysis%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
         endif
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)
@@ -251,7 +329,7 @@ contains
         ! main loop
         do while( .true. )
             ! heartbeat
-            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking, fork_particle_sieving, fork_pool2D)
+            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D)
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
@@ -293,7 +371,7 @@ contains
                         endif
                         call json%get(json_response_ptr, 'terminate_opening2D', l_test, l_found)
                         if( l_found .and. l_test ) then
-                            if( fork_opening2D%status() == FORK_STATUS_RUNNING ) call fork_opening2D%terminate()
+                            if( fork_initial_analysis%status() == FORK_STATUS_RUNNING ) call fork_initial_analysis%terminate()
                         endif
                         call json%get(json_response_ptr, 'terminate_reference_picking', l_test, l_found)
                         if( l_found .and. l_test ) then
@@ -322,8 +400,8 @@ contains
                         endif
                         call json%get(json_response_ptr, 'restart_opening2D', l_test, l_found)
                         if( l_found .and. l_test ) then
-                            if( fork_opening2D%status() /= FORK_STATUS_RUNNING ) then
-                                call fork_opening2D%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'),  cline=cline_opening2D, restart=.true.)
+                            if( fork_initial_analysis%status() /= FORK_STATUS_RUNNING ) then
+                                call fork_initial_analysis%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'),  cline=cline_opening2D, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_reference_picking', l_test, l_found)
@@ -344,19 +422,12 @@ contains
                                 call fork_pool2D%start(name=string(CLASS2D_JOB_NAME), logfile=string(CLASS2D_JOB_NAME//'.log'),  cline=cline_pool2D, restart=.true.)
                             endif
                         endif
-                        ! wait to get update message from outbound queue and destroy
-                        if( mq_stream_master_out%is_active() ) then
-                            if( mq_stream_master_out%receive_timed(meta_buffer, 1) ) then
-                                write(logfhandle, *) "GOT EXISTING UPDATE"
-                                if( allocated(meta_buffer) ) deallocate(meta_buffer)
-                            endif
-                        endif
-                        ! add update message from outbound message queue 
+                        ! gather update payload from HTTP response
                         call json%get(json_response_ptr, 'ctfresthreshold', r_val, l_found)
                         if(l_found) call meta_update%set_ctfres_update(real(r_val))
-                        call json%get(json_response_ptr, 'astigmatism', r_val, l_found)
+                        call json%get(json_response_ptr, 'astigthreshold', r_val, l_found)
                         if(l_found) call meta_update%set_astigmatism_update(real(r_val))
-                        call json%get(json_response_ptr, 'icescore', r_val, l_found)
+                        call json%get(json_response_ptr, 'icefracthreshold', r_val, l_found)
                         if(l_found) call meta_update%set_icescore_update(real(r_val))
                         call json%get(json_response_ptr, 'increase_nmics', i_val, l_found)
                         if(l_found) call meta_update%set_increase_nmics(i_val)
@@ -384,10 +455,9 @@ contains
                             if( allocated(i_arr)   ) deallocate(i_arr)
                             nullify(json_child_ptr)
                         end if
-                        if( meta_update%assigned() .and. mq_stream_master_out%is_active() ) then
-                            write(logfhandle, *) "SEND UPDATE"
+                        if( meta_update%assigned() ) then
                             call meta_update%serialise(meta_buffer)
-                            call mq_stream_master_out%send(meta_buffer)
+                            call send_update_to_stage_pipes(meta_buffer)
                         endif
                         if(allocated(i_arr)) deallocate(i_arr)
                     endif
@@ -406,7 +476,7 @@ contains
                 ! send sigterm to all running forked processes
                 if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) call fork_preprocess%terminate()
                 if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call fork_assign_optics%terminate()
-                if( fork_opening2D%status()         == FORK_STATUS_RUNNING ) call fork_opening2D%terminate()
+                if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call fork_initial_analysis%terminate()
                 if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
                 if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call fork_particle_sieving%terminate()
                 if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
@@ -414,7 +484,7 @@ contains
                 ! if processes are still running set last_loop back to false
                 if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_opening2D%status()         == FORK_STATUS_RUNNING ) l_last_loop = .false.
+                if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) l_last_loop = .false.
                 if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) l_last_loop = .false.
@@ -436,9 +506,19 @@ contains
         call qsys%kill()
         call post%kill()
         call assembler%kill()
-        ! kill message queue
-        if( mq_stream_master_in%is_active() )  call mq_stream_master_in%kill()
-        if( mq_stream_master_out%is_active() ) call mq_stream_master_out%kill()
+        ! close IPC pipes
+        call kill_ipc_pipe(ipc_pipe_preprocess_in)
+        call kill_ipc_pipe(ipc_pipe_preprocess_out)
+        call kill_ipc_pipe(ipc_pipe_assign_optics_in)
+        call kill_ipc_pipe(ipc_pipe_assign_optics_out)
+        call kill_ipc_pipe(ipc_pipe_initial_analysis_in)
+        call kill_ipc_pipe(ipc_pipe_initial_analysis_out)
+        call kill_ipc_pipe(ipc_pipe_refpick_in)
+        call kill_ipc_pipe(ipc_pipe_refpick_out)
+        call kill_ipc_pipe(ipc_pipe_sieve_cavgs_in)
+        call kill_ipc_pipe(ipc_pipe_sieve_cavgs_out)
+        call kill_ipc_pipe(ipc_pipe_pool2D_in)
+        call kill_ipc_pipe(ipc_pipe_pool2D_out)
         ! destroy mutexes
         if( c_pthread_mutex_destroy(meta_mutex)      /= 0) THROW_WARN('failed to destroy metadata mutex' )
         if( c_pthread_mutex_destroy(terminate_mutex) /= 0) THROW_WARN('failed to destroy terminate mutex')
@@ -465,17 +545,16 @@ contains
         end subroutine sigint_handler
 
         subroutine metadata_listener()
+            character(len=:),   allocatable :: my_buffer
             type(gui_metadata_micrograph)   :: meta_mic_tmp
             type(gui_metadata_optics_group) :: meta_optics_group_tmp
-            type(gui_metadata_cavg2D)       :: meta_cavg2D_tmp
-            character(len=:), allocatable :: my_buffer
-            integer                       :: my_rc, my_buffer_type, my_i
-            logical                       :: my_l_continue, my_l_reinit
+            type(gui_metadata_cavg2D)       :: meta_cavg2D_tmp 
+            integer                         :: my_rc, my_buffer_type, my_i
+            logical                         :: my_l_continue, my_l_reinit
             my_l_continue = .true.
             do while( my_l_continue )
                 my_rc = c_pthread_mutex_lock(meta_mutex)
-                if( mq_stream_master_in%is_active() ) then
-                    do while( mq_stream_master_in%receive(my_buffer) )
+                do while( read_any_pipe_message(my_buffer) )
                         if( allocated(my_buffer) ) then
                             my_buffer_type = transfer(my_buffer, my_buffer_type)
                             select case(my_buffer_type)
@@ -705,7 +784,6 @@ contains
                             deallocate(my_buffer)
                         end if
                     end do
-                end if
                 my_rc = c_pthread_mutex_unlock(meta_mutex)
                 if( c_pthread_mutex_lock(terminate_mutex) /= 0 ) THROW_HARD('failed to lock terminate mutex')
                 if( l_terminate ) my_l_continue = .false.
@@ -714,6 +792,110 @@ contains
                 rc = c_usleep(10000)
             end do
         end subroutine metadata_listener
+
+        logical function read_any_pipe_message(buffer)
+            character(len=:), allocatable, intent(inout) :: buffer
+            character(kind=c_char), target               :: raw(max_msgsize)
+            integer                                      :: ipipe
+            integer                                      :: pipe_fds(N_STREAM_PIPES)
+
+            read_any_pipe_message = .false.
+            if( allocated(buffer) ) deallocate(buffer)
+
+            pipe_fds = [ipc_pipe_preprocess_in(1),    &
+                        ipc_pipe_assign_optics_in(1), &
+                        ipc_pipe_initial_analysis_in(1), &
+                        ipc_pipe_refpick_in(1),       &
+                        ipc_pipe_sieve_cavgs_in(1),   &
+                        ipc_pipe_pool2D_in(1)]
+
+            ! First, emit any fully assembled frame already buffered.
+            do ipipe = 1, N_STREAM_PIPES
+                call try_extract_framed_message(rx_state(ipipe), buffer, read_any_pipe_message)
+                if( read_any_pipe_message ) return
+            end do
+
+            do ipipe = 1, N_STREAM_PIPES
+                call try_read_from_fd(pipe_fds(ipipe), raw, rx_state(ipipe), buffer, read_any_pipe_message)
+                if( read_any_pipe_message ) return
+            end do
+
+        end function read_any_pipe_message
+
+        subroutine try_read_from_fd(fd, raw, state, buffer, got_message)
+            integer, intent(in)                           :: fd
+            character(kind=c_char), target, intent(inout) :: raw(:)
+            type(pipe_rx_state), intent(inout)            :: state
+            character(len=:), allocatable, intent(inout)  :: buffer
+            logical, intent(inout)                        :: got_message
+            integer                                       :: nread, i
+            character(len=:), allocatable                 :: chunk
+
+            if( fd < 0 .or. got_message ) return
+            nread = c_read(fd, c_loc(raw(1)), int(size(raw), c_size_t))
+            if( nread > 0 ) then
+                allocate(character(len=nread) :: chunk)
+                do i = 1, nread
+                    chunk(i:i) = transfer(raw(i), 'a')
+                end do
+                call append_pending(state, chunk)
+            endif
+            call try_extract_framed_message(state, buffer, got_message)
+        end subroutine try_read_from_fd
+
+        subroutine append_pending(state, chunk)
+            type(pipe_rx_state), intent(inout) :: state
+            character(len=*), intent(in)       :: chunk
+
+            if( len(chunk) <= 0 ) return
+            if( allocated(state%pending) ) then
+                state%pending = state%pending // chunk
+            else
+                allocate(character(len=len(chunk)) :: state%pending)
+                state%pending = chunk
+            endif
+        end subroutine append_pending
+
+        subroutine try_extract_framed_message(state, buffer, got_message)
+            type(pipe_rx_state), intent(inout)           :: state
+            character(len=:), allocatable, intent(inout) :: buffer
+            logical, intent(inout)                       :: got_message
+            integer(c_int), target                       :: msg_len_c
+            integer                                      :: header_bytes
+
+            if( got_message ) return
+            header_bytes = sizeof(msg_len_c)
+
+            if( state%expected_len < 0 ) then
+                if( .not. allocated(state%pending) ) return
+                if( len(state%pending) < header_bytes ) return
+                msg_len_c = transfer(state%pending(1:header_bytes), msg_len_c)
+                state%expected_len = int(msg_len_c)
+                if( state%expected_len <= 0 .or. state%expected_len > max_msgsize ) then
+                    THROW_HARD('invalid framed metadata length read from stream pipe')
+                endif
+                if( len(state%pending) == header_bytes ) then
+                    deallocate(state%pending)
+                else
+                    state%pending = state%pending(header_bytes + 1:)
+                endif
+            endif
+
+            if( .not. allocated(state%pending) ) return
+            if( len(state%pending) < state%expected_len ) return
+
+            if( allocated(buffer) ) deallocate(buffer)
+            allocate(character(len=state%expected_len) :: buffer)
+            buffer = state%pending(1:state%expected_len)
+
+            if( len(state%pending) == state%expected_len ) then
+                deallocate(state%pending)
+            else
+                state%pending = state%pending(state%expected_len + 1:)
+            endif
+            state%expected_len = -1
+            got_message = .true.
+        end subroutine try_extract_framed_message
 
         subroutine init_cline_preprocess()
             cline_preprocess = cline
@@ -867,6 +1049,109 @@ contains
             call meta_pool2D_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
             if( .not.meta_pool2D_snapshot%initialized() ) THROW_HARD('failed to initialise pool2D snapshot metadata')
         end subroutine init_metadata_pool2D
+
+        subroutine init_ipc_pipe( pipe )
+            integer, intent(inout) :: pipe(2)
+            integer :: rc_pipe, flags
+            rc_pipe = c_pipe(pipe)
+            if( rc_pipe /= 0 ) THROW_HARD('failed to create IPC pipe')
+            ! Keep both ends open across forks; stage processes write to *_in(2),
+            ! and master listener reads from *_in(1).
+            flags = c_fcntl(pipe(1), F_GETFL, 0)
+            if( flags < 0 ) THROW_HARD('failed to get IPC pipe read-end flags')
+            rc_pipe = c_fcntl(pipe(1), F_SETFL, ior(flags, O_NONBLOCK))
+            if( rc_pipe < 0 ) THROW_HARD('failed to set IPC pipe read-end non-blocking mode')
+            flags = c_fcntl(pipe(2), F_GETFL, 0)
+            if( flags < 0 ) THROW_HARD('failed to get IPC pipe write-end flags')
+            rc_pipe = c_fcntl(pipe(2), F_SETFL, ior(flags, O_NONBLOCK))
+            if( rc_pipe < 0 ) THROW_HARD('failed to set IPC pipe write-end non-blocking mode')
+        end subroutine init_ipc_pipe
+
+        subroutine kill_ipc_pipe( pipe )
+            integer, intent(inout) :: pipe(2)
+            integer :: rc_close
+
+            if( pipe(1) >= 0 ) then
+                rc_close = c_close(pipe(1))
+                if( rc_close /= 0 ) THROW_WARN('failed to close IPC pipe read-end')
+                pipe(1) = -1
+            endif
+            if( pipe(2) >= 0 ) then
+                rc_close = c_close(pipe(2))
+                if( rc_close /= 0 ) THROW_WARN('failed to close IPC pipe write-end')
+                pipe(2) = -1
+            endif
+        end subroutine kill_ipc_pipe
+
+        subroutine send_update_to_stage_pipes(buffer)
+            character(len=*), intent(in) :: buffer
+            call send_framed_to_pipe(ipc_pipe_preprocess_out(2), buffer)
+            call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer)
+            call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer)
+            call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer)
+            call send_framed_to_pipe(ipc_pipe_sieve_cavgs_out(2), buffer)
+            call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer)
+        end subroutine send_update_to_stage_pipes
+
+        subroutine send_framed_to_pipe(fd, buffer)
+            integer, intent(in)                          :: fd
+            character(len=*), intent(in)                 :: buffer
+            character(len=:), allocatable                :: framed
+            character(kind=c_char), allocatable, target  :: cbuf(:)
+            integer(c_int), target                       :: msg_len
+            integer(c_int)                               :: nwritten
+            integer                                      :: nbytes, header_bytes, framed_nbytes
+            integer                                      :: sent, retry_count, rc_sleep, err_no, ich
+            integer, parameter                           :: MAX_RETRIES = 200
+            integer, parameter                           :: RETRY_SLEEP_US = 10000
+
+            if( fd < 0 ) return
+            nbytes = len(buffer)
+            if( nbytes <= 0 ) return
+
+            msg_len = int(nbytes, c_int)
+            header_bytes = sizeof(msg_len)
+            framed_nbytes = header_bytes + nbytes
+            allocate(character(len=framed_nbytes) :: framed)
+            framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+            framed(header_bytes + 1:) = buffer
+
+            allocate(cbuf(framed_nbytes))
+            do ich = 1, framed_nbytes
+                cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+            end do
+
+            sent = 0
+            retry_count = 0
+            do while( sent < framed_nbytes )
+                nwritten = c_write(fd, c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                if( nwritten > 0 ) then
+                    sent = sent + int(nwritten)
+                    retry_count = 0
+                    cycle
+                endif
+
+                err_no = ierrno()
+                if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                    retry_count = retry_count + 1
+                    if( retry_count > MAX_RETRIES ) then
+                        THROW_WARN('failed to send framed update to stream pipe: retry limit exceeded')
+                        exit
+                    endif
+                    rc_sleep = c_usleep(RETRY_SLEEP_US)
+                    cycle
+                endif
+
+                if( err_no == int(EPIPE) .or. err_no == int(EBADF) ) then
+                    THROW_WARN('failed to send framed update to stream pipe: no active reader')
+                else
+                    THROW_WARN('failed to send framed update to stream pipe')
+                endif
+                exit
+            end do
+
+            if( allocated(cbuf) ) deallocate(cbuf)
+        end subroutine send_framed_to_pipe
 
     end subroutine exec_stream_p00_master
 

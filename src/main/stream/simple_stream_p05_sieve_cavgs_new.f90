@@ -40,12 +40,13 @@
 !==============================================================================
 module simple_stream_p05_sieve_cavgs_new
 use simple_stream_api
-use unix,                        only: SIGTERM
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK
+use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_fileio,               only: read_filetable
 use simple_ptcl_sieve,           only: ptcl_sieve, DEFAULT_COARSE_POP_THRESHOLD, DEFAULT_FINE_POP_THRESHOLD, &
                                       DEFAULT_COARSE_BOX, DEFAULT_FINE_BOX, DEFAULT_COARSE_NSAMPLE, DEFAULT_FINE_NSAMPLE, &
                                       DEFAULT_LPSTART, DEFAULT_COARSE_LP, DEFAULT_FINE_LP, DEFAULT_NCLS
-use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
+use simple_stream_state,         only: ipc_pipe_sieve_cavgs_in, ipc_pipe_sieve_cavgs_out
 use simple_stream_pool2D_utils,  only: set_lpthres_type
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                                    &
                                        gui_metadata_stream_particle_sieving,                   &
@@ -233,9 +234,9 @@ contains
                     if( jpeg_selection(i) /= 0 ) call meta_particle_sieving%set_selection(jpeg_inds(i))
                 end do
             endif
-            if( meta_particle_sieving%assigned() .and. mq_stream_master_in%is_active() ) then
+            if( meta_particle_sieving%assigned() ) then
                 call meta_particle_sieving%serialise(meta_buffer)
-                call mq_stream_master_in%send(meta_buffer)
+                call send_to_sieve_cavgs_in_pipe(meta_buffer)
             endif
         end subroutine send_meta
 
@@ -271,9 +272,9 @@ contains
                                 y = y_sprite,                        &
                                 h = 100 * ytiles,                    &
                                 w = 100 * xtiles))
-            if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
+            if( meta_cavg2D%assigned() ) then
                 call meta_cavg2D%serialise(meta_buffer)
-                call mq_stream_master_in%send(meta_buffer)
+                call send_to_sieve_cavgs_in_pipe(meta_buffer)
             endif
         end subroutine send_cavg2D_meta
 
@@ -295,6 +296,59 @@ contains
                 endif
             end do
         end subroutine send_cavgs2D_batch
+
+        subroutine send_to_sieve_cavgs_in_pipe(buffer)
+            character(len=*), intent(in)                :: buffer
+            character(len=:), allocatable               :: framed
+            character(kind=c_char), allocatable, target :: cbuf(:)
+            integer(c_int)                              :: nwritten
+            integer(c_int), target                      :: msg_len
+            integer                                     :: err_no
+            integer                                     :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+            integer, parameter                          :: MAX_RETRIES = 200
+            integer, parameter                          :: RETRY_SLEEP_US = 10000
+
+            if( ipc_pipe_sieve_cavgs_in(2) < 0 ) return
+            nbytes = len(buffer)
+            if( nbytes <= 0 ) return
+
+            msg_len = int(nbytes, c_int)
+            header_bytes = sizeof(msg_len)
+            framed_nbytes = header_bytes + nbytes
+            allocate(character(len=framed_nbytes) :: framed)
+            framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+            framed(header_bytes + 1:) = buffer
+
+            allocate(cbuf(framed_nbytes))
+            do ich = 1, framed_nbytes
+                cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+            end do
+
+            sent = 0
+            retry_count = 0
+            do while( sent < framed_nbytes )
+                nwritten = c_write(ipc_pipe_sieve_cavgs_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                if( nwritten > 0 ) then
+                    sent = sent + int(nwritten)
+                    retry_count = 0
+                    cycle
+                end if
+
+                err_no = ierrno()
+                if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                    retry_count = retry_count + 1
+                    if( retry_count > MAX_RETRIES ) then
+                        THROW_HARD('failed to write sieve_cavgs metadata to ipc_pipe_sieve_cavgs_in: retry limit exceeded')
+                    end if
+                    rc_sleep = c_usleep(RETRY_SLEEP_US)
+                    cycle
+                end if
+
+                THROW_HARD('failed to write sieve_cavgs metadata to ipc_pipe_sieve_cavgs_in')
+            end do
+
+            if( allocated(cbuf) ) deallocate(cbuf)
+        end subroutine send_to_sieve_cavgs_in_pipe
         
         ! Called asynchronously on SIGTERM. Exits immediately after logging.
         subroutine sigterm_handler()

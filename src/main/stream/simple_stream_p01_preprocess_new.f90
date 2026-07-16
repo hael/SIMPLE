@@ -1,8 +1,30 @@
 !@descr: task 1 in the stream pipeline: pre-processing (movie registration, CTF estimation, segmentation-based picking)
+!==============================================================================
+! MODULE: simple_stream_p01_preprocess_new
+!
+! PURPOSE:
+!   Implements stream pipeline stage 1 preprocessing. The stage watches for
+!   incoming movie sets, runs motion correction and CTF estimation, performs
+!   segmentation-based picking, and emits preprocessing metadata for GUI
+!   dashboards (micrographs, histograms, and timeplots).
+!
+! ENTRY POINT:
+!   stream_p01_preprocess%execute(cline)
+!
+! GUI MESSAGING:
+!   - Sends stage metadata to master via ipc_pipe_preprocess_in.
+!   - Receives user updates from master via ipc_pipe_preprocess_out.
+!
+! DEPENDENCIES:
+!   simple_stream_api, simple_stream_state, simple_gui_metadata_api,
+!   simple_motion_correct_utils, simple_histogram
+!==============================================================================
 module simple_stream_p01_preprocess_new
-use unix,                        only: SIGTERM
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, c_read
+use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
-use simple_stream_mq_defs
+use simple_stream_state
+use simple_gui_metadata_utils,   only: max_metadata_size
 use simple_gui_metadata_api
 use simple_motion_correct_utils, only: flip_gain
 use simple_histogram,            only: histogram
@@ -45,13 +67,16 @@ contains
         real                                 :: average_ctfres, average_astig, average_icefrac, ave, sdev, var
         logical                              :: err
         integer                              :: fromto(2)
+        character(len=:),        allocatable :: update_pending
         character(len=STDLEN)                :: preproc_nthr_env, preproc_part_env, preproc_nparts_env
         real                                 :: stat_dfx_threshold, stat_dfy_threshold
         real                                 :: stat_astig_threshold, stat_icefrac_threshold, stat_ctfres_threshold
         integer                              :: movies_set_counter, import_counter, nwaits, nmovs2importperiter
         integer                              :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i, j, i_thumb, i_max
         integer                              :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset, envlen
+        integer                              :: update_expected_len
         logical                              :: l_movies_left, l_haschanged, l_restart, SJ_directory_structure, l_dir_found, l_terminate
+        update_expected_len = -1
         l_terminate=.false.
         call signal(SIGTERM, sigterm_handler)
         call cline%set('oritype',     'mic')
@@ -288,10 +313,8 @@ contains
                     end do
                     call meta_preprocess_histogram_ctfres%set(name=string('ctfres'), labels=histogram_rvec, data=histogram_ivec)
                     if( meta_preprocess%assigned() ) then
-                        if( mq_stream_master_in%is_active() ) then
-                            call meta_preprocess_histogram_ctfres%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
-                        endif
+                        call meta_preprocess_histogram_ctfres%serialise(meta_buffer)
+                        call send_to_preprocess_in_pipe(meta_buffer)
                     endif
                     deallocate(histogram_rvec, histogram_ivec)
                     binsize = 500
@@ -308,10 +331,8 @@ contains
                     enddo
                     call meta_preprocess_timeplot_ctfres%set(name=string('ctfres'), labels=histogram_rvec, data=histogram_rvec2, data2=histogram_rvec3)
                     if( meta_preprocess%assigned() ) then
-                        if( mq_stream_master_in%is_active() ) then
-                            call meta_preprocess_timeplot_ctfres%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
-                        endif
+                        call meta_preprocess_timeplot_ctfres%serialise(meta_buffer)
+                        call send_to_preprocess_in_pipe(meta_buffer)
                     endif
                     deallocate(histogram_rvec, histogram_rvec2, histogram_rvec3)
                 endif
@@ -329,10 +350,8 @@ contains
                     end do
                     call meta_preprocess_histogram_icefrac%set(name=string('icefrac'), labels=histogram_rvec, data=histogram_ivec)
                     if( meta_preprocess%assigned() ) then
-                        if( mq_stream_master_in%is_active() ) then
-                            call meta_preprocess_histogram_icefrac%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
-                        endif
+                        call meta_preprocess_histogram_icefrac%serialise(meta_buffer)
+                        call send_to_preprocess_in_pipe(meta_buffer)
                     endif
                     deallocate(histogram_rvec, histogram_ivec)
                 endif
@@ -350,10 +369,8 @@ contains
                     end do
                     call meta_preprocess_histogram_astig%set(name=string('astig'), labels=histogram_rvec, data=histogram_ivec)
                     if( meta_preprocess%assigned() ) then
-                        if( mq_stream_master_in%is_active() ) then
-                            call meta_preprocess_histogram_astig%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
-                        endif
+                        call meta_preprocess_histogram_astig%serialise(meta_buffer)
+                        call send_to_preprocess_in_pipe(meta_buffer)
                     endif
                     deallocate(histogram_rvec, histogram_ivec)
                     binsize = 500
@@ -370,10 +387,8 @@ contains
                     enddo
                     call meta_preprocess_timeplot_astig%set(name=string('astig'), labels=histogram_rvec, data=histogram_rvec2, data2=histogram_rvec3)
                     if( meta_preprocess%assigned() ) then
-                        if( mq_stream_master_in%is_active() ) then
-                            call meta_preprocess_timeplot_astig%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
-                        endif
+                        call meta_preprocess_timeplot_astig%serialise(meta_buffer)
+                        call send_to_preprocess_in_pipe(meta_buffer)
                     endif
                     deallocate(histogram_rvec, histogram_rvec2, histogram_rvec3)
                 endif
@@ -392,10 +407,8 @@ contains
                 enddo
                 call meta_preprocess_timeplot_df%set(name=string('df'), labels=histogram_rvec, data=histogram_rvec2, data2=histogram_rvec3)
                 if( meta_preprocess%assigned() ) then
-                    if( mq_stream_master_in%is_active() ) then
-                        call meta_preprocess_timeplot_df%serialise(meta_buffer)
-                        call mq_stream_master_in%send(meta_buffer)
-                    endif
+                    call meta_preprocess_timeplot_df%serialise(meta_buffer)
+                    call send_to_preprocess_in_pipe(meta_buffer)
                 endif
                 deallocate(histogram_rvec, histogram_rvec2, histogram_rvec3)
                 ! rate timeplot
@@ -407,10 +420,8 @@ contains
                 enddo
                 call meta_preprocess_timeplot_rate%set(name=string('rate'), labels=histogram_rvec, data=histogram_rvec2, data2=histogram_rvec3)
                 if( meta_preprocess%assigned() ) then
-                    if( mq_stream_master_in%is_active() ) then
-                        call meta_preprocess_timeplot_rate%serialise(meta_buffer)
-                        call mq_stream_master_in%send(meta_buffer)
-                    endif
+                    call meta_preprocess_timeplot_rate%serialise(meta_buffer)
+                    call send_to_preprocess_in_pipe(meta_buffer)
                 endif
                 deallocate(histogram_rvec, histogram_rvec2)
 
@@ -424,9 +435,9 @@ contains
                                                             ctfres=spproj_glob%os_mic%get(i_thumb,    "ctfres"),&
                                                             i_max =i_max                                       ,&
                                                             i     =iori                                       )
-                        if( meta_preprocess_micrograph%assigned() .and. mq_stream_master_in%is_active() ) then
+                        if( meta_preprocess_micrograph%assigned() ) then
                             call meta_preprocess_micrograph%serialise(meta_buffer)
-                            call mq_stream_master_in%send(meta_buffer)
+                            call send_to_preprocess_in_pipe(meta_buffer)
                         endif
                     end do
                 end if
@@ -480,40 +491,33 @@ contains
                                      cutoff_ice_score    = params%icefracthreshold,                                                                   & 
                                      cutoff_astigmatism  = params%astigthreshold)
             if( meta_preprocess%assigned() ) then
-                if( mq_stream_master_in%is_active() ) then
-                    write(logfhandle,*) "SENDING"
-                    call meta_preprocess%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
-                endif
+                write(logfhandle,*) "SENDING"
+                call meta_preprocess%serialise(meta_buffer)
+                call send_to_preprocess_in_pipe(meta_buffer)
             endif
         !    call update_user_params(params, cline, http_communicator)
             ! update params
-            if( mq_stream_master_out%is_active() ) then
-                if( mq_stream_master_out%receive(meta_buffer) ) then
-                    if( allocated(meta_buffer) ) then
-                        ! add message back to queue for other processes
-                        call mq_stream_master_out%send(meta_buffer)
-                        ! deserialise buffer into meta_update
-                        meta_update = transfer(meta_buffer, meta_update)
-                        write(logfhandle, *) "GOT UPDATE", meta_update%get_ctfres_update()
-                        if( abs(meta_update%get_ctfres_update()) > 0.001 .and. meta_update%get_ctfres_update() /= params%ctfresthreshold) then
-                            params%ctfresthreshold = meta_update%get_ctfres_update()
-                            params%updated         = 'yes' ! not sure this is still neccessary
-                            call cline_exec%set('ctfresthreshold', params%ctfresthreshold)
-                            write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ', params%ctfresthreshold
-                        endif
-                        if( abs(meta_update%get_astigmatism_update()) > 0.001 .and. meta_update%get_astigmatism_update() /= params%astigthreshold) then
-                            params%astigthreshold = meta_update%get_astigmatism_update()
-                            params%updated        = 'yes' ! not sure this is still neccessary
-                            call cline_exec%set('astigthreshold', params%astigthreshold)
-                            write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ', params%astigthreshold
-                        endif
-                        if( abs(meta_update%get_icescore_update()) > 0.001 .and. meta_update%get_icescore_update() /= params%icefracthreshold) then
-                            params%icefracthreshold = meta_update%get_icescore_update()
-                            params%updated          = 'yes' ! not sure this is still neccessary
-                            call cline_exec%set('icefracthreshold', params%icefracthreshold)
-                            write(logfhandle,'(A,F8.2)')'>>> ICE SCORE THRESHOLD UPDATED TO: ', params%icefracthreshold
-                        endif
+            if( receive_from_preprocess_out_pipe(meta_buffer) ) then
+                if( allocated(meta_buffer) ) then
+                    ! deserialise buffer into meta_update
+                    meta_update = transfer(meta_buffer, meta_update)
+                    if( abs(meta_update%get_ctfres_update()) > 0.001 .and. meta_update%get_ctfres_update() /= params%ctfresthreshold) then
+                        params%ctfresthreshold = meta_update%get_ctfres_update()
+                        params%updated         = 'yes' ! not sure this is still neccessary
+                        call cline_exec%set('ctfresthreshold', params%ctfresthreshold)
+                        write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ', params%ctfresthreshold
+                    endif
+                    if( abs(meta_update%get_astigmatism_update()) > 0.001 .and. meta_update%get_astigmatism_update() /= params%astigthreshold) then
+                        params%astigthreshold = meta_update%get_astigmatism_update()
+                        params%updated        = 'yes' ! not sure this is still neccessary
+                        call cline_exec%set('astigthreshold', params%astigthreshold)
+                        write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ', params%astigthreshold
+                    endif
+                    if( abs(meta_update%get_icescore_update()) > 0.001 .and. meta_update%get_icescore_update() /= params%icefracthreshold) then
+                        params%icefracthreshold = meta_update%get_icescore_update()
+                        params%updated          = 'yes' ! not sure this is still neccessary
+                        call cline_exec%set('icefracthreshold', params%icefracthreshold)
+                        write(logfhandle,'(A,F8.2)')'>>> ICE SCORE THRESHOLD UPDATED TO: ', params%icefracthreshold
                     endif
                 endif
             endif
@@ -837,6 +841,121 @@ contains
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED (PREPROCESSING)'
                 l_terminate = .true.
             end subroutine sigterm_handler
+
+            subroutine send_to_preprocess_in_pipe(buffer)
+                character(len=*), intent(in)                :: buffer
+                character(len=:), allocatable               :: framed
+                character(kind=c_char), allocatable, target :: cbuf(:)
+                integer(c_int)                          :: nwritten
+                integer(c_int), target                   :: msg_len
+                integer                                 :: err_no
+                integer                                 :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+                integer, parameter                      :: MAX_RETRIES = 200
+                integer, parameter                      :: RETRY_SLEEP_US = 10000
+
+                if( ipc_pipe_preprocess_in(2) < 0 ) return
+                nbytes = len(buffer)
+                if( nbytes <= 0 ) return
+
+                msg_len = int(nbytes, c_int)
+                header_bytes = sizeof(msg_len)
+                framed_nbytes = header_bytes + nbytes
+                allocate(character(len=framed_nbytes) :: framed)
+                framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+                framed(header_bytes + 1:) = buffer
+
+                allocate(cbuf(framed_nbytes))
+                do ich = 1, framed_nbytes
+                    cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                end do
+
+                sent = 0
+                retry_count = 0
+                do while( sent < framed_nbytes )
+                    nwritten = c_write(ipc_pipe_preprocess_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    if( nwritten > 0 ) then
+                        sent = sent + int(nwritten)
+                        retry_count = 0
+                        cycle
+                    end if
+
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                        retry_count = retry_count + 1
+                        if( retry_count > MAX_RETRIES ) then
+                            THROW_HARD('failed to write preprocess metadata to ipc_pipe_preprocess_in: retry limit exceeded')
+                        end if
+                        rc_sleep = c_usleep(RETRY_SLEEP_US)
+                        cycle
+                    end if
+
+                    THROW_HARD('failed to write preprocess metadata to ipc_pipe_preprocess_in')
+                end do
+
+                if( allocated(cbuf) ) deallocate(cbuf)
+            end subroutine send_to_preprocess_in_pipe
+
+            logical function receive_from_preprocess_out_pipe(buffer)
+                character(len=:), allocatable, intent(inout) :: buffer
+                character(kind=c_char), allocatable, target  :: raw(:)
+                character(len=:), allocatable                :: chunk
+                integer(c_int), target                       :: msg_len_c
+                integer                                      :: header_bytes
+                integer                                      :: nread, ibyte, err_no, max_meta_bytes
+
+                receive_from_preprocess_out_pipe = .false.
+                if( allocated(buffer) ) deallocate(buffer)
+                header_bytes = sizeof(msg_len_c)
+                max_meta_bytes = max_metadata_size()
+                allocate(raw(max_meta_bytes))
+
+                nread = c_read(ipc_pipe_preprocess_out(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                if( nread < 0 ) then
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) return
+                    return
+                endif
+                if( nread > 0 ) then
+                    allocate(character(len=nread) :: chunk)
+                    do ibyte = 1, nread
+                        chunk(ibyte:ibyte) = transfer(raw(ibyte), 'a')
+                    end do
+                    if( allocated(update_pending) ) then
+                        update_pending = update_pending // chunk
+                    else
+                        allocate(character(len=nread) :: update_pending)
+                        update_pending = chunk
+                    endif
+                endif
+
+                if( update_expected_len < 0 ) then
+                    if( .not.allocated(update_pending) ) return
+                    if( len(update_pending) < header_bytes ) return
+                    msg_len_c = transfer(update_pending(1:header_bytes), msg_len_c)
+                    update_expected_len = int(msg_len_c)
+                    if( update_expected_len <= 0 .or. update_expected_len > max_meta_bytes ) then
+                        THROW_HARD('invalid framed metadata length read from preprocess_out pipe')
+                    endif
+                    if( len(update_pending) == header_bytes ) then
+                        deallocate(update_pending)
+                    else
+                        update_pending = update_pending(header_bytes + 1:)
+                    endif
+                endif
+
+                if( .not.allocated(update_pending) ) return
+                if( len(update_pending) < update_expected_len ) return
+
+                allocate(character(len=update_expected_len) :: buffer)
+                buffer = update_pending(1:update_expected_len)
+                if( len(update_pending) == update_expected_len ) then
+                    deallocate(update_pending)
+                else
+                    update_pending = update_pending(update_expected_len + 1:)
+                endif
+                update_expected_len = -1
+                receive_from_preprocess_out_pipe = .true.
+            end function receive_from_preprocess_out_pipe
 
     end subroutine exec_stream_p01_preprocess
 

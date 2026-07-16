@@ -215,7 +215,7 @@ contains
         call trajectory_reconstruct3D%add_input(UI_PARM, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_mode', 'multi', 'Trajectory chunking mode', &
         &'Use balanced windows or time-constrained flex-latent segmentation(balanced|latent){balanced}', &
-        &'balanced or latent', .false., 'balanced')
+        &'(balanced|latent){balanced}', .false., 'balanced')
         call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks', 'num', 'Number of temporal chunks', &
         &'Fixed number of contiguous chunks; when omitted it is derived from stepsz', '# chunks', .false., 0.)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_min_len', 'num', 'Minimum latent chunk length', &

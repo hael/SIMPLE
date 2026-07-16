@@ -6,9 +6,9 @@
 !   Drives the continuous global 2D classification loop for the streaming
 !   pipeline.  Watches for completed particle-sieve sets, imports them into
 !   a growing pool, runs iterative 2D clustering, and broadcasts progress
-!   and class-average metadata to the GUI via the master message queue.
+!   and class-average metadata to the GUI via ipc_pipe_pool2D_in.
 !   Also responds to live GUI updates: mask-diameter changes and snapshot-2D
-!   write requests received from the stream master.
+!   write requests received on ipc_pipe_pool2D_out.
 !
 ! ENTRY POINT:
 !   stream_p06_pool2D%execute(cline) — called by the stream master
@@ -26,14 +26,16 @@
 !
 ! DEPENDENCIES:
 !   simple_stream_api, simple_stream2D_state, simple_stream_pool2D_utils,
-!   simple_stream_mq_defs, simple_gui_metadata_api, unix
+!   simple_stream_state, simple_gui_metadata_api, unix
 !==============================================================================
 module simple_stream_p06_pool2D_new
-use unix,                        only: SIGTERM
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, c_read
+use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
 use simple_stream2D_state,       only: snapshot_iteration, snapshot_selection, snapshot_last_nptcls
 use simple_stream_pool2D_utils
-use simple_stream_mq_defs,       only: mq_stream_master_in, mq_stream_master_out
+use simple_stream_state,         only: ipc_pipe_pool2D_in, ipc_pipe_pool2D_out
+use simple_gui_metadata_utils,   only: max_metadata_size
 use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                      &
                                        gui_metadata_stream_pool2D,               &
                                        gui_metadata_stream_pool2D_snapshot,       &
@@ -74,6 +76,7 @@ contains
         type(gui_metadata_stream_pool2D)          :: meta_pool2D
         type(gui_metadata_stream_pool2D_snapshot) :: meta_snapshot
         type(string),               allocatable   :: projects(:)
+        character(len=:),           allocatable   :: update_pending
         logical,                    allocatable   :: l_imported(:)
         type(string)                              :: snapshot_filename, snapshot_dir
         integer(kind=dp)                          :: time_last_import
@@ -82,8 +85,10 @@ contains
         integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
         integer                                   :: state_1_particle_rate, optics_id_offset
+        integer                                   :: update_expected_len
         logical                                   :: l_pause, l_terminate, l_once, l_changed, l_sieve_final
         real                                      :: final_mskdiam
+        update_expected_len   = -1
         l_once               = .true.
         l_terminate          = .false.
         l_sieve_final        = .false. ! set when a sieved set flagged sieve_final=yes is imported
@@ -271,47 +276,43 @@ contains
                 endif
             endif
             ! update params
-            if( mq_stream_master_out%is_active() ) then
-                if( mq_stream_master_out%receive(meta_buffer) ) then
-                    if( allocated(meta_buffer) ) then
-                        ! add message back to queue for other processes
-                        call mq_stream_master_out%send(meta_buffer)
-                        ! deserialise buffer into meta_update
-                        meta_update    = transfer(meta_buffer, meta_update)
-                        mskdiam_update = nint(meta_update%get_mskdiam2D_update())
-                        if( mskdiam_update > 0 .and. mskdiam_update /= nint(params%mskdiam) ) then
-                            call update_mskdiam(params, mskdiam_update)
+            if( receive_from_pool2D_out_pipe(meta_buffer) ) then
+                if( allocated(meta_buffer) ) then
+                    ! deserialise buffer into meta_update
+                    meta_update    = transfer(meta_buffer, meta_update)
+                    mskdiam_update = nint(meta_update%get_mskdiam2D_update())
+                    if( mskdiam_update > 0 .and. mskdiam_update /= nint(params%mskdiam) ) then
+                        call update_mskdiam(params, mskdiam_update)
+                        if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
+                        time_last_import = time8()
+                        call unpause_pool()
+                    endif
+                    if( meta_update%get_sieverefs_selection_length() > 0 ) then
+                        call update_match_class_states(meta_update%get_sieverefs_selection(), l_changed)
+                        if( l_changed ) then
                             if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
                             time_last_import = time8()
                             call unpause_pool()
-                        endif
-                        if( meta_update%get_sieverefs_selection_length() > 0 ) then
-                            call update_match_class_states(meta_update%get_sieverefs_selection(), l_changed)
-                            if( l_changed ) then
-                                if( pool_iter > iter_last_import) extra_pause_iters = PAUSE_NITERS
-                                time_last_import = time8()
-                                call unpause_pool()
-                            end if
                         end if
-                        if( meta_update%has_snapshot2D_update() ) then
-                            call meta_update%get_snapshot2D_update(snapshot_id, snapshot_iteration, &
-                                                                   snapshot_selection, snapshot_filename)                                  
-                            if( snapshot_id > last_snapshot_id ) then
-                                ! build the snapshot directory path once
-                                snapshot_dir = string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // &
-                                              swap_suffix(snapshot_filename, "", ".simple")
-                                call write_project_stream2D(params,                                                                &
-                                    snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                             &
-                                    snapshot_starfile_base = snapshot_dir // '/' // swap_suffix(snapshot_filename, "", ".simple"), &
-                                    optics_dir             = params%optics_dir,                                                    &
-                                    optics_offset          = optics_id_offset)
-                                last_snapshot_id = snapshot_id
-                                call send_meta_snapshot2D()
-                            end if
-                            if( allocated(snapshot_selection) ) deallocate(snapshot_selection)
-                        endif
-                        deallocate(meta_buffer)
+                    end if
+                    if( meta_update%has_snapshot2D_update() ) then
+                        call meta_update%get_snapshot2D_update(snapshot_id, snapshot_iteration, &
+                                                               snapshot_selection, snapshot_filename)
+                        if( snapshot_id > last_snapshot_id ) then
+                            ! build the snapshot directory path once
+                            snapshot_dir = string(CWD_GLOB) // '/' // DIR_SNAPSHOT // '/' // &
+                                          swap_suffix(snapshot_filename, "", ".simple")
+                            call write_project_stream2D(params,                                                                &
+                                snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                             &
+                                snapshot_starfile_base = snapshot_dir // '/' // swap_suffix(snapshot_filename, "", ".simple"), &
+                                optics_dir             = params%optics_dir,                                                    &
+                                optics_offset          = optics_id_offset)
+                            last_snapshot_id = snapshot_id
+                            call send_meta_snapshot2D()
+                        end if
+                        if( allocated(snapshot_selection) ) deallocate(snapshot_selection)
                     endif
+                    deallocate(meta_buffer)
                 endif
             endif
             ! Wait
@@ -540,9 +541,9 @@ contains
                 mskdiam            = nint(params%mskdiam),        &
                 mskscale           = params%box * params%smpd,    &
                 resolution         = get_pool_resolution()        )            
-                if( meta_pool2D%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_pool2D%assigned() ) then
                     call meta_pool2D%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_pool2D_in_pipe(meta_buffer)
                 endif
             end subroutine send_meta
 
@@ -552,9 +553,9 @@ contains
                     id                = last_snapshot_id,                         &
                     snapshot_filename = snapshot_dir // '/' // snapshot_filename, &
                     snapshot_nptcls   = snapshot_last_nptcls)
-                if( meta_snapshot%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_snapshot%assigned() ) then
                     call meta_snapshot%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_pool2D_in_pipe(meta_buffer)
                 endif
             end subroutine send_meta_snapshot2D
 
@@ -579,9 +580,9 @@ contains
                                     y = my_ytile * (100.0 / max(1, my_ytiles - 1)),                       &
                                     h = 100 * my_ytiles,                                                  &
                                     w = 100 * my_xtiles))
-                if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_cavg2D%assigned() ) then
                     call meta_cavg2D%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_pool2D_in_pipe(meta_buffer)
                 endif
             end subroutine send_cavg2D_meta
 
@@ -607,6 +608,121 @@ contains
                     end do
                 end if
             end subroutine send_cavgs2D
+
+            subroutine send_to_pool2D_in_pipe(buffer)
+                character(len=*), intent(in)                :: buffer
+                character(len=:), allocatable               :: framed
+                character(kind=c_char), allocatable, target :: cbuf(:)
+                integer(c_int)                              :: nwritten
+                integer(c_int), target                      :: msg_len
+                integer                                     :: err_no
+                integer                                     :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+                integer, parameter                          :: MAX_RETRIES = 200
+                integer, parameter                          :: RETRY_SLEEP_US = 10000
+
+                if( ipc_pipe_pool2D_in(2) < 0 ) return
+                nbytes = len(buffer)
+                if( nbytes <= 0 ) return
+
+                msg_len = int(nbytes, c_int)
+                header_bytes = sizeof(msg_len)
+                framed_nbytes = header_bytes + nbytes
+                allocate(character(len=framed_nbytes) :: framed)
+                framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+                framed(header_bytes + 1:) = buffer
+
+                allocate(cbuf(framed_nbytes))
+                do ich = 1, framed_nbytes
+                    cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                end do
+
+                sent = 0
+                retry_count = 0
+                do while( sent < framed_nbytes )
+                    nwritten = c_write(ipc_pipe_pool2D_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    if( nwritten > 0 ) then
+                        sent = sent + int(nwritten)
+                        retry_count = 0
+                        cycle
+                    end if
+
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                        retry_count = retry_count + 1
+                        if( retry_count > MAX_RETRIES ) then
+                            THROW_HARD('failed to write pool2D metadata to ipc_pipe_pool2D_in: retry limit exceeded')
+                        end if
+                        rc_sleep = c_usleep(RETRY_SLEEP_US)
+                        cycle
+                    end if
+
+                    THROW_HARD('failed to write pool2D metadata to ipc_pipe_pool2D_in')
+                end do
+
+                if( allocated(cbuf) ) deallocate(cbuf)
+            end subroutine send_to_pool2D_in_pipe
+
+            logical function receive_from_pool2D_out_pipe(buffer)
+                character(len=:), allocatable, intent(inout) :: buffer
+                character(kind=c_char), allocatable, target  :: raw(:)
+                character(len=:), allocatable                :: chunk
+                integer(c_int), target                       :: msg_len_c
+                integer                                      :: header_bytes
+                integer                                      :: nread, ibyte, err_no, max_meta_bytes
+
+                receive_from_pool2D_out_pipe = .false.
+                if( allocated(buffer) ) deallocate(buffer)
+                header_bytes = sizeof(msg_len_c)
+                max_meta_bytes = max_metadata_size()
+                allocate(raw(max_meta_bytes))
+
+                nread = c_read(ipc_pipe_pool2D_out(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                if( nread < 0 ) then
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) return
+                    return
+                endif
+                if( nread > 0 ) then
+                    allocate(character(len=nread) :: chunk)
+                    do ibyte = 1, nread
+                        chunk(ibyte:ibyte) = transfer(raw(ibyte), 'a')
+                    end do
+                    if( allocated(update_pending) ) then
+                        update_pending = update_pending // chunk
+                    else
+                        allocate(character(len=nread) :: update_pending)
+                        update_pending = chunk
+                    endif
+                endif
+
+                if( update_expected_len < 0 ) then
+                    if( .not.allocated(update_pending) ) return
+                    if( len(update_pending) < header_bytes ) return
+                    msg_len_c = transfer(update_pending(1:header_bytes), msg_len_c)
+                    update_expected_len = int(msg_len_c)
+                    if( update_expected_len <= 0 .or. update_expected_len > max_meta_bytes ) then
+                        THROW_HARD('invalid framed metadata length read from pool2D_out pipe')
+                    endif
+                    if( len(update_pending) == header_bytes ) then
+                        deallocate(update_pending)
+                    else
+                        update_pending = update_pending(header_bytes + 1:)
+                    endif
+                endif
+
+                if( .not.allocated(update_pending) ) return
+                if( len(update_pending) < update_expected_len ) return
+
+                allocate(character(len=update_expected_len) :: buffer)
+                buffer = update_pending(1:update_expected_len)
+                if( len(update_pending) == update_expected_len ) then
+                    deallocate(update_pending)
+                else
+                    update_pending = update_pending(update_expected_len + 1:)
+                endif
+                update_expected_len = -1
+                receive_from_pool2D_out_pipe = .true.
+            end function receive_from_pool2D_out_pipe
 
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()

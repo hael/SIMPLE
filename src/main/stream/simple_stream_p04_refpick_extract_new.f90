@@ -1,17 +1,17 @@
 !@descr: task 4 in the stream pipeline: reference-based picking and extraction
 !
-! Module simple_stream_p04_refpick_extract_new
+! MODULE: simple_stream_p04_refpick_extract_new
 !
-! Purpose:
+! PURPOSE:
 !   Implements stream pipeline stage 4: reference-based particle picking and
 !   extraction.  The module watches an upstream completed-project directory for
 !   micrograph batches produced by stage 3 (CTF estimation), applies quality
 !   thresholds (CTF resolution, ice fraction, astigmatism), dispatches
 !   pick_extract jobs to the queueing system, and aggregates results into the
 !   master project file.  Progress and micrograph thumbnails are broadcast to
-!   the GUI via the stream message queue.
+!   the GUI via ipc_pipe_refpick_in.
 !
-! Workflow:
+! WORKFLOW:
 !   1. Wait for picking references (pickrefs) to appear on disk.
 !   2. On the first incoming micrograph batch, call make_pickrefs to build
 !      low-pass filtered templates at the correct pixel size.
@@ -21,14 +21,15 @@
 !      master project, and export STAR files for downstream use.
 !   5. Terminate cleanly on SIGTERM or when a termination sentinel file appears.
 !
-! Public type:
+! PUBLIC TYPE:
 !   stream_p04_refpick_extract — commander_base extension; entry point is
 !                                exec_stream_pick_extract.
 !
 module simple_stream_p04_refpick_extract_new
-use unix,                         only: SIGTERM
+use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK
+use, intrinsic :: iso_c_binding,  only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api         
-use simple_stream_mq_defs,        only: mq_stream_master_in, mq_stream_master_out
+use simple_stream_state,          only: ipc_pipe_refpick_in, ipc_pipe_refpick_out
 use simple_commanders_pick,       only: commander_make_pickrefs
 use simple_timer,                 only: simple_gettime, cast_time_char, timer_int_kind, tic, toc
 use simple_gui_metadata_api,      only: gui_metadata_micrograph, gui_metadata_cavg2D,               &
@@ -776,9 +777,9 @@ contains
                     micrographs_accepted = n_imported,      &
                     particles_extracted  = nptcls_glob,     &
                     box_size             = params%box)
-                if( meta_reference_picking%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_reference_picking%assigned() ) then
                     call meta_reference_picking%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_refpick_in_pipe(meta_buffer)
                 endif
             end subroutine send_meta
 
@@ -817,9 +818,9 @@ contains
                     endif
                     call my_boxfile%kill()
                 endif
-                if( meta_micrograph%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_micrograph%assigned() ) then
                     call meta_micrograph%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_refpick_in_pipe(meta_buffer)
                 endif
             end subroutine send_micrograph_meta
 
@@ -841,9 +842,9 @@ contains
                                   y = merge(0.0, my_ytile * (100.0 / (ytiles - 1)), ytiles == 1), &
                                   h = 100 * ytiles,                      &
                                   w = 100 * xtiles))
-                if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_cavg2D%assigned() ) then
                     call meta_cavg2D%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_refpick_in_pipe(meta_buffer)
                 endif
             end subroutine send_cavg2D_meta
 
@@ -863,6 +864,59 @@ contains
                     endif
                 end do
             end subroutine send_pickrefs
+
+            subroutine send_to_refpick_in_pipe(buffer)
+                character(len=*), intent(in)                :: buffer
+                character(len=:), allocatable               :: framed
+                character(kind=c_char), allocatable, target :: cbuf(:)
+                integer(c_int)                              :: nwritten
+                integer(c_int), target                      :: msg_len
+                integer                                     :: err_no
+                integer                                     :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+                integer, parameter                          :: MAX_RETRIES = 200
+                integer, parameter                          :: RETRY_SLEEP_US = 10000
+
+                if( ipc_pipe_refpick_in(2) < 0 ) return
+                nbytes = len(buffer)
+                if( nbytes <= 0 ) return
+
+                msg_len = int(nbytes, c_int)
+                header_bytes = sizeof(msg_len)
+                framed_nbytes = header_bytes + nbytes
+                allocate(character(len=framed_nbytes) :: framed)
+                framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+                framed(header_bytes + 1:) = buffer
+
+                allocate(cbuf(framed_nbytes))
+                do ich = 1, framed_nbytes
+                    cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                end do
+
+                sent = 0
+                retry_count = 0
+                do while( sent < framed_nbytes )
+                    nwritten = c_write(ipc_pipe_refpick_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    if( nwritten > 0 ) then
+                        sent = sent + int(nwritten)
+                        retry_count = 0
+                        cycle
+                    end if
+
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                        retry_count = retry_count + 1
+                        if( retry_count > MAX_RETRIES ) then
+                            THROW_HARD('failed to write refpick metadata to ipc_pipe_refpick_in: retry limit exceeded')
+                        end if
+                        rc_sleep = c_usleep(RETRY_SLEEP_US)
+                        cycle
+                    end if
+
+                    THROW_HARD('failed to write refpick metadata to ipc_pipe_refpick_in')
+                end do
+
+                if( allocated(cbuf) ) deallocate(cbuf)
+            end subroutine send_to_refpick_in_pipe
 
             ! Called asynchronously on SIGTERM. Exits immediately after logging.
             subroutine sigterm_handler()

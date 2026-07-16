@@ -25,18 +25,19 @@
 !
 ! GUI MESSAGING:
 !   Progress and image metadata are broadcast to the GUI via the
-!   mq_stream_master_in queue using the gui_metadata_* types.
+!   ipc_pipe_initial_analysis_in pipe using the gui_metadata_* types.
 !   User updates (threshold changes, reference selections) arrive on
-!   mq_stream_master_out.
+!   ipc_pipe_initial_analysis_out.
 !
 ! DEPENDENCIES:
 !   simple_stream_api, simple_gui_metadata_api, simple_mini_stream_utils,
 !   commander_extract, commander_abinitio2D, commander_shape_rank_cavgs
 !==============================================================================
 module simple_stream_p03_initial_analysis
-use unix,                         only: SIGTERM
+use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK
+use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
-use simple_stream_mq_defs,        only: mq_stream_master_in, mq_stream_master_out
+use simple_stream_state,          only: ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out
 use simple_commanders_pick,       only: commander_extract, commander_reextract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
@@ -1179,9 +1180,9 @@ contains
                     micrographs_accepted = spproj%os_mic%count_state_gt_zero(),  &
                     particles_extracted  = spproj%os_ptcl2D%get_noris(),         &
                     box_size             = box_in_pix)
-                if( meta_initial_picking%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_initial_picking%assigned() ) then
                     call meta_initial_picking%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_initial_analysis_in_pipe(meta_buffer)
                 endif
             end subroutine send_meta
 
@@ -1204,9 +1205,9 @@ contains
                     mask_scale         = box_size * smpd,                            &
                     box_size           = box_size,                                   &
                     cycle              = cycle)
-                if( meta_opening2D%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_opening2D%assigned() ) then
                     call meta_opening2D%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_initial_analysis_in_pipe(meta_buffer)
                 endif
             end subroutine send_meta2D
 
@@ -1244,9 +1245,9 @@ contains
                         deallocate(boxdata)
                     endif
                     call my_boxfile%kill()
-                    if( meta_micrograph%assigned() .and. mq_stream_master_in%is_active() ) then
+                    if( meta_micrograph%assigned() ) then
                         call meta_micrograph%serialise(meta_buffer)
-                        call mq_stream_master_in%send(meta_buffer)
+                        call send_to_initial_analysis_in_pipe(meta_buffer)
                     endif
                 endif
             end subroutine send_micrograph_meta
@@ -1275,9 +1276,9 @@ contains
                                   y = merge(0.0, my_ytile * (100.0 / (ytiles_in - 1)), ytiles_in == 1), &
                                   h = 100 * ytiles_in,                                                  &
                                   w = 100 * xtiles_in))
-                if( meta_cavg2D%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_cavg2D%assigned() ) then
                     call meta_cavg2D%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_initial_analysis_in_pipe(meta_buffer)
                 endif
             end subroutine send_cavg2D_meta
 
@@ -1335,9 +1336,9 @@ contains
                                   y = merge(0.0, my_ytile * (100.0 / (ytiles_in - 1)), ytiles_in == 1), &
                                   h = 100 * ytiles_in,                                                  &
                                   w = 100 * xtiles_in))
-                if( meta_pickrefs%assigned() .and. mq_stream_master_in%is_active() ) then
+                if( meta_pickrefs%assigned() ) then
                     call meta_pickrefs%serialise(meta_buffer)
-                    call mq_stream_master_in%send(meta_buffer)
+                    call send_to_initial_analysis_in_pipe(meta_buffer)
                 endif
             end subroutine send_pickref_meta
 
@@ -1380,6 +1381,59 @@ contains
                 write(logfhandle, '(A)') 'SIGTERM RECEIVED'
                 call exit(0)
             end subroutine sigterm_handler
+
+            subroutine send_to_initial_analysis_in_pipe(buffer)
+                character(len=*), intent(in)                :: buffer
+                character(len=:), allocatable               :: framed
+                character(kind=c_char), allocatable, target :: cbuf(:)
+                integer(c_int)                              :: nwritten
+                integer(c_int), target                      :: msg_len
+                integer                                     :: err_no
+                integer                                     :: sent, nbytes, header_bytes, framed_nbytes, retry_count, ich, rc_sleep
+                integer, parameter                          :: MAX_RETRIES = 200
+                integer, parameter                          :: RETRY_SLEEP_US = 10000
+
+                if( ipc_pipe_initial_analysis_in(2) < 0 ) return
+                nbytes = len(buffer)
+                if( nbytes <= 0 ) return
+
+                msg_len = int(nbytes, c_int)
+                header_bytes = sizeof(msg_len)
+                framed_nbytes = header_bytes + nbytes
+                allocate(character(len=framed_nbytes) :: framed)
+                framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
+                framed(header_bytes + 1:) = buffer
+
+                allocate(cbuf(framed_nbytes))
+                do ich = 1, framed_nbytes
+                    cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                end do
+
+                sent = 0
+                retry_count = 0
+                do while( sent < framed_nbytes )
+                    nwritten = c_write(ipc_pipe_initial_analysis_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    if( nwritten > 0 ) then
+                        sent = sent + int(nwritten)
+                        retry_count = 0
+                        cycle
+                    end if
+
+                    err_no = ierrno()
+                    if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
+                        retry_count = retry_count + 1
+                        if( retry_count > MAX_RETRIES ) then
+                            THROW_HARD('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in: retry limit exceeded')
+                        end if
+                        rc_sleep = c_usleep(RETRY_SLEEP_US)
+                        cycle
+                    end if
+
+                    THROW_HARD('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in')
+                end do
+
+                if( allocated(cbuf) ) deallocate(cbuf)
+            end subroutine send_to_initial_analysis_in_pipe
 
     end subroutine exec_stream_p03_initial_analysis
 

@@ -23,7 +23,6 @@ use simple_class_compatibility_tester,       only: run_all_class_compatibility_t
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
 use simple_persistent_worker_message_tester, only: run_all_persistent_worker_message_tests
 ! hand-written unit tests
-use simple_ipc_mq_tester,         only: run_all_ipc_mq_tests
 use simple_ipc_tcp_socket_tester, only: run_all_ipc_tcp_socket_tests
 use simple_forked_process_tester, only: run_all_forked_process_tests
 use simple_gui_metadata_tester,   only: run_all_gui_metadata_tests
@@ -65,7 +64,6 @@ call run_all_oris_tests
 call run_all_class_compatibility_tests
 call run_all_ptcl_sieve_tests
 call run_all_rec_list_tests
-call run_all_ipc_mq_tests
 call run_all_ipc_tcp_socket_tests
 call run_all_forked_process_tests
 call run_all_gui_metadata_tests

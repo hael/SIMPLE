@@ -10,18 +10,12 @@ use simple_ui,             only: make_ui, list_stream_prgs_in_ui
 use simple_persistent_worker_server,   only: persistent_worker
 use simple_memory_monitor,             only: mem_monitor_init, mem_monitor_finish
 use simple_stream_p00_master,          only: stream_p00_master
-use simple_stream_p01_preprocess,      only: stream_p01_preprocess
-use simple_stream_p02_assign_optics,   only: stream_p02_assign_optics
-use simple_stream_p03_opening2D,       only: stream_p03_opening2D
-use simple_stream_p04_refpick_extract, only: stream_p04_refpick_extract
-use simple_stream_p05_sieve_cavgs,     only: stream_p05_sieve_cavgs
-use simple_stream_p06_pool2D,          only: stream_p06_pool2D
-! use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
-! use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
-! use simple_stream_p03_opening2D_new,       only: stream_p03_opening2D
-! use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
-! use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
-! use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
+use simple_stream_p01_preprocess_new,      only: stream_p01_preprocess
+use simple_stream_p02_assign_optics_new,   only: stream_p02_assign_optics
+use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
+use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
+use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
+use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
 implicit none
 #include "simple_local_flags.inc"
 
@@ -29,7 +23,7 @@ implicit none
 type(stream_p00_master)           :: xmaster
 type(stream_p01_preprocess)       :: xpreprocess
 type(stream_p02_assign_optics)    :: xassign_optics
-type(stream_p03_opening2D)        :: xopening2D
+type(stream_p03_initial_analysis) :: xinitial_analysis
 type(stream_p04_refpick_extract)  :: xpick_extract
 type(stream_p05_sieve_cavgs)      :: xsieve_cavgs 
 type(stream_p06_pool2D)           :: xpool2D
@@ -68,8 +62,8 @@ select case(trim(prg))
         call xpreprocess%execute(cline)
     case( 'assign_optics' )
         call xassign_optics%execute(cline)
-    case( 'gen_pickrefs','opening2D' ) ! to maintain GUI support
-        call xopening2D%execute(cline)
+    case( 'gen_pickrefs','initial_analysis', 'opening2D' ) ! to maintain GUI support
+        call xinitial_analysis%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
     case( 'sieve_cavgs' )
@@ -89,7 +83,7 @@ call mem_monitor_finish
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('b9c50fed7')
+call simple_print_git_version('eceaf68f3')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
