@@ -234,6 +234,7 @@ contains
         class(commander_make_pickrefs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         call cline%set('prg', 'make_pickrefs')
+        if( .not.cline%defined('ncls') ) call cline%set('ncls', 0)
         call make_pickrefs_impl(cline)
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
     end subroutine exec_make_pickrefs

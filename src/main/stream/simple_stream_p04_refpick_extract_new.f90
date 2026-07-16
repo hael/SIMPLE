@@ -246,6 +246,7 @@ contains
                         call cline_make_pickrefs%set('mirr',            'yes')
                         call cline_make_pickrefs%set('trust_header',    'yes')
                         call cline_make_pickrefs%set('smpd',      params%smpd)
+                        call cline_make_pickrefs%set('ncls',               10)
                         call xmake_pickrefs%execute(cline_make_pickrefs)
                         call cline_pick_extract%set('pickrefs', '../'//PICKREFS_FBODY//params%ext%to_char())
                         ! populate pickrefsoris

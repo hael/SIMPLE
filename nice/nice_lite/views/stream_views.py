@@ -584,7 +584,21 @@ def view_stream_reference_picking_zoom(request):
     if os.path.exists(logfile) and os.path.isfile(logfile):
         with open(logfile, "rb") as f:
             logtext = f.read()
-            context["log"].append({"text": str(logtext, errors="replace")})
+            logtext_str = str(logtext, errors="replace")
+            logpart_str = ""
+            for line in logtext_str.splitlines():
+                if ">>> JPEG " in line:
+                    split_line = line.split()
+                    if len(split_line) >= 3:
+                        context["log"].append({"text": logpart_str})
+                        context["log"].append({"image": split_line[2]})
+                        logpart_str = ""
+                    else:
+                        logpart_str += line + "\n"
+                else:
+                    logpart_str += line + "\n"
+            if logpart_str != "":
+                context["log"].append({"text": logpart_str})
     if os.path.exists(errfile) and os.path.isfile(errfile):
         with open(errfile, "rb") as f:
             errortext = f.read()

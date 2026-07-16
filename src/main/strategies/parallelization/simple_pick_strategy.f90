@@ -13,6 +13,7 @@ use simple_image,          only: image
 use simple_stack_io,       only: stack_io
 use simple_default_clines, only: set_automask2D_defaults
 use simple_binoris_io,     only: binwrite_oritab
+use simple_gui_utils,      only: mrc2jpeg_tiled
 implicit none
 
 public :: pick_strategy
@@ -177,18 +178,28 @@ contains
     subroutine make_pickrefs_impl(cline)
         use simple_image_msk, only: automask2D
         use simple_imghead,   only: find_img_smpd
+        use simple_commanders_cavgs, only: commander_cluster_cavgs
+        use simple_syslib, only: simple_getcwd
         class(cmdline), intent(inout) :: cline
         type(parameters)         :: params
         type(stack_io)           :: stkio_r
+        type(stack_io)           :: stkio_w
         type(oris)               :: moldiamori
         type(image)              :: ref2D, ref2D_clip, img_in
+        type(image)              :: img_medoid
         type(image), allocatable :: projs(:), masks(:)
+        type(sp_project)         :: spproj_cluster
+        type(cmdline)            :: cline_cluster_cavgs
+        type(commander_cluster_cavgs) :: xcluster_cavgs
+        type(string)             :: pickrefs_source, pickrefs_cluster_proj, pickrefs_medoids
+        type(string)             :: pickrefs_source_jpeg, cwd
         real,        allocatable :: diams(:), shifts(:,:)
+        integer,     allocatable :: medoid_inds(:), medoid_map(:)
         real,    parameter :: MSKDIAM2LP = 0.15, LP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS = 100
-        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read
+        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read, smpd_cluster
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_stk(3), ncavgs, icavg
-        integer :: cnt, norefs, box_for_pick, box_for_extract
+        integer :: cnt, norefs, box_for_pick, box_for_extract, ncls_pickrefs, nmedoids, n_pickrefs_source, i
         logical :: do_rescale
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
@@ -202,6 +213,67 @@ contains
         if( cline%defined('nrots') ) params%nrots = cline%get_iarg('nrots')
         ! read project and check stream mode
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
+        pickrefs_source = params%pickrefs
+        call simple_getcwd(cwd)
+        pickrefs_source_jpeg = cwd//'/'//'pickrefs_source.jpeg'
+        call mrc2jpeg_tiled(pickrefs_source, pickrefs_source_jpeg)
+        write(logfhandle,'(A,A)') '>>> JPEG ', pickrefs_source_jpeg%to_char()
+        ncls_pickrefs = 0
+        if( cline%defined('ncls') ) ncls_pickrefs = cline%get_iarg('ncls')
+        if( ncls_pickrefs < 0 ) THROW_HARD('make_pickrefs expects ncls >= 0')
+        call find_ldim_nptcls(pickrefs_source, ldim_stk, n_pickrefs_source)
+        if( ncls_pickrefs > 0 .and. n_pickrefs_source > ncls_pickrefs ) then
+            write(logfhandle,'(A,I6)') '>>> CLUSTERING PICKREFS INTO MEDOIDS, NCLS = ', ncls_pickrefs
+            call cline_cluster_cavgs%set('prg',            'cluster_cavgs')
+            call cline_cluster_cavgs%set('stk',            pickrefs_source)
+            call cline_cluster_cavgs%set('smpd',           params%smpd)
+            call cline_cluster_cavgs%set('ncls',           ncls_pickrefs)
+            call cline_cluster_cavgs%set('skip_rejection', 'yes')
+            call cline_cluster_cavgs%set('mkdir',          'no')
+            call xcluster_cavgs%execute(cline_cluster_cavgs)
+            call cline_cluster_cavgs%kill
+            pickrefs_cluster_proj = string('cluster_cavgs_from_stack'//METADATA_EXT)
+            call spproj_cluster%read(pickrefs_cluster_proj)
+            medoid_inds = spproj_cluster%os_cls2D%get_all_asint('medoid_ind')
+            nmedoids = count(medoid_inds > 0)
+            if( nmedoids <= 0 ) THROW_HARD('make_pickrefs ncls mode: no medoids identified')
+            allocate(medoid_map(nmedoids), source=0)
+            nmedoids = 0
+            do i = 1, size(medoid_inds)
+                if( medoid_inds(i) > 0 ) then
+                    nmedoids = nmedoids + 1
+                    medoid_map(nmedoids) = i
+                endif
+            enddo
+            call spproj_cluster%kill
+            smpd_cluster = find_img_smpd(pickrefs_source)
+            if( smpd_cluster <= 0. ) smpd_cluster = params%smpd
+            call find_ldim_nptcls(pickrefs_source, ldim_stk, ncavgs)
+            ldim_stk(3) = 1
+            pickrefs_medoids = string('pickrefs_medoids')//params%ext
+            if( file_exists(pickrefs_medoids) ) call del_file(pickrefs_medoids)
+            call stkio_r%open(pickrefs_source, smpd_cluster, 'read', bufsz=size(medoid_map))
+            call stkio_w%open(pickrefs_medoids, smpd_cluster, 'write', box=ldim_stk(1), bufsz=size(medoid_map))
+            call img_medoid%new(ldim_stk, smpd_cluster)
+            do i = 1, size(medoid_map)
+                call stkio_r%read(medoid_map(i), img_medoid)
+                call stkio_w%write(i, img_medoid)
+            enddo
+            call img_medoid%kill
+            call stkio_w%close
+            call stkio_r%close
+            deallocate(medoid_map, medoid_inds)
+            pickrefs_source = pickrefs_medoids
+            params%pickrefs = pickrefs_source
+            call cline%set('pickrefs', pickrefs_source)
+            write(logfhandle,'(A,I6)') '>>> USING MEDOID PICKREFS, COUNT = ', nmedoids
+            pickrefs_source_jpeg = cwd//'/'//'pickrefs_medoids.jpeg'
+            call mrc2jpeg_tiled(pickrefs_medoids, pickrefs_source_jpeg)
+            write(logfhandle,'(A,A)') '>>> JPEG ', pickrefs_source_jpeg%to_char()
+        else if( ncls_pickrefs > 0 ) then
+            write(logfhandle,'(A,I6,A,I6,A)') '>>> SKIPPING MEDOID CLUSTERING: n_pickrefs=', n_pickrefs_source, &
+                & ' <= ncls=', ncls_pickrefs, '; USING INPUT PICKREFS'
+        endif
         ! read selected cavgs
         call find_ldim_nptcls(params%pickrefs, ldim_stk, ncavgs)
         ldim_stk(3) = 1

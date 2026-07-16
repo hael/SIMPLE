@@ -314,6 +314,9 @@ contains
         ! search controls
         call pick%add_input(UI_SRCH, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}',&
         &'{2.5}', .false., 2.5, gui_submenu="picking", gui_advanced=.false.)
+        call pick%add_input(UI_SRCH, 'ncls', 'num', 'Cluster input pickrefs before template generation', &
+        &'If >0, run cluster_cavgs on pickrefs and use medoids only for make_pickrefs{0}', &
+        &'# clusters{0}', .false., 0., gui_submenu="picking", gui_advanced=.true.)
         call pick%add_input(UI_SRCH, pick_roi, gui_submenu="picking")
         call pick%add_input(UI_SRCH, backgr_subtr, gui_submenu="picking")
         call pick%add_input(UI_SRCH, particle_density, gui_submenu="picking")
