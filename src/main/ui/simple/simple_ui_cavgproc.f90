@@ -45,10 +45,10 @@ contains
         &'Analysis of class averages with affinity propagation',&                ! descr_short
         &'is a program for analyzing class averages with affinity propagation',& ! descr_long
         &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project
+        &.false.)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call cluster_cavgs%add_input(UI_IMG, stk, required_override=.false.)
         ! parameter input/output
         call cluster_cavgs%add_input(UI_PARM, 'ncls', 'num', 'Number of clusters', 'Number of clusters', '# clusters', .false., 0.)
         call cluster_cavgs%add_input(UI_PARM, prune)

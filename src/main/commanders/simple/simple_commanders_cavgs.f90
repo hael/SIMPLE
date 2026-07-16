@@ -166,10 +166,11 @@ contains
         type(clust_info)              :: clust_info_junk
         type(parameters)              :: params
         type(sp_project)              :: spproj
+        type(string)                  :: stack_mode_projfile
         real                          :: frac_good, oa_min, oa_max, smpd
         integer                       :: ldim(3), pop, ncls, ncls_sel, icls, cnt, nptcls
         integer                       :: i, nclust, iclust, nptcls_good
-        logical                       :: l_skip_junk_rejection, l_cluster_only
+        logical                       :: l_skip_junk_rejection, l_cluster_only, l_stack_input_mode
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -180,36 +181,55 @@ contains
         if( .not. cline%defined('prune')   ) call cline%set('prune',    'no')
         ! master parameters
         call params%new(cline)
+        l_stack_input_mode  = (.not. cline%defined('projfile')) .and. cline%defined('stk')
+        if( (.not. cline%defined('projfile')) .and. (.not. cline%defined('stk')) ) then
+            THROW_HARD('cluster_cavgs requires either projfile or stk')
+        endif
         l_skip_junk_rejection = trim(params%skip_rejection) == 'yes'
         l_cluster_only        = trim(params%cluster_only)   == 'yes'
+        if( l_stack_input_mode ) then
+            ! In stack-input mode there is no project/FRC context for junk gating.
+            call cline%set('skip_rejection', 'yes')
+            params%skip_rejection = 'yes'
+            l_skip_junk_rejection = .true.
+            stack_mode_projfile = string('cluster_cavgs_from_stack'//METADATA_EXT)
+        endif
         ! Clustering only presets
         if( l_cluster_only ) then
             ! no particle pruning, junk is identified but not rejected
             call cline%set('prune', 'no')
             params%prune = 'no'
-            call cline%set('skip_rejection', 'no')
-            params%skip_rejection = 'no'
-            l_skip_junk_rejection = .false.
+            if( .not. l_stack_input_mode ) then
+                call cline%set('skip_rejection', 'no')
+                params%skip_rejection = 'no'
+                l_skip_junk_rejection = .false.
+            endif
         endif
-        ! read project file
-        call spproj%read(params%projfile)
-        ncls = spproj%os_cls2D%get_noris()
-        ! prep class average stack
-        if( l_skip_junk_rejection ) then
-            states = spproj%os_cls2D%get_all_asint('state')
-            l_non_junk = states > 0
-            call prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
-            deallocate(states)
+        if( l_stack_input_mode ) then
+            call build_temp_project_from_stack()
+            ncls = spproj%os_cls2D%get_noris()
+            call prep_stack4clust(cavg_imgs, clspops, clsinds, l_non_junk, mm, resvals)
         else
-            call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+            ! read project file
+            call spproj%read(params%projfile)
+            ncls = spproj%os_cls2D%get_noris()
+            ! prep class average stack
+            if( l_skip_junk_rejection ) then
+                states = spproj%os_cls2D%get_all_asint('state')
+                l_non_junk = states > 0
+                call prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+                deallocate(states)
+            else
+                call id_junk_and_prep_cavgs4clust(spproj, cavg_imgs, params%mskdiam, clspops, clsinds, l_non_junk, mm )
+            endif
+            allocate(resvals(size(cavg_imgs)), source=0.)
+            do i = 1, size(cavg_imgs)
+                resvals(i) = spproj%os_cls2D%get(clsinds(i), 'res')
+            enddo
         endif
         ncls_sel = size(cavg_imgs)
         smpd     = cavg_imgs(1)%get_smpd()
         ldim     = cavg_imgs(1)%get_ldim()
-        allocate(resvals(ncls_sel), source=0.)
-        do i = 1, ncls_sel
-            resvals(i) = spproj%os_cls2D%get(clsinds(i), 'res')
-        enddo
         ! ensure correct smpd/box in params class
         params%smpd = smpd
         params%box  = ldim(1)
@@ -242,9 +262,14 @@ contains
         ! Generate output stacks and cluster info
         if( l_cluster_only )then
             ! Simplified output
-            states    = spproj%os_cls2D%get_all_asint('state')
-            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=(states>0))
-            if( count(states==1) > count(l_non_junk) ) then
+            if( l_stack_input_mode ) then
+                allocate(states(ncls), source=1)
+                cavg_imgs = read_stk_into_imgarr(params%stk)
+            else
+                states    = spproj%os_cls2D%get_all_asint('state')
+                cavg_imgs = read_cavgs_into_imgarr(spproj, mask=(states>0))
+            endif
+            if( .not. l_stack_input_mode .and. count(states==1) > count(l_non_junk) ) then
                 ! add junk back into a distinct cluster
                 nclust = nclust + 1
                 clust_info_junk%res         = maxval(clust_info_arr(:)%res)
@@ -279,16 +304,20 @@ contains
                 &' population ',     clust_info_arr(iclust)%pop
             end do
             ! update project
-            call update_project
+            if( .not. l_stack_input_mode ) call update_project
         else
             ! re-create cavg_imgs
-            cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            if( l_stack_input_mode ) then
+                cavg_imgs = read_stk_into_imgarr(params%stk)
+            else
+                cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_non_junk)
+            endif
             ! write aligned clusters
             call write_aligned_cavgs(labels, cavg_imgs, clust_info_arr, 'cluster_aligned', params%ext%to_char())
             ! write un-aligned clusters
             call write_imgarr(ncls_sel, cavg_imgs, labels, 'cluster', params%ext%to_char() )
             ! update project
-            call update_project
+            if( .not. l_stack_input_mode ) call update_project
             ! generate ranked class averages by ordering according to class resolution within clusters
             allocate(inds_glob(ncls_sel), source=0)
             cnt = 0
@@ -334,12 +363,20 @@ contains
             ! write selection
             call write_selected_cavgs(ncls_sel, cavg_imgs, labels4write, params%ext%to_char())
             ! map selection to project
-            call spproj%map_cavgs_selection(states)
-            ! optional pruning
-            if( trim(params%prune).eq.'yes') call spproj%prune_particles
+            if( .not. l_stack_input_mode ) then
+                call spproj%map_cavgs_selection(states)
+                ! optional pruning
+                if( trim(params%prune).eq.'yes') call spproj%prune_particles
+            endif
         endif
         ! this needs to be a full write as many segments are updated
-        call spproj%write(params%projfile)
+        if( l_stack_input_mode ) then
+            call spproj%update_projinfo(stack_mode_projfile)
+            call spproj%write(stack_mode_projfile)
+            write(logfhandle,'(A,A)') '>>> WROTE STACK-MODE PROJECT: ', stack_mode_projfile%to_char()
+        else
+            call spproj%write(params%projfile)
+        endif
         ! destruct
         call spproj%kill
         call dealloc_imgarr(cavg_imgs)
@@ -349,6 +386,62 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
 
       contains
+
+        subroutine build_temp_project_from_stack()
+            type(image), allocatable :: tmp_imgs(:)
+            integer                  :: j, nimgs
+            call dealloc_imgarr(tmp_imgs)
+            tmp_imgs = read_stk_into_imgarr(params%stk)
+            nimgs = size(tmp_imgs)
+            if( nimgs <= 0 ) THROW_HARD('cluster_cavgs stack mode: empty stack')
+            call spproj%os_cls2D%new(nimgs, is_ptcl=.false.)
+            call spproj%os_cls3D%new(nimgs, is_ptcl=.false.)
+            do j = 1, nimgs
+                call spproj%os_cls2D%set(j, 'state',      1.0)
+                call spproj%os_cls2D%set(j, 'pop',        1.0)
+                call spproj%os_cls2D%set(j, 'res',        0.0)
+                call spproj%os_cls2D%set(j, 'corr',       0.0)
+                call spproj%os_cls2D%set(j, 'medoid_ind', 0.0)
+                call spproj%os_cls3D%set(j, 'state',      1.0)
+            enddo
+            call dealloc_imgarr(tmp_imgs)
+        end subroutine build_temp_project_from_stack
+
+        subroutine prep_stack4clust(cavg_imgs_out, clspops_out, clsinds_out, l_non_junk_out, mm_out, resvals_out)
+            type(image), allocatable, intent(inout) :: cavg_imgs_out(:)
+            integer,     allocatable, intent(inout) :: clspops_out(:), clsinds_out(:)
+            logical,     allocatable, intent(inout) :: l_non_junk_out(:)
+            real,        allocatable, intent(inout) :: mm_out(:,:), resvals_out(:)
+            integer :: nimgs, j, ldim_here(3), box
+            real    :: smpd_here, mskrad
+            call dealloc_imgarr(cavg_imgs_out)
+            cavg_imgs_out = read_stk_into_imgarr(params%stk)
+            nimgs = size(cavg_imgs_out)
+            if( nimgs <= 0 ) THROW_HARD('cluster_cavgs stack mode: empty stack after read')
+            ldim_here = cavg_imgs_out(1)%get_ldim()
+            smpd_here = cavg_imgs_out(1)%get_smpd()
+            box       = ldim_here(1)
+            mskrad    = min(real(box/2) - COSMSKHALFWIDTH - 1., 0.5 * params%mskdiam / smpd_here)
+            if( allocated(clspops_out)   ) deallocate(clspops_out)
+            if( allocated(clsinds_out)   ) deallocate(clsinds_out)
+            if( allocated(l_non_junk_out)) deallocate(l_non_junk_out)
+            if( allocated(mm_out)        ) deallocate(mm_out)
+            if( allocated(resvals_out)   ) deallocate(resvals_out)
+            allocate(clspops_out(nimgs),   source=1)
+            allocate(clsinds_out(nimgs))
+            allocate(l_non_junk_out(nimgs), source=.true.)
+            allocate(mm_out(nimgs,2), source=0.0)
+            allocate(resvals_out(nimgs), source=0.0)
+            clsinds_out = (/(j, j=1,nimgs)/)
+            call cavg_imgs_out(1)%memoize_mask_coords
+            !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+            do j = 1, nimgs
+                call cavg_imgs_out(j)%norm
+                call cavg_imgs_out(j)%mask2D_soft(mskrad, backgr=0.)
+                mm_out(j,:) = cavg_imgs_out(j)%minmax(mskrad)
+            end do
+            !$omp end parallel do
+        end subroutine prep_stack4clust
 
         subroutine update_project
             integer :: icls, iclust
