@@ -14,6 +14,9 @@ existing 14-feature model path. The implementation currently provides:
 - named parameters for the correlation policy and neighbourhood definition;
 - a shared `calc_cavg_pairwise_algninfo` provider reused by the existing
   CC/FRC distance calculation, so the full-search transform is not discarded;
+- `model_cavgs_rejection` mirrors the `cluster_cavgs` defaults
+  `ctf=no,objfun=cc` before constructing `parameters`, and the provider rejects
+  callers that violate that CC contract;
 - upper-triangular CC, FRC, rotation, shift, and mirror primitives;
 - explicit neighbour identities, correlations, FRC distances, and normalized
   CC weights;

@@ -495,6 +495,8 @@ contains
         character(len=32)         :: learn_model
         character(len=32)         :: quality_context
         call cline%set('oritype', 'cls2D')
+        call cline%set('ctf',      'no')
+        call cline%set('objfun',   'cc')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
         call params%new(cline)

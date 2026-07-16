@@ -458,6 +458,10 @@ contains
         class(image),      intent(inout) :: cavg_imgs(:)
         real,              intent(in)    :: hp, lp, trs
         type(inpl_struct), allocatable   :: algninfo(:,:)
+        if( trim(params%objfun) /= 'cc' ) &
+            THROW_HARD('calc_cavg_pairwise_algninfo requires objfun=cc')
+        if( trim(params%ctf) /= 'no' ) &
+            THROW_HARD('calc_cavg_pairwise_algninfo requires ctf=no')
         algninfo = match_imgs(params, hp, lp, trs, cavg_imgs, cavg_imgs)
     end function calc_cavg_pairwise_algninfo
 
