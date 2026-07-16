@@ -6,6 +6,7 @@ use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_qua
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
     write_cavg_quality_model_builtin_code
+use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
     CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_result
 use simple_string_utils,          only: lowercase
@@ -478,6 +479,7 @@ contains
         type(image), allocatable  :: cavg_imgs(:)
         type(cavg_quality_model)  :: model
         type(cavg_quality_result) :: quality
+        type(cavg_quality_relation_analysis) :: relation_analysis
         type(string)              :: stkname
         type(string), allocatable :: analysis_files(:)
         integer, allocatable      :: reference_states(:)
@@ -608,6 +610,22 @@ contains
             else
                 call write_cavg_quality_analysis(quality, reference_states, model, 'cavgs_quality_analysis.txt', &
                     params%projfile%to_char())
+                if( trim(params%relational_features) == 'corr_knn_v1' )then
+                    call relation_analysis%calculate(cavg_imgs, spproj%os_cls2D, quality, params)
+                    call relation_analysis%write_pair_table('cavgs_pairwise_relations.txt')
+                    call relation_analysis%write_neighbour_table('cavgs_relational_neighbours.txt')
+                    call relation_analysis%write_feature_table('cavgs_relational_features.txt')
+                    call relation_analysis%write_candidate_table('cavgs_relational_candidates.txt')
+                    call relation_analysis%kill()
+                    write(logfhandle,'(A)') &
+                        '>>> WROTE CAVG PAIRWISE RELATIONS       : cavgs_pairwise_relations.txt'
+                    write(logfhandle,'(A)') &
+                        '>>> WROTE CAVG RELATIONAL NEIGHBOURS    : cavgs_relational_neighbours.txt'
+                    write(logfhandle,'(A)') &
+                        '>>> WROTE CAVG RELATIONAL FEATURES      : cavgs_relational_features.txt'
+                    write(logfhandle,'(A)') &
+                        '>>> WROTE CAVG RELATIONAL CANDIDATES    : cavgs_relational_candidates.txt'
+                endif
             endif
         else
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &

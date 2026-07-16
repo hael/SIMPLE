@@ -314,6 +314,7 @@ type :: parameters
     character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool|sieve){chunk}
     ! class-average quality model preset(chunk100mics|chunk100mics_linear|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
+    character(len=STDLEN)     :: relational_features='none' !< relational cavg features(none|corr_knn_v1){none}
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
@@ -396,6 +397,7 @@ type :: parameters
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=5               !< local nearest-neighbor count for graph-based diffusion splitting
+    integer :: relational_knn=5     !< nearest-neighbor count for relational cavg analysis
     integer :: steerable_nmodes=4   !< angular Fourier modes for cls_split steerable diffusion maps
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
@@ -562,6 +564,10 @@ type :: parameters
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
+    real    :: relational_corr_hp=100. !< cavg relational high-pass limit(in A)
+    real    :: relational_corr_lp=15.  !< cavg relational low-pass limit(in A; sieve coarse default)
+    real    :: relational_corr_trs=10. !< cavg relational shift half-range(in pixels)
+    real    :: relational_weight_tau=0.05 !< cavg relational soft-neighbor temperature
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: scale=1.            !< image scale factor{1}
