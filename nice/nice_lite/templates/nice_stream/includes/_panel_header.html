@@ -48,6 +48,8 @@
             <span class="w-2 h-2 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
         {% elif status == "failed" %}
             <span class="w-2 h-2 rounded-full bg-streamerror flex-shrink-0" title="failed"></span>
+        {% elif status == "queued" %}
+            <span class="w-2 h-2 rounded-full bg-streamlabel flex-shrink-0" title="queued"></span>
         {% else %}
             <span class="w-2 h-2 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
         {% endif %}

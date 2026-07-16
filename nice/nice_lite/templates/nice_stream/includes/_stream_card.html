@@ -117,7 +117,7 @@
         </form>
 
         <!-- Delete (finished/failed/stopped) -->
-        {% if job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+        {% if job.status == "finished" or job.status == "failed" or job.status == "stopped"%}
             <form method="POST" action="{% url 'nice_lite:delete_stream' %}" target="_parent">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
@@ -130,6 +130,20 @@
                     </svg>
                 </button>
             </form>
+        <!-- Kill/Delete (queued) -->
+        {% elif job.status == "queued" %}
+            <form method="POST" action="{% url 'nice_lite:kill_delete_stream' %}" target="_parent">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                <button type="button" data-job-id="{{ job.id }}" onclick="killDeleteStream(this)"
+                        title="kill/delete stream"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <polyline points="3,3 13,13"/>
+                        <polyline points="13,3 3,13"/>
+                    </svg>
+                </button>
+            </form>   
         <!-- Terminate (running/alarm) -->
         {% elif job.status == "running" or job.status == "alarm" %}
             <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent">

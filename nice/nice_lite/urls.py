@@ -59,6 +59,7 @@ urlpatterns = [
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
     path("termstream",                         stream_views.view_stream_terminate_stream,          name="terminate_stream"),
     path("deletestream",                       stream_views.view_stream_delete_stream,             name="delete_stream"),
+    path("killdeletestream",                   stream_views.view_stream_kill_delete_stream,        name="kill_delete_stream"),
     path("updatestreamdescription",            stream_views.view_stream_update_description,        name="update_stream_description"),
     path("updatestream",                       stream_views.view_stream_update_parameters,         name="update_stream_parameters"),
 

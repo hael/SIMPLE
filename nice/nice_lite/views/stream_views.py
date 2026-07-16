@@ -252,6 +252,20 @@ def view_stream_delete_stream(request):
     return response
 
 
+@login_required(login_url="/login")
+@require_POST
+def view_stream_kill_delete_stream(request):
+    """Terminate queued/running stream (if needed), then delete it and redirect to workspace."""
+    streamjob, _jobmodel = _get_accessible_streamjob(request, log_context="kill_delete_stream")
+    if streamjob is None:
+        return redirect("nice_lite:workspace")
+    # Safe for queued jobs and ensures active masters are not left running.
+    streamjob.terminate_master()
+    streamjob.delete()
+    response = redirect("nice_lite:workspace")
+    return response
+
+
 # ------------------------------------------------------------------
 # Stream Shell / Panel Payloads
 # ------------------------------------------------------------------
