@@ -48,6 +48,7 @@ module simple_ptcl_sieve
   use simple_cmdline,                     only: cmdline
   use simple_qsys_env,                    only: qsys_env
   use simple_rec_list,                    only: rec_list
+  use simple_image_bin,                   only: image_bin
   use simple_gui_utils,                   only: mrc2jpeg_tiled
   use simple_defs_fname,                  only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
   use simple_parameters,                  only: parameters
@@ -62,10 +63,11 @@ module simple_ptcl_sieve
                                                 CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
                                                 CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
                                                 CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
-  use simple_class_compatibility,         only: class_compatibility, support_model_metrics
+  use simple_class_compatibility,         only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
   use simple_cavg_quality_feats,          only: I_BP40_100_CENTER_EDGE_VAR, SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
+  use simple_segmentation,                only: otsu_img
 
   implicit none
   public :: ptcl_sieve
@@ -265,7 +267,7 @@ contains
         call self%coarse_compatibility_model%train(params%refs)
         call self%fine_compatibility_model%train(params%refs)
       else
-        THROW_HARD('Compatibility reference file not found: ' // params%refs%to_char())
+        write(logfhandle,'(A,A)') '>>> WARNING: compatibility refs not found, skipping pretraining: ', params%refs%to_char()
       end if
     end if
     call timer_stop(t0, string('new'))
@@ -1817,6 +1819,8 @@ contains
       y_start = (iy - 1) * JPEG_DIM + 1
       y_end   = iy * JPEG_DIM
 
+      call paint_mask_outline(rgb_map, cavg_imgs(icls), x_start, y_start)
+
       if( states(icls) > 0 ) then
         reason_code = -1
       else if( rejection_reasons(icls)%strlen() > 0 ) then
@@ -1941,6 +1945,67 @@ contains
         end do
       end do
     end subroutine paint_reason_border
+
+    ! Paint a 1px contour of the Otsu binary mask in light blue on one tile.
+    subroutine paint_mask_outline(rmap, src_img, x_start, y_start)
+      real,        intent(inout) :: rmap(:,:,:)
+      type(image), intent(inout) :: src_img
+      integer,     intent(in)    :: x_start, y_start
+      type(image)                :: local_img, mask_img
+      type(image_bin)            :: mask_bin, cc_img
+      real, allocatable          :: mask_vals(:,:,:)
+      integer, allocatable       :: cc_sizes(:)
+      integer                    :: ldim_local(3), i, j, imorph
+      logical                    :: boundary
+
+      ldim_local = src_img%get_ldim()
+      call local_img%copy(src_img)
+      call local_img%fft
+      if( ldim_local(1) > JPEG_DIM ) then
+        call local_img%clip_inplace([JPEG_DIM, JPEG_DIM, 1])
+      else
+        call local_img%pad_inplace([JPEG_DIM, JPEG_DIM, 1], backgr=0., antialiasing=.false.)
+      end if
+      call local_img%ifft
+
+      call mask_img%copy(local_img)
+      call otsu_img(mask_img)
+      ! Apply 5 px morphological closing to the binary Otsu mask.
+      call mask_bin%transfer2bimg(mask_img)
+      do imorph = 1, PREPROCESS_MORPH_SIZE
+          call mask_bin%dilate()
+      end do
+      do imorph = 1, PREPROCESS_MORPH_SIZE
+          call mask_bin%erode()
+      end do
+
+      ! Keep only the largest connected foreground component in the mask.
+      call mask_bin%find_ccs(cc_img)
+      cc_sizes = cc_img%size_ccs()
+      if( size(cc_sizes) > 0 .and. maxval(cc_sizes) > 0 )then
+          call cc_img%cc2bin(maxloc(cc_sizes, dim=1))
+          call mask_bin%copy_bimg(cc_img)
+      end if
+      
+      mask_vals = mask_bin%get_rmat()
+
+      do j = 1, JPEG_DIM
+        do i = 1, JPEG_DIM
+          if( mask_vals(i,j,1) < 0.5 ) cycle
+          boundary = (i == 1) .or. (i == JPEG_DIM) .or. (j == 1) .or. (j == JPEG_DIM)
+          if( .not. boundary ) then
+            boundary = mask_vals(i-1,j,1) < 0.5 .or. mask_vals(i+1,j,1) < 0.5 .or. &
+                       mask_vals(i,j-1,1) < 0.5 .or. mask_vals(i,j+1,1) < 0.5
+          end if
+          if( boundary ) rmap(x_start + i - 1, y_start + j - 1, 1) = rgb_code(120, 205, 255)
+        end do
+      end do
+      if( allocated(cc_sizes)  ) deallocate(cc_sizes)
+      if( allocated(mask_vals) ) deallocate(mask_vals)
+      call mask_bin%kill_bimg()
+      call mask_img%kill()
+      call local_img%kill()
+    end subroutine paint_mask_outline
 
     pure subroutine draw_reason_key_swatches(rmap)
       real, intent(inout) :: rmap(:,:,:)

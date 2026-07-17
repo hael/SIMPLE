@@ -673,8 +673,8 @@ subroutine set_ui_params
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in class-average quality model preset'//&
-                                   '(chunk100mics){chunk100mics}', &
-                                   'Quality model(chunk100mics){chunk100mics}', &
+                                   '(chunk100mics|none){chunk100mics}', &
+                                   'Quality model(chunk100mics|none){chunk100mics}', &
                                    .false., 'chunk100mics')
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &

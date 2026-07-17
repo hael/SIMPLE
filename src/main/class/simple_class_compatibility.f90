@@ -18,7 +18,7 @@ use simple_srch_sort_loc,         only: hpsort
 
 implicit none
 
-public :: class_compatibility, support_model_metrics
+public :: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
 
 private
 #include "simple_local_flags.inc"
@@ -36,7 +36,7 @@ real,    parameter :: DEFAULT_QHI            = 0.93
 real,    parameter :: CONV_ABS_EPS           = 0.5                           ! Absolute tolerance (pixels) for axis stability
 real,    parameter :: CONV_REL_EPS           = 0.01                          ! Relative tolerance for axis stability
 real,    parameter :: RESCUE_EDGE_FRAC       = 0.00                          ! Extra margin for boundary rescue in size compatibility
-real,    parameter :: SUPPORT_EDGE_SOFT_FRAC = 0.0                           ! Soft edge slack for c/a bounds during support check
+real,    parameter :: SUPPORT_EDGE_SOFT_FRAC_MAX = 0.05                      ! Initial soft edge slack (5%) for c/a bounds during support check
 real,    parameter :: RELAX_GRID(NRELAX)     = [0.03, 0.05, 0.07, 0.1, 0.15] ! Relative interval expansion candidates
 real,    parameter :: QLOW_GRID(NQ)          = [0.05, 0.1, 0.15]             ! Lower-quantile candidates for c-axis estimate
 real,    parameter :: QHIGH_GRID(NQ)         = [0.85, 0.9, 0.95]             ! Upper-quantile candidates for a-axis estimate
@@ -75,6 +75,7 @@ type :: support_model
     real                                          :: used_relax  = DEFAULT_RELAX
     real                                          :: used_qlo    = DEFAULT_QLO
     real                                          :: used_qhi    = DEFAULT_QHI
+    real                                          :: used_soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX
 end type support_model
 
 type :: class_compatibility
@@ -135,6 +136,7 @@ contains
         self%support_model%used_relax = DEFAULT_RELAX
         self%support_model%used_qlo   = DEFAULT_QLO
         self%support_model%used_qhi   = DEFAULT_QHI
+        self%support_model%used_soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX
         self%support_model%delta_valid = .false.
         self%support_model%converged  = .false.
         self%support_model%valid      = .false.
@@ -284,8 +286,9 @@ contains
             call img_loc%pad_inplace(ldim_target)
         end if
         call img_loc%ifft()
+        write(logfhandle, *) "smpd_raw", img_loc%get_smpd()
         call img_loc%set_smpd(img_loc%get_smpd() * real(ldim(1)) / real(ldim_target(1)))
-
+        write(logfhandle, *) "smpd_scaled", img_loc%get_smpd()
         ! Compute Otsu threshold and binary mask.
         call otsu_img(img_loc)
 
@@ -364,6 +367,7 @@ contains
         real    :: c_cur, b_cur, a_cur, c_soft, a_soft
         real    :: c_best, b_best, a_best
         real    :: relax_best, qlo_best, qhi_best
+        real    :: soft_frac, dc_norm, db_norm, da_norm, stability
         real    :: c_prev, b_prev, a_prev
         real    :: dc, db, da
 
@@ -371,6 +375,17 @@ contains
         c_prev = self%support_model%axis_c
         b_prev = self%support_model%axis_b
         a_prev = self%support_model%axis_a
+
+        ! Start permissive (5%) and decay with axis-update stability from prior fit.
+        soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX
+        if( self%support_model%delta_valid )then
+            dc_norm = self%support_model%delta_c / max(CONV_ABS_EPS, CONV_REL_EPS * max(abs(c_prev), 1.0))
+            db_norm = self%support_model%delta_b / max(CONV_ABS_EPS, CONV_REL_EPS * max(abs(b_prev), 1.0))
+            da_norm = self%support_model%delta_a / max(CONV_ABS_EPS, CONV_REL_EPS * max(abs(a_prev), 1.0))
+            stability = max(dc_norm, db_norm, da_norm)
+            soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX * min(1.0, max(0.0, stability))
+        end if
+        if( self%support_model%converged ) soft_frac = 0.0
 
         if( .not. allocated(self%support_model%training_set) )then
             write(logfhandle,'(A)') 'cavg_compat: support_model training set is not allocated'
@@ -526,8 +541,8 @@ contains
                     do i = 1, nn
                         left = mins(i) * (1.0 - relax_cur)
                         right = maxs(i) * (1.0 + relax_cur)
-                        c_soft = c_cur * (1.0 - relax_cur - SUPPORT_EDGE_SOFT_FRAC)
-                        a_soft = a_cur * (1.0 + relax_cur + SUPPORT_EDGE_SOFT_FRAC)
+                        c_soft = c_cur * (1.0 - relax_cur - soft_frac)
+                        a_soft = a_cur * (1.0 + relax_cur + soft_frac)
                         in_b = (b_cur >= left .and. b_cur <= right)
                         in_c = (mins(i) >= c_cur * (1.0 - relax_cur))
                         in_a = (maxs(i) <= a_cur * (1.0 + relax_cur))
@@ -570,6 +585,7 @@ contains
         self%support_model%used_relax = relax_best
         self%support_model%used_qlo   = qlo_best
         self%support_model%used_qhi   = qhi_best
+        self%support_model%used_soft_frac = soft_frac
         self%support_model%valid = .true.
 
         ! Convergence requires a previous fit and stable c/b/a updates.
