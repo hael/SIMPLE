@@ -179,6 +179,7 @@ contains
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
+        use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
         class(commander_simulate_movie), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)     :: params
@@ -269,6 +270,7 @@ contains
         write(logfhandle,'(a)') '>>> GENERATING MOVIE FRAMES'
         call base_image%fft()
         call base_image%mul(-1.) ! invert contrast
+        call memoize_ft_maps(base_image%get_ldim(), base_image%get_smpd())
         do i=1,params%nframes
             call progress(i,params%nframes)
             ! shift base image
@@ -312,6 +314,15 @@ contains
         if( params%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
         call build%spproj_field%write(string('simulate_movie_params')//TXT_EXT, [1,build%spproj_field%get_noris()])
+        ! Release image/FFTW state when this commander is invoked in-process by a
+        ! workflow.  The standalone executable used to hide these missing kills
+        ! by letting the operating system reclaim everything at process exit.
+        call base_image%kill
+        call shifted_base_image%kill
+        call build%kill_general_tbox
+        call forget_ft_maps
+        if( allocated(ptcl_positions) ) deallocate(ptcl_positions)
+        if( allocated(shifts)         ) deallocate(shifts)
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 
