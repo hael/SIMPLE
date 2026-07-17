@@ -428,25 +428,28 @@ subroutine exec_test_simulated_workflow( self, cline )
     use simple_ui,            only: make_ui
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    character(len=*), parameter :: WORKDIR      = 'test_simulated_workflow'
-    character(len=*), parameter :: PROJNAME     = 'simulated_workflow'
-    character(len=*), parameter :: PROJFILE     = PROJNAME//'.simple'
-    character(len=*), parameter :: VOL_FILE     = '6VXX.mrc'
-    character(len=*), parameter :: REPROJ_FILE  = 'reprojs_6VXX.mrcs'
-    character(len=*), parameter :: MOVIE_FILE   = 'simulate_movie.mrc'
-    character(len=*), parameter :: SUBSET_FILE  = 'random_reprojections.mrcs'
-    character(len=*), parameter :: OPTIMAL_FILE = 'optimal_movie_average.mrc'
-    character(len=*), parameter :: PARAMS_FILE  = 'simulate_movie_params.txt'
+    character(len=*), parameter :: WORKDIR       = 'test_simulated_workflow'
+    character(len=*), parameter :: PROJNAME      = 'simulated_workflow'
+    character(len=*), parameter :: PROJFILE      = PROJNAME//'.simple'
+    character(len=*), parameter :: VOL_FILE      = '6VXX.mrc'
+    character(len=*), parameter :: REPROJ_FILE   = 'reprojs_6VXX.mrcs'
+    character(len=*), parameter :: MOVIE_FILE    = 'simulate_movie.mrc'
+    character(len=*), parameter :: SUBSET_FILE   = 'random_reprojections.mrcs'
+    character(len=*), parameter :: OPTIMAL_FILE  = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE   = 'simulate_movie_params.txt'
+    character(len=*), parameter :: WORKFLOW_PICKER = 'segdiam'
+    ! Reference-picker alternative: comment the line above and uncomment the line below.
+    ! character(len=*), parameter :: WORKFLOW_PICKER = 'new'
     character(len=*), parameter :: PICKREFS_FILE = 'pickrefs.mrc'
-    character(len=*), parameter :: FILETAB_FILE = 'simulated_movies.txt'
-    character(len=*), parameter :: VOL_DIR      = '0_pdb2mrc'
-    character(len=*), parameter :: REPROJ_DIR   = '1_reproject'
-    character(len=*), parameter :: IMPORT_DIR   = '1_import_movies'
-    character(len=*), parameter :: MOTION_DIR   = '2_motion_correct'
-    character(len=*), parameter :: CTF_DIR      = '3_ctf_estimate'
-    character(len=*), parameter :: PICK_DIR     = '4_pick'
-    character(len=*), parameter :: EXTRACT_DIR  = '5_extract'
-    character(len=*), parameter :: ABINIT2D_DIR = '6_abinitio2D'
+    character(len=*), parameter :: FILETAB_FILE  = 'simulated_movies.txt'
+    character(len=*), parameter :: VOL_DIR       = '0_pdb2mrc'
+    character(len=*), parameter :: REPROJ_DIR    = '1_reproject'
+    character(len=*), parameter :: IMPORT_DIR    = '1_import_movies'
+    character(len=*), parameter :: MOTION_DIR    = '2_motion_correct'
+    character(len=*), parameter :: CTF_DIR       = '3_ctf_estimate'
+    character(len=*), parameter :: PICK_DIR      = '4_pick'
+    character(len=*), parameter :: EXTRACT_DIR   = '5_extract'
+    character(len=*), parameter :: ABINIT2D_DIR  = '6_abinitio2D'
     real,             parameter :: SMPD          = 1.3
     real,             parameter :: MSKDIAM       = 180.0
     real,             parameter :: CS            = 2.7
@@ -633,38 +636,48 @@ subroutine exec_test_simulated_workflow( self, cline )
     call update_project_path
     call return_to_stage_root('ctf_estimate')
 
-    write(logfhandle,'(a)') '>>> Step 7: reference-based particle picking'
+    write(logfhandle,'(a,a)') '>>> Step 7: particle picking with ', WORKFLOW_PICKER
     call cline_pick%set('prg',                   'pick')
     call cline_pick%set('projfile',        project_path)
     call cline_pick%set('mkdir',                  'yes')
-    call cline_pick%set('picker',                 'new')
-    call cline_pick%set('pickrefs',         reproj_path)
     call cline_pick%set('smpd',                    SMPD)
-    call cline_pick%set('moldiam',              MSKDIAM)
-    call cline_pick%set('pcontrast',            'black')
-    call cline_pick%set('pick_roi',                'no')
+    call cline_pick%set('pcontrast',             'black')
+    select case(WORKFLOW_PICKER)
+        case('segdiam')
+            call cline_pick%set('picker',         'segdiam')
+            call cline_pick%set('moldiam_max',     MSKDIAM)
+        case('new')
+            call cline_pick%set('picker',             'new')
+            call cline_pick%set('pickrefs',     reproj_path)
+            call cline_pick%set('moldiam',          MSKDIAM)
+            call cline_pick%set('pick_roi',            'no')
+        case default
+            THROW_HARD('Unsupported simulated-workflow picker: '//WORKFLOW_PICKER)
+    end select
     call cline_pick%set('nparts',                     1)
     call cline_pick%set('nthr',                    NTHR)
     call xpick%execute(cline_pick)
     call cline_pick%kill()
-    if( .not. file_exists(PICKREFS_FILE) ) THROW_HARD('Picking references were not generated')
-    call find_ldim_nptcls(string(PICKREFS_FILE), ldim, npickrefs)
-    pickref_smpd = find_img_smpd(string(PICKREFS_FILE))
-    pickref_width = real(ldim(1)) * pickref_smpd
-    if( ldim(1) /= ldim(2) .or. ldim(1) > reproj_box )then
-        THROW_HARD('Generated picking-reference dimensions are inconsistent with the reprojections')
+    if( WORKFLOW_PICKER == 'new' )then
+        if( .not. file_exists(PICKREFS_FILE) ) THROW_HARD('Picking references were not generated')
+        call find_ldim_nptcls(string(PICKREFS_FILE), ldim, npickrefs)
+        pickref_smpd = find_img_smpd(string(PICKREFS_FILE))
+        pickref_width = real(ldim(1)) * pickref_smpd
+        if( ldim(1) /= ldim(2) .or. ldim(1) > reproj_box )then
+            THROW_HARD('Generated picking-reference dimensions are inconsistent with the reprojections')
+        endif
+        if( abs(pickref_smpd - SMPD) > 0.01 )then
+            THROW_HARD('Generated picking-reference sampling distance is inconsistent with the micrographs')
+        endif
+        if( pickref_width < 0.75 * MSKDIAM .or. pickref_width > 1.25 * MSKDIAM )then
+            THROW_HARD('Generated picking-reference physical size is inconsistent with the particle diameter')
+        endif
+        if( EXTRACT_BOX < ldim(1) )then
+            THROW_HARD('Extraction box is smaller than the generated picking references')
+        endif
+        write(logfhandle,'(a,i0,a,f6.1,a)') '>>> VALIDATED PICKING REFERENCES: ', ldim(1), &
+            &' pixels, ', pickref_width, ' A across'
     endif
-    if( abs(pickref_smpd - SMPD) > 0.01 )then
-        THROW_HARD('Generated picking-reference sampling distance is inconsistent with the micrographs')
-    endif
-    if( pickref_width < 0.75 * MSKDIAM .or. pickref_width > 1.25 * MSKDIAM )then
-        THROW_HARD('Generated picking-reference physical size is inconsistent with the particle diameter')
-    endif
-    if( EXTRACT_BOX < ldim(1) )then
-        THROW_HARD('Extraction box is smaller than the generated picking references')
-    endif
-    write(logfhandle,'(a,i0,a,f6.1,a)') '>>> VALIDATED PICKING REFERENCES: ', ldim(1), &
-        &' pixels, ', pickref_width, ' A across'
     call update_project_path
     call return_to_stage_root('pick')
 

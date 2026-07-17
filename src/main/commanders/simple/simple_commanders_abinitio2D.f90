@@ -248,13 +248,15 @@ contains
                 if( .not. cline%defined('lpstart') ) params%lpstart = lpstart
                 if( .not. cline%defined('lpstop')  ) params%lpstop  = lpstop
                 if( trim(params%eo_stage)=='yes')then
-                    stage_parms(1)%lp      = params%lpstart
-                    stage_parms(1)%l_lpset = .true.
-                    do istage = 2, local_nstages-1
-                        stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
-                        stage_parms(istage)%l_lpset = .true.
-                    end do
-                    stage_parms(local_nstages-1)%lp    = params%lpstop
+                    if( local_nstages > 1 )then
+                        stage_parms(1)%lp      = params%lpstart
+                        stage_parms(1)%l_lpset = .true.
+                        do istage = 2, local_nstages-1
+                            stage_parms(istage)%lp      = stage_parms(istage-1)%lp - (stage_parms(istage-1)%lp - params%lpstop)/2.0
+                            stage_parms(istage)%l_lpset = .true.
+                        end do
+                        stage_parms(local_nstages-1)%lp = params%lpstop
+                    endif
                     stage_parms(local_nstages)%l_lpset = .false.
                     stage_parms(local_nstages)%lp      = params%lpstop
                 else
