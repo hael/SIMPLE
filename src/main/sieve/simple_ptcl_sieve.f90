@@ -1954,12 +1954,17 @@ contains
       type(image)                :: local_img, mask_img
       type(image_bin)            :: mask_bin, cc_img
       real, allocatable          :: mask_vals(:,:,:)
+      real, allocatable          :: weight_vals(:,:,:)
       integer, allocatable       :: cc_sizes(:)
       integer                    :: ldim_local(3), i, j, imorph
+      integer                    :: nx, ny
+      real                       :: cx, cy, r2, r2max, radial_w
       logical                    :: boundary
 
       ldim_local = src_img%get_ldim()
       call local_img%copy(src_img)
+      call local_img%zero_edgeavg()
+      call local_img%bp(0., 10.)
       call local_img%fft
       if( ldim_local(1) > JPEG_DIM ) then
         call local_img%clip_inplace([JPEG_DIM, JPEG_DIM, 1])
@@ -1968,7 +1973,24 @@ contains
       end if
       call local_img%ifft
 
+      ! Center-weight intensities before Otsu so dark/bright edge backgrounds
+      ! are less likely to dominate the selected foreground component.
+      weight_vals = local_img%get_rmat()
+      nx = size(weight_vals, 1)
+      ny = size(weight_vals, 2)
+      cx = 0.5 * real(nx + 1)
+      cy = 0.5 * real(ny + 1)
+      r2max = max(1.0, (0.5 * real(min(nx, ny)))**2)
+      do j = 1, ny
+        do i = 1, nx
+          r2 = (real(i) - cx)**2 + (real(j) - cy)**2
+          radial_w = 0.35 + 0.65 * max(0.0, 1.0 - min(1.0, r2 / r2max))
+          weight_vals(i,j,1) = weight_vals(i,j,1) * radial_w
+        end do
+      end do
+
       call mask_img%copy(local_img)
+      call mask_img%set_rmat(weight_vals, .false.)
       call otsu_img(mask_img)
       ! Apply 5 px morphological closing to the binary Otsu mask.
       call mask_bin%transfer2bimg(mask_img)
@@ -2000,6 +2022,7 @@ contains
           if( boundary ) rmap(x_start + i - 1, y_start + j - 1, 1) = rgb_code(120, 205, 255)
         end do
       end do
+      if( allocated(weight_vals) ) deallocate(weight_vals)
       if( allocated(cc_sizes)  ) deallocate(cc_sizes)
       if( allocated(mask_vals) ) deallocate(mask_vals)
       call mask_bin%kill_bimg()
