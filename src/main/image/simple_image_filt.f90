@@ -811,30 +811,53 @@ contains
     end subroutine apply_filter_serial
 
     ! don't touch default parameters here. This routine is being actively used
-    module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius )
+    module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius, gaussian_patch )
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
         integer, optional, intent(in) :: patch_size, search_radius
         real, optional, intent(in)    :: sdev_noise
-        real,  allocatable :: rmat_pad(:,:), rmat_filt(:,:), patch_means(:,:)
+        logical, optional, intent(in) :: gaussian_patch
+        real,  allocatable :: rmat_pad(:,:), rmat_filt(:,:), patch_means(:,:), patch_weights(:,:)
         integer, parameter :: DEFAULT_PATCH_SIZE    = 3  ! current default
         integer, parameter :: DEFAULT_SEARCH_RADIUS = 10 ! current default, gives a 21x21 search box
         real,    parameter :: DEFAULT_WEIGHT_THRESH = 1.e-3
         real,    parameter :: MEAN_GATE_NSIGMA      = 3.
         real    :: z, sigma, h, h_sq, avg, mmsk, min_weight, mean_gate, noise_bias
+        real    :: patch_sigma, patch_weight_sum, patch_weight_sq_sum
         real    :: ref_mean, dist, w
         integer :: i, j, m, n, ii, jj, pad, patch_rad, patch_sz, search_rad, npatch
+        logical :: l_gaussian_patch
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean2D')
         if( self%ft )      THROW_HARD('Real space only;NLmean2D')
         patch_sz  = DEFAULT_PATCH_SIZE
         search_rad = DEFAULT_SEARCH_RADIUS
         min_weight = DEFAULT_WEIGHT_THRESH
+        l_gaussian_patch = .false.
         if( present(patch_size) )      patch_sz   = patch_size
         if( present(search_radius) )   search_rad = search_radius
+        if( present(gaussian_patch) )  l_gaussian_patch = gaussian_patch
         if( patch_sz < 1 .or. mod(patch_sz,2) == 0 ) THROW_HARD('patch_size must be a positive odd integer; NLmean2D')
         if( search_rad < 0 ) THROW_HARD('search_radius must be non-negative; NLmean2D')
         patch_rad = patch_sz / 2
         npatch    = patch_sz * patch_sz
+        allocate(patch_weights(-patch_rad:patch_rad,-patch_rad:patch_rad), source=1.)
+        if( l_gaussian_patch )then
+            ! Gaussian radial patch support (NLM-SAP family); see Deledalle, Duval &
+            ! Salmon, "Non-Local Methods with Shape-Adaptive Patches", JMIV (2012).
+            ! Setting the standard deviation to the patch radius gives every patch
+            ! size the same relative profile without another public tuning parameter.
+            patch_sigma = max(real(patch_rad), 1.)
+            do j = -patch_rad,patch_rad
+                do i = -patch_rad,patch_rad
+                    patch_weights(i,j) = exp(-0.5 * real(i**2 + j**2) / patch_sigma**2.)
+                enddo
+            enddo
+            ! Preserve the uniform-patch SSD scale so the established h=4*sigma
+            ! bandwidth remains comparable when Gaussian weighting is enabled.
+            patch_weights = patch_weights * real(npatch) / sum(patch_weights)
+        endif
+        patch_weight_sum    = sum(patch_weights)
+        patch_weight_sq_sum = sum(patch_weights**2.)
         mmsk      = real(minval(self%ldim(1:2))) / 2. - real(patch_sz)
         if( present(msk) ) mmsk = msk
         if( present(sdev_noise) )then
@@ -850,8 +873,10 @@ contains
         pad       = search_rad + patch_rad
         h         = 4.*sigma
         h_sq      = h**2.
-        mean_gate = MEAN_GATE_NSIGMA * sqrt(2.0) * sigma / sqrt(real(npatch))
-        noise_bias = 2. * sigma**2. * real(npatch)
+        ! The weighted-mean variance depends on sum(w**2); for uniform weights
+        ! this reduces to the original sigma*sqrt(2/npatch) expression.
+        mean_gate = MEAN_GATE_NSIGMA * sqrt(2.0 * patch_weight_sq_sum) * sigma / patch_weight_sum
+        noise_bias = 2. * sigma**2. * patch_weight_sum
         allocate(rmat_pad(1-pad:self%ldim(1)+pad,1-pad:self%ldim(2)+pad))
         allocate(patch_means(1-search_rad:self%ldim(1)+search_rad,1-search_rad:self%ldim(2)+search_rad))
         allocate(rmat_filt(self%ldim(1),self%ldim(2)))
@@ -864,7 +889,8 @@ contains
         enddo
         do n = 1-search_rad,self%ldim(2)+search_rad
             do m = 1-search_rad,self%ldim(1)+search_rad
-                patch_means(m,n) = sum(rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad)) / real(npatch)
+                patch_means(m,n) = sum(patch_weights * &
+                    &rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad)) / patch_weight_sum
             enddo
         enddo
         !$omp parallel do schedule(static) default(shared) private(m,n,i,j,ii,jj,z,avg,ref_mean,dist,w)&
@@ -881,9 +907,10 @@ contains
                         ! Cheap Gaussian patch-mean gate: avoids full SSDs for candidates
                         ! whose mean difference is unlikely under stationary white noise.
                         if( abs(ref_mean - patch_means(ii,jj)) > mean_gate ) cycle
-                        ! For stationary white Gaussian noise, the SSD between two
-                        ! identical clean patches has expected noise energy 2*sigma^2*npatch.
-                        dist = max(sum((rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad) - &
+                        ! For stationary white Gaussian noise, the expected weighted
+                        ! SSD of two identical clean patches is 2*sigma^2*sum(weights).
+                        dist = max(sum(patch_weights * &
+                                  &(rmat_pad(m-patch_rad:m+patch_rad,n-patch_rad:n+patch_rad) - &
                                   &rmat_pad(ii-patch_rad:ii+patch_rad,jj-patch_rad:jj+patch_rad))**2.) - noise_bias, 0.)
                         w = exp(-dist / h_sq)
                         if( w < min_weight ) cycle

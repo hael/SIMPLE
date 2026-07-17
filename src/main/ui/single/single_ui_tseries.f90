@@ -7,6 +7,7 @@ type(ui_program), target :: track_particles
 type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
 type(ui_program), target :: tseries_motion_correct
+type(ui_program), target :: tseries_prep4tracking
 
 contains
 
@@ -16,6 +17,7 @@ contains
         call new_tseries_import(prgtab)
         call new_tseries_make_pickavg(prgtab)
         call new_tseries_motion_correct(prgtab)
+        call new_tseries_prep4tracking(prgtab)
     end subroutine construct_single_tseries_programs
 
     subroutine print_single_tseries_programs(logfhandle)
@@ -25,6 +27,7 @@ contains
         write(logfhandle,'(A)') tseries_import%name%to_char()
         write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
         write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
+        write(logfhandle,'(A)') tseries_prep4tracking%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_single_tseries_programs
 
@@ -183,4 +186,31 @@ contains
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
     end subroutine new_tseries_motion_correct
 
+        subroutine new_tseries_prep4tracking( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call tseries_prep4tracking%new(&
+        &'tseries_prep4tracking',&                                                        ! name
+        &'Prepare time-series for particle tracking',&                                    ! descr_short
+        &'is a program for preparing time-series for preparing particle tracking',&       ! descr_long
+        &'single_exec',&                                                                  ! executable
+        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_prep4tracking%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab)
+    end subroutine new_tseries_prep4tracking
 end module single_ui_tseries

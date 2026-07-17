@@ -1351,11 +1351,12 @@ interface
         real,         intent(in)    :: filter(:)
     end subroutine apply_filter_serial
 
-    module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius )
+    module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius, gaussian_patch )
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
         real, optional, intent(in)    :: sdev_noise
         integer, optional, intent(in) :: patch_size, search_radius
+        logical, optional, intent(in) :: gaussian_patch
     end subroutine NLmean2D
 
     module subroutine NLmean2D_eo( even, odd, avg )
