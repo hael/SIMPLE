@@ -265,9 +265,11 @@ contains
         type(image),                intent(in)    :: img
         real,                       intent(out)   :: min_dim, max_dim
         integer,                    allocatable   :: cc_sizes(:)
+        real,                       allocatable   :: weight_vals(:,:,:)
         type(image)                               :: img_loc
         type(image_bin)                           :: mask_loc, cc_img
-        integer                                   :: imorph
+        integer                                   :: imorph, nx, ny, i, j
+        real                                      :: cx, cy, r2, r2max, radial_w
         integer                                   :: ldim(3), ldim_target(3)
         min_dim = 0.0
         max_dim = 0.0
@@ -286,9 +288,26 @@ contains
             call img_loc%pad_inplace(ldim_target)
         end if
         call img_loc%ifft()
-        write(logfhandle, *) "smpd_raw", img_loc%get_smpd()
         call img_loc%set_smpd(img_loc%get_smpd() * real(ldim(1)) / real(ldim_target(1)))
-        write(logfhandle, *) "smpd_scaled", img_loc%get_smpd()
+
+        ! Center-weight intensities before Otsu so dark/bright edge backgrounds
+        ! are less likely to dominate the selected foreground component.
+        weight_vals = img_loc%get_rmat()
+        nx = size(weight_vals, 1)
+        ny = size(weight_vals, 2)
+        cx = 0.5 * real(nx + 1)
+        cy = 0.5 * real(ny + 1)
+        r2max = max(1.0, (0.5 * real(min(nx, ny)))**2)
+        do j = 1, ny
+            do i = 1, nx
+            r2 = (real(i) - cx)**2 + (real(j) - cy)**2
+            radial_w = 0.2 + 0.8 * max(0.0, 1.0 - min(1.0, r2 / r2max))
+            weight_vals(i,j,1) = weight_vals(i,j,1) * radial_w
+            end do
+        end do
+        call img_loc%set_rmat(weight_vals, .false.)
+        if( allocated(weight_vals) ) deallocate(weight_vals)
+
         ! Compute Otsu threshold and binary mask.
         call otsu_img(img_loc)
 

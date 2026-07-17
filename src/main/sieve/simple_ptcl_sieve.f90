@@ -1984,7 +1984,7 @@ contains
       do j = 1, ny
         do i = 1, nx
           r2 = (real(i) - cx)**2 + (real(j) - cy)**2
-          radial_w = 0.35 + 0.65 * max(0.0, 1.0 - min(1.0, r2 / r2max))
+          radial_w = 0.2 + 0.8 * max(0.0, 1.0 - min(1.0, r2 / r2max))
           weight_vals(i,j,1) = weight_vals(i,j,1) * radial_w
         end do
       end do
