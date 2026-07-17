@@ -9,7 +9,7 @@ use simple_nanoparticle
 use simple_flex_eigenvol_strategy, only: run_flex_eigenvol_linear
 use simple_projected_latent_result, only: projected_latent_fit_result
 use simple_trajectory_chunker, only: trajectory_chunk_plan, make_trajectory_chunk_plan, &
-    &trajectory_chunks_to_parts, write_trajectory_chunks_csv
+    &select_trajectory_chunk_plan, trajectory_chunks_to_parts, write_trajectory_chunks_csv
 use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
     &refine3D_state_vol_fbody, refine3D_state_vol_fname
 implicit none
@@ -325,6 +325,7 @@ contains
         integer, allocatable :: frame_inds(:)
         integer :: state, ipart, istate, nptcls, frame_start, frame_end
         integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime, nchunks_eff
+        logical :: auto_chunk_count
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
@@ -360,8 +361,15 @@ contains
         ! states/stepz
         nptcls = size(rstates)
         if( trim(params%chunk_mode) == 'latent' )then
+            auto_chunk_count = .false.
             if( cline%defined('nchunks') .and. params%nchunks > 0 )then
                 nchunks_eff = params%nchunks
+            else if( params%nchunks_min > 0 .or. params%nchunks_max > 0 )then
+                if( params%nchunks_min < 1 .or. params%nchunks_max < params%nchunks_min )then
+                    THROW_HARD('latent automatic chunk count requires 1 <= nchunks_min <= nchunks_max')
+                endif
+                auto_chunk_count = .true.
+                nchunks_eff = 0
             else
                 nchunks_eff = max(1, nint(real(nptcls) / real(max(1,params%stepsz))))
             endif
@@ -371,9 +379,17 @@ contains
             do i = 1, latent_fit%nptcls
                 frame_inds(i) = nint(spproj%os_ptcl3D%get(latent_fit%pinds(i), 'pind'))
             end do
-            call make_trajectory_chunk_plan(latent_fit, frame_inds, nchunks_eff, &
-                &max(1, nint(real(nptcls) / real(nchunks_eff))), &
-                &params%chunk_min_len, params%chunk_max_len, params%chunk_max_shift, chunk_plan)
+            if( auto_chunk_count )then
+                call select_trajectory_chunk_plan(latent_fit, frame_inds, params%nchunks_min, &
+                    &params%nchunks_max, params%chunk_min_len, params%chunk_max_len, &
+                    &params%chunk_max_shift, params%chunk_count_penalty, chunk_plan, &
+                    &'trajectory_chunk_scan.csv')
+                nchunks_eff = size(chunk_plan%chunks)
+            else
+                call make_trajectory_chunk_plan(latent_fit, frame_inds, nchunks_eff, &
+                    &max(1, nint(real(nptcls) / real(nchunks_eff))), &
+                    &params%chunk_min_len, params%chunk_max_len, params%chunk_max_shift, chunk_plan)
+            endif
             call trajectory_chunks_to_parts(chunk_plan, parts)
             call write_trajectory_chunks_csv(chunk_plan, 'trajectory_chunks.csv')
             call latent_fit%kill

@@ -379,6 +379,8 @@ type :: parameters
     integer :: minits=0            !< minimum # iterations
     integer :: nboxes_max=0
     integer :: nchunks=0
+    integer :: nchunks_max=0       !< maximum candidate temporal chunk count for automatic selection
+    integer :: nchunks_min=0       !< minimum candidate temporal chunk count for automatic selection
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
@@ -485,6 +487,7 @@ type :: parameters
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
+    real    :: chunk_count_penalty=0.05 !< complexity penalty per additional temporal chunk
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
