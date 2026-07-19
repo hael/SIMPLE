@@ -127,14 +127,15 @@ contains
         call self%build_spproj(params, cline)
     end subroutine init_params_and_build_spproj
 
-    subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
+    subroutine init_params_and_build_general_tbox( self, cline, params, do3d, need3Dobjs )
         class(builder),    target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(parameters),         intent(inout) :: params
         logical,         optional, intent(in)    :: do3d
+        logical,         optional, intent(in)    :: need3Dobjs
         call params%new(cline)
         call self%build_spproj(params, cline)
-        call self%build_general_tbox(params, cline, do3d=do3d)
+        call self%build_general_tbox(params, cline, do3d=do3d, need3Dobjs=need3Dobjs)
     end subroutine init_params_and_build_general_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params, wthreads )
@@ -228,11 +229,12 @@ contains
 
     end subroutine build_spproj
 
-    subroutine build_general_tbox( self, params, cline, do3d)
+    subroutine build_general_tbox( self, params, cline, do3d, need3Dobjs)
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
+        logical, optional,      intent(in)    :: need3Dobjs
         type(srchspace_map) :: sub_mapper
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
@@ -243,7 +245,11 @@ contains
         real :: dtmp, inplrotdist
         call self%kill_general_tbox
         ddo3d = .true.
-        if( present(do3d) ) ddo3d = do3d
+        if( present(need3Dobjs) )then
+            ddo3d = need3Dobjs
+        else if( present(do3d) )then
+            ddo3d = do3d
+        endif
         l_direct_prob_neigh = trim(params%refine) == 'prob_neigh' .and.&
             &(trim(params%prob_neigh_mode) == 'shc' .or. trim(params%prob_neigh_mode) == 'snhc')
         ! set up symmetry functionality

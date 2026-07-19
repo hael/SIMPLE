@@ -768,9 +768,9 @@ contains
             case DEFAULT
         end select
         select case(trim(self%prob_neigh_mode))
-            case('state','geom','shc','snhc')
+            case('state','geom','shc','snhc','prior')
             case DEFAULT
-                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
+                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc|prior')
         end select
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then

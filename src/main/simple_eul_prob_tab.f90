@@ -9,6 +9,8 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sa
     &write_seed_shift_table, prob_candidate, prob_candidate_buffer
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_type_defs,        only: OBJFUN_EUCLID
+use simple_prob_prior3D,     only: prior3d_writer, PRIOR3D_NREMAP
+use simple_segmentation,     only: detect_peak_thres_fdr
 implicit none
 
 public :: eul_prob_tab
@@ -16,6 +18,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: PROB_TAB_IO_CHUNK = 1024
+real,    parameter :: PRIOR3D_FDR_Q      = 0.25 !< BH-FDR q: expected false-discovery fraction among retained directions
 
 type :: eul_prob_tab
     class(builder),    pointer  :: b_ptr => null()
@@ -63,6 +66,7 @@ type :: eul_prob_tab
     procedure :: read_tab_to_glob
     procedure :: ref_assign
     procedure :: write_assignment
+    procedure :: write_prior3D
     procedure :: state_assign
     ! REFERENCE INDEX MAPPING
     procedure :: ref_state
@@ -1067,6 +1071,90 @@ contains
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
     end subroutine write_assignment
+
+    ! Writes the dense calibrated likelihood support used by a later finer-grid
+    ! prob_neigh stage.  The artifact is deliberately a truncated support, not
+    ! a claim to represent the full joint posterior over pose.
+    subroutine write_prior3D( self, binfname )
+        class(eul_prob_tab), intent(in) :: self
+        class(string),       intent(in) :: binfname
+        type(prior3d_writer) :: writer
+        integer, allocatable :: cand_iref(:), cand_state(:), cand_proj(:), cand_inpl(:), cand_has_sh(:)
+        integer, allocatable :: out_state(:), out_proj(:), out_inpl(:), out_has_sh(:)
+        real,    allocatable :: cand_dist(:), work_dist(:), cand_weight(:), out_dist(:), out_weight(:)
+        real,    allocatable :: out_x(:), out_y(:), out_euls(:,:)
+        real :: dist_thres, dmin, norm, euls(3)
+        integer :: i, k, ncand, kmax, k_this, npeaks_detected, pick, iproj
+        if( .not. allocated(self%loc_tab) )then
+            THROW_WARN('write_prior3D requires a dense probability table; no artifact written')
+            return
+        endif
+        if( self%nptcls < 1 .or. self%nrefs < 1 ) return
+        kmax = min(self%nrefs, max(PRIOR3D_NREMAP, min(128, max(1, 8*self%p_ptr%npeaks_inpl))))
+        allocate(cand_iref(self%nrefs), cand_state(self%nrefs), cand_proj(self%nrefs), cand_inpl(self%nrefs),&
+            &cand_has_sh(self%nrefs), cand_dist(self%nrefs), work_dist(self%nrefs), cand_weight(self%nrefs))
+        allocate(out_state(kmax), out_proj(kmax), out_inpl(kmax), out_has_sh(kmax))
+        allocate(out_dist(kmax), out_weight(kmax), out_x(kmax), out_y(kmax), out_euls(3,kmax))
+        call writer%open(binfname%to_char(), self%nptcls, self%p_ptr%nstates, self%p_ptr%nspace,&
+            &self%p_ptr%nspace_sub, kmax, self%p_ptr%pgrp, self%pinds)
+        do i = 1, self%nptcls
+            ncand = 0
+            do k = 1, self%nrefs
+                if( self%loc_tab(k,i)%inpl < 1 ) cycle
+                if( .not. ieee_is_finite(self%loc_tab(k,i)%dist) ) cycle
+                ncand = ncand + 1
+                cand_iref(ncand) = k
+                cand_state(ncand) = self%ref_state(k)
+                cand_proj(ncand) = self%ref_proj(k)
+                cand_inpl(ncand) = self%loc_tab(k,i)%inpl
+                cand_has_sh(ncand) = merge(1, 0, self%loc_tab(k,i)%has_sh)
+                cand_dist(ncand) = self%loc_tab(k,i)%dist
+            enddo
+            if( ncand < 1 )then
+                call writer%write_row(self%pinds(i), 0, 0., out_state, out_proj, out_inpl, out_has_sh,&
+                    &out_dist, out_weight, out_x, out_y, out_euls)
+                cycle
+            endif
+            work_dist(1:ncand) = cand_dist(1:ncand)
+            call detect_peak_thres_fdr(ncand, work_dist(1:ncand), PRIOR3D_FDR_Q, 1, min(kmax,ncand),&
+                &dist_thres, npeaks_detected, lower_tail=.true.)
+            k_this = min(kmax, ncand, max(1, npeaks_detected))
+            dmin = minval(cand_dist(1:ncand))
+            cand_weight(1:ncand) = exp(-(cand_dist(1:ncand)-dmin))
+            norm = sum(cand_weight(1:ncand))
+            if( norm > 0. ) cand_weight(1:ncand) = cand_weight(1:ncand) / norm
+            out_state = 0
+            out_proj = 0
+            out_inpl = 0
+            out_has_sh = 0
+            out_dist = 0.
+            out_weight = 0.
+            out_x = 0.
+            out_y = 0.
+            out_euls = 0.
+            do k = 1, k_this
+                pick = minloc(work_dist(1:ncand), dim=1)
+                work_dist(pick) = huge(1.0)
+                out_state(k) = cand_state(pick)
+                out_proj(k) = cand_proj(pick)
+                out_inpl(k) = cand_inpl(pick)
+                out_has_sh(k) = cand_has_sh(pick)
+                out_dist(k) = cand_dist(pick)
+                out_weight(k) = cand_weight(pick)
+                out_x(k) = self%loc_tab(cand_iref(pick),i)%x
+                out_y(k) = self%loc_tab(cand_iref(pick),i)%y
+                iproj = out_proj(k)
+                euls = self%b_ptr%eulspace%get_euler(iproj)
+                out_euls(:,k) = euls
+            enddo
+            call writer%write_row(self%pinds(i), k_this, sum(out_weight(1:k_this)), out_state, out_proj, out_inpl, out_has_sh,&
+                &out_dist, out_weight, out_x, out_y, out_euls)
+        enddo
+        call writer%close
+        call writer%kill
+        deallocate(cand_iref, cand_state, cand_proj, cand_inpl, cand_has_sh, cand_dist, work_dist, cand_weight,&
+            &out_state, out_proj, out_inpl, out_has_sh, out_dist, out_weight, out_x, out_y, out_euls)
+    end subroutine write_prior3D
 
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )

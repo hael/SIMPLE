@@ -113,6 +113,11 @@ the retained-mass and `K_min`/`K_max` guards. This preserves multiple separated
 low-distance modes and avoids treating a fixed fraction of references as a
 posterior neighborhood.
 
+The FDR parameter `PRIOR3D_FDR_Q=0.25` is a false-discovery-rate target for the
+statistical thresholding step. It does not mean that 25% of the projection
+directions should be retained; the realized support size remains particle-
+dependent and is bounded by the support policy.
+
 A sparse table containing only candidates chosen by an earlier geometric or
 random search does not by itself define a global posterior support set. The
 first 3D producer should therefore use dense `prob` tables, or apply known
@@ -325,6 +330,13 @@ Fallback behavior must be explicit and logged, including the number of
 particles that used prior support versus the configured fallback mode, the
 realized neighborhood-size distribution, remapping distances, and the number
 of source rows expanded.
+
+The fallback must remain bounded. For single-state and
+`multivol_mode=independent` workflows, an incompatible prior falls back to the
+`prob_neigh_mode=state` coarse-scored neighborhood. For
+`multivol_mode=docked`, it falls back to the `prob_neigh_mode=geom` projected
+neighborhood. It must never silently expand to a full reference search merely
+because the prior artifact is unavailable.
 
 ## 8. Ownership and invariants
 

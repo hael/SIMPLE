@@ -1,6 +1,7 @@
 !@descr: neighborhood extension of probabilistic 3D search table.
 ! The sparse neighborhood is geometrically sparse and searched independently per state.
 module simple_eul_prob_tab_neigh
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
@@ -8,6 +9,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch,&
     &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
     &prob_candidate, prob_candidate_store
+use simple_prob_prior3D,       only: prior3d_reader, PRIOR3D_FNAME, PRIOR3D_NREMAP
 use simple_decay_funs,        only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
@@ -89,6 +91,8 @@ contains
         select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
                 self%l_direct_stoch_neigh = .true.
+            case('prior')
+                self%l_direct_stoch_neigh = .true.
             case('geom','state')
                 self%l_direct_stoch_neigh = .false.
                 if( .not. allocated(self%b_ptr%subspace_inds) )then
@@ -121,11 +125,121 @@ contains
                 if( .not. allocated(self%b_ptr%subspace_inds) )&
                     &THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_subspace_range; missing subspace indices')
                 call fill_tab_subspace_range(self, i_first, i_last)
+            case('prior')
+                call fill_tab_prior_range(self, i_first, i_last)
             case DEFAULT
                 THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_neigh_range; unsupported prob_neigh_mode')
         end select
         if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_neigh_range
+
+    ! PRIOR SUPPORT BRANCH
+    !
+    ! The prior records were produced on the preceding dense grid.  A finer
+    ! current grid is handled by mapping each stored projection to the three
+    ! nearest current-grid directions under point-group symmetry.  This is the
+    ! only resolution-change rule: a coarser target is deliberately rejected,
+    ! since aggregation would lose support. In that case the caller uses the
+    ! bounded state/geom neighborhood policy for the workflow.
+    subroutine fill_tab_prior_range( self, i_first, i_last )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, intent(in) :: i_first, i_last
+        type(prior3d_reader) :: readers(nthr_glob)
+        type(ori) :: source_o
+        logical, allocatable :: lnns(:,:), mapped_mask(:,:)
+        integer, allocatable :: mapped_refs(:,:), mapped_count(:)
+        integer, allocatable :: inds_sorted(:,:)
+        real, allocatable :: dists_inpl(:,:)
+        real :: shift(2), dist, corr
+        integer :: i, k, iproj, ri, full_ref, irot, ithr, istate, nrots
+        integer :: i_from, i_to
+        logical :: ok, okrow, valid
+        character(len=8) :: fallback_mode
+        i_from = max(1, i_first)
+        i_to   = min(self%nptcls, i_last)
+        if( i_to < i_from ) return
+        valid = .true.
+        do ithr = 1, nthr_glob
+            call readers(ithr)%open(PRIOR3D_FNAME, ok)
+            valid = valid .and. ok
+        enddo
+        if( valid )then
+            valid = readers(1)%nptcls == self%nptcls .and. readers(1)%nstates == self%p_ptr%nstates .and.&
+                &readers(1)%source_nspace <= self%p_ptr%nspace .and.&
+                &trim(readers(1)%pgrp) == trim(self%p_ptr%pgrp) .and.&
+                &size(readers(1)%pinds) == size(self%pinds) .and.&
+                &all(readers(1)%pinds == self%pinds)
+        endif
+        if( valid )then
+            do ithr = 2, nthr_glob
+                valid = valid .and. readers(ithr)%source_nspace == readers(1)%source_nspace
+            enddo
+        endif
+        if( .not. valid )then
+            do ithr = 1, nthr_glob
+                call readers(ithr)%kill
+            enddo
+            fallback_mode = 'state'
+            if( trim(self%p_ptr%multivol_mode) == 'docked' ) fallback_mode = 'geom'
+            THROW_WARN('prob_neigh_mode=prior: support artifact missing or incompatible; falling back to bounded prob_neigh_mode='//trim(fallback_mode)//' search')
+            call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
+            return
+        endif
+        nrots = self%b_ptr%pftc%get_nrots()
+        allocate(lnns(self%p_ptr%nspace,nthr_glob), mapped_mask(self%nrefs,nthr_glob),&
+            &mapped_refs(self%nrefs,nthr_glob), mapped_count(nthr_glob),&
+            &dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
+        lnns = .false.
+        mapped_mask = .false.
+        mapped_refs = 0
+        mapped_count = 0
+        dists_inpl = 0.
+        inds_sorted = 0
+        !$omp parallel do default(shared) private(i,ithr,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_o)&
+        !$omp proc_bind(close) schedule(static)
+        do i = i_from, i_to
+            ithr = omp_get_thread_num() + 1
+            mapped_mask(:,ithr) = .false.
+            mapped_refs(:,ithr) = 0
+            mapped_count(ithr) = 0
+            call readers(ithr)%read_row(self%pinds(i), okrow)
+            if( .not. okrow ) cycle
+            do k = 1, readers(ithr)%nsel
+                istate = readers(ithr)%state(k)
+                if( istate < 1 .or. istate > self%p_ptr%nstates ) cycle
+                if( .not. self%state_exists(istate) ) cycle
+                if( any(.not.(ieee_is_finite(readers(ithr)%euls(:,k)))) ) cycle
+                call source_o%new(.false.)
+                call source_o%set_euler(readers(ithr)%euls(:,k))
+                lnns(:,ithr) = .false.
+                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o,&
+                    &min(PRIOR3D_NREMAP,self%p_ptr%nspace), lnns(:,ithr))
+                call source_o%kill
+                do iproj = 1, self%p_ptr%nspace
+                    if( .not. lnns(iproj,ithr) ) cycle
+                    full_ref = (istate-1)*self%p_ptr%nspace + iproj
+                    ri = self%full_to_compact_ref(full_ref)
+                    if( ri < 1 .or. mapped_mask(ri,ithr) ) cycle
+                    mapped_count(ithr) = mapped_count(ithr) + 1
+                    mapped_refs(mapped_count(ithr),ithr) = ri
+                    mapped_mask(ri,ithr) = .true.
+                    shift = 0.
+                    if( readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
+                        &shift = [readers(ithr)%x(k), readers(ithr)%y(k)]
+                    call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift, self%b_ptr%pftc%get_nrots(),&
+                        &dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
+                    if( irot < 1 .or. irot > nrots ) irot = 1
+                    call record_sparse_eval(self, i, ithr, ri, dist, irot, shift(1), shift(2),&
+                        &(readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        do ithr = 1, nthr_glob
+            call readers(ithr)%kill
+        enddo
+        deallocate(lnns, mapped_mask, mapped_refs, mapped_count, dists_inpl, inds_sorted)
+    end subroutine fill_tab_prior_range
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
 
@@ -316,9 +430,10 @@ contains
 
     ! Identifies peak subspaces via coarse scoring, builds a pooled neighborhoo
     ! and evaluates all fine refs & refines the best
-    subroutine fill_tab_subspace_range( self, i_first, i_last )
+    subroutine fill_tab_subspace_range( self, i_first, i_last, search_mode )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
+        character(len=*), optional, intent(in)   :: search_mode
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(coarse_search_ws) :: coarse_ws
         type(eval_ws)          :: eval_work
@@ -328,10 +443,13 @@ contains
         integer :: iptcl, si, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first
+        character(len=STDLEN) :: active_search_mode
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
-        l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
-        l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
+        active_search_mode = trim(self%p_ptr%prob_neigh_mode)
+        if( present(search_mode) ) active_search_mode = trim(search_mode)
+        l_geom_neigh    = (trim(active_search_mode) == 'geom')
+        l_state_neigh   = (trim(active_search_mode) == 'state')
         ! Keep shift-first seeding single-state only. In multi-state runs this
         ! can bias all states toward the same previous-state shift basin.
         l_seed_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1

@@ -53,7 +53,7 @@ contains
         integer, allocatable :: batches(:,:)
         logical :: l_state_only
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,need3Dobjs=.false.)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
@@ -113,7 +113,7 @@ contains
         type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
         integer :: nptcls
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call build%init_params_and_build_general_tbox(cline,params,need3Dobjs=.true.)
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
@@ -174,6 +174,7 @@ contains
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
+        use simple_prob_prior3D,             only: PRIOR3D_FNAME
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
@@ -191,7 +192,7 @@ contains
         logical :: l_state_only
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
@@ -240,6 +241,14 @@ contains
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
+        if( trim(params%write_prior) == 'yes' )then
+            ! The dense worker path intentionally avoids allocating 3D volume
+            ! objects.  The artifact only needs the lightweight projection
+            ! orientation grid for source Euler coordinates.
+            call build%eulspace%new(params%nspace, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(build%eulspace)
+            call eulprob_obj_glob%write_prior3D(string(PRIOR3D_FNAME))
+        endif
         call eulprob_obj_glob%kill
         ! cleanup
         call cline_prob_tab%kill
@@ -269,7 +278,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.true.)
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
@@ -325,7 +334,7 @@ contains
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
@@ -392,7 +401,7 @@ contains
         integer :: nptcls, ipart
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
         call set_b_p_ptrs2D(params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo

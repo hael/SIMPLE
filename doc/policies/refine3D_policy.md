@@ -227,6 +227,10 @@ neighborhoods before evaluating candidates:
   projection search space for every active state.
 - `geom`: use the geometrically nearest subspace point to the current particle
   projection, with no coarse scoring or pooled peaks.
+- `prior`: reuse the final probabilistic support from the preceding refinement
+  stage, remapping each source projection to the current angular grid. An
+  explicit `prob_neigh_mode=prior` request takes precedence over the default
+  docked multivolume `geom` policy.
 
 Probabilistic-table assignments use the calibrated likelihood path. The stored
 distances are noise-normalized negative log-likelihoods for the Euclidean
