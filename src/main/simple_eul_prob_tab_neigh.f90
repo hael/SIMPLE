@@ -21,7 +21,6 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: POSTERIOR_EXPLORE_NNEIGH = 3
-real,    parameter :: POSTERIOR_RECOVERY_SUPPORT_MASS = 0.05
 
 ! Persistent sparse-posterior artifact state for one worker object.  The
 ! builder's full-to-subspace map is materialized as compact per-subspace
@@ -413,9 +412,9 @@ contains
         deallocate(mapped_stamp, map_generation, posterior_usable, recovery_mask, dists_inpl, inds_sorted)
     end subroutine fill_tab_posterior_range
 
-    ! A posterior row is considered in need of a bounded recovery probe when its
-    ! retained mass is weak or when its coarse support no longer contains the
-    ! particle's current projection cell (including the local three-neighbor ring).
+    ! A posterior row is considered in need of an ordinary recovery probe only
+    ! when it is empty or its coarse support no longer contains the particle's
+    ! current projection cell (including the local three-neighbor ring).
     ! The ordinary state/geom path is used only for these particles; it is not a
     ! global fallback for a valid posterior artifact.
     logical function posterior_row_needs_recovery( self, pind, reader ) result(l_recover)
@@ -425,7 +424,9 @@ contains
         type(ori) :: o_prev
         integer :: prev_state, prev_proj, prev_sub, k, ineigh, source_proj, source_sub, nkeep
         logical :: l_found
-        l_recover = reader%support_mass < POSTERIOR_RECOVERY_SUPPORT_MASS .or. reader%nsel == 0
+        ! Low retained mass requests bounded posterior exploration, but does
+        ! not by itself launch the expensive ordinary neighborhood search.
+        l_recover = reader%nsel == 0
         call get_particle_context(self, pind, o_prev, prev_state, prev_proj)
         prev_proj = max(1, min(self%p_ptr%nspace, prev_proj))
         prev_sub = self%b_ptr%subspace_full2sub_map(prev_proj)
@@ -461,7 +462,8 @@ contains
         class(eul_prob_tab_neigh), intent(in) :: self
         character(len=*), intent(in) :: binfname
         type(posterior3d_writer) :: writer
-        integer, allocatable :: work_pos(:), out_state(:), out_proj(:), out_inpl(:), out_has_sh(:)
+        integer, allocatable :: work_pos(:), seen_stamp(:), seen_index(:)
+        integer, allocatable :: out_state(:), out_proj(:), out_inpl(:), out_has_sh(:)
         real, allocatable :: work_dist(:), work_weight(:), out_dist(:), out_weight(:), out_x(:), out_y(:), out_euls(:,:)
         character(len=STDLEN) :: tmpfname, tmpmeta, metafname
         real :: dmin, norm, euls(3), dist_thres
@@ -477,7 +479,9 @@ contains
             return
         endif
         kmax = min(self%nrefs, max(3, min(128, max(1, 8*self%p_ptr%npeaks_inpl))))
-        allocate(work_pos(self%nrefs), work_dist(self%nrefs), work_weight(self%nrefs))
+        allocate(work_pos(self%nrefs), seen_stamp(self%nrefs), seen_index(self%nrefs),&
+            &work_dist(self%nrefs), work_weight(self%nrefs))
+        seen_stamp = 0
         allocate(out_state(kmax), out_proj(kmax), out_inpl(kmax), out_has_sh(kmax), out_dist(kmax), out_weight(kmax),&
             &out_x(kmax), out_y(kmax), out_euls(3,kmax))
         tmpfname = trim(binfname)//'.tmp'
@@ -490,10 +494,23 @@ contains
             do pos = int(self%candidate_store%offsets(i)), int(self%candidate_store%offsets(i+1))-1
                 if( self%candidate_store%candidates(pos)%inpl < 1 ) cycle
                 if( .not. ieee_is_finite(self%candidate_store%candidates(pos)%dist) ) cycle
-                ncand = ncand + 1
-                if( ncand > self%nrefs ) THROW_HARD('posterior refresh candidate count exceeds reference count')
-                work_pos(ncand)  = pos
-                work_dist(ncand) = self%candidate_store%candidates(pos)%dist
+                if( self%candidate_store%candidates(pos)%iref < 1 .or.&
+                    &self%candidate_store%candidates(pos)%iref > self%p_ptr%nstates*self%p_ptr%nspace ) cycle
+                iref = self%full_to_compact_ref(self%candidate_store%candidates(pos)%iref)
+                if( iref < 1 .or. iref > self%nrefs ) cycle
+                if( seen_stamp(iref) == i )then
+                    pick = seen_index(iref)
+                    if( self%candidate_store%candidates(pos)%dist < work_dist(pick) )then
+                        work_pos(pick)  = pos
+                        work_dist(pick) = self%candidate_store%candidates(pos)%dist
+                    endif
+                else
+                    ncand = ncand + 1
+                    seen_stamp(iref) = i
+                    seen_index(iref) = ncand
+                    work_pos(ncand)  = pos
+                    work_dist(ncand) = self%candidate_store%candidates(pos)%dist
+                endif
             enddo
             if( ncand < 1 )then
                 call writer%write_row(self%pinds(i), 0, 0., out_state, out_proj, out_inpl, out_has_sh,&
@@ -544,7 +561,7 @@ contains
         call simple_rename(trim(tmpmeta), trim(metafname), overwrite=.true.)
         write(logfhandle,'(A,I0,A,I0)') '>>> POSTERIOR REFRESH PUBLISHED: particles=', self%nptcls,&
             &', maximum support width=', kmax
-        deallocate(work_pos, work_dist, work_weight, out_state, out_proj, out_inpl, out_has_sh, out_dist, out_weight,&
+        deallocate(work_pos, seen_stamp, seen_index, work_dist, work_weight, out_state, out_proj, out_inpl, out_has_sh, out_dist, out_weight,&
             &out_x, out_y, out_euls)
     end subroutine write_posterior3D_candidates
 

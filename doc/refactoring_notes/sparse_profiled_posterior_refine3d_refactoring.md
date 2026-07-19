@@ -293,8 +293,8 @@ times the finer-grid multiplicity, rather than to an angular-radius scan of all
 `nspace` directions.
 
 If a particle's current projection cell is not covered by that mapped ring, or
-if the retained mass is weak or empty, the consumer performs a conditional
-global probe using the ordinary mode that would have been selected without
+if the row is empty, the consumer performs a conditional global probe using
+the ordinary mode that would have been selected without
 `prob_neigh_mode=posterior` (`state` for the single-state/independent path and
 `geom` for docked, geometric, and input-orientation workflows). This probe is
 restricted to the affected particles and its candidates are merged with the
