@@ -292,7 +292,7 @@ contains
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
+                    call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                     self%loc_tab(icls,i)%dist = inpl_dist
                     self%loc_tab(icls,i)%inpl   = irot
@@ -327,7 +327,7 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls, iptcl, [0.,0.], ninpl_smpl,&
+                    call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                     self%loc_tab(icls,i)%dist = inpl_dist
                     self%loc_tab(icls,i)%inpl   = irot
@@ -490,7 +490,7 @@ contains
             real,    intent(in)  :: sh_loc(2)
             real,    intent(out) :: dist_loc, corr_loc
             integer, intent(out) :: irot_loc
-            call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
+            call self%b_ptr%pftc%gen_likelihood_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
                 &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
             if( irot_loc < 1 .or. irot_loc > nrots ) irot_loc = 1
         end subroutine score_class

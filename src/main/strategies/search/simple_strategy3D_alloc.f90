@@ -36,16 +36,16 @@ contains
         class(builder),    intent(inout) :: build
         integer :: istate, ithr, nrefs, nrefs_sub
         real    :: areal
-        logical :: l_prob_assign
+        logical :: l_prob_mode
         ! clean all class arrays & types
         call clean_strategy3D()
         ! parameters
         nrefs     = params%nspace     * params%nstates
         nrefs_sub = params%nspace_sub * params%nstates
-        l_prob_assign = str_has_substr(params%refine,'prob')
+        l_prob_mode = str_has_substr(params%refine,'prob')
         ! Probabilistic matching consumes an assignment map directly and never
         ! produces a per-thread reference-search solution table.
-        if( .not. l_prob_assign )then
+        if( .not. l_prob_mode )then
             allocate(s3D%proj_space_shift(2,nrefs,nthr_glob),&
                 &s3D%proj_space_corrs(nrefs,nthr_glob),&
                 &s3D%proj_space_inplinds(nrefs,nthr_glob))
@@ -85,7 +85,7 @@ contains
         ! calculate peak thresholds for probabilistic searches
         if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
-        if( .not. l_prob_assign )then
+        if( .not. l_prob_mode )then
             allocate(s3D%smpl_refs_athres(params%nstates), s3D%smpl_inpl_athres(params%nstates))
             do istate = 1, params%nstates
                 s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params%prob_athres, state=istate)

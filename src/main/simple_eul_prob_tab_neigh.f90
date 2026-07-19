@@ -5,13 +5,12 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: angle_sampling, build_pind_lookup, calc_athres, eulprob_dist_switch,&
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch,&
     &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
     &prob_candidate, prob_candidate_store
 use simple_decay_funs,        only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
-use simple_type_defs,          only: OBJFUN_EUCLID
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -27,7 +26,6 @@ contains
     procedure :: new_neigh_global
     procedure :: fill_tab      => fill_tab_neigh
     procedure :: fill_tab_range => fill_tab_neigh_range
-    procedure :: ref_normalize => ref_normalize_neigh
     procedure :: ref_assign    => ref_assign_neigh
     procedure :: kill          => kill_neigh
     procedure :: read_tabs_to_glob
@@ -142,11 +140,9 @@ contains
         integer :: i, istate, ithr, max_refs_to_refine, nfull_refs
         integer :: iptcl, si, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_prob_objfun, l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_likelihood_inpl
+        logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
-        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
-        l_likelihood_inpl = trim(self%p_ptr%prob_assign) == 'likelihood'
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
         l_snhc_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'snhc')
         l_seed_sh_first = self%p_ptr%l_doshift .and. l_shc_neigh
@@ -236,7 +232,7 @@ contains
             integer, intent(out) :: neval_loc
             integer :: full_ref_loc, prev_full_ref_loc, isample, ri_loc, irot_loc
             integer :: nrefs_bound, smpl_ninpl, nrots
-            real    :: dist_loc, corr_loc, prev_corr_loc, neigh_frac, power_loc
+            real    :: dist_loc, corr_loc, prev_corr_loc, neigh_frac
             logical :: l_greedy_first
             neval_loc = 0
             call direct_rts(ithr_loc)%ne_ran_iarr(direct_srch_order(:,ithr_loc))
@@ -253,12 +249,10 @@ contains
             nrots          = self%b_ptr%pftc%get_nrots()
             nrefs_bound    = nfull_refs
             smpl_ninpl     = nrots
-            power_loc      = POST_EXTR_POWER
             if( l_snhc_neigh )then
                 neigh_frac  = extremal_decay(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
                 nrefs_bound = max(2, min(nfull_refs, nint(real(nfull_refs) * (1. - neigh_frac))))
                 smpl_ninpl  = neighfrac2nsmpl(neigh_frac, nrots)
-                power_loc   = merge(EXTR_POWER, POST_EXTR_POWER, self%p_ptr%extr_iter <= self%p_ptr%extr_lim)
             endif
             prev_corr_loc = -huge(1.0)
             if( (l_shc_neigh .and. (.not. l_greedy_first)) )then
@@ -271,7 +265,7 @@ contains
                 ri_loc = eval_work%fullref_to_sparse_ref(full_ref_loc)
                 if( ri_loc < 1 ) cycle
                 call score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed, l_with_shift,&
-                    &l_snhc_neigh, power_loc, smpl_ninpl, dist_loc, corr_loc, irot_loc)
+                    &l_snhc_neigh, smpl_ninpl, dist_loc, corr_loc, irot_loc)
                 call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
                 neval_loc = neval_loc + 1
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
@@ -293,51 +287,20 @@ contains
 
         ! Scores a single reference selecting
         subroutine score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift,&
-            &l_snhc_style, power_loc, smpl_ninpl_loc, dist_loc, corr_loc, irot_loc)
+            &l_snhc_style, smpl_ninpl_loc, dist_loc, corr_loc, irot_loc)
             integer, intent(in)  :: full_ref_loc, ithr_loc, iptcl_loc, smpl_ninpl_loc
-            real,    intent(in)  :: shift_seed_loc(3), power_loc
+            real,    intent(in)  :: shift_seed_loc(3)
             logical, intent(in)  :: l_with_shift, l_snhc_style
             real,    intent(out) :: dist_loc, corr_loc
             integer, intent(out) :: irot_loc
-            integer :: istate_loc, order_ind_loc
+            integer :: istate_loc, nsample_loc
             real    :: sh_loc(2)
             sh_loc = 0.
             if( l_with_shift .and. l_seed_sh_first ) sh_loc = shift_seed_loc(2:3)
-            if( l_snhc_style )then
-                if( l_likelihood_inpl )then
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                        &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
-                else if( l_prob_objfun )then
-                    call self%b_ptr%pftc%gen_prob_power_objfun_val(full_ref_loc, iptcl_loc, sh_loc, power_loc,&
-                        &smpl_ninpl_loc, dist_loc, corr_loc, irot_loc, dists_inpl(:,ithr_loc), inds_sorted(:,ithr_loc))
-                else
-                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc, sh_loc, corrs_inpl(:,ithr_loc))
-                    call power_sampling(power_loc, self%b_ptr%pftc%get_nrots(), corrs_inpl(:,ithr_loc),&
-                        &inds_sorted(:,ithr_loc), smpl_ninpl_loc, irot_loc, order_ind_loc, corr_loc)
-                    if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
-                    dist_loc = eulprob_dist_switch(corr_loc, self%p_ptr%cc_objfun)
-                endif
-            else
-                istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
-                if( l_likelihood_inpl )then
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                        &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                else if( l_prob_objfun )then
-                    call self%b_ptr%pftc%gen_prob_objfun_val(full_ref_loc, iptcl_loc, sh_loc,&
-                        &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist_loc, irot_loc,&
-                        &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                    corr_loc = exp(-dist_loc)
-                else
-                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc, sh_loc, corrs_inpl(:,ithr_loc))
-                    dists_inpl(:,ithr_loc) = eulprob_dist_switch(corrs_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                    irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc),&
-                        &inds_sorted(:,ithr_loc), inpl_athres(istate_loc), self%p_ptr%prob_athres)
-                    if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
-                    dist_loc = dists_inpl(irot_loc,ithr_loc)
-                    corr_loc = corrs_inpl(irot_loc,ithr_loc)
-                endif
-            endif
+            istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
+            nsample_loc = merge(smpl_ninpl_loc, inpl_likelihood_nsample(istate_loc), l_snhc_style)
+            call self%b_ptr%pftc%gen_likelihood_val(full_ref_loc, iptcl_loc, sh_loc,&
+                &nsample_loc, dist_loc, corr_loc, irot_loc, dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
         end subroutine score_direct_ref
 
         integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
@@ -364,11 +327,9 @@ contains
         integer :: i, istate, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
         integer :: iptcl, si, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_prob_objfun, l_geom_neigh, l_state_neigh, l_seed_sh_first, l_likelihood_inpl
+        logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
-        l_prob_objfun   = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
-        l_likelihood_inpl = trim(self%p_ptr%prob_assign) == 'likelihood'
         l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
         ! Keep shift-first seeding single-state only. In multi-state runs this
@@ -502,25 +463,17 @@ contains
             logical, intent(in)  :: l_with_shift
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
-            if( l_prob_objfun )then
-                if( l_with_shift )then
-                    call self%b_ptr%pftc%gen_best_objfun_val(full_ref_loc, iptcl_loc,&
-                        &shift_seed_loc(2:3), dist_loc, irot_loc)
-                else
-                    call self%b_ptr%pftc%gen_best_objfun_val(full_ref_loc, iptcl_loc,&
-                        &[0.,0.], dist_loc, irot_loc)
-                endif
+            integer :: istate_loc
+            real    :: corr_loc
+            istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
+            if( l_with_shift )then
+                call self%b_ptr%pftc%gen_likelihood_val(full_ref_loc, iptcl_loc,&
+                    &shift_seed_loc(2:3), inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
             else
-                if( l_with_shift )then
-                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc,&
-                        &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
-                else
-                    call self%b_ptr%pftc%gen_objfun_vals(full_ref_loc, iptcl_loc,&
-                        &[0.,0.], dists_inpl(:,ithr_loc))
-                endif
-                dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                irot_loc = minloc(dists_inpl(:,ithr_loc), dim=1)
-                dist_loc = dists_inpl(irot_loc,ithr_loc)
+                call self%b_ptr%pftc%gen_likelihood_val(full_ref_loc, iptcl_loc,&
+                    &[0.,0.], inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
             endif
         end subroutine score_subspace_ref
 
@@ -629,37 +582,14 @@ contains
                         if( ri_loc < 1 ) cycle
                         iproj_loc = self%ref_proj(ri_loc)
                         iref_loc  = self%ref_full(ri_loc)
-                        if( l_likelihood_inpl )then
-                            if( l_with_shift )then
-                                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
-                                    &shift_seed_loc(2:3), inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
-                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                            else
-                                call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(iref_loc, iptcl_loc,&
-                                    &[0.,0.], inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
-                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                            endif
-                        else if( l_prob_objfun )then
-                            if( l_with_shift )then
-                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, shift_seed_loc(2:3),&
-                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
-                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                            else
-                                call self%b_ptr%pftc%gen_prob_objfun_val(iref_loc, iptcl_loc, [0.,0.],&
-                                    &inpl_athres(istate_loc), self%p_ptr%prob_athres, dist, irot_loc,&
-                                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-                            endif
+                        if( l_with_shift )then
+                            call self%b_ptr%pftc%gen_likelihood_val(iref_loc, iptcl_loc,&
+                                &shift_seed_loc(2:3), inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
+                                &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
                         else
-                            if( l_with_shift )then
-                                call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc,&
-                                    &shift_seed_loc(2:3), dists_inpl(:,ithr_loc))
-                            else
-                                call self%b_ptr%pftc%gen_objfun_vals(iref_loc, iptcl_loc, [0.,0.], dists_inpl(:,ithr_loc))
-                            endif
-                            dists_inpl(:,ithr_loc) = eulprob_dist_switch(dists_inpl(:,ithr_loc), self%p_ptr%cc_objfun)
-                            irot_loc = angle_sampling(dists_inpl(:,ithr_loc), dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc),&
-                                &inpl_athres(istate_loc), self%p_ptr%prob_athres)
-                            dist = dists_inpl(irot_loc,ithr_loc)
+                            call self%b_ptr%pftc%gen_likelihood_val(iref_loc, iptcl_loc,&
+                                &[0.,0.], inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
+                                &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
                         endif
                         call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                         neval = neval + 1
@@ -680,78 +610,6 @@ contains
     end subroutine fill_tab_subspace_range
 
     ! ASSIGNMENT SUBROUTINES
-
-    ! Normalises sparse loc_tab distances
-    subroutine ref_normalize_neigh( self )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        real    :: sum_dist_all, min_dist, max_dist
-        integer :: i, pos, first, last
-        logical :: any_eval
-        ! normalize only over evaluated refs (inpl > 0)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last,sum_dist_all)
-        do i = 1, self%nptcls
-            first = int(self%candidate_store%offsets(i))
-            last  = int(self%candidate_store%offsets(i+1)) - 1
-            sum_dist_all = 0.
-            do pos = first,last
-                if( self%candidate_store%candidates(pos)%inpl > 0 )&
-                    &sum_dist_all = sum_dist_all + self%candidate_store%candidates(pos)%dist
-            enddo
-            if( sum_dist_all < TINY )then
-                do pos = first,last
-                    if( self%candidate_store%candidates(pos)%inpl > 0 ) self%candidate_store%candidates(pos)%dist = 0.
-                enddo
-            else
-                do pos = first,last
-                    if( self%candidate_store%candidates(pos)%inpl > 0 )&
-                        &self%candidate_store%candidates(pos)%dist = self%candidate_store%candidates(pos)%dist / sum_dist_all
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
-        min_dist = huge(1.0)
-        max_dist = -huge(1.0)
-        any_eval = .false.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)&
-        !$omp reduction(min:min_dist) reduction(max:max_dist) reduction(.or.:any_eval)
-        do i = 1,self%nptcls
-            first = int(self%candidate_store%offsets(i))
-            last  = int(self%candidate_store%offsets(i+1)) - 1
-            do pos = first,last
-                if( self%candidate_store%candidates(pos)%inpl <= 0 ) cycle
-                min_dist = min(min_dist, self%candidate_store%candidates(pos)%dist)
-                max_dist = max(max_dist, self%candidate_store%candidates(pos)%dist)
-                any_eval = .true.
-            enddo
-        enddo
-        !$omp end parallel do
-        if( .not. any_eval ) return
-        if( (max_dist - min_dist) < TINY )then
-            THROW_WARN('WARNING: numerical unstability in eul_prob_tab_neigh normalize')
-            ! dense-style stochastic tie break over evaluated entries only.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)
-            do i = 1,self%nptcls
-                first = int(self%candidate_store%offsets(i))
-                last  = int(self%candidate_store%offsets(i+1)) - 1
-                do pos = first,last
-                    if( self%candidate_store%candidates(pos)%inpl > 0 ) self%candidate_store%candidates(pos)%dist = ran3()
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,pos,first,last)
-            do i = 1,self%nptcls
-                first = int(self%candidate_store%offsets(i))
-                last  = int(self%candidate_store%offsets(i+1)) - 1
-                do pos = first,last
-                    if( self%candidate_store%candidates(pos)%inpl > 0 )&
-                        &self%candidate_store%candidates(pos)%dist = &
-                        &(self%candidate_store%candidates(pos)%dist - min_dist) / (max_dist - min_dist)
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-    end subroutine ref_normalize_neigh
 
     ! Sparse graph traversal on-the-fly for reference assignment
     subroutine ref_assign_neigh( self )
@@ -778,7 +636,7 @@ contains
 
         type(assign_graph_ws)    :: graph
         type(assign_frontier_ws) :: frontier
-        real,    allocatable :: dists_inpl(:), dists_inpl_sorted(:)
+        real,    allocatable :: dists_inpl_sorted(:)
         integer, allocatable :: inds_sorted(:)
         integer   :: i, iref, assigned_iref, assigned_ptcl, istate, si, fallback_ref
         integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
@@ -786,22 +644,19 @@ contains
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val, dist_tmp, corr_tmp
-        logical   :: l_prob_objfun, final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift, l_likelihood
+        logical   :: final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift
         huge_val = huge(1.0)
-        l_prob_objfun = (self%p_ptr%cc_objfun == OBJFUN_EUCLID)
-        l_likelihood = trim(self%p_ptr%prob_assign) == 'likelihood'
         l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
             &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
-        allocate(dists_inpl(self%b_ptr%pftc%get_nrots()), dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
+        allocate(dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
         do i = 1, self%nptcls
             ! Seed particle with no evaluated candidate with previous orientation
             call seed_fallback_if_empty(i)
         enddo
-        if( .not. l_likelihood ) call self%ref_normalize()
         call build_sparse_assignment_graph()
         call assign_particles_globally()
         call assign_remaining_particles_from_best_touched_ref()
-        deallocate(inds_sorted, dists_inpl_sorted, dists_inpl)
+        deallocate(inds_sorted, dists_inpl_sorted)
     contains
 
         subroutine build_sparse_assignment_graph()
@@ -946,13 +801,8 @@ contains
             call init_frontier()
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                if( l_likelihood )then
-                    call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, projs_athres),&
-                        &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
-                else
-                    assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                        &frontier%inds_sorted(1:nsel), projs_athres, self%p_ptr%prob_athres)
-                endif
+                call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, projs_athres),&
+                    &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_single_state
@@ -965,13 +815,8 @@ contains
             call init_frontier()
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
-                if( l_likelihood )then
-                    call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, state_projs_athres(state_filter)),&
-                        &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
-                else
-                    assigned_idx = angle_sampling(frontier%sel_dists(1:nsel), frontier%sel_dists_sorted(1:nsel),&
-                        &frontier%inds_sorted(1:nsel), state_projs_athres(state_filter), self%p_ptr%prob_athres)
-                endif
+                call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, state_projs_athres(state_filter)),&
+                    &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_for_state
@@ -1131,36 +976,15 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
-                if( l_likelihood .and. self%p_ptr%l_prob_inpl )then
+                if( self%p_ptr%l_prob_inpl )then
                     inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
                         &self%p_ptr%prob_athres, state=fallback_state)
-                    call self%b_ptr%pftc%gen_prob_likelihood_objfun_val(fallback_ref_full, self%pinds(iptcl_loc),&
+                    call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
                         &sh_seed, likelihood_nsample(self%b_ptr%pftc%get_nrots(), inpl_athres_state),&
                         &dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
-                else if( l_prob_objfun )then
-                    if( self%p_ptr%l_prob_inpl )then
-                        inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
-                            &self%p_ptr%prob_athres, state=fallback_state)
-                        call self%b_ptr%pftc%gen_prob_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
-                            &inpl_athres_state, self%p_ptr%prob_athres, dist, irot_loc, dists_inpl_sorted, inds_sorted)
-                    else
-                        call self%b_ptr%pftc%gen_best_objfun_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
-                            &dist, irot_loc)
-                    endif
                 else
-                    call self%b_ptr%pftc%gen_objfun_vals(fallback_ref_full, self%pinds(iptcl_loc), sh_seed, dists_inpl)
-                    dists_inpl = eulprob_dist_switch(dists_inpl, self%p_ptr%cc_objfun)
-                    irot_loc = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
-                    if( self%p_ptr%l_prob_inpl )then
-                        inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
-                            &self%p_ptr%prob_athres, state=fallback_state)
-                        irot_loc = angle_sampling(dists_inpl, dists_inpl_sorted, inds_sorted,&
-                            &inpl_athres_state, self%p_ptr%prob_athres)
-                    else
-                        irot_loc = minloc(dists_inpl, dim=1)
-                    endif
-                    if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
-                    dist = dists_inpl(irot_loc)
+                    call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
+                        &sh_seed, self%b_ptr%pftc%get_nrots(), dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
                 endif
                 if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
                 self%candidate_store%candidates(candidate_pos)%iref   = self%ref_full(fallback_ref_loc)

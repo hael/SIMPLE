@@ -45,7 +45,7 @@ contains
             ! set thread index
             self%s%ithr = ithr
             ! prep
-            call self%s%prep4prob_assign
+            call self%s%prep4prob
             self%s%nrefs_eval = self%s%nrefs
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate

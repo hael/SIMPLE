@@ -217,9 +217,6 @@ contains
         &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
-        &'Probabilistic assignment weighting for refine=prob* modes(legacy|likelihood){likelihood}',&
-        &'(legacy|likelihood){likelihood}', .false., 'likelihood', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}', '(state|geom|shc|snhc){state}', .false., 'state', &
         &gui_submenu="search")
@@ -320,9 +317,6 @@ contains
         call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom){geom}', '(state|geom){geom}', .false., 'geom', &
         &gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probabilistic assignment weighting',&
-        &'Probabilistic assignment weighting for probabilistic stages(legacy|likelihood){likelihood}',&
-        &'(legacy|likelihood){likelihood}', .false., 'likelihood', gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &

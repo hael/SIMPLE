@@ -641,6 +641,7 @@ contains
         else
             do i=1,os_asym_unit%get_noris()
                 inds(i)  = i
+                dists(i) = pi
                 call os_asym_unit%get_ori(i, oasym)
                 do isym = 1, self%n
                     if(isym == 1)then

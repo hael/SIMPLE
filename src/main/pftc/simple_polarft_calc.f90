@@ -171,7 +171,7 @@ type :: polarft_calc
     procedure          :: gen_objfun_vals
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
-    procedure          :: gen_prob_likelihood_objfun_val
+    procedure          :: gen_likelihood_val
     procedure          :: gen_prob_power_objfun_val
     procedure, private :: gen_corrs
     procedure, private :: gen_euclids
@@ -637,7 +637,7 @@ interface
         integer,             intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_prob_objfun_val
 
-    module subroutine gen_prob_likelihood_objfun_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
+    module subroutine gen_likelihood_val(self, iref, iptcl, shift, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl, nsample
@@ -646,7 +646,7 @@ interface
         integer,             intent(out)   :: irot
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
-    end subroutine gen_prob_likelihood_objfun_val
+    end subroutine gen_likelihood_val
 
     module subroutine gen_prob_power_objfun_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)

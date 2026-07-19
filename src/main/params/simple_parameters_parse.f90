@@ -160,7 +160,6 @@ contains
         call reg%add_char('pre_norm', self%pre_norm)
         call reg%add_char('prg', self%prg)
         call reg%add_char('print_states', self%print_states)
-        call reg%add_char('prob_assign', self%prob_assign)
         call reg%add_char('prob_inpl', self%prob_inpl)
         call reg%add_char('prob_neigh_mode', self%prob_neigh_mode)
         call reg%add_char('proj_is_class', self%proj_is_class)

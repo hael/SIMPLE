@@ -772,11 +772,6 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
-        select case(trim(self%prob_assign))
-            case('legacy','likelihood')
-            case DEFAULT
-                THROW_HARD('unsupported prob_assign; expected legacy|likelihood')
-        end select
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500

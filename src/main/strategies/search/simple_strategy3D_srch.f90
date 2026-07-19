@@ -60,7 +60,7 @@ type strategy3D_srch
   contains
     procedure :: new
     procedure :: prep4srch
-    procedure :: prep4prob_assign
+    procedure :: prep4prob
     procedure :: inpl_srch_first
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
@@ -118,7 +118,7 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine prep4prob_assign( self )
+    subroutine prep4prob( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
@@ -135,10 +135,10 @@ contains
         self%ntrs_eval  = 0
         self%prev_corr  = 0.
         if( self%prev_state > 0 )then
-            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4prob_assign')
-            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4prob_assign')
+            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4prob')
+            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4prob')
         endif
-    end subroutine prep4prob_assign
+    end subroutine prep4prob
 
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
