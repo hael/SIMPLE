@@ -19,6 +19,7 @@ integer,          parameter :: PRIOR3D_LABEL_LEN = 32
 
 type :: prior3d_writer
     integer :: unit = -1
+    logical :: is_open = .false.
     integer :: recl = 0
     integer :: kmax = 0
     integer :: nptcls = 0
@@ -35,6 +36,7 @@ end type prior3d_writer
 
 type :: prior3d_reader
     integer :: unit = -1
+    logical :: is_open = .false.
     integer :: recl = 0
     integer :: kmax = 0
     integer :: nptcls = 0
@@ -90,6 +92,7 @@ subroutine open_writer(self, binfname, nptcls, nstates, source_nspace, source_ns
     if( ios /= 0 )then
         close(self%unit)
         self%unit = -1
+        self%is_open = .false.
         THROW_HARD('prior3d_writer: failed to open metadata file '//trim(metafname))
     endif
     magic = PRIOR3D_MAGIC
@@ -104,6 +107,7 @@ subroutine open_writer(self, binfname, nptcls, nstates, source_nspace, source_ns
         &kmax, pgrp_buf, likelihood_buf, convention_buf, pinds
     close(meta_unit)
     if( ios /= 0 ) THROW_HARD('prior3d_writer: failed writing metadata file '//trim(metafname))
+    self%is_open = .true.
 end subroutine open_writer
 
 subroutine write_row(self, pind, nsel, support_mass, state, proj, inpl, has_sh, dist, weight, x, y, euls)
@@ -112,7 +116,7 @@ subroutine write_row(self, pind, nsel, support_mass, state, proj, inpl, has_sh, 
     real,    intent(in) :: support_mass
     real,    intent(in) :: dist(:), weight(:), x(:), y(:), euls(:,:)
     integer :: ios, n
-    if( self%unit < 0 ) THROW_HARD('prior3d_writer: data file is not open')
+    if( .not. self%is_open ) THROW_HARD('prior3d_writer: data file is not open')
     if( pind < 1 .or. pind > huge(1) ) return
     n = max(0, min(self%kmax, nsel))
     self%nsel = 0
@@ -146,8 +150,9 @@ end subroutine write_row
 
 subroutine close_writer(self)
     class(prior3d_writer), intent(inout) :: self
-    if( self%unit >= 0 ) close(self%unit)
+    if( self%is_open ) close(self%unit)
     self%unit = -1
+    self%is_open = .false.
 end subroutine close_writer
 
 subroutine kill_writer(self)
@@ -218,6 +223,7 @@ subroutine open_reader(self, binfname, ok)
         call self%kill
         return
     endif
+    self%is_open = .true.
     ok = .true.
 end subroutine open_reader
 
@@ -227,7 +233,7 @@ subroutine read_row(self, pind, ok)
     logical, intent(out) :: ok
     integer :: ios
     ok = .false.
-    if( self%unit < 0 .or. pind < 1 ) return
+    if( .not. self%is_open .or. pind < 1 ) return
     read(self%unit, rec=pind, iostat=ios) self%nsel, self%support_mass, self%state, self%proj, self%inpl, self%has_sh,&
         &self%dist, self%weight, self%x, self%y, self%euls
     if( ios /= 0 .or. self%nsel < 0 .or. self%nsel > self%kmax .or.&
@@ -240,8 +246,9 @@ end subroutine read_row
 
 subroutine close_reader(self)
     class(prior3d_reader), intent(inout) :: self
-    if( self%unit >= 0 ) close(self%unit)
+    if( self%is_open ) close(self%unit)
     self%unit = -1
+    self%is_open = .false.
 end subroutine close_reader
 
 subroutine kill_reader(self)
