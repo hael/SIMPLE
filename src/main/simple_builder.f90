@@ -38,6 +38,7 @@ type :: builder
     ! neighborhood structures
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
+    integer,                allocatable :: subspace_neighbors(:,:) !< self plus nearest projection neighbors [min(4,nspace_sub),nspace_sub]
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
@@ -287,6 +288,7 @@ contains
                         call sub_mapper%new(params%nspace, params%nspace_sub, sub_distmat)
                         self%subspace_inds         = sub_mapper%get_sub2full_map()
                         self%subspace_full2sub_map = sub_mapper%get_full2sub_map()
+                        call build_subspace_neighbors(self, eulspace_sub)
                         if( allocated(sub_distmat) ) deallocate(sub_distmat)
                         call sub_mapper%kill
                         call eulspace_sub%kill
@@ -331,6 +333,36 @@ contains
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
 
+    subroutine build_subspace_neighbors( self, eulspace_sub )
+        class(builder), intent(inout) :: self
+        class(oris),   intent(inout) :: eulspace_sub
+        logical, allocatable :: lnns(:)
+        integer, allocatable :: inds(:)
+        integer :: nsub, i, j, nkeep
+        type(ori) :: o_sub
+        nsub = eulspace_sub%get_noris()
+        if( nsub < 1 ) return
+        nkeep = min(4, nsub)
+        allocate(self%subspace_neighbors(nkeep,nsub), source=0)
+        allocate(lnns(nsub), inds(nsub))
+        do i = 1, nsub
+            call eulspace_sub%get_ori(i, o_sub)
+            lnns = .false.
+            if( nsub <= 4 )then
+                lnns(1:nsub) = .true.
+            else
+                ! The symmetry-aware projection metric uses the angular distance
+                ! between projection normals and includes the representative itself.
+                call self%pgrpsyms%nearest_proj_neighbors(eulspace_sub, o_sub, nkeep, lnns)
+            endif
+            inds = 0
+            inds(1:nkeep) = pack([(j,j=1,nsub)], lnns)
+            self%subspace_neighbors(:,i) = inds(1:nkeep)
+        enddo
+        deallocate(lnns, inds)
+        call o_sub%kill
+    end subroutine build_subspace_neighbors
+
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self
         if( self%general_tbox_exists )then
@@ -355,6 +387,7 @@ contains
             call self%vol2%kill
             if( allocated(self%subspace_inds)         ) deallocate(self%subspace_inds)
             if( allocated(self%subspace_full2sub_map) ) deallocate(self%subspace_full2sub_map)
+            if( allocated(self%subspace_neighbors)     ) deallocate(self%subspace_neighbors)
             if( allocated(self%fsc)                   ) deallocate(self%fsc)
             if( allocated(self%lmsk)                  ) deallocate(self%lmsk)
             if( allocated(self%lmsk_crop)             ) deallocate(self%lmsk_crop)

@@ -6,16 +6,22 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_eul_prob_tab_utils
 use simple_builder,            only: builder
-use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_prob_posterior3D,    only: posterior3d_reader, POSTERIOR3D_FNAME
+use simple_eul_prob_tab,       only: eul_prob_tab, POSTERIOR3D_FDR_Q
+use simple_prob_posterior3D,    only: posterior3d_reader, posterior3d_writer, POSTERIOR3D_FNAME
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
+use simple_oris,               only: oris
+use simple_syslib,              only: simple_rename
+use simple_segmentation,        only: detect_peak_thres_fdr
 implicit none
 
 public :: eul_prob_tab_neigh
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: POSTERIOR_EXPLORE_NNEIGH = 3
+real,    parameter :: POSTERIOR_RECOVERY_SUPPORT_MASS = 0.05
 
 ! Persistent sparse-posterior artifact state for one worker object.  The
 ! builder's full-to-subspace map is materialized as compact per-subspace
@@ -26,6 +32,8 @@ type :: posterior3d_ws
     integer, allocatable :: pind_lookup(:)
     logical, allocatable :: posterior_available(:)
     integer, allocatable :: sub_offsets(:), sub_full_inds(:)
+    integer, allocatable :: source_to_target_sub(:)
+    type(oris) :: target_subspace
     integer :: source_nspace = 0
     integer :: coverage_count = 0
     logical :: initialized = .false.
@@ -46,6 +54,7 @@ contains
     procedure :: fill_tab       => fill_tab_neigh
     procedure :: fill_tab_range => fill_tab_neigh_range
     procedure :: ref_assign     => ref_assign_neigh
+    procedure :: write_posterior3D_candidates
     procedure :: kill           => kill_neigh
     procedure :: read_tabs_to_glob
     procedure, private :: read_sparse_tab_to_glob
@@ -87,7 +96,8 @@ contains
     subroutine init_posterior3d_ws( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         logical :: ok
-        integer :: i, ithr, max_artifact_pind, nsub
+        integer :: i, ithr, max_artifact_pind, nsub, source_nspace, isrc, isub, target_proj
+        type(ori) :: o_tgt
         if( self%posterior_ws%initialized ) return
         self%posterior_ws%initialized = .true.
         allocate(self%posterior_ws%readers(nthr_glob))
@@ -103,22 +113,50 @@ contains
                 &self%posterior_ws%readers(1)%nstates == self%p_ptr%nstates .and.&
                 &self%posterior_ws%readers(1)%source_nspace > 0 .and.&
                 &self%posterior_ws%readers(1)%source_nspace <= self%p_ptr%nspace .and.&
+                &self%posterior_ws%readers(1)%source_nspace_sub > 0 .and.&
+                &self%posterior_ws%readers(1)%source_nspace_sub <= self%posterior_ws%readers(1)%source_nspace .and.&
                 &self%p_ptr%nspace > 1 .and.&
                 &trim(self%posterior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp) .and.&
-                &allocated(self%b_ptr%subspace_inds) .and. allocated(self%b_ptr%subspace_full2sub_map)
+                    &allocated(self%b_ptr%subspace_inds) .and. allocated(self%b_ptr%subspace_full2sub_map) .and.&
+                    &allocated(self%b_ptr%subspace_neighbors)
         endif
         if( self%posterior_ws%valid )then
             nsub = size(self%b_ptr%subspace_inds)
-            self%posterior_ws%valid = self%posterior_ws%readers(1)%source_nspace == nsub .and.&
+            self%posterior_ws%valid = self%posterior_ws%readers(1)%source_nspace > 0 .and.&
+                &self%posterior_ws%readers(1)%source_nspace_sub > 0 .and.&
+                &self%posterior_ws%readers(1)%source_nspace_sub <= self%posterior_ws%readers(1)%source_nspace .and.&
                 &size(self%b_ptr%subspace_full2sub_map) == self%p_ptr%nspace .and.&
                 &minval(self%b_ptr%subspace_full2sub_map) >= 1 .and.&
-                &maxval(self%b_ptr%subspace_full2sub_map) <= nsub
-            if( self%posterior_ws%valid ) call build_posterior_subspace_lists(self)
+                &maxval(self%b_ptr%subspace_full2sub_map) <= nsub .and.&
+                &size(self%b_ptr%subspace_neighbors,2) == nsub .and.&
+                &size(self%b_ptr%subspace_neighbors,1) >= min(POSTERIOR_EXPLORE_NNEIGH+1,nsub)
+            if( self%posterior_ws%valid )then
+                call build_posterior_subspace_lists(self)
+                source_nspace = self%posterior_ws%readers(1)%source_nspace
+                allocate(self%posterior_ws%source_to_target_sub(source_nspace), source=0)
+                if( source_nspace == self%p_ptr%nspace )then
+                    ! Same full angular grid: use the target builder map directly.
+                    do isrc = 1, source_nspace
+                        self%posterior_ws%source_to_target_sub(isrc) = self%b_ptr%subspace_full2sub_map(isrc)
+                    enddo
+                else
+                    ! Changed grid: retain target coarse representatives. Source
+                    ! Euler coordinates are mapped lazily and cached below.
+                    call self%posterior_ws%target_subspace%new(nsub, is_ptcl=.false.)
+                    do isub = 1, nsub
+                        target_proj = self%b_ptr%subspace_inds(isub)
+                        call self%b_ptr%eulspace%get_ori(target_proj, o_tgt)
+                        call self%posterior_ws%target_subspace%set_ori(isub, o_tgt)
+                    enddo
+                    call o_tgt%kill
+                endif
+            endif
         endif
         if( self%posterior_ws%valid )then
             do ithr = 2, nthr_glob
                 self%posterior_ws%valid = self%posterior_ws%valid .and.&
-                    &self%posterior_ws%readers(ithr)%source_nspace == self%posterior_ws%readers(1)%source_nspace
+                    &self%posterior_ws%readers(ithr)%source_nspace == self%posterior_ws%readers(1)%source_nspace .and.&
+                    &self%posterior_ws%readers(ithr)%source_nspace_sub == self%posterior_ws%readers(1)%source_nspace_sub
             enddo
         endif
         if( .not. self%posterior_ws%valid )then
@@ -164,6 +202,33 @@ contains
         enddo
         deallocate(counts, cursor)
     end subroutine build_posterior_subspace_lists
+
+    ! Maps one source full-grid projection to the target coarse subspace.  For
+    ! changed grids the stored source Euler coordinates are authoritative; the
+    ! result is cached by source projection identity so the expensive angular
+    ! lookup is performed at most once per source direction.
+    subroutine ensure_source_to_target_sub( self, source_proj, source_euls )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, intent(in) :: source_proj
+        real, intent(in) :: source_euls(3)
+        type(ori) :: o_src
+        integer :: cached_sub
+        if( source_proj < 1 .or. source_proj > size(self%posterior_ws%source_to_target_sub) ) return
+        if( .not. all(ieee_is_finite(source_euls)) ) return
+        !$omp atomic read
+        cached_sub = self%posterior_ws%source_to_target_sub(source_proj)
+        if( cached_sub > 0 ) return
+        !$omp critical(posterior_source_to_target_map)
+        if( self%posterior_ws%source_to_target_sub(source_proj) == 0 )then
+            call o_src%new(is_ptcl=.false.)
+            call o_src%set_euler(source_euls)
+            cached_sub = self%b_ptr%pgrpsyms%find_closest_proj(self%posterior_ws%target_subspace, o_src)
+            !$omp atomic write
+            self%posterior_ws%source_to_target_sub(source_proj) = cached_sub
+            call o_src%kill
+        endif
+        !$omp end critical(posterior_source_to_target_map)
+    end subroutine ensure_source_to_target_sub
 
     subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -243,19 +308,25 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, intent(in) :: i_first, i_last
         integer, allocatable :: mapped_stamp(:,:), map_generation(:)
-        logical, allocatable :: posterior_usable(:)
+        logical, allocatable :: posterior_usable(:), recovery_mask(:)
         integer, allocatable :: inds_sorted(:,:)
         real, allocatable :: dists_inpl(:,:)
         real :: shift(2), dist, corr
-        integer :: i, j, k, iproj, ri, full_ref, irot, ithr, istate, nrots
-        integer :: i_from, i_to, ncovered, nrange, source_proj, coarse_proj
+        integer :: i, j, k, iproj, ri, full_ref, irot, ithr, istate, nrots, ineigh
+        integer :: i_from, i_to, ncovered, nrange, source_proj, source_sub, coarse_proj
         logical :: okrow
         character(len=8) :: fallback_mode
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
+        ! Preserve the workflow's ordinary neighborhood policy for the
+        ! conditional probe.  refine3D_multi/input-orientation workflows use
+        ! the geometric path; single/independent ab-initio workflows use state.
         fallback_mode = 'state'
-        if( trim(self%p_ptr%multivol_mode) == 'docked' ) fallback_mode = 'geom'
+        select case(trim(self%p_ptr%multivol_mode))
+            case('docked','geom','input_oris_refine','input_oris_fixed')
+                fallback_mode = 'geom'
+        end select
         call init_posterior3d_ws(self)
         if( .not. self%posterior_ws%valid )then
             if( .not. self%posterior_ws%warning_emitted )then
@@ -267,10 +338,11 @@ contains
         endif
         nrange = i_to - i_from + 1
         allocate(posterior_usable(self%nptcls), source=self%posterior_ws%posterior_available)
+        allocate(recovery_mask(self%nptcls), source=.false.)
         ncovered = count(posterior_usable(i_from:i_to))
         if( ncovered == 0 )then
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
-            deallocate(posterior_usable)
+            deallocate(posterior_usable, recovery_mask)
             return
         endif
         nrots = self%b_ptr%pftc%get_nrots()
@@ -280,7 +352,7 @@ contains
         map_generation = 0
         dists_inpl = 0.
         inds_sorted = 0
-        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj,coarse_proj)&
+        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj,source_sub,coarse_proj,ineigh)&
         !$omp proc_bind(close) schedule(static)
         do i = i_from, i_to
             if( .not. posterior_usable(i) ) cycle
@@ -291,27 +363,34 @@ contains
                 posterior_usable(i) = .false.
                 cycle
             endif
+            recovery_mask(i) = posterior_row_needs_recovery(self, self%pinds(i), self%posterior_ws%readers(ithr))
             do k = 1, self%posterior_ws%readers(ithr)%nsel
                 istate = self%posterior_ws%readers(ithr)%state(k)
                 if( istate < 1 .or. istate > self%p_ptr%nstates ) cycle
                 if( .not. self%state_exists(istate) ) cycle
                 source_proj = self%posterior_ws%readers(ithr)%proj(k)
-                if( source_proj < 1 .or. source_proj > size(self%b_ptr%subspace_inds) ) cycle
-                coarse_proj = source_proj
-                do j = self%posterior_ws%sub_offsets(coarse_proj), self%posterior_ws%sub_offsets(coarse_proj+1)-1
-                    iproj = self%posterior_ws%sub_full_inds(j)
-                    full_ref = (istate-1)*self%p_ptr%nspace + iproj
-                    ri = self%full_to_compact_ref(full_ref)
-                    if( ri < 1 .or. mapped_stamp(ri,ithr) == map_generation(ithr) ) cycle
-                    mapped_stamp(ri,ithr) = map_generation(ithr)
-                    shift = 0.
-                    if( self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
-                        &shift = [self%posterior_ws%readers(ithr)%x(k), self%posterior_ws%readers(ithr)%y(k)]
-                    call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift,&
-                        &nrots, dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
-                    if( irot < 1 .or. irot > nrots ) irot = 1
-                    call record_sparse_eval(self, i, ithr, ri, dist, irot, shift(1), shift(2),&
-                        &(self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
+                if( source_proj < 1 .or. source_proj > size(self%posterior_ws%source_to_target_sub) ) cycle
+                call ensure_source_to_target_sub(self, source_proj, self%posterior_ws%readers(ithr)%euls(:,k))
+                source_sub = self%posterior_ws%source_to_target_sub(source_proj)
+                if( source_sub < 1 .or. source_sub > size(self%posterior_ws%sub_offsets)-1 ) cycle
+                do ineigh = 1, min(POSTERIOR_EXPLORE_NNEIGH+1, size(self%b_ptr%subspace_neighbors,1))
+                    coarse_proj = self%b_ptr%subspace_neighbors(ineigh,source_sub)
+                    if( coarse_proj < 1 .or. coarse_proj > size(self%posterior_ws%sub_offsets)-1 ) cycle
+                    do j = self%posterior_ws%sub_offsets(coarse_proj), self%posterior_ws%sub_offsets(coarse_proj+1)-1
+                        iproj = self%posterior_ws%sub_full_inds(j)
+                        full_ref = (istate-1)*self%p_ptr%nspace + iproj
+                        ri = self%full_to_compact_ref(full_ref)
+                        if( ri < 1 .or. mapped_stamp(ri,ithr) == map_generation(ithr) ) cycle
+                        mapped_stamp(ri,ithr) = map_generation(ithr)
+                        shift = 0.
+                        if( self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
+                            &shift = [self%posterior_ws%readers(ithr)%x(k), self%posterior_ws%readers(ithr)%y(k)]
+                        call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift,&
+                            &nrots, dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
+                        if( irot < 1 .or. irot > nrots ) irot = 1
+                        call record_sparse_eval(self, i, ithr, ri, dist, irot, shift(1), shift(2),&
+                            &(self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
+                    enddo
                 enddo
             enddo
         enddo
@@ -326,8 +405,148 @@ contains
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode,&
                 &active_mask=.not.posterior_usable)
         endif
-        deallocate(mapped_stamp, map_generation, posterior_usable, dists_inpl, inds_sorted)
+        if( any(recovery_mask(i_from:i_to)) )then
+            write(logfhandle,'(A,I0,A,A)') '>>> POSTERIOR BOUNDED RECOVERY PROBES: ',&
+                &count(recovery_mask(i_from:i_to)), ' particles using prob_neigh_mode=', trim(fallback_mode)
+            call fill_tab_subspace_range(self, i_first, i_last, fallback_mode, active_mask=recovery_mask)
+        endif
+        deallocate(mapped_stamp, map_generation, posterior_usable, recovery_mask, dists_inpl, inds_sorted)
     end subroutine fill_tab_posterior_range
+
+    ! A posterior row is considered in need of a bounded recovery probe when its
+    ! retained mass is weak or when its coarse support no longer contains the
+    ! particle's current projection cell (including the local three-neighbor ring).
+    ! The ordinary state/geom path is used only for these particles; it is not a
+    ! global fallback for a valid posterior artifact.
+    logical function posterior_row_needs_recovery( self, pind, reader ) result(l_recover)
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, intent(in) :: pind
+        type(posterior3d_reader), intent(in) :: reader
+        type(ori) :: o_prev
+        integer :: prev_state, prev_proj, prev_sub, k, ineigh, source_proj, source_sub, nkeep
+        logical :: l_found
+        l_recover = reader%support_mass < POSTERIOR_RECOVERY_SUPPORT_MASS .or. reader%nsel == 0
+        call get_particle_context(self, pind, o_prev, prev_state, prev_proj)
+        prev_proj = max(1, min(self%p_ptr%nspace, prev_proj))
+        prev_sub = self%b_ptr%subspace_full2sub_map(prev_proj)
+        nkeep = min(POSTERIOR_EXPLORE_NNEIGH+1, size(self%b_ptr%subspace_neighbors,1))
+        l_found = .false.
+        do k = 1, reader%nsel
+            if( prev_state >= 1 .and. prev_state <= self%p_ptr%nstates )then
+                if( reader%state(k) /= prev_state ) cycle
+            endif
+            source_proj = reader%proj(k)
+            if( source_proj < 1 .or. source_proj > size(self%posterior_ws%source_to_target_sub) ) cycle
+            call ensure_source_to_target_sub(self, source_proj, reader%euls(:,k))
+            source_sub = self%posterior_ws%source_to_target_sub(source_proj)
+            if( source_sub < 1 .or. source_sub > size(self%b_ptr%subspace_neighbors,2) ) cycle
+            do ineigh = 1, nkeep
+                if( self%b_ptr%subspace_neighbors(ineigh,source_sub) == prev_sub )then
+                    l_found = .true.
+                    exit
+                endif
+            enddo
+            if( l_found ) exit
+        enddo
+        l_recover = l_recover .or. .not. l_found
+        call o_prev%kill
+    end function posterior_row_needs_recovery
+
+    ! Rebuilds the sparse posterior from the merged current candidate evidence.
+    ! This is called only by the global prob_neigh owner, after all distributed
+    ! candidate tables have been merged.  The source rows are therefore based
+    ! on the current reference and current calibrated distances, not on a
+    ! cumulative product of evidence from previous iterations.
+    subroutine write_posterior3D_candidates( self, binfname )
+        class(eul_prob_tab_neigh), intent(in) :: self
+        character(len=*), intent(in) :: binfname
+        type(posterior3d_writer) :: writer
+        integer, allocatable :: work_pos(:), out_state(:), out_proj(:), out_inpl(:), out_has_sh(:)
+        real, allocatable :: work_dist(:), work_weight(:), out_dist(:), out_weight(:), out_x(:), out_y(:), out_euls(:,:)
+        character(len=STDLEN) :: tmpfname, tmpmeta, metafname
+        real :: dmin, norm, euls(3), dist_thres
+        integer :: i, pos, pick, ncand, k, k_this, kmax, iref, iproj, istate, nsub, npeaks_detected
+        if( .not. allocated(self%candidate_store%offsets) .or. self%nptcls < 1 .or. self%nrefs < 1 )then
+            THROW_WARN('write_posterior3D_candidates requires merged candidate evidence; no artifact written')
+            return
+        endif
+        nsub = 0
+        if( allocated(self%b_ptr%subspace_inds) ) nsub = size(self%b_ptr%subspace_inds)
+        if( nsub < 1 )then
+            THROW_WARN('write_posterior3D_candidates requires a coarse subspace map; no artifact written')
+            return
+        endif
+        kmax = min(self%nrefs, max(3, min(128, max(1, 8*self%p_ptr%npeaks_inpl))))
+        allocate(work_pos(self%nrefs), work_dist(self%nrefs), work_weight(self%nrefs))
+        allocate(out_state(kmax), out_proj(kmax), out_inpl(kmax), out_has_sh(kmax), out_dist(kmax), out_weight(kmax),&
+            &out_x(kmax), out_y(kmax), out_euls(3,kmax))
+        tmpfname = trim(binfname)//'.tmp'
+        tmpmeta  = trim(tmpfname)//'.meta'
+        metafname = trim(binfname)//'.meta'
+        call writer%open(trim(tmpfname), self%nptcls, self%p_ptr%nstates, self%p_ptr%nspace, nsub, kmax,&
+            &self%p_ptr%pgrp, self%pinds)
+        do i = 1, self%nptcls
+            ncand = 0
+            do pos = int(self%candidate_store%offsets(i)), int(self%candidate_store%offsets(i+1))-1
+                if( self%candidate_store%candidates(pos)%inpl < 1 ) cycle
+                if( .not. ieee_is_finite(self%candidate_store%candidates(pos)%dist) ) cycle
+                ncand = ncand + 1
+                if( ncand > self%nrefs ) THROW_HARD('posterior refresh candidate count exceeds reference count')
+                work_pos(ncand)  = pos
+                work_dist(ncand) = self%candidate_store%candidates(pos)%dist
+            enddo
+            if( ncand < 1 )then
+                call writer%write_row(self%pinds(i), 0, 0., out_state, out_proj, out_inpl, out_has_sh,&
+                    &out_dist, out_weight, out_x, out_y, out_euls)
+                cycle
+            endif
+            dmin = minval(work_dist(1:ncand))
+            work_weight(1:ncand) = exp(-(work_dist(1:ncand)-dmin))
+            norm = sum(work_weight(1:ncand))
+            if( norm > 0. ) work_weight(1:ncand) = work_weight(1:ncand) / norm
+            call detect_peak_thres_fdr(ncand, work_dist(1:ncand), POSTERIOR3D_FDR_Q, 1, min(kmax,ncand),&
+                &dist_thres, npeaks_detected, lower_tail=.true.)
+            k_this = min(kmax, ncand, max(1, npeaks_detected))
+            out_state = 0
+            out_proj = 0
+            out_inpl = 0
+            out_has_sh = 0
+            out_dist = 0.
+            out_weight = 0.
+            out_x = 0.
+            out_y = 0.
+            out_euls = 0.
+            do k = 1, k_this
+                pick = minloc(work_dist(1:ncand), dim=1)
+                pos = work_pos(pick)
+                iref = self%full_to_compact_ref(self%candidate_store%candidates(pos)%iref)
+                if( iref < 1 .or. iref > self%nrefs ) THROW_HARD('posterior refresh contains an invalid reference')
+                istate = self%ref_state(iref)
+                iproj  = self%ref_proj(iref)
+                out_state(k) = istate
+                out_proj(k) = iproj
+                out_inpl(k) = self%candidate_store%candidates(pos)%inpl
+                out_has_sh(k) = merge(1, 0, self%candidate_store%candidates(pos)%has_sh)
+                out_dist(k) = self%candidate_store%candidates(pos)%dist
+                out_weight(k) = work_weight(pick)
+                out_x(k) = self%candidate_store%candidates(pos)%x
+                out_y(k) = self%candidate_store%candidates(pos)%y
+                euls = self%b_ptr%eulspace%get_euler(iproj)
+                out_euls(:,k) = euls
+                work_dist(pick) = huge(1.0)
+            enddo
+            call writer%write_row(self%pinds(i), k_this, sum(out_weight(1:k_this)), out_state, out_proj, out_inpl,&
+                &out_has_sh, out_dist, out_weight, out_x, out_y, out_euls)
+        enddo
+        call writer%close
+        call writer%kill
+        call simple_rename(trim(tmpfname), trim(binfname), overwrite=.true.)
+        call simple_rename(trim(tmpmeta), trim(metafname), overwrite=.true.)
+        write(logfhandle,'(A,I0,A,I0)') '>>> POSTERIOR REFRESH PUBLISHED: particles=', self%nptcls,&
+            &', maximum support width=', kmax
+        deallocate(work_pos, work_dist, work_weight, out_state, out_proj, out_inpl, out_has_sh, out_dist, out_weight,&
+            &out_x, out_y, out_euls)
+    end subroutine write_posterior3D_candidates
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
 
@@ -1563,6 +1782,8 @@ contains
         if( allocated(self%posterior_available) ) deallocate(self%posterior_available)
         if( allocated(self%sub_offsets) ) deallocate(self%sub_offsets)
         if( allocated(self%sub_full_inds) ) deallocate(self%sub_full_inds)
+        if( allocated(self%source_to_target_sub) ) deallocate(self%source_to_target_sub)
+        call self%target_subspace%kill
         self%source_nspace = 0
         self%coverage_count = 0
         self%initialized = .false.

@@ -262,6 +262,7 @@ contains
 
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
+        use simple_prob_posterior3D,        only: POSTERIOR3D_FNAME
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
@@ -300,6 +301,12 @@ contains
         call eulprob_obj_glob_neigh%new_neigh_global(params,build,pinds)
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
+        if( trim(params%prob_neigh_mode) == 'posterior' )then
+            ! The merged current candidate table is the evidence for the next
+            ! posterior generation.  Publish only after global assignment has
+            ! consumed the table for the current iteration.
+            call eulprob_obj_glob_neigh%write_posterior3D_candidates(POSTERIOR3D_FNAME)
+        endif
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob_neigh%write_assignment(fname)

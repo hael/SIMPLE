@@ -13,7 +13,7 @@ use simple_prob_posterior3D,  only: posterior3d_writer
 use simple_segmentation,     only: detect_peak_thres_fdr
 implicit none
 
-public :: eul_prob_tab
+public :: eul_prob_tab, POSTERIOR3D_FDR_Q
 private
 #include "simple_local_flags.inc"
 
