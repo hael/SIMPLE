@@ -7,7 +7,7 @@ use simple_pftc_srch_api
 use simple_eul_prob_tab_utils
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_prob_prior3D,       only: prior3d_reader, PRIOR3D_FNAME, PRIOR3D_NREMAP
+use simple_prob_posterior3D,    only: posterior3d_reader, POSTERIOR3D_FNAME
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
@@ -17,29 +17,27 @@ public :: eul_prob_tab_neigh
 private
 #include "simple_local_flags.inc"
 
-! Persistent support-artifact state for one worker object.  The remap is a
-! property of the source and target angular grids, not of an individual
-! particle, so it is built once and reused for every particle batch.
-type :: prior3d_ws
-    type(prior3d_reader), allocatable :: readers(:)
+! Persistent sparse-posterior artifact state for one worker object.  The
+! target angular index is reused across particles; the radius query is
+! particle-specific and is derived from the stored orientation-distance
+! estimate.
+type :: posterior3d_ws
+    type(posterior3d_reader), allocatable :: readers(:)
     integer, allocatable :: pind_lookup(:)
-    logical, allocatable :: prior_available(:)
-    integer, allocatable :: remap_proj(:,:)       ! [PRIOR3D_NREMAP,source_nspace]
-    integer, allocatable :: remap_count(:)        ! [source_nspace]
+    logical, allocatable :: posterior_available(:)
     integer :: source_nspace = 0
     integer :: coverage_count = 0
     logical :: initialized = .false.
     logical :: valid = .false.
-    logical :: has_coverage = .false.
     logical :: warning_emitted = .false.
 contains
-    procedure :: kill => kill_prior3d_ws
-end type prior3d_ws
+    procedure :: kill => kill_posterior3d_ws
+end type posterior3d_ws
 
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     type(prob_candidate_store) :: candidate_store
     integer, allocatable       :: candidate_fill_counts(:)
-    type(prior3d_ws)           :: prior_ws
+    type(posterior3d_ws)        :: posterior_ws
     logical                    :: l_direct_stoch_neigh = .false.
 contains
     procedure :: new_neigh
@@ -85,85 +83,52 @@ end type coarse_search_ws
 
 contains
 
-    subroutine init_prior3d_ws( self )
+    subroutine init_posterior3d_ws( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        type(ori) :: source_o
-        logical, allocatable :: lnns(:)
-        logical :: ok, okrow
-        integer :: i, j, k, ithr, source_proj, nfound, nremap, max_artifact_pind
-        if( self%prior_ws%initialized ) return
-        self%prior_ws%initialized = .true.
-        allocate(self%prior_ws%readers(nthr_glob))
-        self%prior_ws%valid = .true.
+        logical :: ok
+        integer :: i, ithr, max_artifact_pind
+        if( self%posterior_ws%initialized ) return
+        self%posterior_ws%initialized = .true.
+        allocate(self%posterior_ws%readers(nthr_glob))
+        self%posterior_ws%valid = .true.
         do ithr = 1, nthr_glob
-            call self%prior_ws%readers(ithr)%open(PRIOR3D_FNAME, ok)
-            self%prior_ws%valid = self%prior_ws%valid .and. ok
+            call self%posterior_ws%readers(ithr)%open(POSTERIOR3D_FNAME, ok)
+            self%posterior_ws%valid = self%posterior_ws%valid .and. ok
         enddo
-        if( self%prior_ws%valid )then
-            ! The artifact is sparse and direct-access records are keyed by
-            ! particle ID.  Its sampled pinds need not equal the next stage's
-            ! sampled pinds; coverage is checked below with a particle lookup.
-            self%prior_ws%valid = self%prior_ws%readers(1)%nptcls > 0 .and.&
-                &self%prior_ws%readers(1)%nstates == self%p_ptr%nstates .and.&
-                &self%prior_ws%readers(1)%source_nspace > 0 .and.&
-                &self%prior_ws%readers(1)%source_nspace <= self%p_ptr%nspace .and.&
+        if( self%posterior_ws%valid )then
+            ! Rows are sparse and direct-access records are keyed by particle
+            ! id.  The next stage may sample a different particle subset.
+            self%posterior_ws%valid = self%posterior_ws%readers(1)%nptcls > 0 .and.&
+                &self%posterior_ws%readers(1)%nstates == self%p_ptr%nstates .and.&
+                &self%posterior_ws%readers(1)%source_nspace > 0 .and.&
+                &self%posterior_ws%readers(1)%source_nspace <= self%p_ptr%nspace .and.&
                 &self%p_ptr%nspace > 1 .and.&
-                &trim(self%prior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp)
+                &trim(self%posterior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp)
         endif
-        if( self%prior_ws%valid )then
+        if( self%posterior_ws%valid )then
             do ithr = 2, nthr_glob
-                self%prior_ws%valid = self%prior_ws%valid .and.&
-                    &self%prior_ws%readers(ithr)%source_nspace == self%prior_ws%readers(1)%source_nspace
+                self%posterior_ws%valid = self%posterior_ws%valid .and.&
+                    &self%posterior_ws%readers(ithr)%source_nspace == self%posterior_ws%readers(1)%source_nspace
             enddo
         endif
-        if( .not. self%prior_ws%valid )then
+        if( .not. self%posterior_ws%valid )then
             do ithr = 1, nthr_glob
-                call self%prior_ws%readers(ithr)%kill
+                call self%posterior_ws%readers(ithr)%kill
             enddo
             return
         endif
-        self%prior_ws%source_nspace = self%prior_ws%readers(1)%source_nspace
-        call build_pind_lookup(self%prior_ws%readers(1)%pinds, self%pinds,&
-            &self%prior_ws%pind_lookup, max_artifact_pind)
-        allocate(self%prior_ws%prior_available(self%nptcls), source=.false.)
+        self%posterior_ws%source_nspace = self%posterior_ws%readers(1)%source_nspace
+        call build_pind_lookup(self%posterior_ws%readers(1)%pinds, self%pinds,&
+            &self%posterior_ws%pind_lookup, max_artifact_pind)
+        allocate(self%posterior_ws%posterior_available(self%nptcls), source=.false.)
         do i = 1, self%nptcls
             if( self%pinds(i) >= 1 .and. self%pinds(i) <= max_artifact_pind )then
-                self%prior_ws%prior_available(i) = self%prior_ws%pind_lookup(self%pinds(i)) > 0
+                self%posterior_ws%posterior_available(i) = self%posterior_ws%pind_lookup(self%pinds(i)) > 0
             endif
         enddo
-        self%prior_ws%coverage_count = count(self%prior_ws%prior_available)
-        if( self%prior_ws%coverage_count == 0 ) return
-        nremap = min(PRIOR3D_NREMAP, self%p_ptr%nspace-1)
-        allocate(self%prior_ws%remap_proj(PRIOR3D_NREMAP,self%prior_ws%source_nspace), source=0)
-        allocate(self%prior_ws%remap_count(self%prior_ws%source_nspace), source=0)
-        allocate(lnns(self%p_ptr%nspace), source=.false.)
-        call source_o%new(.false.)
-        do i = 1, self%prior_ws%readers(1)%nptcls
-            call self%prior_ws%readers(1)%read_row(self%prior_ws%readers(1)%pinds(i), okrow)
-            if( .not. okrow ) cycle
-            do k = 1, self%prior_ws%readers(1)%nsel
-                source_proj = self%prior_ws%readers(1)%proj(k)
-                if( source_proj < 1 .or. source_proj > self%prior_ws%source_nspace ) cycle
-                if( self%prior_ws%remap_count(source_proj) > 0 ) cycle
-                if( any(.not.(ieee_is_finite(self%prior_ws%readers(1)%euls(:,k)))) ) cycle
-                call source_o%set_euler(self%prior_ws%readers(1)%euls(:,k))
-                lnns = .false.
-                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o,&
-                    &nremap, lnns)
-                nfound = 0
-                do j = 1, self%p_ptr%nspace
-                    if( .not. lnns(j) ) cycle
-                    nfound = nfound + 1
-                    if( nfound <= PRIOR3D_NREMAP ) self%prior_ws%remap_proj(nfound,source_proj) = j
-                enddo
-                self%prior_ws%remap_count(source_proj) = min(nfound,PRIOR3D_NREMAP)
-            enddo
-        enddo
-        call source_o%kill
-        deallocate(lnns)
-        self%prior_ws%has_coverage = any(self%prior_ws%remap_count > 0)
-        if( .not. self%prior_ws%has_coverage ) self%prior_ws%valid = .false.
-    end subroutine init_prior3d_ws
+        self%posterior_ws%coverage_count = count(self%posterior_ws%posterior_available)
+        if( self%posterior_ws%coverage_count == 0 ) self%posterior_ws%valid = .false.
+    end subroutine init_posterior3d_ws
 
     subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -189,7 +154,7 @@ contains
         select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
                 self%l_direct_stoch_neigh = .true.
-            case('prior')
+            case('posterior')
                 self%l_direct_stoch_neigh = .true.
             case('geom','state')
                 self%l_direct_stoch_neigh = .false.
@@ -223,99 +188,141 @@ contains
                 if( .not. allocated(self%b_ptr%subspace_inds) )&
                     &THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_subspace_range; missing subspace indices')
                 call fill_tab_subspace_range(self, i_first, i_last)
-            case('prior')
-                call fill_tab_prior_range(self, i_first, i_last)
+            case('posterior')
+                call fill_tab_posterior_range(self, i_first, i_last)
             case DEFAULT
                 THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_neigh_range; unsupported prob_neigh_mode')
         end select
         if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_neigh_range
 
-    ! PRIOR SUPPORT BRANCH
+    ! SPARSE PROFILED POSTERIOR BRANCH
     !
-    ! The prior records were produced on the preceding dense grid.  A finer
-    ! current grid is handled by mapping each stored projection to the three
-    ! nearest current-grid directions under point-group symmetry.  This is the
-    ! only resolution-change rule: a coarser target is deliberately rejected,
-    ! since aggregation would lose support. In that case the caller uses the
-    ! bounded state/geom neighborhood policy for the workflow.
-    subroutine fill_tab_prior_range( self, i_first, i_last )
+    ! The source artifact is a sparse posterior on the preceding dense grid.
+    ! Each retained source direction expands to all target directions inside
+    ! twice the particle's stored best-orientation distance, with a minimum of
+    ! three target directions.  Target-grid likelihood evaluation remains
+    ! authoritative.
+    subroutine fill_tab_posterior_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, intent(in) :: i_first, i_last
-        logical, allocatable :: mapped_mask(:,:)
+        integer, allocatable :: mapped_stamp(:,:), map_generation(:)
+        logical, allocatable :: target_mask(:,:), posterior_usable(:)
         integer, allocatable :: inds_sorted(:,:)
         real, allocatable :: dists_inpl(:,:)
-        real :: shift(2), dist, corr
+        type(ori), allocatable :: source_o(:)
+        real :: shift(2), dist, corr, radius_deg, best_ori_dist
         integer :: i, j, k, iproj, ri, full_ref, irot, ithr, istate, nrots
-        integer :: i_from, i_to, ncovered, nrange, source_proj
-        logical :: okrow
+        integer :: i_from, i_to, ncovered, nrange, source_proj, nfound, min_nns
+        logical :: okrow, has_dist
         character(len=8) :: fallback_mode
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
         fallback_mode = 'state'
         if( trim(self%p_ptr%multivol_mode) == 'docked' ) fallback_mode = 'geom'
-        call init_prior3d_ws(self)
-        if( .not. self%prior_ws%valid )then
-            if( .not. self%prior_ws%warning_emitted )then
-                THROW_WARN('prob_neigh_mode=prior: support artifact missing or incompatible; falling back to bounded prob_neigh_mode='//trim(fallback_mode)//' search')
-                self%prior_ws%warning_emitted = .true.
+        call init_posterior3d_ws(self)
+        if( .not. self%posterior_ws%valid )then
+            if( .not. self%posterior_ws%warning_emitted )then
+                THROW_WARN('prob_neigh_mode=posterior: support artifact missing or incompatible; falling back to bounded prob_neigh_mode='//trim(fallback_mode)//' search')
+                self%posterior_ws%warning_emitted = .true.
             endif
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
             return
         endif
         nrange = i_to - i_from + 1
-        ncovered = count(self%prior_ws%prior_available(i_from:i_to))
+        allocate(posterior_usable(self%nptcls), source=self%posterior_ws%posterior_available)
+        do i = i_from, i_to
+            if( .not. posterior_usable(i) ) cycle
+            has_dist = self%b_ptr%spproj_field%isthere(self%pinds(i), 'dist')
+            if( .not. has_dist )then
+                posterior_usable(i) = .false.
+            else
+                best_ori_dist = self%b_ptr%spproj_field%get(self%pinds(i), 'dist')
+                posterior_usable(i) = ieee_is_finite(best_ori_dist) .and. best_ori_dist >= 0.
+            endif
+        enddo
+        ncovered = count(posterior_usable(i_from:i_to))
         if( ncovered == 0 )then
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
+            deallocate(posterior_usable)
             return
         endif
         nrots = self%b_ptr%pftc%get_nrots()
-        allocate(mapped_mask(self%nrefs,nthr_glob), dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
-        mapped_mask = .false.
+        allocate(mapped_stamp(self%nrefs,nthr_glob), map_generation(nthr_glob),&
+            &target_mask(self%p_ptr%nspace,nthr_glob), dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob),&
+            &source_o(nthr_glob))
+        mapped_stamp = 0
+        map_generation = 0
+        target_mask = .false.
         dists_inpl = 0.
         inds_sorted = 0
-        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj)&
+        do ithr = 1, nthr_glob
+            call source_o(ithr)%new(.false.)
+        enddo
+        min_nns = min(3, max(1, self%p_ptr%nspace-1))
+        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj,nfound,radius_deg,best_ori_dist)&
         !$omp proc_bind(close) schedule(static)
         do i = i_from, i_to
-            if( .not. self%prior_ws%prior_available(i) ) cycle
+            if( .not. posterior_usable(i) ) cycle
             ithr = omp_get_thread_num() + 1
-            mapped_mask(:,ithr) = .false.
-            call self%prior_ws%readers(ithr)%read_row(self%pinds(i), okrow)
-            if( .not. okrow ) cycle
-            do k = 1, self%prior_ws%readers(ithr)%nsel
-                istate = self%prior_ws%readers(ithr)%state(k)
+            map_generation(ithr) = map_generation(ithr) + 1
+            best_ori_dist = self%b_ptr%spproj_field%get(self%pinds(i), 'dist')
+            radius_deg = max(0., 2. * best_ori_dist)
+            call self%posterior_ws%readers(ithr)%read_row(self%pinds(i), okrow)
+            if( .not. okrow )then
+                posterior_usable(i) = .false.
+                cycle
+            endif
+            do k = 1, self%posterior_ws%readers(ithr)%nsel
+                istate = self%posterior_ws%readers(ithr)%state(k)
                 if( istate < 1 .or. istate > self%p_ptr%nstates ) cycle
                 if( .not. self%state_exists(istate) ) cycle
-                source_proj = self%prior_ws%readers(ithr)%proj(k)
-                if( source_proj < 1 .or. source_proj > self%prior_ws%source_nspace ) cycle
-                do j = 1, self%prior_ws%remap_count(source_proj)
-                    iproj = self%prior_ws%remap_proj(j,source_proj)
-                    full_ref = (istate-1)*self%p_ptr%nspace + iproj
+                source_proj = self%posterior_ws%readers(ithr)%proj(k)
+                if( source_proj < 1 .or. source_proj > self%posterior_ws%source_nspace ) cycle
+                if( any(.not.ieee_is_finite(self%posterior_ws%readers(ithr)%euls(:,k))) ) cycle
+                call source_o(ithr)%set_euler(self%posterior_ws%readers(ithr)%euls(:,k))
+                target_mask(:,ithr) = .false.
+                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o(ithr),&
+                    &radius_deg, target_mask(:,ithr))
+                nfound = count(target_mask(:,ithr))
+                if( nfound < min_nns )then
+                    call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o(ithr),&
+                        &min_nns, target_mask(:,ithr))
+                endif
+                do j = 1, self%p_ptr%nspace
+                    if( .not. target_mask(j,ithr) ) cycle
+                    full_ref = (istate-1)*self%p_ptr%nspace + j
                     ri = self%full_to_compact_ref(full_ref)
-                    if( ri < 1 .or. mapped_mask(ri,ithr) ) cycle
-                    mapped_mask(ri,ithr) = .true.
+                    if( ri < 1 .or. mapped_stamp(ri,ithr) == map_generation(ithr) ) cycle
+                    mapped_stamp(ri,ithr) = map_generation(ithr)
                     shift = 0.
-                    if( self%prior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
-                        &shift = [self%prior_ws%readers(ithr)%x(k), self%prior_ws%readers(ithr)%y(k)]
+                    if( self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
+                        &shift = [self%posterior_ws%readers(ithr)%x(k), self%posterior_ws%readers(ithr)%y(k)]
                     call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift,&
-                        &self%b_ptr%pftc%get_nrots(), dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
+                        &nrots, dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
                     if( irot < 1 .or. irot > nrots ) irot = 1
                     call record_sparse_eval(self, i, ithr, ri, dist, irot, shift(1), shift(2),&
-                        &(self%prior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
+                        &(self%posterior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
                 enddo
             enddo
         enddo
         !$omp end parallel do
+        ! A malformed row may only become visible during the direct read.  Recount
+        ! after the parallel section so those particles enter the bounded fallback.
+        ncovered = count(posterior_usable(i_from:i_to))
         if( ncovered < nrange )then
-            ! Particle sampling may legitimately change between the dense
-            ! producer stage and a later neighborhood stage.  Uncovered
-            ! particles use the bounded state/geom policy.
+            ! Particle sampling may change between producer and consumer.
+            ! Particles without a valid posterior row or distance estimate use
+            ! the bounded workflow-specific fallback.
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode,&
-                &active_mask=.not.self%prior_ws%prior_available)
+                &active_mask=.not.posterior_usable)
         endif
-        deallocate(mapped_mask, dists_inpl, inds_sorted)
-    end subroutine fill_tab_prior_range
+        do ithr = 1, nthr_glob
+            call source_o(ithr)%kill
+        enddo
+        deallocate(source_o, mapped_stamp, map_generation, target_mask, posterior_usable, dists_inpl, inds_sorted)
+    end subroutine fill_tab_posterior_range
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
 
@@ -432,7 +439,7 @@ contains
                 prev_full_ref_loc = (prev_state_loc - 1) * self%p_ptr%nspace + prev_proj_loc
                 call put_last(prev_full_ref_loc, direct_srch_order(:,ithr_loc))
             endif
-            ! Only force a dense first pass when the particle truly has no prior
+            ! Only force a dense first pass when the particle truly has no previous
             ! search result. Keying this off updatecnt makes iteration 2 behave
             ! like a full scan for first-time sampled particles.
             l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
@@ -851,7 +858,7 @@ contains
         logical   :: final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift, l_report_npeaks
         huge_val = huge(1.0)
         l_report_npeaks = trim(self%p_ptr%refine) == 'prob_neigh' .and.&
-            &trim(self%p_ptr%prob_neigh_mode) == 'prior'
+            &trim(self%p_ptr%prob_neigh_mode) == 'posterior'
         l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
             &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
         allocate(dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
@@ -1038,7 +1045,7 @@ contains
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
-            ! Report the distinct valid sparse references used for this prior neighborhood.
+            ! Report the distinct valid references used for this posterior-guided neighborhood.
             if( l_report_npeaks ) self%assgn_map(assigned_ptcl)%npeaks = particle_evaluated_count(assigned_ptcl)
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
@@ -1538,8 +1545,8 @@ contains
 
     ! DESTRUCTOR
 
-    subroutine kill_prior3d_ws( self )
-        class(prior3d_ws), intent(inout) :: self
+    subroutine kill_posterior3d_ws( self )
+        class(posterior3d_ws), intent(inout) :: self
         integer :: ithr
         if( allocated(self%readers) )then
             do ithr = 1, size(self%readers)
@@ -1548,22 +1555,19 @@ contains
             deallocate(self%readers)
         endif
         if( allocated(self%pind_lookup) ) deallocate(self%pind_lookup)
-        if( allocated(self%prior_available) ) deallocate(self%prior_available)
-        if( allocated(self%remap_proj) ) deallocate(self%remap_proj)
-        if( allocated(self%remap_count) ) deallocate(self%remap_count)
+        if( allocated(self%posterior_available) ) deallocate(self%posterior_available)
         self%source_nspace = 0
         self%coverage_count = 0
         self%initialized = .false.
         self%valid = .false.
-        self%has_coverage = .false.
         self%warning_emitted = .false.
-    end subroutine kill_prior3d_ws
+    end subroutine kill_posterior3d_ws
 
     subroutine kill_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         call self%candidate_store%kill
         if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
-        call self%prior_ws%kill
+        call self%posterior_ws%kill
         self%l_direct_stoch_neigh = .false.
         call self%eul_prob_tab%kill
     end subroutine kill_neigh

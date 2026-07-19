@@ -71,7 +71,7 @@ contains
                 call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
-            if( trim(self%s%p_ptr%prob_neigh_mode) == 'prior' )&
+            if( trim(self%s%p_ptr%prob_neigh_mode) == 'posterior' )&
                 &call os%set(self%s%iptcl, 'npeaks', real(npeaks))
         else
             call os%reject(self%s%iptcl)

@@ -174,7 +174,7 @@ contains
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_prob_prior3D,             only: PRIOR3D_FNAME
+        use simple_prob_posterior3D,          only: POSTERIOR3D_FNAME
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
@@ -247,7 +247,7 @@ contains
             ! orientation grid for source Euler coordinates.
             call build%eulspace%new(params%nspace, is_ptcl=.false.)
             call build%pgrpsyms%build_refspiral(build%eulspace)
-            call eulprob_obj_glob%write_prior3D(string(PRIOR3D_FNAME))
+            call eulprob_obj_glob%write_posterior3D(string(POSTERIOR3D_FNAME))
         endif
         call eulprob_obj_glob%kill
         ! cleanup

@@ -14,7 +14,7 @@ type convergence
     type(stats_struct) :: dist       !< angular distance stats
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
-    type(stats_struct) :: npeaks     !< probabilistic prior neighborhood size stats
+    type(stats_struct) :: npeaks     !< posterior-guided neighborhood size stats
     type(stats_struct) :: shincarg   !< shift increment
     type(stats_struct) :: lp         !< low-pass limit
     type(stats_struct) :: lp_est     !< low-pass limit, estimated
@@ -300,7 +300,7 @@ contains
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call os%stats('frac',       self%frac_srch,  mask=mask)
         l_report_npeaks = trim(params%refine) == 'prob_neigh' .and.&
-            &trim(params%prob_neigh_mode) == 'prior'
+            &trim(params%prob_neigh_mode) == 'posterior'
         if( l_report_npeaks ) call os%stats('npeaks', self%npeaks, mask=mask)
         call os%stats('shincarg',   self%shincarg,   mask=mask)
         call os%stats('lp',         self%lp,         mask=mask)
@@ -335,7 +335,7 @@ contains
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         if( l_report_npeaks )&
-            &write(logfhandle,604) '>>> PRIOR NEIGH NPEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg,&
+            &write(logfhandle,604) '>>> POSTERIOR NEIGH NPEAKS   AVG/SDEV/MIN/MAX:', self%npeaks%avg,&
             &self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv

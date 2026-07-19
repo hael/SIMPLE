@@ -34,7 +34,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
 character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
-character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'  ! default; explicit prior takes precedence
+character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'  ! default; explicit posterior takes precedence
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -54,7 +54,7 @@ integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, ml_reg, trail_rec, fillin, conical_fsc
     type(string) :: balance, partition, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
-    logical :: l_write_prior = .false.
+    logical :: l_write_posterior = .false.
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -176,7 +176,7 @@ contains
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage )
-        cfg%l_write_prior = trim(params%prob_neigh_mode) == 'prior' .and.&
+        cfg%l_write_posterior = trim(params%prob_neigh_mode) == 'posterior' .and.&
             &trim(cfg%refine%to_char()) == 'prob' .and. istage == PROB_NEIGH_REFINE_STAGE - 1
         call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
@@ -252,16 +252,16 @@ contains
         else
             cfg%refine           = 'prob_neigh'
             if( params%nstates > 1 )then
-                if( trim(params%prob_neigh_mode) == 'prior' )then
-                    cfg%prob_neigh_mode  = 'prior'
+                if( trim(params%prob_neigh_mode) == 'posterior' )then
+                    cfg%prob_neigh_mode  = 'posterior'
                 else if( trim(params%multivol_mode).eq.'docked' )then
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_DOCKED
                 else
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
                 endif
             else
-                if( trim(params%prob_neigh_mode) == 'prior' )then
-                    cfg%prob_neigh_mode = 'prior'
+                if( trim(params%prob_neigh_mode) == 'posterior' )then
+                    cfg%prob_neigh_mode = 'posterior'
                 else
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
                 endif
@@ -403,7 +403,7 @@ contains
         select case(cfg%refine%to_char())
             case('prob_neigh')
                 select case(cfg%prob_neigh_mode%to_char())
-                    case('shc','snhc','prior')
+                    case('shc','snhc','posterior')
                         cfg%inspace_sub = 0
                     case DEFAULT
                         ! Keep neighborhood granularity roughly constant when
@@ -460,7 +460,7 @@ contains
         else
             call cline_refine3D%delete('prob_neigh_mode')
         endif
-        if( cfg%l_write_prior )then
+        if( cfg%l_write_posterior )then
             call cline_refine3D%set('write_prior',         'yes')
         else
             call cline_refine3D%delete('write_prior')

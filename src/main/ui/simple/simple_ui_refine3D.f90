@@ -218,7 +218,7 @@ contains
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|shc|snhc|prior){state}', '(state|geom|shc|snhc|prior){state}', .false., 'state', &
+        &'Prob-neigh neighborhood mode(state|geom|shc|snhc|posterior){state}', '(state|geom|shc|snhc|posterior){state}', .false., 'state', &
         &gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
         &'no', gui_submenu="search")
@@ -315,7 +315,7 @@ contains
         &'(input_oris_refine|input_oris_fixed){input_oris_refine}', .false., 'input_oris_refine', &
         &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|prior){geom}', '(state|geom|prior){geom}', .false., 'geom', &
+        &'Prob-neigh neighborhood mode(state|geom|posterior){geom}', '(state|geom|posterior){geom}', .false., 'geom', &
         &gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")

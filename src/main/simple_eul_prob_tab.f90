@@ -9,7 +9,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sa
     &write_seed_shift_table, prob_candidate, prob_candidate_buffer
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_type_defs,        only: OBJFUN_EUCLID
-use simple_prob_prior3D,     only: prior3d_writer, PRIOR3D_NREMAP
+use simple_prob_posterior3D,  only: posterior3d_writer
 use simple_segmentation,     only: detect_peak_thres_fdr
 implicit none
 
@@ -18,7 +18,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: PROB_TAB_IO_CHUNK = 1024
-real,    parameter :: PRIOR3D_FDR_Q      = 0.25 !< BH-FDR q: expected false-discovery fraction among retained directions
+real,    parameter :: POSTERIOR3D_FDR_Q = 0.25 !< BH-FDR q: target false-discovery rate for posterior support peaks
 
 type :: eul_prob_tab
     class(builder),    pointer  :: b_ptr => null()
@@ -66,7 +66,7 @@ type :: eul_prob_tab
     procedure :: read_tab_to_glob
     procedure :: ref_assign
     procedure :: write_assignment
-    procedure :: write_prior3D
+    procedure :: write_posterior3D
     procedure :: state_assign
     ! REFERENCE INDEX MAPPING
     procedure :: ref_state
@@ -1077,10 +1077,10 @@ contains
     ! Writes the dense calibrated likelihood support used by a later finer-grid
     ! prob_neigh stage.  The artifact is deliberately a truncated support, not
     ! a claim to represent the full joint posterior over pose.
-    subroutine write_prior3D( self, binfname )
+    subroutine write_posterior3D( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         class(string),       intent(in) :: binfname
-        type(prior3d_writer) :: writer
+        type(posterior3d_writer) :: writer
         integer, allocatable :: cand_iref(:), cand_state(:), cand_proj(:), cand_inpl(:), cand_has_sh(:)
         integer, allocatable :: out_state(:), out_proj(:), out_inpl(:), out_has_sh(:)
         real,    allocatable :: cand_dist(:), work_dist(:), cand_weight(:), out_dist(:), out_weight(:)
@@ -1088,11 +1088,11 @@ contains
         real :: dist_thres, dmin, norm, euls(3)
         integer :: i, k, ncand, kmax, k_this, npeaks_detected, pick, iproj
         if( .not. allocated(self%loc_tab) )then
-            THROW_WARN('write_prior3D requires a dense probability table; no artifact written')
+            THROW_WARN('write_posterior3D requires a dense probability table; no artifact written')
             return
         endif
         if( self%nptcls < 1 .or. self%nrefs < 1 ) return
-        kmax = min(self%nrefs, max(PRIOR3D_NREMAP, min(128, max(1, 8*self%p_ptr%npeaks_inpl))))
+        kmax = min(self%nrefs, max(3, min(128, max(1, 8*self%p_ptr%npeaks_inpl))))
         allocate(cand_iref(self%nrefs), cand_state(self%nrefs), cand_proj(self%nrefs), cand_inpl(self%nrefs),&
             &cand_has_sh(self%nrefs), cand_dist(self%nrefs), work_dist(self%nrefs), cand_weight(self%nrefs))
         allocate(out_state(kmax), out_proj(kmax), out_inpl(kmax), out_has_sh(kmax))
@@ -1118,7 +1118,7 @@ contains
                 cycle
             endif
             work_dist(1:ncand) = cand_dist(1:ncand)
-            call detect_peak_thres_fdr(ncand, work_dist(1:ncand), PRIOR3D_FDR_Q, 1, min(kmax,ncand),&
+            call detect_peak_thres_fdr(ncand, work_dist(1:ncand), POSTERIOR3D_FDR_Q, 1, min(kmax,ncand),&
                 &dist_thres, npeaks_detected, lower_tail=.true.)
             k_this = min(kmax, ncand, max(1, npeaks_detected))
             dmin = minval(cand_dist(1:ncand))
@@ -1156,7 +1156,7 @@ contains
         call writer%kill
         deallocate(cand_iref, cand_state, cand_proj, cand_inpl, cand_has_sh, cand_dist, work_dist, cand_weight,&
             &out_state, out_proj, out_inpl, out_has_sh, out_dist, out_weight, out_x, out_y, out_euls)
-    end subroutine write_prior3D
+    end subroutine write_posterior3D
 
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )

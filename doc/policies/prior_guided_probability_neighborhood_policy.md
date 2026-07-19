@@ -9,6 +9,12 @@ source and consumer stages use different angular resolutions (`nspace`).
 The existing 2D rank-list implementation is historical test code only. It is
 not required for the 3D design and is not the artifact contract described here.
 
+> **3D status:** This document is retained as historical background. Its former
+> 3D `prob_neigh_mode=prior` design has been superseded by the compact
+> [Sparse Profiled Posterior refactoring note](../refactoring_notes/sparse_profiled_posterior_refine3d_refactoring.md)
+> and the implemented `prob_neigh_mode=posterior` path. The old 3D prior,
+> fixed-three-neighbor, and dense-remapping sections below are not active.
+
 ## 1. Objective
 
 The existing probabilistic workflow condenses a probability table into one hard
