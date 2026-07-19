@@ -345,6 +345,12 @@ contains
             return
         endif
         nrots = self%b_ptr%pftc%get_nrots()
+        ! Every posterior worker writes the deferred-shift metadata, even when
+        ! no particle in this partition needs the bounded ordinary-search
+        ! recovery.  Set this before the posterior-only path can write a table;
+        ! otherwise partitions that happened to enter the recovery path publish
+        ! a nonzero seed grid while the others publish the default zero.
+        self%seed_nrots = nrots
         allocate(mapped_stamp(self%nrefs,nthr_glob), map_generation(nthr_glob),&
             &dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
         mapped_stamp = 0
