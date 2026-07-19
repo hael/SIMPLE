@@ -18,13 +18,14 @@ private
 #include "simple_local_flags.inc"
 
 ! Persistent sparse-posterior artifact state for one worker object.  The
-! target angular index is reused across particles; the radius query is
-! particle-specific and is derived from the stored orientation-distance
-! estimate.
+! builder's full-to-subspace map is materialized as compact per-subspace
+! lists so posterior rows can expand to fine-grid indices without rescanning
+! the complete target angular grid for every particle.
 type :: posterior3d_ws
     type(posterior3d_reader), allocatable :: readers(:)
     integer, allocatable :: pind_lookup(:)
     logical, allocatable :: posterior_available(:)
+    integer, allocatable :: sub_offsets(:), sub_full_inds(:)
     integer :: source_nspace = 0
     integer :: coverage_count = 0
     logical :: initialized = .false.
@@ -86,7 +87,7 @@ contains
     subroutine init_posterior3d_ws( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         logical :: ok
-        integer :: i, ithr, max_artifact_pind
+        integer :: i, ithr, max_artifact_pind, nsub
         if( self%posterior_ws%initialized ) return
         self%posterior_ws%initialized = .true.
         allocate(self%posterior_ws%readers(nthr_glob))
@@ -103,7 +104,16 @@ contains
                 &self%posterior_ws%readers(1)%source_nspace > 0 .and.&
                 &self%posterior_ws%readers(1)%source_nspace <= self%p_ptr%nspace .and.&
                 &self%p_ptr%nspace > 1 .and.&
-                &trim(self%posterior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp)
+                &trim(self%posterior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp) .and.&
+                &allocated(self%b_ptr%subspace_inds) .and. allocated(self%b_ptr%subspace_full2sub_map)
+        endif
+        if( self%posterior_ws%valid )then
+            nsub = size(self%b_ptr%subspace_inds)
+            self%posterior_ws%valid = self%posterior_ws%readers(1)%source_nspace == nsub .and.&
+                &size(self%b_ptr%subspace_full2sub_map) == self%p_ptr%nspace .and.&
+                &minval(self%b_ptr%subspace_full2sub_map) >= 1 .and.&
+                &maxval(self%b_ptr%subspace_full2sub_map) <= nsub
+            if( self%posterior_ws%valid ) call build_posterior_subspace_lists(self)
         endif
         if( self%posterior_ws%valid )then
             do ithr = 2, nthr_glob
@@ -129,6 +139,31 @@ contains
         self%posterior_ws%coverage_count = count(self%posterior_ws%posterior_available)
         if( self%posterior_ws%coverage_count == 0 ) self%posterior_ws%valid = .false.
     end subroutine init_posterior3d_ws
+
+    subroutine build_posterior_subspace_lists( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, allocatable :: counts(:), cursor(:)
+        integer :: nsub, nfull, i, isub
+        nsub  = size(self%b_ptr%subspace_inds)
+        nfull = self%p_ptr%nspace
+        allocate(counts(nsub), cursor(nsub), self%posterior_ws%sub_offsets(nsub+1),&
+            &self%posterior_ws%sub_full_inds(nfull))
+        counts = 0
+        do i = 1, nfull
+            counts(self%b_ptr%subspace_full2sub_map(i)) = counts(self%b_ptr%subspace_full2sub_map(i)) + 1
+        enddo
+        self%posterior_ws%sub_offsets(1) = 1
+        do isub = 1, nsub
+            self%posterior_ws%sub_offsets(isub+1) = self%posterior_ws%sub_offsets(isub) + counts(isub)
+        enddo
+        cursor = self%posterior_ws%sub_offsets(1:nsub)
+        do i = 1, nfull
+            isub = self%b_ptr%subspace_full2sub_map(i)
+            self%posterior_ws%sub_full_inds(cursor(isub)) = i
+            cursor(isub) = cursor(isub) + 1
+        enddo
+        deallocate(counts, cursor)
+    end subroutine build_posterior_subspace_lists
 
     subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -199,22 +234,22 @@ contains
     ! SPARSE PROFILED POSTERIOR BRANCH
     !
     ! The source artifact is a sparse posterior on the preceding dense grid.
-    ! Each retained source direction expands to all target directions inside
-    ! twice the particle's stored best-orientation distance, with a minimum of
-    ! three target directions.  Target-grid likelihood evaluation remains
-    ! authoritative.
+    ! The source posterior is indexed on the builder's coarse subspace.  The
+    ! existing full-to-subspace map expands each retained coarse direction to
+    ! the fine-grid directions assigned to that subspace cell.  This keeps the
+    ! number of target candidates proportional to the resolution ratio rather
+    ! than to an angular-radius union over the full target grid.
     subroutine fill_tab_posterior_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, intent(in) :: i_first, i_last
         integer, allocatable :: mapped_stamp(:,:), map_generation(:)
-        logical, allocatable :: target_mask(:,:), posterior_usable(:)
+        logical, allocatable :: posterior_usable(:)
         integer, allocatable :: inds_sorted(:,:)
         real, allocatable :: dists_inpl(:,:)
-        type(ori), allocatable :: source_o(:)
-        real :: shift(2), dist, corr, radius_deg, best_ori_dist
+        real :: shift(2), dist, corr
         integer :: i, j, k, iproj, ri, full_ref, irot, ithr, istate, nrots
-        integer :: i_from, i_to, ncovered, nrange, source_proj, nfound, min_nns
-        logical :: okrow, has_dist
+        integer :: i_from, i_to, ncovered, nrange, source_proj, coarse_proj
+        logical :: okrow
         character(len=8) :: fallback_mode
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
@@ -232,16 +267,6 @@ contains
         endif
         nrange = i_to - i_from + 1
         allocate(posterior_usable(self%nptcls), source=self%posterior_ws%posterior_available)
-        do i = i_from, i_to
-            if( .not. posterior_usable(i) ) cycle
-            has_dist = self%b_ptr%spproj_field%isthere(self%pinds(i), 'dist')
-            if( .not. has_dist )then
-                posterior_usable(i) = .false.
-            else
-                best_ori_dist = self%b_ptr%spproj_field%get(self%pinds(i), 'dist')
-                posterior_usable(i) = ieee_is_finite(best_ori_dist) .and. best_ori_dist >= 0.
-            endif
-        enddo
         ncovered = count(posterior_usable(i_from:i_to))
         if( ncovered == 0 )then
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
@@ -250,25 +275,17 @@ contains
         endif
         nrots = self%b_ptr%pftc%get_nrots()
         allocate(mapped_stamp(self%nrefs,nthr_glob), map_generation(nthr_glob),&
-            &target_mask(self%p_ptr%nspace,nthr_glob), dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob),&
-            &source_o(nthr_glob))
+            &dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
         mapped_stamp = 0
         map_generation = 0
-        target_mask = .false.
         dists_inpl = 0.
         inds_sorted = 0
-        do ithr = 1, nthr_glob
-            call source_o(ithr)%new(.false.)
-        enddo
-        min_nns = min(3, max(1, self%p_ptr%nspace-1))
-        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj,nfound,radius_deg,best_ori_dist)&
+        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj,coarse_proj)&
         !$omp proc_bind(close) schedule(static)
         do i = i_from, i_to
             if( .not. posterior_usable(i) ) cycle
             ithr = omp_get_thread_num() + 1
             map_generation(ithr) = map_generation(ithr) + 1
-            best_ori_dist = self%b_ptr%spproj_field%get(self%pinds(i), 'dist')
-            radius_deg = max(0., 2. * best_ori_dist)
             call self%posterior_ws%readers(ithr)%read_row(self%pinds(i), okrow)
             if( .not. okrow )then
                 posterior_usable(i) = .false.
@@ -279,20 +296,11 @@ contains
                 if( istate < 1 .or. istate > self%p_ptr%nstates ) cycle
                 if( .not. self%state_exists(istate) ) cycle
                 source_proj = self%posterior_ws%readers(ithr)%proj(k)
-                if( source_proj < 1 .or. source_proj > self%posterior_ws%source_nspace ) cycle
-                if( any(.not.ieee_is_finite(self%posterior_ws%readers(ithr)%euls(:,k))) ) cycle
-                call source_o(ithr)%set_euler(self%posterior_ws%readers(ithr)%euls(:,k))
-                target_mask(:,ithr) = .false.
-                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o(ithr),&
-                    &radius_deg, target_mask(:,ithr))
-                nfound = count(target_mask(:,ithr))
-                if( nfound < min_nns )then
-                    call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o(ithr),&
-                        &min_nns, target_mask(:,ithr))
-                endif
-                do j = 1, self%p_ptr%nspace
-                    if( .not. target_mask(j,ithr) ) cycle
-                    full_ref = (istate-1)*self%p_ptr%nspace + j
+                if( source_proj < 1 .or. source_proj > size(self%b_ptr%subspace_inds) ) cycle
+                coarse_proj = source_proj
+                do j = self%posterior_ws%sub_offsets(coarse_proj), self%posterior_ws%sub_offsets(coarse_proj+1)-1
+                    iproj = self%posterior_ws%sub_full_inds(j)
+                    full_ref = (istate-1)*self%p_ptr%nspace + iproj
                     ri = self%full_to_compact_ref(full_ref)
                     if( ri < 1 .or. mapped_stamp(ri,ithr) == map_generation(ithr) ) cycle
                     mapped_stamp(ri,ithr) = map_generation(ithr)
@@ -318,10 +326,7 @@ contains
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode,&
                 &active_mask=.not.posterior_usable)
         endif
-        do ithr = 1, nthr_glob
-            call source_o(ithr)%kill
-        enddo
-        deallocate(source_o, mapped_stamp, map_generation, target_mask, posterior_usable, dists_inpl, inds_sorted)
+        deallocate(mapped_stamp, map_generation, posterior_usable, dists_inpl, inds_sorted)
     end subroutine fill_tab_posterior_range
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
@@ -1556,6 +1561,8 @@ contains
         endif
         if( allocated(self%pind_lookup) ) deallocate(self%pind_lookup)
         if( allocated(self%posterior_available) ) deallocate(self%posterior_available)
+        if( allocated(self%sub_offsets) ) deallocate(self%sub_offsets)
+        if( allocated(self%sub_full_inds) ) deallocate(self%sub_full_inds)
         self%source_nspace = 0
         self%coverage_count = 0
         self%initialized = .false.

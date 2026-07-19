@@ -250,71 +250,55 @@ entries must be stored with Euler coordinates and state identity, not only
 source reference indices. A source projection index has no meaning on a target
 grid with a different `nspace`.
 
-For each retained source direction:
-
-1. construct or access the target Euler space with the same symmetry;
-2. locate a bounded set of nearby target projection directions using
-   symmetry-aware angular distance;
-3. deduplicate target references across source support entries; and
-4. evaluate the current target-grid likelihood for the resulting candidates.
-
-The target stencil should not be a fixed three-neighbor remap. For each
-particle, use the process-provided angular distance estimate
-`DIST BTW BEST ORIS (DEG)` and define:
+The builder already constructs a `simple_srchspace_map` between the consumer
+fine grid and a coarse subspace. The posterior source grid is represented by
+that coarse subspace: for each target direction `t`,
 
 ```text
-radius_i = 2 * DIST_BTW_BEST_ORIS_i
+coarse(t) = full2sub_map(t)
 ```
 
-Select every target projection direction within `radius_i`, using
-symmetry-aware angular distance. If the radius contains fewer than three
-directions, add the nearest target directions until three are present. The
-minimum-three rule is a lower bound, not the normal selection rule. The
-convergence `AVG` of `DIST BTW BEST ORIS (DEG)` is only a report; the mapper
-must use the corresponding per-particle estimate. If the internal angular
-distance routine uses radians, convert the degree radius once at the API
-boundary.
-
-The mapped entries are a candidate support and the target likelihood remains
-authoritative for the final ordering. If source weights are also used as
-target prior factors, the mapping must be mass-preserving:
+For a retained posterior projection `r`, the consumer evaluates exactly the
+fine-grid directions assigned to `coarse(r)`:
 
 ```text
-target_prior(t) = sum_r source_mass(r) * K(t, r)
+T(r) = { t : full2sub_map(t) = r }
 ```
 
-where `K` is a normalized angular kernel or an equivalent cell/barycentric
-mapping. The mapping must account for duplicate target references and, where
-needed, source/target angular cell area. Equal copying to the nearest three
-directions is not a valid probability mapping.
+Thus, when the posterior is produced at `nspace=2500` and consumed at
+`nspace=5000` with `nspace_sub=2500`, a retained coarse direction maps to
+roughly two fine-grid directions. Twenty-five retained posterior directions
+therefore produce roughly fifty target candidates, with deduplication across
+states and support entries. The target likelihood remains authoritative for
+the final ordering.
 
-The source posterior must not be used to assign zero probability to all target
-directions outside the selected angular-radius neighborhoods. The omitted
-source mass and mapping coverage must be retained as diagnostics and used to
-request a bounded expansion or fallback when appropriate.
+This mapping is preferable to expanding an angular-radius ball around every
+retained direction: it preserves the source-to-target cell ownership already
+used by the builder and makes the candidate count scale with the resolution
+ratio rather than with the area of overlapping angular neighborhoods. The
+coarse subspace resolution must match the source artifact resolution; the
+consumer target `nspace` may be finer.
 
 Only refinement to a finer angular grid is supported. Coarsening and posterior
 aggregation are explicitly out of scope.
 
 ### Mapping ownership and performance
 
-The angular-distance index is a property of the source and target Euler
-spaces, not of an individual particle. It must be constructed once per
-refinement run, or cached by `(pgrp, source grid, target grid, mapping
-version)`. The per-particle radius is then applied as a query against that
-index. Workers must not independently scan the full source artifact and
-perform a full target-space nearest-neighbor search.
+The full-to-subspace map is a property of the source and target Euler spaces,
+not of an individual particle. It must be constructed once per refinement run
+and materialized as compact per-subspace target-index lists. Workers then only
+look up the lists for the particle's retained posterior directions. The
+consumer must not independently scan the full target space for every posterior
+row.
 
-The angular search should cover only the per-particle radius neighborhood. Its
-cost must scale with retained support and the selected angular neighborhood,
+The mapping cost should scale with retained support and the resolution ratio,
 not with:
 
 ```text
 number of particles * source nspace * target nspace
 ```
 
-This is the principal performance requirement that the current prior
-implementation does not satisfy.
+This is the principal performance requirement of the posterior implementation.
 
 ## Artifact contract
 
@@ -337,7 +321,7 @@ box, crop, sampling, and relevant objective/noise metadata
 likelihood transform = profile_exp_minus_dist
 support mode = profile
 FDR/support parameters and Kmax
-mapping version and angular-radius rule
+mapping version and source-to-subspace map contract
 direct-record schema and record capacity
 ```
 
@@ -461,7 +445,7 @@ two competing 3D support mechanisms in the code base:
   convergence checks for `prob_neigh_mode=prior` with `posterior`;
 - replace `write_prior3D` with the final dense-`prob` posterior writer;
 - replace the current full source-to-target remap initialization in
-  `simple_eul_prob_tab_neigh.f90` with per-particle angular-radius mapping;
+  `simple_eul_prob_tab_neigh.f90` with builder-owned subspace-map lookups;
 - preserve the existing `npeaks` field in `assgn_map` and the convergence
   statistics, but remove any prior-specific naming or separate posterior peak
   variable; and
@@ -476,11 +460,10 @@ two competing 3D support mechanisms in the code base:
    posterior rows.
 3. Correctly record retained mass, profile metadata, source Euler coordinates,
    and per-particle diagnostics.
-4. Implement the per-particle angular-radius mapper using
-   `2 * DIST BTW BEST ORIS (DEG)` and a minimum of three target directions.
-   Add coverage and duplicate diagnostics.
+4. Implement the source-to-target subspace mapper using the builder's
+   `simple_srchspace_map` outputs and add coverage and duplicate diagnostics.
 5. Replace the current worker-local full remap initialization with particle-row
-   reads and the angular-radius mapper.
+   reads and compact per-subspace target-index lists.
 6. Feed mapped candidates into the existing neighborhood search while keeping
    target-grid likelihood evaluation authoritative.
 7. Add controller timing, update-epoch validation, fallback reporting, and
@@ -499,12 +482,13 @@ The refactoring is ready for implementation completion when:
   normalization;
 - same-grid posterior-guided search reproduces the intended candidate support;
 - finer-grid consumers use Euler/symmetry mapping rather than source indices;
-- target support contains every direction within twice the per-particle
-  `DIST BTW BEST ORIS (DEG)` estimate, with at least three directions;
+- a retained source direction maps to all target directions assigned to its
+  builder subspace cell;
 - mapped target candidates are deduplicated without probability inflation;
 - multiple separated modes remain eligible;
 - missing or weak support falls back to bounded state/geom search;
-- no worker performs a full source-to-target remap per particle or per batch;
+- no worker performs a full source-to-target remap or target-grid scan per
+  posterior row;
 - direct-access reads are safe under distributed/OpenMP execution;
 - the final `prob` iteration alone writes the artifact; and
 - convergence output reports the dynamic posterior-guided count through the
@@ -515,8 +499,8 @@ The refactoring is ready for implementation completion when:
 - The external mode is `prob_neigh_mode=posterior`; `prior` is removed.
 - The source artifact is a sparse profiled posterior, not a one-sample
   assignment and not a full in-plane posterior.
-- The target candidate set is all directions within twice the per-particle
-  `DIST BTW BEST ORIS (DEG)` estimate, with a minimum of three directions.
+- The target candidate set is the union of fine-grid directions assigned to
+  the coarse subspace cells selected by the sparse posterior.
 - No `posterior_npeaks` parameter or separate reporting field is introduced.
   The existing `npeaks` value and convergence reporting are reused for the
   dynamic number of posterior-guided target directions.

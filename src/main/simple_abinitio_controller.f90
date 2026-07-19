@@ -403,8 +403,13 @@ contains
         select case(cfg%refine%to_char())
             case('prob_neigh')
                 select case(cfg%prob_neigh_mode%to_char())
-                    case('shc','snhc','posterior')
+                    case('shc','snhc')
                         cfg%inspace_sub = 0
+                    case('posterior')
+                        ! Posterior support is produced on the preceding dense
+                        ! grid and is expanded through the builder's subspace
+                        ! map at the next finer resolution.
+                        cfg%inspace_sub = max(1, min(cfg%inspace, NSPACE_SUB_BASE))
                     case DEFAULT
                         ! Keep neighborhood granularity roughly constant when
                         ! late stages increase nspace (e.g. 2500 -> 5000).
