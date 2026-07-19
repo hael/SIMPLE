@@ -42,11 +42,11 @@ takes effect once `ml_reg` is active. `abinitio2D_chunks` must preserve that
 behavior when constructing child `abinitio2D` command lines, applying only the
 chunk-local Nyquist floor.
 
-The default `abinitio2D` search policy uses staged sampled SNHC
-(`refine=snhc_smpl`) for stages 1-4, then switches to sparse probabilistic SNHC
-(`refine=prob_snhc`) for intermediate probabilistic staged `cluster2D`
-invocations. The final staged invocation uses dense 2D probabilistic assignment
-(`refine=prob`) so the previous class remains a valid assignment candidate and
+The staged `abinitio2D` controller uses sampled SNHC (`refine=snhc_smpl`) for
+stages 1-2. From stage 3 onward, `refine=prob` requests dense probabilistic
+assignment at every stage. For `refine=prob_snhc`, intermediate stages use
+sparse probabilistic SNHC and the final staged invocation uses dense
+`refine=prob` so the previous class remains a valid assignment candidate and
 class-overlap convergence reporting can recover. The separate terminal
 all-particle coverage pass after sampled staged updates also uses dense
 `refine=prob`. `abinitio2D_chunks` must preserve this policy when constructing
@@ -72,7 +72,7 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - low-pass limit helpers
 - stage-local `cluster2D` command construction
 - search-mode policy by stage
-- sampled-update policy, including `NPTCLS2SAMPLE_2D` and `nsample` override handling
+- sampled-update policy, including `NSAMPLE_DEFAULT_2D` and `nsample` override handling
 - the rule that stage 1 may sample particles but does not fractionally restore previous class averages
 
 `simple_cluster2D_strategy.f90` owns:
@@ -115,7 +115,7 @@ separate from the matcher worker's online single-read contract.
 
 `abinitio2D` uses a fixed run-local target sample size:
 
-- default: `NPTCLS2SAMPLE_2D = 200000`
+- default: `NSAMPLE_DEFAULT_2D = 200000`
 - override: `nsample=<integer>`
 
 The effective update fraction is:
@@ -139,9 +139,6 @@ Stage policy:
   likelihood-like negative log weights; `objfun=cc` is supported as a monotone
   pseudo-likelihood with `dist = 1 - clamp(cc, 0, 1)` before applying
   `exp(-dist)`
-- `refine=prob_prior` only changes how the candidate class neighborhood is
-  proposed from previous promising assignments; assignment remains
-  likelihood-weighted
 - likelihood-weighted 2D modes may still profile/MAP-refine shifts, and
   sometimes in-plane rotation, after stochastic candidate selection; the
   assignment table then stores the refined/profiled distance, which is intended

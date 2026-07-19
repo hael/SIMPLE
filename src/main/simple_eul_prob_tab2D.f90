@@ -7,17 +7,13 @@ use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index
-use simple_segmentation,       only: detect_peak_thres_fdr
 implicit none
 
-public :: eul_prob_tab2D, PRIOR2D_STAGE5_FNAME
+public :: eul_prob_tab2D
 private
 #include "simple_local_flags.inc"
 
 real,             parameter :: NHOOD_FRAC           = 0.1
-real,             parameter :: PRIOR2D_TOPK_FRAC    = 0.3  !< fraction of nclasses stored per particle as prior top-K
-real,             parameter :: PRIOR2D_FDR_Q        = 0.25 !< FDR q for dynamic prob_prior neighborhoods
-character(len=*), parameter :: PRIOR2D_STAGE5_FNAME = 'posterior_topk_stage05.dat'
 
 type :: eul_prob_tab2D
     class(builder),    pointer  :: b_ptr => null()
@@ -33,9 +29,6 @@ type :: eul_prob_tab2D
     integer,        allocatable :: eval_touched_counts(:)
     integer                     :: eval_max_touched = 0
     logical                     :: l_sparse_snhc = .false.
-    logical                     :: l_prior_mode  = .false.
-    logical,        allocatable :: prior_operated(:)
-    integer                     :: prior_kmax = 0
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
     integer                     :: nhood_sz = 1      !< probabilistic neighborhood size used in fill_tab/ref_assign
@@ -52,7 +45,6 @@ type :: eul_prob_tab2D
     procedure :: read_tab_to_glob
     procedure :: write_assignment
     procedure :: read_assignment
-    procedure :: write_prior_topk
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
@@ -146,8 +138,7 @@ contains
         self%b_ptr     => build
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
-        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc' .or. trim(params%refine) == 'prob_prior'
-        self%l_prior_mode  = trim(params%refine) == 'prob_prior'
+        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc'
         allocate(self%class_exists(self%nclasses))
         ! In 2D probabilistic assignment classes must be able to recover, otherwise
         ! low-population classes are permanently excluded and the solution collapses.
@@ -355,11 +346,9 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(eval2D_sparse_ws) :: eval_work
         type(ran_tabu), allocatable :: direct_rts(:)
-        integer, allocatable :: prior_units(:)
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, ninpl_smpl, nrots
         integer :: i_from, i_to
         real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3)
-        logical :: prior_file_ok
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
@@ -384,16 +373,6 @@ contains
         do ithr = 1, nthr_glob
             direct_rts(ithr) = ran_tabu(self%nclasses)
         enddo
-        prior_file_ok = .false.
-        if( self%l_prior_mode )then
-            self%prior_kmax = max(1, nint(PRIOR2D_TOPK_FRAC * real(self%nclasses)))
-            if( allocated(self%prior_operated) )then
-                self%prior_operated = .false.
-            else
-                allocate(self%prior_operated(self%nptcls), source=.false.)
-            endif
-            call open_prior_units(prior_units, prior_file_ok)
-        endif
         if( self%p_ptr%l_doshift )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -425,7 +404,6 @@ contains
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
-        if( allocated(prior_units) ) call close_prior_units(prior_units)
         call eval_work%dealloc_eval2D_sparse_ws
         deallocate(direct_rts)
 
@@ -437,19 +415,12 @@ contains
             real,    intent(inout) :: cxy_loc(3)
             type(ori) :: o_prev_loc
             integer :: icls_prev_loc, irot0_loc, irot_loc, isample_loc, icls_loc, neval_loc
-            integer :: prior_nloc, neval_bound_loc
+            integer :: neval_bound_loc
             real    :: dist_loc, corr_loc, sh_loc(2)
-            prior_nloc = 0
             call direct_rts(ithr_loc)%ne_ran_iarr(eval_work%direct_srch_order(:,ithr_loc))
-            if( self%l_prior_mode .and. prior_file_ok )then
-                call apply_prior_order(ithr_loc, iptcl_loc, eval_work%direct_srch_order(:,ithr_loc), prior_nloc)
-            endif
-            if( self%l_prior_mode .and. allocated(self%prior_operated) ) self%prior_operated(i_loc) = prior_nloc > 0
             call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev_loc)
             icls_prev_loc = nint(self%b_ptr%spproj_field%get(iptcl_loc, 'class'))
-            ! restore put_last for unsampled particles (prior_nloc==0): they get prob_snhc behaviour
-            if( ((.not. self%l_prior_mode) .or. prior_nloc == 0) .and. &
-                &icls_prev_loc >= 1 .and. icls_prev_loc <= self%nclasses )then
+            if( icls_prev_loc >= 1 .and. icls_prev_loc <= self%nclasses )then
                 call put_last(icls_prev_loc, eval_work%direct_srch_order(:,ithr_loc))
             endif
             cxy_loc = 0.
@@ -462,13 +433,7 @@ contains
             endif
             sh_loc = 0.
             if( l_with_shift ) sh_loc = cxy_loc(2:3)
-            ! prior particles evaluate exactly the prior-K classes for acceleration;
-            ! unsampled particles evaluate the full stochastic nrefs_bound
-            if( prior_nloc > 0 )then
-                neval_bound_loc = prior_nloc
-            else
-                neval_bound_loc = nrefs_bound
-            endif
+            neval_bound_loc = nrefs_bound
             eval_work%eval_cls(:,ithr_loc)   = 0
             eval_work%eval_dists(:,ithr_loc) = huge(1.0)
             neval_loc = 0
@@ -519,71 +484,6 @@ contains
                 endif
             enddo
         end subroutine refine_best_classes
-
-        subroutine open_prior_units(units, ok)
-            integer, allocatable, intent(out) :: units(:)
-            logical,              intent(out) :: ok
-            integer, allocatable :: rec_buf(:)
-            integer :: reclen, ios, j
-            ok = .false.
-            if( .not. file_exists(string(PRIOR2D_STAGE5_FNAME)) )then
-                THROW_WARN('prob_prior: prior file missing, fallback to stochastic sparse search: '//PRIOR2D_STAGE5_FNAME)
-                return
-            endif
-            allocate(rec_buf(self%prior_kmax), source=0)
-            inquire(iolength=reclen) rec_buf
-            deallocate(rec_buf)
-            allocate(units(nthr_glob), source=-1)
-            do j = 1, nthr_glob
-                open(newunit=units(j), file=PRIOR2D_STAGE5_FNAME, status='OLD', action='READ', &
-                    &access='DIRECT', form='UNFORMATTED', recl=reclen, iostat=ios)
-                if( ios /= 0 )then
-                    call close_prior_units(units)
-                    THROW_WARN('prob_prior: failed to open prior direct-access file, fallback to stochastic sparse search')
-                    return
-                endif
-            enddo
-            ok = .true.
-        end subroutine open_prior_units
-
-        subroutine close_prior_units(units)
-            integer, allocatable, intent(inout) :: units(:)
-            integer :: j
-            if( .not. allocated(units) ) return
-            do j = 1, size(units)
-                if( units(j) /= -1 ) close(units(j))
-            enddo
-            deallocate(units)
-        end subroutine close_prior_units
-
-        subroutine apply_prior_order(ithr_loc, iptcl_loc, order, prior_nloc)
-            integer, intent(in)    :: ithr_loc, iptcl_loc
-            integer, intent(inout) :: order(:)
-            integer, intent(out)   :: prior_nloc
-            integer :: prior_rec(self%prior_kmax)
-            integer :: ios, k_prior, icls_loc, j_order, i_tmp
-            prior_nloc = 0
-            prior_rec  = 0
-            if( iptcl_loc < 1 ) return
-            if( .not. allocated(prior_units) ) return
-            read(prior_units(ithr_loc), rec=iptcl_loc, iostat=ios) prior_rec
-            if( ios /= 0 ) return
-            j_order = 1
-            do k_prior = 1, self%prior_kmax
-                icls_loc = prior_rec(k_prior)
-                if( icls_loc < 1 .or. icls_loc > self%nclasses ) cycle
-                do i_tmp = j_order, self%nclasses
-                    if( order(i_tmp) == icls_loc )then
-                        order(i_tmp) = order(j_order)
-                        order(j_order) = icls_loc
-                        j_order = j_order + 1
-                        prior_nloc = prior_nloc + 1
-                        exit
-                    endif
-                enddo
-                if( j_order > self%nclasses ) exit
-            enddo
-        end subroutine apply_prior_order
 
     end subroutine fill_tab_prob_snhc_range
 
@@ -1073,12 +973,9 @@ contains
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
         if( allocated(self%eval_touched_refs)   ) deallocate(self%eval_touched_refs)
         if( allocated(self%eval_touched_counts) ) deallocate(self%eval_touched_counts)
-        if( allocated(self%prior_operated)      ) deallocate(self%prior_operated)
         self%seed_nrots = 0
         self%eval_max_touched = 0
         self%l_sparse_snhc = .false.
-        self%l_prior_mode = .false.
-        self%prior_kmax = 0
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill
@@ -1287,67 +1184,6 @@ contains
         write(unit=funit, pos=headsz + 1) self%assgn_map
         call fclose(funit)
     end subroutine write_assignment
-
-    subroutine write_prior_topk( self, binfname )
-        class(eul_prob_tab2D), intent(in) :: self
-        class(string),         intent(in) :: binfname
-        integer, allocatable :: rec_ints(:)
-        integer, allocatable :: cand_cls(:), top_ind(:)
-        real,    allocatable :: cand_dist(:)
-        real    :: dist_thres
-        integer :: funit, io_stat, reclen
-        integer :: i, k, icls, ncand, pick, k_use, k_this, npeaks_detected
-        if( self%nptcls < 1 .or. self%nclasses < 1 ) return
-        k_use = max(1, nint(PRIOR2D_TOPK_FRAC * real(self%nclasses)))
-        allocate(rec_ints(k_use), source=0)
-        allocate(cand_cls(self%nclasses), cand_dist(self%nclasses))
-        allocate(top_ind(k_use))
-        inquire(iolength=reclen) rec_ints
-        open(newunit=funit, file=binfname%to_char(), status='REPLACE', action='WRITE', &
-            &access='DIRECT', form='UNFORMATTED', recl=reclen, iostat=io_stat)
-        call fileiochk('simple_eul_prob_tab2D; write_prior_topk; file: '//binfname%to_char(), io_stat)
-        do i = 1, self%nptcls
-            if( self%pinds(i) < 1 ) cycle
-            ncand = 0
-            if( self%l_sparse_snhc .and. allocated(self%eval_touched_counts) )then
-                do k = 1, self%eval_touched_counts(i)
-                    icls = self%eval_touched_refs(k,i)
-                    if( icls < 1 .or. icls > self%nclasses ) cycle
-                    if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
-                    ncand = ncand + 1
-                    cand_cls(ncand)  = icls
-                    cand_dist(ncand) = self%loc_tab(icls,i)%dist
-                enddo
-            endif
-            if( ncand < 1 )then
-                do icls = 1, self%nclasses
-                    ncand = ncand + 1
-                    cand_cls(ncand)  = icls
-                    cand_dist(ncand) = self%loc_tab(icls,i)%dist
-                enddo
-            endif
-            ! Fixed-width direct-access records are retained for simplicity:
-            ! k_use is the 0.3*ncls upper bound, while the FDR threshold selects
-            ! a dynamic lower-tail objective neighborhood per particle.  Unused
-            ! record slots stay zero and are ignored by apply_prior_order.
-            call detect_peak_thres_fdr(ncand, cand_dist(1:ncand), PRIOR2D_FDR_Q, 1, min(k_use,ncand),&
-                &dist_thres, npeaks_detected, lower_tail=.true.)
-            k_this = min(k_use, ncand, max(1, npeaks_detected))
-            rec_ints = 0
-            do k = 1, k_this
-                pick = minloc(cand_dist(1:ncand), dim=1)
-                top_ind(k) = pick
-                cand_dist(pick) = huge(1.0)
-            enddo
-            do k = 1, k_this
-                rec_ints(k) = cand_cls(top_ind(k))
-            enddo
-            write(unit=funit, rec=self%pinds(i), iostat=io_stat) rec_ints
-            call fileiochk('simple_eul_prob_tab2D; write_prior_topk(rec); file: '//binfname%to_char(), io_stat)
-        enddo
-        close(funit)
-        deallocate(rec_ints, cand_cls, cand_dist, top_ind)
-    end subroutine write_prior_topk
 
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self

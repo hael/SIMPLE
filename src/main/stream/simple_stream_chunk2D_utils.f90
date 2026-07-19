@@ -87,7 +87,7 @@ contains
         call cline_cluster2D_chunk%set('tau',    params%tau)
         ! refinement
         select case(trim(params%refine))
-               case('snhc','snhc_smpl','prob','prob_snhc','prob_prior')
+               case('snhc','snhc_smpl','prob','prob_snhc')
                 call cline_cluster2D_chunk%set('refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')

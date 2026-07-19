@@ -35,7 +35,7 @@ contains
     subroutine srch_prob( self, os )
         class(strategy2D_prob), intent(inout) :: self
         class(oris),            intent(inout) :: os
-        integer :: iptcl_map, icls, inpl, npeaks
+        integer :: iptcl_map, icls, inpl
         real    :: corr, frac
         if( os%get_state(self%s%iptcl) > 0 )then
             if( .not. associated(self%spec%eulprob_obj_part2D) ) THROW_HARD('strategy2D_prob requires eulprob_obj_part2D')
@@ -45,7 +45,6 @@ contains
             icls      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%icls
             inpl      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%inpl
             frac      = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%frac
-            npeaks    = self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%npeaks
             if( frac <= 0. ) frac = 100.
             self%s%nrefs_eval = max(1, min(self%s%nrefs, nint(real(self%s%nrefs) * frac / 100.)))
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
@@ -60,8 +59,6 @@ contains
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
             call os%set(self%s%iptcl, 'frac', frac)
-            if( trim(self%s%p_ptr%refine) == 'prob_prior' .and. npeaks > 0 )&
-                &call os%set(self%s%iptcl, 'npeaks', real(npeaks))
         else
             call os%reject(self%s%iptcl)
         endif

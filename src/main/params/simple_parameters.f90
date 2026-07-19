@@ -168,7 +168,6 @@ type :: parameters
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: write_imgarr='no'    !< write out cavgs
-    character(len=3)          :: write_prior='no'     !< write prob_prior neighborhood artifact(yes|no){no}
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
@@ -303,7 +302,7 @@ type :: parameters
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: protocol=''          !< generic option
-    character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc|posterior){state}
+    character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
     character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching and 3D rec(raw|den){raw}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis

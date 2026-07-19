@@ -27,7 +27,7 @@ matcher reuses it again for the hard particle update.
 `simple_commanders_abinitio2D.f90` owns `abinitio2D` orchestration: defaults,
 stage execution, final fill-in, and final class-average generation.
 
-`simple_abinitio2D_controller.f90` owns the 2D stage policy: `NPTCLS2SAMPLE_2D`,
+`simple_abinitio2D_controller.f90` owns the 2D stage policy: `NSAMPLE_DEFAULT_2D`,
 `nsample` override handling, stage-local `update_frac`, search-mode transitions,
 and the rule that stage 1 may sample particles without fractionally restoring
 previous class averages.
@@ -93,7 +93,7 @@ The nominal `update_frac` is a target used by sampling. The realized fraction in
 
 `abinitio2D` uses a fixed run-local target sample size:
 
-- default: `NPTCLS2SAMPLE_2D = 200000`
+- default: `NSAMPLE_DEFAULT_2D = 200000`
 - override: `nsample=<integer>`
 
 The stage controller converts that target into:
@@ -120,8 +120,9 @@ Current stage policy:
   requires active particles to have assignments before convergence, while
   particle selection still follows the normal sampled-update path
 - staged `abinitio2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
-  stages 1-4, then sparse probabilistic SNHC (`refine=prob_snhc`) for stage 5
-  and later staged `cluster2D` invocations, including staged fill-in targets
+  stages 1-2. From stage 3 onward, `refine=prob` uses dense probabilistic
+  assignment; `refine=prob_snhc` uses sparse probabilistic SNHC until the
+  final staged invocation, which uses dense `refine=prob`
 - when staged updates were sampled, `abinitio2D` then runs a separate terminal
   dense probabilistic all-particle pass with `update_frac` and `fillin`
   disabled, refreshing class, in-plane, and shift parameters before final

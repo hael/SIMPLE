@@ -219,21 +219,18 @@ update" unless the ownership, artifacts, and update model actually change.
 `prob_neigh` dispatches to the neighborhood probability command. The matcher
 then consumes the generated assignment artifact.
 
-`prob_neigh_mode` controls how `prob_neigh` chooses sparse subspace
-neighborhoods before evaluating candidates:
+`prob_neigh_mode` controls how `prob_neigh` chooses candidate neighborhoods
+before evaluating candidates:
 
 - `state`: score coarse subspace representatives independently per state, pool
   the selected neighborhoods across states, and evaluate the same pooled
   projection search space for every active state.
-- `geom`: use the geometrically nearest subspace point to the current particle
-  projection, with no coarse scoring or pooled peaks.
-- `posterior`: consume the sparse profiled posterior written by the final
-  preceding `refine=prob` stage. Each retained source projection is expanded
-  to all current-grid directions within twice the particle's
-  `DIST BTW BEST ORIS (DEG)` estimate, with a minimum of three directions.
-  Target-grid likelihood evaluation remains authoritative. An explicit
-  `prob_neigh_mode=posterior` request takes precedence over the default docked
-  multivolume `geom` policy.
+- `geom`: select the subspace containing the particle's current projection for
+  every active state, with no coarse scoring or pooled peaks.
+- `shc`: use the direct stochastic candidate path. When shifts are enabled, it
+  first estimates a shift seed before candidate scoring.
+- `snhc`: use the same direct stochastic candidate path without the initial
+  shift seed. It is consequently also the zero-shift default for this mode.
 
 Probabilistic-table assignments use the calibrated likelihood path. The stored
 distances are noise-normalized negative log-likelihoods for the Euclidean

@@ -763,14 +763,14 @@ contains
         end select
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_state','prob_neigh','prob_snhc','prob_prior')
+            case('prob','prob_state','prob_neigh','prob_snhc')
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
         select case(trim(self%prob_neigh_mode))
-            case('state','geom','shc','snhc','posterior')
+            case('state','geom','shc','snhc')
             case DEFAULT
-                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc|posterior')
+                THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then

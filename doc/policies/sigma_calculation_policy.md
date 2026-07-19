@@ -53,7 +53,7 @@ See [src/main/simple_builder.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_bu
 Persisted sigma data has two forms:
 
 - partition-local binary files: `sigma2_part_<part>.dat`
-- grouped STAR files: `sigma2_group_iter_<iter>.star`
+- grouped STAR files: `sigma2_it_<iter>.star`
 
 The binary format is defined in [src/fileio/simple_sigma2_binfile.f90](/Users/elmlundho/src/SIMPLE/src/fileio/simple_sigma2_binfile.f90:1).
 
@@ -88,7 +88,7 @@ See [src/main/simple_euclid_sigma2.f90](/Users/elmlundho/src/SIMPLE/src/main/sim
 If the expected grouped sigma STAR file for the current starting iteration does not exist, SIMPLE bootstraps sigma with `calc_pspec`.
 
 In shared-memory `refine3D`, this check is performed against
-`sigma2_group_iter_<which_iter>.star` before entering the main loop; if missing,
+`sigma2_it_<which_iter>.star` before entering the main loop; if missing,
 `calc_pspec` is executed after enforcing even/odd partitioning. See
 [src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:355).
 
@@ -174,10 +174,14 @@ That implementation:
 
 - reads all partition `sigma2_part_<part>.dat` files
 - groups by `eo` and either `stkind` or one global bucket
-- computes weighted group averages using particle weight `w`
-- writes `sigma2_group_iter_<which_iter>.star`
+- computes arithmetic group averages over active particles; each active
+  particle contributes one spectrum to its even/odd and `stkind` (or global)
+  bucket
+- writes `sigma2_it_<which_iter>.star`
 
-This is intentionally different from bootstrap `calc_pspec_assemble`, which uses unweighted counts plus average-spectrum subtraction and negative repair.
+This is intentionally different from bootstrap `calc_pspec_assemble`, which
+derives spectra from average image-power subtraction and repairs negative
+values before writing its grouped result.
 
 ## Workflow summaries
 
@@ -261,7 +265,7 @@ Near-term improvements should preserve numerical behavior:
 
 - make iteration-number semantics explicit in one helper so `cluster2D` and `refine3D` use the same documented convention
 - separate bootstrap-only policy from steady-state consolidation policy, because they intentionally use different averaging rules
-- add regression coverage for restart/resume behavior using preexisting `sigma2_group_iter_<iter>.star`
+- add regression coverage for restart/resume behavior using preexisting `sigma2_it_<iter>.star`
 - add regression coverage for `refine=prob`, `refine=prob_state`, and
   `refine=prob_neigh` showing that `sigma2_part_<part>.dat` changes after the
   matcher consumes the assignment artifact

@@ -224,7 +224,6 @@ contains
         call reg%add_char('worker_priority', self%worker_priority)
         call reg%add_char('worker_server', self%worker_server)
         call reg%add_char('write_imgarr', self%write_imgarr)
-        call reg%add_char('write_prior', self%write_prior)
         call reg%add_char('zero', self%zero)
         call reg%add_char('ciffile', self%ciffile)
     end subroutine bind_input_carg

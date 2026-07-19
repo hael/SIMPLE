@@ -7,7 +7,7 @@ implicit none
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
 public :: set_abinitio2D_sampling_policy
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE
-public :: PROBREFINE_STAGE, PROB_PRIOR_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
+public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
 #include "simple_local_flags.inc"
 
@@ -20,7 +20,6 @@ integer,          parameter :: ITS_INCR           = 5
 integer,          parameter :: PHASES(2)          = [4, 6]
 integer,          parameter :: EXTR_LIM_LOCAL     = 20
 integer,          parameter :: PROBREFINE_STAGE   = 3
-integer,          parameter :: PROB_PRIOR_STAGE   = 6
 integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
@@ -41,7 +40,6 @@ type cluster2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
     real         :: trs=0., gaufreq=0.
-    logical      :: l_write_prior = .false.
 end type cluster2D_stage_cfg
 
 contains
@@ -50,7 +48,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc','prob_prior')
+            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
@@ -262,14 +260,9 @@ contains
             cfg%refine = 'prob'
         else if( trim(params%refine) == 'prob_snhc' .and. istage == nstages )then
             cfg%refine = 'prob'
-        else if( trim(params%refine) == 'prob_prior' .and. istage >= PROB_PRIOR_STAGE )then
-            cfg%refine = 'prob_prior'
         else
             cfg%refine = 'prob_snhc'
         endif
-        ! stage PROB_PRIOR_STAGE-1 is the designated prior-production stage;
-        ! set a flag so prob_align2D writes the prior artifact only for that stage
-        cfg%l_write_prior = (trim(params%refine) == 'prob_prior') .and. (istage == PROB_PRIOR_STAGE - 1)
     end subroutine set_cluster2D_stage_search_policy
 
     logical function cluster2D_stage_requires_full_assignment( cfg, stage_parms, istage ) result( l_required )
@@ -329,11 +322,6 @@ contains
             call cline_cluster2D%set('fillin', 'yes')
         else
             call cline_cluster2D%delete('fillin')
-        endif
-        if( cfg%l_write_prior )then
-            call cline_cluster2D%set('write_prior', 'yes')
-        else
-            call cline_cluster2D%delete('write_prior')
         endif
         call cline_cluster2D%delete('endit')
     end subroutine emit_cluster2D_stage_cfg

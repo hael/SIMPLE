@@ -268,6 +268,11 @@ contains
         if( ninvalid > 0 )then
             write(logfhandle,'(A,I0)') '>>> RECONSTRUCTION: SKIPPING PARTICLES WITH INVALID STATE OR EVEN/ODD LABELS: ', ninvalid
         endif
+        do state = 1,params%nstates
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> RECONSTRUCTION STATE ', state, ' PARTICLE COUNT: ', &
+                &group_counts(state_eo_group(state,0)) + group_counts(state_eo_group(state,1)), &
+                &' (EVEN/ODD): ', group_counts(state_eo_group(state,0)), '/', group_counts(state_eo_group(state,1))
+        enddo
         deallocate(group_counts, next_pos)
     end subroutine group_pinds_by_state_eo
 

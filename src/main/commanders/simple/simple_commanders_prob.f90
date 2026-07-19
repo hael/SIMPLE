@@ -53,14 +53,14 @@ contains
         integer, allocatable :: batches(:,:)
         logical :: l_state_only
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,need3Dobjs=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
         ! what was generated in the driver (prob_align, below). Sampling is delegated to prob_align (below)
         ! and merely reproduced here
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
-            THROW_HARD('exec_prob_tab requires prior particle sampling (in exec_prob_align)')
+            THROW_HARD('exec_prob_tab requires particle sampling from exec_prob_align')
         endif
         if( nptcls < 1 ) THROW_HARD('exec_prob_tab selected no particles')
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
@@ -113,12 +113,12 @@ contains
         type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
         integer :: nptcls
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline,params,need3Dobjs=.true.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         ! Sampling policy mirrors exec_prob_tab: only reproduce already sampled particles.
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
-            THROW_HARD('exec_prob_tab_neigh requires prior particle sampling (in exec_prob_align)')
+            THROW_HARD('exec_prob_tab_neigh requires particle sampling from exec_prob_align')
         endif
         if( nptcls < 1 ) THROW_HARD('exec_prob_tab_neigh selected no particles')
         ! All neighborhood modes can fill the table in matcher-sized batches; this
@@ -174,7 +174,6 @@ contains
 
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_prob_posterior3D,          only: POSTERIOR3D_FNAME
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
@@ -192,7 +191,7 @@ contains
         logical :: l_state_only
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         ! sampled incremented
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
@@ -241,14 +240,6 @@ contains
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
-        if( trim(params%write_prior) == 'yes' )then
-            ! The dense worker path intentionally avoids allocating 3D volume
-            ! objects.  The artifact only needs the lightweight projection
-            ! orientation grid for source Euler coordinates.
-            call build%eulspace%new(params%nspace, is_ptcl=.false.)
-            call build%pgrpsyms%build_refspiral(build%eulspace)
-            call eulprob_obj_glob%write_posterior3D(string(POSTERIOR3D_FNAME))
-        endif
         call eulprob_obj_glob%kill
         ! cleanup
         call cline_prob_tab%kill
@@ -262,7 +253,6 @@ contains
 
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_prob_posterior3D,        only: POSTERIOR3D_FNAME
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
@@ -279,7 +269,7 @@ contains
         integer :: nptcls
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.true.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
         if( params%l_fillin .and. mod(params%startit,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
@@ -301,12 +291,6 @@ contains
         call eulprob_obj_glob_neigh%new_neigh_global(params,build,pinds)
         call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
         call eulprob_obj_glob_neigh%ref_assign
-        if( trim(params%prob_neigh_mode) == 'posterior' )then
-            ! The merged current candidate table is the evidence for the next
-            ! posterior generation.  Publish only after global assignment has
-            ! consumed the table for the current iteration.
-            call eulprob_obj_glob_neigh%write_posterior3D_candidates(POSTERIOR3D_FNAME)
-        endif
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob_neigh%write_assignment(fname)
@@ -341,7 +325,7 @@ contains
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
         call cline%set('mkdir', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
@@ -352,7 +336,7 @@ contains
         if( build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
         else
-            THROW_HARD('exec_prob_tab2D requires prior particle sampling (in exec_prob_align2D)')
+            THROW_HARD('exec_prob_tab2D requires particle sampling from exec_prob_align2D')
         endif
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls) / real(batchsz_max))
@@ -390,7 +374,7 @@ contains
     end subroutine exec_prob_tab2D
 
     subroutine exec_prob_align2D( self, cline )
-        use simple_eul_prob_tab2D,          only: eul_prob_tab2D, PRIOR2D_STAGE5_FNAME
+        use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
         use simple_builder,                 only: builder
@@ -408,7 +392,7 @@ contains
         integer :: nptcls, ipart
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, need3Dobjs=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call set_b_p_ptrs2D(params, build)
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -455,14 +439,6 @@ contains
         call eulprob_obj_glob%write_assignment(fname)
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: assignment written'
         call flush(logfhandle)
-        ! write per-particle prior ranking only when the controller has flagged this as the
-        ! prior-production stage (stage PROB_PRIOR_STAGE-1, i.e. stage 5 by default)
-        if( trim(params%write_prior) == 'yes' )then
-            fname = string(PRIOR2D_STAGE5_FNAME)
-            call eulprob_obj_glob%write_prior_topk(fname)
-            write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: prior ranking written ', fname%to_char()
-            call flush(logfhandle)
-        endif
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
