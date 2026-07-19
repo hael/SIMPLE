@@ -59,17 +59,16 @@ contains
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
         real    :: dists(self%n)
-        integer :: inds(self%n), i, j
+        integer :: inds(self%n), j
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
-        do i=1,self%n
-            do j=1,self%n
-                inds(j)  = j
-                dists(j) = self%o(j).euldist.o
-            end do
-            call hpsort(dists, inds)
-            do j=1,k
-                lnns(inds(j)) = .true.
-            end do
+        ! The query orientation is fixed, so one distance calculation/sort is sufficient.
+        do j=1,self%n
+            inds(j)  = j
+            dists(j) = self%o(j).euldist.o
+        end do
+        call hpsort(dists, inds)
+        do j=1,k
+            lnns(inds(j)) = .true.
         end do
     end subroutine nearest_proj_neighbors_3
 

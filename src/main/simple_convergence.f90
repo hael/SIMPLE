@@ -266,7 +266,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
-        logical :: converged
+        logical :: converged, l_report_npeaks
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -299,6 +299,9 @@ contains
         call os%stats('dist',       self%dist,       mask=mask)
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call os%stats('frac',       self%frac_srch,  mask=mask)
+        l_report_npeaks = trim(params%refine) == 'prob_neigh' .and.&
+            &trim(params%prob_neigh_mode) == 'prior'
+        if( l_report_npeaks ) call os%stats('npeaks', self%npeaks, mask=mask)
         call os%stats('shincarg',   self%shincarg,   mask=mask)
         call os%stats('lp',         self%lp,         mask=mask)
         call os%stats('lp_est',     self%lp_est,     mask=mask)
@@ -331,6 +334,9 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        if( l_report_npeaks )&
+            &write(logfhandle,604) '>>> PRIOR NEIGH NPEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg,&
+            &self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
@@ -492,6 +498,7 @@ contains
         call ostats%set(1,'IN-PLANE_DIST',               self%dist_inpl%avg)
         call ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
         call ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
+        if( l_report_npeaks ) call ostats%set(1,'NPEAKS', self%npeaks%avg)
         call ostats%set(1,'LP_MATCHING',                 self%lp%avg)
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)

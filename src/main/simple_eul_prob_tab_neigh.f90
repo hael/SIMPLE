@@ -4,13 +4,11 @@ module simple_eul_prob_tab_neigh
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
+use simple_eul_prob_tab_utils
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch,&
-    &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
-    &prob_candidate, prob_candidate_store
 use simple_prob_prior3D,       only: prior3d_reader, PRIOR3D_FNAME, PRIOR3D_NREMAP
-use simple_decay_funs,        only: extremal_decay
+use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_ori,                only: ori
 implicit none
@@ -19,17 +17,37 @@ public :: eul_prob_tab_neigh
 private
 #include "simple_local_flags.inc"
 
+! Persistent support-artifact state for one worker object.  The remap is a
+! property of the source and target angular grids, not of an individual
+! particle, so it is built once and reused for every particle batch.
+type :: prior3d_ws
+    type(prior3d_reader), allocatable :: readers(:)
+    integer, allocatable :: pind_lookup(:)
+    logical, allocatable :: prior_available(:)
+    integer, allocatable :: remap_proj(:,:)       ! [PRIOR3D_NREMAP,source_nspace]
+    integer, allocatable :: remap_count(:)        ! [source_nspace]
+    integer :: source_nspace = 0
+    integer :: coverage_count = 0
+    logical :: initialized = .false.
+    logical :: valid = .false.
+    logical :: has_coverage = .false.
+    logical :: warning_emitted = .false.
+contains
+    procedure :: kill => kill_prior3d_ws
+end type prior3d_ws
+
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     type(prob_candidate_store) :: candidate_store
-    integer, allocatable        :: candidate_fill_counts(:)
-    logical                 :: l_direct_stoch_neigh = .false.
+    integer, allocatable       :: candidate_fill_counts(:)
+    type(prior3d_ws)           :: prior_ws
+    logical                    :: l_direct_stoch_neigh = .false.
 contains
     procedure :: new_neigh
     procedure :: new_neigh_global
-    procedure :: fill_tab      => fill_tab_neigh
+    procedure :: fill_tab       => fill_tab_neigh
     procedure :: fill_tab_range => fill_tab_neigh_range
-    procedure :: ref_assign    => ref_assign_neigh
-    procedure :: kill          => kill_neigh
+    procedure :: ref_assign     => ref_assign_neigh
+    procedure :: kill           => kill_neigh
     procedure :: read_tabs_to_glob
     procedure, private :: read_sparse_tab_to_glob
 end type eul_prob_tab_neigh
@@ -66,6 +84,86 @@ contains
 end type coarse_search_ws
 
 contains
+
+    subroutine init_prior3d_ws( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        type(ori) :: source_o
+        logical, allocatable :: lnns(:)
+        logical :: ok, okrow
+        integer :: i, j, k, ithr, source_proj, nfound, nremap, max_artifact_pind
+        if( self%prior_ws%initialized ) return
+        self%prior_ws%initialized = .true.
+        allocate(self%prior_ws%readers(nthr_glob))
+        self%prior_ws%valid = .true.
+        do ithr = 1, nthr_glob
+            call self%prior_ws%readers(ithr)%open(PRIOR3D_FNAME, ok)
+            self%prior_ws%valid = self%prior_ws%valid .and. ok
+        enddo
+        if( self%prior_ws%valid )then
+            ! The artifact is sparse and direct-access records are keyed by
+            ! particle ID.  Its sampled pinds need not equal the next stage's
+            ! sampled pinds; coverage is checked below with a particle lookup.
+            self%prior_ws%valid = self%prior_ws%readers(1)%nptcls > 0 .and.&
+                &self%prior_ws%readers(1)%nstates == self%p_ptr%nstates .and.&
+                &self%prior_ws%readers(1)%source_nspace > 0 .and.&
+                &self%prior_ws%readers(1)%source_nspace <= self%p_ptr%nspace .and.&
+                &self%p_ptr%nspace > 1 .and.&
+                &trim(self%prior_ws%readers(1)%pgrp) == trim(self%p_ptr%pgrp)
+        endif
+        if( self%prior_ws%valid )then
+            do ithr = 2, nthr_glob
+                self%prior_ws%valid = self%prior_ws%valid .and.&
+                    &self%prior_ws%readers(ithr)%source_nspace == self%prior_ws%readers(1)%source_nspace
+            enddo
+        endif
+        if( .not. self%prior_ws%valid )then
+            do ithr = 1, nthr_glob
+                call self%prior_ws%readers(ithr)%kill
+            enddo
+            return
+        endif
+        self%prior_ws%source_nspace = self%prior_ws%readers(1)%source_nspace
+        call build_pind_lookup(self%prior_ws%readers(1)%pinds, self%pinds,&
+            &self%prior_ws%pind_lookup, max_artifact_pind)
+        allocate(self%prior_ws%prior_available(self%nptcls), source=.false.)
+        do i = 1, self%nptcls
+            if( self%pinds(i) >= 1 .and. self%pinds(i) <= max_artifact_pind )then
+                self%prior_ws%prior_available(i) = self%prior_ws%pind_lookup(self%pinds(i)) > 0
+            endif
+        enddo
+        self%prior_ws%coverage_count = count(self%prior_ws%prior_available)
+        if( self%prior_ws%coverage_count == 0 ) return
+        nremap = min(PRIOR3D_NREMAP, self%p_ptr%nspace-1)
+        allocate(self%prior_ws%remap_proj(PRIOR3D_NREMAP,self%prior_ws%source_nspace), source=0)
+        allocate(self%prior_ws%remap_count(self%prior_ws%source_nspace), source=0)
+        allocate(lnns(self%p_ptr%nspace), source=.false.)
+        call source_o%new(.false.)
+        do i = 1, self%prior_ws%readers(1)%nptcls
+            call self%prior_ws%readers(1)%read_row(self%prior_ws%readers(1)%pinds(i), okrow)
+            if( .not. okrow ) cycle
+            do k = 1, self%prior_ws%readers(1)%nsel
+                source_proj = self%prior_ws%readers(1)%proj(k)
+                if( source_proj < 1 .or. source_proj > self%prior_ws%source_nspace ) cycle
+                if( self%prior_ws%remap_count(source_proj) > 0 ) cycle
+                if( any(.not.(ieee_is_finite(self%prior_ws%readers(1)%euls(:,k)))) ) cycle
+                call source_o%set_euler(self%prior_ws%readers(1)%euls(:,k))
+                lnns = .false.
+                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o,&
+                    &nremap, lnns)
+                nfound = 0
+                do j = 1, self%p_ptr%nspace
+                    if( .not. lnns(j) ) cycle
+                    nfound = nfound + 1
+                    if( nfound <= PRIOR3D_NREMAP ) self%prior_ws%remap_proj(nfound,source_proj) = j
+                enddo
+                self%prior_ws%remap_count(source_proj) = min(nfound,PRIOR3D_NREMAP)
+            enddo
+        enddo
+        call source_o%kill
+        deallocate(lnns)
+        self%prior_ws%has_coverage = any(self%prior_ws%remap_count > 0)
+        if( .not. self%prior_ws%has_coverage ) self%prior_ws%valid = .false.
+    end subroutine init_prior3d_ws
 
     subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -144,101 +242,79 @@ contains
     subroutine fill_tab_prior_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer, intent(in) :: i_first, i_last
-        type(prior3d_reader) :: readers(nthr_glob)
-        type(ori) :: source_o
-        logical, allocatable :: lnns(:,:), mapped_mask(:,:)
-        integer, allocatable :: mapped_refs(:,:), mapped_count(:)
+        logical, allocatable :: mapped_mask(:,:)
         integer, allocatable :: inds_sorted(:,:)
         real, allocatable :: dists_inpl(:,:)
         real :: shift(2), dist, corr
-        integer :: i, k, iproj, ri, full_ref, irot, ithr, istate, nrots
-        integer :: i_from, i_to
-        logical :: ok, okrow, valid
+        integer :: i, j, k, iproj, ri, full_ref, irot, ithr, istate, nrots
+        integer :: i_from, i_to, ncovered, nrange, source_proj
+        logical :: okrow
         character(len=8) :: fallback_mode
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
-        valid = .true.
-        do ithr = 1, nthr_glob
-            call readers(ithr)%open(PRIOR3D_FNAME, ok)
-            valid = valid .and. ok
-        enddo
-        if( valid )then
-            valid = readers(1)%nptcls == self%nptcls .and. readers(1)%nstates == self%p_ptr%nstates .and.&
-                &readers(1)%source_nspace <= self%p_ptr%nspace .and.&
-                &trim(readers(1)%pgrp) == trim(self%p_ptr%pgrp) .and.&
-                &size(readers(1)%pinds) == size(self%pinds) .and.&
-                &all(readers(1)%pinds == self%pinds)
+        fallback_mode = 'state'
+        if( trim(self%p_ptr%multivol_mode) == 'docked' ) fallback_mode = 'geom'
+        call init_prior3d_ws(self)
+        if( .not. self%prior_ws%valid )then
+            if( .not. self%prior_ws%warning_emitted )then
+                THROW_WARN('prob_neigh_mode=prior: support artifact missing or incompatible; falling back to bounded prob_neigh_mode='//trim(fallback_mode)//' search')
+                self%prior_ws%warning_emitted = .true.
+            endif
+            call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
+            return
         endif
-        if( valid )then
-            do ithr = 2, nthr_glob
-                valid = valid .and. readers(ithr)%source_nspace == readers(1)%source_nspace
-            enddo
-        endif
-        if( .not. valid )then
-            do ithr = 1, nthr_glob
-                call readers(ithr)%kill
-            enddo
-            fallback_mode = 'state'
-            if( trim(self%p_ptr%multivol_mode) == 'docked' ) fallback_mode = 'geom'
-            THROW_WARN('prob_neigh_mode=prior: support artifact missing or incompatible; falling back to bounded prob_neigh_mode='//trim(fallback_mode)//' search')
+        nrange = i_to - i_from + 1
+        ncovered = count(self%prior_ws%prior_available(i_from:i_to))
+        if( ncovered == 0 )then
             call fill_tab_subspace_range(self, i_first, i_last, fallback_mode)
             return
         endif
         nrots = self%b_ptr%pftc%get_nrots()
-        allocate(lnns(self%p_ptr%nspace,nthr_glob), mapped_mask(self%nrefs,nthr_glob),&
-            &mapped_refs(self%nrefs,nthr_glob), mapped_count(nthr_glob),&
-            &dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
-        lnns = .false.
+        allocate(mapped_mask(self%nrefs,nthr_glob), dists_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
         mapped_mask = .false.
-        mapped_refs = 0
-        mapped_count = 0
         dists_inpl = 0.
         inds_sorted = 0
-        !$omp parallel do default(shared) private(i,ithr,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_o)&
+        !$omp parallel do default(shared) private(i,ithr,j,k,iproj,ri,full_ref,irot,istate,shift,dist,corr,okrow,source_proj)&
         !$omp proc_bind(close) schedule(static)
         do i = i_from, i_to
+            if( .not. self%prior_ws%prior_available(i) ) cycle
             ithr = omp_get_thread_num() + 1
             mapped_mask(:,ithr) = .false.
-            mapped_refs(:,ithr) = 0
-            mapped_count(ithr) = 0
-            call readers(ithr)%read_row(self%pinds(i), okrow)
+            call self%prior_ws%readers(ithr)%read_row(self%pinds(i), okrow)
             if( .not. okrow ) cycle
-            do k = 1, readers(ithr)%nsel
-                istate = readers(ithr)%state(k)
+            do k = 1, self%prior_ws%readers(ithr)%nsel
+                istate = self%prior_ws%readers(ithr)%state(k)
                 if( istate < 1 .or. istate > self%p_ptr%nstates ) cycle
                 if( .not. self%state_exists(istate) ) cycle
-                if( any(.not.(ieee_is_finite(readers(ithr)%euls(:,k)))) ) cycle
-                call source_o%new(.false.)
-                call source_o%set_euler(readers(ithr)%euls(:,k))
-                lnns(:,ithr) = .false.
-                call self%b_ptr%pgrpsyms%nearest_proj_neighbors(self%b_ptr%eulspace, source_o,&
-                    &min(PRIOR3D_NREMAP,self%p_ptr%nspace), lnns(:,ithr))
-                call source_o%kill
-                do iproj = 1, self%p_ptr%nspace
-                    if( .not. lnns(iproj,ithr) ) cycle
+                source_proj = self%prior_ws%readers(ithr)%proj(k)
+                if( source_proj < 1 .or. source_proj > self%prior_ws%source_nspace ) cycle
+                do j = 1, self%prior_ws%remap_count(source_proj)
+                    iproj = self%prior_ws%remap_proj(j,source_proj)
                     full_ref = (istate-1)*self%p_ptr%nspace + iproj
                     ri = self%full_to_compact_ref(full_ref)
                     if( ri < 1 .or. mapped_mask(ri,ithr) ) cycle
-                    mapped_count(ithr) = mapped_count(ithr) + 1
-                    mapped_refs(mapped_count(ithr),ithr) = ri
                     mapped_mask(ri,ithr) = .true.
                     shift = 0.
-                    if( readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
-                        &shift = [readers(ithr)%x(k), readers(ithr)%y(k)]
-                    call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift, self%b_ptr%pftc%get_nrots(),&
-                        &dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
+                    if( self%prior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift )&
+                        &shift = [self%prior_ws%readers(ithr)%x(k), self%prior_ws%readers(ithr)%y(k)]
+                    call self%b_ptr%pftc%gen_likelihood_val(full_ref, self%pinds(i), shift,&
+                        &self%b_ptr%pftc%get_nrots(), dist, corr, irot, dists_inpl(:,ithr), inds_sorted(:,ithr))
                     if( irot < 1 .or. irot > nrots ) irot = 1
                     call record_sparse_eval(self, i, ithr, ri, dist, irot, shift(1), shift(2),&
-                        &(readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
+                        &(self%prior_ws%readers(ithr)%has_sh(k) /= 0 .and. self%p_ptr%l_doshift))
                 enddo
             enddo
         enddo
         !$omp end parallel do
-        do ithr = 1, nthr_glob
-            call readers(ithr)%kill
-        enddo
-        deallocate(lnns, mapped_mask, mapped_refs, mapped_count, dists_inpl, inds_sorted)
+        if( ncovered < nrange )then
+            ! Particle sampling may legitimately change between the dense
+            ! producer stage and a later neighborhood stage.  Uncovered
+            ! particles use the bounded state/geom policy.
+            call fill_tab_subspace_range(self, i_first, i_last, fallback_mode,&
+                &active_mask=.not.self%prior_ws%prior_available)
+        endif
+        deallocate(mapped_mask, dists_inpl, inds_sorted)
     end subroutine fill_tab_prior_range
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
@@ -430,10 +506,11 @@ contains
 
     ! Identifies peak subspaces via coarse scoring, builds a pooled neighborhoo
     ! and evaluates all fine refs & refines the best
-    subroutine fill_tab_subspace_range( self, i_first, i_last, search_mode )
+    subroutine fill_tab_subspace_range( self, i_first, i_last, search_mode, active_mask )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
         character(len=*), optional, intent(in)   :: search_mode
+        logical, optional, intent(in)            :: active_mask(:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(coarse_search_ws) :: coarse_ws
         type(eval_ws)          :: eval_work
@@ -456,6 +533,9 @@ contains
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
+        if( present(active_mask) )then
+            if( size(active_mask) < i_to ) THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_subspace_range; active mask is too small')
+        endif
         call seed_rnd
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -480,6 +560,9 @@ contains
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(static)
             do i = i_from, i_to
+                if( present(active_mask) )then
+                    if( .not. active_mask(i) ) cycle
+                endif
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 call process_particle_subspace(i, iptcl, ithr, .true., shift_seed)
@@ -490,6 +573,9 @@ contains
         else
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(static)
             do i = i_from, i_to
+                if( present(active_mask) )then
+                    if( .not. active_mask(i) ) cycle
+                endif
                 iptcl      = self%pinds(i)
                 ithr       = omp_get_thread_num() + 1
                 shift_seed = 0.
@@ -762,8 +848,10 @@ contains
         integer   :: greedy_state(self%nptcls)
         real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
         real      :: huge_val, dist_tmp, corr_tmp
-        logical   :: final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift
+        logical   :: final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift, l_report_npeaks
         huge_val = huge(1.0)
+        l_report_npeaks = trim(self%p_ptr%refine) == 'prob_neigh' .and.&
+            &trim(self%p_ptr%prob_neigh_mode) == 'prior'
         l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
             &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
         allocate(dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
@@ -950,6 +1038,8 @@ contains
             call materialize_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots)
             self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
+            ! Report the distinct valid sparse references used for this prior neighborhood.
+            if( l_report_npeaks ) self%assgn_map(assigned_ptcl)%npeaks = particle_evaluated_count(assigned_ptcl)
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
 
@@ -990,6 +1080,7 @@ contains
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
                 self%assgn_map(i)%frac = search_frac(i)
+                if( l_report_npeaks ) self%assgn_map(i)%npeaks = particle_evaluated_count(i)
                 final_assigned(i) = .true.
             enddo
         end subroutine assign_remaining_particles_from_best_touched_ref
@@ -1446,11 +1537,33 @@ contains
     end subroutine refine_best_neighbors
 
     ! DESTRUCTOR
-    
+
+    subroutine kill_prior3d_ws( self )
+        class(prior3d_ws), intent(inout) :: self
+        integer :: ithr
+        if( allocated(self%readers) )then
+            do ithr = 1, size(self%readers)
+                call self%readers(ithr)%kill
+            enddo
+            deallocate(self%readers)
+        endif
+        if( allocated(self%pind_lookup) ) deallocate(self%pind_lookup)
+        if( allocated(self%prior_available) ) deallocate(self%prior_available)
+        if( allocated(self%remap_proj) ) deallocate(self%remap_proj)
+        if( allocated(self%remap_count) ) deallocate(self%remap_count)
+        self%source_nspace = 0
+        self%coverage_count = 0
+        self%initialized = .false.
+        self%valid = .false.
+        self%has_coverage = .false.
+        self%warning_emitted = .false.
+    end subroutine kill_prior3d_ws
+
     subroutine kill_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         call self%candidate_store%kill
         if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
+        call self%prior_ws%kill
         self%l_direct_stoch_neigh = .false.
         call self%eul_prob_tab%kill
     end subroutine kill_neigh

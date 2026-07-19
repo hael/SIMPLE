@@ -164,6 +164,7 @@ contains
                 self%assgn_map(i)%x      = 0.
                 self%assgn_map(i)%y      = 0.
                 self%assgn_map(i)%has_sh = .false.
+                self%assgn_map(i)%npeaks = 0
             endif
             if( allocated(self%state_tab) )then
                 do si = 1,self%nstates
@@ -212,6 +213,7 @@ contains
             self%assgn_map(i)%x      = 0.
             self%assgn_map(i)%y      = 0.
             self%assgn_map(i)%has_sh = .false.
+            self%assgn_map(i)%npeaks = 0
         enddo
     end subroutine new_assignment
 

@@ -39,7 +39,7 @@ contains
         class(strategy3D_prob), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
-        integer :: iproj, iptcl_map, irot, istate, iref
+        integer :: iproj, iptcl_map, irot, istate, iref, npeaks
         real    :: corr, frac
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -50,6 +50,7 @@ contains
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
+            npeaks    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%npeaks
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             frac      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%frac
@@ -70,6 +71,8 @@ contains
                 call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
+            if( trim(self%s%p_ptr%prob_neigh_mode) == 'prior' )&
+                &call os%set(self%s%iptcl, 'npeaks', real(npeaks))
         else
             call os%reject(self%s%iptcl)
         endif
