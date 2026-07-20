@@ -36,8 +36,9 @@ Constructor policy (`new`):
 
 - `new(params, completedir, pre_chunked)` derives mode and tuning from `params`.
 - `single_pass=yes` enables coarse-only terminal semantics.
-- `fine_model=yes` enables learned class-average rejection in the fine tier.
+- `use_model=yes` enables learned class-average rejection in both tiers.
 - `refs=<file>` pre-seeds coarse/fine compatibility models when the file exists.
+- missing `refs` is warning-and-skip (non-fatal).
 - tier tuning overrides may be provided by params: `lpstart`, `lpstop_coarse`,
   `lpstop_fine`, `box_coarse`, `box_fine`, `nsample_coarse`, `nsample_fine`,
   `ncls_coarse`, and `ncls_fine`.
@@ -144,9 +145,9 @@ Queue partition override policy:
 
 Fine-tier model policy:
 
-- when `fine_model=yes`, fine rejection additionally runs model-based quality
-  scoring (`evaluate_cavg_quality`) after hard rejection.
-- when `fine_model=no`, fine rejection uses hard rejection only.
+- when `use_model=yes`, rejection runs model-based quality scoring
+  (`evaluate_cavg_quality`) after hard rejection.
+- when `use_model=no`, rejection uses hard rejection only.
 
 Rejection outputs and artifacts:
 

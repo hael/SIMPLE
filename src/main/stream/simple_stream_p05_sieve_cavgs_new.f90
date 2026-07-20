@@ -119,7 +119,7 @@ contains
         if( .not. cline%defined('nsample_fine')   ) call cline%set('nsample_fine',           DEFAULT_FINE_NSAMPLE)
         if( .not. cline%defined('ncls_coarse')    ) call cline%set('ncls_coarse',                    DEFAULT_NCLS)
         if( .not. cline%defined('ncls_fine')      ) call cline%set('ncls_fine',                      DEFAULT_NCLS)
-        if( .not. cline%defined('fine_model')     ) call cline%set('fine_model',                             'no')
+        if( .not. cline%defined('use_model')      ) call cline%set('use_model',                             'yes')
         if( .not. cline%defined('single_pass')    ) call cline%set('single_pass',                            'no')
         ! Initialise counters.
         n_ptcls_imported = 0
@@ -188,7 +188,7 @@ contains
                     write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', params%mskdiam
                     call spproj_tmp%kill()
                     ! Initialise ptcl_sieve once and run two warm-up cycles.
-                    if( params%pickrefs%strlen() > 0 ) params%refs = params%pickrefs
+                 !   if( params%pickrefs%strlen() > 0 ) params%refs = params%pickrefs
                     call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED))
                     call sieve%cycle(project_list)
                     call sieve%cycle(project_list)

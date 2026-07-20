@@ -11,7 +11,7 @@ use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTER
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
     CAVG_RELATIONAL_DEFAULT_CORR_TRS, &
-    cavg_quality_model_spec, cavg_quality_result
+    cavg_quality_model_spec, cavg_quality_result, CAVG_REJECT_REASON_MODEL
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
 use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
@@ -1144,7 +1144,8 @@ contains
                 quality%states(icls) = 1
                 quality%labels(icls) = 1
             else
-                quality%labels(icls) = 2
+                quality%reasons(icls) = CAVG_REJECT_REASON_MODEL
+                quality%labels(icls)  = 2
             endif
         end do
         quality%threshold        = model%prob_threshold

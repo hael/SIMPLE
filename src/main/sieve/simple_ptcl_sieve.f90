@@ -37,7 +37,7 @@
 !==============================================================================
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
-  use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB, JPEG_DIM
+  use simple_defs,                        only: logfhandle, STDLEN, CWD_GLOB, JPEG_DIM, COSMSKHALFWIDTH
   use simple_error,                       only: simple_exception
   use simple_image,                       only: image
   use simple_timer,                       only: timer_int_kind, tic, toc
@@ -57,12 +57,11 @@ module simple_ptcl_sieve
   use simple_string_utils,                only: int2str
   use simple_projfile_utils,              only: merge_chunk_projfiles
   use simple_commanders_cavgs,            only: commander_cluster_cavgs
-  use simple_cavg_quality_model,          only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model
+  use simple_cavg_quality_model,          only: CAVG_QUALITY_MODEL_SIEVE_DEFAULT, cavg_quality_model
   use simple_cavg_quality_types,          only: cavg_quality_result, CAVG_QUALITY_CONTEXT_SIEVE, &
                                                 CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
                                                 CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
-                                                CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
-                                                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
+                                                CAVG_REJECT_REASON_MODEL
   use simple_class_compatibility,         only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
   use simple_cavg_quality_helpers,        only: cavg_rejection_reason_string
   use simple_cavg_quality_analysis,       only: evaluate_cavg_quality_hard_reject, evaluate_cavg_quality
@@ -149,6 +148,7 @@ module simple_ptcl_sieve
     type(class_compatibility)         :: fine_compatibility_model
     type(chunk2D_coarse_defaults)     :: coarse_defaults
     type(chunk2D_fine_defaults)       :: fine_defaults
+    type(parameters)                  :: params
     type(qsys_env)                    :: qenv
     type(string)                      :: outdir_chunks_coarse
     type(string)                      :: outdir_chunks_fine
@@ -158,7 +158,7 @@ module simple_ptcl_sieve
     logical                           :: coarse_only             = .false.
     logical                           :: pre_chunked             = .false.
     logical                           :: final_ingestion         = .false.
-    logical                           :: model_rejection_enabled = .false.
+    logical                           :: model_rejection_enabled = .true.
     integer                           :: nparallel          = 1
     integer                           :: nthr               = 1
     integer                           :: nparts             = 1
@@ -230,6 +230,7 @@ contains
     t0 = timer_start()
     call self%kill()
     call simple_getcwd(cwd)
+    self%params      = params
     self%completedir = completedir
     self%nparallel   = params%nchunks
     self%mskdiam     = params%mskdiam
@@ -237,7 +238,7 @@ contains
     self%nparts      = params%nparts
     if( present(pre_chunked)        ) self%pre_chunked             = pre_chunked
     if( params%single_pass == 'yes' ) self%coarse_only             = .true.
-    if( params%fine_model  == 'yes' ) self%model_rejection_enabled = .true.
+    if( params%use_model   == 'no ' ) self%model_rejection_enabled = .false.
     if( params%lpstart > 0.0 ) then
       if( self%coarse_defaults%lpstart /= params%lpstart ) self%coarse_defaults%lpstart = params%lpstart
       if( self%fine_defaults%lpstart   /= params%lpstart ) self%fine_defaults%lpstart   = params%lpstart
@@ -305,7 +306,7 @@ contains
     self%coarse_only             = .false.
     self%pre_chunked             = .false.
     self%final_ingestion         = .false.
-    self%model_rejection_enabled = .false.
+    self%model_rejection_enabled = .true.
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
@@ -1286,7 +1287,8 @@ contains
     type(cavg_quality_model)           :: model
     type(sp_project)                   :: spproj
     type(sp_project)                   :: spproj_cluster
-    type(cmdline)                      :: cline_cluster_cavgs
+    type(parameters)                   :: relation_params
+    type(cmdline)                      :: relation_cline
     type(string)                       :: stkname, jpgname, cwd_before_cluster, cluster_projfile, cluster_projbase
     integer(timer_int_kind)            :: t0
     integer                            :: ncls, iimg, nout, non_zero_ptcls, n_total_ptcls
@@ -1308,8 +1310,25 @@ contains
 
     call spproj%read(chunk%projfile)
     cavg_imgs = read_cavgs_into_imgarr(spproj)
+    ! generate the relation parameters for the coarse/fine quality model
+    call relation_cline%set('box', cavg_imgs(1)%get_box())
+    call relation_cline%set('oritype',            'cls2D')
+    call relation_cline%set('ctf',                   'no')
+    call relation_cline%set('objfun',                'cc')
+    call relation_cline%set('mskdiam',                0.0)
+    call relation_params%new(relation_cline)
+    ! Initialize the coarse/fine quality model and evaluate the class averages.
+    call model%init_preset(CAVG_QUALITY_MODEL_SIEVE_DEFAULT)
+    write(logfhandle,'(A,A,A,I6,A,L1,A,A,A,A)') '>>> ', label%to_char(), ' # ', chunk%id, &
+      ' USING REJECTION MODEL=', self%model_rejection_enabled, ' NAME=', trim(model%name), ' CONTEXT=', trim(model%context)
+
     if( label == LABEL_COARSE ) then
-      call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
+      if( self%model_rejection_enabled ) then
+          
+          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, CAVG_QUALITY_CONTEXT_SIEVE, relation_params)
+      else
+          call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
+      end if
       do iimg = 1, size(cavg_imgs)
           if( quality%states(iimg) == 0 ) then
               call spproj%os_cls2D%set(iimg, 'state', 0)
@@ -1319,100 +1338,7 @@ contains
       ! Map the coarse selection to the cluster-average level and write out the updated project file.
       states = spproj%os_cls2D%get_all_asint('state')
       call spproj%map_cavgs_selection(states)
-      if( .true. ) then
-        ! This branch is enabled for testing purposes. It would write out the updated project file after mapping the selection to cluster averages.
-        call spproj%write()
-        ! Run cluster-average quality evaluation
-        call cline_cluster_cavgs%set('prg', 'cluster_cavgs')
-        call cline_cluster_cavgs%set('projfile', chunk%projfile)
-        call cline_cluster_cavgs%set('mskdiam', self%mskdiam)
-        call cline_cluster_cavgs%set('skip_rejection', 'yes')
-        call cline_cluster_cavgs%set('lp', self%coarse_defaults%lpstop)
-        call cline_cluster_cavgs%set('nthr', 1)
-        call cline_cluster_cavgs%set('mkdir', 'yes')
-        call cline_cluster_cavgs%set('outdir', 'cluster_cavgs')
-        call simple_getcwd(cwd_before_cluster)
-        call simple_chdir(chunk%folder)
-        CWD_GLOB = chunk%folder%to_char()
-        call cluster_cavg_commander%execute(cline_cluster_cavgs)
-        call simple_chdir(cwd_before_cluster)
-        CWD_GLOB = cwd_before_cluster%to_char()
-        call cwd_before_cluster%kill()
-        call cline_cluster_cavgs%kill()
-
-        cluster_projbase = basename(chunk%projfile)
-        cluster_projfile = string(chunk%folder%to_char() // '/cluster_cavgs/' // cluster_projbase%to_char())
-        if( file_exists(cluster_projfile) ) then
-          call spproj_cluster%read(cluster_projfile)
-          clusters = spproj_cluster%os_cls2D%get_all_asint('cluster')
-          allocate(overfit_metric_fail(size(cavg_imgs)), source=.false.)
-          do iimg = 1, size(cavg_imgs)
-            if( quality%raw(iimg, I_BP40_100_CENTER_EDGE_VAR) < SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG) then
-              overfit_metric_fail(iimg) = .true.
-            end if
-          end do
-          
-          nuniq = 0
-          allocate(uniq_clusters(size(clusters)), source=0)
-          do iimg = 1, size(clusters)
-            if( clusters(iimg) <= 0 ) cycle
-            if( .not. any(uniq_clusters(1:nuniq) == clusters(iimg)) ) then
-              nuniq = nuniq + 1
-              uniq_clusters(nuniq) = clusters(iimg)
-            end if
-          end do
-
-          do ic = 1, nuniq
-            cid = uniq_clusters(ic)
-            n_in_cluster = count(clusters == cid)
-            if( n_in_cluster == 0 ) cycle
-            n_fail_cluster = count((clusters == cid) .and. overfit_metric_fail)
-            overfit_fail_frac = real(n_fail_cluster) / real(n_in_cluster)
-            if( n_in_cluster == 1 ) then
-              do iimg = 1, size(clusters)
-                if( clusters(iimg) == cid ) then
-                  call spproj%os_cls2D%set(iimg, 'state', 1)
-                  call spproj%os_cls2D%set(iimg, 'rejection_reason', '')
-                end if
-              end do
-              write(logfhandle,'(A,I6,A,I6,A)') '>>> KEPT CLUSTER ', cid, ' IN COARSE CHUNK # ', chunk%id, &
-                ' (SINGLE AVERAGE EXEMPT FROM OVERFIT CLUSTER GATE)'
-            else if( overfit_fail_frac >= OVERFIT_CLUSTER_REJECT_FRAC ) then
-              do iimg = 1, size(clusters)
-                if( clusters(iimg) == cid ) then
-                  call spproj%os_cls2D%set(iimg, 'state', 0)
-                  call spproj%os_cls2D%set(iimg, 'rejection_reason', string('coarse_reject: overfit_cluster_frac_ge_0.70'))
-                  bp_score    = quality%raw(iimg, I_BP40_100_CENTER_EDGE_VAR)
-                  bp_fail     = bp_score    < SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG
-                  write(logfhandle,'(A,I6,A,I6,A,F8.3,A,L1)') &
-                    '>>> REJECTED CLUSTER CLASS chunk#', chunk%id, ' cls=', iimg, &
-                    ' bp40_100=', bp_score, ' fail=', bp_fail
-                end if
-              end do
-              write(logfhandle,'(A,I6,A,I6,A,I6,A,F6.3,A)') '>>> REJECTED CLUSTER ', cid, ' IN COARSE CHUNK # ', chunk%id, &
-                ' DUE TO OVERFIT FAIL RATE ', n_fail_cluster, '/', overfit_fail_frac, ' (>= 0.70)'
-                
-            else
-              do iimg = 1, size(clusters)
-                if( clusters(iimg) == cid ) then
-                  call spproj%os_cls2D%set(iimg, 'state', 1)
-                  call spproj%os_cls2D%set(iimg, 'rejection_reason', '')
-                end if
-              end do
-              write(logfhandle,'(A,I6,A,I6,A,F6.3,A)') '>>> KEPT CLUSTER ', cid, ' IN COARSE CHUNK # ', chunk%id, &
-                ' OVERFIT FAIL FRAC ', overfit_fail_frac, ' (< 0.70)'
-            end if
-          end do
-
-          if( allocated(clusters) ) deallocate(clusters)
-          if( allocated(uniq_clusters) ) deallocate(uniq_clusters)
-          if( allocated(overfit_metric_fail) ) deallocate(overfit_metric_fail)
-          call spproj_cluster%kill()
-        else
-          write(logfhandle,'(A,A)') '>>> SKIPPING CLUSTER-LEVEL OVERFIT GATE; MISSING FILE: ', cluster_projfile%to_char()
-        end if
-      end if
-      
+      ! Train the coarse compatibility model if it has not yet converged, then infer the coarse compatibility scores for all class averages.
       if( .not. self%coarse_compatibility_model%converged() ) then
         call self%coarse_compatibility_model%train(spproj)
         call self%coarse_compatibility_model%get_support_model_metrics(compat_metrics)
@@ -1428,11 +1354,7 @@ contains
       call self%coarse_compatibility_model%infer(spproj)
     else
       if( self%model_rejection_enabled ) then
-          call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-          model%context = CAVG_QUALITY_CONTEXT_SIEVE
-          call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
-          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, CAVG_QUALITY_CONTEXT_SIEVE)
-          call model%kill()
+          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, CAVG_QUALITY_CONTEXT_SIEVE, relation_params)
       else
           call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
       end if
@@ -1442,6 +1364,7 @@ contains
               call spproj%os_cls2D%set(iimg, 'rejection_reason', string('fine_reject: ')//cavg_rejection_reason_string(quality%reasons(iimg)))
           end if
       end do
+      ! Train the fine compatibility model if it has not yet converged, then infer the fine compatibility scores for all class averages.
       if( .not. self%fine_compatibility_model%converged() ) then
         call self%fine_compatibility_model%train(spproj)
         call self%fine_compatibility_model%get_support_model_metrics(compat_metrics)
@@ -1456,6 +1379,7 @@ contains
       end if
       call self%fine_compatibility_model%infer(spproj)
     end if
+    call model%kill()
     states = spproj%os_cls2D%get_all_asint('state')
     call spproj%map_cavgs_selection(states)
     non_zero_ptcls = spproj%os_ptcl2D%count_state_gt_zero()
@@ -1852,9 +1776,7 @@ contains
     write(iu,'(A)') 'BAD_PIXELS: magenta'
     write(iu,'(A)') 'NO_COMPONENT: cyan'
     write(iu,'(A)') 'MASK_GEOMETRY: yellow'
-    write(iu,'(A)') 'BP_CENTER_EDGE_LOW: blue'
-    write(iu,'(A)') 'LOCVAR_FG_LOW: purple'
-    write(iu,'(A)') 'FUZZY_BALL_SIGNAL_NEG: brown'
+    write(iu,'(A)') 'MODEL_REJECT: blue'
     write(iu,'(A)') 'COARSE_OVERFIT_CLUSTER: dark orange'
     close(iu)
     write(logfhandle,'(A,A)') '>>> KEY  ', keyname%to_char()
@@ -1889,12 +1811,8 @@ contains
         reason_color = rgb_code(  0, 200, 200)
       case(CAVG_REJECT_REASON_MASK_GEOMETRY)
         reason_color = rgb_code(255, 220,   0)
-      case(CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW)
+      case(CAVG_REJECT_REASON_MODEL)
         reason_color = rgb_code( 30, 144, 255)
-      case(CAVG_REJECT_REASON_LOCVAR_FG_LOW)
-        reason_color = rgb_code(153,  50, 204)
-      case(CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW)
-        reason_color = rgb_code(139,  69,  19)
       case default
         reason_color = rgb_code(180, 180, 180)
       end select
@@ -1913,12 +1831,8 @@ contains
         reason_code_from_text = CAVG_REJECT_REASON_NO_COMPONENT
       else if( reason_text%has_substr('mask geometry issues') ) then
         reason_code_from_text = CAVG_REJECT_REASON_MASK_GEOMETRY
-      else if( reason_text%has_substr('low band-pass center-edge variance') ) then
-        reason_code_from_text = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
-      else if( reason_text%has_substr('low local variance in foreground') ) then
-        reason_code_from_text = CAVG_REJECT_REASON_LOCVAR_FG_LOW
-      else if( reason_text%has_substr('low fuzzy-ball signal') ) then
-        reason_code_from_text = CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
+      else if( reason_text%has_substr('learned model') ) then
+        reason_code_from_text = CAVG_REJECT_REASON_MODEL
       end if
     end function reason_code_from_text
 
@@ -2032,13 +1946,12 @@ contains
 
     pure subroutine draw_reason_key_swatches(rmap)
       real, intent(inout) :: rmap(:,:,:)
-      integer, parameter  :: ncolors = 10, box = 12, gap = 4, margin = 6
+      integer, parameter  :: ncolors = 7, box = 12, gap = 4, margin = 6
       integer             :: i, x0, y0, x1, y1, c
       integer             :: codes(ncolors)
       codes = [ -1, 100, CAVG_REJECT_REASON_POP, CAVG_REJECT_REASON_BAD_PIXELS, &
                 CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
-                CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, &
-                CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW, 101 ]
+            CAVG_REJECT_REASON_MODEL ]
       y0 = margin
       do i = 1, ncolors
         x0 = margin + (i - 1) * (box + gap)

@@ -3,7 +3,7 @@ module simple_cavg_quality_helpers
 use simple_string,             only: string
 use simple_cavg_quality_types, only: CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP, &
                                      CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, CAVG_REJECT_REASON_MASK_GEOMETRY, &
-                                     CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW, CAVG_REJECT_REASON_LOCVAR_FG_LOW, CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
+                                     CAVG_REJECT_REASON_MODEL
 implicit none
 private
 
@@ -25,12 +25,8 @@ contains
                 reason_text = 'no mask component'
             case( CAVG_REJECT_REASON_MASK_GEOMETRY )
                 reason_text = 'mask geometry issues'
-            case( CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW )
-                reason_text = 'suspected overfitting: low band-pass center-edge variance'
-            case( CAVG_REJECT_REASON_LOCVAR_FG_LOW )
-                reason_text = 'suspected overfitting: low local variance in foreground'
-            case( CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW )
-                reason_text = 'suspected overfitting: low fuzzy-ball signal'
+            case( CAVG_REJECT_REASON_MODEL )
+                reason_text = 'rejected by learned model'
             case default
                 reason_text = 'unknown_reason_code'
         end select

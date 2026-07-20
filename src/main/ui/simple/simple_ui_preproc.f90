@@ -265,7 +265,7 @@ contains
         ! alternative inputs
         call particle_sieving%add_input(UI_SRCH, 'nsample_coarse', 'num', 'Number of particles to sample in coarse sieving', 'Number of particles to sample in coarse sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
         call particle_sieving%add_input(UI_SRCH, 'nsample_fine', 'num', 'Number of particles to sample in fine sieving', 'Number of particles to sample in fine sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'fine_model', 'str', 'Use model for class-average rejection in fine sieving', 'Use model for class-average rejection in fine sieving(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'use_model', 'str', 'Use model for class-average rejection in sieving', 'Use model for class-average rejection in sieving(yes|no){yes}', 'yes|no{yes}', .false., 'yes', gui_submenu="search", gui_advanced=.true.)
         call particle_sieving%add_input(UI_SRCH, 'refs', 'file', 'Reference class averages to initialise size compatibility model', 'Reference class averages to initialise size compatibility model', 'e.g. refs.mrcs', .false., '', gui_submenu="search", gui_advanced=.true.)
         call particle_sieving%add_input(UI_SRCH, 'single_pass', 'str', 'Coarse pass only', 'Coarse pass only(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
         ! filter controls

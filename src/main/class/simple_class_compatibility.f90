@@ -24,22 +24,22 @@ private
 #include "simple_local_flags.inc"
 
 ! Preprocessing constants for class-average compatibility analysis.
-integer, parameter :: PREPROCESS_BOXSIZE             = 128    ! Working box size for resized class averages (pixels)
-integer, parameter :: PREPROCESS_MORPH_SIZE          = 5      ! Number of dilate/erode passes for morphological closing
+integer, parameter :: PREPROCESS_BOXSIZE    = 128    ! Working box size for resized class averages (pixels)
+integer, parameter :: PREPROCESS_MORPH_SIZE = 5      ! Number of dilate/erode passes for morphological closing
 
 ! Support-model search and convergence constants.
-integer, parameter :: NRELAX                 = 5                             ! Number of relaxation candidates in support-model grid
-integer, parameter :: NQ                     = 3                             ! Number of lower/upper quantile candidates in grid
-real,    parameter :: DEFAULT_RELAX          = 0.07
-real,    parameter :: DEFAULT_QLO            = 0.08
-real,    parameter :: DEFAULT_QHI            = 0.93
-real,    parameter :: CONV_ABS_EPS           = 0.5                           ! Absolute tolerance (pixels) for axis stability
-real,    parameter :: CONV_REL_EPS           = 0.01                          ! Relative tolerance for axis stability
-real,    parameter :: RESCUE_EDGE_FRAC       = 0.00                          ! Extra margin for boundary rescue in size compatibility
-real,    parameter :: SUPPORT_EDGE_SOFT_FRAC_MAX = 0.05                      ! Initial soft edge slack (5%) for c/a bounds during support check
-real,    parameter :: RELAX_GRID(NRELAX)     = [0.03, 0.05, 0.07, 0.1, 0.15] ! Relative interval expansion candidates
-real,    parameter :: QLOW_GRID(NQ)          = [0.05, 0.1, 0.15]             ! Lower-quantile candidates for c-axis estimate
-real,    parameter :: QHIGH_GRID(NQ)         = [0.85, 0.9, 0.95]             ! Upper-quantile candidates for a-axis estimate
+integer, parameter :: NRELAX                     = 5                              ! Number of relaxation candidates in support-model grid
+integer, parameter :: NQ                         = 3                              ! Number of lower/upper quantile candidates in grid
+real,    parameter :: DEFAULT_RELAX              = 0.07                           ! Default relative interval expansion for c/a axis estimation
+real,    parameter :: DEFAULT_QLO                = 0.08                           ! Default quantile candidates for c/a axis estimation
+real,    parameter :: DEFAULT_QHI                = 0.93                           ! Default quantile candidates for c/a axis estimation
+real,    parameter :: CONV_ABS_EPS               = 0.5                            ! Absolute tolerance (pixels) for axis stability
+real,    parameter :: CONV_REL_EPS               = 0.01                           ! Relative tolerance for axis stability
+real,    parameter :: RESCUE_EDGE_FRAC           = 0.00                           ! Extra margin for boundary rescue in size compatibility
+real,    parameter :: SUPPORT_EDGE_SOFT_FRAC_MAX = 0.10                           ! Initial soft edge slack (10%) for c/a bounds during support check
+real,    parameter :: RELAX_GRID(NRELAX)         = [0.03, 0.05, 0.07, 0.10, 0.15] ! Relative interval expansion candidates
+real,    parameter :: QLOW_GRID(NQ)              = [0.05, 0.10, 0.15]             ! Lower-quantile candidates for c-axis estimate
+real,    parameter :: QHIGH_GRID(NQ)             = [0.85, 0.90, 0.95]             ! Upper-quantile candidates for a-axis estimate
 
 type :: support_model_training_set
     ! Per-training-batch Feret bounds extracted from selected class averages.
@@ -63,18 +63,18 @@ end type support_model_metrics
 type :: support_model
     ! History of appended training batches; each batch is reweighted equally.
     type(support_model_training_set), allocatable :: training_set(:)
-    logical                                       :: valid       = .false.
-    logical                                       :: converged   = .false.
-    logical                                       :: delta_valid = .false.
-    real                                          :: axis_c      = 0.0
-    real                                          :: axis_b      = 0.0
-    real                                          :: axis_a      = 0.0
-    real                                          :: delta_c     = 0.0
-    real                                          :: delta_b     = 0.0
-    real                                          :: delta_a     = 0.0
-    real                                          :: used_relax  = DEFAULT_RELAX
-    real                                          :: used_qlo    = DEFAULT_QLO
-    real                                          :: used_qhi    = DEFAULT_QHI
+    logical                                       :: valid          = .false.
+    logical                                       :: converged      = .false.
+    logical                                       :: delta_valid    = .false.
+    real                                          :: axis_c         = 0.0
+    real                                          :: axis_b         = 0.0
+    real                                          :: axis_a         = 0.0
+    real                                          :: delta_c        = 0.0
+    real                                          :: delta_b        = 0.0
+    real                                          :: delta_a        = 0.0
+    real                                          :: used_relax     = DEFAULT_RELAX
+    real                                          :: used_qlo       = DEFAULT_QLO
+    real                                          :: used_qhi       = DEFAULT_QHI
     real                                          :: used_soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX
 end type support_model
 
@@ -127,19 +127,19 @@ contains
             end do
             deallocate(self%support_model%training_set)
         end if
-        self%support_model%axis_c     = 0.0
-        self%support_model%axis_b     = 0.0
-        self%support_model%axis_a     = 0.0
-        self%support_model%delta_c    = 0.0
-        self%support_model%delta_b    = 0.0
-        self%support_model%delta_a    = 0.0
-        self%support_model%used_relax = DEFAULT_RELAX
-        self%support_model%used_qlo   = DEFAULT_QLO
-        self%support_model%used_qhi   = DEFAULT_QHI
+        self%support_model%axis_c         = 0.0
+        self%support_model%axis_b         = 0.0
+        self%support_model%axis_a         = 0.0
+        self%support_model%delta_c        = 0.0
+        self%support_model%delta_b        = 0.0
+        self%support_model%delta_a        = 0.0
+        self%support_model%used_relax     = DEFAULT_RELAX
+        self%support_model%used_qlo       = DEFAULT_QLO
+        self%support_model%used_qhi       = DEFAULT_QHI
         self%support_model%used_soft_frac = SUPPORT_EDGE_SOFT_FRAC_MAX
-        self%support_model%delta_valid = .false.
-        self%support_model%converged  = .false.
-        self%support_model%valid      = .false.
+        self%support_model%delta_valid    = .false.
+        self%support_model%converged      = .false.
+        self%support_model%valid          = .false.
     end subroutine kill_support_model
 
     ! ----------------------------------------------------------------
@@ -156,15 +156,15 @@ contains
     subroutine get_support_model_metrics( self, metrics )
         class(class_compatibility), intent(in)  :: self
         type(support_model_metrics), intent(out) :: metrics
-        metrics%axis_c = self%support_model%axis_c
-        metrics%axis_b = self%support_model%axis_b
-        metrics%axis_a = self%support_model%axis_a
-        metrics%delta_c = self%support_model%delta_c
-        metrics%delta_b = self%support_model%delta_b
-        metrics%delta_a = self%support_model%delta_a
+        metrics%axis_c      = self%support_model%axis_c
+        metrics%axis_b      = self%support_model%axis_b
+        metrics%axis_a      = self%support_model%axis_a
+        metrics%delta_c     = self%support_model%delta_c
+        metrics%delta_b     = self%support_model%delta_b
+        metrics%delta_a     = self%support_model%delta_a
         metrics%delta_valid = self%support_model%delta_valid
-        metrics%valid = self%support_model%valid
-        metrics%converged = self%support_model%converged
+        metrics%valid       = self%support_model%valid
+        metrics%converged   = self%support_model%converged
     end subroutine get_support_model_metrics
 
     ! ----------------------------------------------------------------
