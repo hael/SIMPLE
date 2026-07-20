@@ -217,7 +217,7 @@ contains
         integer, intent(in) :: perm(:)
         real(dp), intent(out) :: x(:,:), weights(:,:), evidence(:)
         real(dp), allocatable :: raw_evidence(:)
-        real(dp) :: avg, var, post_avg, signal_var, denom
+        real(dp) :: avg, var, post_avg, signal_var, denom, sumw
         integer :: n, ncomp, i, q, row
         n = size(perm)
         ncomp = fit%ncomp
@@ -245,9 +245,16 @@ contains
         endif
         evidence = raw_evidence / sum(raw_evidence)
         do q = 1, ncomp
+            sumw = 0.d0
             do i = 1, n
-                weights(i,q) = evidence(q) / (1.d0 + weights(i,q))
+                weights(i,q) = 1.d0 / (1.d0 + weights(i,q))
+                sumw = sumw + weights(i,q)
             end do
+            if( sumw > DTINY )then
+                weights(:,q) = weights(:,q) * (evidence(q) * real(n,dp) / sumw)
+            else
+                weights(:,q) = evidence(q)
+            endif
         end do
         deallocate(raw_evidence)
     end subroutine prepare_weighted_features

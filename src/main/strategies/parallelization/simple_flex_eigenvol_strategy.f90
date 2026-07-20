@@ -9,7 +9,7 @@ use simple_projected_latent_model, only: update_basis_from_latents, infer_latent
     &initialize_latents, orthonormalize_latents, latent_sdev, latent_covariance, &
     &basis_fourier_energy, cleanup_planes, projected_model_kfromto, &
     &write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files, &
-    &write_estep_latent_part_file, reduce_estep_latent_part_files
+    &write_estep_latent_part_file, reduce_estep_latent_part_files, canonicalize_projected_latent_basis
 use simple_projected_latent_result, only: projected_latent_fit_result
 use simple_qsys_env,        only: qsys_env
 use simple_reconstructor,    only: reconstructor
@@ -33,11 +33,12 @@ contains
         type(reconstructor)              :: mean_rec
         type(reconstructor), allocatable :: basis_recs(:)
         type(fplane_type),  allocatable  :: fpls(:)
-        type(string)                     :: sigma2_fname, zfname
+        type(string)                     :: sigma2_fname, zfname, eigfname
         integer, allocatable             :: pinds(:)
         real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
+        real(dp), allocatable            :: basis_metric(:,:)
         logical                          :: l_distributed
-        integer                          :: nptcls, ncomp, niters, iter, q, kfromto_eff(2), nparts_eff
+        integer                          :: nptcls, ncomp, niters, iter, q, kfromto_eff(2), nparts_eff, metric_valid_count
         integer(timer_int_kind)          :: t_total, t_step
         t_total = tic()
         call validate_inputs(params, cline, ncomp, niters)
@@ -52,7 +53,7 @@ contains
         endif
         l_distributed = params%nparts > 1
         allocate(z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls), &
-            &mode_vars(ncomp), basis_recs(ncomp))
+            &mode_vars(ncomp), basis_recs(ncomp), basis_metric(ncomp,ncomp))
         call initialize_latents(z, nptcls, ncomp)
         call orthonormalize_latents(z, nptcls, ncomp)
         z_postcov = 0.d0
@@ -123,12 +124,17 @@ contains
         t_step = tic()
         if( l_distributed )then
             call distributed_estep(params, build, cline, basis_recs, z, mode_vars, &
-                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, niters + 1)
+                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, niters + 1, &
+                &basis_metric, metric_valid_count)
         else
             call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, mode_vars, &
-                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL')
+                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL', &
+                &basis_metric=basis_metric, metric_valid_count=metric_valid_count)
         endif
         call log_seconds('>>> FLEX_EIGENVOL FINAL E-STEP SECONDS', toc(t_step))
+        write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_EIGENVOL CANONICAL METRIC PARTICLES: ', metric_valid_count, ' / ', nptcls
+        call canonicalize_projected_latent_basis(basis_recs, z, z_postcov, mode_vars, basis_metric, &
+            &pinds, nptcls, ncomp, log_label='FLEX_EIGENVOL')
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MODE RESIDUAL ENERGY', resid_energy, nptcls)
         call log_residual_reduction('>>> FLEX_EIGENVOL FINAL RESIDUAL REDUCTION', resid_mean_energy, resid_energy, nptcls)
@@ -141,13 +147,16 @@ contains
                 &mode_vars, basis_recs, nptcls, ncomp)
         endif
         call log_basis_fourier_norms('>>> FLEX_EIGENVOL OUTPUT BASIS FOURIER NORM', basis_recs, ncomp)
-        zfname = output_prefix(params)//'_zcoords.txt'
+        zfname   = output_prefix(params)//'_zcoords.txt'
+        eigfname = output_prefix(params)//'_eigenvalues.txt'
         t_step = tic()
         call write_basis_outputs(params, basis_recs, ncomp)
         call write_particle_coordinates(zfname, pinds, z, resid_energy, nptcls, ncomp)
-        call write_trajectory_volumes(params, basis_recs, z, nptcls, ncomp)
+        call write_canonical_eigenvalues(eigfname, mode_vars, ncomp)
+        call write_trajectory_volumes(params, basis_recs, mode_vars, ncomp)
         call log_seconds('>>> FLEX_EIGENVOL OUTPUT SECONDS', toc(t_step))
         write(logfhandle,'(A,A)') '>>> FLEX_EIGENVOL WROTE Z TABLE : ', zfname%to_char()
+        write(logfhandle,'(A,A)') '>>> FLEX_EIGENVOL WROTE EIGENVALUES : ', eigfname%to_char()
         call log_seconds('>>> FLEX_EIGENVOL TOTAL SECONDS', toc(t_total))
         call flush(logfhandle)
         call cleanup_planes(fpls)
@@ -157,6 +166,7 @@ contains
         if( allocated(resid_energy) ) deallocate(resid_energy)
         if( allocated(resid_mean_energy) ) deallocate(resid_mean_energy)
         if( allocated(mode_vars) ) deallocate(mode_vars)
+        if( allocated(basis_metric) ) deallocate(basis_metric)
         call build%esig%kill
         call mean_rec%dealloc_rho
         call mean_rec%kill
@@ -169,6 +179,7 @@ contains
         endif
         call sigma2_fname%kill
         call zfname%kill
+        call eigfname%kill
     end subroutine run_flex_eigenvol_linear
 
     subroutine capture_fit_result( fit, pinds, z, z_postcov, resid_energy, resid_mean_energy, &
@@ -294,7 +305,7 @@ contains
     end subroutine distributed_mstep
 
     subroutine distributed_estep( params, build, cline, basis_recs, z, mode_vars, z_postcov, resid_energy, &
-        &resid_mean_energy, pinds, nptcls, ncomp, iter )
+        &resid_mean_energy, pinds, nptcls, ncomp, iter, basis_metric, metric_valid_count )
         class(parameters),   intent(inout) :: params
         class(builder),      intent(inout) :: build
         class(cmdline),      intent(inout) :: cline
@@ -303,6 +314,8 @@ contains
         real(dp),            intent(inout) :: z(nptcls,ncomp), mode_vars(ncomp)
         real(dp),            intent(inout) :: z_postcov(nptcls,ncomp,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls)
         integer,             intent(in)    :: pinds(nptcls)
+        real(dp), optional,  intent(out)   :: basis_metric(ncomp,ncomp)
+        integer,  optional,  intent(out)   :: metric_valid_count
         type(string), allocatable :: part_fnames(:)
         type(string) :: state_fname, basis_prefix
         state_fname  = flex_state_fname(iter)
@@ -311,8 +324,14 @@ contains
         call write_temp_basis_volumes(params, basis_recs, ncomp, basis_prefix)
         call make_part_fnames('flexvol_estep', iter, params%nparts, params%numlen, '.dat', part_fnames)
         call dispatch_flex_workers(params, cline, 'flex_eigenvol_estep', state_fname, part_fnames, nptcls, basis_prefix)
-        call reduce_estep_latent_part_files(part_fnames, params%nparts, z, z_postcov, resid_energy, resid_mean_energy, &
-            &mode_vars, nptcls, ncomp, log_label='FLEX_EIGENVOL')
+        if( present(basis_metric) )then
+            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, z_postcov, resid_energy, resid_mean_energy, &
+                &mode_vars, nptcls, ncomp, log_label='FLEX_EIGENVOL', basis_metric=basis_metric, &
+                &metric_valid_count=metric_valid_count)
+        else
+            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, z_postcov, resid_energy, resid_mean_energy, &
+                &mode_vars, nptcls, ncomp, log_label='FLEX_EIGENVOL')
+        endif
         call cleanup_string_array(part_fnames)
         call state_fname%kill
         call basis_prefix%kill
@@ -621,11 +640,34 @@ contains
         call fclose(funit)
     end subroutine write_particle_coordinates
 
-    subroutine write_trajectory_volumes( params, basis_recs, z, nptcls, ncomp )
+    subroutine write_canonical_eigenvalues( eigfname, eigvals, ncomp )
+        class(string), intent(in) :: eigfname
+        integer,       intent(in) :: ncomp
+        real(dp),      intent(in) :: eigvals(ncomp)
+        real(dp) :: total, cumulative
+        integer  :: funit, ierr, q
+        total = sum(max(0.d0, eigvals))
+        cumulative = 0.d0
+        call del_file(eigfname)
+        call fopen(funit, file=eigfname, status='NEW', action='WRITE', iostat=ierr)
+        call fileiochk('flex_eigenvol opening '//eigfname%to_char(), ierr)
+        write(funit,'(A)') '# component eigenvalue explained_fraction cumulative_fraction'
+        do q = 1, ncomp
+            if( total > DTINY ) cumulative = cumulative + max(0.d0, eigvals(q)) / total
+            if( total > DTINY )then
+                write(funit,'(I6,3(1X,ES16.8))') q, eigvals(q), max(0.d0, eigvals(q)) / total, cumulative
+            else
+                write(funit,'(I6,3(1X,ES16.8))') q, eigvals(q), 0.d0, 0.d0
+            endif
+        end do
+        call fclose(funit)
+    end subroutine write_canonical_eigenvalues
+
+    subroutine write_trajectory_volumes( params, basis_recs, mode_vars, ncomp )
         class(parameters),   intent(inout) :: params
-        integer,             intent(in)    :: nptcls, ncomp
+        integer,             intent(in)    :: ncomp
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real(dp),            intent(in)    :: z(nptcls,ncomp)
+        real(dp),            intent(in)    :: mode_vars(ncomp)
         type(image)  :: mean_img, basis_img, traj_img, diff_img
         type(string) :: fname
         real         :: sig
@@ -638,9 +680,9 @@ contains
             call basis_img%copy(basis_recs(q))
             if( basis_img%is_ft() ) call basis_img%ifft
             call log_image_stats('>>> FLEX_EIGENVOL TRAJECTORY BASIS STATS', basis_img)
-            sig = latent_sdev(z(:,q), nptcls)
+            sig = real(sqrt(max(0.d0, mode_vars(q))))
             if( sig <= TINY ) sig = 1.
-            write(logfhandle,'(A,I0,A,ES12.4)') '>>> FLEX_EIGENVOL TRAJECTORY LATENT SD ', q, ': ', sig
+            write(logfhandle,'(A,I0,A,ES12.4)') '>>> FLEX_EIGENVOL TRAJECTORY EIGEN SD ', q, ': ', sig
             call flush(logfhandle)
             do isig = 1, size(TRAJ_SIGMAS)
                 call traj_img%copy(mean_img)

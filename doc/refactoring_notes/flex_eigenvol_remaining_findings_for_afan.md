@@ -59,6 +59,28 @@ Until this exists, logs and documentation should describe the components as
 linear modes or factor loadings rather than implying uniquely ordered
 covariance eigenvectors.
 
+**Fix implemented:**
+
+The final E-step now accumulates the observation-induced basis Gram matrix
+before latent-prior precision is added. After that E-step, a terminal
+canonicalization orthonormalizes the basis in this sampling-, CTF-, and
+noise-weighted Fourier metric, diagonalizes the fitted signal covariance, sorts
+components by decreasing signal eigenvalue, and applies a deterministic sign
+convention.
+
+The same invertible transform is applied to the Fourier basis, particle latent
+coordinates, posterior covariance matrices, and latent prior variances. The
+product `B*z`, and therefore the fitted particle model and residuals, is
+unchanged. Trajectory volumes use the square root of the canonical signal
+eigenvalue as their one-sigma displacement, and the eigenvalues and explained
+fractions are written alongside the coordinate table.
+
+Canonicalization is deliberately the last model operation. There is no M-step
+after it. Numerically rank-deficient basis metrics fail with a recommendation
+to reduce `neigs` rather than silently regularizing an unidentifiable mode.
+Closely spaced modes still require subspace rather than component-wise
+comparison.
+
 ### 2. Enable ML Weighting and Use the Average-Map Nonuniform Filter
 
 The plane machinery now supports the correct `1/sigma` whitening contract, but

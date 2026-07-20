@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_builder,          only: builder
 use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
-use simple_linalg,           only: hermitian_invert, hermitian_solve
+use simple_linalg,           only: eigsrt, hermitian_invert, hermitian_solve, jacobi
 use simple_matcher_3Drec,    only: init_rec
 use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
@@ -20,7 +20,8 @@ public :: write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files
 public :: write_estep_latent_part_file, reduce_estep_latent_part_files
 public :: initialize_latents, orthonormalize_latents, latent_sdev, latent_covariance
 public :: basis_fourier_energy, cleanup_planes, projected_model_kfromto
-public :: test_projected_latent_mstep_stats_io
+public :: canonicalize_projected_latent_basis
+public :: test_projected_latent_mstep_stats_io, test_projected_latent_canonicalization
 private
 #include "simple_local_flags.inc"
 
@@ -28,10 +29,12 @@ real(dp), parameter :: LATENT_RIDGE = 1.0d-3
 real(dp), parameter :: MODE_VAR_FLOOR = 1.0d-3
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_ABS = 1.0d-10
+real(dp), parameter :: CANON_METRIC_REL_TOL = 1.0d-8
+real(dp), parameter :: CANON_CHECK_TOL      = 5.0d-8
 integer,  parameter :: MSTEP_STATS_MAGIC = 1180053581
 integer,  parameter :: MSTEP_STATS_VERSION = 1
 integer,  parameter :: ESTEP_PART_MAGIC = 1180053580
-integer,  parameter :: ESTEP_PART_VERSION = 1
+integer,  parameter :: ESTEP_PART_VERSION = 2
 integer(longer), parameter :: MSTEP_STATS_IO_TARGET_BYTES = 64_longer * 1024_longer * 1024_longer
 
 type :: projected_latent_mstep_2d_block
@@ -58,12 +61,14 @@ end type projected_latent_mstep_stats
 type :: projected_latent_estep_part
     integer :: nrecords = 0
     integer :: ncomp    = 0
+    integer :: nmetric  = 0
     integer, allocatable :: rows(:), pinds(:)
     logical, allocatable :: valid(:)
     real(dp), allocatable :: zrows(:,:)
     real(dp), allocatable :: z_postcov(:,:,:)
     real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
     real(dp), allocatable :: mode_second(:,:)
+    real(dp), allocatable :: basis_metric(:,:)
 end type projected_latent_estep_part
 
 contains
@@ -585,7 +590,8 @@ contains
         type(ori),         allocatable :: orientations(:)
         type(projected_latent_estep_part) :: estep_part, estep_out
         complex(dp), allocatable :: gram_h(:,:,:), rhs_h(:,:)
-        real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:)
+        real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:), basis_metric_thread(:,:,:)
+        integer,     allocatable :: metric_count_thread(:)
         character(len=:), allocatable :: log_prefix
         integer :: batchlims(2), batchsz, ibatch, ithr, q, irec, i, progress_stride
         integer(timer_int_kind) :: t_total
@@ -604,7 +610,10 @@ contains
         progress_stride = max(1, 5 * MAXIMGBATCHSZ)
         allocate(basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob), orientations(nthr_glob), &
             &gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob), gram(ncomp,ncomp,nthr_glob), &
-            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob))
+            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), &
+            &basis_metric_thread(ncomp,ncomp,nthr_glob), metric_count_thread(nthr_glob))
+        basis_metric_thread = 0.d0
+        metric_count_thread = 0
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
@@ -618,7 +627,7 @@ contains
                 &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
             call prepare_projected_latent_estep_part(build, mean_rec, basis_recs, fpls(:batchsz), mode_vars, pinds, &
                 &batchlims, batchsz, ncomp, estep_part, basis_fpls, mean_fpls, orientations, &
-                &gram_h, rhs_h, gram, rhs, zrow, post_cov)
+                &gram_h, rhs_h, gram, rhs, zrow, post_cov, basis_metric_thread, metric_count_thread)
             do i = 1, estep_part%nrecords
                 if( .not. estep_part%valid(i) ) cycle
                 if( estep_out%nrecords >= size(estep_out%valid) ) THROW_HARD('E-step output part capacity exceeded')
@@ -639,6 +648,8 @@ contains
                 call flush(logfhandle)
             endif
         end do
+        estep_out%basis_metric = sum(basis_metric_thread, dim=3)
+        estep_out%nmetric      = sum(metric_count_thread)
         call del_file(fname)
         call write_projected_latent_estep_part(fname, estep_out)
         call kill_projected_latent_estep_part(estep_part)
@@ -651,21 +662,24 @@ contains
             end do
         end do
         call cleanup_runtime_batch(build, fpls)
-        deallocate(basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov)
+        deallocate(basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov, &
+            &basis_metric_thread, metric_count_thread)
         call log_seconds(log_prefix//' E-STEP WORKER TOTAL SECONDS', toc(t_total))
     end subroutine write_estep_latent_part_file
 
     subroutine reduce_estep_latent_part_files( part_fnames, nparts, z, z_postcov, resid_energy, resid_mean_energy, &
-        &mode_vars, nptcls, ncomp, log_label )
+        &mode_vars, nptcls, ncomp, log_label, basis_metric, metric_valid_count )
         integer,       intent(in)    :: nparts, nptcls, ncomp
         class(string), intent(in)    :: part_fnames(nparts)
         real(dp),      intent(inout) :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
         real(dp),      intent(inout) :: resid_energy(nptcls), resid_mean_energy(nptcls), mode_vars(ncomp)
         character(len=*), optional, intent(in) :: log_label
+        real(dp), optional, intent(out) :: basis_metric(ncomp,ncomp)
+        integer,  optional, intent(out) :: metric_valid_count
         type(projected_latent_estep_part) :: part
-        real(dp) :: mode_second(ncomp)
+        real(dp) :: mode_second(ncomp), basis_metric_sum(ncomp,ncomp)
         character(len=:), allocatable :: log_prefix
-        integer :: ipart, q
+        integer :: ipart, q, nmetric
         integer(timer_int_kind) :: t_total
         t_total = tic()
         if( present(log_label) )then
@@ -680,30 +694,42 @@ contains
         resid_energy = 0.d0
         resid_mean_energy = 0.d0
         mode_second = 0.d0
+        basis_metric_sum = 0.d0
+        nmetric = 0
         do ipart = 1, nparts
             if( .not. file_exists(part_fnames(ipart)) )then
                 THROW_HARD('missing E-step latent part: '//part_fnames(ipart)%to_char())
             endif
             call read_projected_latent_estep_part(part_fnames(ipart), part)
+            if( part%ncomp /= ncomp ) THROW_HARD('E-step latent part component count mismatch')
             call reduce_projected_latent_estep_part(part, z, z_postcov, resid_energy, resid_mean_energy, mode_second)
+            basis_metric_sum = basis_metric_sum + part%basis_metric
+            nmetric = nmetric + part%nmetric
             call kill_projected_latent_estep_part(part)
         end do
         do q = 1, ncomp
             mode_vars(q) = max(MODE_VAR_FLOOR, mode_second(q) / real(max(1,nptcls), dp))
         end do
+        if( present(basis_metric) )then
+            if( nmetric <= 0 ) THROW_HARD('E-step reduction produced an empty basis metric')
+            basis_metric = basis_metric_sum / real(nmetric, dp)
+        endif
+        if( present(metric_valid_count) ) metric_valid_count = nmetric
         call log_seconds(log_prefix//' E-STEP MASTER REDUCE SECONDS', toc(t_total))
     end subroutine reduce_estep_latent_part_files
 
     subroutine write_projected_latent_estep_part( fname, part )
         class(string), intent(in) :: fname
         type(projected_latent_estep_part), intent(in) :: part
-        integer :: funit, io_stat, header(4), nrec
+        integer :: funit, io_stat, header(5), nrec
         nrec = part%nrecords
-        header = [ESTEP_PART_MAGIC, ESTEP_PART_VERSION, nrec, part%ncomp]
+        header = [ESTEP_PART_MAGIC, ESTEP_PART_VERSION, nrec, part%ncomp, part%nmetric]
         call fopen(funit, file=fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk('write_projected_latent_estep_part; open '//fname%to_char(), io_stat)
         write(funit, iostat=io_stat) header
         call fileiochk('write_projected_latent_estep_part; header '//fname%to_char(), io_stat)
+        write(funit, iostat=io_stat) part%basis_metric
+        call fileiochk('write_projected_latent_estep_part; basis metric '//fname%to_char(), io_stat)
         if( nrec > 0 )then
             write(funit, iostat=io_stat) part%rows(:nrec), part%pinds(:nrec), part%valid(:nrec)
             call fileiochk('write_projected_latent_estep_part; particle fields '//fname%to_char(), io_stat)
@@ -718,7 +744,7 @@ contains
     subroutine read_projected_latent_estep_part( fname, part )
         class(string), intent(in) :: fname
         type(projected_latent_estep_part), intent(inout) :: part
-        integer :: funit, io_stat, header(4), nrec, ncomp
+        integer :: funit, io_stat, header(5), nrec, ncomp
         call kill_projected_latent_estep_part(part)
         if( .not. file_exists(fname) ) THROW_HARD('missing projected latent E-step part: '//fname%to_char())
         call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
@@ -729,9 +755,14 @@ contains
         if( header(2) /= ESTEP_PART_VERSION ) THROW_HARD('bad projected latent E-step part version: '//fname%to_char())
         nrec  = header(3)
         ncomp = header(4)
-        if( nrec < 0 .or. ncomp < 1 ) THROW_HARD('invalid projected latent E-step part header: '//fname%to_char())
+        if( nrec < 0 .or. ncomp < 1 .or. header(5) < 0 )then
+            THROW_HARD('invalid projected latent E-step part header: '//fname%to_char())
+        endif
         call init_projected_latent_estep_part(part, nrec, ncomp)
         part%nrecords = nrec
+        part%nmetric  = header(5)
+        read(funit, iostat=io_stat) part%basis_metric
+        call fileiochk('read_projected_latent_estep_part; basis metric '//fname%to_char(), io_stat)
         if( nrec > 0 )then
             read(funit, iostat=io_stat) part%rows(:nrec), part%pinds(:nrec), part%valid(:nrec)
             call fileiochk('read_projected_latent_estep_part; particle fields '//fname%to_char(), io_stat)
@@ -749,10 +780,11 @@ contains
         call kill_projected_latent_estep_part(part)
         part%nrecords = 0
         part%ncomp    = ncomp
+        part%nmetric  = 0
         allocate(part%rows(nrecords_max), part%pinds(nrecords_max), part%valid(nrecords_max), &
             &part%zrows(ncomp,nrecords_max), part%z_postcov(ncomp,ncomp,nrecords_max), &
             &part%resid_energy(nrecords_max), part%resid_mean_energy(nrecords_max), &
-            &part%mode_second(ncomp,nrecords_max))
+            &part%mode_second(ncomp,nrecords_max), part%basis_metric(ncomp,ncomp))
         part%rows              = 0
         part%pinds             = 0
         part%valid             = .false.
@@ -761,6 +793,7 @@ contains
         part%resid_energy      = 0.d0
         part%resid_mean_energy = 0.d0
         part%mode_second       = 0.d0
+        part%basis_metric      = 0.d0
     end subroutine init_projected_latent_estep_part
 
     subroutine kill_projected_latent_estep_part( part )
@@ -773,8 +806,10 @@ contains
         if( allocated(part%resid_energy) ) deallocate(part%resid_energy)
         if( allocated(part%resid_mean_energy) ) deallocate(part%resid_mean_energy)
         if( allocated(part%mode_second) ) deallocate(part%mode_second)
+        if( allocated(part%basis_metric) ) deallocate(part%basis_metric)
         part%nrecords = 0
         part%ncomp    = 0
+        part%nmetric  = 0
     end subroutine kill_projected_latent_estep_part
 
     subroutine reset_projected_latent_estep_part( part, nrecords )
@@ -783,6 +818,7 @@ contains
         if( .not. allocated(part%valid) ) THROW_HARD('unallocated E-step part')
         if( nrecords > size(part%valid) ) THROW_HARD('E-step part capacity exceeded')
         part%nrecords = nrecords
+        part%nmetric  = 0
         part%rows(:nrecords)              = 0
         part%pinds(:nrecords)             = 0
         part%valid(:nrecords)             = .false.
@@ -791,10 +827,12 @@ contains
         part%resid_energy(:nrecords)      = 0.d0
         part%resid_mean_energy(:nrecords) = 0.d0
         part%mode_second(:,:nrecords)     = 0.d0
+        part%basis_metric                 = 0.d0
     end subroutine reset_projected_latent_estep_part
 
     subroutine prepare_projected_latent_estep_part( build, mean_rec, basis_recs, fpls_batch, mode_vars, pinds, &
-        &batchlims, batchsz, ncomp, part, basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov )
+        &batchlims, batchsz, ncomp, part, basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov, &
+        &basis_metric_thread, metric_count_thread )
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
         integer,             intent(in)    :: batchlims(2), batchsz, ncomp
@@ -808,6 +846,8 @@ contains
         complex(dp),       intent(inout) :: gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob)
         real(dp),          intent(inout) :: gram(ncomp,ncomp,nthr_glob), rhs(ncomp,nthr_glob)
         real(dp),          intent(inout) :: zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob)
+        real(dp),          intent(inout) :: basis_metric_thread(ncomp,ncomp,nthr_glob)
+        integer,           intent(inout) :: metric_count_thread(nthr_glob)
         integer :: i, iptcl, q, r, row, ithr
         call reset_projected_latent_estep_part(part, batchsz)
         !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
@@ -836,6 +876,10 @@ contains
                     gram(q,r,ithr)   = real(gram_h(q,r,ithr), dp)
                     gram(r,q,ithr)   = gram(q,r,ithr)
                 end do
+            end do
+            basis_metric_thread(:,:,ithr) = basis_metric_thread(:,:,ithr) + gram(:,:,ithr)
+            metric_count_thread(ithr) = metric_count_thread(ithr) + 1
+            do q = 1, ncomp
                 gram(q,q,ithr) = gram(q,q,ithr) + ppca_prior_precision(mode_vars(q))
             end do
             call solve_ppca_posterior(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr), post_cov(:,:,ithr))
@@ -870,7 +914,8 @@ contains
     end subroutine reduce_projected_latent_estep_part
 
     subroutine infer_latents_from_basis( params, build, mean_rec, basis_recs, z, mode_vars, &
-        &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label )
+        &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label, &
+        &basis_metric, metric_valid_count )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -883,11 +928,15 @@ contains
         integer,             intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         character(len=*), optional, intent(in) :: log_label
+        real(dp), optional, intent(out) :: basis_metric(ncomp,ncomp)
+        integer,  optional, intent(out) :: metric_valid_count
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpls(:)
         type(ori),         allocatable :: orientations(:)
         type(projected_latent_estep_part) :: estep_part
         complex(dp), allocatable :: gram_h(:,:,:), rhs_h(:,:)
         real(dp),    allocatable :: gram(:,:,:), rhs(:,:), zrow(:,:), post_cov(:,:,:), mode_second(:)
+        real(dp),    allocatable :: basis_metric_thread(:,:,:)
+        integer,     allocatable :: metric_count_thread(:)
         integer,     allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
         integer           :: batchlims(2), batchsz, ibatch, ipart, ithr, nparts_eff, partlims(2), q, progress_stride
@@ -909,11 +958,14 @@ contains
         endif
         allocate(basis_fpls(ncomp,nthr_glob), mean_fpls(nthr_glob), orientations(nthr_glob), &
             &gram_h(ncomp,ncomp,nthr_glob), rhs_h(ncomp,nthr_glob), gram(ncomp,ncomp,nthr_glob), &
-            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), mode_second(ncomp))
+            &rhs(ncomp,nthr_glob), zrow(ncomp,nthr_glob), post_cov(ncomp,ncomp,nthr_glob), mode_second(ncomp), &
+            &basis_metric_thread(ncomp,ncomp,nthr_glob), metric_count_thread(nthr_glob))
         resid_energy = 0.d0
         resid_mean_energy = 0.d0
         z_postcov = 0.d0
         mode_second = 0.d0
+        basis_metric_thread = 0.d0
+        metric_count_thread = 0
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
@@ -928,7 +980,7 @@ contains
                     &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
                 call prepare_projected_latent_estep_part(build, mean_rec, basis_recs, fpls(:batchsz), mode_vars, pinds, &
                     &batchlims, batchsz, ncomp, estep_part, basis_fpls, mean_fpls, orientations, &
-                    &gram_h, rhs_h, gram, rhs, zrow, post_cov)
+                    &gram_h, rhs_h, gram, rhs, zrow, post_cov, basis_metric_thread, metric_count_thread)
                 call reduce_projected_latent_estep_part(estep_part, z, z_postcov, resid_energy, resid_mean_energy, mode_second)
                 if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
                     write(logfhandle,'(A,I0,A,I0)') log_prefix//' E-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
@@ -940,6 +992,11 @@ contains
         do q = 1, ncomp
             mode_vars(q) = max(MODE_VAR_FLOOR, mode_second(q) / real(max(1,nptcls), dp))
         end do
+        if( present(basis_metric) )then
+            if( sum(metric_count_thread) <= 0 ) THROW_HARD('E-step produced an empty basis metric')
+            basis_metric = sum(basis_metric_thread, dim=3) / real(sum(metric_count_thread), dp)
+        endif
+        if( present(metric_valid_count) ) metric_valid_count = sum(metric_count_thread)
         call kill_projected_latent_estep_part(estep_part)
         do ithr = 1, nthr_glob
             call orientations(ithr)%kill
@@ -952,9 +1009,261 @@ contains
                 call cleanup_plane(basis_fpls(q,ithr))
             end do
         end do
-        deallocate(basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov, mode_second)
+        deallocate(basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, post_cov, mode_second, &
+            &basis_metric_thread, metric_count_thread)
         call log_seconds(log_prefix//' E-STEP TOTAL SECONDS', toc(t_total))
     end subroutine infer_latents_from_basis
+
+    subroutine canonicalize_projected_latent_basis( basis_recs, z, z_postcov, mode_vars, basis_metric, &
+        &pinds, nptcls, ncomp, log_label )
+        integer,             intent(in)    :: nptcls, ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        real(dp),            intent(inout) :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp), mode_vars(ncomp)
+        real(dp),            intent(in)    :: basis_metric(ncomp,ncomp)
+        integer,             intent(in)    :: pinds(nptcls)
+        character(len=*), optional, intent(in) :: log_label
+        real(dp), allocatable :: transform(:,:), inv_transform(:,:), eigvals(:)
+        real(dp), allocatable :: prior_cov(:,:), check_mat(:,:), identity(:,:), metric_can(:,:)
+        real(dp) :: metric_cond, inverse_err, metric_err, prior_err, explained_sum, anchor_abs, val_abs
+        real(dp) :: zrow_work(ncomp), postcov_work(ncomp,ncomp)
+        real(dp) :: signs(ncomp)
+        character(len=:), allocatable :: log_prefix
+        integer :: i, q, r, anchor
+        if( nptcls <= 0 .or. ncomp <= 0 ) THROW_HARD('canonicalization requires a nonempty projected latent model')
+        if( present(log_label) )then
+            log_prefix = projected_model_log_prefix(log_label)
+        else
+            log_prefix = projected_model_log_prefix()
+        endif
+        allocate(transform(ncomp,ncomp), inv_transform(ncomp,ncomp), eigvals(ncomp), &
+            &prior_cov(ncomp,ncomp), &
+            &check_mat(ncomp,ncomp), identity(ncomp,ncomp), metric_can(ncomp,ncomp), source=0.d0)
+        prior_cov = 0.d0
+        identity  = 0.d0
+        do q = 1, ncomp
+            if( mode_vars(q) <= DTINY ) THROW_HARD('canonicalization received a nonpositive latent prior variance')
+            prior_cov(q,q) = mode_vars(q)
+            identity(q,q)  = 1.d0
+        end do
+        call compute_canonical_transform(basis_metric, mode_vars, ncomp, transform, inv_transform, eigvals, metric_cond)
+        check_mat = matmul(transform, inv_transform)
+        inverse_err = maxval(abs(check_mat - identity))
+        metric_can = matmul(transpose(transform), matmul(basis_metric, transform))
+        metric_err = maxval(abs(metric_can - identity))
+        check_mat = matmul(inv_transform, matmul(prior_cov, transpose(inv_transform)))
+        do q = 1, ncomp
+            check_mat(q,q) = check_mat(q,q) - eigvals(q)
+        end do
+        prior_err = maxval(abs(check_mat)) / max(1.d0, maxval(eigvals))
+        if( inverse_err > CANON_CHECK_TOL .or. metric_err > CANON_CHECK_TOL .or. prior_err > CANON_CHECK_TOL )then
+            THROW_HARD('projected latent canonicalization failed its matrix invariants')
+        endif
+
+        !$omp parallel do default(shared) schedule(static) private(i,zrow_work,postcov_work) proc_bind(close)
+        do i = 1, nptcls
+            zrow_work = matmul(inv_transform, z(i,:))
+            postcov_work = matmul(inv_transform, matmul(z_postcov(i,:,:), transpose(inv_transform)))
+            z(i,:) = zrow_work
+            z_postcov(i,:,:) = 0.5d0 * (postcov_work + transpose(postcov_work))
+        end do
+        !$omp end parallel do
+
+        ! A latent eigenvector has arbitrary sign. Anchor each well-defined
+        ! component to the largest-magnitude particle coordinate, breaking an
+        ! exact tie by the smallest project particle index.
+        signs = 1.d0
+        do q = 1, ncomp
+            anchor = 1
+            anchor_abs = abs(z(1,q))
+            do i = 2, nptcls
+                val_abs = abs(z(i,q))
+                if( val_abs > anchor_abs .or. (val_abs == anchor_abs .and. pinds(i) < pinds(anchor)) )then
+                    anchor = i
+                    anchor_abs = val_abs
+                endif
+            end do
+            if( anchor_abs > DTINY .and. z(anchor,q) < 0.d0 ) signs(q) = -1.d0
+            transform(:,q)     = signs(q) * transform(:,q)
+            inv_transform(q,:) = signs(q) * inv_transform(q,:)
+            z(:,q)             = signs(q) * z(:,q)
+        end do
+        !$omp parallel do default(shared) schedule(static) private(i,q,r) proc_bind(close)
+        do i = 1, nptcls
+            do r = 1, ncomp
+                do q = 1, ncomp
+                    z_postcov(i,q,r) = signs(q) * signs(r) * z_postcov(i,q,r)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+        call mix_projected_latent_basis(basis_recs, transform, ncomp)
+        mode_vars = eigvals
+        explained_sum = sum(max(0.d0, eigvals))
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') log_prefix//' CANONICAL METRIC CONDITION=', &
+            &metric_cond, ' inverse_err=', inverse_err, ' metric_err=', metric_err, ' prior_err=', prior_err
+        do q = 1, ncomp
+            if( explained_sum > DTINY )then
+                write(logfhandle,'(A,I0,A,ES12.4,A,F10.6,A,F4.1)') log_prefix//' CANONICAL EIGENVALUE ', q, ': ', &
+                    &eigvals(q), ' explained_fraction=', eigvals(q) / explained_sum, ' sign=', signs(q)
+            else
+                write(logfhandle,'(A,I0,A,ES12.4,A,F4.1)') log_prefix//' CANONICAL EIGENVALUE ', q, ': ', &
+                    &eigvals(q), ' sign=', signs(q)
+            endif
+        end do
+        call flush(logfhandle)
+        deallocate(transform, inv_transform, eigvals, prior_cov, check_mat, identity, metric_can)
+    end subroutine canonicalize_projected_latent_basis
+
+    subroutine compute_canonical_transform( basis_metric, mode_vars, ncomp, transform, inv_transform, eigvals, metric_cond )
+        integer,  intent(in)  :: ncomp
+        real(dp), intent(in)  :: basis_metric(ncomp,ncomp), mode_vars(ncomp)
+        real(dp), intent(out) :: transform(ncomp,ncomp), inv_transform(ncomp,ncomp), eigvals(ncomp), metric_cond
+        real(dp) :: metric_work(ncomp,ncomp), metric_vecs(ncomp,ncomp), metric_vals(ncomp)
+        real(dp) :: metric_half(ncomp,ncomp), metric_invhalf(ncomp,ncomp)
+        real(dp) :: signal_work(ncomp,ncomp), signal_vecs(ncomp,ncomp), weighted_half(ncomp,ncomp)
+        real(dp) :: metric_max, metric_min, metric_tol, signal_tol, coeff
+        integer  :: i, j, q, nrot
+        metric_work = 0.5d0 * (basis_metric + transpose(basis_metric))
+        nrot = 0
+        call jacobi(metric_work, ncomp, ncomp, metric_vals, metric_vecs, nrot)
+        call eigsrt(metric_vals, metric_vecs, ncomp, ncomp)
+        metric_max = maxval(metric_vals)
+        if( metric_max <= DTINY ) THROW_HARD('canonicalization basis metric has no observed support')
+        metric_tol = CANON_METRIC_REL_TOL * metric_max
+        metric_min = minval(metric_vals)
+        if( metric_min <= metric_tol )then
+            THROW_HARD('canonicalization basis metric is rank deficient; reduce neigs')
+        endif
+        metric_cond = metric_max / metric_min
+        metric_half    = 0.d0
+        metric_invhalf = 0.d0
+        do q = 1, ncomp
+            do j = 1, ncomp
+                do i = 1, ncomp
+                    coeff = metric_vecs(i,q) * metric_vecs(j,q)
+                    metric_half(i,j)    = metric_half(i,j)    + sqrt(metric_vals(q)) * coeff
+                    metric_invhalf(i,j) = metric_invhalf(i,j) + coeff / sqrt(metric_vals(q))
+                end do
+            end do
+        end do
+        weighted_half = metric_half
+        do q = 1, ncomp
+            weighted_half(:,q) = mode_vars(q) * weighted_half(:,q)
+        end do
+        signal_work = matmul(weighted_half, metric_half)
+        signal_work = 0.5d0 * (signal_work + transpose(signal_work))
+        nrot = 0
+        call jacobi(signal_work, ncomp, ncomp, eigvals, signal_vecs, nrot)
+        call eigsrt(eigvals, signal_vecs, ncomp, ncomp)
+        signal_tol = CANON_CHECK_TOL * max(1.d0, maxval(abs(eigvals)))
+        if( minval(eigvals) < -signal_tol ) THROW_HARD('canonicalization signal covariance is not positive semidefinite')
+        eigvals = max(0.d0, eigvals)
+        transform     = matmul(metric_invhalf, signal_vecs)
+        inv_transform = matmul(transpose(signal_vecs), metric_half)
+    end subroutine compute_canonical_transform
+
+    subroutine mix_projected_latent_basis( basis_recs, transform, ncomp )
+        integer,             intent(in)    :: ncomp
+        type(reconstructor), intent(inout) :: basis_recs(ncomp)
+        real(dp),            intent(in)    :: transform(ncomp,ncomp)
+        complex(dp) :: old_vals(ncomp), new_vals(ncomp)
+        integer :: lb(3), ub(3), q, h, k, m
+        if( .not. allocated(basis_recs(1)%cmat_exp) ) THROW_HARD('canonicalization received an unallocated basis')
+        lb = lbound(basis_recs(1)%cmat_exp)
+        ub = ubound(basis_recs(1)%cmat_exp)
+        do q = 2, ncomp
+            if( .not. allocated(basis_recs(q)%cmat_exp) ) THROW_HARD('canonicalization received an unallocated basis')
+            if( any(lbound(basis_recs(q)%cmat_exp) /= lb) .or. any(ubound(basis_recs(q)%cmat_exp) /= ub) )then
+                THROW_HARD('canonicalization basis Fourier-grid shape mismatch')
+            endif
+        end do
+        !$omp parallel do collapse(3) default(shared) schedule(static) &
+        !$omp private(h,k,m,q,old_vals,new_vals) proc_bind(close)
+        do m = lb(3), ub(3)
+            do k = lb(2), ub(2)
+                do h = lb(1), ub(1)
+                    do q = 1, ncomp
+                        old_vals(q) = cmplx(basis_recs(q)%cmat_exp(h,k,m), kind=dp)
+                    end do
+                    new_vals = matmul(old_vals, transform)
+                    do q = 1, ncomp
+                        basis_recs(q)%cmat_exp(h,k,m) = cmplx(real(new_vals(q),sp), real(aimag(new_vals(q)),sp))
+                    end do
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        do q = 1, ncomp
+            call basis_recs(q)%compress_exp
+        end do
+    end subroutine mix_projected_latent_basis
+
+    subroutine test_projected_latent_canonicalization()
+        integer, parameter :: TEST_NCOMP = 3, TEST_NOBS = 4, TEST_NFEAT = 5
+        type(projected_latent_estep_part) :: part_in, part_out
+        type(string) :: part_fname
+        real(dp) :: metric(TEST_NCOMP,TEST_NCOMP), mode_vars(TEST_NCOMP)
+        real(dp) :: transform(TEST_NCOMP,TEST_NCOMP), inv_transform(TEST_NCOMP,TEST_NCOMP), eigvals(TEST_NCOMP)
+        real(dp) :: basis(TEST_NFEAT,TEST_NCOMP), z(TEST_NOBS,TEST_NCOMP), basis_new(TEST_NFEAT,TEST_NCOMP)
+        real(dp) :: z_new(TEST_NOBS,TEST_NCOMP), identity(TEST_NCOMP,TEST_NCOMP), prior(TEST_NCOMP,TEST_NCOMP)
+        real(dp) :: check(TEST_NCOMP,TEST_NCOMP), pred(TEST_NOBS,TEST_NFEAT), pred_new(TEST_NOBS,TEST_NFEAT)
+        real(dp) :: metric_cond, err
+        integer :: q
+        metric = reshape([4.d0, 1.d0, 0.5d0, 1.d0, 3.d0, 0.25d0, 0.5d0, 0.25d0, 2.d0], shape(metric))
+        mode_vars = [2.5d0, 1.2d0, 0.4d0]
+        basis = reshape([1.d0,2.d0,3.d0,4.d0,5.d0, 2.d0,-1.d0,0.5d0,1.5d0,-2.d0, &
+            &0.25d0,1.25d0,-0.75d0,2.25d0,0.8d0], shape(basis))
+        z = reshape([1.d0,0.2d0,-0.4d0,0.5d0, -0.3d0,1.1d0,0.7d0,-0.2d0, &
+            &0.8d0,-0.6d0,0.1d0,1.3d0], shape(z))
+        call compute_canonical_transform(metric, mode_vars, TEST_NCOMP, transform, inv_transform, eigvals, metric_cond)
+        identity = 0.d0
+        prior    = 0.d0
+        do q = 1, TEST_NCOMP
+            identity(q,q) = 1.d0
+            prior(q,q)    = mode_vars(q)
+        end do
+        err = maxval(abs(matmul(transform, inv_transform) - identity))
+        if( err > CANON_CHECK_TOL ) THROW_HARD('canonicalization test inverse mismatch')
+        check = matmul(transpose(transform), matmul(metric, transform))
+        if( maxval(abs(check - identity)) > CANON_CHECK_TOL ) THROW_HARD('canonicalization test metric mismatch')
+        check = matmul(inv_transform, matmul(prior, transpose(inv_transform)))
+        do q = 1, TEST_NCOMP
+            check(q,q) = check(q,q) - eigvals(q)
+        end do
+        if( maxval(abs(check)) > CANON_CHECK_TOL ) THROW_HARD('canonicalization test prior mismatch')
+        if( any(eigvals(2:) > eigvals(:TEST_NCOMP-1)) ) THROW_HARD('canonicalization test eigenvalue ordering mismatch')
+        basis_new = matmul(basis, transform)
+        z_new     = matmul(z, transpose(inv_transform))
+        pred      = matmul(z, transpose(basis))
+        pred_new  = matmul(z_new, transpose(basis_new))
+        if( maxval(abs(pred - pred_new)) > CANON_CHECK_TOL ) THROW_HARD('canonicalization test model prediction mismatch')
+        call init_projected_latent_estep_part(part_in, 2, TEST_NCOMP)
+        part_in%nrecords = 2
+        part_in%nmetric  = 2
+        part_in%rows     = [1, 2]
+        part_in%pinds    = [11, 12]
+        part_in%valid    = .true.
+        part_in%basis_metric = metric
+        part_in%zrows(:,1) = z(1,:)
+        part_in%zrows(:,2) = z(2,:)
+        part_fname = 'test_projected_latent_canonicalization_estep.bin'
+        call write_projected_latent_estep_part(part_fname, part_in)
+        call read_projected_latent_estep_part(part_fname, part_out)
+        if( part_out%nmetric /= part_in%nmetric ) THROW_HARD('canonicalization test E-step metric count mismatch')
+        if( maxval(abs(part_out%basis_metric - part_in%basis_metric)) > CANON_CHECK_TOL )then
+            THROW_HARD('canonicalization test E-step metric I/O mismatch')
+        endif
+        if( maxval(abs(part_out%zrows - part_in%zrows)) > CANON_CHECK_TOL )then
+            THROW_HARD('canonicalization test E-step latent I/O mismatch')
+        endif
+        call del_file(part_fname)
+        call part_fname%kill
+        call kill_projected_latent_estep_part(part_in)
+        call kill_projected_latent_estep_part(part_out)
+        write(logfhandle,'(A,ES12.4)') '>>> PROJECTED_MODEL CANONICALIZATION TEST PASSED; METRIC CONDITION=', metric_cond
+        call flush(logfhandle)
+    end subroutine test_projected_latent_canonicalization
 
     subroutine solve_coupled_basis_exp( basis_recs, rho_cross_exp, ncomp )
         integer,             intent(in)    :: ncomp
