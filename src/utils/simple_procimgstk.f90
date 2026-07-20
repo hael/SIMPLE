@@ -604,6 +604,7 @@ contains
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img
         integer        :: i, n, ldim(3)
+        real           :: phshift
         type(ctf)      :: tfun
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3)    = 1
@@ -617,10 +618,13 @@ contains
             call progress(i,n)
             call stkio_r%read(i, img)
             tfun = ctf(smpd, o%get(i,'kv'), o%get(i,'cs'), o%get(i,'fraca'))
+            phshift = 0.
+            if( o%isthere(i,'phshift') ) phshift = o%get(i,'phshift')
             if( o%isthere('dfy') )then ! astigmatic CTF
-                call img%apply_ctf_wpad(tfun, o%get_dfx(i), mode, dfy=o%get_dfy(i), angast=o%get(i,'angast'), bfac=bfac)
+                call img%apply_ctf_wpad(tfun, o%get_dfx(i), mode, phshift, dfy=o%get_dfy(i), &
+                    &angast=o%get(i,'angast'), bfac=bfac)
             else ! non-astigmatic CTF
-                call img%apply_ctf_wpad(tfun, o%get_dfx(i), mode, bfac=bfac)
+                call img%apply_ctf_wpad(tfun, o%get_dfx(i), mode, phshift, bfac=bfac)
             endif
             call stkio_w%write(i, img)
         end do

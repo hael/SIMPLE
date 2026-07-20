@@ -101,6 +101,7 @@ type :: parameters
     character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}
+    character(len=3)          :: fit_phshift='no'     !< fit additive CTF phase shift(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
@@ -122,7 +123,6 @@ type :: parameters
     character(len=3)          :: partition='no'
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
-    character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
@@ -560,6 +560,9 @@ type :: parameters
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
+    real    :: phshift_max=180.    !< maximum fitted phase shift(in degrees){180}
+    real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
+    real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
@@ -619,7 +622,6 @@ type :: parameters
     logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_objfun_den      = .false.
-    logical :: l_phaseplate      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
     logical :: l_ptcl_src_den    = .false.

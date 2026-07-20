@@ -197,7 +197,8 @@ contains
             if(spproj%os_mic%isthere(i, 'dfx'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSU,      real(spproj%os_mic%get(i, 'dfx') / 0.0001, dp))
             if(spproj%os_mic%isthere(i, 'dfy'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSV,      real(spproj%os_mic%get(i, 'dfy') / 0.0001, dp))
             if(spproj%os_mic%isthere(i, 'angast' )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'),       dp))
-            if(spproj%os_mic%isthere(i, 'phshift')) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_PHASESHIFT,    real(spproj%os_mic%get(i, 'phshift'),      dp))
+            call starfile_table__setValue_double(self%starfile, EMDL_CTF_PHASESHIFT, &
+                &real(rad2deg(spproj%os_mic%get(i, 'phshift')), dp))
             if(spproj%os_mic%isthere(i, 'ctfres' )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_MAXRES,        real(spproj%os_mic%get(i, 'ctfres'),       dp))
             if(spproj%os_mic%isthere(i, 'icefrac')) call starfile_table__setValue_double(self%starfile,  SMPL_ICE_FRAC,          real(spproj%os_mic%get(i, 'icefrac'),      dp))
             if(spproj%os_mic%isthere(i, 'astig'  )) call starfile_table__setValue_double(self%starfile,  SMPL_ASTIGMATISM,       real(spproj%os_mic%get(i, 'astig'),        dp))
@@ -253,7 +254,8 @@ contains
             if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'angast' )) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_DEFOCUS_ANGLE,         real(spproj%os_ptcl2d%get(i, 'angast'),              dp))
-            if(spproj%os_ptcl2d%isthere(i, 'phshift')) call starfile_table__setValue_double(self%starfile,  EMDL_CTF_PHASESHIFT,            real(spproj%os_ptcl2d%get(i, 'phshift'),             dp))
+            call starfile_table__setValue_double(self%starfile, EMDL_CTF_PHASESHIFT, &
+                &real(rad2deg(spproj%os_ptcl2d%get(i, 'phshift')), dp))
             if(spproj%os_ptcl2d%isthere(i, 'e3'     )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_PSI,                real(spproj%os_ptcl2d%get(i, 'e3'),                  dp))
             if(spproj%os_ptcl2d%isthere(i, 'xpos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_X,             real(spproj%os_ptcl2d%get(i, 'xpos') + half_boxsize, dp))
             if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))
@@ -305,7 +307,8 @@ contains
             if(spproj%os_ptcl2d%isthere(i, 'dfx'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSU,              real(spproj%os_ptcl2d%get(i, 'dfx') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'dfy'    )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUSV,              real(spproj%os_ptcl2d%get(i, 'dfy') / 0.0001,        dp))
             if(spproj%os_ptcl2d%isthere(i, 'angast' )) call starfile_table__setValue_double(part%startable,  EMDL_CTF_DEFOCUS_ANGLE,         real(spproj%os_ptcl2d%get(i, 'angast'),              dp))
-            if(spproj%os_ptcl2d%isthere(i, 'phshift')) call starfile_table__setValue_double(part%startable,  EMDL_CTF_PHASESHIFT,            real(spproj%os_ptcl2d%get(i, 'phshift'),             dp))
+            call starfile_table__setValue_double(part%startable, EMDL_CTF_PHASESHIFT, &
+                &real(rad2deg(spproj%os_ptcl2d%get(i, 'phshift')), dp))
             if(spproj%os_ptcl2d%isthere(i, 'e3'     )) call starfile_table__setValue_double(part%startable,  EMDL_ORIENT_PSI,                real(spproj%os_ptcl2d%get(i, 'e3'),                  dp))
             if(spproj%os_ptcl2d%isthere(i, 'xpos'   )) call starfile_table__setValue_double(part%startable,  EMDL_IMAGE_COORD_X,             real(spproj%os_ptcl2d%get(i, 'xpos') + half_boxsize, dp))
             if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(part%startable,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))

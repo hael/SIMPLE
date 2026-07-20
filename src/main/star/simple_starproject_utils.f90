@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
+public :: LEN_FLAG, RELION_PHASE_MULT, stk_map, star_flag, star_data, star_file, tilt_info
 public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
 public :: split_dataline, h_clust, find_separators, get_value_from_ptcls
 public :: VERBOSE_OUTPUT
@@ -12,6 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: LEN_FLAG = 64
+real,    parameter :: RELION_PHASE_MULT = PI/180.
 logical            :: VERBOSE_OUTPUT =.false.
 
 type stk_map

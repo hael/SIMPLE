@@ -28,7 +28,6 @@ type, extends(image) :: reconstructor
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits of the 2D image
     integer(kind(ENUM_CTFFLAG)) :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
-    logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains
     ! CONSTRUCTORS
@@ -82,7 +81,6 @@ contains
         self%nyq            = self%get_lfny(1)
         self%sh_lim         = self%nyq
         self%ctfflag        = spproj%get_ctfflag_type(self%p_ptr %oritype)
-        self%phaseplate     = spproj%has_phaseplate(self%p_ptr %oritype)
         self%kbwin          = kbinterpol(KBWINSZ,KBALPHA)
         self%wdim           = self%kbwin%get_wdim()
         self%lims           = self%loop_lims(2)

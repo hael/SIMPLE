@@ -229,6 +229,8 @@ contains
                     call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get_dfy(i) * 10000, dp))
                 endif
                 if(angast) call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
+                call starfile_table__setValue_double(startable, EMDL_CTF_PHASESHIFT, &
+                    &real(rad2deg(spproj%os_mic%get(i, 'phshift')), dp))
                 if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
             endif
         end do
@@ -383,6 +385,8 @@ contains
                             call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get_dfy(stkindex) * 10000, dp))
                             call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkindex,'angast'), dp))
                         endif
+                        call starfile_table__setValue_double(startable, EMDL_CTF_PHASESHIFT, &
+                            &real(rad2deg(spproj%os_ptcl2D%get(i, 'phshift')), dp))
                         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
                             group = ceiling((spproj%os_stk%get_dfx(stkindex) - dfxmin) / dfxstep)
                             write(groupname, *) group

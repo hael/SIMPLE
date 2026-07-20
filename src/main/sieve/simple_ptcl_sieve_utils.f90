@@ -5,6 +5,7 @@ use simple_string,          only: string
 use simple_cmdline,         only: cmdline
 use simple_sp_project,      only: sp_project
 use simple_parameters,      only: parameters
+use simple_type_defs,       only: ctfparams
 use simple_string_utils,    only: int2str_pad
 use simple_core_module_api, only: simple_mkdir, simple_abspath
 
@@ -29,6 +30,7 @@ contains
         character(len=*),     parameter     :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
         type(sp_project)     :: spproj
         type(project_rec)    :: prec
+        type(ctfparams)      :: ctfparms
         integer, allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         type(string)         :: fname, absfname, path, projname, projfile
         integer              :: cnt, cnt_stk, ichunk, istk, iptcl, jptcl, kptcl
@@ -166,6 +168,8 @@ contains
                 else
                     call spproj%os_mic%set(cnt,'nptcls', n)
                     call spproj%os_mic%set_state(cnt, spproj_glob%os_stk%get_state(istk))
+                    ctfparms = spproj_glob%os_stk%get_ctfvars(istk)
+                    call spproj%os_mic%set_ctfvars(cnt, ctfparms)
                 endif
                 ! Transfer stack metadata; convert stack path to absolute.
                 call spproj%os_stk%transfer_ori(cnt, spproj_glob%os_stk, istk)

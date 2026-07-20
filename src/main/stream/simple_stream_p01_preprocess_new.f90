@@ -735,7 +735,6 @@ contains
                 ctfvars%cs           = params%cs
                 ctfvars%kv           = params%kv
                 ctfvars%fraca        = params%fraca
-                ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_movies(movie_names(1:STREAM_NMOVS_SET), ctfvars, verbose = .false.)
                 do imov = 1,STREAM_NMOVS_SET
                     import_counter = import_counter + 1

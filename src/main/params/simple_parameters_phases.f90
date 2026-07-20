@@ -163,7 +163,7 @@ contains
         type(binoris)             :: bos
         type(sp_project)          :: spproj
         type(ori)                 :: o
-        type(string)              :: phaseplate, ctfflag
+        type(string)              :: ctfflag
         real                      :: smpd
         integer                   :: i, ifoo, lfoo(3), box, nptcls, istate, cntfile_loc
         logical                   :: def_vol1, def_even, def_odd
@@ -264,18 +264,6 @@ contains
                         self%ctf = ctfflag%to_char()
                     endif
                 endif
-            endif
-            if( .not. cline%defined('phaseplate') )then
-                if( o%isthere('phaseplate') )then
-                    call o%getter('phaseplate', phaseplate)
-                    self%phaseplate   = phaseplate%to_char()
-                    self%l_phaseplate = self%phaseplate.eq.'yes'
-                else
-                    self%phaseplate   = 'no'
-                    self%l_phaseplate = .false.
-                endif
-            else
-                self%l_phaseplate = self%phaseplate.eq.'yes'
             endif
             call bos%close
         else if( self%stk .ne. '' )then

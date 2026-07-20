@@ -40,11 +40,7 @@ contains
         call os_ptr%set(1, 'kv',         ctfvars%kv)
         call os_ptr%set(1, 'cs',         ctfvars%cs)
         call os_ptr%set(1, 'fraca',      ctfvars%fraca)
-        if( ctfvars%l_phaseplate )then
-            call os_ptr%set(1, 'phaseplate', 'yes')
-        else
-            call os_ptr%set(1, 'phaseplate', 'no')
-        endif
+        call os_ptr%set(1, 'phshift',    ctfvars%phshift)
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO)
                 call os_ptr%set(1, 'ctf', 'no')
@@ -91,7 +87,6 @@ contains
             if( .not.is_equal(ctfvars%cs,   prev_ctfvars%cs   )) THROW_HARD('The spherical aberrations do not match! add_movies')
             if( .not.is_equal(ctfvars%kv,   prev_ctfvars%kv   )) THROW_HARD('The voltages do not match! add_movies')
             if( .not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('The amplitude contrasts do not match! add_movies')
-            if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! add_movies')
             call os_ptr%reallocate(ntot)
         endif
         cnt = 0
@@ -145,12 +140,8 @@ contains
             call os_ptr%set(imic, 'kv',      ctfvars%kv)
             call os_ptr%set(imic, 'cs',      ctfvars%cs)
             call os_ptr%set(imic, 'fraca',   ctfvars%fraca)
+            call os_ptr%set(imic, 'phshift', ctfvars%phshift)
             call os_ptr%set(imic, 'state',   1.0) ! default on import
-            if( ctfvars%l_phaseplate )then
-                call os_ptr%set(imic, 'phaseplate', 'yes')
-            else
-                call os_ptr%set(imic, 'phaseplate', 'no')
-            endif
             select case(ctfvars%ctfflag)
                 case(CTFFLAG_NO)
                     call os_ptr%set(imic, 'ctf', 'no')
@@ -203,7 +194,6 @@ contains
             if(.not.is_equal(ctfvars%kv,   prev_ctfvars%kv   )) THROW_HARD('Inconsistent voltage; add_intgs')
             if(.not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('Inconsistent amplituce contrast; add_intgs')
             if(ctfvars%ctfflag /= prev_ctfvars%ctfflag) THROW_HARD('Incompatible CTF flag; add_intgs')
-            if(ctfvars%l_phaseplate .neqv. prev_ctfvars%l_phaseplate ) THROW_HARD('Incompatible phaseplate info; add_intgs')
         endif
         ! read movie names
         nintgs = size(intgs_array)
@@ -246,15 +236,11 @@ contains
             call self%os_mic%set(imic, 'kv',      ctfvars%kv)
             call self%os_mic%set(imic, 'cs',      ctfvars%cs)
             call self%os_mic%set(imic, 'fraca',   ctfvars%fraca)
+            call self%os_mic%set(imic, 'phshift', ctfparms%phshift)
             if( os%isthere(cnt,'state') )then
                 call self%os_mic%set(imic, 'state', os%get(cnt,'state'))
             else
                 call self%os_mic%set(imic, 'state', 1)
-            endif
-            if( ctfvars%l_phaseplate )then
-                call self%os_mic%set(imic, 'phaseplate', 'yes')
-            else
-                call self%os_mic%set(imic, 'phaseplate', 'no')
             endif
             select case(ctfvars%ctfflag)
                 case(CTFFLAG_NO)
@@ -264,7 +250,6 @@ contains
                     call self%os_mic%set_dfx(imic,       ctfparms%dfx)
                     call self%os_mic%set_dfy(imic,       ctfparms%dfy)
                     call self%os_mic%set(imic, 'angast', ctfparms%angast)
-                    call self%os_mic%set(imic, 'phshift',ctfparms%phshift)
                 case(CTFFLAG_FLIP)
                     call self%os_mic%set(imic, 'ctf', 'flip')
             end select

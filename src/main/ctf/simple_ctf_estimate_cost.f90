@@ -151,8 +151,7 @@ contains
         phaseq                = dsqrt(1.d0-amp_contr*amp_contr)
         self%amp_contr_const  = datan(amp_contr / phaseq)
         self%angast           = real(self%parms%angast,dp)*DPI/180.d0 ! astigmatism in radians
-        self%phshift          = 0.d0
-        if( self%parms%l_phaseplate ) self%phshift = real(self%parms%phshift,dp)
+        self%phshift          = real(self%parms%phshift,dp)
         ! optimizer
         optlims = transpose(limits)
         if( self%ndim >= 3 ) optlims(3,:) = deg2rad(optlims(3,:)) ! astigmatism in radians
@@ -174,8 +173,7 @@ contains
         integer       :: h, n
         ! assumes that the 1d spectrum has zero mean and
         ! unit variance over the resolution range
-        phshift = 0.
-        if( self%parms%l_phaseplate )phshift = self%parms%phshift
+        phshift = self%parms%phshift
         call self%tfun%init(df, df, 0.)
         n          = self%reslims1d(2)-self%reslims1d(1)+1
         inv_ldim   = 1./real(self%ldim(1))
@@ -214,7 +212,7 @@ contains
         self%parms%dfy     = parms%dfy
         self%parms%angast  = parms%angast
         self%parms%phshift = parms%phshift
-        self%parms%l_phaseplate = parms%l_phaseplate
+        self%parms%l_fit_phshift = parms%l_fit_phshift
         select case(self%ndim)
             case(2)
                 ! defocus
@@ -224,7 +222,7 @@ contains
                 self%ospec%x = [parms%dfx,parms%dfy,parms%angast]
             case(4)
                 ! defocus, astigmatism & phase shift
-                if( .not.parms%l_phaseplate ) THROW_HARD('Inconsistency; minimize')
+                if( .not.parms%l_fit_phshift ) THROW_HARD('Inconsistency; minimize')
                 self%ospec%x = [parms%dfx,parms%dfy,parms%angast,parms%phshift]
         end select
         call self%diffevol%new(self%ospec)
@@ -237,7 +235,8 @@ contains
             case(3)
                 parms%angast = self%ospec%x(3)
             case(4)
-                parms%phshift = self%ospec%x(4)
+                parms%angast  = self%ospec%x(3)
+                parms%phshift = canonical_phshift(self%ospec%x(4))
         end select
     end subroutine minimize
 
@@ -267,21 +266,13 @@ contains
             select case(D)
                 case(1)
                     ! 1D defocus
-                    cost2D = self%calc_cost2D(vec(1),vec(1),0.,0.)
+                    cost2D = self%calc_cost2D(vec(1),vec(1),0.,self%parms%phshift)
                 case(2)
                     ! 2D defocus
-                    if( self%parms%l_phaseplate )then
-                        cost2D = self%calc_cost2D(vec(1),vec(2),self%parms%angast,add_phshift=self%parms%phshift)
-                    else
-                        cost2D = self%calc_cost2D(vec(1),vec(2),self%parms%angast)
-                    endif
+                    cost2D = self%calc_cost2D(vec(1),vec(2),self%parms%angast,self%parms%phshift)
                 case(3)
                     ! defocus & astigmatism
-                    if( self%parms%l_phaseplate )then
-                        cost2D = self%calc_cost2D(vec(1),vec(2),vec(3),add_phshift=self%parms%phshift)
-                    else
-                        cost2D = self%calc_cost2D(vec(1),vec(2),vec(3))
-                    endif
+                    cost2D = self%calc_cost2D(vec(1),vec(2),vec(3),self%parms%phshift)
                 case(4)
                     ! defocus,astigmatism & phase-shift
                     cost2D = self%calc_cost2D(vec(1),vec(2),vec(3),vec(4))
@@ -291,20 +282,18 @@ contains
 
     ! cost function is correlation within resolution mask between the CTF
     ! spectrum (the model) and the pre-processed micrograph spectrum (the data)
-    real function calc_cost2D( self, dfx, dfy, angast, add_phshift )
+    real function calc_cost2D( self, dfx, dfy, angast, phshift )
         class(ctf_estimate_cost2D), intent(inout) :: self
         real,                       intent(in)    :: dfx         !< defocus x-axis
         real,                       intent(in)    :: dfy         !< defocus y-axis
         real,                       intent(in)    :: angast      !< angle of astigmatism
-        real,             optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,                       intent(in)    :: phshift !< additive phase shift (radians)
         real, pointer :: prmat(:,:,:)
-        real          :: ang, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
+        real          :: ang, spaFreqSq, hinv, kinv, inv_ldim(3)
         real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,fpen,rn
         integer       :: h,mh,k,mk, i,j, l
         ! initialize, it assumes that the reference(img) ins zero mean and
         ! unit variance over the resolution range
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
         call self%tfun%init(dfx, dfy, angast)
         call self%pspec%get_rmat_ptr(prmat)
         rn = real(self%ninds,dp)
@@ -325,7 +314,7 @@ contains
             kinv      = real(k) * inv_ldim(2)
             spaFreqSq = hinv * hinv + kinv * kinv
             ang       = atan2(real(k),real(h))
-            tval      = real(self%tfun%eval(spaFreqSq, ang, aadd_phshift),dp)
+            tval      = real(self%tfun%eval(spaFreqSq, ang, phshift),dp)
             tvalsq    = min(1.d0,max(tval*tval,0.000001d0))
             tval      = dsqrt(tvalsq)
             ! correlation sums
@@ -489,7 +478,7 @@ contains
         self%parms%dfy     = parms%dfy
         self%parms%angast  = parms%angast
         self%parms%phshift = parms%phshift
-        self%parms%l_phaseplate = parms%l_phaseplate
+        self%parms%l_fit_phshift = parms%l_fit_phshift
         select case(self%ndim)
             case(2)
                 ! defocus
@@ -512,7 +501,7 @@ contains
                 parms%angast  = rad2deg(self%ospec%x(3)) ! radians to degrees
             case(4)
                 parms%angast  = rad2deg(self%ospec%x(3)) ! radians to degrees
-                parms%phshift = self%ospec%x(4)          ! radians
+                parms%phshift = canonical_phshift(self%ospec%x(4)) ! radians in [0,pi)
         end select
     end subroutine minimize4Dcont
 

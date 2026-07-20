@@ -43,6 +43,8 @@ type ctf_estimate_fit
     real                          :: df_lims(2)   = [DFMIN_DEFAULT, DFMAX_DEFAULT]! defocus range
     real                          :: df_step      = 0.05     ! defocus step for grid search
     real                          :: astigtol     = 0.05     ! tolerated astigmatism
+    real                          :: phshift_lims(2) = [0., PI] ! phase-shift fitting range (radians)
+    real                          :: phshift_step = 0.174532925 ! initial phase grid step (radians)
     real                          :: hp           = 0.       ! high-pass limit
     real                          :: lp           = 0.       ! low-pass limit
     real                          :: cc_fit       = -1.
@@ -104,7 +106,7 @@ end type ctf_estimate_fit
 
 contains
 
-    subroutine new( self, micrograph, box, parms, dfrange, resrange, astigtol_in)
+    subroutine new( self, micrograph, box, parms, dfrange, resrange, astigtol_in, phshift_lims, phshift_step)
         class(ctf_estimate_fit), intent(inout) :: self
         class(image), target, intent(inout) :: micrograph       !< all micrograph powerspec
         integer,              intent(in)    :: box
@@ -112,6 +114,8 @@ contains
         real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
+        real,                 intent(in)    :: phshift_lims(2) !< phase-shift range (radians)
+        real,                 intent(in)    :: phshift_step !< phase-shift grid step (radians)
         integer :: i,j,sh
         call self%kill
         if( BENCH ) self%t_tot = tic()
@@ -120,7 +124,12 @@ contains
         self%parms%cs           = parms%Cs
         self%parms%kv           = parms%kV
         self%parms%fraca        = parms%fraca
-        self%parms%l_phaseplate = parms%l_phaseplate
+        self%parms%phshift      = canonical_phshift(parms%phshift)
+        self%parms%l_fit_phshift= parms%l_fit_phshift
+        if( phshift_lims(1) > phshift_lims(2) ) THROW_HARD('Invalid phase-shift range; new')
+        if( phshift_step <= 0. ) THROW_HARD('Phase-shift step must be positive; new')
+        self%phshift_lims = phshift_lims
+        self%phshift_step = phshift_step
         self%micrograph => micrograph
         call self%micrograph%ifft
         self%smpd     = self%micrograph%get_smpd()
@@ -206,7 +215,6 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         class(string),           intent(in)    :: fname
         type(oris)   :: os
-        type(string) :: phaseplate
         integer      :: i
         if( nlines(fname) /= 3 ) THROW_HARD('Invalid document; read_doc')
         call os%new(3, is_ptcl=.false.)
@@ -219,8 +227,7 @@ contains
         self%parms%dfy     = os%get_dfy(1)
         self%parms%angast  = os%get(1,'angast')
         self%parms%phshift = os%get(1,'phshift')
-        phaseplate         = os%get_str(1,'phaseplate')
-        self%parms%l_phaseplate = phaseplate%to_char().eq.'yes'
+        self%parms%l_fit_phshift = .false.
         self%ntotpatch     = os%get_int(1,'npatch')
         self%ldim_mic      = [os%get_int(1,'xdim'), os%get_int(1,'ydim'), 1]
         ! polynomes
@@ -316,8 +323,8 @@ contains
         ctfparms%dfx     = self%parms%dfx
         ctfparms%dfy     = self%parms%dfy
         ctfparms%angast  = self%parms%angast
-        ctfparms%phshift = self%parms%phshift
-        ctfparms%l_phaseplate = self%parms%l_phaseplate
+        ctfparms%phshift = canonical_phshift(self%parms%phshift)
+        ctfparms%l_fit_phshift = self%parms%l_fit_phshift
     end subroutine get_parms
 
     ! DOERS
@@ -357,6 +364,7 @@ contains
         ! 1D grid search with rotational average + 3/4D refinement
         if( BENCH ) self%t = tic()
         call self%srch
+        self%parms%phshift = canonical_phshift(self%parms%phshift)
         if( BENCH ) self%rt_2D = toc(self%t)
         ! calculate CTF stats
         if( BENCH ) self%t = tic()
@@ -372,8 +380,8 @@ contains
         parms%dfx          = self%parms%dfx
         parms%dfy          = self%parms%dfy
         parms%angast       = self%parms%angast
-        parms%phshift      = self%parms%phshift
-        parms%l_phaseplate = self%parms%l_phaseplate
+        parms%phshift      = canonical_phshift(self%parms%phshift)
+        parms%l_fit_phshift = self%parms%l_fit_phshift
         if( BENCH )self%rt_tot = self%rt_tot+toc(self%t_tot)
     end subroutine fit
 
@@ -417,7 +425,7 @@ contains
                 self%parms_patch(pi,pj)%dfy     = self%parms%dfy
                 self%parms_patch(pi,pj)%angast  = self%parms%angast
                 self%parms_patch(pi,pj)%phshift = self%parms%phshift
-                self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
+                self%parms_patch(pi,pj)%l_fit_phshift = .false.
                 call self%norm_pspec(self%pspec_patch(pi,pj))
                 call costcont_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol)
@@ -653,11 +661,8 @@ contains
         integer     :: i,logicen
         l_nano = .false.
         if(present(nano)) l_nano = nano
-        if( self%parms%l_phaseplate )then
-            call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast, add_phshift=self%parms%phshift)
-        else
-            call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast)
-        endif
+        call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, &
+            &self%parms%angast, self%parms%phshift)
         call self%pspec_ctf%norm()
         l_msk = self%cc_msk
         ! putting back central cross for display
@@ -689,20 +694,37 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost1D) :: ctfcosts(NSTEPS)
         type(ctfparams)           :: ctf_parms(NBINS)
-        real                      :: dfs(NSTEPS), costs(NSTEPS),cc_fine(NBINS), df_best
-        integer                   :: i, loc, start, end, step, cnt
+        real                      :: dfs(NSTEPS), costs(NSTEPS), phase_costs(NSTEPS), &
+            &best_phases(NSTEPS), cc_fine(NBINS), df_best, phase
+        integer                   :: i, loc, start, end, step, cnt, iph, nphases
         ! no astigmatism
-        self%parms%phshift = 0.
-        if( self%parms%l_phaseplate ) self%parms%phshift = PIO2
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i = 1,NSTEPS
-            call ctfcosts(i)%init(self%pspec, self%flims1d, self%freslims1d,&
-                &self%roavg_spec1d, self%parms, self%resmsk1D)
-            dfs(i)   = self%df_lims(1) + real(i-1)*self%df_step
-            costs(i) = ctfcosts(i)%cost(dfs(i))
-            call ctfcosts(i)%kill
+        costs       = huge(1.)
+        best_phases = self%parms%phshift
+        nphases     = 1
+        if( self%parms%l_fit_phshift )then
+            nphases = max(1, ceiling((self%phshift_lims(2)-self%phshift_lims(1))/self%phshift_step)+1)
+        endif
+        do iph = 1,nphases
+            phase = self%parms%phshift
+            if( self%parms%l_fit_phshift ) phase = min(self%phshift_lims(2), &
+                &self%phshift_lims(1)+real(iph-1)*self%phshift_step)
+            self%parms%phshift = phase
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+            do i = 1,NSTEPS
+                call ctfcosts(i)%init(self%pspec, self%flims1d, self%freslims1d,&
+                    &self%roavg_spec1d, self%parms, self%resmsk1D)
+                dfs(i)         = self%df_lims(1) + real(i-1)*self%df_step
+                phase_costs(i) = ctfcosts(i)%cost(dfs(i))
+                call ctfcosts(i)%kill
+            enddo
+            !$omp end parallel do
+            do i = 1,NSTEPS
+                if( phase_costs(i) < costs(i) )then
+                    costs(i)       = phase_costs(i)
+                    best_phases(i) = phase
+                endif
+            enddo
         enddo
-        !$omp end parallel do
         ! 3/4D search over bins
         step = ceiling(real(NSTEPS)/real(NBINS))
         cnt = 0
@@ -715,8 +737,7 @@ contains
             self%parms%dfx     = df_best
             self%parms%dfy     = df_best
             self%parms%angast  = 0.
-            self%parms%phshift = 0.
-            if( self%parms%l_phaseplate )self%parms%phshift = PIO2
+            self%parms%phshift = best_phases(loc)
             call self%refine
             cc_fine(cnt)   = self%cc_fit
             ctf_parms(cnt) = self%parms
@@ -738,9 +759,9 @@ contains
         limits(2,1) = min(self%df_lims(2),self%parms%dfx + half_range)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
         limits(:,3) = [0., 180.] ! degrees
-        limits(:,4) = [0.,3.142] ! radians
+        limits(:,4) = self%phshift_lims ! radians
         ! good solution
-        if( self%parms%l_phaseplate )then
+        if( self%parms%l_fit_phshift )then
             call self%cost2D%init(self%pspec,self%parms,self%inds_msk,4,limits,       self%astigtol, TOL)
         else
             call self%cost2D%init(self%pspec,self%parms,self%inds_msk,3,limits(:,1:3),self%astigtol, TOL)
@@ -755,9 +776,9 @@ contains
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
         limits(1,3) = self%parms%angast - 30.       ! degrees
         limits(2,3) = self%parms%angast + 30.
-        limits(1,4) = self%parms%phshift - PI/6.    ! radians
-        limits(2,4) = self%parms%phshift + PI/6
-        if( self%parms%l_phaseplate )then
+        limits(1,4) = max(self%phshift_lims(1), self%parms%phshift - max(PI/6.,self%phshift_step))
+        limits(2,4) = min(self%phshift_lims(2), self%parms%phshift + max(PI/6.,self%phshift_step))
+        if( self%parms%l_fit_phshift )then
             call self%costcont%init(self%pspec, self%parms, self%inds_msk, 4, limits, self%astigtol)
         else
             call self%costcont%init(self%pspec, self%parms, self%inds_msk, 3, limits(:,1:3), self%astigtol)
@@ -804,18 +825,16 @@ contains
     end subroutine subtr_backgr
 
     !>  \brief  is for making a |CTF| spectrum image
-    subroutine ctf2pspecimg( self, img, dfx, dfy, angast, add_phshift )
+    subroutine ctf2pspecimg( self, img, dfx, dfy, angast, phshift )
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),   intent(inout) :: img         !< image (output)
         real,           intent(in)    :: dfx         !< defocus x-axis
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
-        real, optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
+        real,           intent(in)    :: phshift !< additive phase shift (radians)
+        real    :: ang, tval, spaFreqSq, hinv, kinv, inv_ldim(3)
         integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
         ! initialize
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
         call self%tfun%init(dfx, dfy, angast)
         call img%zero_and_unflag_ft
         lims     = img%loop_lims(3)
@@ -833,7 +852,7 @@ contains
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
-                tval      = self%tfun%eval(spaFreqSq, ang, aadd_phshift)
+                tval      = self%tfun%eval(spaFreqSq, ang, phshift)
                 tval      = min(1.,max(tval * tval,SMALL))
                 call img%set([i,j,1],sqrt(tval))
             end do
@@ -875,7 +894,7 @@ contains
         real    :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_sc, hp_rad, lp_rad
         real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq, scale
         integer :: ish,sh,n,nshells,cenbox,box_sc
-        phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
+        phshift = self%parms%phshift
         pspec   = self%pspec4ctfres
         call pspec%get_rmat_ptr(ppspec)
         ! resampling, it is assumed the central spot has already been dealt with
@@ -1264,7 +1283,7 @@ contains
             return
         endif
         ! init
-        phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
+        phshift = self%parms%phshift
         tfun    = ctf(self%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
         res     = get_resarr( self%box, self%smpd )
         call tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
@@ -1456,11 +1475,6 @@ contains
         call os%set(1,'icefrac', self%icefrac)
         call os%set(1,'ctfcc',   self%cc_fit)
         call os%set(1,'npatch',  real(self%ntotpatch))
-        if( self%parms%l_phaseplate )then
-            call os%set(1,'phaseplate','yes')
-        else
-            call os%set(1,'phaseplate','no')
-        endif
         if( self%ntotpatch == 0 )then
             self%polyx = 0.
             self%polyy = 0.
@@ -1512,7 +1526,7 @@ contains
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUSU,      real(self%parms%dfx*10000., dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUSV,      real(self%parms%dfy*10000., dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(self%parms%angast,dp))
-        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_PHASESHIFT,    real(self%parms%phshift,dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_PHASESHIFT,    real(rad2deg(self%parms%phshift),dp))
         call starfile_table__write_ofile(mc_starfile)
         call starfile_table__clear(mc_starfile)
         ! local model

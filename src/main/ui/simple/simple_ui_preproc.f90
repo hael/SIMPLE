@@ -95,12 +95,16 @@ contains
         ! parameter input/output
         call ctf_estimate%add_input(UI_PARM, pspecsz, gui_submenu="CTF estimation")
         call ctf_estimate%add_input(UI_PARM, ctfpatch, gui_submenu="CTF estimation")
+        call ctf_estimate%add_input(UI_PARM, fit_phshift, gui_submenu="CTF estimation")
         ! alternative inputs
         ! <empty>
         ! search controls
         call ctf_estimate%add_input(UI_SRCH, dfmin, gui_submenu="CTF estimation")
         call ctf_estimate%add_input(UI_SRCH, dfmax, gui_submenu="CTF estimation")
         call ctf_estimate%add_input(UI_SRCH, astigtol, gui_submenu="CTF estimation")
+        call ctf_estimate%add_input(UI_SRCH, phshift_min, gui_submenu="CTF estimation")
+        call ctf_estimate%add_input(UI_SRCH, phshift_max, gui_submenu="CTF estimation")
+        call ctf_estimate%add_input(UI_SRCH, phshift_step, gui_submenu="CTF estimation")
         ! filter controls
         call ctf_estimate%add_input(UI_FILT, lp, required_override=.false., gui_submenu="CTF estimation")
         call ctf_estimate%add_input(UI_FILT, hp, required_override=.false., gui_submenu="CTF estimation")
@@ -357,6 +361,7 @@ contains
         call preprocess%add_input(UI_PARM, pspecsz)
         call preprocess%add_input(UI_PARM, numlen)
         call preprocess%add_input(UI_PARM, ctfpatch, required_override=.false.)
+        call preprocess%add_input(UI_PARM, fit_phshift, required_override=.false.)
         call preprocess%add_input(UI_PARM, flipgain)
         ! alternative inputs
         ! <empty>
@@ -365,6 +370,9 @@ contains
         call preprocess%add_input(UI_SRCH, dfmin)
         call preprocess%add_input(UI_SRCH, dfmax)
         call preprocess%add_input(UI_SRCH, astigtol)
+        call preprocess%add_input(UI_SRCH, phshift_min)
+        call preprocess%add_input(UI_SRCH, phshift_max)
+        call preprocess%add_input(UI_SRCH, phshift_step)
         call preprocess%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
         call preprocess%add_input(UI_SRCH, mcpatch)
         call preprocess%add_input(UI_SRCH, nxpatch)

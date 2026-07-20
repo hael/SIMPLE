@@ -1270,12 +1270,14 @@ contains
         call outproj%os_stk%set(1, 'kv',         params%kv)
         call outproj%os_stk%set(1, 'cs',         params%cs)
         call outproj%os_stk%set(1, 'fraca',      params%fraca)
+        ! The compact stack may contain particles from several source stacks;
+        ! particle rows remain authoritative for their individual phase shifts.
+        call outproj%os_stk%set(1, 'phshift',    0.)
         if( l_ctf_no )then
             call outproj%os_stk%set(1, 'ctf',    'no')
         else
             call outproj%os_stk%set(1, 'ctf',    'flip')
         endif
-        call outproj%os_stk%set(1, 'phaseplate', 'no')
         call outproj%os_stk%set(1, 'state',      1)
         do iptcl = 1, nptcls
             call outproj%os_ptcl2D%set(iptcl, 'stkind', 1)
@@ -1330,12 +1332,12 @@ contains
             call outproj%os_stk%set(ipart, 'kv',         params%kv)
             call outproj%os_stk%set(ipart, 'cs',         params%cs)
             call outproj%os_stk%set(ipart, 'fraca',      params%fraca)
+            call outproj%os_stk%set(ipart, 'phshift',    0.)
             if( l_ctf_no )then
                 call outproj%os_stk%set(ipart, 'ctf',    'no')
             else
                 call outproj%os_stk%set(ipart, 'ctf',    'flip')
             endif
-            call outproj%os_stk%set(ipart, 'phaseplate', 'no')
             call outproj%os_stk%set(ipart, 'state',      1)
             fromp = top + 1
             call raw_part%kill

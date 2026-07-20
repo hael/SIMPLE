@@ -798,7 +798,7 @@ contains
         character(len=*),          intent(in)    :: oritype
         integer,                   intent(in)    :: iptcl
         class(oris), pointer  :: ptcl_field
-        character(len=STDLEN) :: ctfflag, phaseplate
+        character(len=STDLEN) :: ctfflag
         type(ctfparams)       :: ctfvars
         real                  :: smpd
         integer               :: stkind, ind_in_stk, box, ncls
@@ -826,7 +826,6 @@ contains
                 ctfvars%dfy     = 0.
                 ctfvars%angast  = 0.
                 ctfvars%phshift = 0.
-                ctfvars%l_phaseplate = .false.
                 return
             case DEFAULT
                 THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfparams')
@@ -919,17 +918,10 @@ contains
                     endif
                 endif
         end select
-        ! has phaseplate
-        if( self%os_stk%isthere(stkind, 'phaseplate') )then
-            call self%os_stk%get_static(stkind, 'phaseplate', phaseplate)
-        else
-            phaseplate = 'no'
-        endif
-        ctfvars%l_phaseplate = trim(phaseplate).eq.'yes'
         ! additional phase shift
         ctfvars%phshift = 0.
         if( ptcl_field%isthere(iptcl, 'phshift') )then
-            ctfvars%phshift = ptcl_field%get(iptcl, 'phshift')
+            ctfvars%phshift = canonical_phshift(ptcl_field%get(iptcl, 'phshift'))
         endif
     end function get_ctfparams
 

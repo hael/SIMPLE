@@ -1,7 +1,12 @@
 !@descr: type and enumerator definitions
 module simple_type_defs
+use simple_defs,   only: SP, DP, PI, DPI
 use simple_string, only: string
 implicit none
+
+interface canonical_phshift
+    module procedure canonical_phshift_sp, canonical_phshift_dp
+end interface canonical_phshift
 
 ! CTF flag type
 enum, bind(c)
@@ -61,7 +66,7 @@ type ctfparams
     real    :: dfy     = 0.
     real    :: angast  = 0.
     real    :: phshift = 0.
-    logical :: l_phaseplate = .false. !< image obtained with Volta phaseplate
+    logical :: l_fit_phshift = .false. !< fit phase shift during CTF estimation (runtime policy)
 end type ctfparams
 
 ! type for CTF parameters
@@ -74,6 +79,7 @@ type ctfvars
     real    :: dfx     = 0.
     real    :: dfy     = 0.
     real    :: angast  = 0.
+    real    :: phshift = 0. !< canonical additive CTF phase shift in [0,pi), radians
 end type ctfvars
 
 type stats_struct
@@ -143,6 +149,16 @@ type :: sigma_array
 end type sigma_array
 
 contains
+
+    pure elemental real(SP) function canonical_phshift_sp( phshift ) result( canonical )
+        real(SP), intent(in) :: phshift
+        canonical = modulo(phshift, PI)
+    end function canonical_phshift_sp
+
+    pure elemental real(DP) function canonical_phshift_dp( phshift ) result( canonical )
+        real(DP), intent(in) :: phshift
+        canonical = modulo(phshift, DPI)
+    end function canonical_phshift_dp
 
     pure integer(kind(ENUM_CENTYPE)) function get_centype( str )
         character(len=*), intent(in) :: str

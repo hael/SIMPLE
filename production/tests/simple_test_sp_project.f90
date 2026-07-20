@@ -2,14 +2,74 @@ program simple_test_sp_project
 use simple_core_module_api
 use simple_sp_project, only: sp_project
 use simple_binoris_io, only: binwrite_oritab
+use simple_image,       only: image
 implicit none
 integer, parameter :: NMICS = 87
 integer, parameter :: NPTCLS = 5646
-type(sp_project)   :: project1, project2, project3
+type(sp_project)   :: project1, project2, project3, zero_phase_project, mapped_phase_project
+type(sp_project)   :: missing_phase_project, normalized_phase_project
+type(ctfparams)    :: zero_phase_ctf, mapped_phase_ctf, mapped_phase_result
+type(image)        :: zero_phase_img
 type(string)       :: template, str1, str2, cwd_orig, probe_dir, proj_abs, projinfo_before, projinfo_after
 real    :: eullims(3,2)
 integer :: i, status
 call seed_rnd
+! New CTF-bearing records always carry an explicit numerical phase. Zero is
+! the conventional CTF value, not an absent or provenance-dependent value.
+zero_phase_ctf%smpd     = 1.
+zero_phase_ctf%kv       = 300.
+zero_phase_ctf%cs       = 2.7
+zero_phase_ctf%fraca    = 0.1
+zero_phase_ctf%dfx      = 1.5
+zero_phase_ctf%dfy      = 1.6
+zero_phase_ctf%angast   = 5.
+zero_phase_ctf%ctfflag  = CTFFLAG_YES
+zero_phase_ctf%phshift  = 0.
+call zero_phase_img%new([8,8,1], zero_phase_ctf%smpd)
+call zero_phase_img%write(string('zero_phase_record.mrc'), 1)
+call zero_phase_project%add_single_movie(string('zero_phase_record.mrc'), zero_phase_ctf)
+call zero_phase_project%add_stk(string('zero_phase_record.mrc'), zero_phase_ctf)
+call assert_zero_phase_record(zero_phase_project%os_mic,    'os_mic')
+call assert_zero_phase_record(zero_phase_project%os_stk,    'os_stk')
+call assert_zero_phase_record(zero_phase_project%os_ptcl2D, 'os_ptcl2D')
+call assert_zero_phase_record(zero_phase_project%os_ptcl3D, 'os_ptcl3D')
+call zero_phase_img%kill
+call zero_phase_project%kill
+mapped_phase_ctf = zero_phase_ctf
+mapped_phase_ctf%phshift = PI + PI/4.
+call mapped_phase_project%add_single_movie(string('zero_phase_record.mrc'), mapped_phase_ctf)
+call mapped_phase_project%add_stk(string('zero_phase_record.mrc'), mapped_phase_ctf)
+call assert_phase_record(mapped_phase_project%os_mic,    'os_mic',    PI/4.)
+call assert_phase_record(mapped_phase_project%os_stk,    'os_stk',    PI/4.)
+call assert_phase_record(mapped_phase_project%os_ptcl2D, 'os_ptcl2D', PI/4.)
+call assert_phase_record(mapped_phase_project%os_ptcl3D, 'os_ptcl3D', PI/4.)
+mapped_phase_result = mapped_phase_project%get_micparams(1)
+call assert_phase_value(mapped_phase_result%phshift, 'os_mic -> ctfparams', PI/4.)
+mapped_phase_result = mapped_phase_project%get_ctfparams('stk', 1)
+call assert_phase_value(mapped_phase_result%phshift, 'os_stk -> ctfparams', PI/4.)
+mapped_phase_result = mapped_phase_project%get_ctfparams('ptcl2D', 1)
+call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl2D -> ctfparams', PI/4.)
+mapped_phase_result = mapped_phase_project%get_ctfparams('ptcl3D', 1)
+call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl3D -> ctfparams', PI/4.)
+call mapped_phase_project%kill
+! Serialization is the final schema boundary: even partially assembled project
+! records materialize the identity phase rather than persisting an absent field.
+call missing_phase_project%os_mic%new(1, is_ptcl=.false.)
+call missing_phase_project%os_stk%new(1, is_ptcl=.false.)
+call missing_phase_project%os_ptcl2D%new(1, is_ptcl=.true.)
+call missing_phase_project%os_ptcl3D%new(1, is_ptcl=.true.)
+call missing_phase_project%update_projinfo(string('normalized_phase.simple'))
+call missing_phase_project%write(string('normalized_phase.simple'))
+call normalized_phase_project%read(string('normalized_phase.simple'))
+call assert_zero_phase_record(normalized_phase_project%os_mic,    'serialized os_mic')
+call assert_zero_phase_record(normalized_phase_project%os_stk,    'serialized os_stk')
+call assert_zero_phase_record(normalized_phase_project%os_ptcl2D, 'serialized os_ptcl2D')
+call assert_zero_phase_record(normalized_phase_project%os_ptcl3D, 'serialized os_ptcl3D')
+call missing_phase_project%kill
+call normalized_phase_project%kill
+call del_file('normalized_phase.simple')
+call del_file('zero_phase_record.mrc')
+write(*,*)'TEST SUCCESS PHASE PRESENCE, CANONICALIZATION, AND CTF PARAMETER MAPPING'
 eullims(1,:) = [0.,360.]
 eullims(2,:) = [0.,180.]
 eullims(3,:) = [0.,360.]
@@ -28,13 +88,14 @@ do i = 1,NMICS
     call project1%os_mic%set(i, 'dfx',      1.+ran3())
     call project1%os_mic%set(i, 'dfy',      1.+ran3())
     call project1%os_mic%set(i, 'angast',   360.*ran3())
-    call project1%os_mic%set(i, 'phshift',  0.)
+    call project1%os_mic%set(i, 'phshift',  PI*real(mod(i,7))/14.)
 enddo
 ! prepare dummy project
 call project1%os_ptcl2D%new(NPTCLS, .true.)
 do i = 1,NPTCLS
     call project1%os_ptcl2D%set_dfx(i, 1.+ran3())
     call project1%os_ptcl2D%set_dfy(i, 1.+ran3())
+    call project1%os_ptcl2D%set(i, 'phshift', PI*real(mod(i,11))/22.)
     call project1%os_ptcl2D%set(i, 'corr',    ran3())
     call project1%os_ptcl2D%set_class(i, nint(ran3()*100.))
     call project1%os_ptcl2D%set_state(i, nint(ran3()))
@@ -144,4 +205,40 @@ write(*,*)'TEST SUCCES WRITE/PRINT'
 call del_file('myproject.simple')
 call del_file('project3.simple')
 call del_file('some_mics.txt')
+
+contains
+
+    subroutine assert_zero_phase_record(os, segment_name)
+        class(oris),      intent(in) :: os
+        character(len=*), intent(in) :: segment_name
+        if( .not. os%isthere(1, 'phshift') )then
+            write(*,*)'TEST FAILED: phshift missing from ', trim(segment_name)
+            error stop 1
+        endif
+        if( abs(os%get(1, 'phshift')) > 1.e-6 )then
+            write(*,*)'TEST FAILED: phshift is not zero in ', trim(segment_name)
+            error stop 1
+        endif
+    end subroutine assert_zero_phase_record
+
+    subroutine assert_phase_record(os, segment_name, expected)
+        class(oris),      intent(in) :: os
+        character(len=*), intent(in) :: segment_name
+        real,             intent(in) :: expected
+        if( .not. os%isthere(1, 'phshift') )then
+            write(*,*)'TEST FAILED: phshift missing from ', trim(segment_name)
+            error stop 1
+        endif
+        call assert_phase_value(os%get(1, 'phshift'), segment_name, expected)
+    end subroutine assert_phase_record
+
+    subroutine assert_phase_value(actual, mapping_name, expected)
+        real,             intent(in) :: actual, expected
+        character(len=*), intent(in) :: mapping_name
+        if( abs(actual-expected) > 1.e-6 )then
+            write(*,*)'TEST FAILED: phshift mapping ', trim(mapping_name), actual, expected
+            error stop 1
+        endif
+    end subroutine assert_phase_value
+
 end program simple_test_sp_project

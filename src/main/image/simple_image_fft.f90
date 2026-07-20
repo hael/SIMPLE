@@ -883,7 +883,7 @@ contains
         ! ============================================================
          !---initialize CTF
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
-        ctfvals         = tfun%get_ctfvars()
+        ctfvals         = tfun%get_ctfvars(ctfparms%phshift)
         wl              = ctfvals%wl
         half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
         sum_df          = ctfvals%dfx + ctfvals%dfy
@@ -912,7 +912,8 @@ contains
                 do h = lims(1,1), lims(1,2)
                     hp    = h + 1
                     phase = ph_k * ph_h
-                    tval  = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs))
+                    tval  = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                        &amp_contr_const, wl, half_wl2_cs))
                     self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * phase * tval
                     ph_h = ph_h * w1
                 end do
@@ -926,7 +927,8 @@ contains
                 kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
                 do h = lims(1,1), lims(1,2)
                     hp = h + 1
-                    tval = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs))
+                    tval = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                        &amp_contr_const, wl, half_wl2_cs))
                     self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * tval
                 end do
             end do

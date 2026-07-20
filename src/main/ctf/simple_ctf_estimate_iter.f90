@@ -52,10 +52,23 @@ contains
         call self%micrograph%read(moviename_forctf, 1)
         call self%micrograph%bp(real(params%pspecsz) * ctfvars%smpd, 0.)
         call self%micrograph%ifft
+        ! Fitting policy belongs to the estimation request, not to acquisition
+        ! metadata. Resolve it here so every caller of the shared iterator has
+        ! identical behavior.
+        select case(trim(params%fit_phshift))
+            case('yes')
+                ctfvars%l_fit_phshift = .true.
+            case('no')
+                ctfvars%l_fit_phshift = .false.
+            case DEFAULT
+                THROW_HARD('fit_phshift must be yes or no; iterate')
+        end select
         ! global fitting
         call ctffit%new(self%micrograph, params%pspecsz, ctfvars, [params%dfmin,params%dfmax],&
-            &[params%hp,params%lp], params%astigtol)
+            &[params%hp,params%lp], params%astigtol, &
+            &[deg2rad(params%phshift_min),deg2rad(params%phshift_max)], deg2rad(params%phshift_step))
         call ctffit%fit(ctfvars, params%ctfresthreshold)
+        ctfvars%phshift = canonical_phshift(ctfvars%phshift)
         if( l_gen_thumb )then
             call self%gen_thumbnail( ctffit, params%pspecsz )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)

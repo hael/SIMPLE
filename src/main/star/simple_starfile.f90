@@ -269,7 +269,8 @@ contains
                 if( mics_oris%isthere(imic, 'dfx'    ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUSU,      real(mics_oris%get(imic, 'dfx'    ) / 0.0001, dp))
                 if( mics_oris%isthere(imic, 'dfy'    ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUSV,      real(mics_oris%get(imic, 'dfy'    ) / 0.0001, dp))
                 if( mics_oris%isthere(imic, 'angast' ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUS_ANGLE, real(mics_oris%get(imic, 'angast' ),          dp))
-                if( mics_oris%isthere(imic, 'phshift') ) call starfile_table__setValue_double(part_table, EMDL_CTF_PHASESHIFT,    real(mics_oris%get(imic, 'phshift'),          dp))
+                call starfile_table__setValue_double(part_table, EMDL_CTF_PHASESHIFT, &
+                    &real(rad2deg(mics_oris%get(imic, 'phshift')), dp))
                 if( mics_oris%isthere(imic, 'ctfres' ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_MAXRES,        real(mics_oris%get(imic, 'ctfres' ),          dp))
                 if( mics_oris%isthere(imic, 'icefrac') ) call starfile_table__setValue_double(part_table, SMPL_ICE_FRAC,          real(mics_oris%get(imic, 'icefrac'),          dp))
                 if( mics_oris%isthere(imic, 'astig'  ) ) call starfile_table__setValue_double(part_table, SMPL_ASTIGMATISM,       real(mics_oris%get(imic, 'astig'  ),          dp))
@@ -388,7 +389,8 @@ contains
             if( ptcl2d_oris%isthere(iptcl, 'dfx'    ) ) call starfile_table__setValue_double(ptcl_table, EMDL_CTF_DEFOCUSU,             real(ptcl2d_oris%get(iptcl, 'dfx'    ) / 0.0001,        dp))
             if( ptcl2d_oris%isthere(iptcl, 'dfy'    ) ) call starfile_table__setValue_double(ptcl_table, EMDL_CTF_DEFOCUSV,             real(ptcl2d_oris%get(iptcl, 'dfy'    ) / 0.0001,        dp))
             if( ptcl2d_oris%isthere(iptcl, 'angast' ) ) call starfile_table__setValue_double(ptcl_table, EMDL_CTF_DEFOCUS_ANGLE,        real(ptcl2d_oris%get(iptcl, 'angast' ),                 dp))
-            if( ptcl2d_oris%isthere(iptcl, 'phshift') ) call starfile_table__setValue_double(ptcl_table, EMDL_CTF_PHASESHIFT,           real(ptcl2d_oris%get(iptcl, 'phshift'),                 dp))
+            call starfile_table__setValue_double(ptcl_table, EMDL_CTF_PHASESHIFT, &
+                &real(rad2deg(ptcl2d_oris%get(iptcl, 'phshift')), dp))
             if( ptcl2d_oris%isthere(iptcl, 'e3'     ) ) call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_PSI,               real(ptcl2d_oris%get(iptcl, 'e3'     ),                 dp))
             if( ptcl2d_oris%isthere(iptcl, 'xpos'   ) ) call starfile_table__setValue_double(ptcl_table, EMDL_IMAGE_COORD_X,            real(ptcl2d_oris%get(iptcl, 'xpos'   ) + half_boxsize,  dp))
             if( ptcl2d_oris%isthere(iptcl, 'ypos'   ) ) call starfile_table__setValue_double(ptcl_table, EMDL_IMAGE_COORD_Y,            real(ptcl2d_oris%get(iptcl, 'ypos'   ) + half_boxsize,  dp))
@@ -513,7 +515,8 @@ contains
                 if( ptcl2d_oris%isthere(iptcl, 'dfx'    ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUSU,             real(ptcl2d_oris%get(iptcl, 'dfx'    ) / 0.0001,        dp))
                 if( ptcl2d_oris%isthere(iptcl, 'dfy'    ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUSV,             real(ptcl2d_oris%get(iptcl, 'dfy'    ) / 0.0001,        dp))
                 if( ptcl2d_oris%isthere(iptcl, 'angast' ) ) call starfile_table__setValue_double(part_table, EMDL_CTF_DEFOCUS_ANGLE,        real(ptcl2d_oris%get(iptcl, 'angast' ),                 dp))
-                if( ptcl2d_oris%isthere(iptcl, 'phshift') ) call starfile_table__setValue_double(part_table, EMDL_CTF_PHASESHIFT,           real(ptcl2d_oris%get(iptcl, 'phshift'),                 dp))
+                call starfile_table__setValue_double(part_table, EMDL_CTF_PHASESHIFT, &
+                    &real(rad2deg(ptcl2d_oris%get(iptcl, 'phshift')), dp))
                 if( ptcl2d_oris%isthere(iptcl, 'e3'     ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_PSI,               real(ptcl2d_oris%get(iptcl, 'e3'     ),                 dp))
                 if( ptcl2d_oris%isthere(iptcl, 'xpos'   ) ) call starfile_table__setValue_double(part_table, EMDL_IMAGE_COORD_X,            real(ptcl2d_oris%get(iptcl, 'xpos'   ) + half_boxsize,  dp))
                 if( ptcl2d_oris%isthere(iptcl, 'ypos'   ) ) call starfile_table__setValue_double(part_table, EMDL_IMAGE_COORD_Y,            real(ptcl2d_oris%get(iptcl, 'ypos'   ) + half_boxsize,  dp))

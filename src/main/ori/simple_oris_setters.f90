@@ -574,6 +574,7 @@ contains
             call self%o(i)%set('kv',    kv   )
             call self%o(i)%set('cs',    cs   )
             call self%o(i)%set('fraca', fraca)
+            call self%o(i)%set('phshift', 0.)
             do
                 err = ran3()*deferr
                 if( ran3() < 0.5 )then

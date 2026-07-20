@@ -7,9 +7,11 @@ implicit none
 contains
 
     ! local fast CTF kernel (numerically equivalent refactor)
-    pure elemental real function ft_map_ctf_kernel( h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs ) result( tval )
+    pure elemental real function ft_map_ctf_kernel( h, k, sum_df, diff_df, angast, phshift, &
+        &amp_contr_const, wl, half_wl2_cs ) result( tval )
         integer, intent(in) :: h, k
-        real,    intent(in) :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs
+        real,    intent(in) :: sum_df, diff_df, angast, phshift, amp_contr_const, wl, half_wl2_cs
+        ! phshift is canonical radians in [0,pi); canonicalize once before entering this hot kernel.
         real :: df, PhSh, cterm, pi_wl_s2
         ! Defocus term: exactly the same expression as eval_df,
         ! but factored the sum & difference terms are memoized
@@ -18,7 +20,7 @@ contains
         ! Phase shift term: preserve the same evaluation structure
         pi_wl_s2 = PI * wl * ft_map_spaFreqSq(h,k)
         PhSh     = pi_wl_s2 * (df - half_wl2_cs * ft_map_spaFreqSq(h,k))
-        tval     = sin( PhSh + amp_contr_const )
+        tval     = sin( PhSh + phshift + amp_contr_const )
     end function ft_map_ctf_kernel
 
 end module simple_math_ctf

@@ -44,11 +44,8 @@ contains
                 ctfparms(ithr) = spproj%get_ctfparams(trim(oritype), iptcl)
                 tfuns(ithr)    = ctf(ctfparms(ithr)%smpd, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
                 call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
-                if( ctfparms(ithr)%l_phaseplate )then
-                    self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), ctfparms(ithr)%phshift) )
-                else
-                    self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:)))
-                endif
+                self%ctfmats(:,:,self%pinds(ctfmatind)) = &
+                    &abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), ctfparms(ithr)%phshift))
             endif
         end do
         !$omp end parallel do

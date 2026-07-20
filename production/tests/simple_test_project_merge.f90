@@ -1,0 +1,6 @@
+program simple_test_project_merge
+use simple_project_merge_tester, only: run_all_project_merge_tests
+implicit none
+
+call run_all_project_merge_tests()
+end program simple_test_project_merge

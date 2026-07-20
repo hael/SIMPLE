@@ -1041,6 +1041,7 @@ contains
         type(string) :: projfile, tmpfile
         integer(kind(ENUM_ORISEG))    :: iseg
         logical :: l_tmp
+        call ensure_phase_shift_fields(self)
         l_tmp = .false.
         if( present(tempfile) ) l_tmp = tempfile
         if( present(fname) )then
@@ -1077,6 +1078,7 @@ contains
         integer,          optional, intent(in)    :: fromto(2)
         type(string) :: projfile
         integer(kind(ENUM_ORISEG)) :: iseg
+        call ensure_phase_shift_fields(self)
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: write')
@@ -1095,6 +1097,25 @@ contains
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
     end subroutine write_segment_inside
+
+    ! Numerical phase is part of the project CTF schema irrespective of whether
+    ! it was fitted. A missing value is materialized as the identity shift.
+    subroutine ensure_phase_shift_fields( self )
+        class(sp_project), intent(inout) :: self
+        integer :: i
+        do i = 1,self%os_mic%get_noris()
+            if( .not.self%os_mic%isthere(i, 'phshift') ) call self%os_mic%set(i, 'phshift', 0.)
+        enddo
+        do i = 1,self%os_stk%get_noris()
+            if( .not.self%os_stk%isthere(i, 'phshift') ) call self%os_stk%set(i, 'phshift', 0.)
+        enddo
+        do i = 1,self%os_ptcl2D%get_noris()
+            if( .not.self%os_ptcl2D%isthere(i, 'phshift') ) call self%os_ptcl2D%set(i, 'phshift', 0.)
+        enddo
+        do i = 1,self%os_ptcl3D%get_noris()
+            if( .not.self%os_ptcl3D%isthere(i, 'phshift') ) call self%os_ptcl3D%set(i, 'phshift', 0.)
+        enddo
+    end subroutine ensure_phase_shift_fields
 
     module subroutine write_non_data_segments( self, fname )
         class(sp_project), intent(inout) :: self
@@ -1123,6 +1144,7 @@ contains
         character(len=*),  intent(in)    :: oritype
         class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
+        call ensure_phase_shift_fields(self)
         select case(fname2format(fname))
             case('O')
                 THROW_HARD('write_segment2txt is not supported for *.simple project files; write_segment2txt')
@@ -1270,6 +1292,7 @@ contains
         type(starfile) :: star
         type(string)   :: l_fname
         integer        :: offset_optics
+        call ensure_phase_shift_fields(self)
         offset_optics = 0
         if( present(optics_offset) ) offset_optics = optics_offset
         if( self%os_mic%get_noris() == 0 ) return
@@ -1291,6 +1314,7 @@ contains
         type(starfile) :: star
         type(string)   :: l_fname
         integer        :: offset_optics
+        call ensure_phase_shift_fields(self)
         offset_optics = 0
         if( present(optics_offset) ) offset_optics = optics_offset
         if( self%os_mic%get_noris() == 0 ) return

@@ -636,7 +636,7 @@ contains
         type(string), allocatable  :: stktab(:), parts_fname(:)
         integer                    :: boxcoords(2)
         type(string)               :: partsfile
-        real                       :: dfx, dfy, ogid, gid
+        real                       :: dfx, dfy, angast, phshift, ogid, gid
         integer                    :: imic, i, nmics_tot, cnt, istk, nstks, ipart, numlen
         ! schedule jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), &
@@ -681,7 +681,7 @@ contains
                 call spproj_part%kill
             enddo
             call self%spproj%add_stktab(stktab, os_stk)
-            ! transfer particle locations + defocus + group IDs
+            ! transfer particle locations + CTF parameters + group IDs
             cnt = 0
             do ipart = 1, params%nparts
                 call spproj_part%read_segment('ptcl2D', parts_fname(ipart))
@@ -696,6 +696,16 @@ contains
                         call self%spproj%os_ptcl2D%set_dfy(cnt, dfy)
                         call self%spproj%os_ptcl3D%set_dfx(cnt, dfx)
                         call self%spproj%os_ptcl3D%set_dfy(cnt, dfy)
+                    endif
+                    if( spproj_part%os_ptcl2D%isthere(i,'angast') )then
+                        angast = spproj_part%os_ptcl2D%get(i, 'angast')
+                        call self%spproj%os_ptcl2D%set(cnt, 'angast', angast)
+                        call self%spproj%os_ptcl3D%set(cnt, 'angast', angast)
+                    endif
+                    if( spproj_part%os_ptcl2D%isthere(i,'phshift') )then
+                        phshift = spproj_part%os_ptcl2D%get(i, 'phshift')
+                        call self%spproj%os_ptcl2D%set(cnt, 'phshift', phshift)
+                        call self%spproj%os_ptcl3D%set(cnt, 'phshift', phshift)
                     endif
                     if( spproj_part%os_ptcl2D%isthere(i,'ogid') )then
                         ogid = spproj_part%os_ptcl2D%get(i, 'ogid')

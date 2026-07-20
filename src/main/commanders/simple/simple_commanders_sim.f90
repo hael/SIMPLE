@@ -283,9 +283,9 @@ contains
             ! multiply with CTF
             call shifted_base_image%fft()
             if( params%neg .eq. 'yes' )then
-                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'neg', dfy, angast, params%bfac)
+                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'neg', 0., dfy, angast, params%bfac)
             else
-                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'ctf', dfy, angast, params%bfac)
+                call shifted_base_image%apply_ctf_wpad(tfun, dfx, 'ctf', 0., dfy, angast, params%bfac)
             endif
             call shifted_base_image%ifft()
             ! add the detector noise
@@ -297,6 +297,7 @@ contains
             call build%spproj_field%set_dfx(1,       dfx)
             call build%spproj_field%set_dfy(1,       dfy)
             call build%spproj_field%set(1, 'angast', angast)
+            call build%spproj_field%set(1, 'phshift', 0.)
         end do
         ! generate the optimal average
         base_image = 0.

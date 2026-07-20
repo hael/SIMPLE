@@ -12,6 +12,8 @@ use simple_mini_stream_utils,       only: segdiampick_mics
 implicit none
 #include "simple_local_flags.inc"
 
+private :: transfer_phase_fit_args
+
 type, extends(commander_base) :: commander_mini_stream
   contains
     procedure :: execute      => exec_mini_stream
@@ -87,6 +89,7 @@ contains
         call cline_ctf_estimate%set('nparts',                      1)
         call cline_ctf_estimate%set('nthr',              params%nthr)
         call cline_ctf_estimate%set('projfile', PROJFILE_MINI_STREAM)
+        call transfer_phase_fit_args(cline, params, cline_ctf_estimate)
         call xctf_estimate%execute(cline_ctf_estimate)
         ! this is the actual test
         call spproj%read(string(PROJFILE_MINI_STREAM))
@@ -187,6 +190,7 @@ contains
         call cline_ctf_estimate%set('nparts',                          1)
         call cline_ctf_estimate%set('nthr',                  params%nthr)
         call cline_ctf_estimate%set('projfile',   PROJFILE_CHECK_REFPICK)
+        call transfer_phase_fit_args(cline, params, cline_ctf_estimate)
         call xctf_estimate%execute(cline_ctf_estimate)
         ! make pickrefs
         call cline_make_pickrefs%set('mkdir',                       'no')
@@ -233,5 +237,23 @@ contains
         call spproj%kill
         call fnames%kill
     end subroutine exec_check_refpick
+
+    subroutine transfer_phase_fit_args(parent_cline, params, child_cline)
+        class(cmdline),    intent(in)    :: parent_cline
+        class(parameters), intent(in)    :: params
+        class(cmdline),    intent(inout) :: child_cline
+        if( parent_cline%defined('fit_phshift') )then
+            call child_cline%set('fit_phshift', params%fit_phshift)
+        endif
+        if( parent_cline%defined('phshift_min') )then
+            call child_cline%set('phshift_min', params%phshift_min)
+        endif
+        if( parent_cline%defined('phshift_max') )then
+            call child_cline%set('phshift_max', params%phshift_max)
+        endif
+        if( parent_cline%defined('phshift_step') )then
+            call child_cline%set('phshift_step', params%phshift_step)
+        endif
+    end subroutine transfer_phase_fit_args
 
 end module simple_commanders_validate

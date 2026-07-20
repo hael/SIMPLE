@@ -41,6 +41,7 @@ type(ui_param) :: eo
 type(ui_param) :: flipgain
 type(ui_param) :: fraca
 type(ui_param) :: fraction_dose_target
+type(ui_param) :: fit_phshift
 type(ui_param) :: frcs
 type(ui_param) :: gainref
 type(ui_param) :: graphene_filt
@@ -112,7 +113,9 @@ type(ui_param) :: pcontrast
 type(ui_param) :: pdbout
 type(ui_param) :: pgrp
 type(ui_param) :: pgrp_start
-type(ui_param) :: phaseplate
+type(ui_param) :: phshift_max
+type(ui_param) :: phshift_min
+type(ui_param) :: phshift_step
 type(ui_param) :: pick_roi
 type(ui_param) :: picker
 type(ui_param) :: pickrefs
@@ -606,9 +609,21 @@ subroutine set_ui_params
                                    'Initial point-group symmetry(cn|dn|t|o|i){c1}', &
                                    'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
 
-    call phaseplate%set_param(     'phaseplate',      'binary', 'Phase-plate images', &
-                                   'Images obtained with Volta phase-plate(yes|no){no}', &
+    call fit_phshift%set_param(    'fit_phshift',     'binary', 'Fit CTF phase shift', &
+                                   'Fit the additive phase shift during CTF estimation(yes|no){no}', &
                                    '(yes|no){no}', .false., 'no')
+
+    call phshift_min%set_param(    'phshift_min',     'num', 'Minimum CTF phase shift', &
+                                   'Minimum fitted additive phase shift in degrees{0}', &
+                                   'in degrees{0}', .false., 0.)
+
+    call phshift_max%set_param(    'phshift_max',     'num', 'Maximum CTF phase shift', &
+                                   'Maximum fitted additive phase shift in degrees{180}', &
+                                   'in degrees{180}', .false., 180.)
+
+    call phshift_step%set_param(   'phshift_step',    'num', 'CTF phase-shift step', &
+                                   'Initial phase-shift grid step in degrees{10}', &
+                                   'in degrees{10}', .false., 10.)
 
     call pick_roi%set_param(       'pick_roi',        'binary', 'Artefactual regions exclusion(new picker only)', &
                                    'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}', &

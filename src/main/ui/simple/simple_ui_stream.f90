@@ -242,6 +242,7 @@ contains
         call preproc%add_input(UI_PARM, cs,    required_override=.true., gui_submenu="data",              gui_advanced=.false.)
         call preproc%add_input(UI_PARM, fraca, required_override=.true., gui_submenu="data",              gui_advanced=.false.)
         call preproc%add_input(UI_PARM, smpd,  required_override=.true., gui_submenu="data",              gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, fit_phshift, gui_submenu="CTF estimation", gui_advanced=.false.)
         call preproc%add_input(UI_PARM, flipgain, gui_submenu="motion correction")
         call preproc%add_input(UI_PARM, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
         & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0)
@@ -250,6 +251,9 @@ contains
         ! search controls
         call preproc%add_input(UI_SRCH, dfmin, gui_submenu="CTF estimation")
         call preproc%add_input(UI_SRCH, dfmax, gui_submenu="CTF estimation")
+        call preproc%add_input(UI_SRCH, phshift_min, gui_submenu="CTF estimation")
+        call preproc%add_input(UI_SRCH, phshift_max, gui_submenu="CTF estimation")
+        call preproc%add_input(UI_SRCH, phshift_step, gui_submenu="CTF estimation")
         call preproc%add_input(UI_SRCH, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, gui_submenu="optics groups", gui_online=.true.)
         call preproc%add_input(UI_SRCH, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&

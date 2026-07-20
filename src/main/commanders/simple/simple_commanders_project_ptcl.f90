@@ -54,7 +54,7 @@ contains
         type(string), allocatable :: stkfnames(:), stkfnames_den(:)
         real,         allocatable :: line(:)
         type(simple_nice_comm)    :: nice_comm
-        type(string)              :: phaseplate, ctfstr
+        type(string)              :: ctfstr
         type(parameters)          :: params
         type(sp_project)          :: spproj
         type(oris)                :: os
@@ -184,6 +184,8 @@ contains
                     endif
                     if( nrecs > 3 )then
                         call os%set(i, 'phshift', line(4))
+                    else
+                        call os%set(i, 'phshift', 0.)
                     endif
                 end do
             endif
@@ -263,22 +265,6 @@ contains
                             endif
                         end do
                     endif
-                    ! phase-plate
-                    if( cline%defined('phaseplate') )then
-                        call os%set_all2single('phaseplate', trim(params%phaseplate))
-                    else
-                        do i=1,ndatlines
-                            if( .not. os%isthere(i, 'phaseplate') )then
-                                call os%set(i, 'phaseplate', 'no')
-                            endif
-                        end do
-                    endif
-                    call os%getter(1, 'phaseplate', phaseplate)
-                    if( phaseplate .eq. 'yes' )then
-                        if( .not. os%isthere(1,'phshift') )then
-                            THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_import_particles')
-                        endif
-                    endif
                     ! ctf flag
                     if( cline%defined('ctf') )then
                         call os%set_all2single('ctf', trim(params%ctf))
@@ -314,15 +300,9 @@ contains
                     if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
                     if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
                     if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')
-                    if( cline%defined('phaseplate') )then
-                        phaseplate = cline%get_carg('phaseplate')
-                    else
-                        phaseplate ='no'
-                    endif
                     ctfvars%kv           = params%kv
                     ctfvars%cs           = params%cs
                     ctfvars%fraca        = params%fraca
-                    ctfvars%l_phaseplate = phaseplate .eq. 'yes'
                 endif
             endif
             if( inputted_stk_den )then

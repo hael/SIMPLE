@@ -9,10 +9,10 @@ implicit none
 contains
  
     !>  \brief  is for generating an image of CTF
-    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in )
+    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in, phshift )
         class(image), intent(inout) :: self
         class(ctf),   intent(inout) :: tfun
-        real,         intent(in)    :: dfx_in, dfy_in, angast_in
+        real,         intent(in)    :: dfx_in, dfy_in, angast_in, phshift
         type(ctfvars) :: ctfvals ! CTF derived variables
         integer :: h,k,physh,physk
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
@@ -20,7 +20,7 @@ contains
         call self%set_ft(.true.)
         ! init
         call tfun%init(dfx_in, dfy_in, angast_in) ! conversions
-        ctfvals         = tfun%get_ctfvars()
+        ctfvals         = tfun%get_ctfvars(phshift)
         wl              = ctfvals%wl
         half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
         sum_df          = ctfvals%dfx + ctfvals%dfy
@@ -30,7 +30,8 @@ contains
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
-                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                    &amp_contr_const, wl, half_wl2_cs)
                 ! set cmat
                 physh = ft_map_phys_addrh(h,k)
                 physk = ft_map_phys_addrk(h,k)
@@ -40,11 +41,12 @@ contains
     end subroutine ctf2img
 
     !>  \brief  is for applying CTF to an image
-    module subroutine apply_ctf_wpad( self, tfun, dfx, mode, dfy, angast, bfac )
+    module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
         class(image),     intent(inout) :: self   !< instance
         class(ctf),       intent(inout) :: tfun   !< CTF object
         real,             intent(in)    :: dfx    !< defocus x-axis
         character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
+        real,             intent(in)    :: phshift !< additive phase shift (radians)
         real, optional,   intent(in)    :: dfy    !< defocus y-axis
         real, optional,   intent(in)    :: angast !< angle of astigmatism
         real, optional,   intent(in)    :: bfac   !< bfactor
@@ -61,6 +63,7 @@ contains
         ! defaults
         ctfparms%dfy    = ctfparms%dfx
         ctfparms%angast = 0.
+        ctfparms%phshift = canonical_phshift(phshift)
         ! optionals
         if(present(dfy))    ctfparms%dfy    = dfy
         if(present(angast)) ctfparms%angast = angast
@@ -101,7 +104,7 @@ contains
         is_square  = (mode == 'square')
         ! initialize
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
-        ctfvals         = tfun%get_ctfvars()
+        ctfvals         = tfun%get_ctfvars(ctfparms%phshift)
         wl              = ctfvals%wl
         half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
         sum_df          = ctfvals%dfx + ctfvals%dfy
@@ -111,7 +114,8 @@ contains
         do h = ft_map_lims(1,1), ft_map_lims(1,2)
             do k = ft_map_lims(2,1), ft_map_lims(2,2)
                 ! calculate CTF
-                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
+                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                    &amp_contr_const, wl, half_wl2_cs)
                 ! SIMD-compatible mode handling using masked operations
                 t = merge(       abs(tval),                     ZERO, is_abs)     + &
                     merge(           tval,                      ZERO, is_ctf)     + &
@@ -200,7 +204,7 @@ contains
             tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
             call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
             ! --- optimized kernel scalars ---
-            ctfvals         = tfun%get_ctfvars()
+            ctfvals         = tfun%get_ctfvars(ctfparms%phshift)
             wl              = ctfvals%wl
             half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
             sum_df          = ctfvals%dfx + ctfvals%dfy
@@ -271,9 +275,10 @@ contains
                             transfer = phase
                         endif
                     endif
-                    ! CTF (optimized kernel; no phase-plate support)
+                    ! CTF (phase shift is stored in radians)
                     if (l_ctf) then
-                        ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs)
+                ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                            &amp_contr_const, wl, half_wl2_cs)
                         if (l_flip) then
                             ! Input images are already phase-flipped, so the Fourier signal is
                             ! proportional to |CTF| * signal. Use |CTF| in the numerator and
@@ -334,7 +339,7 @@ contains
         res = get_resarr(box, self%smpd)
         lims = self%loop_lims(2)
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-        phshift    = 0.
+        phshift    = canonical_phshift(ctfparms%phshift)
         start_freq = sqrt(tfun%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast)))
         end_freq   = sqrt(tfun%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast)))
         ice_maxind = get_find_at_res(res, ICE_BAND1)

@@ -628,9 +628,10 @@ contains
         write(unit,*) "_rlnDefocusU #2"
         write(unit,*) "_rlnDefocusV #3"
         write(unit,*) "_rlnDefocusAngle #4"
-        write(unit,*) "_rlnOpticsGroup #5"
-        write(unit,*) "intg1.mrc 10000 12000 15 1"
-        write(unit,*) "intg2.mrc 11000 13000 18 1"
+        write(unit,*) "_rlnPhaseShift #5"
+        write(unit,*) "_rlnOpticsGroup #6"
+        write(unit,*) "intg1.mrc 10000 12000 15 45 1"
+        write(unit,*) "intg2.mrc 11000 13000 18 90 1"
         close(unit)
         ! Prepare a cmdline object
         call cl%set("import_dir", tmpdir%to_char())
@@ -642,6 +643,8 @@ contains
         call assert_real(10000.0, proj%os_mic%get(1,"dfx"), 1e-6, "import_mics: defocusU imported")
         call assert_real(12000.0, proj%os_mic%get(1,"dfy"), 1e-6, "import_mics: defocusV imported")
         call assert_real(15.0,   proj%os_mic%get(1,"angast"),1e-6,"import_mics: angast imported")
+        call assert_real(PI/4., proj%os_mic%get(1,"phshift"), 1e-6, &
+            &"import_mics: RELION phase shift converted from degrees to radians")
     end subroutine test_star_import_mics
 
     !-----------------------------------------------------------------------
@@ -827,6 +830,10 @@ contains
             call proj1%os_mic%set(i,"smpd",1.0*i)
             call proj1%os_mic%set(i,"fraca",i*0.1)
             call proj1%os_mic%set(i,"cs",2.0+0.3*i)
+            call proj1%os_mic%set(i,"dfx",10000.+100.*i)
+            call proj1%os_mic%set(i,"dfy",11000.+100.*i)
+            call proj1%os_mic%set(i,"angast",10.*i)
+            call proj1%os_mic%set(i,"phshift",deg2rad(20.*i))
         end do
         ! Export
         call sp1%export_mics(proj1)
@@ -842,6 +849,8 @@ contains
             call assert_char("intg"//int2str(i)//".mrc", str_intg%to_char(), "roundtrip intg")
             call assert_real(1.0*i, proj2%os_mic%get(i,"smpd"), 1e-6, "roundtrip smpd")
             call assert_real(i*0.1, proj2%os_mic%get(i,"fraca"), 1e-6, "roundtrip fraca")
+            call assert_real(deg2rad(20.*i), proj2%os_mic%get(i,"phshift"), 1e-5, &
+                &"roundtrip phase shift preserves SIMPLE radians through RELION degrees")
             call str_intg%kill
         end do
     end subroutine test_roundtrip_micrographs

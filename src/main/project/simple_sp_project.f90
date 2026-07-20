@@ -100,7 +100,6 @@ contains
     procedure, private :: add_scale_tag
     procedure          :: report_state2stk
     ! STK - getters
-    procedure          :: has_phaseplate
     procedure          :: get_box
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
@@ -289,7 +288,7 @@ interface
         character(len=*),          intent(in)    :: oritype
         integer,                   intent(in)    :: iptcl
         class(oris), pointer  :: ptcl_field
-        character(len=STDLEN) :: ctfflag, phaseplate
+        character(len=STDLEN) :: ctfflag
         type(ctfparams)       :: ctfvars
     end function get_ctfparams
 
@@ -460,11 +459,6 @@ interface
     end subroutine report_state2stk
 
     ! STK - Getters
-
-    module logical function has_phaseplate( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-    end function has_phaseplate
 
     module integer function get_box( self )
         class(sp_project), target, intent(in) :: self

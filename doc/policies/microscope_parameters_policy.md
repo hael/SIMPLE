@@ -13,7 +13,6 @@ The microscope-parameter model used for CTF evaluation is:
 - `cs`: spherical aberration constant, in mm
 - `fraca`: amplitude contrast fraction
 - `smpd`: sampling distance, in Angstroms per pixel
-- `phaseplate`: Volta phase-plate status
 
 `fraca` is not technically a microscope hardware parameter, but it is part of
 the same model identity for SIMPLE because it changes the CTF that is fitted and
@@ -22,13 +21,15 @@ combined.
 
 Defocus parameters (`dfx`, `dfy`, `angast`, `phshift`) are image- or
 particle-dependent CTF parameters. They are closely related, but they are not
-part of the microscope/CTF-model identity considered here.
+part of the microscope/CTF-model identity considered here. Numerical phase is
+governed by the [phase-shift CTF policy](phase_shift_ctf_policy.md); acquisition
+hardware is not a SIMPLE CTF execution flag.
 
 ## Current Data Model
 
 The canonical in-memory CTF bundle is `ctfparams` in
 `src/defs/simple_type_defs.f90`. It carries `smpd`, `kv`, `cs`, `fraca`,
-defocus, phase shift, CTF flag, and phase-plate state.
+defocus, phase shift, CTF flag, and phase-fitting policy.
 
 Project metadata stores these values in several places:
 
@@ -51,12 +52,12 @@ CTF-model parameters by `ogid`.
 ### Movie and micrograph import
 
 `import_movies` accepts scalar command-line values for `smpd`, `kv`, `cs`,
-`fraca`, `ctf`, and `phaseplate`.
+`fraca`, and `ctf`.
 
 When importing into a project that already contains movies or micrographs,
 `exec_import_movies` and `sp_project%add_movies` compare the new values against
 the first existing micrograph and abort if `smpd`, `kv`, `cs`, `fraca`, CTF
-status, or phase-plate state differ.
+status differ.
 
 When importing integrated micrographs with `deftab`, per-micrograph defocus can
 come from the table, but `smpd`, `kv`, `cs`, and `fraca` still come from the
@@ -97,8 +98,8 @@ however, prevents creating such mixed rows in a single project.
 
 Particle extraction reads CTF values from each micrograph row and passes them to
 `sp_project%add_stk`, which writes `smpd`, `kv`, `cs`, `fraca`, CTF status, and
-phase-plate state onto the generated stack row. It also propagates `ogid` from
-micrographs to particles when present.
+the numerical phase onto the generated stack and particle rows. It also
+propagates `ogid` from micrographs to particles when present.
 
 The current extractor resets `ctfparms%smpd` to the run-level `params%smpd`
 before adding the stack. That is consistent with the current same-sampling
@@ -108,9 +109,10 @@ common sampling distance.
 ## 2D and 3D Analysis
 
 2D and 3D CTF-aware analysis call `sp_project%get_ctfparams`. That function maps
-particles to `stkind`, reads `smpd`, `kv`, `cs`, `fraca`, CTF status, and
-phase-plate state from `os_stk`, and reads defocus-related values from the
-particle row. It does not consult `os_optics`.
+particles to `stkind`, reads `smpd`, `kv`, `cs`, `fraca`, and CTF status from
+`os_stk`, and reads defocus-related values, including the authoritative phase,
+from the particle row. A stack-level query reads the stack phase instead. It
+does not consult `os_optics`.
 
 Consequences:
 
@@ -134,7 +136,7 @@ information, optional XML beam shifts, `maxpop`, and `optics_offset`. It then
 propagates `ogid` to micrographs, stacks, and particles and writes optics rows.
 
 Current optics-group assignment does not split groups by `kv`, `cs`, `fraca`,
-`smpd`, or phase-plate state. The optics row inherits CTF-model values from a
+or `smpd`. The optics row inherits CTF-model values from a
 representative image in the group. This is adequate for same-microscope
 beam-tilt grouping, but it is not a safe policy for mixed microscopes or mixed
 CTF-model settings unless the input grouping already prevents those settings
@@ -163,7 +165,7 @@ backfill missing authoritative CTF-model values.
 ## Practical Current Guidance
 
 The supported direct `import_movies` path is homogeneous in `smpd`, `kv`, `cs`,
-`fraca`, CTF flag, and phase-plate state.
+`fraca`, and CTF flag.
 
 For multiple microscopes that have already been scaled to the same sampling
 distance, the safest current workflow is:
@@ -176,7 +178,8 @@ distance, the safest current workflow is:
    after the particle stacks are at a common sampling distance and compatible
    box policy.
 4. Before 2D or 3D analysis, verify that each relevant `os_stk` row contains the
-   intended `smpd`, `kv`, `cs`, `fraca`, `ctf`, and `phaseplate` values.
+   intended `smpd`, `kv`, `cs`, `fraca`, and `ctf` values, and verify that the
+   particle rows carry the intended numerical `phshift`.
 
 Do not rely on `os_optics` alone for CTF-aware 2D/3D analysis in the current
 codebase.

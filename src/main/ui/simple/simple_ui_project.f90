@@ -241,7 +241,6 @@ contains
         call import_movies%add_input(UI_PARM, cs,    required_override=.true.)
         call import_movies%add_input(UI_PARM, fraca, required_override=.true.)
         call import_movies%add_input(UI_PARM, ctf_yes)
-        call import_movies%add_input(UI_PARM, phaseplate)
         call import_movies%add_input(UI_PARM, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
         call import_movies%add_input(UI_PARM, 'deftab', 'file','Pre-determined per-micrograph CTF parameters',&
         &'List of CTF parmeters for micrographs import only', 'e.g. deftab.txt', .false., '')
@@ -277,7 +276,6 @@ contains
         call import_particles%add_input(UI_PARM, cs,    required_override=.true.)
         call import_particles%add_input(UI_PARM, fraca, required_override=.true.)
         call import_particles%add_input(UI_PARM, ctf_yes)
-        call import_particles%add_input(UI_PARM, phaseplate)
         call import_particles%add_input(UI_PARM, oritab)
         call import_particles%add_input(UI_PARM, deftab)
         call import_particles%add_input(UI_PARM, 'plaintexttab', 'file', 'Plain text file of input parameters',&

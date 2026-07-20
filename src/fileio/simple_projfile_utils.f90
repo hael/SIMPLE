@@ -527,6 +527,7 @@ contains
                 logical :: lctf
                 if( l_has_mics )then
                     do imic = 1,proj%os_mic%get_noris()
+                        call require_row_field(proj%os_mic, imic, 'phshift', 'os_mic', iproj)
                         if( proj%os_mic%isthere(imic, 'ctf') )then
                             lctf = ctf_enabled_for_row(proj%os_mic, imic, iproj, 'os_mic')
                             if( lctf )then
@@ -534,7 +535,6 @@ contains
                                 call require_row_field(proj%os_mic, imic, 'kv',         'os_mic', iproj)
                                 call require_row_field(proj%os_mic, imic, 'cs',         'os_mic', iproj)
                                 call require_row_field(proj%os_mic, imic, 'fraca',      'os_mic', iproj)
-                                call require_row_field(proj%os_mic, imic, 'phaseplate', 'os_mic', iproj)
                             endif
                         endif
                     enddo
@@ -548,6 +548,7 @@ contains
                         THROW_HARD('stack particle ranges do not match os_ptcl3D size in input project '//int2str(iproj))
                     endif
                     do istk = 1,proj%os_stk%get_noris()
+                        call require_row_field(proj%os_stk, istk, 'phshift', 'os_stk', iproj)
                         if( proj%os_stk%isthere(istk, 'ctf') )then
                             lctf = ctf_enabled_for_row(proj%os_stk, istk, iproj, 'os_stk')
                             if( lctf )then
@@ -555,7 +556,6 @@ contains
                                 call require_row_field(proj%os_stk, istk, 'kv',         'os_stk', iproj)
                                 call require_row_field(proj%os_stk, istk, 'cs',         'os_stk', iproj)
                                 call require_row_field(proj%os_stk, istk, 'fraca',      'os_stk', iproj)
-                                call require_row_field(proj%os_stk, istk, 'phaseplate', 'os_stk', iproj)
                             endif
                         endif
                     enddo
@@ -584,28 +584,31 @@ contains
                 integer :: iptcl, stkind, nptcls, nstks_here
                 integer :: bad_stkind_missing, bad_stkind_range
                 integer :: bad_dfx, bad_angast, bad_phshift
-                logical, allocatable :: stack_ctf(:), stack_phaseplate(:)
-                if( .not.l_has_stks ) return
+                logical, allocatable :: stack_ctf(:)
                 nptcls = os%get_noris()
+                bad_phshift = NO_BAD
+                !$omp parallel do default(shared) private(iptcl) schedule(static) &
+                !$omp& reduction(min:bad_phshift) if(nptcls > 10000)
+                do iptcl = 1,nptcls
+                    if( .not.os%isthere(iptcl, 'phshift') ) bad_phshift = min(bad_phshift, iptcl)
+                enddo
+                !$omp end parallel do
+                if( bad_phshift /= NO_BAD ) call require_row_field(os, bad_phshift, 'phshift', trim(segment), iproj)
+                if( .not.l_has_stks ) return
                 nstks_here = proj%os_stk%get_noris()
-                allocate(stack_ctf(nstks_here), stack_phaseplate(nstks_here))
-                stack_ctf        = .false.
-                stack_phaseplate = .false.
+                allocate(stack_ctf(nstks_here))
+                stack_ctf = .false.
                 do stkind = 1,nstks_here
                     if( proj%os_stk%isthere(stkind, 'ctf') )then
                         stack_ctf(stkind) = ctf_enabled_for_row(proj%os_stk, stkind, iproj, 'os_stk')
-                        if( stack_ctf(stkind) )then
-                            stack_phaseplate(stkind) = phaseplate_enabled_for_row(proj%os_stk, stkind, iproj, 'os_stk')
-                        endif
                     endif
                 enddo
                 bad_stkind_missing = NO_BAD
                 bad_stkind_range   = NO_BAD
                 bad_dfx            = NO_BAD
                 bad_angast         = NO_BAD
-                bad_phshift        = NO_BAD
                 !$omp parallel do default(shared) private(iptcl, stkind) schedule(static) &
-                !$omp& reduction(min:bad_stkind_missing,bad_stkind_range,bad_dfx,bad_angast,bad_phshift) &
+                !$omp& reduction(min:bad_stkind_missing,bad_stkind_range,bad_dfx,bad_angast) &
                 !$omp& if(nptcls > 10000)
                 do iptcl = 1,nptcls
                     if( .not.os%isthere(iptcl, 'stkind') )then
@@ -619,9 +622,6 @@ contains
                                 if( .not.os%isthere(iptcl, 'dfx') ) bad_dfx = min(bad_dfx, iptcl)
                                 if( os%isthere(iptcl, 'dfy') .and. (.not.os%isthere(iptcl, 'angast')) )then
                                     bad_angast = min(bad_angast, iptcl)
-                                endif
-                                if( stack_phaseplate(stkind) .and. (.not.os%isthere(iptcl, 'phshift')) )then
-                                    bad_phshift = min(bad_phshift, iptcl)
                                 endif
                             endif
                         endif
@@ -637,7 +637,6 @@ contains
                 endif
                 if( bad_dfx /= NO_BAD ) call require_row_field(os, bad_dfx, 'dfx', trim(segment), iproj)
                 if( bad_angast /= NO_BAD ) call require_row_field(os, bad_angast, 'angast', trim(segment), iproj)
-                if( bad_phshift /= NO_BAD ) call require_row_field(os, bad_phshift, 'phshift', trim(segment), iproj)
             end subroutine validate_particle_field
 
             subroutine validate_stack_particle_ranges( proj, os, iproj, segment )
@@ -847,22 +846,6 @@ contains
                         THROW_HARD('unsupported ctf flag in '//trim(segment)//' for input project '//int2str(iproj))
                 end select
             end function ctf_enabled_for_row
-
-            logical function phaseplate_enabled_for_row( os, irow, iproj, segment )
-                class(oris),       intent(in) :: os
-                integer,           intent(in) :: irow, iproj
-                character(len=*),  intent(in) :: segment
-                character(len=STDLEN) :: phaseplate
-                call os%get_static(irow, 'phaseplate', phaseplate)
-                select case(trim(phaseplate))
-                    case('yes')
-                        phaseplate_enabled_for_row = .true.
-                    case('no')
-                        phaseplate_enabled_for_row = .false.
-                    case DEFAULT
-                        THROW_HARD('unsupported phaseplate flag in '//trim(segment)//' for input project '//int2str(iproj))
-                end select
-            end function phaseplate_enabled_for_row
 
             integer function source_max_ogid( proj )
                 class(sp_project), intent(inout) :: proj

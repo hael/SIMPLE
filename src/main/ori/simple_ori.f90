@@ -457,16 +457,19 @@ contains
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: rval
-        integer :: ind
+        integer  :: ind
+        real(dp) :: rval_here
+        rval_here = rval
+        if( key == 'phshift' ) rval_here = canonical_phshift(rval)
         if( self%is_ptcl )then
             ind = get_oriparam_ind(key)
             if( ind == 0 )then
-                call self%htab%set(key, rval)
+                call self%htab%set(key, rval_here)
             else
-                self%pparms(ind) = real(rval)
+                self%pparms(ind) = real(rval_here)
             endif
         else
-            call self%htab%set(key, rval)
+            call self%htab%set(key, rval_here)
         endif
     end subroutine set_1
 
@@ -475,15 +478,18 @@ contains
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: rval
         integer :: ind
+        real    :: rval_here
+        rval_here = rval
+        if( key == 'phshift' ) rval_here = canonical_phshift(rval)
         if( self%is_ptcl )then
             ind = get_oriparam_ind(key)
             if( ind == 0 )then
-                call self%htab%set(key, rval)
+                call self%htab%set(key, rval_here)
             else
-                self%pparms(ind) = rval
+                self%pparms(ind) = rval_here
             endif
         else
-            call self%htab%set(key, rval)
+            call self%htab%set(key, rval_here)
         endif
     end subroutine set_2
 
@@ -1211,6 +1217,7 @@ contains
         class(ori), intent(inout) :: self
         real,       intent(in)    :: prec(N_PTCL_ORIPARAMS)
         self%pparms = prec
+        self%pparms(I_PHSHIFT) = canonical_phshift(self%pparms(I_PHSHIFT))
     end subroutine prec2ori
 
     pure integer function ori_strlen_trim( self )
@@ -1271,7 +1278,7 @@ contains
     function get_ctfvars( self ) result( ctfvars )
         class(ori), intent(in) :: self
         type(ctfparams)        :: ctfvars
-        type(string) :: ctfstr, phplate
+        type(string) :: ctfstr
         if( self%isthere('ctf') )then
             ctfstr = self%get_str('ctf')
             ctfvars%ctfflag = CTFFLAG_YES
@@ -1284,11 +1291,6 @@ contains
                     ctfvars%ctfflag = CTFFLAG_FLIP
             end select
         endif
-        ctfvars%l_phaseplate = .false.
-        if( self%isthere('phaseplate') )then
-            phplate = self%get_str('phaseplate')
-            ctfvars%l_phaseplate = phplate%to_char() .eq. 'yes'
-        endif
         ctfvars%smpd    = self%get('smpd')
         ctfvars%cs      = self%get('cs')
         ctfvars%kv      = self%get('kv')
@@ -1296,9 +1298,8 @@ contains
         ctfvars%dfx     = self%get_dfx()
         ctfvars%dfy     = self%get_dfy()
         ctfvars%angast  = self%get('angast')
-        ctfvars%phshift = self%get('phshift')
+        ctfvars%phshift = canonical_phshift(self%get('phshift'))
         call ctfstr%kill
-        call phplate%kill 
     end function get_ctfvars
 
     subroutine get_axis_angle( self, vec, angle )
@@ -1341,12 +1342,8 @@ contains
         call self%set('cs',    ctfvars%cs)
         call self%set('kv',    ctfvars%kv)
         call self%set('fraca', ctfvars%fraca)
-        if( ctfvars%l_phaseplate )then
-            call self%set('phaseplate', 'yes')
-            call self%set('phshift', ctfvars%phshift)
-        else
-            call self%set('phaseplate', 'no')
-        endif
+        ! Phase is a numerical part of the CTF model and is always persisted.
+        call self%set('phshift', canonical_phshift(ctfvars%phshift))
         call self%set_dfx(ctfvars%dfx)
         call self%set_dfy(ctfvars%dfy)
         call self%set('angast', ctfvars%angast)

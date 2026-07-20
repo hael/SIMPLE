@@ -44,6 +44,7 @@ contains
         call check_refpick%add_input(UI_PARM, kv,      required_override=.true.)
         call check_refpick%add_input(UI_PARM, cs,      required_override=.true.)
         call check_refpick%add_input(UI_PARM, fraca)
+        call check_refpick%add_input(UI_PARM, fit_phshift)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -51,6 +52,9 @@ contains
         call check_refpick%add_input(UI_SRCH, pick_roi)
         call check_refpick%add_input(UI_SRCH, particle_density)
         call check_refpick%add_input(UI_SRCH, nboxes_max)
+        call check_refpick%add_input(UI_SRCH, phshift_min)
+        call check_refpick%add_input(UI_SRCH, phshift_max)
+        call check_refpick%add_input(UI_SRCH, phshift_step)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -80,10 +84,14 @@ contains
         call mini_stream%add_input(UI_PARM, cs,   required_override=.true.)
         call mini_stream%add_input(UI_PARM, fraca)
         call mini_stream%add_input(UI_PARM, moldiam_max)
+        call mini_stream%add_input(UI_PARM, fit_phshift)
         ! alternative inputs
         ! <empty>
         ! search controls
         call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
+        call mini_stream%add_input(UI_SRCH, phshift_min)
+        call mini_stream%add_input(UI_SRCH, phshift_max)
+        call mini_stream%add_input(UI_SRCH, phshift_step)
         ! filter controls
         ! <empty>
         ! mask controls

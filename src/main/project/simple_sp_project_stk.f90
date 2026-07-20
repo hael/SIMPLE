@@ -69,7 +69,7 @@ contains
             call o%set_dfx(      ctfvars%dfx)
             call o%set_dfy(      ctfvars%dfy)
             call o%set('angast', ctfvars%angast)
-            if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
+            call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', n_os_stk)
             call o%set('indstk', i)
             call o%set('state',  1)         ! default on import
@@ -84,7 +84,7 @@ contains
     module subroutine add_single_stk( self, stk, ctfvars, os )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: stk
-        type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk (smpd,kv,cs,fraca,phaseplate)
+        type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
         type(string) :: stk_abspath, projname, fbody
         integer      :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
@@ -125,6 +125,14 @@ contains
         call self%os_ptcl3D%set_all2single('stkind', 1)
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1) ! default on import
         if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1) ! default on import
+        do pind = 1,self%os_ptcl2D%get_noris()
+            if( .not.self%os_ptcl2D%isthere(pind, 'phshift') )then
+                call self%os_ptcl2D%set(pind, 'phshift', ctfvars%phshift)
+            endif
+            if( .not.self%os_ptcl3D%isthere(pind, 'phshift') )then
+                call self%os_ptcl3D%set(pind, 'phshift', ctfvars%phshift)
+            endif
+        enddo
         ! full path and existence check
         stk_abspath = simple_abspath(stk)
         ! find dimension of inputted stack
@@ -148,13 +156,8 @@ contains
         call self%os_stk%set(1, 'kv',         ctfvars%kv)
         call self%os_stk%set(1, 'cs',         ctfvars%cs)
         call self%os_stk%set(1, 'fraca',      ctfvars%fraca)
+        call self%os_stk%set(1, 'phshift',    ctfvars%phshift)
         call self%os_stk%set(1, 'state',      1) ! default on import
-        if( ctfvars%l_phaseplate )then
-            if( .not. os%isthere('phshift') ) THROW_HARD('phaseplate=yes & input oris lack phshift; add_single_stk')
-            call self%os_stk%set(1, 'phaseplate', 'yes')
-        else
-            call self%os_stk%set(1, 'phaseplate', 'no')
-        endif
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO)
                 call self%os_stk%set(1, 'ctf', 'no')
@@ -256,6 +259,7 @@ contains
             call self%os_stk%set(stk_ind, 'top',        top)
             call self%os_stk%set(stk_ind, 'stkkind',    'split')
             call self%os_stk%set(stk_ind, 'imgkind',    'ptcl')
+            if( .not. o_stk%isthere('phshift') ) call self%os_stk%set(stk_ind, 'phshift', 0.)
             istate = 1 ! default on import
             if( o_stk%isthere('state') ) istate = o_stk%get_state()
             call self%os_stk%set(stk_ind, 'state', istate)
@@ -264,7 +268,11 @@ contains
             call o_ptcl%set_dfx(      o_stk%get_dfx())
             call o_ptcl%set_dfy(      o_stk%get_dfy())
             call o_ptcl%set('angast', o_stk%get('angast'))
-            if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
+            if( o_stk%isthere('phshift') )then
+                call o_ptcl%set('phshift', o_stk%get('phshift'))
+            else
+                call o_ptcl%set('phshift', 0.)
+            endif
             call o_ptcl%set_stkind(stk_ind)
             call o_ptcl%set_state(istate)
             pind = fromp
@@ -365,12 +373,7 @@ contains
             call o_stk%set('cs',         ctfvars%cs)
             call o_stk%set('fraca',      ctfvars%fraca)
             call o_stk%set('state',      1.0) ! default on import
-            if( ctfvars%l_phaseplate )then
-                call o_stk%set('phaseplate', 'yes')
-                call o_stk%set('phshift',    ctfvars%phshift)
-            else
-                call o_stk%set('phaseplate', 'no')
-            endif
+            call o_stk%set('phshift', ctfvars%phshift)
             select case(ctfvars%ctfflag)
                 case(CTFFLAG_NO)
                     call o_stk%set('ctf', 'no')
@@ -389,6 +392,7 @@ contains
                 call o_ptcl%set_stkind(stk_ind)
                 call o_ptcl%set('pind',   pind) ! to keep track of particle indices
                 call o_ptcl%set('indstk', i)    ! physical particle index in stack
+                if( .not. o_ptcl%isthere('phshift') ) call o_ptcl%set('phshift', ctfvars%phshift)
                 istate = 1
                 if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
                 call o_ptcl%set_state(istate)
@@ -401,12 +405,6 @@ contains
                     case DEFAULT
                         ! all good
                 end select
-                if( ctfvars%l_phaseplate )then
-                    if( .not.o_ptcl%isthere('phshift') )then
-                        call o_ptcl%print_ori
-                        THROW_HARD('Missing phase-shift parameter for particle: '//int2str(pind))
-                    endif
-                endif
                 call self%os_ptcl2D%set_ori(pind, o_ptcl)
                 call self%os_ptcl3D%set_ori(pind, o_ptcl)
             enddo
@@ -681,21 +679,6 @@ contains
     end subroutine report_state2stk
 
     ! Getters
-
-    module logical function has_phaseplate( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        type(string) :: phaseplate
-        has_phaseplate = .false.
-        if( trim(oritype) .eq. 'cls3D' ) return
-        ! get info
-        if( self%os_stk%isthere(1, 'phaseplate') )then
-            phaseplate = self%os_stk%get_str(1, 'phaseplate')
-        else
-            phaseplate = 'no'
-        endif
-        has_phaseplate = phaseplate%to_char().eq.'yes'
-    end function has_phaseplate
 
     module integer function get_box( self )
         class(sp_project), target, intent(in) :: self

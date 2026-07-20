@@ -2077,17 +2077,18 @@ interface
 
     ! ===== image CTF procedure interfaces =====
 
-    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in )
+    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in, phshift )
         class(image), intent(inout) :: self
         class(ctf),   intent(inout) :: tfun
-        real,         intent(in)    :: dfx_in, dfy_in, angast_in
+        real,         intent(in)    :: dfx_in, dfy_in, angast_in, phshift
     end subroutine ctf2img
 
-    module subroutine apply_ctf_wpad( self, tfun, dfx, mode, dfy, angast, bfac )
+    module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
         class(image),     intent(inout) :: self   !< instance
         class(ctf),       intent(inout) :: tfun   !< CTF object
         real,             intent(in)    :: dfx    !< defocus x-axis
         character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
+        real,             intent(in)    :: phshift !< additive phase shift (radians)
         real, optional,   intent(in)    :: dfy    !< defocus y-axis
         real, optional,   intent(in)    :: angast !< angle of astigmatism
         real, optional,   intent(in)    :: bfac   !< bfactor

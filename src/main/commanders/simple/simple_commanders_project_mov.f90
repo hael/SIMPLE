@@ -26,7 +26,7 @@ contains
         type(oris)                :: deftab
         type(ctfparams)           :: ctfvars, prev_ctfvars
         type(stream_watcher)      :: movie_buff
-        type(string)              :: phaseplate, boxfname
+        type(string)              :: boxfname
         type(string), allocatable :: boxfnames(:), movfnames(:) 
         logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
@@ -54,11 +54,6 @@ contains
         nprev_movies = spproj%get_nmovies()
         first_import = nprev_movies==0 .and. nprev_intgs==0
         ! CTF
-        if( cline%defined('phaseplate') )then
-            phaseplate = cline%get_carg('phaseplate')
-        else
-            phaseplate ='no'
-        endif
         ctfvars%smpd  = params%smpd
         ctfvars%kv    = params%kv
         ctfvars%cs    = params%cs
@@ -73,8 +68,6 @@ contains
             case DEFAULT
                 THROW_HARD('ctf flag: '//trim(params%ctf)//' not supported; exec_import_movies')
         end select
-        ctfvars%l_phaseplate = .false.
-        if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
         ! sanity checks
         if( first_import )then
             if( spproj%get_nstks()>0)then
@@ -95,7 +88,6 @@ contains
             if( .not.is_equal(ctfvars%cs,   prev_ctfvars%cs)   ) THROW_HARD('The spherical aberrations do not match! exec_import_movies')
             if( .not.is_equal(ctfvars%kv,   prev_ctfvars%kv)   ) THROW_HARD('The voltages do not match! exec_import_movies')
             if( .not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('The amplitude contrasts do not match! exec_import_movies')
-            if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! exec_import_movies')
         endif
         ! update project info
         call spproj%update_projinfo( cline )

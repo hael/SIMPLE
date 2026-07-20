@@ -356,7 +356,6 @@ contains
         ctfvars%dfx     = 0.
         ctfvars%dfy     = 0.
         ctfvars%angast  = 0.
-        ctfvars%l_phaseplate = .false.
         ctfvars%ctfflag = CTFFLAG_NO
         do iframe = 1,spproj%os_mic%get_noris()
             call spproj%os_mic%set(iframe,'ctf','no')

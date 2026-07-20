@@ -77,8 +77,9 @@ contains
         self%angast = deg2rad(angast)
     end subroutine init
 
-    pure function get_ctfvars( self ) result(ctfvals)
+    pure function get_ctfvars( self, phshift ) result(ctfvals)
         class(ctf), intent(in) :: self
+        real,       intent(in) :: phshift !< additive phase shift (radians)
         type(ctfvars) :: ctfvals
         ctfvals%smpd            = self%smpd
         ctfvals%kv              = self%kv
@@ -88,6 +89,7 @@ contains
         ctfvals%dfx             = self%dfx
         ctfvals%dfy             = self%dfy
         ctfvals%angast          = self%angast
+        ctfvals%phshift         = canonical_phshift(phshift)
     end function get_ctfvars
 
     !>  \brief returns the argument (radians) to the ctf
@@ -104,7 +106,8 @@ contains
         !! compute the defocus
         df = self%eval_df(ang)
         !! compute the ctf argument
-        evalPhSh = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) + add_phshift
+        evalPhSh = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) &
+            &+ canonical_phshift(add_phshift)
     end function evalPhSh
 
     !>  \brief Returns the CTF, based on CTFFIND4 subroutine (Rohou & Grigorieff (2015))

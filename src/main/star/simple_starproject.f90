@@ -86,7 +86,8 @@ contains
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
-        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, &
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfMaxResolution", splflag="ctfres")]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splIceFrac", splflag="icefrac")]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
@@ -113,7 +114,8 @@ contains
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
-        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, &
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
@@ -135,7 +137,8 @@ contains
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
-        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, &
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
@@ -187,6 +190,7 @@ contains
         do i =1,spproj%os_mic%get_noris()
             call spproj%os_mic%set(i, "imgkind", "mic")
             call spproj%os_mic%set(i, "ctf", "yes")
+            if( .not.spproj%os_mic%isthere(i, 'phshift') ) call spproj%os_mic%set(i, 'phshift', 0.)
         end do
     end subroutine import_mics
 
@@ -196,6 +200,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         type(string) :: tmpstr
+        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls2D"
@@ -210,6 +215,9 @@ contains
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
+        do i = 1,spproj%os_ptcl2D%get_noris()
+            if( .not.spproj%os_ptcl2D%isthere(i, 'phshift') ) call spproj%os_ptcl2D%set(i, 'phshift', 0.)
+        enddo
     end subroutine import_ptcls2D
 
     subroutine import_cls2D(self, cline, spproj, filename)
@@ -238,6 +246,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         type(string) :: tmpstr
+        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls3D"
@@ -252,6 +261,9 @@ contains
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
+        do i = 1,spproj%os_ptcl3D%get_noris()
+            if( .not.spproj%os_ptcl3D%isthere(i, 'phshift') ) call spproj%os_ptcl3D%set(i, 'phshift', 0.)
+        enddo
     end subroutine import_ptcls3D
 
     ! imports into 2D & 3D, preserves poses
@@ -260,6 +272,7 @@ contains
         class(string),      intent(in)    :: filename
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: ctfflag
+        integer                           :: i
         write(logfhandle,'(A,A)')'>>> Importing ' , filename%to_char()
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
@@ -269,6 +282,9 @@ contains
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
         ! 3D field
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
+        do i = 1,spproj%os_ptcl3D%get_noris()
+            if( .not.spproj%os_ptcl3D%isthere(i, 'phshift') ) call spproj%os_ptcl3D%set(i, 'phshift', 0.)
+        enddo
         ! CTF
         select case(lowercase(ctfflag%to_char()))
             case('no')
@@ -508,6 +524,7 @@ contains
             call stkoris%set(i, 'imgkind',    'ptcl')
             call stkoris%set(i, 'ctf',        'yes')
             call stkoris%set(i, 'stkkind',    'split')
+            if( .not.stkoris%isthere(i, 'phshift') ) call stkoris%set(i, 'phshift', 0.)
         end do
         ! cleanup
         call entrystr%kill
