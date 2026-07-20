@@ -428,40 +428,40 @@ subroutine exec_test_simulated_workflow( self, cline )
     use simple_ui,            only: make_ui
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    character(len=*), parameter :: WORKDIR       = 'test_simulated_workflow'
-    character(len=*), parameter :: PROJNAME      = 'simulated_workflow'
-    character(len=*), parameter :: PROJFILE      = PROJNAME//'.simple'
-    character(len=*), parameter :: VOL_FILE      = '6VXX.mrc'
-    character(len=*), parameter :: REPROJ_FILE   = 'reprojs_6VXX.mrcs'
-    character(len=*), parameter :: MOVIE_FILE    = 'simulate_movie.mrc'
-    character(len=*), parameter :: SUBSET_FILE   = 'random_reprojections.mrcs'
-    character(len=*), parameter :: OPTIMAL_FILE  = 'optimal_movie_average.mrc'
-    character(len=*), parameter :: PARAMS_FILE   = 'simulate_movie_params.txt'
+    character(len=*), parameter :: WORKDIR         = 'test_simulated_workflow'
+    character(len=*), parameter :: PROJNAME        = 'simulated_workflow'
+    character(len=*), parameter :: PROJFILE        = PROJNAME//'.simple'
+    character(len=*), parameter :: VOL_FILE        = '6VXX.mrc'
+    character(len=*), parameter :: REPROJ_FILE     = 'reprojs_6VXX.mrcs'
+    character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
+    character(len=*), parameter :: SUBSET_FILE     = 'random_reprojections.mrcs'
+    character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE     = 'simulate_movie_params.txt'
     character(len=*), parameter :: WORKFLOW_PICKER = 'segdiam'
     ! Reference-picker alternative: comment the line above and uncomment the line below.
     ! character(len=*), parameter :: WORKFLOW_PICKER = 'new'
-    character(len=*), parameter :: PICKREFS_FILE = 'pickrefs.mrc'
-    character(len=*), parameter :: FILETAB_FILE  = 'simulated_movies.txt'
-    character(len=*), parameter :: VOL_DIR       = '0_pdb2mrc'
-    character(len=*), parameter :: REPROJ_DIR    = '1_reproject'
-    character(len=*), parameter :: IMPORT_DIR    = '1_import_movies'
-    character(len=*), parameter :: MOTION_DIR    = '2_motion_correct'
-    character(len=*), parameter :: CTF_DIR       = '3_ctf_estimate'
-    character(len=*), parameter :: PICK_DIR      = '4_pick'
-    character(len=*), parameter :: EXTRACT_DIR   = '5_extract'
-    character(len=*), parameter :: ABINIT2D_DIR  = '6_abinitio2D'
-    real,             parameter :: SMPD          = 1.3
-    real,             parameter :: MSKDIAM       = 180.0
-    real,             parameter :: CS            = 2.7
-    real,             parameter :: KV            = 300.0
-    real,             parameter :: FRACA         = 0.1
-    integer,          parameter :: NPROJS        = 100
-    integer,          parameter :: NPER_MOVIE    = 16
-    integer,          parameter :: MOVIE_DIM     = 1536
-    integer,          parameter :: NFRAMES       = 16
-    integer,          parameter :: NMOVIES       = 10
-    integer,          parameter :: EXTRACT_BOX   = 192
-    integer,          parameter :: NTHR          = 4
+    character(len=*), parameter :: PICKREFS_FILE  = 'pickrefs.mrc'
+    character(len=*), parameter :: FILETAB_FILE   = 'simulated_movies.txt'
+    character(len=*), parameter :: VOL_DIR        = '0_pdb2mrc'
+    character(len=*), parameter :: REPROJ_DIR     = '1_reproject'
+    character(len=*), parameter :: IMPORT_DIR     = '1_import_movies'
+    character(len=*), parameter :: MOTION_DIR     = '2_motion_correct'
+    character(len=*), parameter :: CTF_DIR        = '3_ctf_estimate'
+    character(len=*), parameter :: PICK_DIR       = '4_pick'
+    character(len=*), parameter :: EXTRACT_DIR    = '5_extract'
+    character(len=*), parameter :: ABINIT2D_DIR   = '6_abinitio2D'
+    real,             parameter :: SMPD           = 1.3
+    real,             parameter :: MSKDIAM        = 180.0
+    real,             parameter :: CS             = 2.7
+    real,             parameter :: KV             = 300.0
+    real,             parameter :: FRACA          = 0.1
+    integer,          parameter :: NPROJS         = 100
+    integer,          parameter :: NPER_MOVIE     = 16
+    integer,          parameter :: MOVIE_DIM      = 1536
+    integer,          parameter :: NFRAMES        = 16
+    integer,          parameter :: NMOVIES        = 10
+    integer,          parameter :: EXTRACT_BOX    = 192
+    integer,          parameter :: NTHR           = 4
     type(cmdline)                       :: cline_projection, cline_sim_mov, cline_new_project
     type(cmdline)                       :: cline_import_movies, cline_mot_corr, cline_ctf_est
     type(cmdline)                       :: cline_pick, cline_extract, cline_abinitio2D, cline_abinitio3D
@@ -552,25 +552,25 @@ subroutine exec_test_simulated_workflow( self, cline )
             call projection%write(string(SUBSET_FILE), j)
         enddo
         subset_path = simple_abspath(string(SUBSET_FILE))
-        call cline_sim_mov%set('prg',        'simulate_movie')
+        call cline_sim_mov%set('prg',           'simulate_movie')
         if( i == 1 )then
-            call cline_sim_mov%set('mkdir',                 'yes')
-            call cline_sim_mov%set('dir_exec',  'simulate_movies')
+            call cline_sim_mov%set('mkdir',                'yes')
+            call cline_sim_mov%set('dir_exec', 'simulate_movies')
         else
-            call cline_sim_mov%set('mkdir',                  'no')
+            call cline_sim_mov%set('mkdir',                 'no')
         endif
-        call cline_sim_mov%set('stk',             subset_path)
-        call cline_sim_mov%set('xdim',              MOVIE_DIM)
-        call cline_sim_mov%set('ydim',              MOVIE_DIM)
-        call cline_sim_mov%set('nframes',             NFRAMES)
-        call cline_sim_mov%set('smpd',                   SMPD)
-        call cline_sim_mov%set('snr',                     0.2)
-        call cline_sim_mov%set('kv',                       KV)
-        call cline_sim_mov%set('cs',                       CS)
-        call cline_sim_mov%set('fraca',                 FRACA)
-        call cline_sim_mov%set('defocus',                 2.0)
-        call cline_sim_mov%set('trs',                     2.0)
-        call cline_sim_mov%set('nthr',                   NTHR)
+        call cline_sim_mov%set('stk',                subset_path)
+        call cline_sim_mov%set('xdim',                 MOVIE_DIM)
+        call cline_sim_mov%set('ydim',                 MOVIE_DIM)
+        call cline_sim_mov%set('nframes',                NFRAMES)
+        call cline_sim_mov%set('smpd',                      SMPD)
+        call cline_sim_mov%set('snr',                        0.2)
+        call cline_sim_mov%set('kv',                          KV)
+        call cline_sim_mov%set('cs',                          CS)
+        call cline_sim_mov%set('fraca',                    FRACA)
+        call cline_sim_mov%set('defocus',                    2.0)
+        call cline_sim_mov%set('trs',                        2.0)
+        call cline_sim_mov%set('nthr',                      NTHR)
         call xsimov%execute(cline_sim_mov)
         if( .not. file_exists(MOVIE_FILE) ) THROW_HARD('Simulated movie was not generated')
         movie_fname = string('simulate_movie_')//int2str_pad(i,3)//MRC_EXT
@@ -590,72 +590,68 @@ subroutine exec_test_simulated_workflow( self, cline )
     filetab_path = simple_abspath(string(FILETAB_FILE))
 
     write(logfhandle,'(a)') '>>> Step 4: create a project and import the movies'
-    call cline_new_project%set('projname',   PROJNAME)
-    call cline_new_project%set('qsys_name',   'local')
+    call cline_new_project%set('projname',              PROJNAME)
+    call cline_new_project%set('qsys_name',              'local')
     call xnew_project%execute(cline_new_project)
     call cline_new_project%kill()
     call simple_getcwd(workflow_root)
     workflow_root_path = workflow_root%to_char()
-    project_path = simple_abspath(string(PROJFILE))
-    call cline_import_movies%set('prg',      'import_movies')
-    call cline_import_movies%set('mkdir',              'yes')
-    call cline_import_movies%set('projfile',    project_path)
-    call cline_import_movies%set('filetab',     filetab_path)
-    call cline_import_movies%set('cs',                    CS)
-    call cline_import_movies%set('fraca',              FRACA)
-    call cline_import_movies%set('kv',                    KV)
-    call cline_import_movies%set('smpd',                SMPD)
-    call cline_import_movies%set('ctf',                'yes')
+    project_path       = simple_abspath(string(PROJFILE))
+    call cline_import_movies%set('prg',          'import_movies')
+    call cline_import_movies%set('mkdir',                  'yes')
+    call cline_import_movies%set('projfile',        project_path)
+    call cline_import_movies%set('filetab',         filetab_path)
+    call cline_import_movies%set('cs',                        CS)
+    call cline_import_movies%set('fraca',                  FRACA)
+    call cline_import_movies%set('kv',                        KV)
+    call cline_import_movies%set('smpd',                    SMPD)
+    call cline_import_movies%set('ctf',                    'yes')
     call ximport_movies%execute(cline_import_movies)
     call cline_import_movies%kill()
     call update_project_path
     call return_to_stage_root('import_movies')
 
     write(logfhandle,'(a)') '>>> Step 5: motion correction'
-    call cline_mot_corr%set('prg',       'motion_correct')
-    call cline_mot_corr%set('projfile',      project_path)
-    call cline_mot_corr%set('mkdir',                'yes')
-    call cline_mot_corr%set('algorithm',            'iso')
-    call cline_mot_corr%set('mcpatch',               'no')
-    call cline_mot_corr%set('nparts',                   1)
-    call cline_mot_corr%set('nthr',                  NTHR)
+    call cline_mot_corr%set('prg',              'motion_correct')
+    call cline_mot_corr%set('projfile',             project_path)
+    call cline_mot_corr%set('mkdir',                       'yes')
+    call cline_mot_corr%set('nparts',                          1)
+    call cline_mot_corr%set('nthr',                         NTHR)
     call xmotcorr%execute(cline_mot_corr)
     call cline_mot_corr%kill()
     call update_project_path
     call return_to_stage_root('motion_correct')
 
     write(logfhandle,'(a)') '>>> Step 6: CTF estimation'
-    call cline_ctf_est%set('prg',       'ctf_estimate')
-    call cline_ctf_est%set('projfile',    project_path)
-    call cline_ctf_est%set('mkdir',              'yes')
-    call cline_ctf_est%set('ctfpatch',            'no')
-    call cline_ctf_est%set('nparts',                 1)
-    call cline_ctf_est%set('nthr',                NTHR)
+    call cline_ctf_est%set('prg',                 'ctf_estimate')
+    call cline_ctf_est%set('projfile',              project_path)
+    call cline_ctf_est%set('mkdir',                        'yes')
+    call cline_ctf_est%set('nparts',                           1)
+    call cline_ctf_est%set('nthr',                          NTHR)
     call xctf_estimate%execute(cline_ctf_est)
     call cline_ctf_est%kill()
     call update_project_path
     call return_to_stage_root('ctf_estimate')
 
     write(logfhandle,'(a,a)') '>>> Step 7: particle picking with ', WORKFLOW_PICKER
-    call cline_pick%set('prg',                   'pick')
-    call cline_pick%set('projfile',        project_path)
-    call cline_pick%set('mkdir',                  'yes')
-    call cline_pick%set('smpd',                    SMPD)
-    call cline_pick%set('pcontrast',             'black')
+    call cline_pick%set('prg',                            'pick')
+    call cline_pick%set('projfile',                 project_path)
+    call cline_pick%set('mkdir',                           'yes')
+    call cline_pick%set('pcontrast',                     'black')
     select case(WORKFLOW_PICKER)
         case('segdiam')
-            call cline_pick%set('picker',         'segdiam')
-            call cline_pick%set('moldiam_max',     MSKDIAM)
+            call cline_pick%set('picker',              'segdiam')
+            call cline_pick%set('moldiam_max',           MSKDIAM)
         case('new')
-            call cline_pick%set('picker',             'new')
-            call cline_pick%set('pickrefs',     reproj_path)
-            call cline_pick%set('moldiam',          MSKDIAM)
-            call cline_pick%set('pick_roi',            'no')
+            call cline_pick%set('picker',                  'new')
+            call cline_pick%set('pickrefs',          reproj_path)
+            call cline_pick%set('moldiam',               MSKDIAM)
+            call cline_pick%set('pick_roi',                 'no')
         case default
             THROW_HARD('Unsupported simulated-workflow picker: '//WORKFLOW_PICKER)
     end select
-    call cline_pick%set('nparts',                     1)
-    call cline_pick%set('nthr',                    NTHR)
+    call cline_pick%set('nparts',                              1)
+    call cline_pick%set('nthr',                             NTHR)
     call xpick%execute(cline_pick)
     call cline_pick%kill()
     if( WORKFLOW_PICKER == 'new' )then
@@ -682,12 +678,12 @@ subroutine exec_test_simulated_workflow( self, cline )
     call return_to_stage_root('pick')
 
     write(logfhandle,'(a)') '>>> Step 8: particle extraction'
-    call cline_extract%set('prg',         'extract')
-    call cline_extract%set('projfile', project_path)
-    call cline_extract%set('mkdir',           'yes')
-    call cline_extract%set('box',       EXTRACT_BOX)
-    call cline_extract%set('nparts',              1)
-    call cline_extract%set('nthr',             NTHR)
+    call cline_extract%set('prg',                      'extract')
+    call cline_extract%set('projfile',              project_path)
+    call cline_extract%set('mkdir',                        'yes')
+    call cline_extract%set('box',                    EXTRACT_BOX)
+    call cline_extract%set('nparts',                           1)
+    call cline_extract%set('nthr',                          NTHR)
     call xextract%execute(cline_extract)
     call cline_extract%kill()
     call update_project_path
@@ -700,14 +696,14 @@ subroutine exec_test_simulated_workflow( self, cline )
     ncls = min(4, max(2, nptcls / 5))
 
     write(logfhandle,'(a)') '>>> Step 9: ab initio 2D'
-    call cline_abinitio2D%set('prg',        'abinitio2D')
-    call cline_abinitio2D%set('projfile',   project_path)
-    call cline_abinitio2D%set('mkdir',             'yes')
-    call cline_abinitio2D%set('mskdiam',         MSKDIAM)
-    call cline_abinitio2D%set('ncls',               ncls)
-    call cline_abinitio2D%set('nstages',               1)
-    call cline_abinitio2D%set('nits_per_stage',        1)
-    call cline_abinitio2D%set('nthr',               NTHR)
+    call cline_abinitio2D%set('prg',                'abinitio2D')
+    call cline_abinitio2D%set('projfile',           project_path)
+    call cline_abinitio2D%set('mkdir',                     'yes')
+    call cline_abinitio2D%set('mskdiam',                 MSKDIAM)
+    call cline_abinitio2D%set('ncls',                       ncls)
+    call cline_abinitio2D%set('nstages',                       1)
+    call cline_abinitio2D%set('nits_per_stage',                1)
+    call cline_abinitio2D%set('nthr',                       NTHR)
     call xabinitio2D%execute(cline_abinitio2D)
     call cline_abinitio2D%kill()
     call update_project_path
@@ -718,20 +714,20 @@ subroutine exec_test_simulated_workflow( self, cline )
     call spproj%kill()
 
     write(logfhandle,'(a)') '>>> Step 10: ab initio 3D'
-    call cline_abinitio3D%set('prg',            'abinitio3D')
-    call cline_abinitio3D%set('projfile',       project_path)
-    call cline_abinitio3D%set('mkdir',                 'yes')
-    call cline_abinitio3D%set('pgrp',                   'c1')
-    call cline_abinitio3D%set('pgrp_start',             'c1')
-    call cline_abinitio3D%set('mskdiam',             MSKDIAM)
-    call cline_abinitio3D%set('nstates',                   1)
-    call cline_abinitio3D%set('multivol_mode',      'single')
-    call cline_abinitio3D%set('filt_mode',            'none')
-    call cline_abinitio3D%set('automsk',                'no')
-    call cline_abinitio3D%set('nstages',                   1)
-    call cline_abinitio3D%set('nsample', min(nptcls, NPROJS))
-    call cline_abinitio3D%set('nparts',                    1)
-    call cline_abinitio3D%set('nthr',                   NTHR)
+    call cline_abinitio3D%set('prg',                'abinitio3D')
+    call cline_abinitio3D%set('projfile',           project_path)
+    call cline_abinitio3D%set('mkdir',                     'yes')
+    call cline_abinitio3D%set('pgrp',                       'c1')
+    call cline_abinitio3D%set('pgrp_start',                 'c1')
+    call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
+    call cline_abinitio3D%set('nstates',                       1)
+    call cline_abinitio3D%set('multivol_mode',          'single')
+    call cline_abinitio3D%set('filt_mode',                'none')
+    call cline_abinitio3D%set('automsk',                    'no')
+    call cline_abinitio3D%set('nstages',                       1)
+    call cline_abinitio3D%set('nsample',     min(nptcls, NPROJS))
+    call cline_abinitio3D%set('nparts',                        1)
+    call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
     call cline_abinitio3D%kill()
 
