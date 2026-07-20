@@ -8,6 +8,7 @@ use simple_convergence, only: convergence
 use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
+use simple_euclid_sigma2, only: sigma2_group_iter
 implicit none
 
 public :: cluster2D_strategy, cluster2D_inmem_strategy, cluster2D_distr_strategy, create_cluster2D_strategy
@@ -163,7 +164,7 @@ contains
         call cluster2D_exec(params, build, cline, params%which_iter, converged)
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
-            call cline%set('which_iter', params%which_iter + 1)
+            call cline%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
             call xcalc_group_sigmas%execute(cline)
             call cline%set('which_iter', params%which_iter)
         endif
@@ -290,7 +291,7 @@ contains
         if( params%cc_objfun==OBJFUN_EUCLID )then
             cline_calc_sigma = cline
             call cline_calc_sigma%set('prg',        'calc_group_sigmas')
-            call cline_calc_sigma%set('which_iter', params%which_iter + 1)
+            call cline_calc_sigma%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
             call cline_calc_sigma%set('nthr',       self%nthr_master)
             call xcalc_group_sigmas%execute(cline_calc_sigma)
         endif

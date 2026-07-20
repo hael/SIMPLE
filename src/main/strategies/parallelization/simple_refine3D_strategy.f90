@@ -10,6 +10,7 @@ use simple_qsys_env,      only: qsys_env
 use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
+use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -523,11 +524,15 @@ contains
                 call build%spproj_field%partition_eo
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            cline_calc_pspec   = cline
-            call cline_calc_pspec%set('prg', 'calc_pspec')
-            if( L_BENCH_GLOB ) t_calc_pspec = tic()
-            call xcalc_pspec%execute( cline_calc_pspec )
-            if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
+            if( sigma2_stage_needs_bootstrap(startit) )then
+                cline_calc_pspec = cline
+                call cline_calc_pspec%set('prg', 'calc_pspec')
+                if( L_BENCH_GLOB ) t_calc_pspec = tic()
+                call xcalc_pspec%execute( cline_calc_pspec )
+                if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
+            else
+                write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+            endif
         endif
         ! Keep run-time counters consistent with the new high-level loop
         params%startit    = startit
@@ -601,7 +606,8 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma )then
-            call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+            call self%cline_calc_group_sigmas%set('which_iter', &
+                sigma2_group_iter(params%which_iter, matcher_completed=.false.))
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
             if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
@@ -883,9 +889,13 @@ contains
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( L_BENCH_GLOB ) t_calc_pspec = tic()
-            call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-            if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
+            if( params%cc_objfun /= OBJFUN_EUCLID .or. sigma2_stage_needs_bootstrap(params%startit) )then
+                if( L_BENCH_GLOB ) t_calc_pspec = tic()
+                call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
+            else
+                write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+            endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.
             do state = 1,params%nstates
@@ -1000,7 +1010,8 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
         if( trim(params%objfun).eq.'euclid' )then
-            call self%cline_calc_group_sigmas%set('which_iter', iter)
+            call self%cline_calc_group_sigmas%set('which_iter', &
+                sigma2_group_iter(iter, matcher_completed=.false.))
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
             if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)

@@ -52,7 +52,7 @@ See [src/main/simple_builder.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_bu
 
 Persisted sigma data has two forms:
 
-- partition-local binary files: `sigma2_part_<part>.dat`
+- partition-local binary files: `sigma2_noise_partN.dat`
 - grouped STAR files: `sigma2_it_<iter>.star`
 
 The binary format is defined in [src/fileio/simple_sigma2_binfile.f90](/Users/elmlundho/src/SIMPLE/src/fileio/simple_sigma2_binfile.f90:1).
@@ -81,16 +81,57 @@ When group STAR files are loaded, the selected group spectrum is expanded back o
 
 See [src/main/simple_euclid_sigma2.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_euclid_sigma2.f90:171).
 
+## Native-grid and staged-refinement policy
+
+Persistent sigma spectra live on the original particle-image grid, not on a
+stage's cropped working grid:
+
+```text
+native shell k  <->  params%box, params%smpd
+storage range   =    1 : fdim(params%box)-1
+```
+
+`calc_pspec`, the matcher residual update, and `euclid_sigma2` all use this
+native shell convention. `box_crop` and `smpd_crop` only determine how much of
+that stored model a stage consumes. A crop change between refine3D stages does
+not change the meaning or size of a stored sigma record and is not a reason to
+recalculate or rewrite it.
+
+The native records already contain shells outside an early stage's active
+matching band. When a later stage activates those shells, the normal matcher
+residual update replaces their values. No stage-handoff extrapolation or
+interpolation is required.
+
+Reconstruction already owns the only required grid adaptation.
+`image%gen_fplane4rec` calls `simple_math_ft::upsample_sigma2` to interpolate
+the selected native sigma range onto the padded reconstruction Fourier plane.
+This is an existing parallel consumer path and must not be duplicated in stage
+initialization. See
+[src/main/image/simple_image_ctf.f90](/Users/elmlundho/src/SIMPLE/src/main/image/simple_image_ctf.f90:203)
+and
+[src/utils/math/simple_math_ft.f90](/Users/elmlundho/src/SIMPLE/src/utils/math/simple_math_ft.f90:1).
+
+A change to the original `params%box` or `params%smpd` is a different native
+particle representation and is outside this reuse contract.
+
 ## Calculation lifecycle
 
 ### 1. Bootstrap spectra
 
-If the expected grouped sigma STAR file for the current starting iteration does not exist, SIMPLE bootstraps sigma with `calc_pspec`.
+`calc_pspec` is the initial image-power-spectrum bootstrap. For refine3D it runs
+on the first sigma-producing stage (`startit <= 1`), after enforcing even/odd
+partitioning. A later staged run (`startit > 1`) reuses the existing
+`sigma2_noise_partN.dat` files instead. The normal first
+`calc_group_sigmas` call then reads those files and creates the grouped model
+for the new iteration.
 
-In shared-memory `refine3D`, this check is performed against
-`sigma2_it_<which_iter>.star` before entering the main loop; if missing,
-`calc_pspec` is executed after enforcing even/odd partitioning. See
-[src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:355).
+This reuse needs no public command-line mode, controller handoff metadata,
+binary-format extension, file conversion, or new interpolation path. The staged
+controller already advances `startit` and retains the native-grid partition
+files in the working directory. Existing readers remain responsible for file
+validation. A missing or unusable file fails through that established path; it
+must not silently trigger another expensive `calc_pspec` bootstrap. See
+[src/main/strategies/parallelization/simple_refine3D_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_refine3D_strategy.f90:523).
 
 `abinitio2D` sets `sigma_est='global'` and, unless overridden, uses the default
 Euclidean objective with `ml_reg='yes'`. It runs `calc_pspec` before the first
@@ -100,8 +141,8 @@ available. See
 [src/main/commanders/simple/simple_commanders_abinitio2D.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio2D.f90:276).
 
 `abinitio3D` sets `objfun='euclid'` and `sigma_est='global'`, then delegates
-stage execution to `refine3D`. The same refine3D bootstrap contract therefore
-applies to all 3D ab initio stages. See
+stage execution to `refine3D`. Its first stage bootstraps sigma and later stages
+reuse the residual partition files written by the preceding matcher. See
 [src/main/commanders/simple/simple_commanders_abinitio.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio.f90:444) and
 [src/main/simple_abinitio_utils.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_utils.f90:283).
 
@@ -118,7 +159,7 @@ assembly step:
 - the requested grouped STAR layout is written with identical initial global
   curves in every group, so existing `sigma_est='group'` readers remain valid
 - the two global curves are propagated to every active record in partition-local
-  `sigma2_part_<part>.dat` files
+  `sigma2_noise_partN.dat` files
 
 This is the established `sigma_est='global'` propagation behavior, now used for
 all initial bootstraps. It is not a permanent replacement for group estimation:
@@ -154,7 +195,7 @@ probabilistic modes, the sequence is:
    the assignment artifact
 3. run the normal matcher, which consumes the assignment, updates
    orientation/state/shift records, recalculates per-particle residual sigmas,
-   and writes `sigma2_part_<part>.dat`
+   and writes `sigma2_noise_partN.dat`
 4. consolidate partition sigmas into the next grouped STAR handoff
 
 The important bug-prevention rule is that step 3 is mandatory for `prob`,
@@ -168,6 +209,11 @@ The assignment-only side of this split is visible in
 ### 3. Iteration consolidation
 
 The policy is that grouped STAR files are the durable handoff artifact between iterations and runs.
+
+`sigma2_it_<N>.star` is the grouped model consumed by matcher iteration `N`.
+`sigma2_group_iter` encodes this convention for both workflows: consolidation
+before matching writes the current iteration number, while consolidation after
+matching writes the next iteration number.
 
 Current implementation details differ slightly by workflow:
 
@@ -184,7 +230,7 @@ The authoritative consolidation implementation is `exec_calc_group_sigmas` in [s
 
 That implementation:
 
-- reads all partition `sigma2_part_<part>.dat` files
+- reads all partition `sigma2_noise_partN.dat` files
 - groups by `eo` and either `stkind` or one global bucket
 - computes arithmetic group averages over active particles; each active
   particle contributes one spectrum to its even/odd and `stkind` (or global)
@@ -269,17 +315,38 @@ The current boundary is acceptable and should be preserved:
 - matcher/search code: per-particle sigma updates
 - probabilistic commanders: candidate probability tables and assignment artifacts only
 - Euclid commanders/strategies: bootstrap and iteration-level consolidation
+- refine3D stage initialization: bootstrap once, then retain existing native-grid
+  partition files
 - reconstruction/restoration code: sigma consumption when `l_ml_reg`
 
-## Recommended evolution
+The main rule to preserve is simple: sigma remains on the native particle grid.
+Grouped STAR files are the normal cross-iteration model, while the newer
+matcher-written partition files are retained across refine3D stage boundaries
+so the next stage can consolidate them without rerunning `calc_pspec`.
 
-Near-term improvements should preserve numerical behavior:
+## Forward-looking evolution
 
-- make iteration-number semantics explicit in one helper so `cluster2D` and `refine3D` use the same documented convention
-- separate bootstrap-only policy from steady-state consolidation policy, because they intentionally use different averaging rules
-- add regression coverage for restart/resume behavior using preexisting `sigma2_it_<iter>.star`
-- add regression coverage for `refine=prob`, `refine=prob_state`, and
-  `refine=prob_neigh` showing that `sigma2_part_<part>.dat` changes after the
-  matcher consumes the assignment artifact
+The most plausible future simplification is to make all Euclidean sigma
+handling follow the current `sigma_est='global'` policy and remove the
+`sigma_est` option. Bootstrap and steady-state consolidation would then produce
+one spectrum per even/odd half-set rather than separate `stkind` spectra, and
+matching and reconstruction would use those global curves for every active
+particle.
 
-The main rule to preserve is simple: grouped STAR sigma files are the cross-iteration contract, while partition binary sigma files are working state for the current pass.
+This would not remove the matcher-side per-particle residual calculation. Those
+residuals remain the observations from which the next global even/odd spectra
+are estimated.
+
+This direction is deliberately deferred. Before removing the grouped mode,
+`sigma_est='global'` must be validated in high-resolution refinement against
+the current grouped policy. The comparison must cover representative homogeneous
+and mixed particle populations and demonstrate comparable:
+
+- FSC and reported resolution;
+- high-frequency stability and map quality;
+- orientation, shift, and convergence behavior;
+- robustness when stacks or particle groups have different noise levels.
+
+Until that evidence exists, `sigma_est='group'` and `sigma_est='global'` remain
+supported current behavior. Removal of the option is not part of the present
+stage-reuse refactoring.

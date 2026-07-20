@@ -9,7 +9,8 @@ implicit none
 
 public :: euclid_sigma2, write_groups_starfile
 public :: split_sigma2_into_groups, consolidate_sigma2_groups, average_sigma2_groups
-public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
+public :: sigma2_star_from_iter, sigma2_group_iter, sigma2_stage_needs_bootstrap
+public :: fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
 
@@ -48,6 +49,18 @@ contains
 end type euclid_sigma2
 
 contains
+
+    pure integer function sigma2_group_iter( matcher_iter, matcher_completed ) result( group_iter )
+        integer, intent(in) :: matcher_iter
+        logical, intent(in) :: matcher_completed
+        group_iter = matcher_iter
+        if( matcher_completed ) group_iter = group_iter + 1
+    end function sigma2_group_iter
+
+    pure logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
+        integer, intent(in) :: startit
+        needs_bootstrap = startit <= 1
+    end function sigma2_stage_needs_bootstrap
 
     subroutine new( self, params, pftc, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration

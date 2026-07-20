@@ -83,7 +83,7 @@ call mem_monitor_finish
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('c3b0d4e39')
+call simple_print_git_version('a93af895b')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
