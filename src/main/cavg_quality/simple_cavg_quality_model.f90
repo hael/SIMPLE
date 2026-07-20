@@ -19,6 +19,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+public :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 ! Internal compatibility cache for the retired score-and-cluster code path.
@@ -58,7 +59,8 @@ end type cavg_quality_cached_decision
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in builtin_names.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk100mics'
-character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+character(len=*), parameter :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT = 'sievemodel'
+character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT // '|' // CAVG_QUALITY_MODEL_SIEVE_DEFAULT
 
 real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
@@ -137,6 +139,8 @@ contains
         select case(trim(preset_name))
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 spec = chunk100mics_model_spec()
+            case(CAVG_QUALITY_MODEL_SIEVE_DEFAULT)
+                spec = sieve_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -272,6 +276,228 @@ contains
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
     end function chunk100mics_model_spec
+
+    function sieve_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                    = CAVG_QUALITY_MODEL_SIEVE_DEFAULT
+        spec%context                 = 'sieve'
+        spec%feature_policy          = 'microchunk_plus_score_signal'
+        spec%weights                 = [ &
+              7.142857E-02,   7.142857E-02,   7.142857E-02,   7.142857E-02, &
+              7.142857E-02,   7.142857E-02,   7.142857E-02,   7.142857E-02, &
+              7.142857E-02,   7.142857E-02,   7.142857E-02,   7.142857E-02, &
+              7.142857E-02,   7.142857E-02 ]
+        spec%intercept               =   9.832671E-01
+        spec%linear_coefficients     = [ &
+             -6.918444E-02,   1.174217E+00,   2.082862E-01,   9.721558E-01, &
+              2.745598E-01,  -6.372386E-01,  -2.369738E-01,   3.745508E-01, &
+             -8.853315E-01,  -8.241642E-01,  -1.025514E-01,  -2.550836E-02, &
+              3.438007E-01,   1.061425E+00 ]
+        spec%n_interactions           = 91
+        spec%interaction_terms        = 0
+        spec%interaction_coefficients = 0.0
+        spec%interaction_terms(1,:) = [1, 2 ]
+        spec%interaction_coefficients(1) =   6.158664E-01
+        spec%interaction_terms(2,:) = [1, 3 ]
+        spec%interaction_coefficients(2) =  -7.278305E-02
+        spec%interaction_terms(3,:) = [1, 4 ]
+        spec%interaction_coefficients(3) =  -5.793010E-02
+        spec%interaction_terms(4,:) = [1, 5 ]
+        spec%interaction_coefficients(4) =  -1.581391E-01
+        spec%interaction_terms(5,:) = [1, 6 ]
+        spec%interaction_coefficients(5) =   2.160046E-01
+        spec%interaction_terms(6,:) = [1, 7 ]
+        spec%interaction_coefficients(6) =  -1.268776E-01
+        spec%interaction_terms(7,:) = [1, 8 ]
+        spec%interaction_coefficients(7) =   3.217513E-01
+        spec%interaction_terms(8,:) = [1, 9 ]
+        spec%interaction_coefficients(8) =  -1.239059E-01
+        spec%interaction_terms(9,:) = [1, 10 ]
+        spec%interaction_coefficients(9) =  -2.689630E-01
+        spec%interaction_terms(10,:) = [1, 11 ]
+        spec%interaction_coefficients(10) =   4.064969E-01
+        spec%interaction_terms(11,:) = [1, 12 ]
+        spec%interaction_coefficients(11) =   2.079959E-01
+        spec%interaction_terms(12,:) = [1, 13 ]
+        spec%interaction_coefficients(12) =   8.464044E-02
+        spec%interaction_terms(13,:) = [1, 14 ]
+        spec%interaction_coefficients(13) =   2.688188E-02
+        spec%interaction_terms(14,:) = [2, 3 ]
+        spec%interaction_coefficients(14) =   2.528967E-01
+        spec%interaction_terms(15,:) = [2, 4 ]
+        spec%interaction_coefficients(15) =  -4.502688E-02
+        spec%interaction_terms(16,:) = [2, 5 ]
+        spec%interaction_coefficients(16) =   3.397096E-01
+        spec%interaction_terms(17,:) = [2, 6 ]
+        spec%interaction_coefficients(17) =   1.369977E-01
+        spec%interaction_terms(18,:) = [2, 7 ]
+        spec%interaction_coefficients(18) =  -3.075861E-01
+        spec%interaction_terms(19,:) = [2, 8 ]
+        spec%interaction_coefficients(19) =  -4.387426E-01
+        spec%interaction_terms(20,:) = [2, 9 ]
+        spec%interaction_coefficients(20) =   2.256129E-01
+        spec%interaction_terms(21,:) = [2, 10 ]
+        spec%interaction_coefficients(21) =   8.311773E-02
+        spec%interaction_terms(22,:) = [2, 11 ]
+        spec%interaction_coefficients(22) =  -1.010890E-01
+        spec%interaction_terms(23,:) = [2, 12 ]
+        spec%interaction_coefficients(23) =  -6.351334E-01
+        spec%interaction_terms(24,:) = [2, 13 ]
+        spec%interaction_coefficients(24) =   6.612171E-01
+        spec%interaction_terms(25,:) = [2, 14 ]
+        spec%interaction_coefficients(25) =  -1.799542E-01
+        spec%interaction_terms(26,:) = [3, 4 ]
+        spec%interaction_coefficients(26) =  -6.657630E-01
+        spec%interaction_terms(27,:) = [3, 5 ]
+        spec%interaction_coefficients(27) =   5.755506E-01
+        spec%interaction_terms(28,:) = [3, 6 ]
+        spec%interaction_coefficients(28) =  -7.396340E-02
+        spec%interaction_terms(29,:) = [3, 7 ]
+        spec%interaction_coefficients(29) =   3.756891E-02
+        spec%interaction_terms(30,:) = [3, 8 ]
+        spec%interaction_coefficients(30) =  -7.736346E-02
+        spec%interaction_terms(31,:) = [3, 9 ]
+        spec%interaction_coefficients(31) =  -1.425177E-02
+        spec%interaction_terms(32,:) = [3, 10 ]
+        spec%interaction_coefficients(32) =   1.281168E-01
+        spec%interaction_terms(33,:) = [3, 11 ]
+        spec%interaction_coefficients(33) =   3.084263E-02
+        spec%interaction_terms(34,:) = [3, 12 ]
+        spec%interaction_coefficients(34) =   1.866026E-01
+        spec%interaction_terms(35,:) = [3, 13 ]
+        spec%interaction_coefficients(35) =  -1.912241E-01
+        spec%interaction_terms(36,:) = [3, 14 ]
+        spec%interaction_coefficients(36) =   1.800826E-01
+        spec%interaction_terms(37,:) = [4, 5 ]
+        spec%interaction_coefficients(37) =  -2.024839E-01
+        spec%interaction_terms(38,:) = [4, 6 ]
+        spec%interaction_coefficients(38) =  -2.072305E-01
+        spec%interaction_terms(39,:) = [4, 7 ]
+        spec%interaction_coefficients(39) =   2.061003E-01
+        spec%interaction_terms(40,:) = [4, 8 ]
+        spec%interaction_coefficients(40) =  -4.541796E-01
+        spec%interaction_terms(41,:) = [4, 9 ]
+        spec%interaction_coefficients(41) =   5.552803E-01
+        spec%interaction_terms(42,:) = [4, 10 ]
+        spec%interaction_coefficients(42) =  -1.353896E+00
+        spec%interaction_terms(43,:) = [4, 11 ]
+        spec%interaction_coefficients(43) =   6.565881E-01
+        spec%interaction_terms(44,:) = [4, 12 ]
+        spec%interaction_coefficients(44) =  -5.576389E-01
+        spec%interaction_terms(45,:) = [4, 13 ]
+        spec%interaction_coefficients(45) =  -5.728185E-02
+        spec%interaction_terms(46,:) = [4, 14 ]
+        spec%interaction_coefficients(46) =  -3.663005E-01
+        spec%interaction_terms(47,:) = [5, 6 ]
+        spec%interaction_coefficients(47) =   9.450029E-01
+        spec%interaction_terms(48,:) = [5, 7 ]
+        spec%interaction_coefficients(48) =   3.618473E-01
+        spec%interaction_terms(49,:) = [5, 8 ]
+        spec%interaction_coefficients(49) =  -5.069597E-02
+        spec%interaction_terms(50,:) = [5, 9 ]
+        spec%interaction_coefficients(50) =   8.555743E-01
+        spec%interaction_terms(51,:) = [5, 10 ]
+        spec%interaction_coefficients(51) =   1.143771E-01
+        spec%interaction_terms(52,:) = [5, 11 ]
+        spec%interaction_coefficients(52) =   4.424291E-01
+        spec%interaction_terms(53,:) = [5, 12 ]
+        spec%interaction_coefficients(53) =   4.453060E-01
+        spec%interaction_terms(54,:) = [5, 13 ]
+        spec%interaction_coefficients(54) =   6.675552E-01
+        spec%interaction_terms(55,:) = [5, 14 ]
+        spec%interaction_coefficients(55) =   1.489348E-01
+        spec%interaction_terms(56,:) = [6, 7 ]
+        spec%interaction_coefficients(56) =  -2.402572E-01
+        spec%interaction_terms(57,:) = [6, 8 ]
+        spec%interaction_coefficients(57) =   3.175540E-01
+        spec%interaction_terms(58,:) = [6, 9 ]
+        spec%interaction_coefficients(58) =   2.686897E-02
+        spec%interaction_terms(59,:) = [6, 10 ]
+        spec%interaction_coefficients(59) =  -1.394199E-01
+        spec%interaction_terms(60,:) = [6, 11 ]
+        spec%interaction_coefficients(60) =   2.202978E-01
+        spec%interaction_terms(61,:) = [6, 12 ]
+        spec%interaction_coefficients(61) =   3.135217E-02
+        spec%interaction_terms(62,:) = [6, 13 ]
+        spec%interaction_coefficients(62) =  -1.774485E-01
+        spec%interaction_terms(63,:) = [6, 14 ]
+        spec%interaction_coefficients(63) =  -6.164746E-01
+        spec%interaction_terms(64,:) = [7, 8 ]
+        spec%interaction_coefficients(64) =  -3.134043E-01
+        spec%interaction_terms(65,:) = [7, 9 ]
+        spec%interaction_coefficients(65) =   2.526013E-01
+        spec%interaction_terms(66,:) = [7, 10 ]
+        spec%interaction_coefficients(66) =  -6.858773E-01
+        spec%interaction_terms(67,:) = [7, 11 ]
+        spec%interaction_coefficients(67) =   4.007939E-01
+        spec%interaction_terms(68,:) = [7, 12 ]
+        spec%interaction_coefficients(68) =  -7.243691E-01
+        spec%interaction_terms(69,:) = [7, 13 ]
+        spec%interaction_coefficients(69) =   1.833894E-01
+        spec%interaction_terms(70,:) = [7, 14 ]
+        spec%interaction_coefficients(70) =  -1.969232E-01
+        spec%interaction_terms(71,:) = [8, 9 ]
+        spec%interaction_coefficients(71) =  -3.968418E-01
+        spec%interaction_terms(72,:) = [8, 10 ]
+        spec%interaction_coefficients(72) =   3.011461E-01
+        spec%interaction_terms(73,:) = [8, 11 ]
+        spec%interaction_coefficients(73) =   1.477741E-01
+        spec%interaction_terms(74,:) = [8, 12 ]
+        spec%interaction_coefficients(74) =  -1.669138E-01
+        spec%interaction_terms(75,:) = [8, 13 ]
+        spec%interaction_coefficients(75) =   4.175667E-01
+        spec%interaction_terms(76,:) = [8, 14 ]
+        spec%interaction_coefficients(76) =   7.915357E-01
+        spec%interaction_terms(77,:) = [9, 10 ]
+        spec%interaction_coefficients(77) =  -6.477614E-01
+        spec%interaction_terms(78,:) = [9, 11 ]
+        spec%interaction_coefficients(78) =   1.153760E-01
+        spec%interaction_terms(79,:) = [9, 12 ]
+        spec%interaction_coefficients(79) =   9.445300E-01
+        spec%interaction_terms(80,:) = [9, 13 ]
+        spec%interaction_coefficients(80) =  -4.692881E-01
+        spec%interaction_terms(81,:) = [9, 14 ]
+        spec%interaction_coefficients(81) =  -1.464467E-01
+        spec%interaction_terms(82,:) = [10, 11 ]
+        spec%interaction_coefficients(82) =  -5.707061E-01
+        spec%interaction_terms(83,:) = [10, 12 ]
+        spec%interaction_coefficients(83) =   3.766019E-01
+        spec%interaction_terms(84,:) = [10, 13 ]
+        spec%interaction_coefficients(84) =  -1.581933E-01
+        spec%interaction_terms(85,:) = [10, 14 ]
+        spec%interaction_coefficients(85) =   1.928267E-01
+        spec%interaction_terms(86,:) = [11, 12 ]
+        spec%interaction_coefficients(86) =  -4.707946E-01
+        spec%interaction_terms(87,:) = [11, 13 ]
+        spec%interaction_coefficients(87) =  -8.185964E-01
+        spec%interaction_terms(88,:) = [11, 14 ]
+        spec%interaction_coefficients(88) =   6.579612E-01
+        spec%interaction_terms(89,:) = [12, 13 ]
+        spec%interaction_coefficients(89) =   4.306115E-01
+        spec%interaction_terms(90,:) = [12, 14 ]
+        spec%interaction_coefficients(90) =  -7.650308E-01
+        spec%interaction_terms(91,:) = [13, 14 ]
+        spec%interaction_coefficients(91) =  -1.115168E-01
+        spec%prob_threshold          =   2.500000E-01
+        spec%regularization_lambda   =   1.000000E-03
+        spec%calibration_temperature =   1.000000E+00
+        spec%relational_feature_schema = 'corr_knn_signal_v1'
+        spec%relational_knn          = 5
+        spec%relational_corr_hp      =   1.000000E+02
+        spec%relational_corr_lp      =   1.500000E+01
+        spec%relational_corr_trs     =   1.000000E+0
+        spec%relational_coefficient  =  -3.960855E-01
+        spec%boundary_margin         =   0.000000E+00
+        spec%min_score_separation    =   5.000000E-02
+        spec%otsu_min_offset         =   0.000000E+00
+        spec%otsu_max_offset         =   0.000000E+00
+        spec%cluster_rescue_margin   =   2.000000E-01
+        spec%min_accept_frac         =   0.000000E+00
+        spec%use_lowsep_otsu         = .false.
+        spec%use_otsu_window         = .false.
+        spec%use_cluster_rescue      = .false.
+        spec%enforce_min_accept_frac = .false.
+    end function sieve_model_spec
 
     subroutine set_pairwise_interactions_for_feature_count( spec, nfeatures, coefficients )
         type(cavg_quality_model_spec), intent(inout) :: spec

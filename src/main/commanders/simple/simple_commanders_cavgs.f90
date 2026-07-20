@@ -4,11 +4,11 @@ use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_hard_reject, &
     write_cavg_quality_training_table, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
-    write_cavg_quality_model_builtin_code
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_SIEVE_DEFAULT, &
+    cavg_quality_model, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
-    CAVG_QUALITY_CONTEXT_SIEVE, CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
+    CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_HARD_GATES, CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
 use simple_string_utils,          only: lowercase
 use simple_strategy2D_utils
@@ -515,8 +515,6 @@ contains
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
         if( quality_mode == QUALITY_MODE_LEARN )then
-            if( trim(params%quality_context) == CAVG_QUALITY_CONTEXT_SIEVE ) &
-                THROW_HARD('model_cavgs_rejection quality_mode=learn does not support sieve; sieve is hard-gates-only')
             if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             if( cline%defined('infile') ) &
                 THROW_HARD('model_cavgs_rejection quality_mode=learn is ab initio and does not accept infile')
@@ -577,12 +575,12 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        if( trim(quality_context) == CAVG_QUALITY_CONTEXT_SIEVE )then
+        if( trim(quality_context) == CAVG_QUALITY_CONTEXT_HARD_GATES )then
             ! Sieve is an explicit no-model route: apply/analyze/evaluate use
             ! only the conservative sieve hard gates and skip model scoring.
-            model%name = 'sieve_hard_gates'
-            model%context = CAVG_QUALITY_CONTEXT_SIEVE
-            model%feature_policy = 'sieve_hard_gates'
+            model%name = 'hard_gates'
+            model%context = CAVG_QUALITY_CONTEXT_HARD_GATES
+            model%feature_policy = 'hard_gates'
             model%weights = 0.0
             call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, trim(quality_context))
         else

@@ -16,6 +16,7 @@ public :: CAVG_RELATIONAL_DEFAULT_CORR_TRS
 public :: CAVG_QUALITY_CONTEXT_CHUNK
 public :: CAVG_QUALITY_CONTEXT_SIEVE
 public :: CAVG_QUALITY_CONTEXT_POOL
+public :: CAVG_QUALITY_CONTEXT_HARD_GATES
 public :: CAVG_REJECT_REASON_NONE
 public :: CAVG_REJECT_REASON_POP
 public :: CAVG_REJECT_REASON_BAD_PIXELS
@@ -51,6 +52,7 @@ real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_TRS        = 10.0
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_HARD_GATES        = 'hard_gates'
 
 integer, parameter :: CAVG_REJECT_REASON_NONE                  = 0
 integer, parameter :: CAVG_REJECT_REASON_POP                   = 1

@@ -10,6 +10,9 @@ Controls inside the viewer:
     - p / left arrow: previous page
     - a: select all classes on current page
     - u: unselect all classes on current page
+    - [ / ]: decrease/increase contrast
+    - - / +: decrease/increase brightness
+    - r: reset brightness/contrast
     - s: save selection file
     - q: save and quit
 
@@ -24,8 +27,10 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -86,16 +91,42 @@ def load_stack(mrc_path: Path) -> np.ndarray:
 
 
 def normalize_image(img: np.ndarray) -> np.ndarray:
-    lo, hi = np.percentile(img, (1.0, 99.0))
-    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
-        lo = float(np.min(img))
-        hi = float(np.max(img))
+    lo = float(np.min(img))
+    hi = float(np.max(img))
 
     if hi <= lo:
         return np.zeros_like(img, dtype=np.float32)
 
     out = (img - lo) / (hi - lo)
     return np.clip(out, 0.0, 1.0)
+
+
+def _run_cmd(cmd: List[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, text=True, capture_output=True, check=False)
+
+
+def _find_project_query_exec() -> Optional[str]:
+    for name in ("simple_private_exec", "simple_exec"):
+        exe = shutil.which(name)
+        if exe:
+            return exe
+    return None
+
+
+def _parse_cls2d_states(print_vals_stdout: str) -> List[int]:
+    states: List[int] = []
+    for raw in print_vals_stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        cols = line.split()
+        if len(cols) < 2:
+            continue
+        # Data rows start with integer class index followed by integer state.
+        if not (cols[0].isdigit() and cols[1].lstrip("+-").isdigit()):
+            continue
+        states.append(int(cols[1]))
+    return states
 
 
 class SelectorUI:
@@ -111,6 +142,14 @@ class SelectorUI:
         self.selection = np.zeros(self.n_classes, dtype=np.int8)
         self.page = 0
         self.total_pages = max(1, math.ceil(self.n_classes / self.per_page))
+        self.contrast = 1.0
+        self.brightness = 0.0
+        self.contrast_step = 0.10
+        self.brightness_step = 0.05
+        self.contrast_min = 0.2
+        self.contrast_max = 3.0
+        self.brightness_min = -0.5
+        self.brightness_max = 0.5
 
         self.fig = None
         self.axes = None
@@ -120,6 +159,9 @@ class SelectorUI:
         self._try_load_existing_selection()
 
     def _try_load_existing_selection(self) -> None:
+        if not self.output_txt.exists():
+            self._try_generate_selection_from_project()
+
         if not self.output_txt.exists():
             return
 
@@ -139,6 +181,50 @@ class SelectorUI:
         self.selection = np.asarray(rows, dtype=np.int8)
         print(f"Loaded existing selection from {self.output_txt}")
 
+    def _try_generate_selection_from_project(self) -> None:
+        projfile = self.output_txt.with_suffix(".simple")
+        if not projfile.exists():
+            return
+
+        query_exec = _find_project_query_exec()
+        if query_exec is None:
+            print(
+                "Selection TXT missing and no SIMPLE executable in PATH "
+                "(expected simple_private_exec or simple_exec); starting from all unselected."
+            )
+            return
+
+        cmd = [
+            query_exec,
+            "prg=print_project_vals",
+            f"projfile={projfile}",
+            "oritype=cls2D",
+            "keys=state",
+        ]
+        out = _run_cmd(cmd)
+        if out.returncode != 0:
+            err = out.stderr.strip() or "unknown error"
+            print(
+                f"Selection TXT missing and cls2D query failed for {projfile}: {err}; "
+                "starting from all unselected."
+            )
+            return
+
+        raw_states = _parse_cls2d_states(out.stdout)
+        if len(raw_states) != self.n_classes:
+            print(
+                f"Selection TXT missing and cls2D row count mismatch for {projfile}: "
+                f"got {len(raw_states)}, expected {self.n_classes}; starting from all unselected."
+            )
+            return
+
+        self.selection = np.asarray([1 if s > 0 else 0 for s in raw_states], dtype=np.int8)
+        self.output_txt.parent.mkdir(parents=True, exist_ok=True)
+        with self.output_txt.open("w", encoding="utf-8") as fh:
+            for val in self.selection:
+                fh.write(f"{int(val)}\n")
+        print(f"Generated selection from cls2D states: {self.output_txt}")
+
     def _page_indices(self) -> np.ndarray:
         start = self.page * self.per_page
         stop = min(start + self.per_page, self.n_classes)
@@ -150,8 +236,13 @@ class SelectorUI:
     def _status_title(self) -> str:
         return (
             f"{self.output_txt.name} | page {self.page + 1}/{self.total_pages} | "
-            f"selected {self._selected_count()}/{self.n_classes}"
+            f"selected {self._selected_count()}/{self.n_classes} | "
+            f"contrast {self.contrast:.2f} | brightness {self.brightness:+.2f}"
         )
+
+    def _apply_display_adjustment(self, img: np.ndarray) -> np.ndarray:
+        adjusted = (img - 0.5) * self.contrast + 0.5 + self.brightness
+        return np.clip(adjusted, 0.0, 1.0)
 
     def _set_border(self, idx: int) -> None:
         rect = self.rectangles.get(idx)
@@ -179,6 +270,7 @@ class SelectorUI:
             ax.set_yticks([])
 
             img = normalize_image(self.stack[idx])
+            img = self._apply_display_adjustment(img)
             ax.imshow(img, cmap=self.cmap, interpolation="nearest")
             ax.set_title(str(idx + 1), fontsize=9)
 
@@ -240,6 +332,22 @@ class SelectorUI:
             self._bulk_set_current_page(1)
         elif key == "u":
             self._bulk_set_current_page(0)
+        elif key == "[":
+            self.contrast = max(self.contrast_min, self.contrast - self.contrast_step)
+            self._draw_page()
+        elif key == "]":
+            self.contrast = min(self.contrast_max, self.contrast + self.contrast_step)
+            self._draw_page()
+        elif key in {"-", "_"}:
+            self.brightness = max(self.brightness_min, self.brightness - self.brightness_step)
+            self._draw_page()
+        elif key in {"+", "="}:
+            self.brightness = min(self.brightness_max, self.brightness + self.brightness_step)
+            self._draw_page()
+        elif key == "r":
+            self.contrast = 1.0
+            self.brightness = 0.0
+            self._draw_page()
         elif key == "s":
             self.save()
         elif key == "q":
@@ -250,7 +358,10 @@ class SelectorUI:
         self.save()
 
     def run(self) -> None:
-        print("Controls: click=toggle, n/p=page, a=select page, u=unselect page, s=save, q=save+quit")
+        print(
+            "Controls: click=toggle, n/p=page, a=select page, u=unselect page, "
+            "[/]=contrast, -/+=brightness, r=reset, s=save, q=save+quit"
+        )
 
         self.fig, self.axes = plt.subplots(self.rows, self.cols, figsize=(1.7 * self.cols, 1.7 * self.rows))
         self.fig.canvas.mpl_connect("button_press_event", self.on_click)

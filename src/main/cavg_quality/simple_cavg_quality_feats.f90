@@ -322,15 +322,6 @@ contains
                 else if( mask_hard_reject ) then
                     cavg_hard_reject_for_context = .true.
                     reason = CAVG_REJECT_REASON_MASK_GEOMETRY
-                ! else if( bp_center_edge_var < SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN ) then
-                !     cavg_hard_reject_for_context = .true.
-                !     reason = CAVG_REJECT_REASON_BP_CENTER_EDGE_LOW
-                ! else if( locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX ) then
-                !     cavg_hard_reject_for_context = .true.
-                !     reason = CAVG_REJECT_REASON_LOCVAR_FG_LOW
-                ! else if( fuzzy_ball_signal < FUZZY_BALL_SIGNAL_HARD_REJECT_MIN ) then
-                !     cavg_hard_reject_for_context = .true.
-                !     reason = CAVG_REJECT_REASON_FUZZY_BALL_SIGNAL_LOW
                 end if
             case(CAVG_QUALITY_CONTEXT_POOL)
                 ! Pool is the final pre-3D 2D selection stage after highly cleaned
