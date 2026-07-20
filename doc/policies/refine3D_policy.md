@@ -316,9 +316,17 @@ The combined even/odd iteration is part of base `refine3D`, not a terminal
 ## 11. Finalization and Artifacts
 
 On each iteration, strategy benchmark files should stay simple: context plus
-one `TIMINGS (s)` section. Labels should be coarse operation buckets such as
+one `TIMINGS (s)` section. Labels should include the coarse operation buckets
 setup, probabilistic pre-step, matcher/scheduler, assembly/postprocess, and
-total time.
+total time, together with separately timed reprojection-model materialization
+and group-sigma consolidation. These two measurements keep a per-iteration
+sigma update distinguishable from reference preparation.
+
+Each refine3D stage also writes one stage-entry benchmark at its first
+iteration. It records the total stage initialization wall time and the nested
+`calc_pspec` wall time. The latter is the per-particle sigma estimation that
+may be reused across compatible stage changes; it must not be inferred from a
+per-iteration setup bucket.
 
 Distributed matching writes partition alignment documents and merges them into
 the project after worker completion. Shared-memory matching writes the project

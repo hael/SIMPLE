@@ -47,7 +47,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
-          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
+          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT
 private
 #include "simple_local_flags.inc"
 
@@ -111,6 +111,10 @@ integer :: ldim(3), box
 integer :: n_nu_mask = 0
 integer :: nu_smooth_norm_radius = -1
 real    :: smpd
+logical :: nu_l_report = .true.
+! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this
+! flag restores the detailed candidate, shell-extension, and continuity logs.
+logical :: NU_DEV_OUTPUT = .false.
 ! Cache of the raw E/O noise scale used to normalize the Huber unary objective.
 ! Computed once per setup_nu_dmats and reused across all shell-extension
 ! challenges so the per-shell median/MAD pass is not paid repeatedly.
@@ -158,6 +162,10 @@ interface
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(in) :: n_highres_steps
     end subroutine init_nu_filter
+
+    module subroutine set_nu_filter_report( l_report )
+        logical, intent(in) :: l_report
+    end subroutine set_nu_filter_report
 
     module logical function keep_nu_highres_extension_step( istep, finest_step )
         integer, intent(in) :: istep, finest_step

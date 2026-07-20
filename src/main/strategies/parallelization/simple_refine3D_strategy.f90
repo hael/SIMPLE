@@ -32,16 +32,25 @@ end type refine3D_strategy
 
 type :: refine3D_bench_state
     integer(timer_int_kind) :: t_init      = 0
+    integer(timer_int_kind) :: t_model     = 0
+    integer(timer_int_kind) :: t_sigma     = 0
     integer(timer_int_kind) :: t_prob      = 0
     integer(timer_int_kind) :: t_sched     = 0
     integer(timer_int_kind) :: t_assemble  = 0
     integer(timer_int_kind) :: t_tot       = 0
     real(timer_int_kind)    :: rt_init     = 0.
+    real(timer_int_kind)    :: rt_model    = 0.
+    real(timer_int_kind)    :: rt_sigma    = 0.
     real(timer_int_kind)    :: rt_prob     = 0.
     real(timer_int_kind)    :: rt_sched    = 0.
     real(timer_int_kind)    :: rt_assemble = 0.
     real(timer_int_kind)    :: rt_tot      = 0.
 end type refine3D_bench_state
+
+type :: refine3D_stage_bench_state
+    real(timer_int_kind) :: rt_total      = 0.
+    real(timer_int_kind) :: rt_calc_pspec = 0.
+end type refine3D_stage_bench_state
 
 ! ======================================================================
 ! SHARED-MEMORY IMPLEMENTATION
@@ -383,11 +392,15 @@ contains
     subroutine reset_refine3D_bench( bench )
         type(refine3D_bench_state), intent(inout) :: bench
         bench%t_init      = 0
+        bench%t_model     = 0
+        bench%t_sigma     = 0
         bench%t_prob      = 0
         bench%t_sched     = 0
         bench%t_assemble  = 0
         bench%t_tot       = 0
         bench%rt_init     = 0.
+        bench%rt_model    = 0.
+        bench%rt_sigma    = 0.
         bench%rt_prob     = 0.
         bench%rt_sched    = 0.
         bench%rt_assemble = 0.
@@ -418,6 +431,8 @@ contains
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
         write(fnr,'(a,1x,f0.2)') 'refine3D strategy setup/init        :', bench%rt_init
+        write(fnr,'(a,1x,f0.2)') 'refine3D reprojection model         :', bench%rt_model
+        write(fnr,'(a,1x,f0.2)') 'refine3D group-sigma consolidation  :', bench%rt_sigma
         write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
         write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
         write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
@@ -426,6 +441,31 @@ contains
         call fclose(fnr)
         call benchfname%kill
     end subroutine write_strategy_bench_report
+
+    subroutine write_stage_bench_report( params, bench, execution_mode )
+        type(parameters),                   intent(in) :: params
+        type(refine3D_stage_bench_state),   intent(in) :: bench
+        character(len=*),                    intent(in) :: execution_mode
+        type(string) :: benchfname
+        integer :: fnr
+        if( .not. L_BENCH_GLOB ) return
+        benchfname = refine3D_stage_bench_fname(params%startit)
+        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
+        write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
+        write(fnr,'(a,a)')  'refine3D continuation mode          : ', trim(params%continue)
+        write(fnr,'(a,i0)') 'refine3D nspace                     : ', params%nspace
+        write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
+        write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
+        write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.2)') 'refine3D stage initialization total :', bench%rt_total
+        write(fnr,'(a,1x,f0.2)') 'refine3D stage-entry calc_pspec     :', bench%rt_calc_pspec
+        call fclose(fnr)
+        call benchfname%kill
+    end subroutine write_stage_bench_report
 
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
@@ -439,8 +479,11 @@ contains
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
+        type(refine3D_stage_bench_state)      :: stage_bench
+        integer(timer_int_kind)                :: t_stage_init, t_calc_pspec
         integer                               :: startit
         logical                               :: l_proj_dirty
+        if( L_BENCH_GLOB ) t_stage_init = tic()
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! startit
@@ -482,13 +525,19 @@ contains
             endif
             cline_calc_pspec   = cline
             call cline_calc_pspec%set('prg', 'calc_pspec')
+            if( L_BENCH_GLOB ) t_calc_pspec = tic()
             call xcalc_pspec%execute( cline_calc_pspec )
+            if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
         endif
         ! Keep run-time counters consistent with the new high-level loop
         params%startit    = startit
         params%which_iter = params%startit
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         params%outfile    = 'algndoc'//METADATA_EXT
+        if( L_BENCH_GLOB )then
+            stage_bench%rt_total = toc(t_stage_init)
+            call write_stage_bench_report(params, stage_bench, 'shared-memory')
+        endif
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
@@ -547,11 +596,15 @@ contains
             params%lambda = cos_decay(params%which_iter, params%maxits_glob, params%lam_bounds)
             write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
         endif
+        if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, current_build=build)
+        if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma )then
             call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
         endif
         l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
@@ -702,11 +755,14 @@ contains
         type(commander_rec3D)      :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
+        type(refine3D_stage_bench_state) :: stage_bench
         type(string)  :: prev_refine_path, target_name, fname_vol, vol, fsc_file
         type(string), allocatable :: list(:)
         real    :: smpd
         integer :: state, box, nfiles, i
+        integer(timer_int_kind) :: t_stage_init, t_calc_pspec
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
+        if( L_BENCH_GLOB ) t_stage_init = tic()
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -827,7 +883,9 @@ contains
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
+            if( L_BENCH_GLOB ) t_calc_pspec = tic()
             call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+            if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.
             do state = 1,params%nstates
@@ -883,6 +941,10 @@ contains
         call self%job_descr%set('prg', 'refine3D')
         ! Keep consistent iteration counters
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
+        if( L_BENCH_GLOB )then
+            stage_bench%rt_total = toc(t_stage_init)
+            call write_stage_bench_report(params, stage_bench, 'distributed')
+        endif
         call prev_refine_path%kill
         call target_name%kill
         call fname_vol%kill
@@ -933,11 +995,15 @@ contains
             params%lambda = cos_decay(iter, params%maxits_glob, params%lam_bounds)
             write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
         endif
+        if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
+        if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
         if( trim(params%objfun).eq.'euclid' )then
             call self%cline_calc_group_sigmas%set('which_iter', iter)
+            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
             call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
         endif
         ! ensure spproj is current
         if( self%have_oris .or. iter > params%startit )then

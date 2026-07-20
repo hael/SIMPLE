@@ -193,7 +193,7 @@ contains
 
     subroutine exec_nu_filt3D(self, cline)
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
-            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map
+            &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map, NU_DEV_OUTPUT
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
@@ -227,7 +227,7 @@ contains
         call optimize_nu_cutoff_finds()
         call nu_filter_vols(even_nu, odd_nu)
         call print_nu_filtmap_lowpass_stats()
-        call analyze_filtmap_neighbor_continuity()
+        if( NU_DEV_OUTPUT ) call analyze_filtmap_neighbor_continuity()
         odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)
         even_out = add2fbody(params%vols(2), params%ext, NUFILT_SUFFIX)
         if( params%outvol .ne. '' )then

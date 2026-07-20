@@ -27,6 +27,7 @@ public :: refine3D_partial_rho_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
+public :: refine3D_stage_bench_fname
 public :: refine3D_volassemble_bench_fname
 
 contains
@@ -186,6 +187,11 @@ contains
         integer, intent(in) :: iter
         fname = string('REFINE3D_STRATEGY_BENCH_ITER')//iter_tag(iter)//TXT_EXT
     end function refine3D_strategy_bench_fname
+
+    type(string) function refine3D_stage_bench_fname( iter ) result(fname)
+        integer, intent(in) :: iter
+        fname = string('REFINE3D_STAGE_BENCH_ITER')//iter_tag(iter)//TXT_EXT
+    end function refine3D_stage_bench_fname
 
     type(string) function refine3D_volassemble_bench_fname( iter ) result(fname)
         integer, intent(in) :: iter

@@ -164,6 +164,7 @@ contains
         integer :: icut, nselected
         character(len=10) :: source_tag
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
+        if( .not.nu_l_report ) return
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         nselected = count_active_nu_mask(mask)
@@ -186,19 +187,21 @@ contains
         logical, optional, intent(in) :: mask(:,:,:)
         type(stats_struct) :: statvars
         integer :: nbase
-        nbase = count_active_nu_mask(mask)
-        if( nbase == 0 ) then
-            write(logfhandle,'(A)') '>>> No low-pass selections remain after NU optimization'
-            call print_filtmap_lowpass_histogram(mask)
-            return
-        end if
-        call calc_filtmap_lowpass_stats(statvars, mask)
-        write(logfhandle,'(A)') ''
-        write(logfhandle,'(A)') '>>> NU FILTER LOCAL RESOLUTION SUMMARY'
-        write(logfhandle,'(A,I12)') '    Voxels analyzed: ', nbase
-        write(logfhandle,'(A)')     '              Mean    Median     Sigma       Min       Max'
-        write(logfhandle,'(A,5F10.3)') '    Angstrom ', statvars%avg, statvars%med, statvars%sdev, statvars%minv, statvars%maxv
-        write(logfhandle,'(A)') ''
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            nbase = count_active_nu_mask(mask)
+            if( nbase == 0 )then
+                write(logfhandle,'(A)') '>>> No low-pass selections remain after NU optimization'
+            else
+                call calc_filtmap_lowpass_stats(statvars, mask)
+                write(logfhandle,'(A)') ''
+                write(logfhandle,'(A)') '>>> NU FILTER LOCAL RESOLUTION SUMMARY'
+                write(logfhandle,'(A,I12)') '    Voxels analyzed: ', nbase
+                write(logfhandle,'(A)')     '              Mean    Median     Sigma       Min       Max'
+                write(logfhandle,'(A,5F10.3)') '    Angstrom ', statvars%avg, statvars%med, &
+                    &statvars%sdev, statvars%minv, statvars%maxv
+                write(logfhandle,'(A)') ''
+            endif
+        endif
         call print_filtmap_lowpass_histogram(mask)
     end subroutine print_nu_filtmap_lowpass_stats
 
@@ -400,9 +403,11 @@ contains
         endif
         call resmap%write(fname, del_if_exists=.true.)
         call resmap%kill
-        write(logfhandle,'(A,1X,A)') '>>> Wrote NU local resolution frequency map:', fname%to_char()
-        write(logfhandle,'(A,I12,A,F8.5,A)') '    Nonzero voxels: ', n_written, &
-            &'; values are spatial frequency in 1/A, capped at ', freq_max, ' 1/A'
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            write(logfhandle,'(A,1X,A)') '>>> Wrote NU local resolution frequency map:', fname%to_char()
+            write(logfhandle,'(A,I12,A,F8.5,A)') '    Nonzero voxels: ', n_written, &
+                &'; values are spatial frequency in 1/A, capped at ', freq_max, ' 1/A'
+        endif
     end subroutine write_nu_local_resolution_map
 
     subroutine require_valid_stats_mask( mask, caller )

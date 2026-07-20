@@ -57,13 +57,14 @@ contains
             cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
         end do
         n_valid = size(lowpass_limits)
-        if( n_extra_retained_requested > n_extra )then
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_retained_requested > n_extra )then
             write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                 &'>>> NU high-resolution depth ', n_extra_requested, &
                 &' exceeds distance-matrix memory window; using finest ', n_extra, &
                 &' retained shell step(s) within cap ', NU_DMAT_CANDIDATE_CAP, ' candidates'
         endif
-        if( n_extra_requested > 0 .and. NU_HIGHRES_EXTENSION_RETAIN_STRIDE > 1 )then
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_requested > 0 .and. &
+            &NU_HIGHRES_EXTENSION_RETAIN_STRIDE > 1 )then
             write(logfhandle,'(A,I0,A,I0,A)') &
                 &'>>> NU high-resolution extension bank retention: every ', &
                 &NU_HIGHRES_EXTENSION_RETAIN_STRIDE, &
@@ -89,6 +90,11 @@ contains
             call butterworth_filter(cutoff_finds(i), bwfilters(:,i))
         end do
     end subroutine init_nu_filter
+
+    module subroutine set_nu_filter_report( l_report )
+        logical, intent(in) :: l_report
+        nu_l_report = l_report
+    end subroutine set_nu_filter_report
 
     module logical function keep_nu_highres_extension_step( istep, finest_step )
         integer, intent(in) :: istep, finest_step

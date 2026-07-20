@@ -556,6 +556,7 @@ The staged refinement uses the ordinary `refine3D` artifact names:
   `reprojection_model_odd.bin`
 - matcher benchmarks: `REFINE3D_BENCH_ITERIII.txt`
 - strategy benchmarks: `REFINE3D_STRATEGY_BENCH_ITERIII.txt`
+- stage-entry benchmarks: `REFINE3D_STAGE_BENCH_ITERIII.txt`
 - assembly benchmarks: `VOLASSEMBLE_BENCH_ITERIII.txt`
 
 The final reconstruction writes ordinary reconstruct3D products and

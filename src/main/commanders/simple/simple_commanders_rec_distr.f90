@@ -258,6 +258,7 @@ contains
         use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
+            &set_nu_filter_report, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
             &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
@@ -336,6 +337,7 @@ contains
 
         subroutine initialize_context()
             call build%init_params_and_build_general_tbox(cline, params)
+            call set_nu_filter_report(params%part == 1)
             call build%build_rec_eo_tbox(params)
             call build%eorecvol%kill_exp
             numlen_part       = max(1, params%numlen)
@@ -486,7 +488,7 @@ contains
         real function nu_aux_effective_resolution() result(aux_resolution)
             aux_resolution = res0143s(state)
             if( params%l_lpset .and. params%lp > TINY )then
-                if( aux_resolution > params%lp + TINY )then
+                if( NU_DEV_OUTPUT .and. params%part == 1 .and. aux_resolution > params%lp + TINY )then
                     write(logfhandle,'(A,F8.3,A,F8.3,A)') &
                         &'>>> NU auxiliary effective resolution clamped by matching low-pass: FSC ', &
                         &aux_resolution, ' A; matching LP ', params%lp, ' A'
@@ -504,17 +506,19 @@ contains
             do
                 call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
                 if( .not. ext_stats%attempted )then
-                    if( ext_stats%n_mask == 0 )then
-                        write(logfhandle,'(A)') &
-                            &'>>> NU high-resolution extension stopped: empty NU refinement mask'
-                    else if( ext_stats%n_tested == 0 )then
-                        write(logfhandle,'(A,F8.3,A,I0,A)') &
-                            &'>>> NU high-resolution extension stopped: no frontier voxels at current finest label ', &
-                            &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
-                    else
-                        write(logfhandle,'(A,F8.3,A,I0,A)') &
-                            &'>>> NU high-resolution extension stopped: no valid next shell after ', &
-                            &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
+                    if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                        if( ext_stats%n_mask == 0 )then
+                            write(logfhandle,'(A)') &
+                                &'>>> NU high-resolution extension stopped: empty NU refinement mask'
+                        else if( ext_stats%n_tested == 0 )then
+                            write(logfhandle,'(A,F8.3,A,I0,A)') &
+                                &'>>> NU high-resolution extension stopped: no frontier voxels at current finest label ', &
+                                &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
+                        else
+                            write(logfhandle,'(A,F8.3,A,I0,A)') &
+                                &'>>> NU high-resolution extension stopped: no valid next shell after ', &
+                                &ext_stats%old_limit, ' A (k=', ext_stats%old_find, ')'
+                        endif
                     endif
                     exit
                 endif
@@ -526,9 +530,11 @@ contains
                 call refine_nu_extension_filtmap_ordered_labels
                 n_highres_steps = get_nu_filtmap_highres_shell_depth()
                 call write_nu_highres_steps_for_state(n_highres_steps)
-                write(logfhandle,'(A,I0,A,I0)') &
-                    &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
-                    &n_accepted_this_iteration, '; promoted depth for next iteration: ', n_highres_steps
+                if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                    write(logfhandle,'(A,I0,A,I0)') &
+                        &'>>> NU high-resolution extension accepted shell steps this iteration: ', &
+                        &n_accepted_this_iteration, '; promoted depth for next iteration: ', n_highres_steps
+                endif
             endif
         end subroutine refine_nonuniform_filter_bank
 
@@ -580,7 +586,7 @@ contains
 
         subroutine log_nonuniform_filter_stats()
             call print_nu_filtmap_lowpass_stats()
-            call analyze_filtmap_neighbor_continuity()
+            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
         end subroutine log_nonuniform_filter_stats
 
         subroutine write_nonuniform_outputs()
@@ -609,8 +615,10 @@ contains
             align_lp = get_nu_filtmap_finest_selected_lp()
             if( align_lp <= TINY ) return
             nu_align_lps(state) = align_lp
-            write(logfhandle,'(A,I0,A,F8.3,A)') &
-                &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'
+            if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                write(logfhandle,'(A,I0,A,F8.3,A)') &
+                    &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', align_lp, ' A'
+            endif
         end subroutine record_nu_alignment_lowpass_limit
 
         subroutine cleanup_nonuniform_state()
@@ -688,7 +696,7 @@ contains
             ! Match the classical multi-state policy: the best resolved
             ! populated state determines the single global matching bandwidth.
             l_included = (nu_align_lps > TINY) .and. (state_pops > 0)
-            if( params%nstates > 1 ) call log_nu_alignment_lowpass_summary(l_included)
+            if( NU_DEV_OUTPUT .and. params%part == 1 .and. params%nstates > 1 ) call log_nu_alignment_lowpass_summary(l_included)
             if( .not. any(l_included) )then
                 if( any(nu_align_lps > TINY) )then
                     write(logfhandle,'(A)') &
@@ -705,8 +713,10 @@ contains
                 endif
             enddo
             call build%spproj_field%set_all2single('lp', align_lp)
-            write(logfhandle,'(A,I0,A,F8.3,A)') &
-                &'>>> NU filter project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
+            if( NU_DEV_OUTPUT .and. params%part == 1 )then
+                write(logfhandle,'(A,I0,A,F8.3,A)') &
+                    &'>>> NU filter project matching low-pass limit from state ', selected_state, ': ', align_lp, ' A'
+            endif
         end subroutine update_project_nu_alignment_lowpass
 
         subroutine log_nu_alignment_lowpass_summary(l_included)

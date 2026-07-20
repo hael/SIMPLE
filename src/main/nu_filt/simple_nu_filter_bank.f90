@@ -45,15 +45,19 @@ contains
                     &aux_odd(aux_replacement_idx:aux_replacement_idx))
                 nu_aux_replacement_label = size(cutoff_finds)
                 nu_aux_replacement_resolution = aux_resolutions(aux_replacement_idx)
-                write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') &
-                    &'>>> NU auxiliary replacement: auxiliary pair ', aux_replacement_idx, &
-                    &' replaces finest discrete label at ', finest_lp, ' A with effective ', &
-                    &nu_aux_replacement_resolution, ' A'
+                if( NU_DEV_OUTPUT .and. nu_l_report )then
+                    write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') &
+                        &'>>> NU auxiliary replacement: auxiliary pair ', aux_replacement_idx, &
+                        &' replaces finest discrete label at ', finest_lp, ' A with effective ', &
+                        &nu_aux_replacement_resolution, ' A'
+                endif
             else
                 call cleanup_aux_bank
-                if( size(aux_resolutions) > 0 ) write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                    &'>>> NU auxiliary ignored: finest supplied effective resolution ', minval(aux_resolutions), &
-                    &' A does not extend beyond finest discrete label ', finest_lp, ' A'
+                if( NU_DEV_OUTPUT .and. nu_l_report .and. size(aux_resolutions) > 0 )then
+                    write(logfhandle,'(A,F8.3,A,F8.3,A)') &
+                        &'>>> NU auxiliary ignored: finest supplied effective resolution ', minval(aux_resolutions), &
+                        &' A does not extend beyond finest discrete label ', finest_lp, ' A'
+                endif
             endif
         else
             if( present(aux_odd) ) THROW_HARD('Auxiliary odd bank supplied without even bank; setup_nu_dmats')
@@ -73,14 +77,15 @@ contains
         ! E/O noise scale is candidate-independent so it does not need to be
         ! recomputed per shell challenge.
         nu_noise_sigma_cached = noise_sigma
-        write(logfhandle,'(A,ES12.4)') '>>> NU normalized Huber objective raw E/O scale: ', noise_sigma
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &write(logfhandle,'(A,ES12.4)') '>>> NU normalized Huber objective raw E/O scale: ', noise_sigma
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
         if( n_candidates > NU_DMAT_CANDIDATE_CAP )then
             THROW_HARD('NU distance-matrix candidate cap exceeded in setup_nu_dmats')
         endif
         call setup_nu_candidate_coords(n_candidates)
-        call log_nu_objective_smoothing_bank()
+        if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_objective_smoothing_bank()
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
         allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
@@ -180,10 +185,12 @@ contains
             filtmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
-        call log_nu_aux_replacement_margin_stats()
-        call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
+        if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_aux_replacement_margin_stats()
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
-        call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
         call cache_nu_extension_frontier_dmats(filtmap, n_base)
         ! Keep the mask-packed unary bank. High-resolution extension appends

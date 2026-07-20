@@ -9,29 +9,33 @@ contains
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
         integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
-        integer :: nchanged
-        integer :: n_base
+        integer :: nchanged, n_base
         real    :: beta, e, best_e, site_energy
         if( n_candidates < 2 ) return
         if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
         if( size(candidate_coords) /= n_candidates ) &
             &THROW_HARD('candidate_coords size mismatch; refine_nu_candidate_map_ordered_labels')
-        n_base = size(cutoff_finds)
         beta = estimate_nu_label_smooth_beta(n_candidates)
-        write(logfhandle,'(A,ES12.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
-            &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
-            &', base labels=', n_base, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
-        write(logfhandle,'(A,I0,A,I0)') '>>> NU ordered-label smoothing neighborhood: ', &
-            &NU_LABEL_SMOOTH_NNEIGH, '-connected, color passes=', NU_LABEL_SMOOTH_NCOLORS
-        write(logfhandle,'(A,F6.3)') '>>> NU ordered-label smoothing quadratic jump fraction: ', &
-            &NU_LABEL_SMOOTH_QUAD_FRAC
-        call log_nu_candidate_coords
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            n_base = size(cutoff_finds)
+            write(logfhandle,'(A,ES12.4,A,I0,A,I0,A,I0,A,I0)') '>>> NU ordered-label smoothing: beta=', beta, &
+                &', max iterations=', NU_LABEL_SMOOTH_MAXITS, ', candidates=', n_candidates, &
+                &', base labels=', n_base, ', step tolerance=', NU_LABEL_SMOOTH_STEP_TOL
+            write(logfhandle,'(A,I0,A,I0)') '>>> NU ordered-label smoothing neighborhood: ', &
+                &NU_LABEL_SMOOTH_NNEIGH, '-connected, color passes=', NU_LABEL_SMOOTH_NCOLORS
+            write(logfhandle,'(A,F6.3)') '>>> NU ordered-label smoothing quadratic jump fraction: ', &
+                &NU_LABEL_SMOOTH_QUAD_FRAC
+            call log_nu_candidate_coords
+        endif
         if( beta <= TINY )then
-            write(logfhandle,'(A)') '>>> NU ordered-label smoothing skipped: beta <= TINY'
+            if( NU_DEV_OUTPUT .and. nu_l_report ) &
+                &write(logfhandle,'(A)') '>>> NU ordered-label smoothing skipped: beta <= TINY'
             return
         endif
-        site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
-        write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
+            write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
+        endif
         do iter = 1, NU_LABEL_SMOOTH_MAXITS
             nchanged = 0
             do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
@@ -64,9 +68,11 @@ contains
                 end do
                 !$omp end parallel do
             end do
-            site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
-            write(logfhandle,'(A,I0,A,I0,A,F12.5)') '>>> NU ordered-label smoothing iteration ', iter, &
-                &' changed voxels: ', nchanged, ', mean site energy: ', site_energy
+            if( nu_l_report )then
+                site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
+                write(logfhandle,'(A,I2,A,I8,A,F12.5)') '>>> NU ordered-label smoothing iteration ', iter, &
+                    &' changed voxels: ', nchanged, ', mean site energy: ', site_energy
+            endif
             if( nchanged == 0 ) exit
         end do
     end subroutine refine_nu_candidate_map_ordered_labels

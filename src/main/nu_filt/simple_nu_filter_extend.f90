@@ -17,8 +17,7 @@ contains
         integer, allocatable :: frontier_vox(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         integer           :: old_radius_px, new_radius_px, n_seed_min
-        real              :: accept_pct_eff, pct_finest, x, noise_sigma
-        real              :: old_radius_angstrom, new_radius_angstrom
+        real              :: accept_pct_eff, pct_finest, x, noise_sigma, old_radius_angstrom, new_radius_angstrom
         integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i
@@ -56,9 +55,11 @@ contains
             return
         endif
         if( old_label < sz_old )then
-            write(logfhandle,'(A,I0,A,I0,A,F8.3,A)') &
-                &'>>> NU high-resolution extension frontier reset from empty bank label ', &
-                &sz_old, ' to populated label ', old_label, ' (', cutoff_find_to_lowpass_limit(old_label), ' A)'
+            if( NU_DEV_OUTPUT .and. nu_l_report )then
+                write(logfhandle,'(A,I0,A,I0,A,F8.3,A)') &
+                    &'>>> NU high-resolution extension frontier reset from empty bank label ', &
+                    &sz_old, ' to populated label ', old_label, ' (', cutoff_find_to_lowpass_limit(old_label), ' A)'
+            endif
             call prune_nu_highres_extension_bank(old_label)
             sz_old = old_label
         endif
@@ -147,19 +148,21 @@ contains
         endif
         n_seed_min = min(n_total, NU_HIGHRES_EXTENSION_MIN_SEED_VOXELS)
         local_stats%n_seed_min = n_seed_min
-        write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A,I12,A,I12,A,F8.3,A,I12,A,F8.3,A)') &
-            &'>>> NU high-resolution extension challenge ', local_stats%old_limit, ' A (k=', &
-            &local_stats%old_find, ') -> ', local_stats%new_limit, ' A (k=', local_stats%new_find, &
-            &'); frontier ', n_finest, '/', n_total, ' (', local_stats%pct_tested_mask, &
-            &'% mask), unary wins ', local_stats%n_unary_wins, ' (', local_stats%pct_unary_wins_tested, '%)'
-        old_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%old_limit)
-        new_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%new_limit)
-        old_radius_px = nu_objective_smooth_radius_pixels(local_stats%old_limit)
-        new_radius_px = nu_objective_smooth_radius_pixels(local_stats%new_limit)
-        write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A)') &
-            &'>>> NU high-resolution extension AWF radii old/new: ', &
-            &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
-            &new_radius_angstrom, ' A (px=', new_radius_px, ')'
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A,I12,A,I12,A,F8.3,A,I12,A,F8.3,A)') &
+                &'>>> NU high-resolution extension challenge ', local_stats%old_limit, ' A (k=', &
+                &local_stats%old_find, ') -> ', local_stats%new_limit, ' A (k=', local_stats%new_find, &
+                &'); frontier ', n_finest, '/', n_total, ' (', local_stats%pct_tested_mask, &
+                &'% mask), unary wins ', local_stats%n_unary_wins, ' (', local_stats%pct_unary_wins_tested, '%)'
+            old_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%old_limit)
+            new_radius_angstrom = nu_objective_smooth_radius_angstrom(local_stats%new_limit)
+            old_radius_px = nu_objective_smooth_radius_pixels(local_stats%old_limit)
+            new_radius_px = nu_objective_smooth_radius_pixels(local_stats%new_limit)
+            write(logfhandle,'(A,F8.3,A,I0,A,F8.3,A,I0,A)') &
+                &'>>> NU high-resolution extension AWF radii old/new: ', &
+                &old_radius_angstrom, ' A (px=', old_radius_px, ') / ', &
+                &new_radius_angstrom, ' A (px=', new_radius_px, ')'
+        endif
         if( l_permissive_accept )then
             local_stats%applied = n_extended > 0
         else
@@ -169,14 +172,16 @@ contains
         endif
         local_stats%promote_next = local_stats%applied
         if( .not. local_stats%applied ) then
-            if( n_extended > 0 )then
-                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') &
-                    &'>>> NU high-resolution extension rejected: challenger wins ', &
-                    &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, &
-                    &'% of tested frontier or lacks absolute support ', n_extended, '/', n_seed_min, ' voxels'
-            else
-                write(logfhandle,'(A,F8.3,A)') &
-                    &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
+            if( NU_DEV_OUTPUT .and. nu_l_report )then
+                if( n_extended > 0 )then
+                    write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') &
+                        &'>>> NU high-resolution extension rejected: challenger wins ', &
+                        &local_stats%pct_unary_wins_tested, '% below ', accept_pct_eff, &
+                        &'% of tested frontier or lacks absolute support ', n_extended, '/', n_seed_min, ' voxels'
+                else
+                    write(logfhandle,'(A,F8.3,A)') &
+                        &'>>> NU high-resolution extension stopped: no unary wins for challenger ', new_limit, ' A'
+                endif
             endif
             call delete_cached_filtered_pair(new_find)
             if( allocated(extend_choice) ) deallocate(extend_choice)
@@ -190,9 +195,10 @@ contains
                 local_stats%applied = .false.
                 local_stats%promote_next = .false.
                 local_stats%memory_limited = .true.
-                write(logfhandle,'(A,I0,A)') &
-                    &'>>> NU high-resolution extension stopped: distance-matrix cap full at ', &
-                    &NU_DMAT_CANDIDATE_CAP, ' candidates'
+                if( NU_DEV_OUTPUT .and. nu_l_report ) &
+                    &write(logfhandle,'(A,I0,A)') &
+                        &'>>> NU high-resolution extension stopped: distance-matrix cap full at ', &
+                        &NU_DMAT_CANDIDATE_CAP, ' candidates'
                 call delete_cached_filtered_pair(new_find)
                 if( allocated(extend_choice) ) deallocate(extend_choice)
                 deallocate(dmat_new, dmat_finest_mask)
@@ -208,7 +214,8 @@ contains
         call apply_nu_highres_extension_selection(frontier_vox, extend_choice, sz_old, sz_old + 1)
         call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find)
         call cache_nu_highres_extension_frontier_after_selection(dmat_new, frontier_vox, extend_choice)
-        write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         if( allocated(extend_choice) ) deallocate(extend_choice)
         deallocate(dmat_new, dmat_finest_mask)
         if( present(stats) ) stats = local_stats
@@ -297,12 +304,15 @@ contains
         if( n_candidates /= size(candidate_coords) ) &
             &THROW_HARD('candidate/unary size mismatch; refine_nu_extension_filtmap_ordered_labels')
         if( n_candidates < 2 ) return
-        write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &write(logfhandle,'(A)') '>>> NU post-extension ordered-label cleanup'
         call clamp_nu_filtmap_labels(n_base)
-        call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
         call clamp_nu_filtmap_labels(n_base)
-        call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
         call compact_nu_highres_dmat_bank_for_capacity()
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
     end subroutine refine_nu_extension_filtmap_ordered_labels
@@ -448,7 +458,7 @@ contains
         call move_alloc(new_dmats, dmats_mask)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         l_thinned = n_keep < new_n_base
-        if( l_thinned )then
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. l_thinned )then
             write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                 &'>>> NU high-resolution extension bank thinned: ', new_n_base, &
                 &' -> ', n_keep, ' base labels; retaining every ', &
@@ -552,9 +562,11 @@ contains
             end do
             !$omp end parallel do
         endif
-        write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
-            &'>>> NU distance-matrix bank compacted for memory: ', size(dmats_mask,2), &
-            &' -> ', n_keep + n_aux, ' candidates (cap ', NU_DMAT_CANDIDATE_CAP, ')'
+        if( NU_DEV_OUTPUT .and. nu_l_report )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
+                &'>>> NU distance-matrix bank compacted for memory: ', size(dmats_mask,2), &
+                &' -> ', n_keep + n_aux, ' candidates (cap ', NU_DMAT_CANDIDATE_CAP, ')'
+        endif
         call move_alloc(new_dmats, dmats_mask)
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         deallocate(keep, old_to_new)

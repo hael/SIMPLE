@@ -54,7 +54,7 @@ contains
         use simple_abinitio_utils, only: write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
+            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shells, write_nu_local_resolution_map
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -358,11 +358,12 @@ contains
             call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
-                write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
+                if( NU_DEV_OUTPUT ) &
+                    &write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
             endif
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call print_nu_filtmap_lowpass_stats()
-            call analyze_filtmap_neighbor_continuity()
+            if( NU_DEV_OUTPUT ) call analyze_filtmap_neighbor_continuity()
             out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
             out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
             out_avg  = add2fbody(init_vol,  MRC_EXT, NUFILT_SUFFIX)

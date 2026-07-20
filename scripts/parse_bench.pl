@@ -8,6 +8,7 @@ use File::Path qw(make_path);
 # Parse benchmark text files (*_BENCH_ITER*.txt) and emit matrix CSVs.
 #
 # Benchmark files may contain:
+#   REFINE3D_STAGE_BENCH_ITER*.txt (stage-entry initialization diagnostics)
 #   *** BENCHMARK CONTEXT ***
 #   *** TIMINGS (s) ***
 #   *** RELATIVE TIMINGS (%) ***
