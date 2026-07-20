@@ -90,8 +90,8 @@ barrier.
 - Combining probability-table construction with reconstruction.
 - Removing ML sigma data.
 - Creating one new candidate/table class for every probability mode.
-- Applying the 3D sparse-store or streamed-I/O machinery to
-  `simple_eul_prob_tab2D` without a measured 2D memory or filesystem need.
+- Changing 2D scoring, candidate ordering, or assignment semantics while
+  reusing the compact-store and streamed-I/O machinery.
 
 ## Current memory problem
 
@@ -250,10 +250,11 @@ Constructor role is expressed by dedicated procedures (`new_worker`,
 `new_state`, `new_neigh_global`, and `new_assignment`), not optional ownership
 flags such as `with_assignment` or `compact_global`.
 
-`simple_eul_prob_tab2D` follows the same ownership vocabulary for readability:
-its worker owns a table but no assignment map, its global object owns both,
-and its matcher reader owns only the assignment map. It intentionally retains
-its dense/sparse table formats and `ptcl_ref` records.
+`simple_eul_prob_tab2D` now follows the same ownership and storage model. A
+worker owns thread-local compact candidate buffers and streams completed
+batches, the global object owns either a compact rectangular dense table or a
+ragged sparse store plus the assignment map, and the matcher reader owns only
+the assignment map. The final assignment artifact remains `ptcl_ref`-based.
 
 ## Worker batching policy
 
@@ -470,11 +471,20 @@ The probabilistic matcher no longer allocates the unused per-thread
 threshold arrays. Remaining `R*T` scoring workspaces are retained where they
 are needed to preserve current Top-K and tie behavior.
 
-### Phase 6: remove validation path and consider 2D reuse
+### Phase 6: remove validation path and reuse in 2D — implemented
 
 Once exact equivalence is established, remove the old dense neighborhood path
-and its temporary comparison switch. Then separately decide whether
-`simple_eul_prob_tab2D` should reuse the common record/store.
+and its temporary comparison switch. A measured `abinitio2D` memory failure at
+300 classes subsequently justified reusing the common record/store:
+
+- 2D workers stream batch-local `prob_candidate` records instead of retaining
+  a partition-wide `ptcl_ref(C,Ppart)` table;
+- sparse 2D global merge uses `prob_candidate_store`, so candidate memory is
+  proportional to evaluated support `Q` rather than `C*P`;
+- dense 2D global merge retains rectangular lookup but uses compact candidates,
+  and assignment sorts indices without duplicating the full score matrix;
+- the global object is allocated only after all workers have completed, avoiding
+  worker/global table overlap in shared-memory execution.
 
 ## Validation
 

@@ -104,6 +104,16 @@ that re-reads image stacks to lower peak memory. Offline or terminal
 class-average assembly commands may have their own explicit reads, but that is
 separate from the matcher worker's online single-read contract.
 
+Probabilistic table construction has a separate bounded-memory contract:
+
+- `prob_tab2D` workers retain only thread-local compact candidates for the
+  current particle batch and stream them to one partition file;
+- `prob_align2D` constructs the global object only after workers complete;
+- dense `refine=prob` uses a compact rectangular candidate table, while sparse
+  `refine=prob_snhc` uses a particle-oriented ragged candidate store;
+- compact storage is materialized as the established `ptcl_ref` assignment only
+  after global selection, so assignment-file semantics do not change.
+
 `simple_commanders_mkcavgs.f90` and the classaverager modules own:
 
 - explicit class-average assembly from partial sums
@@ -190,6 +200,9 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Are class-average assembly/restoration responsibilities explicit?
 - Does online class-average restoration reuse the matcher batch images instead
   of introducing a second particle-stack read?
+- Does probabilistic table construction stay batch-bounded in workers, avoid
+  worker/global overlap, and keep sparse global storage proportional to the
+  evaluated candidate count?
 - Are stale distributed handoffs removed without deleting fractional class-average carry-over inputs?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Is `fillin=yes` treated as a full-assignment coverage guard unless the

@@ -352,6 +352,8 @@ contains
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false.)
         ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
         call eulprob_obj_part%new_worker(params,build,pinds)
+        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        call eulprob_obj_part%begin_write(fname)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -361,7 +363,6 @@ contains
             call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
         end do
         ! write the 2D probability table
-        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
         if( allocated(batches) ) deallocate(batches)
@@ -389,7 +390,7 @@ contains
         type(cmdline)              :: cline_prob_tab
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
-        integer :: nptcls, ipart
+        integer :: nptcls
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -409,8 +410,6 @@ contains
         call flush(logfhandle)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
-        ! build the global prob table (nclasses x nptcls)
-        call eulprob_obj_glob%new(params, build, pinds)
         ! generate partition-wise dist tables
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')
@@ -423,11 +422,9 @@ contains
         endif
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: prob_tab2D workers completed; merging partition tables'
         call flush(logfhandle)
-        ! merge all partition tables into global
-        do ipart = 1, params%nparts
-            fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call eulprob_obj_glob%read_tab_to_glob(fname)
-        end do
+        ! Allocate the global table only after worker scoring has released its batch-local storage.
+        call eulprob_obj_glob%new(params, build, pinds)
+        call eulprob_obj_glob%read_tabs_to_glob(string(DIST_FBODY),params%nparts,params%numlen)
         ! global probabilistic class assignment
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: running global probabilistic assignment'
         call flush(logfhandle)

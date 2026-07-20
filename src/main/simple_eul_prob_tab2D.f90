@@ -6,7 +6,8 @@ use simple_builder,            only: builder
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
-    &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index
+    &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index, prob_candidate,&
+    &prob_candidate_buffer, prob_candidate_store
 implicit none
 
 public :: eul_prob_tab2D
@@ -14,20 +15,26 @@ private
 #include "simple_local_flags.inc"
 
 real,             parameter :: NHOOD_FRAC           = 0.1
+integer,          parameter :: PROB_TAB2D_IO_CHUNK  = 65536
 
 type :: eul_prob_tab2D
     class(builder),    pointer  :: b_ptr => null()
     class(parameters), pointer  :: p_ptr => null()
-    type(ptcl_ref), allocatable :: loc_tab(:,:)      !< 2D search table (nclasses, nptcls)
+    type(prob_candidate), allocatable :: loc_tab(:,:) !< dense global table (nclasses,nptcls)
+    type(prob_candidate_store)        :: candidate_store !< sparse global table
+    type(prob_candidate_buffer), allocatable :: candidate_buffers(:) !< worker batch storage
     type(ptcl_ref), allocatable :: assgn_map(:)      !< assignment map (nptcls)
     real,           allocatable :: seed_shifts(:,:)  !< per-particle seeded shift (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)    !< per-particle seeded shift flag
     integer                     :: seed_nrots = 0    !< rotation grid used for deferred seeded shifts
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
-    integer,        allocatable :: eval_touched_refs(:,:)
-    integer,        allocatable :: eval_touched_counts(:)
-    integer                     :: eval_max_touched = 0
+    integer,        allocatable :: candidate_fill_counts(:)
+    integer                     :: table_unit    = -1
+    logical                     :: table_is_open = .false.
+    integer(int64)              :: table_addr    = 1_int64
+    integer(int64)              :: table_nnz     = 0_int64
+    integer                     :: table_nchunks = 0
     logical                     :: l_sparse_snhc = .false.
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
@@ -41,8 +48,11 @@ type :: eul_prob_tab2D
     procedure :: fill_tab
     procedure :: fill_tab_range
     procedure :: ref_assign => ref_assign_likelihood
+    procedure :: begin_write
+    procedure :: flush_candidate_buffers
     procedure :: write_tab
     procedure :: read_tab_to_glob
+    procedure :: read_tabs_to_glob
     procedure :: write_assignment
     procedure :: read_assignment
     ! DESTRUCTOR
@@ -51,15 +61,12 @@ type :: eul_prob_tab2D
     procedure, private :: fill_tab_prob_snhc
     procedure, private :: fill_tab_prob_snhc_range
     procedure, private :: ref_assign_sparse_likelihood
-    procedure, private :: clear_sparse_eval_table_range
     procedure, private :: record_sparse_eval
-    procedure, private :: mark_ref_touched
-    procedure, private :: write_sparse_tab
     procedure, private :: read_sparse_tab_to_glob
     procedure, private :: new_common
     procedure, private :: initialize_storage
-    procedure, private :: allocate_sparse_bookkeeping
     procedure, private :: finalize_assignment
+    procedure, private :: finalize_candidate_assignment
 end type eul_prob_tab2D
 
 type :: eval2D_sparse_ws
@@ -84,8 +91,8 @@ contains
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
         call self%new_common(params,build,pinds)
-        allocate(self%loc_tab(self%nclasses,self%nptcls),self%assgn_map(self%nptcls))
-        call self%allocate_sparse_bookkeeping
+        allocate(self%assgn_map(self%nptcls))
+        if( .not. self%l_sparse_snhc ) allocate(self%loc_tab(self%nclasses,self%nptcls))
         call self%initialize_storage
     end subroutine new_global
 
@@ -95,9 +102,7 @@ contains
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
         call self%new_common(params,build,pinds)
-        allocate(self%loc_tab(self%nclasses,self%nptcls))
-        call self%allocate_sparse_bookkeeping
-        call self%initialize_storage
+        allocate(self%candidate_buffers(nthr_glob))
     end subroutine new_worker
 
     subroutine new_assignment( self, params, build, pinds )
@@ -153,15 +158,6 @@ contains
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
     end subroutine new_common
 
-    subroutine allocate_sparse_bookkeeping( self )
-        class(eul_prob_tab2D), intent(inout) :: self
-        if( self%l_sparse_snhc )then
-            self%eval_max_touched = max(1, self%nclasses)
-            allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-            allocate(self%eval_touched_counts(self%nptcls), source=0)
-        endif
-    end subroutine allocate_sparse_bookkeeping
-
     subroutine initialize_storage( self )
         class(eul_prob_tab2D), intent(inout) :: self
         integer :: i, icls, iptcl
@@ -183,15 +179,12 @@ contains
             endif
             if( allocated(self%loc_tab) )then
                 do icls = 1, self%nclasses
-                    self%loc_tab(icls,i)%pind   = iptcl
-                    self%loc_tab(icls,i)%icls   = icls
+                    self%loc_tab(icls,i)%iref   = icls
                     self%loc_tab(icls,i)%inpl   = 0
                     self%loc_tab(icls,i)%dist   = huge(x)
                     self%loc_tab(icls,i)%x      = 0.
                     self%loc_tab(icls,i)%y      = 0.
                     self%loc_tab(icls,i)%has_sh = .false.
-                    self%loc_tab(icls,i)%frac   = 100.
-                    self%loc_tab(icls,i)%npeaks = 0
                 end do
             endif
         end do
@@ -285,9 +278,8 @@ contains
                     icls = active_cls(iref_n)
                     call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                    self%loc_tab(icls,i)%dist = inpl_dist
-                    self%loc_tab(icls,i)%inpl   = irot
-                    cls_dists(icls) = self%loc_tab(icls,i)%dist
+                    call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
+                    cls_dists(icls) = inpl_dist
                 end do
                 ! (3) refine shifts for a neighborhood of classes around the best one
                 cls_dists_work = cls_dists
@@ -296,14 +288,12 @@ contains
                     icls = loc(1)
                     if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
-                    irot     = self%loc_tab(icls,i)%inpl
+                    irot     = self%candidate_buffers(ithr)%get_inpl(i, icls)
                     cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
                     if( irot > 0 )then
-                        self%loc_tab(icls,i)%inpl   = irot
-                        self%loc_tab(icls,i)%dist   = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
-                        self%loc_tab(icls,i)%x      = cxy_prob(2)
-                        self%loc_tab(icls,i)%y      = cxy_prob(3)
-                        self%loc_tab(icls,i)%has_sh = .true.
+                        call self%record_sparse_eval(i, ithr, icls,&
+                            &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
+                            &cxy_prob(2), cxy_prob(3), .true.)
                     endif
                     cls_dists_work(icls) = huge(1.0)
                 end do
@@ -320,11 +310,7 @@ contains
                     icls = active_cls(iref_n)
                     call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
-                    self%loc_tab(icls,i)%dist = inpl_dist
-                    self%loc_tab(icls,i)%inpl   = irot
-                    self%loc_tab(icls,i)%x      = 0.
-                    self%loc_tab(icls,i)%y      = 0.
-                    self%loc_tab(icls,i)%has_sh = .false.
+                    call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                 end do
             end do
             !$omp end parallel do
@@ -333,6 +319,7 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         call o_prev%kill
+        if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_range
 
     subroutine fill_tab_prob_snhc( self )
@@ -362,12 +349,6 @@ contains
         smpl_ncls   = max(1, min(smpl_ncls, self%nclasses))
         ninpl_smpl  = neighfrac2nsmpl(neigh_frac, nrots)
         ninpl_smpl  = max(1, min(ninpl_smpl, nrots))
-        if( .not. allocated(self%eval_touched_refs) )then
-            self%eval_max_touched = max(1, self%nclasses)
-            allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-        endif
-        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
-        call self%clear_sparse_eval_table_range(i_from, i_to)
         call eval_work%init_eval2D_sparse_ws(self%nclasses, nrots, smpl_ncls, nthr_glob)
         allocate(direct_rts(nthr_glob))
         do ithr = 1, nthr_glob
@@ -406,6 +387,7 @@ contains
         end do
         call eval_work%dealloc_eval2D_sparse_ws
         deallocate(direct_rts)
+        if( self%table_is_open ) call self%flush_candidate_buffers
 
     contains
 
@@ -441,7 +423,7 @@ contains
                 if( isample_loc > neval_bound_loc ) exit
                 icls_loc = eval_work%direct_srch_order(isample_loc,ithr_loc)
                 call score_class(icls_loc, ithr_loc, iptcl_loc, sh_loc, dist_loc, corr_loc, irot_loc)
-                call self%record_sparse_eval(i_loc, icls_loc, dist_loc, irot_loc, 0., 0., .false.)
+                call self%record_sparse_eval(i_loc, ithr_loc, icls_loc, dist_loc, irot_loc, 0., 0., .false.)
                 neval_loc = neval_loc + 1
                 eval_work%eval_cls(neval_loc,ithr_loc)   = icls_loc
                 eval_work%eval_dists(neval_loc,ithr_loc) = dist_loc
@@ -476,10 +458,11 @@ contains
                 icls_loc = eval_work%eval_cls(eval_slot_loc,ithr_loc)
                 if( icls_loc < 1 ) cycle
                 call grad_shsrch_obj(ithr_loc)%set_indices(icls_loc, iptcl_loc)
-                irot_loc = self%loc_tab(icls_loc,i_loc)%inpl
+                irot_loc = self%candidate_buffers(ithr_loc)%get_inpl(i_loc, icls_loc)
                 cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=sh_loc)
                 if( irot_loc > 0 )then
-                    call self%record_sparse_eval(i_loc, icls_loc, eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun),&
+                    call self%record_sparse_eval(i_loc, ithr_loc, icls_loc,&
+                        &eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun),&
                         &irot_loc, cxy_prob_loc(2), cxy_prob_loc(3), .true.)
                 endif
             enddo
@@ -487,95 +470,73 @@ contains
 
     end subroutine fill_tab_prob_snhc_range
 
-    subroutine clear_sparse_eval_table_range( self, i_from, i_to )
+    subroutine record_sparse_eval( self, i, ithr, icls, dist, irot, x, y, has_sh )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer,               intent(in)    :: i_from, i_to
-        integer :: i, k, icls
-        if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) ) return
-        !$omp parallel do default(shared) private(i,k,icls) proc_bind(close) schedule(static)
-        do i = i_from, i_to
-            do k = 1, self%eval_touched_counts(i)
-                icls = self%eval_touched_refs(k,i)
-                if( icls < 1 .or. icls > self%nclasses ) cycle
-                self%loc_tab(icls,i)%dist   = huge(1.0)
-                self%loc_tab(icls,i)%inpl   = 0
-                self%loc_tab(icls,i)%x      = 0.
-                self%loc_tab(icls,i)%y      = 0.
-                self%loc_tab(icls,i)%has_sh = .false.
-            enddo
-            self%eval_touched_counts(i) = 0
-        enddo
-        !$omp end parallel do
-    end subroutine clear_sparse_eval_table_range
-
-    subroutine record_sparse_eval( self, i, icls, dist, irot, x, y, has_sh )
-        class(eul_prob_tab2D), intent(inout) :: self
-        integer,               intent(in)    :: i, icls, irot
+        integer,               intent(in)    :: i, ithr, icls, irot
         real,                  intent(in)    :: dist, x, y
         logical,               intent(in)    :: has_sh
+        type(prob_candidate) :: candidate
         if( icls < 1 .or. icls > self%nclasses )&
             &THROW_HARD('simple_eul_prob_tab2D::record_sparse_eval; class index out of range')
-        self%loc_tab(icls,i)%dist   = dist
-        self%loc_tab(icls,i)%inpl   = irot
-        self%loc_tab(icls,i)%x      = x
-        self%loc_tab(icls,i)%y      = y
-        self%loc_tab(icls,i)%has_sh = has_sh
-        call self%mark_ref_touched(i, icls)
+        candidate%iref   = icls
+        candidate%dist   = dist
+        candidate%inpl   = irot
+        candidate%x      = x
+        candidate%y      = y
+        candidate%has_sh = has_sh
+        call self%candidate_buffers(ithr)%append_or_replace(i, candidate)
     end subroutine record_sparse_eval
-
-    subroutine mark_ref_touched( self, i, icls )
-        class(eul_prob_tab2D), intent(inout) :: self
-        integer,               intent(in)    :: i, icls
-        integer :: kt
-        if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
-            &THROW_HARD('simple_eul_prob_tab2D::mark_ref_touched; sparse bookkeeping is not allocated')
-        do kt = 1, self%eval_touched_counts(i)
-            if( self%eval_touched_refs(kt,i) == icls ) return
-        enddo
-        if( self%eval_touched_counts(i) >= self%eval_max_touched )then
-            THROW_HARD('simple_eul_prob_tab2D::mark_ref_touched; eval_touched overflow')
-        endif
-        self%eval_touched_counts(i) = self%eval_touched_counts(i) + 1
-        self%eval_touched_refs(self%eval_touched_counts(i),i) = icls
-    end subroutine mark_ref_touched
 
 
     subroutine finalize_assignment( self, iptcl_loc, icls_loc, frac, npeaks )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,                intent(in)    :: iptcl_loc, icls_loc, npeaks
         real,                   intent(in)    :: frac
-        self%assgn_map(iptcl_loc) = self%loc_tab(icls_loc,iptcl_loc)
+        call self%finalize_candidate_assignment(iptcl_loc,self%loc_tab(icls_loc,iptcl_loc),frac,npeaks)
+    end subroutine finalize_assignment
+
+    subroutine finalize_candidate_assignment( self, iptcl_loc, candidate, frac, npeaks )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: iptcl_loc, npeaks
+        type(prob_candidate),  intent(in)    :: candidate
+        real,                  intent(in)    :: frac
+        self%assgn_map(iptcl_loc)%pind   = self%pinds(iptcl_loc)
+        self%assgn_map(iptcl_loc)%iproj  = 0
+        self%assgn_map(iptcl_loc)%istate = 0
+        self%assgn_map(iptcl_loc)%icls   = candidate%iref
+        self%assgn_map(iptcl_loc)%inpl   = candidate%inpl
+        self%assgn_map(iptcl_loc)%dist   = candidate%dist
+        self%assgn_map(iptcl_loc)%x      = candidate%x
+        self%assgn_map(iptcl_loc)%y      = candidate%y
+        self%assgn_map(iptcl_loc)%has_sh = candidate%has_sh
         call materialize_seed_shift(self%assgn_map(iptcl_loc),self%seed_shifts(:,iptcl_loc),&
             &self%seed_has_sh(iptcl_loc),self%p_ptr%l_doshift,self%seed_nrots)
         self%assgn_map(iptcl_loc)%frac   = frac
         self%assgn_map(iptcl_loc)%npeaks = npeaks
-    end subroutine finalize_assignment
+    end subroutine finalize_candidate_assignment
 
     subroutine ref_assign_sparse_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
 
         type :: assign_graph_ws
-            integer, allocatable :: class_counts(:), class_offsets(:), class_fill(:), class_list(:), class_pos(:), active_classes(:)
-            integer, allocatable :: ptcl_counts(:), ptcl_offsets(:), ptcl_fill(:), ptcl_classes(:)
-            real,    allocatable :: class_dists(:)
+            integer, allocatable :: class_counts(:), class_offsets(:), class_fill(:), class_pos(:), active_classes(:)
+            integer, allocatable :: class_candidates(:), candidate_particles(:)
         end type assign_graph_ws
 
         type :: assign_frontier_ws
-            integer, allocatable :: order(:), work_ptcl(:), sel_classes(:), sel_pos(:), likelihood_order(:)
-            integer, allocatable :: ptcl_classes(:)
+            integer, allocatable :: order(:), work_candidates(:), sel_classes(:), sel_pos(:), likelihood_order(:)
             real,    allocatable :: class_dist(:), work_d(:), sel_dists(:), likelihood_dists(:)
             logical, allocatable :: ptcl_avail(:)
         end type assign_frontier_ws
 
         type(assign_graph_ws)    :: graph
         type(assign_frontier_ws) :: frontier
-        integer, allocatable :: raw_offsets(:), raw_classes(:)
         logical, allocatable :: class_active(:)
-        integer :: i, k, pos, idx, icls, assigned_icls, assigned_ptcl, assigned_idx, nleft, nsel
-        integer :: total_raw, total, nactive, maxclass, neligible, nassigned, last_class
-        real    :: best_dist, dist_loc, huge_val
-        if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
-            &THROW_HARD('simple_eul_prob_tab2D::ref_assign_sparse_likelihood; sparse bookkeeping is not allocated')
+        integer :: i, k, pos, idx, icls, assigned_ptcl, assigned_idx, nleft, nsel
+        integer :: total, nactive, maxclass, neligible, nassigned, last_class, assigned_candidate
+        real    :: best_dist, huge_val
+        if( .not. allocated(self%candidate_store%candidates) )&
+            &THROW_HARD('simple_eul_prob_tab2D::ref_assign_sparse_likelihood; sparse candidate store is not allocated')
         write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing sparse likelihood ',&
             &self%nptcls, ' particles x ', self%nclasses
         call flush(logfhandle)
@@ -586,57 +547,24 @@ contains
             THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
         endif
         huge_val  = huge(1.0) / 2.0
-        call build_sparse_raw_table()
         call build_sparse_assignment_graph()
         call assign_particles_from_frontier()
         call assign_remaining_particles()
         write(logfhandle,'(A,I0)') '>>> PROB_TAB2D_ASSIGN: sparse likelihood done; assigned ', nassigned
         call flush(logfhandle)
-        deallocate(raw_offsets, raw_classes, class_active)
+        deallocate(class_active)
 
     contains
 
-        subroutine build_sparse_raw_table()
-            integer, allocatable :: raw_counts(:)
-            allocate(raw_offsets(self%nptcls+1), raw_counts(self%nptcls), source=0)
-            do i = 1,self%nptcls
-                do k = 1,self%eval_touched_counts(i)
-                    icls = self%eval_touched_refs(k,i)
-                    if( .not. valid_sparse_class(i, icls) ) cycle
-                    raw_counts(i) = raw_counts(i) + 1
-                enddo
-            enddo
-            raw_offsets(1) = 1
-            do i = 1,self%nptcls
-                raw_offsets(i+1) = raw_offsets(i) + raw_counts(i)
-            enddo
-            total_raw = raw_offsets(self%nptcls+1) - 1
-            if( total_raw < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%ref_assign_sparse_likelihood')
-            allocate(raw_classes(total_raw))
-            raw_counts = 0
-            do i = 1,self%nptcls
-                do k = 1,self%eval_touched_counts(i)
-                    icls = self%eval_touched_refs(k,i)
-                    if( .not. valid_sparse_class(i, icls) ) cycle
-                    pos = raw_offsets(i) + raw_counts(i)
-                    raw_classes(pos) = icls
-                    raw_counts(i)    = raw_counts(i) + 1
-                enddo
-            enddo
-            deallocate(raw_counts)
-        end subroutine build_sparse_raw_table
-
         subroutine build_sparse_assignment_graph()
             allocate(graph%class_counts(self%nclasses), graph%class_offsets(self%nclasses+1),&
-                &graph%class_fill(self%nclasses), graph%class_pos(self%nclasses),&
-                &graph%ptcl_counts(self%nptcls), graph%ptcl_offsets(self%nptcls+1), graph%ptcl_fill(self%nptcls))
+                &graph%class_fill(self%nclasses), graph%class_pos(self%nclasses))
             graph%class_counts = 0
-            graph%ptcl_counts  = 0
             do i = 1,self%nptcls
-                do pos = raw_offsets(i), raw_offsets(i+1)-1
-                    icls = raw_classes(pos)
+                do pos = int(self%candidate_store%offsets(i)), int(self%candidate_store%offsets(i+1))-1
+                    if( .not. valid_sparse_candidate(pos) ) cycle
+                    icls = self%candidate_store%candidates(pos)%iref
                     graph%class_counts(icls) = graph%class_counts(icls) + 1
-                    graph%ptcl_counts(i)     = graph%ptcl_counts(i) + 1
                 enddo
             enddo
             nactive = count(graph%class_counts > 0)
@@ -648,40 +576,33 @@ contains
                 graph%class_offsets(icls+1) = graph%class_offsets(icls) + graph%class_counts(icls)
             enddo
             total = graph%class_offsets(self%nclasses+1) - 1
-            allocate(graph%class_list(total), graph%class_dists(total))
-            graph%ptcl_offsets(1) = 1
-            do i = 1,self%nptcls
-                graph%ptcl_offsets(i+1) = graph%ptcl_offsets(i) + graph%ptcl_counts(i)
-            enddo
-            allocate(graph%ptcl_classes(max(1,graph%ptcl_offsets(self%nptcls+1)-1)))
+            allocate(graph%class_candidates(total), graph%candidate_particles(size(self%candidate_store%candidates)), source=0)
             graph%class_fill = graph%class_offsets(1:self%nclasses)
-            graph%ptcl_fill  = graph%ptcl_offsets(1:self%nptcls)
             do i = 1,self%nptcls
-                do pos = raw_offsets(i), raw_offsets(i+1)-1
-                    icls = raw_classes(pos)
+                do pos = int(self%candidate_store%offsets(i)), int(self%candidate_store%offsets(i+1))-1
+                    graph%candidate_particles(pos) = i
+                    if( .not. valid_sparse_candidate(pos) ) cycle
+                    icls = self%candidate_store%candidates(pos)%iref
                     idx = graph%class_fill(icls)
-                    graph%class_list(idx)  = i
-                    graph%class_dists(idx) = self%loc_tab(icls,i)%dist
+                    graph%class_candidates(idx) = pos
                     graph%class_fill(icls) = idx + 1
-                    idx = graph%ptcl_fill(i)
-                    graph%ptcl_classes(idx) = icls
-                    graph%ptcl_fill(i)      = idx + 1
                 enddo
             enddo
             maxclass = max(1, maxval(graph%class_counts))
-            allocate(frontier%work_d(maxclass), frontier%order(maxclass), frontier%work_ptcl(maxclass))
+            allocate(frontier%work_d(maxclass), frontier%order(maxclass), frontier%work_candidates(maxclass))
             do idx = 1,nactive
                 icls = graph%active_classes(idx)
                 k    = graph%class_counts(icls)
                 if( k <= 1 ) cycle
                 pos = graph%class_offsets(icls)
-                frontier%work_d(1:k)    = graph%class_dists(pos:pos+k-1)
-                frontier%work_ptcl(1:k) = graph%class_list(pos:pos+k-1)
+                frontier%work_candidates(1:k) = graph%class_candidates(pos:pos+k-1)
+                do i = 1,k
+                    frontier%work_d(i) = self%candidate_store%candidates(frontier%work_candidates(i))%dist
+                enddo
                 frontier%order(1:k)     = (/(i,i=1,k)/)
                 call hpsort(frontier%work_d(1:k), frontier%order(1:k))
                 do i = 1,k
-                    graph%class_dists(pos+i-1) = frontier%work_d(i)
-                    graph%class_list(pos+i-1)  = frontier%work_ptcl(frontier%order(i))
+                    graph%class_candidates(pos+i-1) = frontier%work_candidates(frontier%order(i))
                 enddo
             enddo
             allocate(frontier%class_dist(self%nclasses), frontier%sel_pos(self%nclasses),&
@@ -727,23 +648,27 @@ contains
         end subroutine sample_frontier_likelihood
 
         subroutine commit_selected_assignment()
-            assigned_icls = frontier%sel_classes(assigned_idx)
-            assigned_ptcl = graph%class_list(graph%class_offsets(assigned_icls) + graph%class_pos(assigned_icls) - 1)
+            icls = frontier%sel_classes(assigned_idx)
+            assigned_candidate = graph%class_candidates(graph%class_offsets(icls) + graph%class_pos(icls) - 1)
+            assigned_ptcl = graph%candidate_particles(assigned_candidate)
             frontier%ptcl_avail(assigned_ptcl) = .false.
             nleft = nleft - 1
             nassigned = nassigned + 1
-            call self%finalize_assignment(assigned_ptcl,assigned_icls,search_frac(assigned_ptcl),&
-                &search_npeaks(assigned_ptcl))
+            call self%finalize_candidate_assignment(assigned_ptcl,self%candidate_store%candidates(assigned_candidate),&
+                &search_frac(assigned_ptcl),search_npeaks(assigned_ptcl))
             call update_frontier_after_assignment(assigned_ptcl)
         end subroutine commit_selected_assignment
 
         subroutine update_frontier_after_assignment( iptcl_assigned )
             integer, intent(in) :: iptcl_assigned
-            do idx = graph%ptcl_offsets(iptcl_assigned), graph%ptcl_offsets(iptcl_assigned+1)-1
-                icls = graph%ptcl_classes(idx)
+            do idx = int(self%candidate_store%offsets(iptcl_assigned)),&
+                &int(self%candidate_store%offsets(iptcl_assigned+1))-1
+                if( .not. valid_sparse_candidate(idx) ) cycle
+                icls = self%candidate_store%candidates(idx)%iref
                 if( graph%class_pos(icls) > graph%class_counts(icls) ) cycle
                 pos = graph%class_offsets(icls)
-                if( graph%class_list(pos + graph%class_pos(icls) - 1) /= iptcl_assigned ) cycle
+                assigned_candidate = graph%class_candidates(pos + graph%class_pos(icls) - 1)
+                if( graph%candidate_particles(assigned_candidate) /= iptcl_assigned ) cycle
                 call advance_class_head(icls)
                 call sync_frontier_class(icls)
             enddo
@@ -752,39 +677,46 @@ contains
         subroutine assign_remaining_particles()
             do i = 1,self%nptcls
                 if( .not. frontier%ptcl_avail(i) ) cycle
-                assigned_icls = pick_best_sparse_class(i)
-                if( assigned_icls == 0 )&
+                assigned_candidate = pick_best_sparse_candidate(i)
+                if( assigned_candidate == 0 )&
                     &THROW_HARD('Failed sparse likelihood particle assignment in eul_prob_tab2D%ref_assign_sparse_likelihood')
-                call self%finalize_assignment(i,assigned_icls,search_frac(i),search_npeaks(i))
+                call self%finalize_candidate_assignment(i,self%candidate_store%candidates(assigned_candidate),&
+                    &search_frac(i),search_npeaks(i))
                 frontier%ptcl_avail(i) = .false.
                 nassigned = nassigned + 1
             enddo
         end subroutine assign_remaining_particles
 
-        integer function pick_best_sparse_class( iptcl_loc ) result(icls_best)
+        integer function pick_best_sparse_candidate( iptcl_loc ) result(candidate_best)
             integer, intent(in) :: iptcl_loc
-            integer :: pos_loc, icls_loc
-            icls_best = 0
+            integer :: pos_loc
+            candidate_best = 0
             best_dist = huge(1.0)
-            do pos_loc = raw_offsets(iptcl_loc), raw_offsets(iptcl_loc+1)-1
-                icls_loc = raw_classes(pos_loc)
-                dist_loc = self%loc_tab(icls_loc,iptcl_loc)%dist
-                if( dist_loc < best_dist )then
-                    best_dist = dist_loc
-                    icls_best = icls_loc
+            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)),&
+                &int(self%candidate_store%offsets(iptcl_loc+1))-1
+                if( .not. valid_sparse_candidate(pos_loc) ) cycle
+                if( self%candidate_store%candidates(pos_loc)%dist < best_dist )then
+                    best_dist      = self%candidate_store%candidates(pos_loc)%dist
+                    candidate_best = pos_loc
                 endif
             enddo
-        end function pick_best_sparse_class
+        end function pick_best_sparse_candidate
 
         real function search_frac( iptcl_loc ) result(frac)
             integer, intent(in) :: iptcl_loc
-            frac = 100. * real(self%eval_touched_counts(iptcl_loc)) / real(self%nclasses)
+            frac = 100. * real(search_npeaks(iptcl_loc)) / real(self%nclasses)
         end function search_frac
 
         integer function search_npeaks( iptcl_loc ) result(npeaks)
             integer, intent(in) :: iptcl_loc
+            integer :: pos_loc, icls_loc
             npeaks = 0
-            if( allocated(self%eval_touched_counts) ) npeaks = self%eval_touched_counts(iptcl_loc)
+            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)),&
+                &int(self%candidate_store%offsets(iptcl_loc+1))-1
+                icls_loc = self%candidate_store%candidates(pos_loc)%iref
+                if( icls_loc < 1 .or. icls_loc > self%nclasses ) cycle
+                if( self%candidate_store%candidates(pos_loc)%inpl > 0 ) npeaks = npeaks + 1
+            enddo
         end function search_npeaks
 
         subroutine advance_class_head( icls_loc )
@@ -797,9 +729,9 @@ contains
             endif
             start = graph%class_offsets(icls_loc)
             do while( graph%class_pos(icls_loc) <= nloc )
-                cand = graph%class_list(start + graph%class_pos(icls_loc) - 1)
-                if( frontier%ptcl_avail(cand) )then
-                    frontier%class_dist(icls_loc) = graph%class_dists(start + graph%class_pos(icls_loc) - 1)
+                cand = graph%class_candidates(start + graph%class_pos(icls_loc) - 1)
+                if( frontier%ptcl_avail(graph%candidate_particles(cand)) )then
+                    frontier%class_dist(icls_loc) = self%candidate_store%candidates(cand)%dist
                     return
                 endif
                 graph%class_pos(icls_loc) = graph%class_pos(icls_loc) + 1
@@ -833,14 +765,17 @@ contains
             endif
         end subroutine sync_frontier_class
 
-        logical function valid_sparse_class( iptcl_loc, icls_loc ) result(l_valid)
-            integer, intent(in) :: iptcl_loc, icls_loc
+        logical function valid_sparse_candidate( candidate_pos ) result(l_valid)
+            integer, intent(in) :: candidate_pos
+            integer :: icls_loc
             l_valid = .false.
+            if( candidate_pos < 1 .or. candidate_pos > size(self%candidate_store%candidates) ) return
+            icls_loc = self%candidate_store%candidates(candidate_pos)%iref
             if( icls_loc < 1 .or. icls_loc > self%nclasses ) return
             if( .not. class_active(icls_loc) ) return
-            if( self%loc_tab(icls_loc,iptcl_loc)%inpl <= 0 ) return
+            if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 ) return
             l_valid = .true.
-        end function valid_sparse_class
+        end function valid_sparse_candidate
 
     end subroutine ref_assign_sparse_likelihood
 
@@ -848,9 +783,9 @@ contains
     subroutine ref_assign_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), eligible_cls(:), inds_sorted(:)
-        real,    allocatable :: sorted_tab(:,:), cls_dists(:), corr_proxy(:)
+        real,    allocatable :: score_work(:,:), cls_dists(:), corr_proxy(:)
         logical, allocatable :: ptcl_avail(:), class_active(:)
-        integer :: i, icls, assigned_icls, assigned_ptcl
+        integer :: i, icls, assigned_icls, assigned_ptcl, ithr
         integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
         real    :: best_dist
         if( self%l_sparse_snhc )then
@@ -876,21 +811,22 @@ contains
             endif
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
-        allocate(sorted_tab(self%nptcls,self%nclasses),stab_inds(self%nptcls,self%nclasses),&
+        allocate(score_work(self%nptcls,nthr_glob),stab_inds(self%nptcls,self%nclasses),&
             &ptcl_avail(self%nptcls))
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: using likelihood weights exp(-dist)'
         call flush(logfhandle)
         ! sort each column
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: sorting per-class particle distances'
         call flush(logfhandle)
-        sorted_tab = transpose(self%loc_tab(:,:)%dist)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(icls,i,ithr)
         do icls = 1, self%nclasses
+            ithr = omp_get_thread_num() + 1
             stab_inds(:,icls) = (/(i,i=1,self%nptcls)/)
             if( class_active(icls) )then
-                call hpsort(sorted_tab(:,icls), stab_inds(:,icls))
-            else
-                sorted_tab(:,icls) = huge(sorted_tab(1,icls))
+                do i = 1,self%nptcls
+                    score_work(i,ithr) = self%loc_tab(icls,i)%dist
+                enddo
+                call hpsort(score_work(:,ithr), stab_inds(:,icls))
             endif
         end do
         !$omp end parallel do
@@ -914,7 +850,8 @@ contains
                 if( icls_dist_inds(icls) <= self%nptcls )then
                     neligible = neligible + 1
                     eligible_cls(neligible) = icls
-                    cls_dists(neligible)    = sorted_tab(icls_dist_inds(icls), icls)
+                    assigned_ptcl           = stab_inds(icls_dist_inds(icls), icls)
+                    cls_dists(neligible)    = self%loc_tab(icls,assigned_ptcl)%dist
                 endif
             end do
             if( neligible == 0 ) exit
@@ -957,7 +894,7 @@ contains
         endif
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: done'
         call flush(logfhandle)
-        deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, sorted_tab, cls_dists, corr_proxy,&
+        deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, score_work, cls_dists, corr_proxy,&
             &ptcl_avail, class_active)
     end subroutine ref_assign_likelihood
 
@@ -965,102 +902,108 @@ contains
 
     subroutine kill( self )
         class(eul_prob_tab2D), intent(inout) :: self
+        integer :: ithr
+        if( self%table_is_open ) call fclose(self%table_unit)
         if( allocated(self%loc_tab)        ) deallocate(self%loc_tab)
+        call self%candidate_store%kill
+        if( allocated(self%candidate_buffers) )then
+            do ithr = 1,size(self%candidate_buffers)
+                call self%candidate_buffers(ithr)%kill
+            enddo
+            deallocate(self%candidate_buffers)
+        endif
         if( allocated(self%assgn_map)      ) deallocate(self%assgn_map)
         if( allocated(self%seed_shifts)    ) deallocate(self%seed_shifts)
         if( allocated(self%seed_has_sh)    ) deallocate(self%seed_has_sh)
         if( allocated(self%pinds)          ) deallocate(self%pinds)
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
-        if( allocated(self%eval_touched_refs)   ) deallocate(self%eval_touched_refs)
-        if( allocated(self%eval_touched_counts) ) deallocate(self%eval_touched_counts)
+        if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
         self%seed_nrots = 0
-        self%eval_max_touched = 0
         self%l_sparse_snhc = .false.
+        self%table_unit    = -1
+        self%table_is_open = .false.
+        self%table_addr    = 1_int64
+        self%table_nnz     = 0_int64
+        self%table_nchunks = 0
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill
 
     ! FILE IO
 
-    subroutine write_tab( self, binfname )
-        class(eul_prob_tab2D), intent(in) :: self
-        class(string),         intent(in) :: binfname
-        integer :: funit, io_stat, file_header(2)
-        integer(int64) :: addr
-        if( self%l_sparse_snhc )then
-            call self%write_sparse_tab(binfname)
-            return
-        endif
-        file_header(1) = self%nclasses
-        file_header(2) = self%nptcls
-        call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        write(unit=funit, pos=1) file_header
+    subroutine begin_write( self, binfname )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(string),         intent(in)    :: binfname
+        integer :: io_stat
+        integer(int64) :: file_header(4), addr
+        if( self%table_is_open ) THROW_HARD('2D probability candidate stream is already open')
+        if( .not. allocated(self%candidate_buffers) ) THROW_HARD('2D candidate stream requested without worker buffers')
+        file_header = [int(self%nclasses,int64),int(self%nptcls,int64),0_int64,0_int64]
+        call fopen(self%table_unit,binfname,access='STREAM',action='WRITE',status='REPLACE',iostat=io_stat)
+        call fileiochk('simple_eul_prob_tab2D; begin_write; file: '//binfname%to_char(),io_stat)
+        self%table_is_open = .true.
+        write(self%table_unit,pos=1) file_header
         addr = sizeof(file_header) + 1
-        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
-        write(funit, pos=addr) self%loc_tab
-        call fclose(funit)
-    end subroutine write_tab
-
-    subroutine write_sparse_tab( self, binfname )
-        class(eul_prob_tab2D), intent(in) :: self
-        class(string),         intent(in) :: binfname
-        type(ptcl_ref), allocatable :: sparse_tab(:)
-        integer,        allocatable :: sparse_refs(:), sparse_counts(:)
-        integer :: funit, io_stat, file_header(3), i, k, icls, nnz, pos
-        integer(int64) :: addr
-        if( .not. allocated(self%eval_touched_counts) .or. .not. allocated(self%eval_touched_refs) )&
-            &THROW_HARD('eul_prob_tab2D%write_sparse_tab; sparse bookkeeping is not allocated')
-        nnz = 0
-        allocate(sparse_counts(self%nptcls), source=0)
-        do i = 1, self%nptcls
-            do k = 1, self%eval_touched_counts(i)
-                icls = self%eval_touched_refs(k,i)
-                if( icls < 1 .or. icls > self%nclasses ) cycle
-                if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
-                sparse_counts(i) = sparse_counts(i) + 1
-                nnz = nnz + 1
-            enddo
-        enddo
-        if( nnz < 1 ) THROW_HARD('eul_prob_tab2D%write_sparse_tab; empty sparse table')
-        allocate(sparse_refs(nnz), sparse_tab(nnz))
-        pos = 0
-        do i = 1, self%nptcls
-            do k = 1, self%eval_touched_counts(i)
-                icls = self%eval_touched_refs(k,i)
-                if( icls < 1 .or. icls > self%nclasses ) cycle
-                if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
-                pos = pos + 1
-                sparse_refs(pos) = icls
-                sparse_tab(pos)  = self%loc_tab(icls,i)
-            enddo
-        enddo
-        file_header(1) = self%nclasses
-        file_header(2) = self%nptcls
-        file_header(3) = nnz
-        call fopen(funit, binfname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        write(unit=funit, pos=1) file_header
-        addr = sizeof(file_header) + 1
-        write(funit, pos=addr) self%pinds
+        write(self%table_unit,pos=addr) self%pinds
         addr = addr + sizeof(self%pinds)
-        call write_seed_shift_table(funit, addr, self%seed_nrots, self%seed_shifts, self%seed_has_sh)
-        write(funit, pos=addr) sparse_counts
-        addr = addr + sizeof(sparse_counts)
-        write(funit, pos=addr) sparse_refs
-        addr = addr + sizeof(sparse_refs)
-        write(funit, pos=addr) sparse_tab
-        call fclose(funit)
-        deallocate(sparse_tab, sparse_refs, sparse_counts)
-    end subroutine write_sparse_tab
+        call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        self%table_addr    = addr
+        self%table_nnz     = 0_int64
+        self%table_nchunks = 0
+    end subroutine begin_write
+
+    subroutine flush_candidate_buffers( self )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer :: ithr, nused
+        if( .not. self%table_is_open ) return
+        do ithr = 1,size(self%candidate_buffers)
+            nused = self%candidate_buffers(ithr)%nused
+            if( nused < 1 ) cycle
+            write(self%table_unit,pos=self%table_addr) nused
+            self%table_addr = self%table_addr + sizeof(nused)
+            write(self%table_unit,pos=self%table_addr) self%candidate_buffers(ithr)%particle_indices(1:nused)
+            self%table_addr = self%table_addr + sizeof(self%candidate_buffers(ithr)%particle_indices(1:nused))
+            write(self%table_unit,pos=self%table_addr) self%candidate_buffers(ithr)%candidates(1:nused)
+            self%table_addr = self%table_addr + sizeof(self%candidate_buffers(ithr)%candidates(1:nused))
+            self%table_nnz     = self%table_nnz + int(nused,int64)
+            self%table_nchunks = self%table_nchunks + 1
+            call self%candidate_buffers(ithr)%kill
+        enddo
+    end subroutine flush_candidate_buffers
+
+    subroutine write_tab( self, binfname )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(string),         intent(in)    :: binfname
+        integer(int64) :: file_header(4), addr
+        if( .not. self%table_is_open ) call self%begin_write(binfname)
+        call self%flush_candidate_buffers
+        if( self%table_nnz < 1 ) THROW_HARD('eul_prob_tab2D%write_tab; empty candidate stream')
+        if( .not. self%l_sparse_snhc )then
+            if( self%table_nnz /= int(self%nclasses,int64)*int(self%nptcls,int64) )&
+                &THROW_HARD('eul_prob_tab2D%write_tab; dense candidate stream is incomplete')
+        endif
+        file_header = [int(self%nclasses,int64),int(self%nptcls,int64),self%table_nnz,int(self%table_nchunks,int64)]
+        write(self%table_unit,pos=1) file_header
+        addr = sizeof(file_header) + 1
+        write(self%table_unit,pos=addr) self%pinds
+        addr = addr + sizeof(self%pinds)
+        call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        call fclose(self%table_unit)
+        self%table_unit    = -1
+        self%table_is_open = .false.
+        self%table_addr    = 1_int64
+    end subroutine write_tab
 
     subroutine read_tab_to_glob( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
         class(string),         intent(in)    :: binfname
-        type(ptcl_ref), allocatable :: mat_loc(:,:)
+        type(prob_candidate), allocatable :: candidates_loc(:)
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
-        integer, allocatable :: pind2glob(:), pinds_loc(:)
-        integer :: funit, io_stat, file_header(2), nptcls_loc, nclasses_loc, i_loc, i_glob, pind, max_pind, seed_nrots_loc
-        integer(int64) :: addr
+        integer, allocatable :: pind2glob(:), pinds_loc(:), particle_indices(:), candidate_counts(:)
+        integer :: funit, io_stat, nptcls_loc, nclasses_loc, nchunks, seed_nrots_loc
+        integer :: i_loc, i_glob, pind, max_pind, ichunk, chunk_n, first, last, nread, j, icls
+        integer(int64) :: file_header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
         if( self%l_sparse_snhc )then
             call self%read_sparse_tab_to_glob(binfname)
             return
@@ -1072,48 +1015,74 @@ contains
             THROW_HARD('dist files of partitions should be ready!')
         endif
         read(unit=funit, pos=1) file_header
-        nclasses_loc = file_header(1)
-        nptcls_loc   = file_header(2)
+        nclasses_loc = int(file_header(1))
+        nptcls_loc   = int(file_header(2))
+        nnz          = file_header(3)
+        nchunks      = int(file_header(4))
         if( nclasses_loc .ne. self%nclasses ) THROW_HARD('nclasses mismatch in read_tab_to_glob!')
-        allocate(mat_loc(nclasses_loc, nptcls_loc))
-        allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
+        allocate(pinds_loc(nptcls_loc),seed_shifts_loc(2,nptcls_loc),seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
+        read(funit,pos=addr) pinds_loc
+        addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        read(unit=funit, pos=addr) mat_loc
-        call fclose(funit)
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_tab_to_glob')
-        pinds_loc = mat_loc(1,:)%pind
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
-        if( max_pind < 1 )then
-            deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
-            return
-        endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob,pind)
         do i_loc = 1, nptcls_loc
-            pind = mat_loc(1,i_loc)%pind
-            if( pind < 1 .or. pind > max_pind ) cycle
-            i_glob = pind2glob(pind)
-            if( i_glob > 0 )then
-                self%loc_tab(:,i_glob)     = mat_loc(:,i_loc)
+            pind = pinds_loc(i_loc)
+            if( pind >= 1 .and. pind <= max_pind )then
+                i_glob = pind2glob(pind)
+                if( i_glob < 1 ) cycle
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
             endif
-        end do
-        !$omp end parallel do
-        deallocate(mat_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, pinds_loc)
+        enddo
+        allocate(particle_indices(PROB_TAB2D_IO_CHUNK),candidates_loc(PROB_TAB2D_IO_CHUNK))
+        allocate(candidate_counts(nptcls_loc),source=0)
+        nnz_read = 0_int64
+        do ichunk = 1,nchunks
+            read(funit,pos=addr) chunk_n
+            addr = addr + sizeof(chunk_n)
+            if( chunk_n < 1 ) THROW_HARD('invalid empty 2D candidate chunk')
+            chunk_indices_addr    = addr
+            chunk_candidates_addr = chunk_indices_addr + int(chunk_n,int64)*int(sizeof(chunk_n),int64)
+            do first = 1,chunk_n,PROB_TAB2D_IO_CHUNK
+                last  = min(chunk_n,first+PROB_TAB2D_IO_CHUNK-1)
+                nread = last-first+1
+                read(funit,pos=chunk_indices_addr+int(first-1,int64)*int(sizeof(chunk_n),int64)) particle_indices(1:nread)
+                read(funit,pos=chunk_candidates_addr+int(first-1,int64)*int(sizeof(candidates_loc(1)),int64)) candidates_loc(1:nread)
+                do j = 1,nread
+                    i_loc = particle_indices(j)
+                    if( i_loc < 1 .or. i_loc > nptcls_loc ) THROW_HARD('invalid particle index in 2D candidate stream')
+                    candidate_counts(i_loc) = candidate_counts(i_loc) + 1
+                    pind = pinds_loc(i_loc)
+                    if( pind < 1 .or. pind > max_pind ) cycle
+                    i_glob = pind2glob(pind)
+                    if( i_glob < 1 ) cycle
+                    icls = candidates_loc(j)%iref
+                    if( icls < 1 .or. icls > self%nclasses ) THROW_HARD('invalid class in dense 2D candidate stream')
+                    self%loc_tab(icls,i_glob) = candidates_loc(j)
+                enddo
+            enddo
+            addr = chunk_candidates_addr + int(chunk_n,int64)*int(sizeof(candidates_loc(1)),int64)
+            nnz_read = nnz_read + int(chunk_n,int64)
+        enddo
+        if( nnz_read /= nnz ) THROW_HARD('2D candidate stream count mismatch')
+        if( any(candidate_counts /= nclasses_loc) ) THROW_HARD('dense 2D candidate stream is incomplete')
+        call fclose(funit)
+        deallocate(candidates_loc,particle_indices,candidate_counts,pinds_loc,seed_shifts_loc,seed_has_sh_loc,pind2glob)
     end subroutine read_tab_to_glob
 
     subroutine read_sparse_tab_to_glob( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
         class(string),         intent(in)    :: binfname
-        type(ptcl_ref), allocatable :: sparse_tab(:)
+        type(prob_candidate), allocatable :: candidates_loc(:)
         real,           allocatable :: seed_shifts_loc(:,:)
         logical,        allocatable :: seed_has_sh_loc(:)
-        integer,        allocatable :: pinds_loc(:), sparse_counts(:), sparse_refs(:), pind2glob(:)
-        integer :: funit, io_stat, file_header(3), nclasses_loc, nptcls_loc, nnz
-        integer(int64) :: addr
-        integer :: i_loc, i_glob, k, pos, icls, pind, max_pind, seed_nrots_loc
+        integer, allocatable :: pinds_loc(:), particle_indices(:), pind2glob(:)
+        integer :: funit, io_stat, nclasses_loc, nptcls_loc, nchunks
+        integer :: i_loc, i_glob, pind, max_pind, seed_nrots_loc, ichunk, chunk_n, first, last, nread, j, candidate_pos
+        integer(int64) :: file_header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
         if( file_exists(binfname) )then
             call fopen(funit, binfname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
             call fileiochk('simple_eul_prob_tab2D; read_sparse_tab_to_glob; file: '//binfname%to_char(), io_stat)
@@ -1121,38 +1090,22 @@ contains
             THROW_HARD('sparse dist files of partitions should be ready!')
         endif
         read(unit=funit, pos=1) file_header
-        nclasses_loc = file_header(1)
-        nptcls_loc   = file_header(2)
+        nclasses_loc = int(file_header(1))
+        nptcls_loc   = int(file_header(2))
         nnz          = file_header(3)
+        nchunks      = int(file_header(4))
         if( nclasses_loc .ne. self%nclasses ) THROW_HARD('nclasses mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
         if( nnz < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%read_sparse_tab_to_glob')
-        allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
-        allocate(sparse_counts(nptcls_loc), sparse_refs(nnz), sparse_tab(nnz))
+        allocate(pinds_loc(nptcls_loc),seed_shifts_loc(2,nptcls_loc),seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
         read(funit, pos=addr) pinds_loc
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        read(funit, pos=addr) sparse_counts
-        addr = addr + sizeof(sparse_counts)
-        read(funit, pos=addr) sparse_refs
-        addr = addr + sizeof(sparse_refs)
-        read(funit, pos=addr) sparse_tab
-        call fclose(funit)
-        if( any(sparse_counts < 0) .or. sum(sparse_counts) /= nnz )&
-            &THROW_HARD('sparse table count mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
         if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
         if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
-        if( .not. allocated(self%eval_touched_refs) )then
-            self%eval_max_touched = max(1, self%nclasses)
-            allocate(self%eval_touched_refs(self%eval_max_touched,self%nptcls), source=0)
-        endif
-        if( .not. allocated(self%eval_touched_counts) ) allocate(self%eval_touched_counts(self%nptcls), source=0)
+        if( .not. allocated(self%candidate_store%candidates) .or. .not. allocated(self%candidate_fill_counts) )&
+            &THROW_HARD('sparse 2D candidate store must be sized before reading partition tables')
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
-        if( max_pind < 1 )then
-            deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
-            return
-        endif
-        pos = 0
         do i_loc = 1, nptcls_loc
             pind = pinds_loc(i_loc)
             i_glob = 0
@@ -1160,19 +1113,120 @@ contains
             if( i_glob > 0 )then
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+                self%candidate_store%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
+                self%candidate_store%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
             endif
-            do k = 1, sparse_counts(i_loc)
-                pos = pos + 1
-                if( i_glob < 1 ) cycle
-                icls = sparse_refs(pos)
-                if( icls < 1 .or. icls > self%nclasses ) cycle
-                self%loc_tab(icls,i_glob) = sparse_tab(pos)
-                call self%mark_ref_touched(i_glob, icls)
-            enddo
         enddo
-        if( pos /= nnz ) THROW_HARD('sparse table count mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
-        deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, sparse_counts, sparse_refs, sparse_tab, pind2glob)
+        allocate(particle_indices(PROB_TAB2D_IO_CHUNK),candidates_loc(PROB_TAB2D_IO_CHUNK))
+        nnz_read = 0_int64
+        do ichunk = 1,nchunks
+            read(funit,pos=addr) chunk_n
+            addr = addr + sizeof(chunk_n)
+            if( chunk_n < 1 ) THROW_HARD('invalid empty sparse 2D candidate chunk')
+            chunk_indices_addr    = addr
+            chunk_candidates_addr = chunk_indices_addr + int(chunk_n,int64)*int(sizeof(chunk_n),int64)
+            do first = 1,chunk_n,PROB_TAB2D_IO_CHUNK
+                last  = min(chunk_n,first+PROB_TAB2D_IO_CHUNK-1)
+                nread = last-first+1
+                read(funit,pos=chunk_indices_addr+int(first-1,int64)*int(sizeof(chunk_n),int64)) particle_indices(1:nread)
+                read(funit,pos=chunk_candidates_addr+int(first-1,int64)*int(sizeof(candidates_loc(1)),int64)) candidates_loc(1:nread)
+                do j = 1,nread
+                    i_loc = particle_indices(j)
+                    if( i_loc < 1 .or. i_loc > nptcls_loc ) THROW_HARD('invalid particle index in sparse 2D candidate stream')
+                    pind = pinds_loc(i_loc)
+                    if( pind < 1 .or. pind > max_pind ) cycle
+                    i_glob = pind2glob(pind)
+                    if( i_glob < 1 ) cycle
+                    if( candidates_loc(j)%iref < 1 .or. candidates_loc(j)%iref > self%nclasses )&
+                        &THROW_HARD('invalid class in sparse 2D candidate stream')
+                    self%candidate_fill_counts(i_glob) = self%candidate_fill_counts(i_glob) + 1
+                    candidate_pos = int(self%candidate_store%offsets(i_glob)) + self%candidate_fill_counts(i_glob) - 1
+                    if( candidate_pos >= int(self%candidate_store%offsets(i_glob+1)) )&
+                        &THROW_HARD('candidate-store overflow in eul_prob_tab2D%read_sparse_tab_to_glob')
+                    self%candidate_store%candidates(candidate_pos) = candidates_loc(j)
+                enddo
+            enddo
+            addr = chunk_candidates_addr + int(chunk_n,int64)*int(sizeof(candidates_loc(1)),int64)
+            nnz_read = nnz_read + int(chunk_n,int64)
+        enddo
+        if( nnz_read /= nnz ) THROW_HARD('sparse 2D candidate stream count mismatch')
+        call fclose(funit)
+        deallocate(pinds_loc,seed_shifts_loc,seed_has_sh_loc,particle_indices,candidates_loc,pind2glob)
     end subroutine read_sparse_tab_to_glob
+
+    subroutine read_tabs_to_glob( self, fbody, nparts, numlen )
+        class(eul_prob_tab2D), intent(inout) :: self
+        class(string),         intent(in)    :: fbody
+        integer,               intent(in)    :: nparts, numlen
+        type(string) :: fname
+        type(prob_candidate) :: candidate_dummy
+        integer, allocatable :: counts_glob(:), particle_indices(:), pinds_loc(:), pind2glob(:)
+        real,    allocatable :: seed_shifts_loc(:,:)
+        logical, allocatable :: seed_has_sh_loc(:)
+        integer :: ipart, funit, io_stat, nptcls_loc, nchunks, ichunk, chunk_n, first, last, nread, j
+        integer :: pind, i_glob, max_pind, seed_nrots_loc
+        integer(int64) :: header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
+        if( .not. self%l_sparse_snhc )then
+            do ipart = 1,nparts
+                fname = fbody//int2str_pad(ipart,numlen)//'.dat'
+                call self%read_tab_to_glob(fname)
+            enddo
+            return
+        endif
+        allocate(counts_glob(self%nptcls),source=0)
+        allocate(particle_indices(PROB_TAB2D_IO_CHUNK))
+        do ipart = 1,nparts
+            fname = fbody//int2str_pad(ipart,numlen)//'.dat'
+            call fopen(funit,fname,access='STREAM',action='READ',status='OLD',iostat=io_stat)
+            call fileiochk('simple_eul_prob_tab2D; read_tabs_to_glob header; file: '//fname%to_char(),io_stat)
+            read(funit,pos=1) header
+            if( header(1) /= int(self%nclasses,int64) ) THROW_HARD('nclasses mismatch in eul_prob_tab2D%read_tabs_to_glob')
+            nptcls_loc = int(header(2))
+            nnz        = header(3)
+            nchunks    = int(header(4))
+            allocate(pinds_loc(nptcls_loc),seed_shifts_loc(2,nptcls_loc),seed_has_sh_loc(nptcls_loc))
+            addr = sizeof(header) + 1
+            read(funit,pos=addr) pinds_loc
+            addr = addr + sizeof(pinds_loc)
+            call read_seed_shift_table(funit,addr,seed_nrots_loc,seed_shifts_loc,seed_has_sh_loc)
+            call build_pind_lookup(self%pinds,pinds_loc,pind2glob,max_pind)
+            nnz_read = 0_int64
+            do ichunk = 1,nchunks
+                read(funit,pos=addr) chunk_n
+                addr = addr + sizeof(chunk_n)
+                if( chunk_n < 1 ) THROW_HARD('invalid empty sparse 2D candidate chunk')
+                chunk_indices_addr    = addr
+                chunk_candidates_addr = chunk_indices_addr + int(chunk_n,int64)*int(sizeof(chunk_n),int64)
+                do first = 1,chunk_n,PROB_TAB2D_IO_CHUNK
+                    last  = min(chunk_n,first+PROB_TAB2D_IO_CHUNK-1)
+                    nread = last-first+1
+                    read(funit,pos=chunk_indices_addr+int(first-1,int64)*int(sizeof(chunk_n),int64)) particle_indices(1:nread)
+                    do j = 1,nread
+                        if( particle_indices(j) < 1 .or. particle_indices(j) > nptcls_loc )&
+                            &THROW_HARD('invalid particle index in sparse 2D candidate stream')
+                        pind = pinds_loc(particle_indices(j))
+                        if( pind < 1 .or. pind > max_pind ) cycle
+                        i_glob = pind2glob(pind)
+                        if( i_glob > 0 ) counts_glob(i_glob) = counts_glob(i_glob) + 1
+                    enddo
+                enddo
+                addr = chunk_candidates_addr + int(chunk_n,int64)*int(sizeof(candidate_dummy),int64)
+                nnz_read = nnz_read + int(chunk_n,int64)
+            enddo
+            if( nnz_read /= nnz ) THROW_HARD('sparse 2D candidate stream count mismatch')
+            call fclose(funit)
+            deallocate(pinds_loc,seed_shifts_loc,seed_has_sh_loc,pind2glob)
+        enddo
+        if( any(counts_glob < 1) ) THROW_HARD('sparse 2D candidate stream has particles without candidates')
+        call self%candidate_store%new_ragged(self%pinds,counts_glob)
+        allocate(self%candidate_fill_counts(self%nptcls),source=0)
+        do ipart = 1,nparts
+            fname = fbody//int2str_pad(ipart,numlen)//'.dat'
+            call self%read_sparse_tab_to_glob(fname)
+        enddo
+        if( any(self%candidate_fill_counts /= counts_glob) ) THROW_HARD('sparse 2D candidate-store fill mismatch')
+        deallocate(self%candidate_fill_counts,counts_glob,particle_indices)
+    end subroutine read_tabs_to_glob
 
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab2D), intent(in) :: self
