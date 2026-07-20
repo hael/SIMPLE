@@ -31,9 +31,12 @@ control so that `calc_pspec` is skipped.
 ## 1. Why the current stage bootstrap is wrong
 
 `calc_pspec` rereads particle stacks and estimates sigma2 from masked image power
-spectra. This is useful as an initial bootstrap, but it is both expensive and a
-weaker estimate than the orientation-conditioned residual spectra already
-produced by the matcher.
+spectra. Its current bootstrap is a bounded global E/O estimate: it randomly
+selects at most 25,000 active particles, stratified across even/odd, propagates
+the resulting global curves to every particle record, and leaves later matcher
+residual updates to establish group-specific structure. This is useful as an
+initial bootstrap, but it is both expensive and a weaker estimate than the
+orientation-conditioned residual spectra already produced by the matcher.
 
 At the end of an established refine3D stage, the useful state is:
 
@@ -193,6 +196,11 @@ Run `calc_pspec` only when:
 - no predecessor exists, normally the first stage;
 - no predecessor artifact can be interpreted safely; or
 - the user explicitly requests `sigma2_init=refresh`.
+
+`FRESH_CALC` refers to this bounded global E/O bootstrap, not a full
+per-particle/group power-spectrum calculation. It is deliberately retained for
+the first sigma-producing stage; subsequent stages should use the reuse path
+described here.
 
 For staged abinitio after the first sigma-producing stage, use strict reuse. An
 unexpected incompatibility should fail with a precise message instead of

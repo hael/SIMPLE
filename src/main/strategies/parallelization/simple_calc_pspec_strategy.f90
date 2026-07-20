@@ -8,11 +8,15 @@ use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs,      only: qsys_cleanup, qsys_job_finished
 use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_binfile, only: sigma2_binfile
+use simple_ran_tabu,       only: ran_tabu
 implicit none
 
 public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_distr_strategy, create_calc_pspec_strategy
 private
 #include "simple_local_flags.inc"
+
+integer,          parameter :: SIGMA2_BOOTSTRAP_MAX_PARTICLES = 25000
+character(len=*), parameter :: SIGMA2_BOOTSTRAP_SELECTION_FNAME = 'sigma2_bootstrap_selection.dat'
 
 ! --------------------------------------------------------------------
 ! Strategy interface
@@ -122,6 +126,12 @@ contains
         call params%new(cline)
         call build%build_spproj(params, cline, wthreads=.true.)
         call build%build_general_tbox(params, cline, do3d=.false.)
+        if( cline%defined('part') )then
+            if( .not.file_exists(SIGMA2_BOOTSTRAP_SELECTION_FNAME) ) &
+                &THROW_HARD('Missing global sigma2 bootstrap selection for calc_pspec worker')
+        else
+            call write_sigma2_bootstrap_selection(params, build)
+        endif
         self%cline_calc_pspec_assemble = cline
         call self%cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble')
     end subroutine inmem_initialize
@@ -142,33 +152,14 @@ contains
         integer,     allocatable :: pinds(:)
         real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
         integer :: batchlims(2), kfromto(2)
-        integer :: i, iptcl, imatch, ithr, nyq, nptcls_part_sel, nptcls_active_tot, batchsz_max, nbatch
+        integer :: i, iptcl, imatch, ithr, nyq, nptcls_part_sel, batchsz_max, nbatch, eo
         integer :: ninvalid_sigma2
-        logical :: l_scale_update_frac
         logical :: l_add_to_sum
-        real    :: sig2_mul, update_frac_eff
-        ! Sampling
-        ! Because this is always run prior to reconstruction/search, sampling is not always informed
-        ! or may change with workflows. Instead of setting a sampling for the following operations when
-        ! l_update_frac, we sample uniformly AND do not write the corresponding field. Group sigmas need
-        ! direct spectra for every active particle in each stack group; only the global estimate uses
-        ! the sampled/bootstrap path.
-        l_scale_update_frac = .false.
-        if( params%l_sigma_glob .and. params%l_update_frac )then
-            call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, &
-                nptcls_part_sel, pinds, .false. )
-            l_scale_update_frac = .true.
-            sig2_mul = 1.0 / (2.0 * params%update_frac)
-        else if( params%l_sigma_glob .and. params%nsample > 0 )then
-            nptcls_active_tot = build%spproj%count_state_gt_zero()
-            update_frac_eff = min(1.0, real(params%nsample) / real(max(1, nptcls_active_tot)))
-            call build%spproj_field%sample4update_rnd([params%fromp,params%top], update_frac_eff, nptcls_part_sel, pinds, .false. )
-            l_scale_update_frac = .true.
-            sig2_mul = 1.0 / (2.0 * max(update_frac_eff, TINY))
-        else
-            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls_part_sel, pinds, .false.)
-            sig2_mul = 0.5
-        endif
+        real    :: sig2_mul(2)
+        ! Sigma2 is bootstrapped once from a capped, random global E/O sample.
+        ! The resulting two curves are propagated to every particle record;
+        ! matcher residual updates establish any requested group structure later.
+        call read_sigma2_bootstrap_selection(params, build, nptcls_part_sel, pinds, sig2_mul)
         nyq = build%img%get_nyq()
         allocate(sigma2(nyq,params%fromp:params%top), source=0.)
         call sum_img%new([params%box,params%box,1], params%smpd)
@@ -210,13 +201,14 @@ contains
                     endif
                     ! allocate contigous local sigma2 array for optimal caching in parallell loop
                     cmat_thr_sum = dcmplx(0.d0, 0.d0)
-                    !$omp parallel do default(shared) private(iptcl,imatch,ithr,l_add_to_sum)&
+                    !$omp parallel do default(shared) private(iptcl,imatch,ithr,eo,l_add_to_sum)&
                     !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
                      do imatch = 1, nbatch
                         ithr  = omp_get_thread_num() + 1
                         iptcl = pinds(batchlims(1) + imatch - 1)
                         call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
-                        sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul
+                        eo = build%spproj_field%get_eo(iptcl)
+                        sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul(eo+1)
                         l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
                         if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
                         ! thread average
@@ -284,6 +276,7 @@ contains
         call build%kill_general_tbox
         call killimgbatch(build)
         call unmemoize_powspec_coords
+        if( .not.cline%defined('part') ) call del_file(SIGMA2_BOOTSTRAP_SELECTION_FNAME)
     end subroutine inmem_cleanup
 
     ! =====================================================================
@@ -307,6 +300,7 @@ contains
         ! Sanity check + ensure EO partition exists and is persisted
         call sanity_check_calc_pspec_input(params, build)
         call ensure_calc_pspec_eo_partition(params, build)
+        call write_sigma2_bootstrap_selection(params, build)
         ! Set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! Prepare command lines from prototype master
@@ -354,6 +348,7 @@ contains
         ! Best-effort cleanup of project-related resources
         call build%spproj_field%kill
         call build%spproj%kill
+        call del_file(SIGMA2_BOOTSTRAP_SELECTION_FNAME)
         call simple_touch(CALCPSPEC_FINISHED)
     end subroutine distr_cleanup
 
@@ -375,8 +370,111 @@ contains
         enddo
         call del_file('CALC_PSPEC_FINISHED')
         call del_file(CALCPSPEC_FINISHED)
+        call del_file(SIGMA2_BOOTSTRAP_SELECTION_FNAME)
         call fname%kill
     end subroutine cleanup_calc_pspec_outputs
+
+    subroutine write_sigma2_bootstrap_selection(params, build)
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(ran_tabu) :: rt
+        integer, allocatable :: candidates(:,:), pinds(:)
+        integer :: nactive(2), nsample(2), nfilled(2), nselected, iptcl, eo, i, ios, fd, offset
+        logical :: is_open
+        nactive = 0
+        do iptcl = 1,params%nptcls
+            if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+            eo = build%spproj_field%get_eo(iptcl)
+            if( eo < 0 .or. eo > 1 ) THROW_HARD('Invalid even/odd label in sigma2 bootstrap selection')
+            nactive(eo+1) = nactive(eo+1) + 1
+        enddo
+        if( sum(nactive) < 1 ) THROW_HARD('No active particles for sigma2 bootstrap selection')
+        nsample(1) = min(nactive(1), SIGMA2_BOOTSTRAP_MAX_PARTICLES / 2)
+        nsample(2) = min(nactive(2), SIGMA2_BOOTSTRAP_MAX_PARTICLES - nsample(1))
+        if( sum(nsample) < SIGMA2_BOOTSTRAP_MAX_PARTICLES )then
+            nsample(1) = nsample(1) + min(SIGMA2_BOOTSTRAP_MAX_PARTICLES - sum(nsample), nactive(1) - nsample(1))
+            nsample(2) = nsample(2) + min(SIGMA2_BOOTSTRAP_MAX_PARTICLES - sum(nsample), nactive(2) - nsample(2))
+        endif
+        nselected = sum(nsample)
+        allocate(candidates(maxval(nactive),2), source=0)
+        nfilled = 0
+        do iptcl = 1,params%nptcls
+            if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+            eo = build%spproj_field%get_eo(iptcl) + 1
+            nfilled(eo) = nfilled(eo) + 1
+            candidates(nfilled(eo),eo) = iptcl
+        enddo
+        allocate(pinds(nselected), source=0)
+        offset = 0
+        do eo = 1,2
+            if( nsample(eo) == 0 ) cycle
+            if( nsample(eo) < nactive(eo) )then
+                rt = ran_tabu(nactive(eo))
+                call rt%shuffle(candidates(:nactive(eo),eo))
+                call rt%kill
+            endif
+            pinds(offset+1:offset+nsample(eo)) = candidates(:nsample(eo),eo)
+            offset = offset + nsample(eo)
+        enddo
+        call hpsort(pinds)
+        is_open = .false.
+        open(newunit=fd, file=SIGMA2_BOOTSTRAP_SELECTION_FNAME, status='replace', action='write', iostat=ios)
+        if( ios /= 0 ) THROW_HARD('Cannot open sigma2 bootstrap selection for writing')
+        is_open = .true.
+        write(fd,'(4(I0,1X))',iostat=ios) nactive(1), nactive(2), nsample(1), nsample(2)
+        if( ios /= 0 ) THROW_HARD('Cannot write sigma2 bootstrap selection header')
+        do i = 1,nselected
+            iptcl = pinds(i)
+            write(fd,'(I0,1X,I0)',iostat=ios) iptcl, build%spproj_field%get_eo(iptcl)
+            if( ios /= 0 ) THROW_HARD('Cannot write sigma2 bootstrap selection record')
+        enddo
+        if( is_open ) close(fd)
+        write(logfhandle,'(A,I8,A,I8,A,I8,A,I8,A,I8)') &
+            '>>> SIGMA2 GLOBAL BOOTSTRAP ACTIVE E/O: ', nactive(1), '/', nactive(2), &
+            '; SAMPLED E/O: ', nsample(1), '/', nsample(2), '; CAP: ', SIGMA2_BOOTSTRAP_MAX_PARTICLES
+        deallocate(candidates, pinds)
+    end subroutine write_sigma2_bootstrap_selection
+
+    subroutine read_sigma2_bootstrap_selection(params, build, nsamples_part, pinds, sig2_mul)
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        integer,          intent(out)   :: nsamples_part
+        integer, allocatable, intent(out) :: pinds(:)
+        real,             intent(out)   :: sig2_mul(2)
+        integer, allocatable :: all_pinds(:)
+        integer :: nactive(2), nsample(2), nselected, eo, i, ios, fd
+        logical :: is_open
+        if( .not.file_exists(SIGMA2_BOOTSTRAP_SELECTION_FNAME) ) &
+            &THROW_HARD('Missing sigma2 bootstrap selection for calc_pspec worker')
+        is_open = .false.
+        open(newunit=fd, file=SIGMA2_BOOTSTRAP_SELECTION_FNAME, status='old', action='read', iostat=ios)
+        if( ios /= 0 ) THROW_HARD('Cannot open sigma2 bootstrap selection for reading')
+        is_open = .true.
+        read(fd,*,iostat=ios) nactive(1), nactive(2), nsample(1), nsample(2)
+        if( ios /= 0 ) THROW_HARD('Cannot read sigma2 bootstrap selection header')
+        nselected = sum(nsample)
+        if( nselected < 1 .or. nselected > SIGMA2_BOOTSTRAP_MAX_PARTICLES ) &
+            &THROW_HARD('Invalid sigma2 bootstrap selection size')
+        if( any(nsample < 0) .or. any(nsample > nactive) ) &
+            &THROW_HARD('Invalid sigma2 bootstrap selection counts')
+        allocate(all_pinds(nselected), source=0)
+        do i = 1,nselected
+            read(fd,*,iostat=ios) all_pinds(i), eo
+            if( ios /= 0 ) THROW_HARD('Cannot read sigma2 bootstrap selection record')
+            if( all_pinds(i) < 1 .or. all_pinds(i) > params%nptcls .or. eo < 0 .or. eo > 1 ) &
+                &THROW_HARD('Invalid sigma2 bootstrap selection record')
+            if( build%spproj_field%get_eo(all_pinds(i)) /= eo ) &
+                &THROW_HARD('Sigma2 bootstrap selection even/odd mismatch')
+        enddo
+        if( is_open ) close(fd)
+        pinds = pack(all_pinds, all_pinds >= params%fromp .and. all_pinds <= params%top)
+        nsamples_part = size(pinds)
+        sig2_mul = 0.
+        do eo = 1,2
+            if( nsample(eo) > 0 ) sig2_mul(eo) = real(nactive(eo)) / (2. * real(nsample(eo)))
+        enddo
+        deallocate(all_pinds)
+    end subroutine read_sigma2_bootstrap_selection
 
     subroutine sanity_check_calc_pspec_input(params, build)
         type(parameters), intent(in)    :: params

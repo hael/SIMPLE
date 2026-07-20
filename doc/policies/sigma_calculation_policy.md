@@ -105,13 +105,25 @@ applies to all 3D ab initio stages. See
 [src/main/commanders/simple/simple_commanders_abinitio.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_abinitio.f90:444) and
 [src/main/simple_abinitio_utils.f90](/Users/elmlundho/src/SIMPLE/src/main/simple_abinitio_utils.f90:283).
 
-`calc_pspec` computes per-particle noise power spectra from masked particle images and writes `init_pspec_part*.dat`. In the bootstrap assembly step:
+`calc_pspec` bootstraps two global noise spectra, one for each even/odd half-set,
+from masked particle images. It selects a random, even/odd-stratified sample of
+at most 25,000 active particles across the complete run, so distributed workers
+only evaluate their intersection with that shared selection. The assembler uses
+the existing global-estimate scaling and propagation path. In the bootstrap
+assembly step:
 
-- spectra are averaged per even/odd and group
+- sampled spectra are scaled and averaged globally per even/odd half-set
 - the average image power spectrum is subtracted
 - negative values are repaired by neighbor propagation
-- grouped STAR output is written
-- partition-local `sigma2_part_<part>.dat` files are rewritten with the grouped values
+- the requested grouped STAR layout is written with identical initial global
+  curves in every group, so existing `sigma_est='group'` readers remain valid
+- the two global curves are propagated to every active record in partition-local
+  `sigma2_part_<part>.dat` files
+
+This is the established `sigma_est='global'` propagation behavior, now used for
+all initial bootstraps. It is not a permanent replacement for group estimation:
+the normal orientation-conditioned matcher residual update and later group
+consolidation specialize the initially shared curves.
 
 See [src/main/strategies/parallelization/simple_calc_pspec_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_calc_pspec_strategy.f90:130) and [src/main/commanders/simple/simple_commanders_euclid_distr.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_euclid_distr.f90:15).
 
