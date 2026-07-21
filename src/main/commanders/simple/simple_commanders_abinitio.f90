@@ -1359,6 +1359,8 @@ contains
             ! input volumes are assumed aligned to the target symmetry axis
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
+            start_stage = abinitio_symsrch_stage() + 1
+            l_ini3D     = .true.
             ! setting up random classes for particles sampling
             call spproj%os_ptcl2D%rnd_cls(100)
             call spproj%write_segment_inside('ptcl2D', params%projfile)
