@@ -11,7 +11,8 @@ use simple_diffusion_maps,        only: embed_graph
 use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part, &
     &assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts, flex_projection_directions, &
     &write_flex_mean_projection_stack
-use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_modes, write_flex_diffmap_rec_parts, &
+use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages
+use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
 use simple_parameters,            only: parameters
 use simple_flex_embedding_result, only: flex_embedding_result
@@ -118,11 +119,12 @@ contains
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
         if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
         if( .not.cline%defined('nstates') ) call cline%set('nstates',1)
+        if( .not.cline%defined('npreimages') ) call cline%set('npreimages',8)
         if( .not.cline%defined('neigs') ) call cline%set('neigs',20)
         if( .not.cline%defined('k_nn') ) call cline%set('k_nn',10)
         if( .not.cline%defined('nang_nbrs') ) call cline%set('nang_nbrs',100)
         if( .not.cline%defined('lp') ) call cline%set('lp',8.0)
-        if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_eigvol_001.mrc')
+        if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
         call cline%set('ml_reg','no')
     end subroutine apply_defaults
 
@@ -152,13 +154,16 @@ contains
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         integer, allocatable :: pinds(:)
-        real, allocatable :: coords(:,:)
+        real, allocatable :: coords(:,:),raw_coords(:,:),weights(:,:),neff(:),bandwidths(:)
+        integer, allocatable :: medoids(:),labels(:)
         type(string) :: registered_stack,registered_project
         integer :: nmodes
-        call run_flex_analysis(params,build,cline,pinds,coords,nmodes,registered_stack,registered_project)
-        call reconstruct_registered(cline,registered_project,pinds,coords,nmodes)
+        call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,nmodes,registered_stack,registered_project)
+        call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels,weights,neff,bandwidths)
+        call store_project_preimage_weights(registered_project,pinds,weights,size(medoids),labels,medoids)
+        call reconstruct_registered(cline,registered_project,pinds,weights,size(medoids))
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords)
+        deallocate(pinds,coords,raw_coords,medoids,labels,weights,neff,bandwidths)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
@@ -182,8 +187,7 @@ contains
         if( .not.cline%defined('part') ) THROW_HARD('PART must be defined for flex_eigenvol worker execution')
         if( .not.cline%defined('infile') ) THROW_HARD('INFILE assignment must be defined for flex_eigenvol worker execution')
         if( params%stage<1 .or. params%stage>3 ) THROW_HARD('invalid flex_eigenvol worker stage')
-        if( params%stage==3 .and. (params%neigs<1 .or. params%neigs>20) ) &
-            &THROW_HARD('invalid flex_eigenvol worker mode count')
+        if( params%stage==3 .and. params%npreimages<2 ) THROW_HARD('invalid flex_eigenvol worker pre-image count')
     end subroutine worker_initialize
 
     subroutine worker_execute( self, params, build, cline )
@@ -210,8 +214,8 @@ contains
                 call write_graph_part(params,rows,nbrs,d2s,ncandidates)
                 deallocate(features,proj_ids,proj_dirs,rows,nbrs,d2s,ncandidates)
             case(3)
-                call read_project_coordinates(build%spproj,pinds,params%neigs,coords)
-                call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%neigs,params%part)
+                call read_project_preimage_weights(build%spproj,pinds,params%npreimages,coords)
+                call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%npreimages,params%part)
                 deallocate(coords)
         end select
         call qsys_job_finished(params,string('simple_flex_eigenvol_strategy :: worker_execute'))
@@ -249,8 +253,8 @@ contains
         type(builder) :: registered_build
         type(cmdline) :: registered_cline
         type(string) :: registered_stack,registered_project,worker_program
-        integer, allocatable :: pinds(:)
-        real, allocatable :: coords(:,:)
+        integer, allocatable :: pinds(:),medoids(:),labels(:)
+        real, allocatable :: coords(:,:),raw_coords(:,:),weights(:,:),neff(:),bandwidths(:)
         type(diffmap_graph) :: graph
         integer :: nmodes,nptcls,max_modes,cand_min,cand_max
         real :: cand_mean
@@ -286,35 +290,37 @@ contains
         call read_graph_parts(params,size(pinds),self%nparts_run,graph,cand_min,cand_max,cand_mean)
         call cleanup_distributed_analysis_parts(params,self%nparts_run)
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_graph_seconds=',toc(t_step)
-        call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,nmodes)
+        call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,raw_coords,nmodes)
+        call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels,weights,neff,bandwidths)
         call graph%kill()
         call store_project_coordinates(registered_project,pinds,coords,nmodes)
+        call store_project_preimage_weights(registered_project,pinds,weights,size(medoids),labels,medoids)
 
         registered_cline=cline
         call registered_cline%set('projfile',registered_project%to_char())
         call registered_cline%set('mkdir','no')
         call registered_cline%set('ptcl_src','raw')
-        call registered_cline%set('neigs',nmodes)
+        call registered_cline%set('npreimages',size(medoids))
         call registered_cline%set('nparts',self%nparts_run)
         call registered_cline%gen_job_descr(self%job_descr,prg=worker_program)
         call self%job_descr%set('stage','3')
         call self%job_descr%set('mkdir','no')
         call self%job_descr%set('projfile',registered_project%to_char())
         call self%job_descr%set('ptcl_src','raw')
-        call self%job_descr%set('neigs',int2str(nmodes))
+        call self%job_descr%set('npreimages',int2str(size(medoids)))
         call self%job_descr%set('nparts',int2str(self%nparts_run))
         call self%job_descr%set('numlen',int2str(params%numlen))
         t_step=tic()
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
             &array=L_USE_SLURM_ARR,extra_params=params)
         call registered_build%init_params_and_build_general_tbox(registered_cline,registered_params,do3d=.true.)
-        call reduce_flex_diffmap_rec_parts(registered_params,registered_build,self%nparts_run,nmodes)
+        call reduce_flex_diffmap_rec_parts(registered_params,registered_build,self%nparts_run,size(medoids))
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_reconstruction_seconds=',toc(t_step)
-        call cleanup_flex_diffmap_rec_parts(self%nparts_run,nmodes,params%numlen)
+        call cleanup_flex_diffmap_rec_parts(self%nparts_run,size(medoids),params%numlen)
         call registered_build%kill_general_tbox
         call registered_cline%kill; call worker_program%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords)
+        deallocate(pinds,coords,raw_coords,medoids,labels,weights,neff,bandwidths)
     end subroutine master_execute
 
     subroutine master_finalize_run( self, params, build, cline )
@@ -360,11 +366,11 @@ contains
         end do
     end subroutine prepare_particle_partitions
 
-    subroutine reconstruct_registered( cline, registered_project, pinds, coords, nmodes )
+    subroutine reconstruct_registered( cline, registered_project, pinds, weights, nstates )
         class(cmdline), intent(inout) :: cline
         type(string), intent(in) :: registered_project
-        integer, intent(in) :: pinds(:),nmodes
-        real, intent(in) :: coords(:,:)
+        integer, intent(in) :: pinds(:),nstates
+        real, intent(in) :: weights(:,:)
         type(parameters) :: registered_params
         type(builder) :: registered_build
         type(cmdline) :: registered_cline
@@ -373,7 +379,7 @@ contains
         call registered_cline%set('mkdir','no')
         call registered_cline%set('ptcl_src','raw')
         call registered_build%init_params_and_build_general_tbox(registered_cline,registered_params,do3d=.true.)
-        call reconstruct_flex_diffmap_modes(registered_params,registered_build,pinds,coords,nmodes)
+        call reconstruct_flex_diffmap_states(registered_params,registered_build,pinds,weights,nstates)
         call registered_build%kill_general_tbox
         call registered_cline%kill
     end subroutine reconstruct_registered
@@ -384,28 +390,29 @@ contains
         class(cmdline), intent(inout) :: cline
         type(flex_embedding_result), intent(inout) :: fit_result
         integer, allocatable :: pinds(:)
-        real, allocatable :: coords(:,:)
+        real, allocatable :: coords(:,:),raw_coords(:,:)
         type(string) :: registered_stack,registered_project
         integer :: nmodes
-        call run_flex_analysis(params,build,cline,pinds,coords,nmodes,registered_stack,registered_project,fit_result)
+        call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,nmodes,registered_stack,registered_project,fit_result)
         write(logfhandle,'(A)') '>>> FLEX DIFFMAP reconstruction=skipped (embedding-only caller)'
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords)
+        deallocate(pinds,coords,raw_coords)
     end subroutine fit_flex_eigenvol_embedding
 
-    subroutine run_flex_analysis( params, build, cline, pinds, coords, nmodes, registered_stack, &
+    subroutine run_flex_analysis( params, build, cline, pinds, coords, raw_coords, nmodes, registered_stack, &
         &registered_project, fit_result )
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         integer, allocatable, intent(out) :: pinds(:)
         real, allocatable, intent(out) :: coords(:,:)
+        real, allocatable, intent(out) :: raw_coords(:,:)
         integer, intent(out) :: nmodes
         type(string), intent(out) :: registered_stack,registered_project
         type(flex_embedding_result), optional, intent(inout) :: fit_result
         type(diffmap_graph) :: graph
         integer, allocatable :: proj_ids(:)
-        real, allocatable :: features(:,:),proj_dirs(:,:),coords_mode_major(:,:),eigvals(:)
+        real, allocatable :: features(:,:),proj_dirs(:,:),coords_mode_major(:,:),raw_mode_major(:,:),eigvals(:)
         integer :: nptcls,max_modes,icm_iters,cand_min,cand_max
         real :: cand_mean,icm_score
         logical :: icm_converged
@@ -429,11 +436,12 @@ contains
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP graph_seconds=',toc(t_step)
         deallocate(features,proj_dirs,proj_ids)
         t_step=tic()
-        call embed_graph(graph,max_modes,coords_mode_major,eigvals)
+        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major)
         if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
         call select_spectral_rank_icm(eigvals,size(eigvals),nmodes,icm_converged,icm_iters,icm_score,min_rank=1)
         nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
         allocate(coords(nptcls,nmodes),source=transpose(coords_mode_major(1:nmodes,:)))
+        allocate(raw_coords(nptcls,nmodes),source=transpose(raw_mode_major(1:nmodes,:)))
         if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('diffusion embedding produced nonfinite coordinates')
         write(logfhandle,'(A,I0,A,L1,A,I0,A,ES12.4,A,F10.3)') '>>> FLEX DIFFMAP selected_modes=',nmodes, &
             &' icm_converged=',icm_converged,' icm_iters=',icm_iters,' icm_score=',icm_score, &
@@ -443,7 +451,7 @@ contains
         call write_graph_summary(graph,cand_min,cand_max,cand_mean,params)
         if( present(fit_result) ) call capture_result(fit_result,pinds,coords,eigvals,nptcls,nmodes)
         call graph%kill()
-        deallocate(coords_mode_major,eigvals)
+        deallocate(coords_mode_major,raw_mode_major,eigvals)
     end subroutine run_flex_analysis
 
     subroutine store_project_coordinates( project_fname, pinds, coords, nmodes )
@@ -465,27 +473,58 @@ contains
         call spproj%kill
     end subroutine store_project_coordinates
 
-    subroutine read_project_coordinates( spproj, pinds, nmodes, coords )
-        type(sp_project), intent(inout) :: spproj
-        integer, intent(in) :: pinds(:),nmodes
-        real, allocatable, intent(out) :: coords(:,:)
+    subroutine store_project_preimage_weights( project_fname, pinds, weights, nstates, labels, medoids )
+        type(string), intent(in) :: project_fname
+        integer, intent(in) :: pinds(:),nstates
+        real, intent(in) :: weights(:,:)
+        integer, intent(in) :: labels(:),medoids(:)
+        type(sp_project) :: spproj
         type(string) :: label
-        integer :: i,q,nall
-        nall=spproj%os_ptcl3D%get_noris()
-        if( size(pinds)<1 ) THROW_HARD('empty flex particle assignment')
-        allocate(coords(size(pinds),nmodes))
-        do q=1,nmodes
-            label=string('flex_coord')//int2str(q)
+        integer :: i,state
+        if( size(weights,1)/=size(pinds) .or. size(weights,2)<nstates .or. &
+            &size(labels)/=size(pinds) .or. size(medoids)/=nstates ) &
+            &THROW_HARD('invalid flex pre-image weights for project storage')
+        call spproj%read(project_fname)
+        do i=1,size(pinds)
+            call spproj%os_ptcl3D%set(pinds(i),'flex_cluster',real(labels(i)))
+            call spproj%os_ptcl3D%set(pinds(i),'flex_medoid',0.)
+        end do
+        do state=1,nstates
+            call spproj%os_ptcl3D%set(pinds(medoids(state)),'flex_medoid',real(state))
+        end do
+        do state=1,nstates
+            label=string('flex_weight')//int2str(state)
             do i=1,size(pinds)
-                if( pinds(i)<1 .or. pinds(i)>nall ) THROW_HARD('flex assignment particle outside project')
-                if( .not.spproj%os_ptcl3D%isthere(pinds(i),label%to_char()) ) &
-                    &THROW_HARD('flex coordinate missing from registered project')
-                coords(i,q)=spproj%os_ptcl3D%get(pinds(i),label%to_char())
+                call spproj%os_ptcl3D%set(pinds(i),label%to_char(),weights(i,state))
             end do
             call label%kill
         end do
-        if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('nonfinite flex coordinate in registered project')
-    end subroutine read_project_coordinates
+        call spproj%write(project_fname)
+        call spproj%kill
+    end subroutine store_project_preimage_weights
+
+    subroutine read_project_preimage_weights( spproj, pinds, nstates, weights )
+        type(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: pinds(:),nstates
+        real, allocatable, intent(out) :: weights(:,:)
+        type(string) :: label
+        integer :: i,state,nall
+        nall=spproj%os_ptcl3D%get_noris()
+        if( size(pinds)<1 .or. nstates<2 ) THROW_HARD('invalid flex pre-image worker assignment')
+        allocate(weights(size(pinds),nstates))
+        do state=1,nstates
+            label=string('flex_weight')//int2str(state)
+            do i=1,size(pinds)
+                if( pinds(i)<1 .or. pinds(i)>nall ) THROW_HARD('flex assignment particle outside project')
+                if( .not.spproj%os_ptcl3D%isthere(pinds(i),label%to_char()) ) &
+                    &THROW_HARD('flex pre-image weight missing from registered project')
+                weights(i,state)=spproj%os_ptcl3D%get(pinds(i),label%to_char())
+            end do
+            call label%kill
+        end do
+        if( any(weights<0.) .or. .not.all(ieee_is_finite(weights)) ) &
+            &THROW_HARD('invalid flex pre-image weight in registered project')
+    end subroutine read_project_preimage_weights
 
     subroutine read_int_file( fname, vals )
         type(string), intent(in) :: fname
@@ -582,14 +621,15 @@ contains
         deallocate(nbrs,ncandidates,d2s,covered,row_nbrs,row_d2s)
     end subroutine read_graph_parts
 
-    subroutine embed_flex_graph( params, pinds, graph, max_modes, cmin, cmax, cmean, coords, nmodes )
+    subroutine embed_flex_graph( params, pinds, graph, max_modes, cmin, cmax, cmean, coords, raw_coords, nmodes )
         type(parameters), intent(in) :: params
         integer, intent(in) :: pinds(:),max_modes,cmin,cmax
         type(diffmap_graph), intent(in) :: graph
         real, intent(in) :: cmean
         real, allocatable, intent(out) :: coords(:,:)
+        real, allocatable, intent(out) :: raw_coords(:,:)
         integer, intent(out) :: nmodes
-        real, allocatable :: coords_mode_major(:,:),eigvals(:)
+        real, allocatable :: coords_mode_major(:,:),raw_mode_major(:,:),eigvals(:)
         real :: icm_score
         integer :: icm_iters
         logical :: icm_converged
@@ -597,11 +637,12 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cmin, &
             &' max=',cmax,' mean=',cmean,' directed_nnz=',graph%nnz
         t_step=tic()
-        call embed_graph(graph,max_modes,coords_mode_major,eigvals)
+        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major)
         if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
         call select_spectral_rank_icm(eigvals,size(eigvals),nmodes,icm_converged,icm_iters,icm_score,min_rank=1)
         nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
         allocate(coords(size(pinds),nmodes),source=transpose(coords_mode_major(1:nmodes,:)))
+        allocate(raw_coords(size(pinds),nmodes),source=transpose(raw_mode_major(1:nmodes,:)))
         if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('diffusion embedding produced nonfinite coordinates')
         write(logfhandle,'(A,I0,A,L1,A,I0,A,ES12.4,A,F10.3)') '>>> FLEX DIFFMAP selected_modes=',nmodes, &
             &' icm_converged=',icm_converged,' icm_iters=',icm_iters,' icm_score=',icm_score, &
@@ -609,7 +650,7 @@ contains
         call write_coordinates(pinds,coords,size(pinds),nmodes)
         call write_spectrum(eigvals,nmodes,icm_converged,icm_iters,icm_score)
         call write_graph_summary(graph,cmin,cmax,cmean,params)
-        deallocate(coords_mode_major,eigvals)
+        deallocate(coords_mode_major,raw_mode_major,eigvals)
     end subroutine embed_flex_graph
 
     subroutine cleanup_distributed_analysis_parts( params, nparts )
@@ -643,6 +684,7 @@ contains
         if( params%oritype/='ptcl3D' ) THROW_HARD('flex_eigenvol requires oritype=ptcl3D')
         if( .not.cline%defined('vol1') ) THROW_HARD('flex_eigenvol requires vol1=<mean map>')
         if( params%nstates/=1 ) THROW_HARD('flex_eigenvol supports one ptcl3D state')
+        if( params%npreimages<2 ) THROW_HARD('flex_eigenvol requires npreimages>=2')
         max_modes=min(20,max(1,params%neigs))
         params%k_nn=max(1,params%k_nn)
         params%nang_nbrs=max(params%k_nn,params%nang_nbrs)

@@ -419,6 +419,7 @@ type :: parameters
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
+    integer :: npreimages=8        !< # representative manifold pre-image volumes
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}

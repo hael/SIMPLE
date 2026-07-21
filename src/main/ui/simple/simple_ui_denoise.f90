@@ -300,8 +300,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call flex_eigenvol%new(&
         &'flex_eigenvol',&
-        &'Diffusion-map 3D variability volumes',&
-        &'builds an angularly gated nearest-neighbor graph from registered ptcl3D residuals and reconstructs Hermitian 3D diffusion modes',&
+        &'Diffusion-manifold representative 3D states',&
+        &'builds a sparse diffusion map, selects coverage-initialized k-medoids, and reconstructs soft kernel-weighted 3D pre-image states',&
         &'simple_exec',&
         &.true.)
         call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
@@ -318,6 +318,10 @@ contains
         call flex_eigenvol%add_input(UI_FILT, 'nang_nbrs', 'num', &
             'Angular candidate cap (default 100)', &
             'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 100.0)
+        call flex_eigenvol%add_input(UI_FILT, 'npreimages', 'num', &
+            'Representative state volumes (default 8)', &
+            'Number of coverage-initialized k-medoids used as nonlinear diffusion-manifold pre-image targets', &
+            '# state volumes', .false., 8.0)
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Graph and reconstruction low-pass limit in Angstroms{8}', &
             gui_submenu="regularization", gui_advanced=.false.)

@@ -122,15 +122,17 @@ contains
         if( allocated(eigs) ) deallocate(eigs)
     end subroutine steerable_embed
 
-    subroutine embed_graph( graph, ndiff_req, coords, eigvals )
+    subroutine embed_graph( graph, ndiff_req, coords, eigvals, raw_coords )
         type(diffmap_graph), target, intent(in)  :: graph
         integer,                   intent(in)    :: ndiff_req
         real, allocatable,         intent(out)   :: coords(:,:), eigvals(:)
+        real, allocatable, optional, intent(out) :: raw_coords(:,:)
         real, allocatable :: evals(:), evecs(:,:), diff_evals(:)
         integer :: n, ndiff_scan, ndiff_used, nev, eig_info, max_basis, i, k, j
         n = graph%n
         if( n < 3 )then
             allocate(coords(1,n), eigvals(1), source=0.)
+            if( present(raw_coords) ) allocate(raw_coords(1,n), source=0.)
             return
         endif
         if( ndiff_req <= 0 )then
@@ -159,6 +161,7 @@ contains
                 coords(k,i) = evals(j) * evecs(i,j)
             end do
         end do
+        if( present(raw_coords) ) allocate(raw_coords(ndiff_used,n), source=coords)
         call normalize_coords(coords)
         deallocate(evals, evecs, diff_evals)
     end subroutine embed_graph

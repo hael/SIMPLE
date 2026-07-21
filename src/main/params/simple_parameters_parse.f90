@@ -345,6 +345,7 @@ contains
         call reg%add_int('ncls_fine', self%ncls_fine)
         call reg%add_int('nptcls_coarse', self%nptcls_coarse)
         call reg%add_int('nptcls_fine', self%nptcls_fine)
+        call reg%add_int('npreimages', self%npreimages)
         call reg%add_int('nsample_coarse', self%nsample_coarse)
         call reg%add_int('nsample_fine', self%nsample_fine)
         call reg%add_int('nsubcls_min', self%nsubcls_min)
