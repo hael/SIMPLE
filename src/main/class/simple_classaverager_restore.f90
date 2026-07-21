@@ -720,7 +720,7 @@ contains
 
     ! PUBLIC UTILITIES
 
-    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori)
+    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in)
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch, killimgbatch
         use simple_memoize_ft_maps
@@ -734,6 +734,7 @@ contains
         logical,     optional,              intent(in)    :: phflip
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
+        integer,     optional,              intent(in)    :: pinds_in(:)
         class(oris), pointer :: pos
         type(kbinterpol)     :: kbwin
         type(image)          :: img(nthr_glob), gridcorr_img
@@ -767,7 +768,15 @@ contains
         end select
         call spproj%ptr2oritype( oritype, pos )
         if( allocated(pinds) ) deallocate(pinds)
-        call pos%get_pinds(icls, str%to_char(), pinds)
+        if( present(pinds_in) )then
+            if( size(pinds_in) < 1 ) return
+            if( any(pinds_in < 1) .or. any(pinds_in > pos%get_noris()) )then
+                THROW_HARD('particle index outside orientation field; transform_ptcls')
+            endif
+            allocate(pinds, source=pinds_in)
+        else
+            call pos%get_pinds(icls, str%to_char(), pinds)
+        endif
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)
         if( pop == 0 ) return

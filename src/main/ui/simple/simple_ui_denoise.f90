@@ -315,8 +315,8 @@ contains
             'Nearest neighbors (default 10)', &
             'Registered-residual neighbors retained per particle', '# neighbors', .false., 10.0)
         call flex_eigenvol%add_input(UI_FILT, 'nang_nbrs', 'num', &
-            'Angular candidate cap (default 1000)', &
-            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0)
+            'Angular candidate cap (default 100)', &
+            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 100.0)
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Graph and reconstruction low-pass limit in Angstroms{8}', &
             gui_submenu="regularization", gui_advanced=.false.)

@@ -1,214 +1,702 @@
 !@descr: sparse diffusion-map 3D variability analysis from fixed particle poses
 module simple_flex_eigenvol_strategy
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,               only: builder
 use simple_cmdline,               only: cmdline
 use simple_diff_map_denoise,      only: select_spectral_rank_icm
-use simple_diff_map_graphs,       only: diffmap_graph, build_gated_euclidean_knn_graph
+use simple_diff_map_graphs,       only: diffmap_graph, build_gated_euclidean_knn_graph, &
+    &find_gated_euclidean_neighbors_rows, build_gated_euclidean_graph_from_neighbors
 use simple_diffusion_maps,        only: embed_graph
-use simple_flex_diffmap_features, only: prepare_flex_diffmap_features
-use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_modes, write_flex_diffmap_rec_part, &
-    &reduce_flex_diffmap_rec_parts
+use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part, &
+    &assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts, flex_projection_directions, &
+    &write_flex_mean_projection_stack
+use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_modes, write_flex_diffmap_rec_parts, &
+    &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
 use simple_parameters,            only: parameters
-use simple_flex_embedding_result,  only: flex_embedding_result
+use simple_flex_embedding_result, only: flex_embedding_result
 use simple_qsys_env,              only: qsys_env
+use simple_sp_project,            only: sp_project
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: run_flex_eigenvol_diffmap, run_flex_eigenvol_reconstruct_worker
+public :: flex_eigenvol_strategy, flex_eigenvol_shmem_strategy
+public :: flex_eigenvol_worker_strategy, flex_eigenvol_master_strategy
+public :: create_flex_eigenvol_strategy, fit_flex_eigenvol_embedding
 
-integer, parameter :: FLEX_DIFFMAP_STATE_MAGIC=1180061702, FLEX_DIFFMAP_STATE_VERSION=1
+type, abstract :: flex_eigenvol_strategy
+contains
+    procedure(init_interface),     deferred :: initialize
+    procedure(exec_interface),     deferred :: execute
+    procedure(finalize_interface), deferred :: finalize_run
+    procedure(cleanup_interface),  deferred :: cleanup
+end type flex_eigenvol_strategy
+
+type, extends(flex_eigenvol_strategy) :: flex_eigenvol_shmem_strategy
+contains
+    procedure :: initialize   => shmem_initialize
+    procedure :: execute      => shmem_execute
+    procedure :: finalize_run => shmem_finalize_run
+    procedure :: cleanup      => shmem_cleanup
+end type flex_eigenvol_shmem_strategy
+
+type, extends(flex_eigenvol_strategy) :: flex_eigenvol_worker_strategy
+contains
+    procedure :: initialize   => worker_initialize
+    procedure :: execute      => worker_execute
+    procedure :: finalize_run => worker_finalize_run
+    procedure :: cleanup      => worker_cleanup
+end type flex_eigenvol_worker_strategy
+
+type, extends(flex_eigenvol_strategy) :: flex_eigenvol_master_strategy
+    type(qsys_env)           :: qenv
+    type(chash)              :: job_descr
+    type(chash), allocatable :: part_params(:)
+    integer                  :: nparts_run = 1
+contains
+    procedure :: initialize   => master_initialize
+    procedure :: execute      => master_execute
+    procedure :: finalize_run => master_finalize_run
+    procedure :: cleanup      => master_cleanup
+end type flex_eigenvol_master_strategy
+
+abstract interface
+    subroutine init_interface(self, params, build, cline)
+        import :: flex_eigenvol_strategy, parameters, builder, cmdline
+        class(flex_eigenvol_strategy), intent(inout) :: self
+        type(parameters),              intent(inout) :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
+    end subroutine init_interface
+    subroutine exec_interface(self, params, build, cline)
+        import :: flex_eigenvol_strategy, parameters, builder, cmdline
+        class(flex_eigenvol_strategy), intent(inout) :: self
+        type(parameters),              intent(inout) :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
+    end subroutine exec_interface
+    subroutine finalize_interface(self, params, build, cline)
+        import :: flex_eigenvol_strategy, parameters, builder, cmdline
+        class(flex_eigenvol_strategy), intent(inout) :: self
+        type(parameters),              intent(in)    :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
+    end subroutine finalize_interface
+    subroutine cleanup_interface(self, params)
+        import :: flex_eigenvol_strategy, parameters
+        class(flex_eigenvol_strategy), intent(inout) :: self
+        type(parameters),              intent(in)    :: params
+    end subroutine cleanup_interface
+end interface
 
 contains
 
-    subroutine run_flex_eigenvol_diffmap( params, build, cline, fit_result )
+    function create_flex_eigenvol_strategy( cline ) result(strategy)
+        class(cmdline), intent(in) :: cline
+        class(flex_eigenvol_strategy), allocatable :: strategy
+        integer :: nparts
+        logical :: is_worker,is_master
+        nparts=1
+        if( cline%defined('nparts') ) nparts=max(1,cline%get_iarg('nparts'))
+        is_worker=cline%defined('part')
+        is_master=(nparts>1).and.(.not.is_worker)
+        if( is_master )then
+            allocate(flex_eigenvol_master_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED FLEX_EIGENVOL (MASTER)'
+        else if( is_worker )then
+            allocate(flex_eigenvol_worker_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_EIGENVOL (WORKER)'
+        else
+            allocate(flex_eigenvol_shmem_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_EIGENVOL (SHARED-MEMORY)'
+        endif
+    end function create_flex_eigenvol_strategy
+
+    subroutine apply_defaults( cline )
+        class(cmdline), intent(inout) :: cline
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
+        if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
+        if( .not.cline%defined('nstates') ) call cline%set('nstates',1)
+        if( .not.cline%defined('neigs') ) call cline%set('neigs',20)
+        if( .not.cline%defined('k_nn') ) call cline%set('k_nn',10)
+        if( .not.cline%defined('nang_nbrs') ) call cline%set('nang_nbrs',100)
+        if( .not.cline%defined('lp') ) call cline%set('lp',8.0)
+        if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_eigvol_001.mrc')
+        call cline%set('ml_reg','no')
+    end subroutine apply_defaults
+
+    subroutine init_common( params, build, cline )
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        call apply_defaults(cline)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+    end subroutine init_common
+
+    subroutine shmem_initialize( self, params, build, cline )
+        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        integer :: max_modes
+        call init_common(params,build,cline)
+        call validate_inputs(params,cline,max_modes)
+    end subroutine shmem_initialize
+
+    subroutine shmem_execute( self, params, build, cline )
+        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        integer, allocatable :: pinds(:)
+        real, allocatable :: coords(:,:)
+        type(string) :: registered_stack,registered_project
+        integer :: nmodes
+        call run_flex_analysis(params,build,cline,pinds,coords,nmodes,registered_stack,registered_project)
+        call reconstruct_registered(cline,registered_project,pinds,coords,nmodes)
+        call finish_analysis_outputs(registered_stack,registered_project)
+        deallocate(pinds,coords)
+    end subroutine shmem_execute
+
+    subroutine shmem_finalize_run( self, params, build, cline )
+        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+    end subroutine shmem_finalize_run
+
+    subroutine shmem_cleanup( self, params )
+        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+    end subroutine shmem_cleanup
+
+    subroutine worker_initialize( self, params, build, cline )
+        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        call init_common(params,build,cline)
+        if( .not.cline%defined('part') ) THROW_HARD('PART must be defined for flex_eigenvol worker execution')
+        if( .not.cline%defined('infile') ) THROW_HARD('INFILE assignment must be defined for flex_eigenvol worker execution')
+        if( params%stage<1 .or. params%stage>3 ) THROW_HARD('invalid flex_eigenvol worker stage')
+        if( params%stage==3 .and. (params%neigs<1 .or. params%neigs>20) ) &
+            &THROW_HARD('invalid flex_eigenvol worker mode count')
+    end subroutine worker_initialize
+
+    subroutine worker_execute( self, params, build, cline )
+        use simple_qsys_funs, only: qsys_job_finished
+        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        integer, allocatable :: pinds(:)
+        real, allocatable :: coords(:,:),features(:,:),proj_dirs(:,:),d2s(:,:)
+        integer, allocatable :: proj_ids(:),rows(:),nbrs(:,:),ncandidates(:)
+        integer :: i
+        call read_int_file(params%infile,pinds)
+        select case(params%stage)
+            case(1)
+                call prepare_flex_diffmap_feature_part(params,build,pinds,params%part)
+            case(2)
+                call read_flex_diffmap_feature_parts(params,params%nparts,features,proj_ids)
+                call flex_projection_directions(build,proj_dirs)
+                if( size(pinds)/=params%top-params%fromp+1 ) THROW_HARD('flex graph row assignment size mismatch')
+                allocate(rows(params%top-params%fromp+1),source=[(i,i=params%fromp,params%top)])
+                call find_gated_euclidean_neighbors_rows(features,proj_ids,proj_dirs,params%k_nn, &
+                    &params%nang_nbrs,rows,nbrs,d2s,ncandidates)
+                call write_graph_part(params,rows,nbrs,d2s,ncandidates)
+                deallocate(features,proj_ids,proj_dirs,rows,nbrs,d2s,ncandidates)
+            case(3)
+                call read_project_coordinates(build%spproj,pinds,params%neigs,coords)
+                call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%neigs,params%part)
+                deallocate(coords)
+        end select
+        call qsys_job_finished(params,string('simple_flex_eigenvol_strategy :: worker_execute'))
+        deallocate(pinds)
+    end subroutine worker_execute
+
+    subroutine worker_finalize_run( self, params, build, cline )
+        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+    end subroutine worker_finalize_run
+
+    subroutine worker_cleanup( self, params )
+        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+    end subroutine worker_cleanup
+
+    subroutine master_initialize( self, params, build, cline )
+        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        integer :: max_modes
+        call init_common(params,build,cline)
+        call validate_inputs(params,cline,max_modes)
+    end subroutine master_initialize
+
+    subroutine master_execute( self, params, build, cline )
+        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        type(parameters) :: registered_params
+        type(builder) :: registered_build
+        type(cmdline) :: registered_cline
+        type(string) :: registered_stack,registered_project,worker_program
+        integer, allocatable :: pinds(:)
+        real, allocatable :: coords(:,:)
+        type(diffmap_graph) :: graph
+        integer :: nmodes,nptcls,max_modes,cand_min,cand_max
+        real :: cand_mean
+        integer(timer_int_kind) :: t_step
+        call validate_inputs(params,cline,max_modes)
+        call select_particles(params,build,pinds,nptcls)
+        call validate_selected_particles(build%spproj,pinds)
+        self%nparts_run=min(max(1,params%nparts),size(pinds))
+        write(logfhandle,'(A,I0,A,I0,A,I0)') 'Flex worker planning: requested_nparts=',params%nparts, &
+            &' selected_particles=',size(pinds),' effective_nparts=',self%nparts_run
+        write(logfhandle,'(A)') 'Flex partition unit: contiguous selected-particle rows for features, graph rows, and reconstruction.'
+        call self%qenv%new(params,self%nparts_run,numlen=params%numlen,nptcls=size(pinds))
+        call prepare_particle_partitions(self,params,pinds)
+        worker_program='flex_eigenvol'
+        call cline%gen_job_descr(self%job_descr,prg=worker_program)
+        call self%job_descr%set('mkdir','no')
+        call self%job_descr%set('nparts',int2str(self%nparts_run))
+        call self%job_descr%set('numlen',int2str(params%numlen))
+
+        call self%job_descr%set('stage','1')
+        t_step=tic()
+        call write_flex_mean_projection_stack(params,build)
+        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
+            &array=L_USE_SLURM_ARR,extra_params=params)
+        call assemble_flex_diffmap_feature_parts(params,build%spproj,pinds,self%nparts_run,self%qenv%parts,registered_project)
+        registered_stack='flex_registered_particles_part*.mrcs'
+        write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_registration_seconds=',toc(t_step)
+
+        call self%job_descr%set('stage','2')
+        t_step=tic()
+        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
+            &array=L_USE_SLURM_ARR,extra_params=params)
+        call read_graph_parts(params,size(pinds),self%nparts_run,graph,cand_min,cand_max,cand_mean)
+        call cleanup_distributed_analysis_parts(params,self%nparts_run)
+        write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_graph_seconds=',toc(t_step)
+        call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,nmodes)
+        call graph%kill()
+        call store_project_coordinates(registered_project,pinds,coords,nmodes)
+
+        registered_cline=cline
+        call registered_cline%set('projfile',registered_project%to_char())
+        call registered_cline%set('mkdir','no')
+        call registered_cline%set('ptcl_src','raw')
+        call registered_cline%set('neigs',nmodes)
+        call registered_cline%set('nparts',self%nparts_run)
+        call registered_cline%gen_job_descr(self%job_descr,prg=worker_program)
+        call self%job_descr%set('stage','3')
+        call self%job_descr%set('mkdir','no')
+        call self%job_descr%set('projfile',registered_project%to_char())
+        call self%job_descr%set('ptcl_src','raw')
+        call self%job_descr%set('neigs',int2str(nmodes))
+        call self%job_descr%set('nparts',int2str(self%nparts_run))
+        call self%job_descr%set('numlen',int2str(params%numlen))
+        t_step=tic()
+        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
+            &array=L_USE_SLURM_ARR,extra_params=params)
+        call registered_build%init_params_and_build_general_tbox(registered_cline,registered_params,do3d=.true.)
+        call reduce_flex_diffmap_rec_parts(registered_params,registered_build,self%nparts_run,nmodes)
+        write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_reconstruction_seconds=',toc(t_step)
+        call cleanup_flex_diffmap_rec_parts(self%nparts_run,nmodes,params%numlen)
+        call registered_build%kill_general_tbox
+        call registered_cline%kill; call worker_program%kill
+        call finish_analysis_outputs(registered_stack,registered_project)
+        deallocate(pinds,coords)
+    end subroutine master_execute
+
+    subroutine master_finalize_run( self, params, build, cline )
+        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+    end subroutine master_finalize_run
+
+    subroutine master_cleanup( self, params )
+        use simple_qsys_funs, only: qsys_cleanup
+        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        type(string) :: fname
+        integer :: ipart
+        call self%qenv%kill
+        call qsys_cleanup(params)
+        if( allocated(self%part_params) )then
+            do ipart=1,size(self%part_params)
+                fname=string('flex_particles_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+                call del_file(fname); call fname%kill
+                call self%part_params(ipart)%kill
+            end do
+            deallocate(self%part_params)
+        endif
+        call self%job_descr%kill
+    end subroutine master_cleanup
+
+    subroutine prepare_particle_partitions( self, params, pinds )
+        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: pinds(:)
+        type(string) :: fname
+        integer :: ipart,first,last
+        allocate(self%part_params(self%nparts_run))
+        do ipart=1,self%nparts_run
+            first=self%qenv%parts(ipart,1); last=self%qenv%parts(ipart,2)
+            fname=string('flex_particles_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            call arr2txtfile(pinds(first:last),fname)
+            call self%part_params(ipart)%new(1)
+            call self%part_params(ipart)%set('infile',fname%to_char())
+            call fname%kill
+        end do
+    end subroutine prepare_particle_partitions
+
+    subroutine reconstruct_registered( cline, registered_project, pinds, coords, nmodes )
+        class(cmdline), intent(inout) :: cline
+        type(string), intent(in) :: registered_project
+        integer, intent(in) :: pinds(:),nmodes
+        real, intent(in) :: coords(:,:)
+        type(parameters) :: registered_params
+        type(builder) :: registered_build
+        type(cmdline) :: registered_cline
+        registered_cline=cline
+        call registered_cline%set('projfile',registered_project%to_char())
+        call registered_cline%set('mkdir','no')
+        call registered_cline%set('ptcl_src','raw')
+        call registered_build%init_params_and_build_general_tbox(registered_cline,registered_params,do3d=.true.)
+        call reconstruct_flex_diffmap_modes(registered_params,registered_build,pinds,coords,nmodes)
+        call registered_build%kill_general_tbox
+        call registered_cline%kill
+    end subroutine reconstruct_registered
+
+    subroutine fit_flex_eigenvol_embedding( params, build, cline, fit_result )
         class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
+        class(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        type(flex_embedding_result), intent(inout) :: fit_result
+        integer, allocatable :: pinds(:)
+        real, allocatable :: coords(:,:)
+        type(string) :: registered_stack,registered_project
+        integer :: nmodes
+        call run_flex_analysis(params,build,cline,pinds,coords,nmodes,registered_stack,registered_project,fit_result)
+        write(logfhandle,'(A)') '>>> FLEX DIFFMAP reconstruction=skipped (embedding-only caller)'
+        call finish_analysis_outputs(registered_stack,registered_project)
+        deallocate(pinds,coords)
+    end subroutine fit_flex_eigenvol_embedding
+
+    subroutine run_flex_analysis( params, build, cline, pinds, coords, nmodes, registered_stack, &
+        &registered_project, fit_result )
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        integer, allocatable, intent(out) :: pinds(:)
+        real, allocatable, intent(out) :: coords(:,:)
+        integer, intent(out) :: nmodes
+        type(string), intent(out) :: registered_stack,registered_project
         type(flex_embedding_result), optional, intent(inout) :: fit_result
         type(diffmap_graph) :: graph
-        type(string) :: registered_stack, registered_project
-        integer, allocatable :: pinds(:), proj_ids(:)
-        real, allocatable :: features(:,:), proj_dirs(:,:), coords_mode_major(:,:), eigvals(:)
-        real, allocatable :: coords(:,:)
-        integer :: nptcls, max_modes, nmodes, icm_iters
-        integer :: cand_min, cand_max
-        real :: cand_mean, icm_score
+        integer, allocatable :: proj_ids(:)
+        real, allocatable :: features(:,:),proj_dirs(:,:),coords_mode_major(:,:),eigvals(:)
+        integer :: nptcls,max_modes,icm_iters,cand_min,cand_max
+        real :: cand_mean,icm_score
         logical :: icm_converged
-        integer(timer_int_kind) :: t_total, t_step
-        t_total = tic()
-        call validate_inputs(params, cline, max_modes)
-        call select_particles(params, build, pinds, nptcls)
+        integer(timer_int_kind) :: t_step
+        call validate_inputs(params,cline,max_modes)
+        call select_particles(params,build,pinds,nptcls)
+        call validate_selected_particles(build%spproj,pinds)
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,F8.3)') &
             '>>> FLEX DIFFMAP particles=',nptcls,' k_nn=',params%k_nn,' nang_nbrs=',params%nang_nbrs, &
             &' max_modes=',max_modes,' lp=',params%lp
-        if( params%nparts > 1 )then
-            write(logfhandle,'(A,I0,A)') '>>> FLEX DIFFMAP parts=',params%nparts, &
-                &' (registered preparation and graph are master-owned; Hermitian statistics are distributed)'
-        endif
         call flush(logfhandle)
-
-        t_step = tic()
-        call prepare_flex_diffmap_features(params, build, pinds, features, proj_ids, proj_dirs, &
-            &registered_stack, registered_project)
+        t_step=tic()
+        call prepare_flex_diffmap_features(params,build,pinds,features,proj_ids,proj_dirs,registered_stack,registered_project)
         write(logfhandle,'(A,F10.3,A,I0)') '>>> FLEX DIFFMAP registration_seconds=',toc(t_step), &
             &' feature_values=',size(features,kind=8)
-        call flush(logfhandle)
-
-        t_step = tic()
-        call build_gated_euclidean_knn_graph(features, proj_ids, proj_dirs, params%k_nn, params%nang_nbrs, graph, &
-            &cand_min, cand_max, cand_mean)
+        t_step=tic()
+        call build_gated_euclidean_knn_graph(features,proj_ids,proj_dirs,params%k_nn,params%nang_nbrs,graph, &
+            &cand_min,cand_max,cand_mean)
         write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cand_min, &
             &' max=',cand_max,' mean=',cand_mean,' directed_nnz=',graph%nnz
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP graph_seconds=',toc(t_step)
-        call flush(logfhandle)
         deallocate(features,proj_dirs,proj_ids)
-
-        t_step = tic()
+        t_step=tic()
         call embed_graph(graph,max_modes,coords_mode_major,eigvals)
-        if( size(eigvals) < 1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
+        if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
         call select_spectral_rank_icm(eigvals,size(eigvals),nmodes,icm_converged,icm_iters,icm_score,min_rank=1)
-        nmodes = min(max(1,nmodes),min(max_modes,size(eigvals)))
+        nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
         allocate(coords(nptcls,nmodes),source=transpose(coords_mode_major(1:nmodes,:)))
+        if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('diffusion embedding produced nonfinite coordinates')
         write(logfhandle,'(A,I0,A,L1,A,I0,A,ES12.4,A,F10.3)') '>>> FLEX DIFFMAP selected_modes=',nmodes, &
             &' icm_converged=',icm_converged,' icm_iters=',icm_iters,' icm_score=',icm_score, &
             &' embedding_seconds=',toc(t_step)
-        call flush(logfhandle)
-
         call write_coordinates(pinds,coords,nptcls,nmodes)
         call write_spectrum(eigvals,nmodes,icm_converged,icm_iters,icm_score)
         call write_graph_summary(graph,cand_min,cand_max,cand_mean,params)
         if( present(fit_result) ) call capture_result(fit_result,pinds,coords,eigvals,nptcls,nmodes)
+        call graph%kill()
+        deallocate(coords_mode_major,eigvals)
+    end subroutine run_flex_analysis
 
-        t_step = tic()
-        if( params%nparts > 1 )then
-            call distributed_reconstruct(params,build,cline,pinds,coords,nmodes)
-        else
-            call reconstruct_flex_diffmap_modes(params,build,pinds,coords,nmodes)
-        endif
-        write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP reconstruction_seconds=',toc(t_step)
+    subroutine store_project_coordinates( project_fname, pinds, coords, nmodes )
+        type(string), intent(in) :: project_fname
+        integer, intent(in) :: pinds(:),nmodes
+        real, intent(in) :: coords(:,:)
+        type(sp_project) :: spproj
+        type(string) :: label
+        integer :: i,q
+        call spproj%read(project_fname)
+        do q=1,nmodes
+            label=string('flex_coord')//int2str(q)
+            do i=1,size(pinds)
+                call spproj%os_ptcl3D%set(pinds(i),label%to_char(),coords(i,q))
+            end do
+            call label%kill
+        end do
+        call spproj%write(project_fname)
+        call spproj%kill
+    end subroutine store_project_coordinates
+
+    subroutine read_project_coordinates( spproj, pinds, nmodes, coords )
+        type(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: pinds(:),nmodes
+        real, allocatable, intent(out) :: coords(:,:)
+        type(string) :: label
+        integer :: i,q,nall
+        nall=spproj%os_ptcl3D%get_noris()
+        if( size(pinds)<1 ) THROW_HARD('empty flex particle assignment')
+        allocate(coords(size(pinds),nmodes))
+        do q=1,nmodes
+            label=string('flex_coord')//int2str(q)
+            do i=1,size(pinds)
+                if( pinds(i)<1 .or. pinds(i)>nall ) THROW_HARD('flex assignment particle outside project')
+                if( .not.spproj%os_ptcl3D%isthere(pinds(i),label%to_char()) ) &
+                    &THROW_HARD('flex coordinate missing from registered project')
+                coords(i,q)=spproj%os_ptcl3D%get(pinds(i),label%to_char())
+            end do
+            call label%kill
+        end do
+        if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('nonfinite flex coordinate in registered project')
+    end subroutine read_project_coordinates
+
+    subroutine read_int_file( fname, vals )
+        type(string), intent(in) :: fname
+        integer, allocatable, intent(out) :: vals(:)
+        integer :: nvals,funit,ios,i
+        character(len=XLONGSTRLEN) :: line
+        nvals=0
+        open(newunit=funit,file=fname%to_char(),status='old',action='read',iostat=ios)
+        call fileiochk('opening flex particle assignment '//fname%to_char(),ios)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios/=0 ) exit
+            if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+            nvals=nvals+1
+        end do
+        close(funit)
+        if( nvals<1 ) THROW_HARD('empty flex particle assignment file')
+        allocate(vals(nvals))
+        open(newunit=funit,file=fname%to_char(),status='old',action='read',iostat=ios)
+        call fileiochk('opening flex particle assignment '//fname%to_char(),ios)
+        i=0
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios/=0 ) exit
+            if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+            i=i+1; read(line,*) vals(i)
+        end do
+        close(funit)
+    end subroutine read_int_file
+
+    subroutine write_graph_part( params, rows, nbrs, d2s, ncandidates )
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: rows(:),nbrs(:,:),ncandidates(:)
+        real, intent(in) :: d2s(:,:)
+        type(string) :: fname
+        integer :: u,ir,m
+        if( size(nbrs,2)/=size(rows).or.any(shape(d2s)/=shape(nbrs)) ) &
+            &THROW_HARD('invalid flex graph part dimensions')
+        fname=string('flex_graph_neighbors_part')//int2str_pad(params%part,params%numlen)//TXT_EXT
+        call del_file(fname)
+        open(newunit=u,file=fname%to_char(),status='replace',action='write')
+        write(u,'(A)') '# row ncandidates (neighbor squared_distance)*'
+        do ir=1,size(rows)
+            write(u,'(I10,1X,I10)',advance='no') rows(ir),ncandidates(ir)
+            do m=1,size(nbrs,1)
+                write(u,'(1X,I10,1X,ES16.8)',advance='no') nbrs(m,ir),d2s(m,ir)
+            end do
+            write(u,*)
+        end do
+        close(u); call fname%kill
+    end subroutine write_graph_part
+
+    subroutine read_graph_parts( params, nptcls, nparts, graph, cmin, cmax, cmean )
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: nptcls,nparts
+        type(diffmap_graph), intent(out) :: graph
+        integer, intent(out) :: cmin,cmax
+        real, intent(out) :: cmean
+        integer, allocatable :: nbrs(:,:),ncandidates(:)
+        real, allocatable :: d2s(:,:)
+        logical, allocatable :: covered(:)
+        type(string) :: fname
+        character(len=XLONGSTRLEN) :: line
+        integer, allocatable :: row_nbrs(:)
+        real, allocatable :: row_d2s(:)
+        integer :: k_used,ipart,u,ios,row,m,nread,row_ncandidates
+        k_used=min(max(1,params%k_nn),nptcls-1)
+        allocate(nbrs(k_used,nptcls),ncandidates(nptcls),source=0)
+        allocate(d2s(k_used,nptcls),source=0.)
+        allocate(covered(nptcls),source=.false.)
+        allocate(row_nbrs(k_used),row_d2s(k_used))
+        do ipart=1,nparts
+            fname=string('flex_graph_neighbors_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            open(newunit=u,file=fname%to_char(),status='old',action='read',iostat=ios)
+            call fileiochk('opening flex graph part '//fname%to_char(),ios)
+            nread=0
+            do
+                read(u,'(A)',iostat=ios) line
+                if( ios/=0 ) exit
+                if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+                read(line,*) row,row_ncandidates,(row_nbrs(m),row_d2s(m),m=1,k_used)
+                if( row<1 .or. row>nptcls ) THROW_HARD('flex graph part row outside table')
+                if( covered(row) ) THROW_HARD('duplicate flex graph part row')
+                ncandidates(row)=row_ncandidates; nbrs(:,row)=row_nbrs; d2s(:,row)=row_d2s
+                covered(row)=.true.; nread=nread+1
+            end do
+            close(u); call fname%kill
+            if( nread<1 ) THROW_HARD('empty flex graph part')
+        end do
+        if( any(.not.covered) ) THROW_HARD('distributed flex graph parts do not cover every particle')
+        call build_gated_euclidean_graph_from_neighbors(nptcls,nbrs,d2s,ncandidates,graph)
+        cmin=minval(ncandidates); cmax=maxval(ncandidates)
+        cmean=real(sum(int(ncandidates,kind=8)),kind=sp)/real(nptcls,kind=sp)
+        deallocate(nbrs,ncandidates,d2s,covered,row_nbrs,row_d2s)
+    end subroutine read_graph_parts
+
+    subroutine embed_flex_graph( params, pinds, graph, max_modes, cmin, cmax, cmean, coords, nmodes )
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: pinds(:),max_modes,cmin,cmax
+        type(diffmap_graph), intent(in) :: graph
+        real, intent(in) :: cmean
+        real, allocatable, intent(out) :: coords(:,:)
+        integer, intent(out) :: nmodes
+        real, allocatable :: coords_mode_major(:,:),eigvals(:)
+        real :: icm_score
+        integer :: icm_iters
+        logical :: icm_converged
+        integer(timer_int_kind) :: t_step
+        write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cmin, &
+            &' max=',cmax,' mean=',cmean,' directed_nnz=',graph%nnz
+        t_step=tic()
+        call embed_graph(graph,max_modes,coords_mode_major,eigvals)
+        if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
+        call select_spectral_rank_icm(eigvals,size(eigvals),nmodes,icm_converged,icm_iters,icm_score,min_rank=1)
+        nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
+        allocate(coords(size(pinds),nmodes),source=transpose(coords_mode_major(1:nmodes,:)))
+        if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('diffusion embedding produced nonfinite coordinates')
+        write(logfhandle,'(A,I0,A,L1,A,I0,A,ES12.4,A,F10.3)') '>>> FLEX DIFFMAP selected_modes=',nmodes, &
+            &' icm_converged=',icm_converged,' icm_iters=',icm_iters,' icm_score=',icm_score, &
+            &' embedding_seconds=',toc(t_step)
+        call write_coordinates(pinds,coords,size(pinds),nmodes)
+        call write_spectrum(eigvals,nmodes,icm_converged,icm_iters,icm_score)
+        call write_graph_summary(graph,cmin,cmax,cmean,params)
+        deallocate(coords_mode_major,eigvals)
+    end subroutine embed_flex_graph
+
+    subroutine cleanup_distributed_analysis_parts( params, nparts )
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: nparts
+        type(string) :: fname
+        integer :: ipart
+        do ipart=1,nparts
+            fname=string('flex_residual_features_part')//int2str_pad(ipart,params%numlen)//'.mrcs'
+            call del_file(fname); call fname%kill
+            fname=string('flex_registered_particle_map_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            call del_file(fname); call fname%kill
+            fname=string('flex_graph_neighbors_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            call del_file(fname); call fname%kill
+        end do
+        call del_file('flex_mean_projections.mrcs')
+    end subroutine cleanup_distributed_analysis_parts
+
+    subroutine finish_analysis_outputs( registered_stack, registered_project )
+        type(string), intent(inout) :: registered_stack,registered_project
         write(logfhandle,'(A,A)') '>>> FLEX DIFFMAP registered_stack=',registered_stack%to_char()
         write(logfhandle,'(A,A)') '>>> FLEX DIFFMAP registered_project=',registered_project%to_char()
-        write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP total_seconds=',toc(t_total)
         call flush(logfhandle)
-
-        call graph%kill()
-        if( allocated(pinds) ) deallocate(pinds)
-        if( allocated(coords) ) deallocate(coords)
-        if( allocated(coords_mode_major) ) deallocate(coords_mode_major)
-        if( allocated(eigvals) ) deallocate(eigvals)
-        call registered_stack%kill
-        call registered_project%kill
-    end subroutine run_flex_eigenvol_diffmap
-
-    subroutine run_flex_eigenvol_reconstruct_worker( params, build, cline )
-        class(parameters), intent(inout) :: params
-        class(builder), intent(inout) :: build
-        class(cmdline), intent(inout) :: cline
-        integer, allocatable :: pinds(:)
-        real, allocatable :: coords(:,:)
-        integer :: nptcls,nmodes
-        if( .not.cline%defined('infile') .or. .not.cline%defined('outfile') )then
-            THROW_HARD('flex_eigenvol_reconstruct requires infile and outfile')
-        endif
-        call read_state(params%infile,pinds,coords,nptcls,nmodes)
-        call write_flex_diffmap_rec_part(params,build,pinds,coords,nmodes,[params%fromp,params%top],params%outfile)
-        deallocate(pinds,coords)
-    end subroutine run_flex_eigenvol_reconstruct_worker
-
-    subroutine distributed_reconstruct( params, build, cline, pinds, coords, nmodes )
-        class(parameters), intent(inout) :: params
-        class(builder), intent(inout) :: build
-        class(cmdline), intent(inout) :: cline
-        integer, intent(in) :: pinds(:),nmodes
-        real, intent(in) :: coords(:,:)
-        type(qsys_env) :: qenv
-        type(chash) :: job_descr
-        type(chash), allocatable :: part_params(:)
-        type(string), allocatable :: part_files(:)
-        type(string) :: state_file,prg_string
-        integer :: ipart,nparts_eff
-        nparts_eff=min(max(1,params%nparts),size(pinds))
-        state_file='flex_diffmap_reconstruct_state.dat'
-        call write_state(state_file,pinds,coords,nmodes)
-        allocate(part_params(nparts_eff),part_files(nparts_eff))
-        do ipart=1,nparts_eff
-            part_files(ipart)=string('flex_diffmap_reconstruct_part')//int2str_pad(ipart,params%numlen)//'.bin'
-            call del_file(part_files(ipart))
-            call part_params(ipart)%new(1)
-            call part_params(ipart)%set('outfile',part_files(ipart)%to_char())
-        end do
-        prg_string='flex_eigenvol_reconstruct'
-        call cline%gen_job_descr(job_descr,prg=prg_string)
-        call job_descr%set('mkdir','no')
-        call job_descr%set('infile',state_file%to_char())
-        call job_descr%set('nparts',int2str(nparts_eff))
-        call job_descr%set('numlen',int2str(params%numlen))
-        call qenv%new(params,nparts_eff,numlen=params%numlen,nptcls=size(pinds))
-        call qenv%gen_scripts_and_schedule_jobs(job_descr,part_params=part_params,array=L_USE_SLURM_ARR,extra_params=params)
-        call qenv%kill
-        call reduce_flex_diffmap_rec_parts(params,build,part_files,nmodes)
-        do ipart=1,nparts_eff
-            call del_file(part_files(ipart)); call part_files(ipart)%kill; call part_params(ipart)%kill
-        end do
-        call del_file(state_file)
-        call state_file%kill; call prg_string%kill; call job_descr%kill
-        deallocate(part_files,part_params)
-    end subroutine distributed_reconstruct
-
-    subroutine write_state( fname, pinds, coords, nmodes )
-        class(string), intent(in) :: fname
-        integer, intent(in) :: pinds(:),nmodes
-        real, intent(in) :: coords(:,:)
-        integer :: u,ios,header(4)
-        header=[FLEX_DIFFMAP_STATE_MAGIC,FLEX_DIFFMAP_STATE_VERSION,size(pinds),nmodes]
-        call del_file(fname)
-        call fopen(u,file=fname,access='STREAM',status='REPLACE',action='WRITE',iostat=ios)
-        call fileiochk('open flex diffusion state',ios)
-        write(u,iostat=ios) header,pinds,coords(:,1:nmodes)
-        call fileiochk('write flex diffusion state',ios); call fclose(u)
-    end subroutine write_state
-
-    subroutine read_state( fname, pinds, coords, nptcls, nmodes )
-        class(string), intent(in) :: fname
-        integer, allocatable, intent(out) :: pinds(:)
-        real, allocatable, intent(out) :: coords(:,:)
-        integer, intent(out) :: nptcls,nmodes
-        integer :: u,ios,header(4)
-        call fopen(u,file=fname,access='STREAM',status='OLD',action='READ',iostat=ios)
-        call fileiochk('open flex diffusion state worker',ios)
-        read(u,iostat=ios) header
-        call fileiochk('read flex diffusion state header',ios)
-        if( header(1)/=FLEX_DIFFMAP_STATE_MAGIC .or. header(2)/=FLEX_DIFFMAP_STATE_VERSION )then
-            THROW_HARD('incompatible flex diffusion state')
-        endif
-        nptcls=header(3); nmodes=header(4)
-        allocate(pinds(nptcls),coords(nptcls,nmodes))
-        read(u,iostat=ios) pinds,coords
-        call fileiochk('read flex diffusion state payload',ios); call fclose(u)
-    end subroutine read_state
+        call registered_stack%kill; call registered_project%kill
+    end subroutine finish_analysis_outputs
 
     subroutine validate_inputs( params, cline, max_modes )
         class(parameters), intent(inout) :: params
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(out)   :: max_modes
-        if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_eigenvol requires oritype=ptcl3D')
-        if( .not. cline%defined('vol1') ) THROW_HARD('flex_eigenvol requires vol1=<mean map>')
-        if( params%nstates /= 1 ) THROW_HARD('flex_eigenvol supports one ptcl3D state')
-        max_modes = min(20,max(1,params%neigs))
-        params%k_nn = max(1,params%k_nn)
-        params%nang_nbrs = max(params%k_nn,params%nang_nbrs)
+        class(cmdline), intent(inout) :: cline
+        integer, intent(out) :: max_modes
+        if( params%oritype/='ptcl3D' ) THROW_HARD('flex_eigenvol requires oritype=ptcl3D')
+        if( .not.cline%defined('vol1') ) THROW_HARD('flex_eigenvol requires vol1=<mean map>')
+        if( params%nstates/=1 ) THROW_HARD('flex_eigenvol supports one ptcl3D state')
+        max_modes=min(20,max(1,params%neigs))
+        params%k_nn=max(1,params%k_nn)
+        params%nang_nbrs=max(params%k_nn,params%nang_nbrs)
     end subroutine validate_inputs
 
     subroutine select_particles( params, build, pinds, nptcls )
-        class(parameters), intent(in)       :: params
-        class(builder),    intent(inout)    :: build
-        integer, allocatable, intent(inout) :: pinds(:)
+        class(parameters), intent(in) :: params
+        class(builder), intent(inout) :: build
+        integer, allocatable, intent(out) :: pinds(:)
         integer, intent(out) :: nptcls
         call build%spproj_field%sample4rec([params%fromp,params%top],nptcls,pinds)
-        if( nptcls < 3 ) THROW_HARD('flex_eigenvol found fewer than three active particles')
+        if( nptcls<3 ) THROW_HARD('flex_eigenvol found fewer than three active particles')
     end subroutine select_particles
+
+    subroutine validate_selected_particles( spproj, pinds )
+        type(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: pinds(:)
+        integer, allocatable :: stk_sizes(:),stk_offsets(:)
+        logical, allocatable :: seen_slots(:)
+        integer :: nptcls,nstks,nslots,istk,i,iptcl,stkind,indstk,slot,ctf_mode
+        nptcls=spproj%os_ptcl3D%get_noris()
+        if( spproj%os_ptcl2D%get_noris()/=nptcls ) THROW_HARD('flex_eigenvol requires matching ptcl2D/ptcl3D fields')
+        nstks=spproj%os_stk%get_noris()
+        if( nstks<1 ) THROW_HARD('flex_eigenvol project has no particle stacks')
+        allocate(stk_sizes(nstks),stk_offsets(nstks),source=0)
+        nslots=0
+        do istk=1,nstks
+            stk_offsets(istk)=nslots
+            if( spproj%os_stk%isthere(istk,'nptcls_stk') )then
+                stk_sizes(istk)=spproj%os_stk%get_int(istk,'nptcls_stk')
+            else if( spproj%os_stk%isthere(istk,'fromp').and.spproj%os_stk%isthere(istk,'top') )then
+                stk_sizes(istk)=spproj%os_stk%get_top(istk)-spproj%os_stk%get_fromp(istk)+1
+            endif
+            if( stk_sizes(istk)<1 ) THROW_HARD('flex_eigenvol requires valid stack particle counts')
+            nslots=nslots+stk_sizes(istk)
+        end do
+        allocate(seen_slots(nslots),source=.false.)
+        ctf_mode=spproj%get_ctfflag_type('ptcl3D',pinds(1))
+        if( ctf_mode/=CTFFLAG_YES .and. ctf_mode/=CTFFLAG_FLIP ) &
+            &THROW_HARD('flex_eigenvol requires ctf=yes or ctf=flip particle images')
+        do i=1,size(pinds)
+            iptcl=pinds(i)
+            if( iptcl<1 .or. iptcl>nptcls ) THROW_HARD('selected flex particle index outside project')
+            if( spproj%os_ptcl3D%get_state(iptcl)<=0 ) THROW_HARD('selected flex particle has state zero')
+            if( .not.spproj%os_ptcl3D%isthere(iptcl,'proj') ) THROW_HARD('selected flex particle has no projection index')
+            call spproj%map_ptcl_ind2stk_ind('ptcl3D',iptcl,stkind,indstk)
+            if( stkind<1 .or. stkind>nstks ) THROW_HARD('selected flex particle has invalid stack index')
+            if( indstk<1 .or. indstk>stk_sizes(stkind) ) THROW_HARD('selected flex particle has invalid image index')
+            slot=stk_offsets(stkind)+indstk
+            if( seen_slots(slot) ) THROW_HARD('selected flex particles alias the same stack image')
+            seen_slots(slot)=.true.
+            if( spproj%get_ctfflag_type('ptcl3D',iptcl)/=ctf_mode ) &
+                &THROW_HARD('flex_eigenvol does not support mixed ctf=yes and ctf=flip particle stacks')
+        end do
+        deallocate(stk_sizes,stk_offsets,seen_slots)
+    end subroutine validate_selected_particles
 
     subroutine capture_result( fit, pinds, coords, eigvals, nptcls, nmodes )
         type(flex_embedding_result), intent(inout) :: fit

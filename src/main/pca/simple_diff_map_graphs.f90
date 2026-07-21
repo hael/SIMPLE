@@ -16,6 +16,8 @@ public :: diffmap_graph
 public :: build_cls_split_graph
 public :: build_euclidean_knn_graph
 public :: build_gated_euclidean_knn_graph
+public :: find_gated_euclidean_neighbors_rows
+public :: build_gated_euclidean_graph_from_neighbors
 public :: build_orientation_knn_graph
 public :: graph_matvec
 public :: estimate_graph_shift_scale
@@ -130,13 +132,10 @@ contains
         type(diffmap_graph), intent(out) :: graph
         integer, optional,   intent(out) :: ncandidates_min, ncandidates_max
         real, optional,      intent(out) :: ncandidates_mean
-        integer, allocatable :: counts(:), offsets(:), cursor(:), members(:)
-        integer, allocatable :: proj_order(:), nbrs(:,:), ncandidates(:)
-        real,    allocatable :: angular_key(:), d2s(:,:), kth_d2(:)
-        real(dp) :: d2
-        real :: dotdir
+        integer, allocatable :: nbrs(:,:),ncandidates(:),rows(:)
+        real, allocatable :: d2s(:,:)
         integer :: n, ndim, nproj, k_used, cap_used
-        integer :: i, j, k, m, p, q, f, pos, nseen
+        integer :: i
         n     = size(features,2)
         ndim  = size(features,1)
         nproj = size(proj_dirs,2)
@@ -151,67 +150,101 @@ contains
             if( present(ncandidates_mean) ) ncandidates_mean = 0.
             return
         endif
-        k_used   = min(max(1,k_nn), n-1)
-        cap_used = min(max(k_used,nang_nbrs), n-1)
-        allocate(counts(nproj), offsets(nproj+1), cursor(nproj), source=0)
-        do i = 1,n
-            counts(proj_ids(i)) = counts(proj_ids(i)) + 1
-        end do
-        offsets(1) = 1
-        do p = 1,nproj
-            offsets(p+1) = offsets(p) + counts(p)
-        end do
-        cursor = offsets(1:nproj)
-        allocate(members(n), source=0)
-        do i = 1,n
-            p = proj_ids(i)
-            members(cursor(p)) = i
-            cursor(p) = cursor(p) + 1
-        end do
-        allocate(proj_order(nproj), angular_key(nproj))
-        allocate(nbrs(k_used,n), source=0)
-        allocate(d2s(k_used,n), kth_d2(n), source=0.)
-        allocate(ncandidates(n), source=0)
-        d2s = huge(1.)
-        do p = 1,nproj
-            if( counts(p) == 0 ) cycle
-            do q = 1,nproj
-                proj_order(q) = q
-                dotdir = max(-1., min(1., dot_product(proj_dirs(:,p), proj_dirs(:,q))))
-                angular_key(q) = 1. - dotdir
-            end do
-            call hpsort(angular_key, proj_order)
-            do pos = offsets(p), offsets(p+1)-1
-                i = members(pos)
-                nseen = 0
-                direction_loop: do m = 1,nproj
-                    q = proj_order(m)
-                    if( counts(q) == 0 ) cycle
-                    do k = offsets(q), offsets(q+1)-1
-                        j = members(k)
-                        if( j == i ) cycle
-                        d2 = 0._dp
-                        do f = 1,ndim
-                            d2 = d2 + real(features(f,i)-features(f,j),dp)**2
-                        end do
-                        call insert_neighbor(j, real(d2), nbrs(:,i), d2s(:,i))
-                        nseen = nseen + 1
-                        if( nseen >= cap_used ) exit direction_loop
-                    end do
-                end do direction_loop
-                ncandidates(i) = nseen
-            end do
-        end do
-        do i = 1,n
-            if( nbrs(k_used,i) < 1 ) THROW_HARD('too few angular candidates for requested flex k_nn')
-        end do
-        kth_d2 = d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc_gated', 'none', graph)
+        k_used=min(max(1,k_nn),n-1); cap_used=min(max(k_used,nang_nbrs),n-1)
+        allocate(rows(n)); rows=[(i,i=1,n)]
+        call find_gated_euclidean_neighbors_rows(features,proj_ids,proj_dirs,k_used,cap_used,rows,nbrs,d2s,ncandidates)
+        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph)
         if( present(ncandidates_min)  ) ncandidates_min  = minval(ncandidates)
         if( present(ncandidates_max)  ) ncandidates_max  = maxval(ncandidates)
         if( present(ncandidates_mean) ) ncandidates_mean = real(sum(int(ncandidates,kind=8)),kind=sp) / real(n,kind=sp)
-        deallocate(counts, offsets, cursor, members, proj_order, angular_key, nbrs, d2s, kth_d2, ncandidates)
+        deallocate(rows,nbrs,d2s,ncandidates)
     end subroutine build_gated_euclidean_knn_graph
+
+    subroutine find_gated_euclidean_neighbors_rows( features, proj_ids, proj_dirs, k_nn, nang_nbrs, rows, &
+        &nbrs, d2s, ncandidates )
+        real, intent(in) :: features(:,:),proj_dirs(:,:)
+        integer, intent(in) :: proj_ids(:),k_nn,nang_nbrs,rows(:)
+        integer, allocatable, intent(out) :: nbrs(:,:),ncandidates(:)
+        real, allocatable, intent(out) :: d2s(:,:)
+        integer, allocatable :: counts(:),offsets(:),cursor(:),members(:)
+        integer, allocatable :: row_counts(:),row_offsets(:),row_cursor(:),row_members(:)
+        real(dp) :: d2
+        real :: dotdir
+        integer :: n,ndim,nproj,k_used,cap_used,ir,i,j,k,m,p,q,f,nseen,pos
+        n=size(features,2); ndim=size(features,1); nproj=size(proj_dirs,2)
+        if( n<2 .or. ndim<1 .or. size(proj_ids)/=n ) THROW_HARD('invalid distributed gated graph inputs')
+        if( any(rows<1).or.any(rows>n) ) THROW_HARD('gated graph row assignment outside feature table')
+        if( any(proj_ids<1).or.any(proj_ids>nproj) ) THROW_HARD('projection id outside direction table')
+        k_used=min(max(1,k_nn),n-1); cap_used=min(max(k_used,nang_nbrs),n-1)
+        allocate(counts(nproj),offsets(nproj+1),cursor(nproj),source=0)
+        do i=1,n; counts(proj_ids(i))=counts(proj_ids(i))+1; end do
+        offsets(1)=1
+        do p=1,nproj; offsets(p+1)=offsets(p)+counts(p); end do
+        cursor=offsets(1:nproj); allocate(members(n),source=0)
+        do i=1,n
+            p=proj_ids(i); members(cursor(p))=i; cursor(p)=cursor(p)+1
+        end do
+        allocate(row_counts(nproj),row_offsets(nproj+1),row_cursor(nproj),source=0)
+        do ir=1,size(rows); row_counts(proj_ids(rows(ir)))=row_counts(proj_ids(rows(ir)))+1; end do
+        row_offsets(1)=1
+        do p=1,nproj; row_offsets(p+1)=row_offsets(p)+row_counts(p); end do
+        row_cursor=row_offsets(1:nproj); allocate(row_members(size(rows)),source=0)
+        do ir=1,size(rows)
+            p=proj_ids(rows(ir)); row_members(row_cursor(p))=ir; row_cursor(p)=row_cursor(p)+1
+        end do
+        allocate(nbrs(k_used,size(rows)),source=0)
+        allocate(d2s(k_used,size(rows)),source=huge(1.))
+        allocate(ncandidates(size(rows)),source=0)
+        !$omp parallel do default(shared) private(q,dotdir,pos,ir,i,nseen,m,k,j,d2,f) schedule(dynamic)
+        do p=1,nproj
+            block
+                integer :: proj_order(nproj)
+                real :: angular_key(nproj)
+                if( row_counts(p)==0 ) cycle
+                proj_order=[(q,q=1,nproj)]
+                do q=1,nproj
+                    dotdir=max(-1.,min(1.,dot_product(proj_dirs(:,p),proj_dirs(:,q))))
+                    angular_key(q)=1.-dotdir
+                end do
+                call hpsort(angular_key,proj_order)
+                do pos=row_offsets(p),row_offsets(p+1)-1
+                    ir=row_members(pos); i=rows(ir); nseen=0
+                    direction_loop: do m=1,nproj
+                        q=proj_order(m)
+                        if( counts(q)==0 ) cycle
+                        do k=offsets(q),offsets(q+1)-1
+                            j=members(k)
+                            if( j==i ) cycle
+                            d2=0._dp
+                            do f=1,ndim
+                                d2=d2+real(features(f,i)-features(f,j),dp)**2
+                            end do
+                            call insert_neighbor(j,real(d2),nbrs(:,ir),d2s(:,ir))
+                            nseen=nseen+1
+                            if( nseen>=cap_used ) exit direction_loop
+                        end do
+                    end do direction_loop
+                    ncandidates(ir)=nseen
+                end do
+            end block
+        end do
+        !$omp end parallel do
+        if( any(nbrs(k_used,:)<1) ) THROW_HARD('too few angular candidates for requested flex k_nn')
+        deallocate(counts,offsets,cursor,members,row_counts,row_offsets,row_cursor,row_members)
+    end subroutine find_gated_euclidean_neighbors_rows
+
+    subroutine build_gated_euclidean_graph_from_neighbors( n, nbrs, d2s, ncandidates, graph )
+        integer, intent(in) :: n,nbrs(:,:),ncandidates(:)
+        real, intent(in) :: d2s(:,:)
+        type(diffmap_graph), intent(out) :: graph
+        real, allocatable :: kth_d2(:)
+        if( n<2 .or. size(nbrs,2)/=n .or. any(shape(d2s)/=shape(nbrs)) ) &
+            &THROW_HARD('invalid gated neighbor table assembly')
+        if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
+        allocate(kth_d2(n),source=d2s(size(d2s,1),:))
+        call pack_scalar_knn_to_csr(n,size(nbrs,1),nbrs,d2s,kth_d2,'euc_gated','none',graph)
+        deallocate(kth_d2)
+    end subroutine build_gated_euclidean_graph_from_neighbors
 
     subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, algninfo )
         type(parameters),      intent(in)    :: params

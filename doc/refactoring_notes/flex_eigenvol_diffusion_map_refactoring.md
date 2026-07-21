@@ -151,7 +151,7 @@ median candidate count, and the number of particles that reached the cap.
 The first implementation uses the following computational cap:
 
 ```text
-nang_nbrs = 1000
+nang_nbrs = 100
 ```
 
 Here `nang_nbrs` means the maximum number of candidate **particles** considered
@@ -162,7 +162,7 @@ does not mean 1,000 retained graph edges. The final graph default remains:
 k_nn = 10
 ```
 
-For the first release, `nang_nbrs=1000` is a hard per-particle candidate cap
+For the first release, `nang_nbrs=100` is a hard per-particle candidate cap
 applied after the resolution-derived angular cutoff. It is also a normal public
 UI parameter so larger or smaller data sets can change the computational bound
 without changing code. The implementation must report how often the cap is
@@ -874,7 +874,7 @@ Proposed public parameters are:
 | --- | --- | ---: |
 | `neigs` | maximum reconstructed diffusion modes | 20, hard maximum 20 |
 | `k_nn` | retained particle neighbors in sparse graph | 10 |
-| `nang_nbrs` | maximum angularly gated candidate particles per particle | 1000 |
+| `nang_nbrs` | maximum angularly gated candidate particles per particle | 100 |
 | `lp` | common graph-feature and mode-reconstruction low-pass limit | existing flex default |
 | `mskdiam` | particle/model support used during feature construction | existing project convention |
 | `nparts`, `nthr` | execution controls only | existing conventions |
@@ -946,7 +946,7 @@ final output summary. The intended shape is:
 
 ```text
 FLEX_EIGENVOL DIFFUSION MAP
-particles=... projections=... lp=... k_nn=10 nang_nbrs=1000 max_modes=20
+particles=... projections=... lp=... k_nn=10 nang_nbrs=100 max_modes=20
 [1/6] reprojections and particle registration ... done (... s)
 [2/6] residual features                    ... done (... s)
 [3/6] sparse graph                         ... done (... s)
@@ -1224,7 +1224,7 @@ retained modes must be distinguished from posterior uncertainty.
 
 ## 18. Resolved implementation decisions
 
-1. `nang_nbrs` is a public typed UI parameter with an initial default of 1000.
+1. `nang_nbrs` is a public typed UI parameter with an initial default of 100.
    For the first implementation it is a hard per-particle candidate cap applied
    after the resolution-derived angular cutoff. Cap-hit statistics are
    reported so this policy can be revisited with evidence.

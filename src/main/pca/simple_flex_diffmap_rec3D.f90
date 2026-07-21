@@ -14,9 +14,10 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: reconstruct_flex_diffmap_modes, write_flex_diffmap_rec_part, reduce_flex_diffmap_rec_parts
+public :: reconstruct_flex_diffmap_modes, write_flex_diffmap_rec_parts, reduce_flex_diffmap_rec_parts
+public :: cleanup_flex_diffmap_rec_parts
 
-integer, parameter :: FLEX_REC_MAGIC=1180061701, FLEX_REC_VERSION=1
+integer, parameter :: FLEX_REC_MODE_BLOCK_MAX=4
 
 contains
 
@@ -26,80 +27,119 @@ contains
         integer,           intent(in)    :: pinds(:), nmodes
         real,              intent(in)    :: coords(:,:)
         type(reconstructor), allocatable :: mode_recs(:)
-        integer :: q
-        call accumulate_flex_modes(params,build,pinds,coords,nmodes,1,size(pinds),mode_recs)
-        do q = 1,nmodes
-            call finalize_mode(params, mode_recs(q))
-            call write_mode(params, mode_recs(q), q)
-            call mode_recs(q)%dealloc_rho
-            call mode_recs(q)%kill
+        integer :: q,qfirst,qlast,nblock,blocksz
+        blocksz=reconstruction_block_size(params,build,nmodes)
+        do qfirst=1,nmodes,blocksz
+            qlast=min(nmodes,qfirst+blocksz-1)
+            nblock=qlast-qfirst+1
+            call accumulate_flex_modes(params,build,pinds,coords(:,qfirst:qlast),nblock,1,size(pinds),mode_recs)
+            do q=1,nblock
+                call finalize_mode(params, mode_recs(q))
+                call write_mode(params, mode_recs(q), qfirst+q-1)
+                call mode_recs(q)%dealloc_rho
+                call mode_recs(q)%kill
+            end do
+            deallocate(mode_recs)
         end do
-        deallocate(mode_recs)
     end subroutine reconstruct_flex_diffmap_modes
 
-    subroutine write_flex_diffmap_rec_part( params, build, pinds, coords, nmodes, partlims, fname )
+    subroutine write_flex_diffmap_rec_parts( params, build, pinds, coords, nmodes, part )
         class(parameters), intent(inout) :: params
         class(builder), intent(inout) :: build
-        integer, intent(in) :: pinds(:),nmodes,partlims(2)
+        integer, intent(in) :: pinds(:),nmodes,part
         real, intent(in) :: coords(:,:)
-        class(string), intent(in) :: fname
         type(reconstructor), allocatable :: recs(:)
-        integer :: u,ios,q,header(10),lb(3),ub(3)
-        call accumulate_flex_modes(params,build,pinds,coords,nmodes,partlims(1),partlims(2),recs)
-        lb=lbound(recs(1)%cmat_exp); ub=ubound(recs(1)%cmat_exp)
-        header=[FLEX_REC_MAGIC,FLEX_REC_VERSION,nmodes,lb,ub,partlims(1)]
-        call del_file(fname)
-        call fopen(u,file=fname,access='STREAM',status='REPLACE',action='WRITE',iostat=ios)
-        call fileiochk('open flex reconstruction part',ios)
-        write(u,iostat=ios) header
-        call fileiochk('write flex reconstruction header',ios)
-        do q=1,nmodes
-            write(u,iostat=ios) recs(q)%cmat_exp,recs(q)%rho_exp
-            call fileiochk('write flex reconstruction statistics',ios)
-            call recs(q)%dealloc_rho; call recs(q)%kill
+        type(string) :: vol_fname, rho_fname
+        integer :: q,qfirst,qlast,nblock,blocksz
+        if( size(pinds)<1 .or. part<1 ) THROW_HARD('invalid flex reconstruction worker assignment')
+        blocksz=reconstruction_block_size(params,build,nmodes)
+        do qfirst=1,nmodes,blocksz
+            qlast=min(nmodes,qfirst+blocksz-1)
+            nblock=qlast-qfirst+1
+            call accumulate_flex_modes(params,build,pinds,coords(:,qfirst:qlast),nblock,1,size(pinds),recs)
+            do q=1,nblock
+                call recs(q)%compress_exp
+                call flex_part_fnames(qfirst+q-1,part,params%numlen,vol_fname,rho_fname)
+                call recs(q)%write(vol_fname,del_if_exists=.true.)
+                call recs(q)%write_rho(rho_fname)
+                call recs(q)%dealloc_rho; call recs(q)%kill
+                call vol_fname%kill; call rho_fname%kill
+            end do
+            deallocate(recs)
         end do
-        call fclose(u)
-        deallocate(recs)
-    end subroutine write_flex_diffmap_rec_part
+    end subroutine write_flex_diffmap_rec_parts
 
-    subroutine reduce_flex_diffmap_rec_parts( params, build, fnames, nmodes )
+    subroutine reduce_flex_diffmap_rec_parts( params, build, nparts, nmodes )
         class(parameters), intent(inout) :: params
         class(builder), intent(inout) :: build
-        type(string), intent(in) :: fnames(:)
-        integer, intent(in) :: nmodes
+        integer, intent(in) :: nparts, nmodes
         type(reconstructor), allocatable :: recs(:)
-        complex, allocatable :: ctmp(:,:,:)
-        real, allocatable :: rtmp(:,:,:)
-        integer :: u,ios,q,ipart,header(10),lb(3),ub(3)
-        allocate(recs(nmodes))
-        do q=1,nmodes; call init_mode(params,build,recs(q)); end do
-        lb=lbound(recs(1)%cmat_exp); ub=ubound(recs(1)%cmat_exp)
-        allocate(ctmp(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
-        allocate(rtmp(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
-        do ipart=1,size(fnames)
-            call fopen(u,file=fnames(ipart),access='STREAM',status='OLD',action='READ',iostat=ios)
-            call fileiochk('open flex reconstruction part for reduction',ios)
-            read(u,iostat=ios) header
-            call fileiochk('read flex reconstruction header',ios)
-            if( header(1)/=FLEX_REC_MAGIC .or. header(2)/=FLEX_REC_VERSION .or. header(3)/=nmodes )then
-                THROW_HARD('incompatible flex reconstruction part')
-            endif
-            if( any(header(4:6)/=lb) .or. any(header(7:9)/=ub) ) THROW_HARD('flex reconstruction part bounds mismatch')
-            do q=1,nmodes
-                read(u,iostat=ios) ctmp,rtmp
-                call fileiochk('read flex reconstruction statistics',ios)
-                recs(q)%cmat_exp=recs(q)%cmat_exp+ctmp
-                recs(q)%rho_exp=recs(q)%rho_exp+rtmp
+        type(reconstructor) :: rec_read
+        type(string) :: vol_fname, rho_fname
+        integer :: q,iq,qfirst,qlast,nblock,blocksz,ipart
+        if( nparts<1 .or. nmodes<1 ) THROW_HARD('invalid distributed flex reconstruction reduction')
+        blocksz=reconstruction_block_size(params,build,nmodes)
+        do qfirst=1,nmodes,blocksz
+            qlast=min(nmodes,qfirst+blocksz-1)
+            nblock=qlast-qfirst+1
+            allocate(recs(nblock))
+            do q=1,nblock; call init_reduced_mode(params,build,recs(q)); end do
+            call init_reduced_mode(params,build,rec_read)
+            do ipart=1,nparts
+                do iq=qfirst,qlast
+                    call flex_part_fnames(iq,ipart,params%numlen,vol_fname,rho_fname)
+                    if( .not.file_exists(vol_fname) .or. .not.file_exists(rho_fname) )then
+                        THROW_HARD('missing flex reconstruction volume/rho partial')
+                    endif
+                    call rec_read%read(vol_fname)
+                    call rec_read%read_rho(rho_fname)
+                    q=iq-qfirst+1
+                    call recs(q)%sum_reduce(rec_read)
+                    call vol_fname%kill; call rho_fname%kill
+                end do
             end do
-            call fclose(u)
+            call rec_read%dealloc_rho; call rec_read%kill
+            do q=1,nblock
+                call finalize_mode(params,recs(q)); call write_mode(params,recs(q),qfirst+q-1)
+                call recs(q)%dealloc_rho; call recs(q)%kill
+            end do
+            deallocate(recs)
         end do
-        deallocate(ctmp,rtmp)
-        do q=1,nmodes
-            call finalize_mode(params,recs(q)); call write_mode(params,recs(q),q)
-            call recs(q)%dealloc_rho; call recs(q)%kill
-        end do
-        deallocate(recs)
     end subroutine reduce_flex_diffmap_rec_parts
+
+    subroutine cleanup_flex_diffmap_rec_parts( nparts, nmodes, numlen )
+        integer, intent(in) :: nparts,nmodes,numlen
+        type(string) :: vol_fname,rho_fname
+        integer :: ipart,q
+        do ipart=1,nparts
+            do q=1,nmodes
+                call flex_part_fnames(q,ipart,numlen,vol_fname,rho_fname)
+                call del_file(vol_fname); call del_file(rho_fname)
+                call vol_fname%kill; call rho_fname%kill
+            end do
+        end do
+    end subroutine cleanup_flex_diffmap_rec_parts
+
+    integer function reconstruction_block_size( params, build, nmodes, lb, ub ) result(blocksz)
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nmodes
+        integer, optional, intent(out)   :: lb(3),ub(3)
+        type(reconstructor) :: probe
+        integer(kind=8) :: bytes_per_mode
+        call init_mode(params,build,probe)
+        if( present(lb) ) lb=lbound(probe%cmat_exp)
+        if( present(ub) ) ub=ubound(probe%cmat_exp)
+        bytes_per_mode=int(size(probe%cmat_exp),8)*int(storage_size(probe%cmat_exp)/8,8) &
+            &+int(size(probe%rho_exp),8)*int(storage_size(probe%rho_exp)/8,8)
+        call probe%dealloc_rho
+        call probe%kill
+        blocksz=min(nmodes,FLEX_REC_MODE_BLOCK_MAX)
+        write(logfhandle,'(A,I0,A,F10.1,A,F10.1)') '>>> FLEX DIFFMAP reconstruction_mode_block=',blocksz, &
+            &' per_mode_MiB=',real(bytes_per_mode,dp)/(1024._dp**2), &
+            &' modes_plus_mean_MiB=',real(blocksz+1,dp)*real(bytes_per_mode,dp)/(1024._dp**2)
+        call flush(logfhandle)
+    end function reconstruction_block_size
 
     subroutine accumulate_flex_modes( params, build, pinds, coords, nmodes, first, last, mode_recs )
         class(parameters), intent(inout) :: params
@@ -158,6 +198,15 @@ contains
         call rec%reset_exp
     end subroutine init_mode
 
+    subroutine init_reduced_mode( params, build, rec )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        type(reconstructor), intent(inout) :: rec
+        call rec%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call rec%alloc_rho(params, build%spproj, expand=.false.)
+        call rec%reset
+    end subroutine init_reduced_mode
+
     subroutine read_particles( params, build, nptcls, pinds, lims, batchsz )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -209,7 +258,7 @@ contains
     subroutine finalize_mode( params, rec )
         class(parameters), intent(in)    :: params
         type(reconstructor), intent(inout) :: rec
-        call rec%compress_exp
+        if( allocated(rec%cmat_exp) ) call rec%compress_exp
         call rec%sampl_dens_correct
         call rec%ifft
         call rec%div(real(params%box))
@@ -244,6 +293,13 @@ contains
         call prefix%kill
         call ext%kill
     end subroutine write_mode
+
+    subroutine flex_part_fnames( mode, part, numlen, vol_fname, rho_fname )
+        integer, intent(in) :: mode,part,numlen
+        type(string), intent(out) :: vol_fname,rho_fname
+        vol_fname = string('flex_diffmap_mode_')//int2str_pad(mode,3)//'_part'//int2str_pad(part,numlen)//MRC_EXT
+        rho_fname = string('rho_')//vol_fname
+    end subroutine flex_part_fnames
 
     subroutine cleanup_plane( fpl )
         type(fplane_type), intent(inout) :: fpl

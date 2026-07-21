@@ -210,7 +210,7 @@ contains
         type(commander_prob_align_neigh)        :: xprob_align_neigh
         type(commander_prob_tab2D)              :: xprob_tab2D
         type(commander_prob_align2D)            :: xprob_align2D
-        type(commander_flex_eigenvol_reconstruct) :: xflex_eigenvol_reconstruct
+        type(commander_flex_eigenvol)             :: xflex_eigenvol
         ! RECONSTRUCTION PROGRAMS
         type(commander_volassemble)             :: xvolassemble
         type(commander_rec3D_worker)            :: xrec3D
@@ -315,8 +315,8 @@ contains
                 call xprob_tab2D%execute(cline)
             case( 'prob_align2D' )
                 call xprob_align2D%execute(cline)
-            case( 'flex_eigenvol_reconstruct' )
-                call xflex_eigenvol_reconstruct%execute(cline)
+            case( 'flex_eigenvol' )
+                call xflex_eigenvol%execute(cline)
             ! RECONSTRUCTION PROGRAMS
             case( 'reconstruct3D' )
                 call xrec3D%execute(cline)

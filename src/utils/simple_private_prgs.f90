@@ -764,23 +764,7 @@ contains
         ! optional keys
         call private_prgs(26)%push_opt_key('nthr')
 
-        ! FLEX_EIGENVOL_RECONSTRUCT, for Hermitian diffusion-mode statistics
-        call private_prgs(27)%set_name('flex_eigenvol_reconstruct')
-        call private_prgs(27)%push_req_key('projfile')
-        call private_prgs(27)%push_req_key('vol1')
-        call private_prgs(27)%push_req_key('infile')
-        call private_prgs(27)%push_req_key('outfile')
-        call private_prgs(27)%push_req_key('part')
-        call private_prgs(27)%push_req_key('nparts')
-        call private_prgs(27)%push_req_key('fromp')
-        call private_prgs(27)%push_req_key('top')
-        call private_prgs(27)%push_req_key('numlen')
-        call private_prgs(27)%push_opt_key('nthr')
-        call private_prgs(27)%push_opt_key('neigs')
-        call private_prgs(27)%push_opt_key('lp')
-        call private_prgs(27)%push_opt_key('outvol')
-
-        n_private_prgs = 27
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs

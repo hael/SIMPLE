@@ -2,7 +2,6 @@
 module simple_trajectory_chunker
 use simple_core_module_api
 use simple_flex_embedding_result, only: flex_embedding_result
-use simple_diff_map_denoise,        only: select_spectral_rank_icm
 use simple_srch_sort_loc,          only: hpsort
 implicit none
 
@@ -218,20 +217,11 @@ contains
         integer, intent(in) :: perm(:)
         real(dp), intent(out) :: x(:,:), weights(:,:), evidence(:)
         real(dp), allocatable :: raw_evidence(:)
-        real, allocatable :: eigvals_sp(:)
         real(dp) :: avg, var, denom
-        real :: icm_score
-        integer :: n, ncomp, i, q, row, nkeep, icm_iters
-        logical :: icm_converged
+        integer :: n, ncomp, i, q, row
         n = size(perm)
         ncomp = fit%ncomp
         allocate(raw_evidence(ncomp), source=0.d0)
-        allocate(eigvals_sp(ncomp), source=0.)
-        eigvals_sp = real(max(0.d0, fit%eigvals))
-        call select_spectral_rank_icm(eigvals_sp, ncomp, nkeep, icm_converged, icm_iters, icm_score, min_rank=1)
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,L1,A,ES12.4)') '>>> TRAJECTORY_CHUNK ICM MODES: ', nkeep, &
-            &' / ', ncomp, ' iterations=', icm_iters, ' converged=', icm_converged, ' score=', icm_score
-        call flush(logfhandle)
         do q = 1, ncomp
             avg = sum(fit%z(:,q)) / real(n,dp)
             var = sum((fit%z(:,q) - avg) ** 2) / real(max(1,n-1),dp)
@@ -242,7 +232,6 @@ contains
                 x(i,q) = (fit%z(row,q) - avg) / denom
             end do
         end do
-        if( nkeep < ncomp ) raw_evidence(nkeep+1:) = 0.d0
         if( sum(raw_evidence) <= DTINY )then
             raw_evidence(1) = 1.d0
         endif
@@ -250,7 +239,7 @@ contains
         do q = 1, ncomp
             weights(:,q) = evidence(q)
         end do
-        deallocate(raw_evidence, eigvals_sp)
+        deallocate(raw_evidence)
     end subroutine prepare_weighted_features
 
     subroutine make_boundary_bands( n, nchunks, min_len, max_len, max_shift, bound_lo, bound_hi )

@@ -6,7 +6,7 @@ use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
-use simple_flex_eigenvol_strategy, only: run_flex_eigenvol_diffmap
+use simple_flex_eigenvol_strategy, only: fit_flex_eigenvol_embedding
 use simple_flex_embedding_result, only: flex_embedding_result
 use simple_trajectory_chunker, only: trajectory_chunk_plan, make_trajectory_chunk_plan, &
     &select_trajectory_chunk_plan, trajectory_chunks_to_parts, write_trajectory_chunks_csv
@@ -340,7 +340,7 @@ contains
                 if( .not. cline%defined('vol1') ) THROW_HARD('trajectory_reconstruct3D chunk_mode=latent requires vol1=<mean map>')
                 if( .not. cline%defined('neigs')   ) call cline%set('neigs',  20)
                 if( .not. cline%defined('k_nn')    ) call cline%set('k_nn',    10)
-                if( .not. cline%defined('nang_nbrs')) call cline%set('nang_nbrs',1000)
+                if( .not. cline%defined('nang_nbrs')) call cline%set('nang_nbrs',100)
                 if( .not. cline%defined('lp')      ) call cline%set('lp',      8.0)
                 if( .not. cline%defined('outvol')  ) call cline%set('outvol', 'trajectory_chunk_flex_001.mrc')
                 if( .not. cline%defined('nstates') ) call cline%set('nstates', 1)
@@ -375,7 +375,7 @@ contains
                 nchunks_eff = max(1, nint(real(nptcls) / real(max(1,params%stepsz))))
             endif
             call chunk_build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            call run_flex_eigenvol_diffmap(params, chunk_build, cline, latent_fit)
+            call fit_flex_eigenvol_embedding(params, chunk_build, cline, latent_fit)
             allocate(frame_inds(latent_fit%nptcls), source=0)
             do i = 1, latent_fit%nptcls
                 frame_inds(i) = nint(spproj%os_ptcl3D%get(latent_fit%pinds(i), 'pind'))
