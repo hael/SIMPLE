@@ -143,9 +143,9 @@ contains
                 else
                     bfac = params%bfac+bfacerr
                 endif
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
-            else
                 call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
+            else
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
             endif
             ! clip
             call build%img_pad%clip(build%img)
