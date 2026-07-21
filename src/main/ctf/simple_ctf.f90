@@ -34,6 +34,7 @@ type ctf
     procedure, private :: evalPhSh
     procedure, private :: eval_1, eval_2, eval_3, eval_4
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
+    procedure          :: eval_canonical
     procedure, private :: eval_sign
     procedure, private :: eval_df
     procedure          :: nextrema
@@ -101,13 +102,13 @@ contains
         class(ctf), intent(in) :: self        !< instance
         real,       intent(in) :: spaFreqSq   !< square of spatial frequency at which to compute the ctf (1/pixels^2)
         real,       intent(in) :: ang         !< angle at which to compute the ctf (radians)
-        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,       intent(in) :: add_phshift !< additive CTF phase shift (canonical radians)
         real :: df                            !< defocus at point at which we're evaluating the ctf
         !! compute the defocus
         df = self%eval_df(ang)
         !! compute the ctf argument
         evalPhSh = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) &
-            &+ canonical_phshift(add_phshift)
+            &+ add_phshift
     end function evalPhSh
 
     !>  \brief Returns the CTF, based on CTFFIND4 subroutine (Rohou & Grigorieff (2015))
@@ -149,11 +150,11 @@ contains
         real,       intent(in)    :: dfy         !< Defocus along second axis (for astigmatic CTF, dfx .ne. dfy) (micrometers)
         real,       intent(in)    :: angast      !< Azimuth of first axis. 0.0 means axis is at 3 o'clock. (radians)
         real,       intent(in)    :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,       intent(in)    :: add_phshift !< additive CTF phase shift (radians)
         ! initialize the CTF object, using the input parameters
         call self%init(dfx, dfy, angast)
         ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
-        eval_2 = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
+        eval_2 = sin( self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const )
     end function eval_2
 
     !>  \brief Returns the CTF with pre-initialize parameters
@@ -170,20 +171,30 @@ contains
         class(ctf), intent(in) :: self        !< instance
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,       intent(in) :: add_phshift !< additive CTF phase shift (radians)
         ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
-        eval_4 = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
+        eval_4 = sin( self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const )
     end function eval_4
+
+    !> Returns the CTF for a phase already canonicalized to [0,pi).
+    !! Use this in verified pixel loops to avoid repeated modulo operations.
+    elemental real function eval_canonical( self, spaFreqSq, ang, add_phshift )
+        class(ctf), intent(in) :: self        !< instance
+        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
+        real,       intent(in) :: ang         !< angle at which to compute the CTF (radians)
+        real,       intent(in) :: add_phshift !< additive CTF phase shift (canonical radians)
+        eval_canonical = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
+    end function eval_canonical
 
     !>  \brief Returns the sign of the CTF with pre-initialize parameters
     elemental integer function eval_sign( self, spaFreqSq, ang, add_phshift )
         class(ctf), intent(in) :: self        !< instance
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,       intent(in) :: add_phshift !< additive CTF phase shift (radians)
         real :: angle
         ! compute phase shift + amplitude constrast term, no need to evaluate the sine to workout the sign
-        angle = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
+        angle = self%evalPhSh(spaFreqSq, ang, canonical_phshift(add_phshift)) + self%amp_contr_const
         do while( angle > TWOPI )
             angle = angle - TWOPI
         enddo
@@ -206,8 +217,10 @@ contains
         class(ctf), intent(in) :: self
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians) )
-        real,       intent(in) :: phshift     !< aditional phase shift (radians), for phase plate
+        real,       intent(in) :: phshift     !< additive CTF phase shift (radians)
         real :: nextrema_before_chi_extremum, chi_extremem_spafreqsq, df, rn
+        real :: canonical_phase
+        canonical_phase = canonical_phshift(phshift)
         ! spatial frequency of the phase aberration extremum
         if( self%cs < 0.0001 )then
             chi_extremem_spafreqsq = 9999.9999;
@@ -217,10 +230,10 @@ contains
         endif
         ! extrema
         if( spaFreqSq <= chi_extremem_spafreqsq )then
-            rn = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5))
+            rn = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5))
         else
-            nextrema_before_chi_extremum = floor( 1. / PI * (self%evalPhSh(chi_extremem_spafreqsq, ang, phshift)+self%amp_contr_const) + 0.5)
-            rn = floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5)
+            nextrema_before_chi_extremum = floor( 1. / PI * (self%evalPhSh(chi_extremem_spafreqsq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
+            rn = floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
             rn = nextrema_before_chi_extremum + abs(rn-nextrema_before_chi_extremum)
         endif
         nextrema = nint(abs(rn))
@@ -230,13 +243,13 @@ contains
     real function SpaFreqSqAtNthZero( self, nzero, add_phshift, ang )
         class(ctf), intent(in)  :: self
         integer,    intent(in)  :: nzero
-        real,       intent(in)  :: add_phshift
+        real,       intent(in)  :: add_phshift !< additive CTF phase shift (radians)
         real,       intent(in)  :: ang
         real :: phshift, A, B, C, determinant, one,two
         phshift = real(nzero) * PI
         A = -0.5 * PI * self%wl**3. * self%cs
         B = PI * self%wl * self%eval_df(ang)
-        C = self%amp_contr_const + add_phshift
+        C = self%amp_contr_const + canonical_phshift(add_phshift)
         determinant = B**2. - 4.*A*(C-phshift)
         if( abs(self%cs) < 0.0001 )then
             SpaFreqSqAtNthZero = (phshift-C) / B

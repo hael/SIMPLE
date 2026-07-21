@@ -36,6 +36,9 @@ call assert_real(PI/4., ctfvals%phshift, TOL, &
 call assert_real(tfun%eval(spa_freq_sq, ang, PI/4.), &
     &tfun%eval(spa_freq_sq, ang, PI + PI/4.), TOL, &
     &'scalar CTF evaluation consumes the canonical phase')
+call assert_real(tfun%eval(spa_freq_sq, ang, PI/4.), &
+    &tfun%eval_canonical(spa_freq_sq, ang, PI/4.), TOL, &
+    &'canonical-input fast evaluator agrees with the defensive scalar API')
 
 ! The image-layer fast kernel must agree with the scalar CTF for conventional,
 ! intermediate, and near-quadrature phase shifts.

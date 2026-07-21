@@ -87,7 +87,7 @@ contains
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, &
-            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_DEG2RAD)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfMaxResolution", splflag="ctfres")]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splIceFrac", splflag="icefrac")]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
@@ -115,7 +115,7 @@ contains
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, &
-            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_DEG2RAD)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
@@ -138,7 +138,7 @@ contains
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, &
-            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_MULT)]
+            &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_DEG2RAD)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]

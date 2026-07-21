@@ -165,15 +165,15 @@ contains
 
     ! 1D ROUTINE
 
-    real function cost1D( self, df )
+    real function cost1D( self, df, phshift )
         class(ctf_estimate_cost1D), intent(inout) :: self
         real,                       intent(in)    :: df         !< average defocus
-        real          :: ang, spaFreqSq, hinv, inv_ldim, phshift
+        real,                       intent(in)    :: phshift    !< canonical additive CTF phase shift
+        real          :: ang, spaFreqSq, hinv, inv_ldim
         real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,ctf_sum
         integer       :: h, n
         ! assumes that the 1d spectrum has zero mean and
         ! unit variance over the resolution range
-        phshift = self%parms%phshift
         call self%tfun%init(df, df, 0.)
         n          = self%reslims1d(2)-self%reslims1d(1)+1
         inv_ldim   = 1./real(self%ldim(1))
@@ -186,7 +186,7 @@ contains
             hinv      = real(h) * inv_ldim
             spaFreqSq = hinv * hinv
             ang       = atan2(0.,real(h))
-            tval      = real(self%tfun%eval(spaFreqSq, 0., phshift),dp)
+            tval      = real(self%tfun%eval_canonical(spaFreqSq, 0., phshift),dp)
             tvalsq    = min(1.d0,max(tval*tval,DSMALL))
             tval      = dsqrt(tvalsq)
             ! correlation sums
@@ -314,7 +314,7 @@ contains
             kinv      = real(k) * inv_ldim(2)
             spaFreqSq = hinv * hinv + kinv * kinv
             ang       = atan2(real(k),real(h))
-            tval      = real(self%tfun%eval(spaFreqSq, ang, phshift),dp)
+            tval      = real(self%tfun%eval_canonical(spaFreqSq, ang, phshift),dp)
             tvalsq    = min(1.d0,max(tval*tval,0.000001d0))
             tval      = dsqrt(tvalsq)
             ! correlation sums

@@ -126,9 +126,19 @@ contains
         self%parms%fraca        = parms%fraca
         self%parms%phshift      = canonical_phshift(parms%phshift)
         self%parms%l_fit_phshift= parms%l_fit_phshift
+        if( phshift_lims(1) < 0. .or. phshift_lims(1) >= PI )then
+            THROW_HARD('Phase-shift minimum must be in [0,pi); new')
+        endif
+        if( phshift_lims(2) < 0. .or. phshift_lims(2) > PI )then
+            THROW_HARD('Phase-shift maximum must be in [0,pi]; new')
+        endif
         if( phshift_lims(1) > phshift_lims(2) ) THROW_HARD('Invalid phase-shift range; new')
         if( phshift_step <= 0. ) THROW_HARD('Phase-shift step must be positive; new')
         self%phshift_lims = phshift_lims
+        ! PI is equivalent to zero for power-spectrum fitting and is not part
+        ! of the canonical interval. Keep the UI's 180-degree upper bound but
+        ! make the optimizer's numerical interval strictly half-open.
+        if( self%phshift_lims(2) >= PI ) self%phshift_lims(2) = nearest(PI, -1.)
         self%phshift_step = phshift_step
         self%micrograph => micrograph
         call self%micrograph%ifft
@@ -694,37 +704,34 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost1D) :: ctfcosts(NSTEPS)
         type(ctfparams)           :: ctf_parms(NBINS)
-        real                      :: dfs(NSTEPS), costs(NSTEPS), phase_costs(NSTEPS), &
-            &best_phases(NSTEPS), cc_fine(NBINS), df_best, phase
+        real                      :: dfs(NSTEPS), costs(NSTEPS), best_phases(NSTEPS), &
+            &cc_fine(NBINS), df_best, phase, phase_cost
         integer                   :: i, loc, start, end, step, cnt, iph, nphases
         ! no astigmatism
         costs       = huge(1.)
         best_phases = self%parms%phshift
         nphases     = 1
         if( self%parms%l_fit_phshift )then
-            nphases = max(1, ceiling((self%phshift_lims(2)-self%phshift_lims(1))/self%phshift_step)+1)
+            nphases = max(1, floor((self%phshift_lims(2)-self%phshift_lims(1))/self%phshift_step)+1)
         endif
-        do iph = 1,nphases
-            phase = self%parms%phshift
-            if( self%parms%l_fit_phshift ) phase = min(self%phshift_lims(2), &
-                &self%phshift_lims(1)+real(iph-1)*self%phshift_step)
-            self%parms%phshift = phase
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-            do i = 1,NSTEPS
-                call ctfcosts(i)%init(self%pspec, self%flims1d, self%freslims1d,&
-                    &self%roavg_spec1d, self%parms, self%resmsk1D)
-                dfs(i)         = self%df_lims(1) + real(i-1)*self%df_step
-                phase_costs(i) = ctfcosts(i)%cost(dfs(i))
-                call ctfcosts(i)%kill
-            enddo
-            !$omp end parallel do
-            do i = 1,NSTEPS
-                if( phase_costs(i) < costs(i) )then
-                    costs(i)       = phase_costs(i)
+        !$omp parallel do default(shared) private(i,iph,phase,phase_cost) schedule(static) proc_bind(close)
+        do i = 1,NSTEPS
+            call ctfcosts(i)%init(self%pspec, self%flims1d, self%freslims1d,&
+                &self%roavg_spec1d, self%parms, self%resmsk1D)
+            dfs(i) = self%df_lims(1) + real(i-1)*self%df_step
+            do iph = 1,nphases
+                phase = self%parms%phshift
+                if( self%parms%l_fit_phshift ) phase = min(self%phshift_lims(2), &
+                    &self%phshift_lims(1)+real(iph-1)*self%phshift_step)
+                phase_cost = ctfcosts(i)%cost(dfs(i), phase)
+                if( phase_cost < costs(i) )then
+                    costs(i)       = phase_cost
                     best_phases(i) = phase
                 endif
             enddo
+            call ctfcosts(i)%kill
         enddo
+        !$omp end parallel do
         ! 3/4D search over bins
         step = ceiling(real(NSTEPS)/real(NBINS))
         cnt = 0
@@ -759,7 +766,7 @@ contains
         limits(2,1) = min(self%df_lims(2),self%parms%dfx + half_range)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
         limits(:,3) = [0., 180.] ! degrees
-        limits(:,4) = self%phshift_lims ! radians
+        if( self%parms%l_fit_phshift ) limits(:,4) = self%phshift_lims ! radians
         ! good solution
         if( self%parms%l_fit_phshift )then
             call self%cost2D%init(self%pspec,self%parms,self%inds_msk,4,limits,       self%astigtol, TOL)
@@ -776,9 +783,9 @@ contains
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
         limits(1,3) = self%parms%angast - 30.       ! degrees
         limits(2,3) = self%parms%angast + 30.
-        limits(1,4) = max(self%phshift_lims(1), self%parms%phshift - max(PI/6.,self%phshift_step))
-        limits(2,4) = min(self%phshift_lims(2), self%parms%phshift + max(PI/6.,self%phshift_step))
         if( self%parms%l_fit_phshift )then
+            limits(1,4) = max(self%phshift_lims(1), self%parms%phshift - max(PI/6.,self%phshift_step))
+            limits(2,4) = min(self%phshift_lims(2), self%parms%phshift + max(PI/6.,self%phshift_step))
             call self%costcont%init(self%pspec, self%parms, self%inds_msk, 4, limits, self%astigtol)
         else
             call self%costcont%init(self%pspec, self%parms, self%inds_msk, 3, limits(:,1:3), self%astigtol)
@@ -832,7 +839,7 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: phshift !< additive phase shift (radians)
-        real    :: ang, tval, spaFreqSq, hinv, kinv, inv_ldim(3)
+        real    :: ang, tval, spaFreqSq, hinv, kinv, inv_ldim(3), canonical_phase
         integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
         ! initialize
         call self%tfun%init(dfx, dfy, angast)
@@ -842,6 +849,7 @@ contains
         mk       = abs(lims(2,1))
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
+        canonical_phase = canonical_phshift(phshift)
         !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang,tval) &
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -852,7 +860,7 @@ contains
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
-                tval      = self%tfun%eval(spaFreqSq, ang, phshift)
+                tval      = self%tfun%eval_canonical(spaFreqSq, ang, canonical_phase)
                 tval      = min(1.,max(tval * tval,SMALL))
                 call img%set([i,j,1],sqrt(tval))
             end do
@@ -975,7 +983,7 @@ contains
         do sh = 0,nshells
             spaFreq        = scale * real(sh) / real(self%box)
             spaFreqSq      = spaFreq*spaFreq
-            ctf1d(sh)      = -tfun%eval(spaFreqSq, mid_angast_rad, add_phshift=phshift)
+            ctf1d(sh)      = -tfun%eval_canonical(spaFreqSq, mid_angast_rad, phshift)
             nextrema1d(sh) = real(tfun%nextrema(spaFreqSq, mid_angast_rad, phshift))
         enddo
         ! CTF & calculate #of astigmatism extrema & 1D spectra
@@ -1202,7 +1210,7 @@ contains
                         ! # of extrema
                         nextr = real(tfun%nextrema(spaFreqSq, ang, phshift))
                         ! CTF
-                        ctf  = -tfun%eval(spaFreqSq, ang, phshift)
+                        ctf  = -tfun%eval_canonical(spaFreqSq, ang, phshift)
                         ! 1D rotational average
                         sh = get_shell(ctf, nextr)
                         if( sh > nshells ) cycle

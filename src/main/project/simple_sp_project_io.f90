@@ -828,6 +828,7 @@ contains
             call self%segreader(isegment, wthreads=wthreads)
         end do
         call self%bos%close
+        call ensure_phase_shift_fields(self)
         ! Keep the in-memory project metadata consistent with the file that was read,
         ! but do not mutate the project file as a side effect of reading it.
         call self%update_projinfo(fname)
@@ -868,6 +869,7 @@ contains
             call self%segreader(isegment, only_ctfparams_state_eo=.true.)
         end do
         call self%bos%close
+        call ensure_phase_shift_fields(self)
     end subroutine read_ctfparams_state_eo
 
     module subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads )
@@ -887,6 +889,7 @@ contains
         call self%segreader(STK_SEG, wthreads=wthreads)
         call self%segreader(PTCL2D_SEG, wthreads=wthreads)
         call self%bos%close
+        call ensure_phase_shift_fields(self)
     end subroutine read_mic_stk_ptcl2D_segments
 
     module subroutine read_segment( self, oritype, fname, fromto, wthreads )
@@ -937,6 +940,7 @@ contains
             case DEFAULT
                 THROW_HARD('file format of: '//fname%to_char()//' not supported; read_segment')
         end select
+        call ensure_phase_shift_fields(self)
     end subroutine read_segment
 
     module subroutine segreader( self, isegment, fromto, only_ctfparams_state_eo, wthreads )
@@ -1104,16 +1108,32 @@ contains
         class(sp_project), intent(inout) :: self
         integer :: i
         do i = 1,self%os_mic%get_noris()
-            if( .not.self%os_mic%isthere(i, 'phshift') ) call self%os_mic%set(i, 'phshift', 0.)
+            if( self%os_mic%isthere(i, 'phshift') )then
+                call self%os_mic%set(i, 'phshift', self%os_mic%get(i, 'phshift'))
+            else
+                call self%os_mic%set(i, 'phshift', 0.)
+            endif
         enddo
         do i = 1,self%os_stk%get_noris()
-            if( .not.self%os_stk%isthere(i, 'phshift') ) call self%os_stk%set(i, 'phshift', 0.)
+            if( self%os_stk%isthere(i, 'phshift') )then
+                call self%os_stk%set(i, 'phshift', self%os_stk%get(i, 'phshift'))
+            else
+                call self%os_stk%set(i, 'phshift', 0.)
+            endif
         enddo
         do i = 1,self%os_ptcl2D%get_noris()
-            if( .not.self%os_ptcl2D%isthere(i, 'phshift') ) call self%os_ptcl2D%set(i, 'phshift', 0.)
+            if( self%os_ptcl2D%isthere(i, 'phshift') )then
+                call self%os_ptcl2D%set(i, 'phshift', self%os_ptcl2D%get(i, 'phshift'))
+            else
+                call self%os_ptcl2D%set(i, 'phshift', 0.)
+            endif
         enddo
         do i = 1,self%os_ptcl3D%get_noris()
-            if( .not.self%os_ptcl3D%isthere(i, 'phshift') ) call self%os_ptcl3D%set(i, 'phshift', 0.)
+            if( self%os_ptcl3D%isthere(i, 'phshift') )then
+                call self%os_ptcl3D%set(i, 'phshift', self%os_ptcl3D%get(i, 'phshift'))
+            else
+                call self%os_ptcl3D%set(i, 'phshift', 0.)
+            endif
         enddo
     end subroutine ensure_phase_shift_fields
 

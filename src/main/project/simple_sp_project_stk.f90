@@ -299,7 +299,9 @@ contains
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
-        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
+        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind, os_ind
+        real      :: stack_phase, particle_phase
+        logical   :: heterogeneous_phase
         nstks = size(stkfnames)
         n_os  = os%get_noris()
         ! first pass for sanity check and determining dimensions
@@ -355,9 +357,26 @@ contains
             fromp = self%os_stk%get_top(n_os_stk) + 1
         endif
         ! parameters transfer
+        os_ind = 0
         do istk=1,nstks
             top     = fromp + nptcls_arr(istk) - 1 ! global index
             stk_ind = n_os_stk + istk
+            ! The particle rows are authoritative. A stack row records their
+            ! common phase, or zero when the stack contains mixed phases.
+            heterogeneous_phase = .false.
+            stack_phase = canonical_phshift(ctfvars%phshift)
+            do i=1,nptcls_arr(istk)
+                particle_phase = stack_phase
+                if( os%isthere(os_ind+i, 'phshift') )then
+                    particle_phase = canonical_phshift(os%get(os_ind+i, 'phshift'))
+                endif
+                if( i == 1 )then
+                    stack_phase = particle_phase
+                else if( .not.is_equal(particle_phase, stack_phase) )then
+                    heterogeneous_phase = .true.
+                endif
+            enddo
+            if( heterogeneous_phase ) stack_phase = 0.
             ! updates stk segment
             call o_stk%new(is_ptcl=.false.)
             call o_stk%set('stk',        stkfnames(istk))
@@ -373,7 +392,7 @@ contains
             call o_stk%set('cs',         ctfvars%cs)
             call o_stk%set('fraca',      ctfvars%fraca)
             call o_stk%set('state',      1.0) ! default on import
-            call o_stk%set('phshift', ctfvars%phshift)
+            call o_stk%set('phshift', stack_phase)
             select case(ctfvars%ctfflag)
                 case(CTFFLAG_NO)
                     call o_stk%set('ctf', 'no')
@@ -388,7 +407,7 @@ contains
             ! updates particles segment
             do i=1,nptcls_arr(istk)
                 pind = fromp+i-1
-                call os%get_ori(pind, o_ptcl)
+                call os%get_ori(os_ind+i, o_ptcl)
                 call o_ptcl%set_stkind(stk_ind)
                 call o_ptcl%set('pind',   pind) ! to keep track of particle indices
                 call o_ptcl%set('indstk', i)    ! physical particle index in stack
@@ -408,6 +427,7 @@ contains
                 call self%os_ptcl2D%set_ori(pind, o_ptcl)
                 call self%os_ptcl3D%set_ori(pind, o_ptcl)
             enddo
+            os_ind = os_ind + nptcls_arr(istk)
             ! update
             fromp = top + 1 ! global index
         enddo

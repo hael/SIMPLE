@@ -618,7 +618,7 @@ subroutine set_ui_params
                                    'in degrees{0}', .false., 0.)
 
     call phshift_max%set_param(    'phshift_max',     'num', 'Maximum CTF phase shift', &
-                                   'Maximum fitted additive phase shift in degrees{180}', &
+                                   'Maximum fitted additive phase shift in degrees; 180 is the exclusive pi boundary{180}', &
                                    'in degrees{180}', .false., 180.)
 
     call phshift_step%set_param(   'phshift_step',    'num', 'CTF phase-shift step', &

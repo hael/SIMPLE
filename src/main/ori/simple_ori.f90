@@ -1343,7 +1343,7 @@ contains
         call self%set('kv',    ctfvars%kv)
         call self%set('fraca', ctfvars%fraca)
         ! Phase is a numerical part of the CTF model and is always persisted.
-        call self%set('phshift', canonical_phshift(ctfvars%phshift))
+        call self%set('phshift', ctfvars%phshift)
         call self%set_dfx(ctfvars%dfx)
         call self%set_dfy(ctfvars%dfy)
         call self%set('angast', ctfvars%angast)

@@ -72,7 +72,9 @@ phshift_step=10 degrees
 The 0--180-degree interval reflects the phase ambiguity of power-spectrum CTF
 fitting and agrees with the established RELION/cisTEM approach. The grid is an
 initial search, not an assertion that a laser or Volta phase must be exactly
-90 degrees.
+90 degrees. The user-facing 180-degree maximum denotes the ambiguity boundary;
+the estimator excludes the exact endpoint from its grid and maps the continuous
+optimizer's upper limit to the largest representable value below `pi`.
 
 ## 4. In-memory CTF contract
 
