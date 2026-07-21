@@ -69,7 +69,7 @@ contains
     end function find_larger_magic_box
 
     ! closest size
-    pure function find_magic_box( trial_box ) result( best_box )
+    pure elemental function find_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box
         integer :: best_box, dist, ind
         call find(boxsizes, NSZS, trial_box, ind, dist)

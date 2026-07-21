@@ -24,6 +24,11 @@ type, extends(commander_base) :: commander_tseries_prep4tracking
     procedure :: execute      => exec_tseries_prep4tracking
 end type commander_tseries_prep4tracking
 
+type, extends(commander_base) :: commander_tseries_extractor
+  contains
+    procedure :: execute      => exec_tseries_extractor
+end type commander_tseries_extractor
+
 type, extends(commander_base) :: commander_tseries_make_pickavg
   contains
     procedure :: execute      => exec_tseries_make_pickavg
@@ -202,24 +207,24 @@ contains
     end subroutine exec_tseries_motion_correct
 
     subroutine exec_tseries_prep4tracking( self, cline )
-        use simple_imgarr_utils,   only: alloc_imgarr, dealloc_imgarr, write_imgarr
+        use simple_imgarr_utils,   only: alloc_imgarr, dealloc_imgarr, write_imgarr, copy_imgarr
         use simple_denoise_movies, only: diffmap_denoise_image_stack
         class(commander_tseries_prep4tracking), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         real,              parameter :: SMPD_TARGET = 1.0
         integer,           parameter :: GRPFREQ     = 10
         integer,           parameter :: NFRAMESGRP  = 5
-        integer,           parameter :: BATCHSZ   = 100
-        character(len=11), parameter :: FILT_DIR  = 'filtered/'
+        integer,           parameter :: BATCHSZ     = 100
+        character(len=11), parameter :: FILT_DIR    = 'filtered/'
         type(string),    allocatable :: framenames(:)
         type(image),     allocatable :: frames(:), frames_sc(:), denoised_frames_sc(:)
-        type(string)     :: fname
+        type(string)     :: fname, abs_fname
         type(image)      :: avgimg
         type(sp_project) :: spproj
         type(parameters) :: params
         real             :: smpd_sc
-        integer          :: ldim(3), ldim_sc(3), i, j, iframe, nframes, end, numlen_nframes, n
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        integer          :: ldim(3), ldim_sc(3), i,j,n,s, iframe, nframes, end, numlen_nframes
+        call cline%set('mkdir',   'yes')
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -232,20 +237,16 @@ contains
         do i = 1,nframes
             framenames(i) = spproj%os_mic%get_str(i,'frame')
         enddo
-        ! dimensions
+        ! dimensions & scaling
         ldim = [nint(spproj%os_mic%get(1,'xdim')), nint(spproj%os_mic%get(1,'ydim')), 1]
-        call spproj%kill
-        ! scaling
         params%scale = min(1.0, params%smpd/SMPD_TARGET)
-        ldim_sc(1)   = nint(ldim(1) * params%scale)
-        ldim_sc(1)   = find_magic_box(ldim_sc(1))
-        ldim_sc(2)   = nint(ldim(2) * params%scale)
-        ldim_sc(2)   = find_magic_box(ldim_sc(2))
+        ldim_sc(1:2) = nint(real(ldim(1:2)) * params%scale)
+        ldim_sc(1:2) = find_magic_box(ldim_sc(1:2))
         ldim_sc(3)   = 1
         params%scale = max(real(ldim_sc(1))/real(ldim(1)), real(ldim_sc(2))/real(ldim(2)))
         smpd_sc      = params%smpd / params%scale
-        write(logfhandle,*) '>>> SCALING FACTOR   : ', params%scale
-        write(logfhandle,*) '>>> SCALED DIMENSIONS: ', ldim_sc(1:2)
+        write(logfhandle,'(A,F8.3)')'>>> SCALING FACTOR   : ', params%scale
+        write(logfhandle,'(A,2I6)') '>>> SCALED DIMENSIONS: ', ldim_sc(1:2)
         call alloc_imgarr( BATCHSZ, ldim, params%smpd, frames, wthreads=.false.)
         call alloc_imgarr( BATCHSZ, ldim_sc, smpd_sc, frames_sc, wthreads=.false.)
         call avgimg%new(ldim_sc, smpd_sc)
@@ -255,24 +256,35 @@ contains
             ! downscale, remove backround
             call downscale_frames(iframe, end)
             ! denoise
-            call diffmap_denoise_image_stack(frames_sc(1:n), denoised_frames_sc)
+            if( n < 3 ) then
+                denoised_frames_sc = copy_imgarr(frames_sc(1:n))
+            else
+                call diffmap_denoise_image_stack(frames_sc(1:n), denoised_frames_sc)
+            endif
             ! filtered average
             do i = 1, n, GRPFREQ
                 call avgimg%zero
-                do j = i, min(i+NFRAMESGRP-1,n)
+                do j = i, min(i+NFRAMESGRP-1, nframes)
                     call avgimg%add(denoised_frames_sc(j))
                 end do
-                call avgimg%NLMean2D(patch_size=7, search_radius=12, gaussian_patch=.true.)
+                call avgimg%NLMean2D(patch_size=7, search_radius=11, gaussian_patch=.true.)
                 call avgimg%bp(45.0, 2.*params%smpd)
                 call avgimg%norm
+                ! write
                 fname = trim(FILT_DIR)//'frame_'//int2str_pad(iframe+i-1,numlen_nframes)//MRC_EXT
                 call avgimg%write(fname)
-                print *,iframe, iframe + i-1, '->', iframe + i + NFRAMESGRP - 1
-
-
+                ! book-keeping
+                abs_fname = simple_abspath(fname)
+                s = iframe + i - 1
+                call spproj%os_mic%set(s, 'track_fname', abs_fname)
+                call spproj%os_mic%set(s, 'fromt', s)
+                call spproj%os_mic%set(s, 'tot',   min(s+GRPFREQ-1, nframes))
             end do
             call dealloc_imgarr(denoised_frames_sc)
         enddo
+        call spproj%write_segment_inside('mic', params%projfile)
+        ! cleanup
+        call spproj%kill
         call dealloc_imgarr(frames)
         call dealloc_imgarr(frames_sc)
         call avgimg%kill
@@ -286,26 +298,37 @@ contains
                 integer, intent(in) :: istart, iend
                 integer :: i, e
                 e = iend - istart + 1
-                !$omp parallel do schedule(guided) proc_bind(close) private(i) default(shared)
                 do i = 1,e
                     call frames(i)%read(framenames(istart+i-1))
                 end do
-                !$omp end parallel do
                 !$omp parallel do schedule(guided) proc_bind(close) private(i) default(shared)
                 do i = 1,e
                     call frames(i)%fft
                     call frames(i)%clip(frames_sc(i))
                     call frames_sc(i)%ifft
-                end do
-                !$omp end parallel do
-                !$omp parallel do schedule(guided) proc_bind(close) private(i) default(shared)
-                do i = 1,e
                     call frames_sc(i)%subtract_background(45.0)
                 end do
                 !$omp end parallel do
             end subroutine downscale_frames
 
     end subroutine exec_tseries_prep4tracking
+
+    subroutine exec_tseries_extractor( self, cline )
+        use single_tseries_extractor, only: init_trajectory_extractor, extract_trajectory, kill_trajectory_extractor
+        class(commander_tseries_extractor), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(sp_project) :: spproj
+        type(parameters) :: params
+        call cline%set('mkdir', 'yes')
+        call cline%set('oritype', 'mic')
+        if( .not.cline%defined('neg')   ) call cline%set('neg',   'yes')
+        if( .not.cline%defined('fbody') ) call cline%set('fbody', 'trajectory')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        call init_trajectory_extractor(params, spproj, string(PATH_HERE), params%fbody)
+        call extract_trajectory()
+        call kill_trajectory_extractor()
+    end subroutine exec_tseries_extractor
 
     subroutine exec_tseries_make_pickavg( self, cline )
         use simple_motion_correct_iter, only: motion_correct_iter

@@ -8,6 +8,7 @@ type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
 type(ui_program), target :: tseries_motion_correct
 type(ui_program), target :: tseries_prep4tracking
+type(ui_program), target :: tseries_extractor
 
 contains
 
@@ -18,6 +19,7 @@ contains
         call new_tseries_make_pickavg(prgtab)
         call new_tseries_motion_correct(prgtab)
         call new_tseries_prep4tracking(prgtab)
+        call new_tseries_extractor(prgtab)
     end subroutine construct_single_tseries_programs
 
     subroutine print_single_tseries_programs(logfhandle)
@@ -28,6 +30,7 @@ contains
         write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
         write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
         write(logfhandle,'(A)') tseries_prep4tracking%name%to_char()
+        write(logfhandle,'(A)') tseries_extractor%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_single_tseries_programs
 
@@ -186,7 +189,7 @@ contains
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
     end subroutine new_tseries_motion_correct
 
-        subroutine new_tseries_prep4tracking( prgtab )
+    subroutine new_tseries_prep4tracking( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call tseries_prep4tracking%new(&
@@ -213,4 +216,35 @@ contains
         ! add to ui_hash
         call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab)
     end subroutine new_tseries_prep4tracking
+
+    subroutine new_tseries_extractor( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call tseries_extractor%new(&
+        &'tseries_extractor',&                                                           ! name
+        &'Extract particle trajectories from time-series',&                              ! descr_short
+        &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! descr_long
+        &'single_exec',&                                                                  ! executable
+        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_extractor%add_input(UI_PARM, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
+        &'give .txt trajectory file', .true., '')
+        call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_extractor%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('tseries_extractor', tseries_extractor, prgtab)
+    end subroutine new_tseries_extractor
+
 end module single_ui_tseries

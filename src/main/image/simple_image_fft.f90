@@ -85,7 +85,7 @@ contains
         class(image),     intent(inout) :: self
         character(len=*), intent(in)    :: which
         class(image),     intent(inout) :: img
-        integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3),phys(3)
+        integer :: h,mh,k,mk,l,ml,lims(3,2),phys(3),indh,indk,indl
         integer :: which_flag
         logical :: didft
         complex :: comp
@@ -120,46 +120,46 @@ contains
         ml   = abs(lims(3,1))
         if( .not.self%wthreads .and. self%is_2d() )then
             do k=lims(2,1),lims(2,2)
-                inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                indk = min(max(1,k+mk+1),self%ldim(2))
                 do h=lims(1,1),lims(1,2)
-                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                    comp    = self%get_fcomp2D(h,k)
+                    indh = min(max(1,h+mh+1),self%ldim(1))
+                    comp = self%get_fcomp2D(h,k)
                     select case(which_flag)
                         case(0)
-                            img%rmat(inds(1),inds(2),1) = real(comp)
+                            img%rmat(indh,indk,1) = real(comp)
                         case(1)
-                            img%rmat(inds(1),inds(2),1) = csq(comp)
+                            img%rmat(indh,indk,1) = real(comp*conjg(comp))
                         case(2)
-                            img%rmat(inds(1),inds(2),1) = sqrt(csq(comp))
+                            img%rmat(indh,indk,1) = sqrt(real(comp*conjg(comp)))
                         case(3)
-                            img%rmat(inds(1),inds(2),1) = log(csq(comp))
+                            img%rmat(indh,indk,1) = log(1.0+real(comp*conjg(comp)))
                         case(4)
-                            img%rmat(inds(1),inds(2),1) = phase_angle(comp)
+                            img%rmat(indh,indk,1) = phase_angle(comp)
                     end select
                 end do
             end do
         else
-            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,inds)&
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,indh,indk,indl)&
             !$omp schedule(static) proc_bind(close)
             do h=lims(1,1),lims(1,2)
                 do k=lims(2,1),lims(2,2)
                     do l=lims(3,1),lims(3,2)
                         phys = self%comp_addr_phys(h,k,l)
                         comp = self%get_fcomp([h,k,l],phys)
-                        inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                        inds(2) = min(max(1,k+mk+1),self%ldim(2))
-                        inds(3) = min(max(1,l+ml+1),self%ldim(3))
+                        indh = min(max(1,h+mh+1),self%ldim(1))
+                        indk = min(max(1,k+mk+1),self%ldim(2))
+                        indl = min(max(1,l+ml+1),self%ldim(3))
                         select case(which_flag)
                         case (0)
-                            call img%set(inds,real(comp))
+                            img%rmat(indh,indk,indl) = real(comp)
                         case(1)
-                            call img%set(inds,csq(comp))
+                            img%rmat(indh,indk,indl) = real(comp*conjg(comp))
                         case(2)
-                            call img%set(inds,sqrt(csq(comp)))
+                            img%rmat(indh,indk,indl) = sqrt(real(comp*conjg(comp)))
                         case (3)
-                            call img%set(inds,log(csq(comp)))
+                            img%rmat(indh,indk,indl) = log(1.0+real(comp*conjg(comp)))
                         case(4)
-                            call img%set(inds,phase_angle(comp))
+                            img%rmat(indh,indk,indl) = phase_angle(comp)
                         end select
                     end do
                 end do

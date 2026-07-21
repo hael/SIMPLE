@@ -298,6 +298,7 @@
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
         - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
         - `simple_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
+        - `simple_tseries_extractor.f90` — nanoparticle time series extraction from frames
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function
         - `simple_opt_bfgs.f90` — function minimization by L-BFGS (Limited memory Broyden-Fletcher-Goldfarb-Shannon optimization)
         - `simple_opt_bfgs2.f90` — function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
