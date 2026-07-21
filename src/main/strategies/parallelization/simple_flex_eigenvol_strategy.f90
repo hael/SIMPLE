@@ -130,6 +130,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
+        if( .not.cline%defined('nspace') ) &
+            &THROW_HARD('flex_eigenvol requires nspace=<projection grid size>; it cannot be inferred from populated project rows')
         call apply_defaults(cline)
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
     end subroutine init_common

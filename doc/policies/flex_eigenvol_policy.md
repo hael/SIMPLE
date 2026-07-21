@@ -15,15 +15,17 @@ The implemented input assumptions are:
 - one supplied and fixed mean volume (`vol1`);
 - one active `ptcl3D` state;
 - fixed 3D orientations, in-plane rotations, shifts, and CTF parameters;
+- an explicit projection-grid size (`nspace`);
 - `ctf=yes` or already phase-flipped (`ctf=flip`) particle images;
 - one low-pass limit `lp` used for both graph features and 3D mode
   reconstruction.
 
 Before feature preparation, the implementation requires at least three
 selected active particles, matching ptcl2D/ptcl3D field sizes, valid and unique
-selected stack slots, valid `proj` indices within the builder `eulspace`, and a
-uniform supported CTF mode. Mixed `ctf=yes`/`ctf=flip` selected particles are
-rejected.
+selected stack slots, and a uniform supported CTF mode. Mixed
+`ctf=yes`/`ctf=flip` selected particles are rejected. `nspace` must be supplied
+on the command line: the maximum populated `ptcl3D%proj` value cannot recover
+the grid size because the final projection directions may be empty.
 
 The standalone workflow returns a continuous low-dimensional coordinate system
 and up to 20 corresponding 3D mode volumes. Callers that only consume the
@@ -41,9 +43,12 @@ the persisted registered image, but it does not repeat the geometric
 registration. The implementation extends and uses `transform_ptcls` with an
 explicit particle-index batch, following the matcher batch policy
 `min(nptcls,nthr*BATCHTHRSZ)` and the established project-aware particle
-reader. After registration the particle is directly comparable with the
-discrete mean-volume reprojection identified by its `proj` index; no rotation
-or shift search is performed during graph construction.
+reader. The explicit `nspace` value defines the builder grid and the stored
+project `proj` field is authoritative. Every selected `proj` must lie in
+`1:nspace`; an out-of-range value is a hard error and is never remapped or
+clamped. After registration the particle is directly comparable with the
+corresponding discrete mean-volume reprojection; no rotation or shift search
+is performed during graph construction.
 
 The registered particles are phase-flipped when the input project is
 `ctf=yes`. Already phase-flipped particles are not flipped again. The durable

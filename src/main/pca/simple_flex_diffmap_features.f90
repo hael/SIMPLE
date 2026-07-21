@@ -60,16 +60,17 @@ contains
         allocate(processed(nall), source=.false.)
         nproj = build%eulspace%get_noris()
         if( nproj < 1 ) THROW_HARD('flex_eigenvol requires the builder projection-direction grid')
+        allocate(proj_ids(nptcls),source=0)
         do i = 1,nptcls
             if( pinds(i) < 1 .or. pinds(i) > nall ) THROW_HARD('invalid active particle index in flex feature preparation')
             if( p2row(pinds(i)) /= 0 ) THROW_HARD('duplicate active particle index in flex feature preparation')
             p2row(pinds(i)) = i
-            iproj = build%spproj%os_ptcl3D%get_int(pinds(i),'proj')
-            if( iproj < 1 .or. iproj > nproj ) THROW_HARD('active particle projection index outside builder eulspace')
+            proj_ids(i)=build%spproj%os_ptcl3D%get_int(pinds(i),'proj')
+            if( proj_ids(i)<1 .or. proj_ids(i)>nproj ) &
+                &THROW_HARD('active particle projection index outside explicit nspace grid')
         end do
         npix = params%box_crop * params%box_crop
         if( l_retain ) allocate(features(npix,nptcls),source=0.)
-        allocate(proj_ids(nptcls), source=0)
         if( l_part )then
             registered_stack = string('flex_registered_particles_part')//int2str_pad(part_here,params%numlen)//'.mrcs'
             residual_stack   = string('flex_residual_features_part')//int2str_pad(part_here,params%numlen)//'.mrcs'
@@ -137,7 +138,7 @@ contains
                     THROW_HARD('batch registration changed active particle order')
                 endif
                 if( processed(iptcl) ) THROW_HARD('active flex particle was registered twice')
-                iproj = build%spproj%os_ptcl3D%get_int(iptcl,'proj')
+                iproj = proj_ids(row)
                 call registered(j)%fft
                 call registered(j)%clip(reg_crop)
                 call reg_crop%ifft
@@ -164,7 +165,6 @@ contains
                     features(:,row)=vec
                     deallocate(vec)
                 endif
-                proj_ids(row) = iproj
                 processed(iptcl) = .true.
             end do
             call forget_ft_maps
@@ -181,7 +181,7 @@ contains
             if( .not.all(ieee_is_finite(features)) ) THROW_HARD('nonfinite registered residual feature')
         endif
         if( .not.l_part )then
-            call write_registered_project(params,build%spproj,pinds,registered_stack,registered_project,registered_spproj)
+            call write_registered_project(params,build%spproj,pinds,proj_ids,registered_stack,registered_project,registered_spproj)
             call registered_spproj%kill
         endif
         call mean_vol%kill
@@ -327,14 +327,40 @@ contains
         integer, intent(in) :: pinds(:),nparts,parts(nparts,2)
         type(string), intent(out) :: project_fname
         type(sp_project) :: outproj
-        type(string) :: stack_fname,frcs_fname
+        type(string) :: stack_fname,frcs_fname,map_fname
         logical, allocatable :: active(:)
+        integer, allocatable :: part_proj_ids(:)
+        character(len=XLONGSTRLEN) :: line
         real :: e3,angast
         integer :: ipart,i,iptcl,nptcls,nlocal,ldim(3),stkind,indstk,map_unit
+        integer :: map_read_unit,ios,map_local,map_pind,map_proj,map_stack,nread
         project_fname='flex_registered_particles.simple'
         call del_file(project_fname)
         nptcls=spproj%os_ptcl3D%get_noris()
         allocate(active(nptcls),source=.false.); active(pinds)=.true.
+        allocate(part_proj_ids(size(pinds)),source=0)
+        do ipart=1,nparts
+            map_fname=string('flex_registered_particle_map_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            open(newunit=map_read_unit,file=map_fname%to_char(),status='old',action='read',iostat=ios)
+            call fileiochk('opening registered flex feature map '//map_fname%to_char(),ios)
+            nread=0
+            do
+                read(map_read_unit,'(A)',iostat=ios) line
+                if( ios/=0 ) exit
+                if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+                read(line,*) map_local,map_pind,map_proj,map_stack
+                nread=nread+1
+                i=parts(ipart,1)+nread-1
+                if( i>parts(ipart,2) .or. map_local/=nread .or. map_stack/=nread ) &
+                    &THROW_HARD('invalid registered flex feature-map ordering')
+                if( map_pind/=pinds(i) .or. map_proj<1 .or. map_proj>params%nspace ) &
+                    &THROW_HARD('registered flex feature-map content mismatch')
+                part_proj_ids(i)=map_proj
+            end do
+            close(map_read_unit); call map_fname%kill
+            if( nread/=parts(ipart,2)-parts(ipart,1)+1 ) THROW_HARD('incomplete registered flex feature map')
+        end do
+        if( any(part_proj_ids<1) ) THROW_HARD('distributed registered flex project has invalid projections')
         call outproj%copy(spproj); call outproj%update_projinfo(project_fname)
         if( outproj%os_stk%get_noris()>0 ) call outproj%os_stk%kill()
         call outproj%os_stk%new(nparts,is_ptcl=.false.)
@@ -366,6 +392,7 @@ contains
                 iptcl=pinds(i)
                 call outproj%os_ptcl3D%set(iptcl,'stkind',ipart)
                 call outproj%os_ptcl3D%set(iptcl,'indstk',i-parts(ipart,1)+1)
+                call outproj%os_ptcl3D%set(iptcl,'proj',part_proj_ids(i))
                 if( outproj%os_ptcl3D%isthere(iptcl,'angast') )then
                     e3=spproj%os_ptcl3D%e3get(iptcl); angast=spproj%os_ptcl3D%get(iptcl,'angast')
                     call outproj%os_ptcl3D%set(iptcl,'angast',registered_angast(angast,e3))
@@ -407,17 +434,17 @@ contains
             do i=parts(ipart,1),parts(ipart,2)
                 iptcl=pinds(i)
                 write(map_unit,'(I10,1X,I10,1X,I8,1X,I10,1X,I8)') i,iptcl, &
-                    &spproj%os_ptcl3D%get_int(iptcl,'proj'),i-parts(ipart,1)+1,ipart
+                    &part_proj_ids(i),i-parts(ipart,1)+1,ipart
             end do
         end do
         close(map_unit)
-        deallocate(active)
+        deallocate(active,part_proj_ids)
     end subroutine assemble_flex_diffmap_feature_parts
 
-    subroutine write_registered_project( params, spproj, pinds, stack_fname, project_fname, outproj )
+    subroutine write_registered_project( params, spproj, pinds, proj_ids, stack_fname, project_fname, outproj )
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
-        integer,           intent(in)    :: pinds(:)
+        integer,           intent(in)    :: pinds(:),proj_ids(:)
         type(string),      intent(in)    :: stack_fname, project_fname
         type(sp_project),  intent(inout) :: outproj
         type(string) :: frcs_fname
@@ -426,6 +453,7 @@ contains
         integer :: iptcl, i, nptcls, nactive, nstack, ldim_stack(3), stkind, indstk
         nptcls = spproj%os_ptcl3D%get_noris()
         nactive = size(pinds)
+        if( size(proj_ids)/=nactive ) THROW_HARD('registered flex project projection-map size mismatch')
         allocate(active(nptcls), source=.false.)
         active(pinds) = .true.
         call find_ldim_nptcls(stack_fname, ldim_stack, nstack)
@@ -457,6 +485,7 @@ contains
         end do
         do i = 1,nactive
             call outproj%os_ptcl3D%set(pinds(i),'indstk',i)
+            call outproj%os_ptcl3D%set(pinds(i),'proj',proj_ids(i))
             if( outproj%os_ptcl3D%isthere(pinds(i),'angast') )then
                 e3     = spproj%os_ptcl3D%e3get(pinds(i))
                 angast = spproj%os_ptcl3D%get(pinds(i),'angast')

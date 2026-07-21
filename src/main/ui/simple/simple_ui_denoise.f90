@@ -308,6 +308,7 @@ contains
             'Mean volume', 'Mean volume used for residual backprojection', &
             'input volume e.g. vol1.mrc', .true., '')
         call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
+        call flex_eigenvol%add_input(UI_SRCH, nspace, required_override=.true.)
         call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
             'Maximum number of diffusion modes (maximum 20)', &
             'Upper bound scanned before ICM feature selection', '# modes', .false., 20.0)
