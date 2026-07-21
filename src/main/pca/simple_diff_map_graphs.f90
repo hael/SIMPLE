@@ -238,11 +238,15 @@ contains
         real, intent(in) :: d2s(:,:)
         type(diffmap_graph), intent(out) :: graph
         real, allocatable :: kth_d2(:)
-        if( n<2 .or. size(nbrs,2)/=n .or. any(shape(d2s)/=shape(nbrs)) ) &
-            &THROW_HARD('invalid gated neighbor table assembly')
+        integer :: k_used
+        if( n<2 .or. size(nbrs,2)/=n ) THROW_HARD('invalid gated neighbor table assembly')
+        k_used=size(nbrs,1)
+        if( k_used<1 .or. size(d2s,1)/=k_used .or. size(d2s,2)/=n ) &
+            &THROW_HARD('invalid gated neighbor distance table assembly')
         if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
-        allocate(kth_d2(n),source=d2s(size(d2s,1),:))
-        call pack_scalar_knn_to_csr(n,size(nbrs,1),nbrs,d2s,kth_d2,'euc_gated','none',graph)
+        allocate(kth_d2(n))
+        kth_d2=d2s(k_used,:)
+        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated','none',graph)
         deallocate(kth_d2)
     end subroutine build_gated_euclidean_graph_from_neighbors
 

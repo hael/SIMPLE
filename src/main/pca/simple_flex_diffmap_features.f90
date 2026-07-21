@@ -35,17 +35,17 @@ contains
         logical, optional, intent(in)    :: retain_features
         type(sp_project) :: registered_spproj
         type(stack_io)   :: registered_io, residual_io
-        type(image)      :: mean_vol, mean_ctf, reg_crop, residual
-        type(image), allocatable :: mean_reprojs(:), registered(:)
+        type(image)      :: mean_vol
+        type(image), allocatable :: mean_reprojs(:), registered(:), registered_crops(:), mean_ctfs(:)
         type(ctfparams)  :: ctfparms
         type(ctf)        :: tfun
         real, allocatable :: vec(:)
         integer, allocatable :: batch_pinds(:), p2row(:), batches(:,:)
-        logical, allocatable :: processed(:)
+        logical, allocatable :: processed(:), used_proj(:)
         real :: e3
         integer :: nptcls, nall, nproj, npix, batchsz_max, nbatches
         type(string) :: residual_stack,map_fname
-        integer :: i, j, iptcl, iproj, row, map_unit, ctf_mode, ibatch, batch_start, batch_end,part_here
+        integer :: i, j, iptcl, iproj, row, ithr, map_unit, ctf_mode, ibatch, batch_start, batch_end,part_here
         logical :: do_phaseflip,l_part,l_retain
         nptcls = size(pinds)
         if( nptcls < 1 ) THROW_HARD('flex_eigenvol feature preparation received no particles')
@@ -96,9 +96,27 @@ contains
             mean_reprojs=reproject(mean_vol,build%eulspace,top=nproj)
         endif
         if( l_retain ) call flex_projection_directions(build,proj_dirs)
-        call mean_ctf%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        call reg_crop%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-        call residual%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+        allocate(used_proj(nproj),source=.false.)
+        do i=1,nptcls
+            used_proj(proj_ids(i))=.true.
+        end do
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)
+        do iproj=1,nproj
+            if( used_proj(iproj) ) call mean_reprojs(iproj)%fft
+        end do
+        !$omp end parallel do
+        allocate(mean_ctfs(max(1,params%nthr)),registered_crops(min(nptcls,MAXIMGBATCHSZ)))
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)
+        do i=1,size(mean_ctfs)
+            call mean_ctfs(i)%new([params%box_crop,params%box_crop,1],params%smpd_crop,wthreads=.false.)
+        end do
+        !$omp end parallel do
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)
+        do i=1,size(registered_crops)
+            call registered_crops(i)%new([params%box_crop,params%box_crop,1],params%smpd_crop,wthreads=.false.)
+        end do
+        !$omp end parallel do
+        call mean_ctfs(1)%memoize_mask_coords
         ctf_mode = build%spproj%get_ctfflag_type('ptcl3D',pinds(1))
         select case(ctf_mode)
             case(CTFFLAG_YES)
@@ -114,7 +132,7 @@ contains
             endif
         end do
 
-        batchsz_max = min(nptcls, max(1,params%nthr) * BATCHTHRSZ)
+        batchsz_max = min(nptcls, min(MAXIMGBATCHSZ,max(1,params%nthr) * BATCHTHRSZ))
         nbatches    = ceiling(real(nptcls) / real(batchsz_max))
         batches     = split_nobjs_even(nptcls, nbatches)
         call registered_io%open(registered_stack, params%smpd_crop, 'write', box=params%box_crop)
@@ -130,7 +148,6 @@ contains
             if( size(batch_pinds) /= batch_end - batch_start + 1 .or. size(registered) /= size(batch_pinds) )then
                 THROW_HARD('batch registration size mismatch in flex feature preparation')
             endif
-            call memoize_ft_maps([params%box_crop,params%box_crop,1],params%smpd_crop)
             do j = 1,size(batch_pinds)
                 row   = batch_start + j - 1
                 iptcl = batch_pinds(j)
@@ -138,37 +155,61 @@ contains
                     THROW_HARD('batch registration changed active particle order')
                 endif
                 if( processed(iptcl) ) THROW_HARD('active flex particle was registered twice')
-                iproj = proj_ids(row)
+            end do
+            ! transform_ptcls uses and clears the global Fourier maps for its
+            ! native and padded boxes, so restore the crop-box maps here.
+            call memoize_ft_maps([params%box_crop,params%box_crop,1],params%smpd_crop)
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)
+            do j = 1,size(batch_pinds)
                 call registered(j)%fft
-                call registered(j)%clip(reg_crop)
-                call reg_crop%ifft
-                call registered_io%write(row, reg_crop)
+                call registered(j)%clip(registered_crops(j))
+                call registered_crops(j)%ifft
+            end do
+            !$omp end parallel do
+            call dealloc_imgarr(registered)
+            do j = 1,size(batch_pinds)
+                row   = batch_start + j - 1
+                iptcl = batch_pinds(j)
+                iproj = proj_ids(row)
+                call registered_io%write(row,registered_crops(j))
                 write(map_unit,'(I10,1X,I10,1X,I8,1X,I10)') row, iptcl, iproj, row
-                call mean_ctf%copy_fast(mean_reprojs(iproj))
-                call mean_ctf%fft
+            end do
+            !$omp parallel do default(shared) private(ithr,row,iptcl,iproj,ctfparms,e3,tfun,vec) &
+            !$omp& schedule(static) proc_bind(close)
+            do j = 1,size(batch_pinds)
+                ithr  = omp_get_thread_num()+1
+                row   = batch_start+j-1
+                iptcl = batch_pinds(j)
+                iproj = proj_ids(row)
+                call mean_ctfs(ithr)%copy_fast(mean_reprojs(iproj))
                 ctfparms = build%spproj%get_ctfparams('ptcl3D',iptcl)
                 ! transform_ptcls rotates the image by -e3.  The astigmatism
                 ! axes therefore rotate into the registered frame by +e3.
                 e3 = build%spproj%os_ptcl3D%e3get(iptcl)
                 ctfparms%angast = registered_angast(ctfparms%angast,e3)
                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call mean_ctf%apply_ctf(tfun, 'abs', ctfparms)
-                call reg_crop%fft
-                residual = reg_crop - mean_ctf
-                call residual%ifft
-                if( params%lp > 2. * params%smpd_crop + TINY ) call residual%bp(0., params%lp)
-                call residual%mask2D_softavg(params%msk_crop)
-                if( l_part ) call residual_io%write(row,residual)
+                call mean_ctfs(ithr)%apply_ctf(tfun,'abs',ctfparms)
+                call registered_crops(j)%fft
+                call registered_crops(j)%subtr(mean_ctfs(ithr))
+                if( params%lp > 2. * params%smpd_crop + TINY ) call registered_crops(j)%bp(0.,params%lp)
+                call registered_crops(j)%ifft
+                call registered_crops(j)%mask2D_softavg(params%msk_crop)
                 if( l_retain )then
-                    vec=residual%serialize()
+                    vec=registered_crops(j)%serialize()
                     if( size(vec)/=npix ) THROW_HARD('registered residual feature size mismatch')
                     features(:,row)=vec
                     deallocate(vec)
                 endif
                 processed(iptcl) = .true.
             end do
+            !$omp end parallel do
+            if( l_part )then
+                do j=1,size(batch_pinds)
+                    row=batch_start+j-1
+                    call residual_io%write(row,registered_crops(j))
+                end do
+            endif
             call forget_ft_maps
-            if( allocated(registered) ) call dealloc_imgarr(registered)
             if( allocated(batch_pinds) ) deallocate(batch_pinds)
         end do
         call registered_io%close
@@ -186,10 +227,9 @@ contains
         endif
         call mean_vol%kill
         if( allocated(mean_reprojs) ) call dealloc_imgarr(mean_reprojs)
-        call mean_ctf%kill
-        call reg_crop%kill
-        call residual%kill
-        deallocate(p2row, processed, batches)
+        call dealloc_imgarr(mean_ctfs)
+        call dealloc_imgarr(registered_crops)
+        deallocate(p2row, processed, used_proj, batches)
         call residual_stack%kill; call map_fname%kill
     end subroutine prepare_flex_diffmap_features
 
