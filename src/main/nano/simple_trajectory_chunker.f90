@@ -1,7 +1,7 @@
 !@descr: time-constrained flex-latent segmentation for nanoparticle trajectories
 module simple_trajectory_chunker
 use simple_core_module_api
-use simple_projected_latent_result, only: projected_latent_fit_result
+use simple_flex_embedding_result, only: flex_embedding_result
 use simple_diff_map_denoise,        only: select_spectral_rank_icm
 use simple_srch_sort_loc,          only: hpsort
 implicit none
@@ -37,7 +37,7 @@ contains
 
     subroutine make_trajectory_chunk_plan( fit, frame_inds, nchunks_in, target_len_in, min_len_in, &
         &max_len_in, max_shift_in, plan )
-        type(projected_latent_fit_result), intent(in) :: fit
+        type(flex_embedding_result), intent(in) :: fit
         integer, intent(in) :: frame_inds(:)
         integer, intent(in) :: nchunks_in, target_len_in, min_len_in, max_len_in, max_shift_in
         type(trajectory_chunk_plan), intent(inout) :: plan
@@ -156,7 +156,7 @@ contains
 
     subroutine select_trajectory_chunk_plan( fit, frame_inds, nchunks_min_in, nchunks_max_in, &
         &min_len_in, max_len_in, max_shift_in, count_penalty, plan, scan_fname )
-        type(projected_latent_fit_result), intent(in) :: fit
+        type(flex_embedding_result), intent(in) :: fit
         integer, intent(in) :: frame_inds(:)
         integer, intent(in) :: nchunks_min_in, nchunks_max_in, min_len_in, max_len_in, max_shift_in
         real, intent(in) :: count_penalty
@@ -214,7 +214,7 @@ contains
     end subroutine select_trajectory_chunk_plan
 
     subroutine prepare_weighted_features( fit, perm, x, weights, evidence )
-        type(projected_latent_fit_result), intent(in) :: fit
+        type(flex_embedding_result), intent(in) :: fit
         integer, intent(in) :: perm(:)
         real(dp), intent(out) :: x(:,:), weights(:,:), evidence(:)
         real(dp), allocatable :: raw_evidence(:)
@@ -295,7 +295,7 @@ contains
     end function chunk_count_is_feasible
 
     real(dp) function temporal_partition_silhouette( fit, frame_inds, plan ) result(score)
-        type(projected_latent_fit_result), intent(in) :: fit
+        type(flex_embedding_result), intent(in) :: fit
         integer, intent(in) :: frame_inds(:)
         type(trajectory_chunk_plan), intent(in) :: plan
         real(dp), allocatable :: x(:,:), weights(:,:), evidence(:), centers(:,:), center_weights(:,:)

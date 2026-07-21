@@ -300,8 +300,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call flex_eigenvol%new(&
         &'flex_eigenvol',&
-        &'Linear 3D variability eigenvolumes',&
-        &'estimates linear eigenvolumes from fixed ptcl3D poses using iterative EM-PCA and a supplied mean map',&
+        &'Diffusion-map 3D variability volumes',&
+        &'builds an angularly gated nearest-neighbor graph from registered ptcl3D residuals and reconstructs Hermitian 3D diffusion modes',&
         &'simple_exec',&
         &.true.)
         call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
@@ -309,12 +309,16 @@ contains
             'input volume e.g. vol1.mrc', .true., '')
         call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
         call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
-            'Number of linear eigenvolume components (maximum 20)', &
-            'Number of linear eigenvolume components (maximum 20)', '# eigenvolumes', .false., 20.0)
-        call flex_eigenvol%add_input(UI_FILT, maxits, required_override=.false., &
-            gui_submenu="algorithm", gui_advanced=.false.)
+            'Maximum number of diffusion modes (maximum 20)', &
+            'Upper bound scanned before ICM feature selection', '# modes', .false., 20.0)
+        call flex_eigenvol%add_input(UI_FILT, 'k_nn', 'num', &
+            'Nearest neighbors (default 10)', &
+            'Registered-residual neighbors retained per particle', '# neighbors', .false., 10.0)
+        call flex_eigenvol%add_input(UI_FILT, 'nang_nbrs', 'num', &
+            'Angular candidate cap (default 1000)', &
+            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0)
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
-            descr_placeholder_override='Eigenvolume low-pass limit in Angstroms{8}', &
+            descr_placeholder_override='Graph and reconstruction low-pass limit in Angstroms{8}', &
             gui_submenu="regularization", gui_advanced=.false.)
         call flex_eigenvol%add_input(UI_ALT, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &

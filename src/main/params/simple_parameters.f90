@@ -395,6 +395,7 @@ type :: parameters
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=5               !< local nearest-neighbor count for graph-based diffusion splitting
+    integer :: nang_nbrs=1000       !< angularly gated candidate-particle cap for flex diffusion maps
     integer :: steerable_nmodes=4   !< angular Fourier modes for cls_split steerable diffusion maps
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}

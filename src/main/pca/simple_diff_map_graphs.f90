@@ -15,6 +15,7 @@ private
 public :: diffmap_graph
 public :: build_cls_split_graph
 public :: build_euclidean_knn_graph
+public :: build_gated_euclidean_knn_graph
 public :: build_orientation_knn_graph
 public :: graph_matvec
 public :: estimate_graph_shift_scale
@@ -115,6 +116,102 @@ contains
         endif
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_euclidean_knn_graph
+
+    !> Build a Euclidean kNN graph without an all-pairs particle comparison.
+    !! Projection directions define candidate bins. Neighboring bins are
+    !! visited in angular order until nang_nbrs particle candidates have been
+    !! examined, and only the k_nn closest registered-residuals are retained.
+    subroutine build_gated_euclidean_knn_graph( features, proj_ids, proj_dirs, k_nn, nang_nbrs, graph, &
+        &ncandidates_min, ncandidates_max, ncandidates_mean )
+        real,                intent(in)  :: features(:,:)
+        integer,             intent(in)  :: proj_ids(:)
+        real,                intent(in)  :: proj_dirs(:,:)
+        integer,             intent(in)  :: k_nn, nang_nbrs
+        type(diffmap_graph), intent(out) :: graph
+        integer, optional,   intent(out) :: ncandidates_min, ncandidates_max
+        real, optional,      intent(out) :: ncandidates_mean
+        integer, allocatable :: counts(:), offsets(:), cursor(:), members(:)
+        integer, allocatable :: proj_order(:), nbrs(:,:), ncandidates(:)
+        real,    allocatable :: angular_key(:), d2s(:,:), kth_d2(:)
+        real(dp) :: d2
+        real :: dotdir
+        integer :: n, ndim, nproj, k_used, cap_used
+        integer :: i, j, k, m, p, q, f, pos, nseen
+        n     = size(features,2)
+        ndim  = size(features,1)
+        nproj = size(proj_dirs,2)
+        if( n < 1 .or. ndim < 1 ) THROW_HARD('empty gated Euclidean graph')
+        if( size(proj_ids) /= n ) THROW_HARD('projection-id size mismatch in gated Euclidean graph')
+        if( size(proj_dirs,1) /= 3 .or. nproj < 1 ) THROW_HARD('invalid projection directions in gated Euclidean graph')
+        if( any(proj_ids < 1) .or. any(proj_ids > nproj) ) THROW_HARD('projection id outside direction table')
+        if( n == 1 )then
+            call make_singleton_graph('euc_gated', 'none', graph)
+            if( present(ncandidates_min)  ) ncandidates_min  = 0
+            if( present(ncandidates_max)  ) ncandidates_max  = 0
+            if( present(ncandidates_mean) ) ncandidates_mean = 0.
+            return
+        endif
+        k_used   = min(max(1,k_nn), n-1)
+        cap_used = min(max(k_used,nang_nbrs), n-1)
+        allocate(counts(nproj), offsets(nproj+1), cursor(nproj), source=0)
+        do i = 1,n
+            counts(proj_ids(i)) = counts(proj_ids(i)) + 1
+        end do
+        offsets(1) = 1
+        do p = 1,nproj
+            offsets(p+1) = offsets(p) + counts(p)
+        end do
+        cursor = offsets(1:nproj)
+        allocate(members(n), source=0)
+        do i = 1,n
+            p = proj_ids(i)
+            members(cursor(p)) = i
+            cursor(p) = cursor(p) + 1
+        end do
+        allocate(proj_order(nproj), angular_key(nproj))
+        allocate(nbrs(k_used,n), source=0)
+        allocate(d2s(k_used,n), kth_d2(n), source=0.)
+        allocate(ncandidates(n), source=0)
+        d2s = huge(1.)
+        do p = 1,nproj
+            if( counts(p) == 0 ) cycle
+            do q = 1,nproj
+                proj_order(q) = q
+                dotdir = max(-1., min(1., dot_product(proj_dirs(:,p), proj_dirs(:,q))))
+                angular_key(q) = 1. - dotdir
+            end do
+            call hpsort(angular_key, proj_order)
+            do pos = offsets(p), offsets(p+1)-1
+                i = members(pos)
+                nseen = 0
+                direction_loop: do m = 1,nproj
+                    q = proj_order(m)
+                    if( counts(q) == 0 ) cycle
+                    do k = offsets(q), offsets(q+1)-1
+                        j = members(k)
+                        if( j == i ) cycle
+                        d2 = 0._dp
+                        do f = 1,ndim
+                            d2 = d2 + real(features(f,i)-features(f,j),dp)**2
+                        end do
+                        call insert_neighbor(j, real(d2), nbrs(:,i), d2s(:,i))
+                        nseen = nseen + 1
+                        if( nseen >= cap_used ) exit direction_loop
+                    end do
+                end do direction_loop
+                ncandidates(i) = nseen
+            end do
+        end do
+        do i = 1,n
+            if( nbrs(k_used,i) < 1 ) THROW_HARD('too few angular candidates for requested flex k_nn')
+        end do
+        kth_d2 = d2s(k_used,:)
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc_gated', 'none', graph)
+        if( present(ncandidates_min)  ) ncandidates_min  = minval(ncandidates)
+        if( present(ncandidates_max)  ) ncandidates_max  = maxval(ncandidates)
+        if( present(ncandidates_mean) ) ncandidates_mean = real(sum(int(ncandidates,kind=8)),kind=sp) / real(n,kind=sp)
+        deallocate(counts, offsets, cursor, members, proj_order, angular_key, nbrs, d2s, kth_d2, ncandidates)
+    end subroutine build_gated_euclidean_knn_graph
 
     subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, algninfo )
         type(parameters),      intent(in)    :: params

@@ -356,6 +356,7 @@ contains
         call reg%add_int('kpca_nystrom_npts', self%kpca_nystrom_npts)
         call reg%add_int('kpca_nystrom_local_nbrs', self%kpca_nystrom_local_nbrs)
         call reg%add_int('k_nn', self%k_nn)
+        call reg%add_int('nang_nbrs', self%nang_nbrs)
         call reg%add_int('steerable_nmodes', self%steerable_nmodes)
         call reg%add_int('newbox', self%newbox)
         call reg%add_int('nframes', self%nframes)

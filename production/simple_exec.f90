@@ -76,10 +76,14 @@ if( logfhandle .ne. OUTPUT_UNIT )then
 endif
 if( .not. l_silent )then
 <<<<<<< HEAD
+<<<<<<< HEAD
     call simple_print_git_version('ca2e8e04e')
 =======
     call simple_print_git_version('a64ce0919')
 >>>>>>> 17a13c4d9 (starting at the stage after symmetry axis search when inputting vol1 to abinitio3D)
+=======
+    call simple_print_git_version('5219186fd')
+>>>>>>> ab2ea6056 (replaced PCA with diffusion maps in flex_eigenvol)
     ! end timer and print
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)

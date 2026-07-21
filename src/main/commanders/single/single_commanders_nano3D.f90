@@ -6,8 +6,8 @@ use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
-use simple_flex_eigenvol_strategy, only: run_flex_eigenvol_linear
-use simple_projected_latent_result, only: projected_latent_fit_result
+use simple_flex_eigenvol_strategy, only: run_flex_eigenvol_diffmap
+use simple_flex_embedding_result, only: flex_embedding_result
 use simple_trajectory_chunker, only: trajectory_chunk_plan, make_trajectory_chunk_plan, &
     &select_trajectory_chunk_plan, trajectory_chunks_to_parts, write_trajectory_chunks_csv
 use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
@@ -318,7 +318,7 @@ contains
         type(parameters)      :: params
         type(sp_project)      :: spproj
         type(builder)         :: chunk_build
-        type(projected_latent_fit_result) :: latent_fit
+        type(flex_embedding_result) :: latent_fit
         type(trajectory_chunk_plan) :: chunk_plan
         type(cmdline)         :: cline_rec
         type(image)           :: vol1, vol2
@@ -339,7 +339,8 @@ contains
             case('latent')
                 if( .not. cline%defined('vol1') ) THROW_HARD('trajectory_reconstruct3D chunk_mode=latent requires vol1=<mean map>')
                 if( .not. cline%defined('neigs')   ) call cline%set('neigs',  20)
-                if( .not. cline%defined('maxits')  ) call cline%set('maxits',  3)
+                if( .not. cline%defined('k_nn')    ) call cline%set('k_nn',    10)
+                if( .not. cline%defined('nang_nbrs')) call cline%set('nang_nbrs',1000)
                 if( .not. cline%defined('lp')      ) call cline%set('lp',      8.0)
                 if( .not. cline%defined('outvol')  ) call cline%set('outvol', 'trajectory_chunk_flex_001.mrc')
                 if( .not. cline%defined('nstates') ) call cline%set('nstates', 1)
@@ -374,7 +375,7 @@ contains
                 nchunks_eff = max(1, nint(real(nptcls) / real(max(1,params%stepsz))))
             endif
             call chunk_build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            call run_flex_eigenvol_linear(params, chunk_build, cline, latent_fit)
+            call run_flex_eigenvol_diffmap(params, chunk_build, cline, latent_fit)
             allocate(frame_inds(latent_fit%nptcls), source=0)
             do i = 1, latent_fit%nptcls
                 frame_inds(i) = nint(spproj%os_ptcl3D%get(latent_fit%pinds(i), 'pind'))
