@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-07-21T17:39:32.659600+00:00",
+  "units": "MiB",
+  "models": {
+    "motion_correct": {
+      "target": "single-worker peak RSS",
+      "rows": 200,
+      "coefficients": {
+        "intercept": 109.93049657,
+        "original_megapixels": 14.91419682,
+        "effective_megapixels": 0.61951037,
+        "original_megapixels_x_smpd": 26.06244137,
+        "original_megapixels_x_extra_frames": 5.05631333,
+        "effective_megapixels_x_extra_frames": 3.56564432,
+        "original_megapixels_x_extra_threads": 3.69477404
+      },
+      "safety": {
+        "factor": 1.35,
+        "extra_frame_factor_per_frame": 0.02,
+        "extra_frame_factor_cap": 0.4,
+        "floor_mib": 64.0,
+        "round_mib": 256
+      },
+      "calibration": {
+        "xdim": [1024, 10000],
+        "ydim": [1024, 10000],
+        "smpd": [0.4, 2.0],
+        "frames": [4, 16],
+        "threads": [1, 4],
+        "smpd_downscale": [1.3, 1.3],
+        "notes": "Dimensions above 4096 were measured only at 4 frames and 1 thread. All movies were square and used algorithm=iso, mcpatch=no, downscale=yes."
+      }
+    },
+    "abinitio2D": {
+      "target": "whole-commander peak RSS",
+      "rows": 30,
+      "coefficients": {
+        "intercept": 24.09962373,
+        "box_squared_per_10000": 77.25031658,
+        "sampled_particle_megapixels": 1.08989816,
+        "references": 1.16578552,
+        "threads": 4.85145027
+      },
+      "safety": {
+        "factor": 1.25,
+        "floor_mib": 64.0,
+        "round_mib": 128
+      },
+      "calibration": {
+        "particles": [100, 2000],
+        "box": [64, 192],
+        "threads": [1, 8],
+        "references": [2, 32],
+        "notes": "One-stage screening model; autoscaled cases are conservatively estimated from the requested box size."
+      }
+    },
+    "abinitio3D": {
+      "target": "conservative process-tree peak RSS",
+      "rows": 36,
+      "coefficients": {
+        "intercept": 227.18084541,
+        "box_million_voxels": 10.97686624,
+        "sampled_particle_megapixels": 18.95509155,
+        "extra_partitions": 106.43907355,
+        "extra_states": 87.0106754,
+        "mask_million_voxels": 179.84005742,
+        "threads": 0.38722884,
+        "capped_extra_iterations": 14.43798783
+      },
+      "safety": {
+        "factor": 1.25,
+        "floor_mib": 64.0,
+        "round_mib": 128
+      },
+      "calibration": {
+        "particles": [100, 1000],
+        "box": [64, 160],
+        "smpd": [0.8, 2.0],
+        "mask_diameter": [40.0, 80.0],
+        "threads": [1, 8],
+        "partitions": [1, 4],
+        "states": [1, 4],
+        "iterations": [1, 20],
+        "notes": "Process-tree estimate is parent peak plus the largest nparts child peaks; it is intentionally conservative rather than an exact simultaneous RSS measurement."
+      }
+    }
+  }
+}
