@@ -338,7 +338,7 @@ contains
             case('balanced')
             case('latent')
                 if( .not. cline%defined('vol1') ) THROW_HARD('trajectory_reconstruct3D chunk_mode=latent requires vol1=<mean map>')
-                if( .not. cline%defined('neigs')   ) call cline%set('neigs',   3)
+                if( .not. cline%defined('neigs')   ) call cline%set('neigs',  20)
                 if( .not. cline%defined('maxits')  ) call cline%set('maxits',  3)
                 if( .not. cline%defined('lp')      ) call cline%set('lp',      8.0)
                 if( .not. cline%defined('outvol')  ) call cline%set('outvol', 'trajectory_chunk_flex_001.mrc')

@@ -301,7 +301,7 @@ contains
         call flex_eigenvol%new(&
         &'flex_eigenvol',&
         &'Linear 3D variability eigenvolumes',&
-        &'estimates projected-PPCA linear eigenvolumes from fixed ptcl3D poses and a supplied mean map',&
+        &'estimates linear eigenvolumes from fixed ptcl3D poses using iterative EM-PCA and a supplied mean map',&
         &'simple_exec',&
         &.true.)
         call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
@@ -309,8 +309,8 @@ contains
             'input volume e.g. vol1.mrc', .true., '')
         call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
         call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
-            'Number of linear eigenvolume components', &
-            'Number of linear eigenvolume components', '# eigenvolumes', .false., 3.0)
+            'Number of linear eigenvolume components (maximum 20)', &
+            'Number of linear eigenvolume components (maximum 20)', '# eigenvolumes', .false., 20.0)
         call flex_eigenvol%add_input(UI_FILT, maxits, required_override=.false., &
             gui_submenu="algorithm", gui_advanced=.false.)
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &

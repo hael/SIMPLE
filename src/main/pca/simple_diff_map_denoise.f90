@@ -17,6 +17,7 @@ public :: estimate_diffmap_denoise_rank
 public :: graph_nystrom_residual_preimage
 public :: calc_diffmap_reconstruction_error
 public :: calc_diffmap_residual_energy_ratio
+public :: select_spectral_rank_icm
 
 integer, parameter :: SE2_NTRANS_MODES                         = 2
 integer, parameter :: DIFFMAP_DENOISE_ICM_RANK_MAXITS          = 16
@@ -542,7 +543,7 @@ contains
         rank_scan = min(max(1, rank_scan), max_rank)
         call embed_graph(graph, rank_scan, coords, eigvals)
         if( allocated(eigvals) .and. size(eigvals) > 0 )then
-            call select_diffmap_denoise_rank_icm(eigvals, size(eigvals), den_rank, &
+            call select_spectral_rank_icm(eigvals, size(eigvals), den_rank, &
                                                  icm_converged, icm_iters, icm_score)
         else
             den_rank      = rank_scan
@@ -564,12 +565,13 @@ contains
         if( nptcls > 3 ) neigs_scan = max(2, neigs_scan)
     end function diffmap_denoise_auto_neigs_scan
 
-    subroutine select_diffmap_denoise_rank_icm(eigvals, max_neigs, nkeep, converged, niter, score)
+    subroutine select_spectral_rank_icm(eigvals, max_neigs, nkeep, converged, niter, score, min_rank)
         real,    intent(in)  :: eigvals(:)
         integer, intent(in)  :: max_neigs
         integer, intent(out) :: nkeep, niter
         logical, intent(out) :: converged
         real,    intent(out) :: score
+        integer, optional, intent(in) :: min_rank
         real, allocatable :: spec(:)
         real :: smin, smax, delta, beta, complexity, trial_score, best_score
         integer :: i, n, nmin_rank, upper_rank, lower_rank, k_trial, trial_iter
@@ -577,6 +579,7 @@ contains
         logical :: trial_converged, best_converged
         n = min(size(eigvals), max(1, max_neigs))
         nmin_rank = diffmap_denoise_min_neigs(n)
+        if( present(min_rank) ) nmin_rank = max(1, min(n, min_rank))
         if( n <= 0 )then
             nkeep     = 1
             niter     = 0
@@ -629,7 +632,7 @@ contains
         score     = best_score
         converged = best_converged
         deallocate(spec)
-    end subroutine select_diffmap_denoise_rank_icm
+    end subroutine select_spectral_rank_icm
 
     subroutine run_diffmap_denoise_icm_rank_seed(spec, seed_rank, nmin_rank, nmax_rank, beta, alpha, &
                                                  nkeep, score, niter, converged)

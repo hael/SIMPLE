@@ -238,7 +238,7 @@ contains
         ! search controls
         call trajectory_reconstruct3D%add_input(UI_SRCH, pgrp)
         call trajectory_reconstruct3D%add_input(UI_SRCH, 'neigs', 'num', 'Flex latent dimensions', &
-        &'Maximum flex_eigenvol latent dimensions used for chunking{3}', '# modes', .false., 3.)
+        &'Maximum flex_eigenvol latent dimensions used for chunking{20}', '# modes', .false., 20.)
         call trajectory_reconstruct3D%add_input(UI_SRCH, maxits, required_override=.false.)
         ! filter controls
         call trajectory_reconstruct3D%add_input(UI_FILT, lp, required_override=.false.)

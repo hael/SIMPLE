@@ -10,9 +10,9 @@ type :: projected_latent_fit_result
     integer :: nptcls = 0
     integer :: ncomp  = 0
     integer,  allocatable :: pinds(:)
-    real(dp), allocatable :: z(:,:), z_postcov(:,:,:)
+    real(dp), allocatable :: z(:,:)
     real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
-    real(dp), allocatable :: mode_vars(:), basis_energy(:)
+    real(dp), allocatable :: eigvals(:)
 contains
     procedure :: kill => kill_projected_latent_fit_result
 end type projected_latent_fit_result
@@ -23,11 +23,9 @@ contains
         class(projected_latent_fit_result), intent(inout) :: self
         if( allocated(self%pinds) ) deallocate(self%pinds)
         if( allocated(self%z) ) deallocate(self%z)
-        if( allocated(self%z_postcov) ) deallocate(self%z_postcov)
         if( allocated(self%resid_energy) ) deallocate(self%resid_energy)
         if( allocated(self%resid_mean_energy) ) deallocate(self%resid_mean_energy)
-        if( allocated(self%mode_vars) ) deallocate(self%mode_vars)
-        if( allocated(self%basis_energy) ) deallocate(self%basis_energy)
+        if( allocated(self%eigvals) ) deallocate(self%eigvals)
         self%nptcls = 0
         self%ncomp  = 0
     end subroutine kill_projected_latent_fit_result

@@ -2,6 +2,7 @@
 module simple_trajectory_chunker
 use simple_core_module_api
 use simple_projected_latent_result, only: projected_latent_fit_result
+use simple_diff_map_denoise,        only: select_spectral_rank_icm
 use simple_srch_sort_loc,          only: hpsort
 implicit none
 
@@ -52,7 +53,7 @@ contains
         if( n <= 0 .or. ncomp <= 0 ) THROW_HARD('trajectory chunking requires a nonempty projected latent fit')
         if( size(frame_inds) /= n ) THROW_HARD('trajectory chunking frame index count does not match latent fit')
         if( .not. allocated(fit%pinds) .or. .not. allocated(fit%z) .or. &
-            &.not. allocated(fit%z_postcov) .or. .not. allocated(fit%basis_energy) )then
+            &.not. allocated(fit%eigvals) )then
             THROW_HARD('trajectory chunking received an incomplete projected latent fit')
         endif
         nchunks = max(1, min(nchunks_in, n))
@@ -217,46 +218,39 @@ contains
         integer, intent(in) :: perm(:)
         real(dp), intent(out) :: x(:,:), weights(:,:), evidence(:)
         real(dp), allocatable :: raw_evidence(:)
-        real(dp) :: avg, var, post_avg, signal_var, denom, sumw
-        integer :: n, ncomp, i, q, row
+        real, allocatable :: eigvals_sp(:)
+        real(dp) :: avg, var, denom
+        real :: icm_score
+        integer :: n, ncomp, i, q, row, nkeep, icm_iters
+        logical :: icm_converged
         n = size(perm)
         ncomp = fit%ncomp
         allocate(raw_evidence(ncomp), source=0.d0)
+        allocate(eigvals_sp(ncomp), source=0.)
+        eigvals_sp = real(max(0.d0, fit%eigvals))
+        call select_spectral_rank_icm(eigvals_sp, ncomp, nkeep, icm_converged, icm_iters, icm_score, min_rank=1)
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,L1,A,ES12.4)') '>>> TRAJECTORY_CHUNK ICM MODES: ', nkeep, &
+            &' / ', ncomp, ' iterations=', icm_iters, ' converged=', icm_converged, ' score=', icm_score
+        call flush(logfhandle)
         do q = 1, ncomp
             avg = sum(fit%z(:,q)) / real(n,dp)
             var = sum((fit%z(:,q) - avg) ** 2) / real(max(1,n-1),dp)
-            post_avg = 0.d0
-            do i = 1, n
-                post_avg = post_avg + max(0.d0, fit%z_postcov(i,q,q))
-            end do
-            post_avg = post_avg / real(n,dp)
-            signal_var = max(0.d0, var - post_avg)
-            raw_evidence(q) = max(0.d0, fit%basis_energy(q)) * signal_var
+            raw_evidence(q) = max(0.d0, fit%eigvals(q))
             denom = sqrt(max(var, DTINY))
             do i = 1, n
                 row = perm(i)
                 x(i,q) = (fit%z(row,q) - avg) / denom
-                weights(i,q) = max(0.d0, fit%z_postcov(row,q,q)) / max(var, DTINY)
             end do
         end do
+        if( nkeep < ncomp ) raw_evidence(nkeep+1:) = 0.d0
         if( sum(raw_evidence) <= DTINY )then
-            raw_evidence = max(0.d0, fit%basis_energy)
-            if( sum(raw_evidence) <= DTINY ) raw_evidence(1) = 1.d0
+            raw_evidence(1) = 1.d0
         endif
         evidence = raw_evidence / sum(raw_evidence)
         do q = 1, ncomp
-            sumw = 0.d0
-            do i = 1, n
-                weights(i,q) = 1.d0 / (1.d0 + weights(i,q))
-                sumw = sumw + weights(i,q)
-            end do
-            if( sumw > DTINY )then
-                weights(:,q) = weights(:,q) * (evidence(q) * real(n,dp) / sumw)
-            else
-                weights(:,q) = evidence(q)
-            endif
+            weights(:,q) = evidence(q)
         end do
-        deallocate(raw_evidence)
+        deallocate(raw_evidence, eigvals_sp)
     end subroutine prepare_weighted_features
 
     subroutine make_boundary_bands( n, nchunks, min_len, max_len, max_shift, bound_lo, bound_hi )

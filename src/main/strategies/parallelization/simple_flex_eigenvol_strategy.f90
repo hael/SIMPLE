@@ -21,7 +21,7 @@ private
 
 real,     parameter :: TRAJ_SIGMAS(7) = [-3., -2., -1., 0., 1., 2., 3.]
 integer,  parameter :: FLEX_STATE_MAGIC = 1180054611
-integer,  parameter :: FLEX_STATE_VERSION = 1
+integer,  parameter :: FLEX_STATE_VERSION = 2
 
 contains
 
@@ -33,9 +33,9 @@ contains
         type(reconstructor)              :: mean_rec
         type(reconstructor), allocatable :: basis_recs(:)
         type(fplane_type),  allocatable  :: fpls(:)
-        type(string)                     :: sigma2_fname, zfname, eigfname
+        type(string)                     :: zfname, eigfname
         integer, allocatable             :: pinds(:)
-        real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
+        real(dp), allocatable            :: z(:,:), resid_energy(:), resid_mean_energy(:), eigvals(:)
         real(dp), allocatable            :: basis_metric(:,:)
         logical                          :: l_distributed
         integer                          :: nptcls, ncomp, niters, iter, q, kfromto_eff(2), nparts_eff, metric_valid_count
@@ -52,16 +52,14 @@ contains
             call cline%set('numlen', params%numlen)
         endif
         l_distributed = params%nparts > 1
-        allocate(z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls), &
-            &mode_vars(ncomp), basis_recs(ncomp), basis_metric(ncomp,ncomp))
+        allocate(z(nptcls,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls), &
+            &eigvals(ncomp), basis_recs(ncomp), basis_metric(ncomp,ncomp))
         call initialize_latents(z, nptcls, ncomp)
         call orthonormalize_latents(z, nptcls, ncomp)
-        z_postcov = 0.d0
-        mode_vars = 1.d0
         kfromto_eff = projected_model_kfromto(params)
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL PARTICLES  : ', nptcls
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL COMPONENTS : ', ncomp
-        write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL PPCA ITERS : ', niters
+        write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL PCA ITERS  : ', niters
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL THREADS    : ', nthr_glob
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL PARTS      : ', params%nparts
         write(logfhandle,'(A,I0)') '>>> FLEX_EIGENVOL BOX        : ', params%box_crop
@@ -73,8 +71,6 @@ contains
         write(logfhandle,'(A,A)')  '>>> FLEX_EIGENVOL MEAN MAP  : ', params%vols(1)%to_char()
         call flush(logfhandle)
         t_step = tic()
-        sigma2_fname = string('flex_eigenvol_sigma2.tmp')
-        call build%esig%new(params, build%pftc, sigma2_fname, params%box_crop)
         call init_mean_reconstructor(params, build, mean_rec)
         do q = 1, ncomp
             call init_output_reconstructor(params, build, basis_recs(q))
@@ -85,66 +81,61 @@ contains
             call flush(logfhandle)
             t_step = tic()
             if( l_distributed )then
-                call distributed_mstep(params, build, cline, basis_recs, z, z_postcov, &
+                call distributed_mstep(params, build, cline, basis_recs, z, &
                     &pinds, nptcls, ncomp, iter)
             else
-                call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postcov, &
+                call update_basis_from_latents(params, build, mean_rec, basis_recs, z, &
                     &pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL')
             endif
             call log_iter_seconds('>>> FLEX_EIGENVOL ITER M-STEP SECONDS', iter, toc(t_step))
             t_step = tic()
             if( l_distributed )then
-                call distributed_estep(params, build, cline, basis_recs, z, mode_vars, &
-                    &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, iter)
+                call distributed_estep(params, build, cline, basis_recs, z, &
+                    &resid_energy, resid_mean_energy, pinds, nptcls, ncomp, iter)
             else
-                call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, mode_vars, &
-                    &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL')
+                call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, &
+                    &resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL')
             endif
             call log_iter_seconds('>>> FLEX_EIGENVOL ITER E-STEP SECONDS', iter, toc(t_step))
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
             call log_residual_stats('>>> FLEX_EIGENVOL ITER MODE RESIDUAL ENERGY', resid_energy, nptcls)
             call log_residual_reduction('>>> FLEX_EIGENVOL ITER RESIDUAL REDUCTION', resid_mean_energy, resid_energy, nptcls)
             call log_latent_sdevs('>>> FLEX_EIGENVOL ITER LATENT SD', z, nptcls, ncomp)
-            call log_mode_vars('>>> FLEX_EIGENVOL ITER PPCA MODE VAR', mode_vars, ncomp)
-            ! Do not center, rotate, or rescale z independently here.  The
-            ! posterior covariance, prior variance, and basis must remain in
-            ! the same latent coordinate system for the next M-step.
         end do
         write(logfhandle,'(A)') '>>> FLEX_EIGENVOL FINAL REFIT'
         call flush(logfhandle)
         t_step = tic()
         if( l_distributed )then
-            call distributed_mstep(params, build, cline, basis_recs, z, z_postcov, &
+            call distributed_mstep(params, build, cline, basis_recs, z, &
                 &pinds, nptcls, ncomp, niters + 1)
         else
-            call update_basis_from_latents(params, build, mean_rec, basis_recs, z, z_postcov, &
+            call update_basis_from_latents(params, build, mean_rec, basis_recs, z, &
                 &pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL')
         endif
         call log_seconds('>>> FLEX_EIGENVOL FINAL M-STEP SECONDS', toc(t_step))
         t_step = tic()
         if( l_distributed )then
-            call distributed_estep(params, build, cline, basis_recs, z, mode_vars, &
-                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, niters + 1, &
+            call distributed_estep(params, build, cline, basis_recs, z, &
+                &resid_energy, resid_mean_energy, pinds, nptcls, ncomp, niters + 1, &
                 &basis_metric, metric_valid_count)
         else
-            call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, mode_vars, &
-                &z_postcov, resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL', &
+            call infer_latents_from_basis(params, build, mean_rec, basis_recs, z, &
+                &resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label='FLEX_EIGENVOL', &
                 &basis_metric=basis_metric, metric_valid_count=metric_valid_count)
         endif
         call log_seconds('>>> FLEX_EIGENVOL FINAL E-STEP SECONDS', toc(t_step))
         write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_EIGENVOL CANONICAL METRIC PARTICLES: ', metric_valid_count, ' / ', nptcls
-        call canonicalize_projected_latent_basis(basis_recs, z, z_postcov, mode_vars, basis_metric, &
+        call canonicalize_projected_latent_basis(basis_recs, z, eigvals, basis_metric, &
             &pinds, nptcls, ncomp, log_label='FLEX_EIGENVOL')
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MEAN-ONLY RESIDUAL ENERGY', resid_mean_energy, nptcls)
         call log_residual_stats('>>> FLEX_EIGENVOL FINAL MODE RESIDUAL ENERGY', resid_energy, nptcls)
         call log_residual_reduction('>>> FLEX_EIGENVOL FINAL RESIDUAL REDUCTION', resid_mean_energy, resid_energy, nptcls)
         call log_latent_sdevs('>>> FLEX_EIGENVOL FINAL LATENT SD', z, nptcls, ncomp)
         call log_latent_means('>>> FLEX_EIGENVOL FINAL LATENT MEAN', z, nptcls, ncomp)
-        call log_mode_vars('>>> FLEX_EIGENVOL FINAL PPCA MODE VAR', mode_vars, ncomp)
         call log_latent_covariance_eigs('>>> FLEX_EIGENVOL FINAL LATENT COV EIGVAL', z, nptcls, ncomp)
         if( present(fit_result) )then
-            call capture_fit_result(fit_result, pinds, z, z_postcov, resid_energy, resid_mean_energy, &
-                &mode_vars, basis_recs, nptcls, ncomp)
+            call capture_fit_result(fit_result, pinds, z, resid_energy, resid_mean_energy, &
+                &eigvals, nptcls, ncomp)
         endif
         call log_basis_fourier_norms('>>> FLEX_EIGENVOL OUTPUT BASIS FOURIER NORM', basis_recs, ncomp)
         zfname   = output_prefix(params)//'_zcoords.txt'
@@ -152,8 +143,8 @@ contains
         t_step = tic()
         call write_basis_outputs(params, basis_recs, ncomp)
         call write_particle_coordinates(zfname, pinds, z, resid_energy, nptcls, ncomp)
-        call write_canonical_eigenvalues(eigfname, mode_vars, ncomp)
-        call write_trajectory_volumes(params, basis_recs, mode_vars, ncomp)
+        call write_canonical_eigenvalues(eigfname, eigvals, ncomp)
+        call write_trajectory_volumes(params, basis_recs, eigvals, ncomp)
         call log_seconds('>>> FLEX_EIGENVOL OUTPUT SECONDS', toc(t_step))
         write(logfhandle,'(A,A)') '>>> FLEX_EIGENVOL WROTE Z TABLE : ', zfname%to_char()
         write(logfhandle,'(A,A)') '>>> FLEX_EIGENVOL WROTE EIGENVALUES : ', eigfname%to_char()
@@ -162,12 +153,10 @@ contains
         call cleanup_planes(fpls)
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(z) ) deallocate(z)
-        if( allocated(z_postcov) ) deallocate(z_postcov)
         if( allocated(resid_energy) ) deallocate(resid_energy)
         if( allocated(resid_mean_energy) ) deallocate(resid_mean_energy)
-        if( allocated(mode_vars) ) deallocate(mode_vars)
+        if( allocated(eigvals) ) deallocate(eigvals)
         if( allocated(basis_metric) ) deallocate(basis_metric)
-        call build%esig%kill
         call mean_rec%dealloc_rho
         call mean_rec%kill
         if( allocated(basis_recs) )then
@@ -177,33 +166,25 @@ contains
             end do
             deallocate(basis_recs)
         endif
-        call sigma2_fname%kill
         call zfname%kill
         call eigfname%kill
     end subroutine run_flex_eigenvol_linear
 
-    subroutine capture_fit_result( fit, pinds, z, z_postcov, resid_energy, resid_mean_energy, &
-        &mode_vars, basis_recs, nptcls, ncomp )
+    subroutine capture_fit_result( fit, pinds, z, resid_energy, resid_mean_energy, &
+        &eigvals, nptcls, ncomp )
         type(projected_latent_fit_result), intent(inout) :: fit
         integer,             intent(in) :: nptcls, ncomp
         integer,             intent(in) :: pinds(nptcls)
-        real(dp),            intent(in) :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
-        real(dp),            intent(in) :: resid_energy(nptcls), resid_mean_energy(nptcls), mode_vars(ncomp)
-        type(reconstructor), intent(in) :: basis_recs(ncomp)
-        integer :: q
+        real(dp),            intent(in) :: z(nptcls,ncomp)
+        real(dp),            intent(in) :: resid_energy(nptcls), resid_mean_energy(nptcls), eigvals(ncomp)
         call fit%kill
         fit%nptcls = nptcls
         fit%ncomp  = ncomp
         allocate(fit%pinds(nptcls), source=pinds)
         allocate(fit%z(nptcls,ncomp), source=z)
-        allocate(fit%z_postcov(nptcls,ncomp,ncomp), source=z_postcov)
         allocate(fit%resid_energy(nptcls), source=resid_energy)
         allocate(fit%resid_mean_energy(nptcls), source=resid_mean_energy)
-        allocate(fit%mode_vars(ncomp), source=mode_vars)
-        allocate(fit%basis_energy(ncomp), source=0.d0)
-        do q = 1, ncomp
-            fit%basis_energy(q) = basis_fourier_energy(basis_recs(q))
-        end do
+        allocate(fit%eigvals(ncomp), source=eigvals)
     end subroutine capture_fit_result
 
     subroutine run_flex_eigenvol_mstep_worker( params, build, cline )
@@ -212,23 +193,20 @@ contains
         class(cmdline),    intent(inout) :: cline
         type(reconstructor)              :: mean_rec
         type(fplane_type), allocatable   :: fpls(:)
-        type(string)                     :: sigma2_fname
         integer, allocatable             :: pinds(:)
-        real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
+        real(dp), allocatable            :: z(:,:)
         integer                          :: nptcls, ncomp, niters, partlims(2)
         call validate_inputs(params, cline, ncomp, niters)
         if( .not. cline%defined('infile') ) THROW_HARD('flex_eigenvol_mstep worker requires infile=<state.dat>')
         if( .not. cline%defined('outfile') ) THROW_HARD('flex_eigenvol_mstep worker requires outfile=<part.bin>')
-        call read_flex_state_file(params%infile, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp)
+        call read_flex_state_file(params%infile, pinds, z, nptcls, ncomp)
         params%nptcls = nptcls
         partlims = [params%fromp, params%top]
-        sigma2_fname = 'flex_eigenvol_sigma2_mstep_part'//int2str_pad(params%part, params%numlen)//'.tmp'
-        call build%esig%new(params, build%pftc, sigma2_fname, params%box_crop)
         call init_mean_reconstructor(params, build, mean_rec)
-        call write_mstep_stats_part_file(params, build, mean_rec, z, z_postcov, pinds, nptcls, ncomp, &
+        call write_mstep_stats_part_file(params, build, mean_rec, z, pinds, nptcls, ncomp, &
             &partlims, params%outfile, fpls, log_label='FLEX_EIGENVOL_WORKER')
         call cleanup_planes(fpls)
-        call cleanup_worker_state(mean_rec, sigma2_fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy)
+        call cleanup_worker_state(mean_rec, pinds, z)
     end subroutine run_flex_eigenvol_mstep_worker
 
     subroutine run_flex_eigenvol_estep_worker( params, build, cline )
@@ -238,25 +216,23 @@ contains
         type(reconstructor)              :: mean_rec
         type(reconstructor), allocatable :: basis_recs(:)
         type(fplane_type), allocatable   :: fpls(:)
-        type(string)                     :: sigma2_fname, basis_prefix
+        type(string)                     :: basis_prefix
         integer, allocatable             :: pinds(:)
-        real(dp), allocatable            :: z(:,:), z_postcov(:,:,:), resid_energy(:), resid_mean_energy(:), mode_vars(:)
+        real(dp), allocatable            :: z(:,:)
         integer                          :: nptcls, ncomp, niters, partlims(2), q
         call validate_inputs(params, cline, ncomp, niters)
         if( .not. cline%defined('infile') ) THROW_HARD('flex_eigenvol_estep worker requires infile=<state.dat>')
         if( .not. cline%defined('outfile') ) THROW_HARD('flex_eigenvol_estep worker requires outfile=<part.dat>')
         if( .not. cline%defined('refs') ) THROW_HARD('flex_eigenvol_estep worker requires refs=<basis-prefix>')
-        call read_flex_state_file(params%infile, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp)
+        call read_flex_state_file(params%infile, pinds, z, nptcls, ncomp)
         params%nptcls = nptcls
         allocate(basis_recs(ncomp))
         partlims = [params%fromp, params%top]
-        sigma2_fname = 'flex_eigenvol_sigma2_estep_part'//int2str_pad(params%part, params%numlen)//'.tmp'
-        call build%esig%new(params, build%pftc, sigma2_fname, params%box_crop)
         call init_mean_reconstructor(params, build, mean_rec)
         basis_prefix = normalize_basis_prefix(params%refs)
         call init_basis_reconstructors_from_prefix(params, build, basis_recs, ncomp, basis_prefix)
         call basis_prefix%kill
-        call write_estep_latent_part_file(params, build, mean_rec, basis_recs, mode_vars, pinds, nptcls, ncomp, &
+        call write_estep_latent_part_file(params, build, mean_rec, basis_recs, pinds, nptcls, ncomp, &
             &partlims, params%outfile, fpls, log_label='FLEX_EIGENVOL_WORKER')
         call cleanup_planes(fpls)
         do q = 1, ncomp
@@ -264,24 +240,21 @@ contains
             call basis_recs(q)%kill
         end do
         deallocate(basis_recs)
-        call cleanup_worker_state(mean_rec, sigma2_fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy)
+        call cleanup_worker_state(mean_rec, pinds, z)
     end subroutine run_flex_eigenvol_estep_worker
 
-    subroutine distributed_mstep( params, build, cline, basis_recs, z, z_postcov, pinds, nptcls, ncomp, iter )
+    subroutine distributed_mstep( params, build, cline, basis_recs, z, pinds, nptcls, ncomp, iter )
         class(parameters),   intent(inout) :: params
         class(builder),      intent(inout) :: build
         class(cmdline),      intent(inout) :: cline
         integer,             intent(in)    :: nptcls, ncomp, iter
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real(dp),            intent(in)    :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
+        real(dp),            intent(in)    :: z(nptcls,ncomp)
         integer,             intent(in)    :: pinds(nptcls)
         type(string), allocatable :: part_fnames(:)
         type(string) :: state_fname
-        real(dp), allocatable :: dummy_mode_vars(:), dummy_resid(:), dummy_mean_resid(:)
         integer :: exp_shape(3), npairs
         integer(longer) :: stats_bytes
-        allocate(dummy_mode_vars(ncomp), dummy_resid(nptcls), dummy_mean_resid(nptcls), source=0.d0)
-        dummy_mode_vars = 1.d0
         exp_shape  = shape(basis_recs(1)%cmat_exp)
         npairs     = (ncomp * (ncomp + 1)) / 2
         stats_bytes = product(int(exp_shape,longer)) * &
@@ -292,27 +265,25 @@ contains
             &stats_bytes * int(max(1,params%ncunits),longer)
         call flush(logfhandle)
         state_fname = flex_state_fname(iter)
-        call write_flex_state_file(state_fname, pinds, z, z_postcov, &
-            &dummy_mode_vars, dummy_resid, dummy_mean_resid, nptcls, ncomp)
+        call write_flex_state_file(state_fname, pinds, z, nptcls, ncomp)
         call make_part_fnames('flexvol_mstep_stats', iter, params%nparts, params%numlen, '.bin', part_fnames)
         call dispatch_flex_workers(params, cline, 'flex_eigenvol_mstep', state_fname, part_fnames, nptcls)
         call update_basis_from_mstep_stats_part_files(params, basis_recs, ncomp, part_fnames, params%nparts, &
             &log_label='FLEX_EIGENVOL')
         call cleanup_string_array(part_fnames)
-        deallocate(dummy_mode_vars, dummy_resid, dummy_mean_resid)
         call del_file(state_fname)
         call state_fname%kill
     end subroutine distributed_mstep
 
-    subroutine distributed_estep( params, build, cline, basis_recs, z, mode_vars, z_postcov, resid_energy, &
+    subroutine distributed_estep( params, build, cline, basis_recs, z, resid_energy, &
         &resid_mean_energy, pinds, nptcls, ncomp, iter, basis_metric, metric_valid_count )
         class(parameters),   intent(inout) :: params
         class(builder),      intent(inout) :: build
         class(cmdline),      intent(inout) :: cline
         integer,             intent(in)    :: nptcls, ncomp, iter
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real(dp),            intent(inout) :: z(nptcls,ncomp), mode_vars(ncomp)
-        real(dp),            intent(inout) :: z_postcov(nptcls,ncomp,ncomp), resid_energy(nptcls), resid_mean_energy(nptcls)
+        real(dp),            intent(inout) :: z(nptcls,ncomp)
+        real(dp),            intent(inout) :: resid_energy(nptcls), resid_mean_energy(nptcls)
         integer,             intent(in)    :: pinds(nptcls)
         real(dp), optional,  intent(out)   :: basis_metric(ncomp,ncomp)
         integer,  optional,  intent(out)   :: metric_valid_count
@@ -320,17 +291,17 @@ contains
         type(string) :: state_fname, basis_prefix
         state_fname  = flex_state_fname(iter)
         basis_prefix = flex_basis_prefix(iter)
-        call write_flex_state_file(state_fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp)
+        call write_flex_state_file(state_fname, pinds, z, nptcls, ncomp)
         call write_temp_basis_volumes(params, basis_recs, ncomp, basis_prefix)
         call make_part_fnames('flexvol_estep', iter, params%nparts, params%numlen, '.dat', part_fnames)
         call dispatch_flex_workers(params, cline, 'flex_eigenvol_estep', state_fname, part_fnames, nptcls, basis_prefix)
         if( present(basis_metric) )then
-            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, z_postcov, resid_energy, resid_mean_energy, &
-                &mode_vars, nptcls, ncomp, log_label='FLEX_EIGENVOL', basis_metric=basis_metric, &
+            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, resid_energy, resid_mean_energy, &
+                &nptcls, ncomp, log_label='FLEX_EIGENVOL', basis_metric=basis_metric, &
                 &metric_valid_count=metric_valid_count)
         else
-            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, z_postcov, resid_energy, resid_mean_energy, &
-                &mode_vars, nptcls, ncomp, log_label='FLEX_EIGENVOL')
+            call reduce_estep_latent_part_files(part_fnames, params%nparts, z, resid_energy, resid_mean_energy, &
+                &nptcls, ncomp, log_label='FLEX_EIGENVOL')
         endif
         call cleanup_string_array(part_fnames)
         call state_fname%kill
@@ -392,11 +363,10 @@ contains
         endif
     end function normalize_basis_prefix
 
-    subroutine write_flex_state_file( fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp )
+    subroutine write_flex_state_file( fname, pinds, z, nptcls, ncomp )
         class(string), intent(in) :: fname
         integer,      intent(in) :: nptcls, ncomp, pinds(nptcls)
-        real(dp),     intent(in) :: z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp)
-        real(dp),     intent(in) :: mode_vars(ncomp), resid_energy(nptcls), resid_mean_energy(nptcls)
+        real(dp),     intent(in) :: z(nptcls,ncomp)
         integer :: funit, io_stat, header(4)
         header = [FLEX_STATE_MAGIC, FLEX_STATE_VERSION, nptcls, ncomp]
         call del_file(fname)
@@ -404,25 +374,21 @@ contains
         call fileiochk('write_flex_state_file; open '//fname%to_char(), io_stat)
         write(funit, iostat=io_stat) header
         call fileiochk('write_flex_state_file; header '//fname%to_char(), io_stat)
-        write(funit, iostat=io_stat) pinds, mode_vars
-        call fileiochk('write_flex_state_file; particle/mode fields '//fname%to_char(), io_stat)
-        write(funit, iostat=io_stat) z, z_postcov, resid_energy, resid_mean_energy
+        write(funit, iostat=io_stat) pinds
+        call fileiochk('write_flex_state_file; particle fields '//fname%to_char(), io_stat)
+        write(funit, iostat=io_stat) z
         call fileiochk('write_flex_state_file; latent fields '//fname%to_char(), io_stat)
         call fclose(funit)
     end subroutine write_flex_state_file
 
-    subroutine read_flex_state_file( fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy, nptcls, ncomp )
+    subroutine read_flex_state_file( fname, pinds, z, nptcls, ncomp )
         class(string), intent(in) :: fname
         integer, allocatable, intent(inout) :: pinds(:)
-        real(dp), allocatable, intent(inout) :: z(:,:), z_postcov(:,:,:), mode_vars(:), resid_energy(:), resid_mean_energy(:)
+        real(dp), allocatable, intent(inout) :: z(:,:)
         integer, intent(out) :: nptcls, ncomp
         integer :: funit, io_stat, header(4)
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(z) ) deallocate(z)
-        if( allocated(z_postcov) ) deallocate(z_postcov)
-        if( allocated(mode_vars) ) deallocate(mode_vars)
-        if( allocated(resid_energy) ) deallocate(resid_energy)
-        if( allocated(resid_mean_energy) ) deallocate(resid_mean_energy)
         if( .not. file_exists(fname) ) THROW_HARD('missing flex_eigenvol state file: '//fname%to_char())
         call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
         call fileiochk('read_flex_state_file; open '//fname%to_char(), io_stat)
@@ -433,11 +399,10 @@ contains
         nptcls = header(3)
         ncomp  = header(4)
         if( nptcls < 1 .or. ncomp < 1 ) THROW_HARD('invalid flex_eigenvol state header: '//fname%to_char())
-        allocate(pinds(nptcls), z(nptcls,ncomp), z_postcov(nptcls,ncomp,ncomp), mode_vars(ncomp), &
-            &resid_energy(nptcls), resid_mean_energy(nptcls))
-        read(funit, iostat=io_stat) pinds, mode_vars
-        call fileiochk('read_flex_state_file; particle/mode fields '//fname%to_char(), io_stat)
-        read(funit, iostat=io_stat) z, z_postcov, resid_energy, resid_mean_energy
+        allocate(pinds(nptcls), z(nptcls,ncomp))
+        read(funit, iostat=io_stat) pinds
+        call fileiochk('read_flex_state_file; particle fields '//fname%to_char(), io_stat)
+        read(funit, iostat=io_stat) z
         call fileiochk('read_flex_state_file; latent fields '//fname%to_char(), io_stat)
         call fclose(funit)
     end subroutine read_flex_state_file
@@ -522,20 +487,14 @@ contains
         endif
     end subroutine cleanup_string_array
 
-    subroutine cleanup_worker_state( mean_rec, sigma2_fname, pinds, z, z_postcov, mode_vars, resid_energy, resid_mean_energy )
+    subroutine cleanup_worker_state( mean_rec, pinds, z )
         type(reconstructor), intent(inout) :: mean_rec
-        type(string),        intent(inout) :: sigma2_fname
         integer, allocatable, intent(inout) :: pinds(:)
-        real(dp), allocatable, intent(inout) :: z(:,:), z_postcov(:,:,:), mode_vars(:), resid_energy(:), resid_mean_energy(:)
+        real(dp), allocatable, intent(inout) :: z(:,:)
         call mean_rec%dealloc_rho
         call mean_rec%kill
         if( allocated(pinds) ) deallocate(pinds)
         if( allocated(z) ) deallocate(z)
-        if( allocated(z_postcov) ) deallocate(z_postcov)
-        if( allocated(mode_vars) ) deallocate(mode_vars)
-        if( allocated(resid_energy) ) deallocate(resid_energy)
-        if( allocated(resid_mean_energy) ) deallocate(resid_mean_energy)
-        call sigma2_fname%kill
     end subroutine cleanup_worker_state
 
     subroutine validate_inputs( params, cline, ncomp, niters )
@@ -553,9 +512,9 @@ contains
         endif
         ncomp  = max(1, params%neigs)
         niters = max(1, params%maxits)
-        if( ncomp > 16 )then
-            THROW_WARN('flex_eigenvol capping neigs at 16 for this first PPCA implementation')
-            ncomp = 16
+        if( ncomp > 20 )then
+            THROW_WARN('flex_eigenvol capping neigs at 20')
+            ncomp = 20
         endif
     end subroutine validate_inputs
 
@@ -663,11 +622,11 @@ contains
         call fclose(funit)
     end subroutine write_canonical_eigenvalues
 
-    subroutine write_trajectory_volumes( params, basis_recs, mode_vars, ncomp )
+    subroutine write_trajectory_volumes( params, basis_recs, eigvals, ncomp )
         class(parameters),   intent(inout) :: params
         integer,             intent(in)    :: ncomp
         type(reconstructor), intent(inout) :: basis_recs(ncomp)
-        real(dp),            intent(in)    :: mode_vars(ncomp)
+        real(dp),            intent(in)    :: eigvals(ncomp)
         type(image)  :: mean_img, basis_img, traj_img, diff_img
         type(string) :: fname
         real         :: sig
@@ -680,7 +639,7 @@ contains
             call basis_img%copy(basis_recs(q))
             if( basis_img%is_ft() ) call basis_img%ifft
             call log_image_stats('>>> FLEX_EIGENVOL TRAJECTORY BASIS STATS', basis_img)
-            sig = real(sqrt(max(0.d0, mode_vars(q))))
+            sig = real(sqrt(max(0.d0, eigvals(q))))
             if( sig <= TINY ) sig = 1.
             write(logfhandle,'(A,I0,A,ES12.4)') '>>> FLEX_EIGENVOL TRAJECTORY EIGEN SD ', q, ': ', sig
             call flush(logfhandle)
@@ -810,17 +769,6 @@ contains
         end do
         call flush(logfhandle)
     end subroutine log_latent_means
-
-    subroutine log_mode_vars( label, mode_vars, ncomp )
-        character(len=*), intent(in) :: label
-        integer,          intent(in) :: ncomp
-        real(dp),         intent(in) :: mode_vars(ncomp)
-        integer :: q
-        do q = 1, ncomp
-            write(logfhandle,'(A,1X,I0,A,ES12.4)') trim(label), q, ': ', mode_vars(q)
-        end do
-        call flush(logfhandle)
-    end subroutine log_mode_vars
 
     subroutine log_basis_fourier_norms( label, basis_recs, ncomp )
         character(len=*),   intent(in) :: label
