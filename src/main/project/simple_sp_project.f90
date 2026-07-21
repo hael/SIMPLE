@@ -386,15 +386,15 @@ interface
     end subroutine set_boxfile
 
     module integer function get_nmovies( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
     end function get_nmovies
 
     module integer function get_nintgs( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
     end function get_nintgs
 
     module integer function get_nframes( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
     end function get_nframes
 
     module subroutine get_mic2stk_inds( self, mic2stk_inds, stk2mic_inds )

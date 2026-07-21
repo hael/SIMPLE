@@ -413,7 +413,7 @@ contains
     end subroutine set_boxfile
 
     module integer function get_nmovies( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
         type(string) :: imgkind
         integer :: i
         get_nmovies = 0
@@ -424,7 +424,7 @@ contains
     end function get_nmovies
 
     module integer function get_nintgs( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
         integer :: i
         get_nintgs = 0
         do i=1,self%os_mic%get_noris()
@@ -433,7 +433,7 @@ contains
     end function get_nintgs
 
     module integer function get_nframes( self )
-        class(sp_project), target, intent(inout) :: self
+        class(sp_project), target, intent(in) :: self
         integer :: i
         get_nframes = 0
         do i=1,self%os_mic%get_noris()

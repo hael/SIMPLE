@@ -541,8 +541,9 @@ contains
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
-        fromto_here = self%header(isegment)%fromto
-        if( present(fromto) ) fromto_here = fromto
+        fromto_here    = self%header(isegment)%fromto
+        present_fromto = present(fromto)
+        if( present_fromto ) fromto_here = fromto
         if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
             write(logfhandle,*) 'filename', self%fname%to_char()
             THROW_HARD('Invalid fromto(1) index, out of range')
@@ -552,9 +553,9 @@ contains
             THROW_HARD('Invalid fromto(2) index, out of range')
         endif
         nthr = 1
-        if( present(wthreads) )then
-            if( wthreads ) nthr = omp_get_max_threads()
-        endif
+        ! if( present(wthreads) )then
+        !     if( wthreads ) nthr = omp_get_max_threads()
+        ! endif
         oonly_ctfparams_state_eo = .false.
         if( present(only_ctfparams_state_eo) ) oonly_ctfparams_state_eo = only_ctfparams_state_eo
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
@@ -581,7 +582,7 @@ contains
                     read(unit=self%funit,pos=ibytes) tmp_string
                     ibytes = ibytes + nbatch*self%header(isegment)%n_bytes_per_record
                     ! parse
-                    !omp parallel do default(shared) private(i,irec,ipos) schedule(static) proc_bind(close)
+                    ! inactive !omp parallel do default(shared) private(i,irec,ipos) schedule(static) proc_bind(close)
                     do i = 1,nbatch
                         irec  = batches(ibatch,1) + i - 1
                         ipos  = (i-1) * self%header(isegment)%n_bytes_per_record + 1
@@ -601,7 +602,7 @@ contains
                             endif
                         endif
                     enddo
-                    !omp end parallel do
+                    ! inactive!omp end parallel do
                     deallocate(tmp_string)
                 enddo
             endif
