@@ -2,12 +2,14 @@
 program simple_test_flex_diffmap_graph
 use simple_core_module_api
 use simple_diff_map_graphs, only: diffmap_graph, build_gated_euclidean_knn_graph, &
-    &find_gated_euclidean_neighbors_rows, build_gated_euclidean_graph_from_neighbors
+    &find_gated_euclidean_neighbors_rows, build_gated_euclidean_graph_from_neighbors, build_euclidean_knn_graph
+use simple_diffusion_maps, only: embed_graph
 implicit none
-type(diffmap_graph) :: graph,graph_parts
-real :: features(2,6), dirs(3,2), cmean
+type(diffmap_graph) :: graph,graph_parts,graph_many
+real :: features(2,6), features_many(2,24), dirs(3,2), cmean,angle
 integer, allocatable :: nbrs1(:,:),nbrs2(:,:),nbrs(:,:),nc1(:),nc2(:),nc(:)
 real, allocatable :: d2s1(:,:),d2s2(:,:),d2s(:,:)
+real, allocatable :: coords(:,:),raw_coords(:,:),eigvals(:),eigenfunctions(:,:),nystrom_coords(:,:)
 integer :: proj(6), cmin, cmax, i, p
 
 features(:,1) = [0.0,0.0]
@@ -39,6 +41,20 @@ call build_gated_euclidean_graph_from_neighbors(6,nbrs,d2s,nc,graph_parts)
 if( any(graph_parts%rowptr/=graph%rowptr) ) stop 'distributed graph row pointers differ'
 if( any(graph_parts%colind/=graph%colind) ) stop 'distributed graph neighbors differ'
 if( maxval(abs(graph_parts%w-graph%w))>1.e-6 ) stop 'distributed graph weights differ'
+call embed_graph(graph,2,coords,eigvals,raw_coords,eigenfunctions,nystrom_coords)
+if( any(shape(eigenfunctions)/=[2,6]) .or. any(shape(nystrom_coords)/=[2,6]) ) &
+    &stop 'diffusion spectral output shape mismatch'
+if( maxval(abs(eigenfunctions-nystrom_coords))>1.e-4 ) stop 'training-node Nystrom coefficients differ from eigenfunctions'
+deallocate(coords,raw_coords,eigvals,eigenfunctions,nystrom_coords)
+do i=1,size(features_many,2)
+    angle=2.*acos(-1.)*real(i-1)/real(size(features_many,2))
+    features_many(:,i)=[cos(angle),sin(angle)]
+end do
+call build_euclidean_knn_graph(features_many,6,'none',graph_many)
+call embed_graph(graph_many,21,coords,eigvals)
+if( size(eigvals)/=21 .or. any(shape(coords)/=[21,24]) ) stop 'diffusion scan was capped below requested rank'
+deallocate(coords,eigvals)
+call graph_many%kill()
 deallocate(nbrs1,nbrs2,nbrs,d2s1,d2s2,d2s,nc1,nc2,nc)
 call graph_parts%kill()
 call graph%kill()

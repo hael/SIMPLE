@@ -1,6 +1,5 @@
 !@descr: tools and metrics for clustering analysis
 module simple_clustering_utils
-use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_kmedoids, only: kmedoids
 use simple_aff_prop, only: aff_prop
 use simple_hclust,   only: hclust
@@ -8,105 +7,11 @@ use simple_stat,     only: calc_ap_pref
 use simple_core_module_api
 implicit none
 
-public :: cluster_dmat, cluster_coords_kmedoids_coverage
-public :: labels2smat, aggregate, silhouette_score, DBIndex, DunnIndex
+public :: cluster_dmat, labels2smat, aggregate, silhouette_score, DBIndex, DunnIndex
 private
 #include "simple_local_flags.inc"
 
 contains
-
-    ! K-medoids for low-dimensional Euclidean coordinates without materializing
-    ! an N-by-N distance matrix. Farthest-point seeding gives coverage of the
-    ! coordinate manifold; the update is the exact squared-Euclidean medoid
-    ! (the member nearest the cluster centroid).
-    subroutine cluster_coords_kmedoids_coverage( coords, nclust, i_medoids, labels )
-        real,                 intent(in)  :: coords(:,:)
-        integer,              intent(in)  :: nclust
-        integer, allocatable, intent(out) :: i_medoids(:), labels(:)
-        integer, parameter :: MAXITS=20
-        real(dp), allocatable :: centroid(:), mind2(:)
-        integer, allocatable :: labels_prev(:)
-        logical, allocatable :: selected(:)
-        real(dp) :: d2, objective
-        integer :: n,ndim,i,j,k,iter,nmembers,loc(1)
-        n=size(coords,1); ndim=size(coords,2)
-        if( n<2 .or. ndim<1 ) THROW_HARD('invalid coordinate table for coverage k-medoids')
-        if( nclust<2 .or. nclust>n ) THROW_HARD('invalid cluster count for coverage k-medoids')
-        if( .not.all(ieee_is_finite(coords)) ) THROW_HARD('nonfinite coordinate in coverage k-medoids')
-        allocate(i_medoids(nclust),labels(n),labels_prev(n),selected(n),mind2(n),centroid(ndim))
-        selected=.false.; labels=0; labels_prev=-1
-        centroid=sum(real(coords,dp),dim=1)/real(n,dp)
-        do i=1,n
-            mind2(i)=sum((real(coords(i,:),dp)-centroid)**2)
-        end do
-        loc=minloc(mind2); i_medoids(1)=loc(1); selected(loc(1))=.true.
-        do i=1,n
-            mind2(i)=coord_dist2(coords,i,i_medoids(1))
-        end do
-        do k=2,nclust
-            loc=maxloc(mind2,mask=.not.selected)
-            i_medoids(k)=loc(1); selected(loc(1))=.true.
-            do i=1,n
-                mind2(i)=min(mind2(i),coord_dist2(coords,i,i_medoids(k)))
-            end do
-        end do
-        do iter=1,MAXITS
-            call assign_to_medoids(coords,i_medoids,labels,objective)
-            if( all(labels==labels_prev) ) exit
-            labels_prev=labels
-            do k=1,nclust
-                nmembers=count(labels==k)
-                if( nmembers<1 ) THROW_HARD('empty cluster in coverage k-medoids')
-                centroid=0._dp
-                do i=1,n
-                    if( labels(i)==k ) centroid=centroid+real(coords(i,:),dp)
-                end do
-                centroid=centroid/real(nmembers,dp)
-                d2=huge(d2); j=i_medoids(k)
-                do i=1,n
-                    if( labels(i)/=k ) cycle
-                    if( sum((real(coords(i,:),dp)-centroid)**2)<d2 )then
-                        d2=sum((real(coords(i,:),dp)-centroid)**2); j=i
-                    endif
-                end do
-                i_medoids(k)=j
-            end do
-        end do
-        call assign_to_medoids(coords,i_medoids,labels,objective)
-        write(logfhandle,'(A,I0,A,I0,A,ES14.6)') '>>> COVERAGE K-MEDOIDS clusters=',nclust, &
-            &' iterations=',min(iter,MAXITS),' squared_distance=',objective
-        deallocate(labels_prev,selected,mind2,centroid)
-
-    contains
-
-        real(dp) function coord_dist2( x, ia, ib ) result(val)
-            real, intent(in) :: x(:,:)
-            integer, intent(in) :: ia,ib
-            val=sum((real(x(ia,:),dp)-real(x(ib,:),dp))**2)
-        end function coord_dist2
-
-        subroutine assign_to_medoids( x, meds, labs, obj )
-            real, intent(in) :: x(:,:)
-            integer, intent(in) :: meds(:)
-            integer, intent(out) :: labs(:)
-            real(dp), intent(out) :: obj
-            real(dp) :: best,cand
-            integer :: ii,kk,bestk
-            obj=0._dp
-            !$omp parallel do default(shared) private(ii,kk,best,bestk,cand) reduction(+:obj) schedule(static) proc_bind(close)
-            do ii=1,size(x,1)
-                best=huge(best); bestk=1
-                do kk=1,size(meds)
-                    cand=coord_dist2(x,ii,meds(kk))
-                    if( cand<best )then
-                        best=cand; bestk=kk
-                    endif
-                end do
-                labs(ii)=bestk; obj=obj+best
-            end do
-            !$omp end parallel do
-        end subroutine assign_to_medoids
-    end subroutine cluster_coords_kmedoids_coverage
 
     subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref, nclust_max )
         real,                 intent(in)    :: dmat(:,:)

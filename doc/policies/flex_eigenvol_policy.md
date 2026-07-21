@@ -17,8 +17,7 @@ The implemented input assumptions are:
 - fixed 3D orientations, in-plane rotations, shifts, and CTF parameters;
 - an explicit projection-grid size (`nspace`);
 - `ctf=yes` or already phase-flipped (`ctf=flip`) particle images;
-- one low-pass limit `lp` used for both graph features and 3D pre-image
-  reconstruction.
+- one low-pass limit `lp` used only for graph-feature construction.
 
 Before feature preparation, the implementation requires at least three
 selected active particles, matching ptcl2D/ptcl3D field sizes, valid and unique
@@ -36,13 +35,14 @@ selection and reconstruction.
 
 ## 2. Canonical registered frame
 
-Each selected active particle is geometrically registered once by the inverse
-of its stored in-plane shift and in-plane angle. Feature preparation includes
-the standard particle normalization performed by `transform_ptcls`.
-Reconstruction later applies the normal reconstruction batch preprocessing to
-the persisted registered image, but it does not repeat the geometric
-registration. The implementation extends and uses `transform_ptcls` with an
-explicit particle-index batch, following the matcher batch policy
+Each selected active particle is geometrically registered once for feature
+preparation by the inverse of its stored in-plane shift and in-plane angle.
+Feature preparation includes the standard particle normalization performed by
+`transform_ptcls`. The residual 3D fit separately reads the original images
+through the projected-model batch path and applies their stored geometry in
+the projection operator; it does not interpolate them into the registered 2D
+frame. The implementation extends and uses `transform_ptcls` with an explicit
+particle-index batch, following the matcher batch policy
 `min(nptcls,nthr*BATCHTHRSZ)` and the established project-aware particle
 reader. The explicit `nspace` value defines the builder grid and the stored
 project `proj` field is authoritative. Every selected `proj` must lie in
@@ -97,7 +97,8 @@ residual is serialized in Cartesian image space. When active, the configured
 mean-volume mask is applied before the discrete projections are generated.
 Each residual is then restricted by the active `lp` and 2D soft mask before
 serialization. The comparison is therefore CTF-consistent in the phase-flipped
-observation model and uses the same low-pass setting as reconstruction.
+observation model. This graph-feature limit is not applied to the generative
+volumes.
 
 Particles are binned by the validated discrete projection index from the
 builder's symmetry-reduced `eulspace`. Projection directions are taken from
@@ -134,11 +135,15 @@ eigensolver. The trivial stationary vector is omitted. Nontrivial eigenpairs
 are returned in descending eigenvalue order, and the coordinate convention of
 `embed_graph` is retained.
 
-ICM selects a prefix of the spectrum with a minimum rank of one. The requested
-scan limit is clamped to `min(max(neigs,1),20)` and is further limited by the
-number of nontrivial graph modes available. Zero selected modes is invalid. No
-scientific assumption is made about a preferred ordering beyond the descending
-order required by the current prefix-based ICM selector.
+With the default `icm=yes`, ICM selects a prefix of the spectrum with a minimum
+rank of one. With `icm=no`, rank selection is bypassed and every nontrivial
+eigenpair returned by the scan is retained for target selection, residual-basis
+fitting, and representative synthesis. `neigs` must be positive and has no
+fixed implementation maximum. The eigensolver limits the requested scan only
+to the nontrivial modes available for the selected-particle graph (at most
+`N-2` for the current embedding). Thus “all” means all eigenpairs returned
+under the configured `neigs` scan limit, not necessarily every possible graph
+eigenpair. Zero retained modes is invalid.
 
 The coordinate and spectrum outputs are:
 
@@ -146,75 +151,74 @@ The coordinate and spectrum outputs are:
 - `flex_diffmap_spectrum.txt`;
 - `flex_diffmap_graph.txt`.
 
-## 5. Manifold targets and Hermitian 3D pre-images
+## 5. Manifold targets and residual Nyström 3D pre-images
 
 The normalized coordinates written for users and embedding consumers are not
 used to place reconstruction targets. `embed_graph` also returns the raw
 diffusion coordinates `lambda_q psi_q`; this preserves diffusion-eigenvalue
 scaling when distances are evaluated.
 
-Representative targets are selected from actual particles by
-coverage-initialized k-medoids in the retained raw diffusion coordinates. The
-first seed is the particle nearest the global centroid; subsequent seeds use
-greedy farthest-point coverage. The assignment/update step then refines the
-targets as squared-Euclidean medoids without constructing a dense `N x N`
-distance matrix. The requested count is controlled by `npreimages` and defaults
-to eight. It is clamped only when more representatives than particles are
-requested; the implementation does not use silhouette score or claim to infer
-a physical number of discrete conformational classes.
+Representative targets are selected from actual particles with the same
+`cluster_dmat(...,'kmed',...)` path used by `cls_split`. The distance matrix is
+formed from the retained raw diffusion coordinates. The requested count is
+controlled by `npreimages` and defaults to eight. It is clamped only when more
+representatives than particles are requested; the workflow does not use
+silhouette selection or claim that the requested representatives are physical
+discrete conformational classes.
 
-For target medoid `s`, the kernel bandwidth is the median raw diffusion
-distance of its hard k-medoid members. Every particle receives a nonnegative
-soft weight
-
-```text
-w_is = exp(-0.5 * diffusion_distance(i,s)**2 / bandwidth_s**2)
-```
-
-Hard labels select and describe targets; they do not truncate reconstruction
-support. Because every target is a training graph node, no out-of-sample
-coordinate extension is required. The raw diffusion embedding is the
-Nyström-compatible spectral coordinate system and the positive local kernel
-defines the regularized pre-image weights.
-
-The Hermitian Fourier reconstruction formulation is retained. State `s`
-accumulates the complete registered particle observation with
+The eigensolve also retains the nontrivial graph eigenfunctions `psi_q`. The
+training design for the 3D residual model is `z_iq = psi_q(i)`, matching the
+residual-mode coefficients used by the `denoise_project` Nyström pre-image.
+For every graph node, the corresponding evaluation coefficient is calculated
+with the same normalized graph operator:
 
 ```text
-numerator scale = w_is
-density scale   = w_is
+phi_q(i) = sum_j Wnorm(i,j) psi_q(j) / lambda_q
 ```
 
-through `insert_plane_oversamp_multi_scaled`. The same weight is required in
-both accumulators because it is a fractional observation/state-membership
-weight. Squaring it in the density would instead implement a regression-basis
-normal equation. The former mean-subtracted `z_iq`/`z_iq**2` linear mode
-reconstruction is not part of the production pre-image path. The numerator is
-complex and Hermitian; the density is real and uses the particle CTF-squared
-sampling density. States are independent, so reconstruction cost and memory
-are linear in `npreimages`.
+The representative target coefficient is `phi_q` at its medoid node. There is
+no Gaussian distance kernel, fitted bandwidth, soft cluster-membership table,
+or independent reconstruction of common signal for each representative.
 
-For phase-flipped input, `gen_fplane4rec` applies `abs(CTF)` to the numerator
-and `CTF**2` to the density. The resulting maps are CTF-density-corrected
-Hermitian least-squares reconstructions. They must not be described as
-unit-transfer backprojections or as statistically Wiener-restored maps.
+The 2D-to-3D translation uses `simple_projected_latent_model`. It projects the
+fixed supplied mean, subtracts that prediction from every prepared particle
+Fourier plane, and accumulates the coupled residual normal equations. The
+right-hand side is weighted by `z_iq`; the density contains every cross-term
+`z_iq*z_ir`. The established coupled block solver therefore accounts for
+correlation between retained graph eigenfunctions instead of reconstructing
+each component independently. The fitted residual basis volumes retain the
+existing spatial-mask policy, but flex explicitly disables the projected
+model's `lp`-controlled Fourier-plane truncation and final `bp` operation. The
+public `lp` parameter affects graph features only. No FSC-derived weighting,
+cutoff, or filtering is applied to the residual basis or synthesized states.
 
-Reconstruction initializes a new builder from
-`flex_registered_particles.simple` and reads the preserved registered stack
-through the established matcher batch reader. It does not reread or
-re-register the raw particle stack. The canonical project has zero in-plane
-geometry and canonical astigmatism metadata, while `ctf=flip` causes
-`gen_fplane4rec` to use the correct amplitude and density model.
+Pre-image state `s` is synthesized as
 
-Reconstructors are processed in ordered blocks of at most four states. The
-implementation measures and logs the expanded bytes per state and the
-estimated state-block allocation. A smaller final block is used when fewer
-than four states remain.
+```text
+V_s = V_mean + sum_q phi_q(s) B_q
+```
 
-The configured mask and `lp` are applied during finalization. There is no
-linear mode synthesis, post-reconstruction Gram rotation, PCA
-orthogonalization, trajectory-volume fan-out, duplicate difference-map output,
-or sigma-derived scaling.
+where the original supplied mean is fixed and `B_q` are the fitted residual
+3D basis volumes. The basis volumes are an internal representation; the
+representative state volumes, not linear one-mode trajectories, are the
+diagnostic outputs. Setting every target coefficient to zero reproduces the
+supplied mean by construction.
+
+The residual basis fit reads the original project through the established
+projected-model matcher batch reader and uses the original fixed orientations,
+shifts, and CTF metadata. It does not geometrically register particles again.
+This is deliberate: the registered stack has already passed through
+`transform_ptcls` normalization and interpolation, whereas the established
+projected-latent kernel owns raw-particle normalization and observation-model
+preparation. Feeding that registered stack to the kernel would normalize it a
+second time. `flex_registered_particles.simple` remains the durable feature
+project and carries the spectral coordinates used by distributed workers; the
+original input project is not edited.
+
+There is no alternating latent-coordinate refinement, PCA canonicalization,
+trajectory-volume fan-out, duplicate difference-map output, or sigma-derived
+scaling. Diffusion eigenfunctions remain fixed after the graph eigensolve; the
+projected residual basis is fitted once.
 
 ## 6. Shared- and distributed-memory execution
 
@@ -234,8 +238,8 @@ program name or reconstruction-only commander such as the removed
 factory pattern currently used by `cls_split` and `denoise_project`.
 
 The shared strategy performs registered feature preparation, sparse graph
-construction, embedding, ICM selection, representative selection, soft-kernel
-construction, and blocked Hermitian state reconstruction in the main process
+construction, embedding, ICM selection, representative selection, one coupled
+projected-residual basis fit, and Nyström state synthesis in the main process
 using the established OpenMP kernels. The nano3D latent
 caller uses a separate in-process embedding API and deliberately skips
 reconstruction; this is not a second executable path.
@@ -249,9 +253,9 @@ barriers behind the same `flex_eigenvol` program:
 2. Graph workers read the residual part stacks through buffered `stack_io`,
    calculate only their assigned source rows of the angularly gated kNN table,
    and write those sparse neighbor rows for master assembly.
-3. Reconstruction workers reread the registered project, obtain their
-   `flex_weightN` soft pre-image weights from `ptcl3D` metadata, and accumulate
-   their state statistics.
+3. Residual-model workers reread the registered project, obtain the retained
+   `flex_spectralN` eigenfunction values from `ptcl3D` metadata, and accumulate
+   their assigned coupled projected-latent M-step statistics.
 
 The master constructs the normal `qsys_env` job description and writes one
 text particle-assignment file per worker with `arr2txtfile`. After feature
@@ -260,29 +264,29 @@ building `flex_registered_particles.simple` over the registered part stacks;
 it does not concatenate or rewrite them. After graph workers finish, the
 master validates complete, nonoverlapping row coverage, assembles and
 normalizes the sparse graph, and owns the global sparse eigensolve, ICM
-selection, k-medoid selection, and kernel construction. It writes coordinates,
-hard `flex_cluster` assignments, `flex_medoid` markers, and `flex_weightN`
-values into the registered project's `ptcl3D` metadata before launching
-reconstruction. There is no custom binary worker state file.
+selection, k-medoid selection, and Nyström target evaluation. It writes
+coordinates, hard `flex_cluster` assignments, `flex_medoid` markers, and
+`flex_spectralN` values into the registered project's `ptcl3D` metadata before
+launching the residual-model workers. There is no custom flex worker-state
+file.
 
 The deliberate scheduling unit is a contiguous range of selected-particle
-rows, not class. Feature preparation and graph source-row evaluation are
-particle-separable. Reconstruction produces global per-state volumes, so every
-worker contributes additive Fourier numerator and density statistics to every
-state; there are no independent per-class outputs to schedule. The effective
-worker count is capped by the selected particle count, and the `qsys_env`
-ranges are materialized exactly in the assignment files.
+rows, not class. Feature preparation, graph source-row evaluation, and coupled
+normal-equation accumulation are particle-separable. The fitted residual basis
+and all representative volumes are global outputs; there are no independent
+per-class outputs to schedule. The effective worker count is capped by the
+selected particle count, and the `qsys_env` ranges are materialized exactly in
+the assignment files.
 
-Each worker processes its assigned particles in the established matcher
-batches and states in blocks of at most four. For every state and part it calls
-`reconstructor%compress_exp`, writes the Fourier numerator with the inherited
-image writer, and writes density with `reconstructor%write_rho`. The master
-reads those volume/rho pairs into regular reconstructors and combines them
-with `reconstructor%sum_reduce`, one state block at a time. The distributed
-handoff and reduction do not serialize, seek through, or manually add
-`cmat_exp`/`rho_exp`. Successful
-reduction removes the temporary volume/rho pairs and the standard strategy
-cleanup removes assignment files and invokes queue-system cleanup.
+Each worker processes its assigned particles in the established projected
+latent-model matcher batches and writes one
+`write_mstep_stats_part_file` result. The master calls
+`update_basis_from_mstep_stats_part_files`, which validates and sums those
+coupled sufficient statistics, solves the global basis system, and finalizes
+the residual basis. The master alone adds the fixed mean and synthesizes the
+requested Nyström representatives. Successful reduction removes the temporary
+statistics files; standard strategy cleanup removes assignment files and
+invokes queue-system cleanup.
 
 The former `flex_eigenvol_mstep` and `flex_eigenvol_estep` programs and their
 iterative PCA state are not part of this policy.
@@ -294,18 +298,17 @@ Standard output is stage-oriented and concise. It reports:
 - particle count, `k_nn`, `nang_nbrs`, `lp`, and maximum rank;
 - registered-feature size and preparation time;
 - candidate-count range/mean, graph edge count, and graph time;
-- selected ICM rank and convergence summary;
-- representative count, medoid particle, hard population, kernel bandwidth,
-  and effective population;
-- reconstruction block size/allocation and progress when state reconstruction
-  is enabled;
+- retained rank, whether ICM was enabled, and its convergence summary when used;
+- representative count, medoid particle, and hard population;
+- coupled projected-residual fit and reduction progress when state
+  reconstruction is enabled;
 - an explicit reconstruction-skipped message for embedding-only callers;
 - registered stack/project names.
 
 When reconstruction is enabled, the requested `outvol` is pre-image state 1.
 Further states use the same stem with three-digit suffixes. The default is
 `flex_state_001.mrc`. `flex_diffmap_preimages.txt` records state number, medoid
-row and particle, hard population, bandwidth, and effective population.
+row and particle, and hard population.
 Embedding-only execution writes no state volumes.
 
 The nano3D latent trajectory integration is an embedding-only caller. It uses
@@ -323,16 +326,18 @@ constructing trajectory chunks.
 | Angular candidate cap and sparse residual kNN graph | Implemented |
 | Sparse diffusion embedding | Implemented |
 | ICM prefix rank selection, rank at least one | Implemented |
-| Coverage-initialized k-medoids in raw diffusion distance | Implemented |
-| Nonnegative soft diffusion-kernel pre-image weights | Implemented |
-| Hermitian CTF-density 3D state reconstruction | Implemented |
+| `icm=no` retention of every eigenpair returned by the `neigs` scan | Implemented |
+| Existing `cluster_dmat` k-medoids in raw diffusion distance | Implemented |
+| Denoise-style graph eigenfunction/Nyström coefficients | Implemented |
+| Coupled projection-aware residual 3D basis fit | Implemented |
+| Fixed-mean Nyström representative synthesis | Implemented |
+| Generative volumes without FSC or low-pass filtering | Implemented |
 | Shared-memory execution | Implemented |
 | Single shmem/worker/master strategy factory and executable | Implemented |
-| qsys assignment files plus project-backed worker weights | Implemented |
+| qsys assignment files plus project-backed spectral coordinates | Implemented |
 | Distributed registered-feature preparation with part stacks | Implemented |
 | Distributed angular-gated graph-row calculation and sparse assembly | Implemented |
-| Reconstructor-owned distributed volume/rho I/O and `sum_reduce` | Implemented |
-| Bounded four-state reconstruction and blocked reduction | Implemented |
+| Projected-latent distributed sufficient-statistics reduction | Implemented |
 | Nano3D embedding-only integration without duplicate ICM/reconstruction | Implemented |
 | Iterative PCA/PPCA and sigma estimation | Removed from flex workflow |
 | Even/odd maps and FSC per pre-image state | Forward-facing development |
@@ -344,7 +349,10 @@ would also be valuable, but it requires a clearly specified likelihood and
 calibrated uncertainty model. It must not be inferred from diffusion
 eigenvalues alone.
 
-Project FSCs are already two-fold cross-validated. A future shrinkage method
-should use those independently validated FSC estimates directly—preferably
+Project FSCs are already two-fold cross-validated. Once the pre-image model and
+representative generation are otherwise settled, a future shrinkage method can
+use those independently validated FSC estimates directly—preferably
 state-specific FSCs when available—to shrink Fourier coefficients continuously.
 This is distinct from applying a hard or soft FSC cutoff as an output filter.
+Until that work is implemented and validated, the generative volumes remain
+free of FSC-derived weighting, cutoff, and filtering.

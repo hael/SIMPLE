@@ -301,17 +301,22 @@ contains
         call flex_eigenvol%new(&
         &'flex_eigenvol',&
         &'Diffusion-manifold representative 3D states',&
-        &'builds a sparse diffusion map, selects coverage-initialized k-medoids, and reconstructs soft kernel-weighted 3D pre-image states',&
+        &'builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean',&
         &'simple_exec',&
         &.true.)
         call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
-            'Mean volume', 'Mean volume used for residual backprojection', &
+            'Mean volume', 'Fixed mean volume used by the projection-aware residual model', &
             'input volume e.g. vol1.mrc', .true., '')
         call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
         call flex_eigenvol%add_input(UI_SRCH, nspace, required_override=.true.)
         call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
-            'Maximum number of diffusion modes (maximum 20)', &
-            'Upper bound scanned before ICM feature selection', '# modes', .false., 20.0)
+            'Maximum number of diffusion modes (default 20)', &
+            'Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no', &
+            '# modes >=1', .false., 20.0)
+        call flex_eigenvol%add_input(UI_FILT, 'icm', 'binary', &
+            'Automatic diffusion-mode selection', &
+            'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan', &
+            '(yes|no){yes}', .false., 'yes')
         call flex_eigenvol%add_input(UI_FILT, 'k_nn', 'num', &
             'Nearest neighbors (default 10)', &
             'Registered-residual neighbors retained per particle', '# neighbors', .false., 10.0)
@@ -320,10 +325,10 @@ contains
             'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 100.0)
         call flex_eigenvol%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
-            'Number of coverage-initialized k-medoids used as nonlinear diffusion-manifold pre-image targets', &
+            'Number of k-medoids used as representative Nyström pre-image targets', &
             '# state volumes', .false., 8.0)
         call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
-            descr_placeholder_override='Graph and reconstruction low-pass limit in Angstroms{8}', &
+            descr_placeholder_override='Graph-feature low-pass limit in Angstroms{8}; generative volumes are unfiltered', &
             gui_submenu="regularization", gui_advanced=.false.)
         call flex_eigenvol%add_input(UI_ALT, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
