@@ -122,11 +122,15 @@ contains
         call vol_odd_filt_new%kill
         call smooth_nu_objective(dmat_new, dmat_tmp, new_limit)
         allocate(dmat_finest_mask(n_nu_mask), source=huge(x))
-        if( allocated(dmat_finest_cached) .and. size(dmat_finest_cached) == n_nu_mask ) then
-            dmat_finest_mask = dmat_finest_cached
+        if( allocated(dmat_finest_cached) )then
+            if( size(dmat_finest_cached) == n_nu_mask )then
+                dmat_finest_mask = dmat_finest_cached
+            else
+                call fill_nu_frontier_dmat_from_bank(frontier_vox, sz_old, dmat_finest_mask)
+            endif
         else
             call fill_nu_frontier_dmat_from_bank(frontier_vox, sz_old, dmat_finest_mask)
-        end if
+        endif
         deallocate(dmat_tmp)
         ! Keep the smoothed mask-normalization volume across adjacent shell
         ! challenges; nu_filter_vols/cleanup releases it before output synthesis.
