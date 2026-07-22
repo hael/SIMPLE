@@ -16,6 +16,8 @@ contains
         type(image),       allocatable :: imgs_pad(:)
         type(ori)        :: o2
         type(projector)  :: vol_pad
+        logical, allocatable :: use_proj(:)
+        logical          :: has_state
         integer          :: n, i, ithr, ldim(3), boxpd, ldim_pd(3), box
         real             :: smpd
         ldim    = vol%get_ldim()
@@ -36,6 +38,13 @@ contains
         do ithr=1,nthr_glob
             call imgs_pad(ithr)%new([boxpd,boxpd,1], smpd, wthreads=.false.)
         end do
+        allocate(use_proj(n), source=.true.)
+        has_state = o%isthere('state')
+        if( has_state )then
+            do i=1,n
+                use_proj(i) = o%get_state(i) /= 0
+            end do
+        endif
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
@@ -46,11 +55,10 @@ contains
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr,o2) proc_bind(close)
         do i=1,n
-            if(o%isthere('state'))then
-                if(o%get_state(i)==0)cycle
-            endif
+            if( .not.use_proj(i) ) cycle
             ! get thread index
             ithr = omp_get_thread_num() + 1
+            if( ithr > size(imgs_pad) ) ithr = size(imgs_pad)
             ! extract central secion
             call o%get_ori(i, o2)
             call vol_pad%fproject_serial(o2, imgs_pad(ithr))
@@ -65,7 +73,7 @@ contains
         do ithr=1,nthr_glob
             call imgs_pad(ithr)%kill
         end do
-        deallocate(imgs_pad)
+        deallocate(imgs_pad,use_proj)
         call vol_pad%kill_expanded
         call vol_pad%kill
     end function reproject

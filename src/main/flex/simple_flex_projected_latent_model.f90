@@ -37,10 +37,9 @@ real(dp), parameter :: COUPLED_DENSITY_FLOOR = 1.0d-6
 real(dp), parameter :: CANON_METRIC_REL_TOL = 1.0d-8
 real(dp), parameter :: CANON_CHECK_TOL      = 5.0d-8
 integer,  parameter :: MSTEP_STATS_MAGIC = 1180053581
-! Version 3 stores one self-density per independent residual mode.  This
-! replaces the packed cross-mode Gram matrix without suppressing a mode by the
-! total particle count as a shared ordinary density would.
-integer,  parameter :: MSTEP_STATS_VERSION = 3
+! Version 2 stores one ordinary reconstruction density shared by all
+! independently reconstructed residual modes.
+integer,  parameter :: MSTEP_STATS_VERSION = 2
 integer,  parameter :: ESTEP_PART_MAGIC = 1180053580
 integer,  parameter :: ESTEP_PART_VERSION = 3
 integer(longer), parameter :: MSTEP_STATS_IO_TARGET_BYTES = 64_longer * 1024_longer * 1024_longer
@@ -213,10 +212,10 @@ contains
             call basis_recs(q)%reset_exp
         end do
         exp_shape = shape(basis_recs(1)%cmat_exp)
-        ! Nyström modal pre-image: each eigenvolume uses its own diagonal
-        ! normal-equation density sum_i psi_iq**2 |CTF_i|**2.  Cross-mode
-        ! Gram terms are deliberately not formed or inverted.
-        allocate(rho_cross_exp(ncomp, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        ! Nyström modal pre-image: each eigenvolume is an independently
+        ! weighted residual reconstruction. All modes share the ordinary
+        ! sampling/CTF density; no per-voxel latent Gram matrix is formed.
+        allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
@@ -249,7 +248,7 @@ contains
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP READ/PREP SECONDS', read_prep_seconds)
         call log_seconds(log_prefix//' M-STEP MEAN PROJECT SECONDS', mean_project_seconds)
-        call log_seconds(log_prefix//' M-STEP MODAL ACCUMULATE SECONDS', insert_seconds)
+        call log_seconds(log_prefix//' M-STEP COUPLED ACCUMULATE SECONDS', insert_seconds)
         call kill_projected_latent_mstep_2d_block(mstep_block)
         if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
@@ -259,7 +258,7 @@ contains
         deallocate(mean_fpls)
         t_phase = tic()
         do q = 1, ncomp
-            basis_recs(q)%rho_exp = rho_cross_exp(q,:,:,:)
+            basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
         end do
         call log_seconds(log_prefix//' M-STEP MODAL DENSITY HANDOFF SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
@@ -340,9 +339,9 @@ contains
         integer,             intent(in)    :: pinds(:)
         type(projected_latent_mstep_2d_block), intent(inout) :: block
         type(fplane_type), intent(inout) :: mean_fpls(nthr_glob)
-        integer :: i, iptcl, q, row, ithr
+        integer :: i, iptcl, row, ithr
         call reset_projected_latent_mstep_2d_block(block, batchsz)
-        !$omp parallel do default(shared) private(i,row,iptcl,q,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,row,iptcl,ithr) schedule(static) proc_bind(close)
         do i = 1, batchsz
             row   = batchlims(1) + i - 1
             iptcl = pinds(row)
@@ -354,11 +353,9 @@ contains
             call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpls(ithr), apply_ctf_amp=.true.)
             call subtract_plane(fpls_batch(i), mean_fpls(ithr))
             block%zrows(:,i) = z(row,:)
-            ! Each independent modal regression has the diagonal normal
-            ! density psi_q**2 |CTF|**2.  Cross-mode entries remain zero.
-            do q = 1, ncomp
-                block%latent_second(q,q,i) = z(row,q) * z(row,q)
-            end do
+            ! The modal Nyström pre-image has one ordinary density for all
+            ! residual modes. Keep this compatibility buffer zeroed: the
+            ! accumulator ignores it when passed a single density volume.
             block%valid(i) = .true.
         end do
         !$omp end parallel do
@@ -385,7 +382,7 @@ contains
             THROW_HARD('invalid projected latent M-step statistics dimensions')
         endif
         stats%ncomp     = ncomp
-        stats%npairs    = ncomp
+        stats%npairs    = 1
         stats%exp_lb    = exp_lb
         stats%exp_ub    = exp_ub
         stats%model_nyq = model_nyq
@@ -556,7 +553,7 @@ contains
             call basis_recs(q)%reset_exp
         end do
         exp_shape = shape(basis_recs(1)%cmat_exp)
-        allocate(rho_cross_exp(ncomp, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         t_phase = tic()
         do ipart = 1, nparts
             if( .not. file_exists(part_fnames(ipart)) )then
@@ -568,7 +565,7 @@ contains
         call log_seconds(log_prefix//' M-STEP MASTER REDUCE SECONDS', toc(t_phase))
         t_phase = tic()
         do q = 1, ncomp
-            basis_recs(q)%rho_exp = rho_cross_exp(q,:,:,:)
+            basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
         end do
         call log_seconds(log_prefix//' M-STEP MASTER MODAL DENSITY HANDOFF SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
@@ -604,9 +601,9 @@ contains
         if( header(2) /= MSTEP_STATS_VERSION ) THROW_HARD('bad M-step statistics version: '//fname%to_char())
         if( header(3) < 0 ) THROW_HARD('negative M-step statistics record count: '//fname%to_char())
         if( header(4) /= ncomp ) THROW_HARD('M-step statistics component mismatch: '//fname%to_char())
-        npairs = ncomp
+        npairs = 1
         if( header(5) /= npairs ) THROW_HARD('M-step statistics density-count mismatch: '//fname%to_char())
-        if( size(rho_cross_exp,1) /= npairs ) THROW_HARD('M-step reduction density/component mismatch')
+        if( size(rho_cross_exp,1) /= npairs ) THROW_HARD('M-step reduction requires one shared density volume')
         exp_lb    = header(6:8)
         exp_ub    = header(9:11)
         exp_shape = exp_ub - exp_lb + 1
@@ -683,10 +680,8 @@ contains
                 end do
             end do
         end do
-        do q = 1, TEST_NCOMP
-            stats%rho_cross(q,:,:,:) = 0.01 * real(q)
-        end do
-        allocate(rho_cross(TEST_NCOMP,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
+        stats%rho_cross(1,:,:,:) = 0.01
+        allocate(rho_cross(1,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
         padded_fname = 'test_projected_latent_mstep_stats_io.bin'
         fname = padded_fname
         call write_projected_latent_mstep_stats(fname, stats)

@@ -128,6 +128,8 @@ contains
         if( .not. cline%defined('neigs')    ) call cline%set('neigs',    DIFFMAP_NEIGS_SCAN_DEFAULT)
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      DIFFMAP_GRAPH_KNN_DEFAULT)
+        if( .not. cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','median')
+        if( .not. cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',3.0)
         if( .not. cline%defined('graph') )then
             if( cline%get_carg('oritype') == 'ptcl3D' )then
                 call cline%set('graph', 'ori')
@@ -154,6 +156,7 @@ contains
         type(parameters), intent(in)    :: params
         class(cmdline),   intent(inout) :: cline
         logical :: l_fixed_nsubcls
+        character(len=STDLEN) :: bandwidth_mode
         l_fixed_nsubcls = cline%defined('ncls') .and. params%ncls > 1
         select case(trim(params%oritype))
             case('ptcl2D','ptcl3D')
@@ -171,6 +174,10 @@ contains
                 THROW_HARD('cls_split supports graph=euc|ori only')
         end select
         if( params%k_nn < 1 ) THROW_HARD('cls_split requires k_nn >= 1')
+        bandwidth_mode=lowercase(trim(params%bandwidth_mode))
+        if( bandwidth_mode/='median' .and. bandwidth_mode/='ferguson' ) &
+            &THROW_HARD('cls_split bandwidth_mode must be median|ferguson')
+        if( params%bandwidth_tune < 0. ) THROW_HARD('cls_split requires bandwidth_tune >= 0')
         if( params%neigs < 0 ) THROW_HARD('cls_split requires neigs >= 0; use neigs=0 for auto scan')
         if( cline%defined('ncls') )then
             if( params%ncls < 0 ) THROW_HARD('cls_split requires ncls >= 0; use ncls=0 for auto')

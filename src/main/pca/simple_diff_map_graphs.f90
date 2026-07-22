@@ -52,17 +52,21 @@ contains
         endif
         select case(trim(metric))
             case('ori')
-                call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), graph)
+                call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), graph, &
+                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune)
             case DEFAULT
                 if( .not. present(pcavecs) ) THROW_HARD('Euclidean graph requires pcavecs')
-                call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), graph)
+                call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), graph, &
+                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune)
         end select
     end subroutine build_cls_split_graph
 
-    subroutine build_euclidean_knn_graph( pcavecs, k_nn, graph )
+    subroutine build_euclidean_knn_graph( pcavecs, k_nn, graph, bandwidth_mode, bandwidth_tune )
         real,                 intent(in)  :: pcavecs(:,:)
         integer,              intent(in)  :: k_nn
         type(diffmap_graph),  intent(out) :: graph
+        character(len=*), optional, intent(in) :: bandwidth_mode
+        real, optional, intent(in) :: bandwidth_tune
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
@@ -77,7 +81,7 @@ contains
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_euclidean_neighbors(pcavecs, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', graph)
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', graph, bandwidth_mode, bandwidth_tune)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_euclidean_knn_graph
 
@@ -86,7 +90,7 @@ contains
     !! visited in angular order until nang_nbrs particle candidates have been
     !! examined, and only the k_nn closest registered-residuals are retained.
     subroutine build_gated_euclidean_knn_graph( features, proj_ids, proj_dirs, k_nn, nang_nbrs, graph, &
-        &ncandidates_min, ncandidates_max, ncandidates_mean )
+        &ncandidates_min, ncandidates_max, ncandidates_mean, bandwidth_mode, bandwidth_tune )
         real,                intent(in)  :: features(:,:)
         integer,             intent(in)  :: proj_ids(:)
         real,                intent(in)  :: proj_dirs(:,:)
@@ -94,6 +98,8 @@ contains
         type(diffmap_graph), intent(out) :: graph
         integer, optional,   intent(out) :: ncandidates_min, ncandidates_max
         real, optional,      intent(out) :: ncandidates_mean
+        character(len=*), optional, intent(in) :: bandwidth_mode
+        real, optional, intent(in) :: bandwidth_tune
         integer, allocatable :: nbrs(:,:),ncandidates(:),rows(:)
         real, allocatable :: d2s(:,:)
         integer :: n, ndim, nproj, k_used, cap_used
@@ -115,7 +121,7 @@ contains
         k_used=min(max(1,k_nn),n-1); cap_used=min(max(k_used,nang_nbrs),n-1)
         allocate(rows(n)); rows=[(i,i=1,n)]
         call find_gated_euclidean_neighbors_rows(features,proj_ids,proj_dirs,k_used,cap_used,rows,nbrs,d2s,ncandidates)
-        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph)
+        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph,bandwidth_mode,bandwidth_tune)
         if( present(ncandidates_min)  ) ncandidates_min  = minval(ncandidates)
         if( present(ncandidates_max)  ) ncandidates_max  = maxval(ncandidates)
         if( present(ncandidates_mean) ) ncandidates_mean = real(sum(int(ncandidates,kind=8)),kind=sp) / real(n,kind=sp)
@@ -195,10 +201,13 @@ contains
         deallocate(counts,offsets,cursor,members,row_counts,row_offsets,row_cursor,row_members)
     end subroutine find_gated_euclidean_neighbors_rows
 
-    subroutine build_gated_euclidean_graph_from_neighbors( n, nbrs, d2s, ncandidates, graph )
+    subroutine build_gated_euclidean_graph_from_neighbors( n, nbrs, d2s, ncandidates, graph, &
+        &bandwidth_mode, bandwidth_tune )
         integer, intent(in) :: n,nbrs(:,:),ncandidates(:)
         real, intent(in) :: d2s(:,:)
         type(diffmap_graph), intent(out) :: graph
+        character(len=*), optional, intent(in) :: bandwidth_mode
+        real, optional, intent(in) :: bandwidth_tune
         real, allocatable :: kth_d2(:)
         integer :: k_used
         if( n<2 .or. size(nbrs,2)/=n ) THROW_HARD('invalid gated neighbor table assembly')
@@ -208,15 +217,17 @@ contains
         if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
         allocate(kth_d2(n))
         kth_d2=d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph)
+        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph,bandwidth_mode,bandwidth_tune)
         deallocate(kth_d2)
     end subroutine build_gated_euclidean_graph_from_neighbors
 
-    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph )
+    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph, bandwidth_mode, bandwidth_tune )
         type(parameters),      intent(in)    :: params
         type(sp_project),      intent(inout) :: spproj
         integer,               intent(in)    :: pinds(:), k_nn
         type(diffmap_graph),   intent(out)   :: graph
+        character(len=*), optional, intent(in) :: bandwidth_mode
+        real, optional, intent(in) :: bandwidth_tune
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
@@ -231,7 +242,7 @@ contains
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_orientation_neighbors(spproj, pinds, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', graph)
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', graph, bandwidth_mode, bandwidth_tune)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_orientation_knn_graph
 
@@ -304,15 +315,20 @@ contains
         end do
     end subroutine find_orientation_neighbors
 
-    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph )
+    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph, bandwidth_mode, bandwidth_tune )
         integer,              intent(in)  :: n, k_used, nbrs(:,:)
         real,                 intent(in)  :: d2s(:,:), kth_d2(:)
         character(len=*),     intent(in)  :: metric
         type(diffmap_graph),  intent(out) :: graph
+        character(len=*), optional, intent(in) :: bandwidth_mode
+        real, optional, intent(in) :: bandwidth_tune
         integer, allocatable :: counts(:), cursor(:)
         real :: eps, w
         integer :: i, m, j, p, nnz
         logical :: mutual
+        logical :: ok
+        character(len=STDLEN) :: bw_mode
+        real :: bw_tune
         allocate(counts(n), cursor(n), source=0)
         do i = 1,n
             do m = 1,k_used
@@ -334,8 +350,24 @@ contains
             graph%rowptr(i+1) = graph%rowptr(i) + counts(i)
         end do
         cursor = graph%rowptr(1:n)
-        eps = median_positive(kth_d2)
-        if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+        bw_mode = 'median'
+        if( present(bandwidth_mode) ) bw_mode = lowercase(trim(bandwidth_mode))
+        select case(trim(bw_mode))
+        case('median')
+            eps = median_positive(kth_d2)
+            if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+        case('ferguson')
+            bw_tune = 3.0
+            if( present(bandwidth_tune) ) bw_tune = bandwidth_tune
+            call estimate_ferguson_bandwidth(d2s, bw_tune, eps, ok)
+            if( .not. ok )then
+                eps = median_positive(kth_d2)
+                if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+                write(logfhandle,'(A)') '>>> DIFFMAP bandwidth_mode=ferguson fallback -> median kth-NN scale'
+            endif
+        case DEFAULT
+            THROW_HARD('invalid bandwidth_mode in diffusion graph; use median|ferguson')
+        end select
         do i = 1,n
             do m = 1,k_used
                 j = nbrs(m,i)
@@ -368,6 +400,114 @@ contains
             end do
         end function neighbor_contains
     end subroutine pack_scalar_knn_to_csr
+
+    subroutine estimate_ferguson_bandwidth( d2s, tune, eps, ok )
+        real, intent(in) :: d2s(:,:), tune
+        real, intent(out) :: eps
+        logical, intent(out) :: ok
+        integer, parameter :: NSCAN=121, NA=28, NB=33
+        real(dp), allocatable :: d2(:), x(:), y(:), xz(:)
+        real(dp) :: d2med, eps_min, eps_max, logeps_min, logeps_max
+        real(dp) :: xmu, xsd, step, le, epsi, sumw, arg
+        real(dp) :: a, b, t, s1, st, stt, sy, sty, det, cfit, dfit, pred, res, sse
+        real(dp) :: best_sse, best_a, best_b, a0, b0, logeps_star, sigma2, tune_eff
+        integer :: i, q, nvalid, ia, ib
+        eps = 1.e-6
+        ok = .false.
+        allocate(d2(size(d2s)))
+        nvalid = 0
+        do i = 1,size(d2s,2)
+            do q = 1,size(d2s,1)
+                if( d2s(q,i) <= 0. .or. .not. ieee_is_finite(d2s(q,i)) ) cycle
+                nvalid = nvalid + 1
+                d2(nvalid) = real(d2s(q,i),dp)
+            end do
+        end do
+        if( nvalid < 16 )then
+            deallocate(d2)
+            return
+        endif
+        d2med = real(median_positive(real(d2(1:nvalid))),dp)
+        if( d2med <= real(DTINY,dp) )then
+            deallocate(d2)
+            return
+        endif
+        eps_min = max(d2med * 1.0d-3, 1.0d-12)
+        eps_max = max(d2med * 1.0d+3, eps_min * 10.0d0)
+        logeps_min = log(eps_min)
+        logeps_max = log(eps_max)
+        step = (logeps_max - logeps_min) / real(max(NSCAN-1,1),dp)
+        allocate(x(NSCAN), y(NSCAN), xz(NSCAN))
+        do i = 1,NSCAN
+            le = logeps_min + real(i-1,dp) * step
+            x(i) = le
+            epsi = exp(le)
+            sumw = 0.d0
+            do q = 1,nvalid
+                arg = -d2(q) / max(epsi, real(DTINY,dp))
+                if( arg > -80.d0 ) sumw = sumw + exp(arg)
+            end do
+            y(i) = log(max(sumw, real(DTINY,dp)))
+        end do
+        xmu = sum(x) / real(NSCAN,dp)
+        xsd = sqrt(sum((x - xmu)**2) / real(max(NSCAN-1,1),dp))
+        if( xsd <= real(DTINY,dp) ) xsd = 1.d0
+        xz = (x - xmu) / xsd
+        best_sse = huge(1.d0)
+        best_a = 0.d0
+        best_b = 0.d0
+        do ia = 1,NA
+            a = 0.2d0 + real(ia-1,dp) * (3.8d0 / real(max(NA-1,1),dp))
+            do ib = 1,NB
+                b = -4.0d0 + real(ib-1,dp) * (8.0d0 / real(max(NB-1,1),dp))
+                s1 = 0.d0; st = 0.d0; stt = 0.d0; sy = 0.d0; sty = 0.d0
+                do i = 1,NSCAN
+                    t = tanh(a * xz(i) + b)
+                    s1 = s1 + 1.d0
+                    st = st + t
+                    stt = stt + t * t
+                    sy = sy + y(i)
+                    sty = sty + t * y(i)
+                end do
+                det = stt * s1 - st * st
+                if( abs(det) <= 1.d-14 ) cycle
+                cfit = (sty * s1 - sy * st) / det
+                if( cfit <= 0.d0 ) cycle
+                dfit = (sy * stt - sty * st) / det
+                sse = 0.d0
+                do i = 1,NSCAN
+                    pred = dfit + cfit * tanh(a * xz(i) + b)
+                    res = y(i) - pred
+                    sse = sse + res * res
+                end do
+                if( sse < best_sse )then
+                    best_sse = sse
+                    best_a = a
+                    best_b = b
+                endif
+            end do
+        end do
+        if( .not. ieee_is_finite(best_sse) .or. best_sse >= huge(1.d0) )then
+            deallocate(d2, x, y, xz)
+            return
+        endif
+        a0 = best_a / xsd
+        b0 = best_b - best_a * xmu / xsd
+        if( abs(a0) <= 1.d-10 )then
+            deallocate(d2, x, y, xz)
+            return
+        endif
+        logeps_star = -b0 / a0
+        tune_eff = max(real(tune,dp), 0.d0)
+        sigma2 = tune_eff * tune_eff * 2.d0 * exp(logeps_star)
+        if( .not. ieee_is_finite(sigma2) .or. sigma2 <= real(DTINY,dp) )then
+            deallocate(d2, x, y, xz)
+            return
+        endif
+        eps = real(max(sigma2, 1.d-12), kind=kind(eps))
+        ok = .true.
+        deallocate(d2, x, y, xz)
+    end subroutine estimate_ferguson_bandwidth
 
     subroutine make_singleton_graph( metric, graph )
         character(len=*),    intent(in)  :: metric

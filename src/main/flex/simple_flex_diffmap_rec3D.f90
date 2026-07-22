@@ -2,6 +2,7 @@
 module simple_flex_diffmap_rec3D
 use simple_core_module_api
 use simple_builder,                only: builder
+use simple_sp_project,             only: sp_project
 use simple_gridding,               only: prep3D_inv_instrfun4mul
 use simple_image,                  only: image
 use simple_matcher_3Drec,          only: init_rec, prep_imgs4rec, cleanup_rec_buffers
@@ -12,12 +13,14 @@ use simple_flex_projected_latent_model, only: update_basis_from_latents, write_m
     &prep_imgs4projected_model, solve_coupled_basis_exp
 use simple_flex_reconstructor_latent_ops, only: project_fplane_mean
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled
+use simple_flex_reconstructor_latent_ops, only: insert_plane_oversamp_multi_scaled
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, reduce_flex_diffmap_rec_parts
+public :: reconstruct_flex_diffmap_weighted_states
 public :: cleanup_flex_diffmap_rec_parts
 public :: test_fake_preimage_against_reconstruct3D
 public :: canonicalize_flex_preimage_coordinates
@@ -375,6 +378,162 @@ contains
         call cleanup_reconstructors(mean_rec,basis_recs)
         deallocate(z_dp)
     end subroutine reconstruct_flex_diffmap_states
+
+    !> Direct manifold pre-image reconstruction with kernel weights.
+    !! Medoid-selected manifold descriptors are converted to soft particle
+    !! weights upstream; this routine reconstructs each state from weighted
+    !! contributions of all particles rather than from a global residual basis.
+    subroutine reconstruct_flex_diffmap_weighted_states( params, build, pinds, state_weights, nstates, fsc_projfile )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: pinds(:), nstates
+        real,              intent(in)    :: state_weights(:,:)
+        type(string), optional, intent(in) :: fsc_projfile
+        type(reconstructor), allocatable :: state_recs(:)
+        type(fplane_type), allocatable :: fpls(:)
+        type(image) :: gridcorr_img, state_img
+        type(ori) :: orientation
+        real(dp), allocatable :: scales(:)
+        real, allocatable :: shrink_filters(:,:)
+        logical, allocatable :: has_shrink_filter(:)
+        integer, allocatable :: shrink_source_state(:)
+        integer :: batchlims(2), batchsz, ibatch, i, iptcl, state
+        if( size(pinds)<1 .or. nstates<1 ) THROW_HARD('invalid flex weighted state reconstruction dimensions')
+        if( any(shape(state_weights)/=[size(pinds),nstates]) ) THROW_HARD('flex weighted state table mismatch')
+        allocate(state_recs(nstates),scales(nstates))
+        call prepare_project_fsc_shrinkage_filters(params,build,nstates,shrink_filters,has_shrink_filter,shrink_source_state, &
+            &fsc_projfile)
+        do state=1,nstates
+            call init_basis_reconstructor(params,build,state_recs(state))
+        end do
+        call init_rec(params,build,MAXIMGBATCHSZ,fpls)
+        call prepimgbatch(params,build,MAXIMGBATCHSZ)
+        do ibatch=1,size(pinds),MAXIMGBATCHSZ
+            batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz=batchlims(2)-batchlims(1)+1
+            if( params%l_ptcl_src_den )then
+                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
+                    &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+            endif
+            call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)),fpls(:batchsz))
+            do i=1,batchsz
+                iptcl=pinds(batchlims(1)+i-1)
+                call build%spproj_field%get_ori(iptcl,orientation)
+                if( orientation%isstatezero() ) cycle
+                scales=real(state_weights(batchlims(1)+i-1,:),dp)
+                call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
+            end do
+        end do
+        call orientation%kill
+        call cleanup_rec_buffers(build,fpls)
+        gridcorr_img=prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
+            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        do state=1,nstates
+            call state_recs(state)%compress_exp
+            call state_recs(state)%sampl_dens_correct
+            call state_recs(state)%ifft
+            call state_recs(state)%div(real(params%box))
+            call state_recs(state)%mul(gridcorr_img)
+            call state_img%copy(state_recs(state))
+            if( has_shrink_filter(state) )then
+                call state_img%apply_filter(shrink_filters(:,state))
+                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC shrinkage to state=',state, &
+                    &' using_source_state=',shrink_source_state(state)
+            endif
+            call write_state(params,state_img,state)
+            call state_img%kill
+            call state_recs(state)%dealloc_rho
+            call state_recs(state)%kill
+        end do
+        call gridcorr_img%kill
+        deallocate(state_recs,scales,shrink_filters,has_shrink_filter,shrink_source_state)
+    end subroutine reconstruct_flex_diffmap_weighted_states
+
+    subroutine prepare_project_fsc_shrinkage_filters( params, build, nstates, shrink_filters, has_filter, source_state, &
+        &fsc_projfile )
+        class(parameters), intent(in) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in) :: nstates
+        real, allocatable, intent(out) :: shrink_filters(:,:)
+        logical, allocatable, intent(out) :: has_filter(:)
+        integer, allocatable, intent(out) :: source_state(:)
+        type(string), optional, intent(in) :: fsc_projfile
+        type(sp_project) :: spproj
+        type(string) :: fsc_fname, imgkind_here, proj_for_fsc
+        real, allocatable :: fsc(:)
+        integer :: filtsz, state, fsc_box, i, state1_fsc_count
+        logical :: out_loaded
+        filtsz=fdim(params%box_crop)-1
+        allocate(shrink_filters(filtsz,nstates),has_filter(nstates),source_state(nstates))
+        shrink_filters=0.
+        has_filter=.false.
+        source_state=0
+        if( filtsz<1 ) return
+        proj_for_fsc=params%projfile
+        if( present(fsc_projfile) )then
+            if( len_trim(fsc_projfile%to_char())>0 ) proj_for_fsc=fsc_projfile
+        endif
+        if( .not.file_exists(proj_for_fsc) )then
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: projfile not found'
+            call proj_for_fsc%kill
+            return
+        endif
+        call spproj%read_segment('out',proj_for_fsc)
+        out_loaded=spproj%os_out%get_noris()>0
+        if( .not.out_loaded )then
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: empty out segment'
+            call proj_for_fsc%kill
+            call spproj%kill
+            return
+        endif
+        state1_fsc_count=0
+        do i=1,spproj%os_out%get_noris()
+            if( .not.spproj%os_out%isthere(i,'imgkind') ) cycle
+            call spproj%os_out%getter(i,'imgkind',imgkind_here)
+            if( imgkind_here%to_char()/='fsc' ) cycle
+            if( spproj%os_out%get_state(i)==1 ) state1_fsc_count=state1_fsc_count+1
+        end do
+        if( state1_fsc_count/=1 )then
+            write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: expected exactly one state=1 FSC in out segment, found=', &
+                &state1_fsc_count
+            call imgkind_here%kill
+            call proj_for_fsc%kill
+            call spproj%kill
+            return
+        endif
+        call spproj%get_fsc(1,fsc_fname,fsc_box)
+        if( .not.file_exists(fsc_fname) )then
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: state=1 FSC file missing'
+            call imgkind_here%kill
+            call proj_for_fsc%kill
+            call spproj%kill
+            return
+        endif
+        fsc=file2rarr(fsc_fname)
+        if( size(fsc)/=filtsz )then
+            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: state=1 FSC size mismatch; fsc_nyq=', &
+                &size(fsc),' model_nyq=',filtsz
+            deallocate(fsc)
+            call fsc_fname%kill
+            call imgkind_here%kill
+            call proj_for_fsc%kill
+            call spproj%kill
+            return
+        endif
+        do state=1,nstates
+            call fsc2optlp_sub(filtsz,fsc,shrink_filters(:,state),merged=.false.)
+            has_filter(state)=any(shrink_filters(:,state)>0.)
+            source_state(state)=1
+        end do
+        deallocate(fsc)
+        call fsc_fname%kill
+        call imgkind_here%kill
+        call proj_for_fsc%kill
+        call spproj%kill
+    end subroutine prepare_project_fsc_shrinkage_filters
 
     subroutine write_flex_diffmap_rec_parts( params, build, pinds, z, ncomp, part )
         class(parameters), intent(inout) :: params

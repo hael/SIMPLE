@@ -68,6 +68,27 @@ would be applied.
 
 #### 3.2.1 Ferguson / tanh data-adaptive bandwidth (HIGH PRIORITY)
 
+**Implemented in SIMPLE (2026-07-22)**:
+
+- `src/main/pca/simple_diff_map_graphs.f90` now supports
+  `bandwidth_mode=(median|ferguson)` and `bandwidth_tune` in kNN graph
+  construction (`build_euclidean_knn_graph`,
+  `build_gated_euclidean_knn_graph`, `build_orientation_knn_graph`).
+- A Ferguson-style tanh fit is applied over a log-bandwidth scan when
+  `bandwidth_mode=ferguson`; if the fit is not usable, the code falls back to
+  the legacy median-kth-neighbor bandwidth.
+- New CLI-visible parameters were added for diffusion-map programs:
+  `bandwidth_mode` and `bandwidth_tune` (default `3.0`) in
+  `ppca_denoise`, `cls_split`, `denoise_project`, and `flex_analysis`.
+  `flex_analysis` now defaults to `bandwidth_mode=ferguson`; the other
+  programs keep `bandwidth_mode=median` unless overridden.
+
+Enable with, for example:
+
+```bash
+simple_exec prg=flex_analysis ... bandwidth_mode=ferguson bandwidth_tune=3
+```
+
 **ManifoldEM location**: `core.py`, function `fergusonE` (~line 182);
 called from `DMembeddingII.py`, function `op` (~line 576):
 
@@ -404,6 +425,58 @@ Wiener filtering.
 This path preserves SIMPLE's existing theory (ML-style weighting at
 reconstruction time) while making flex_analysis capable of matching that
 contract when explicitly requested.
+
+---
+
+#### 3.2.7 What We Can Reuse From diffusion-maps-with-nystrom
+
+An additional reference implementation was inspected at
+`/home/elmlundho/src/diffusion-maps-with-nystrom`
+(`src/diffusionmaps/diffusion_maps.py`).
+
+This codebase is compact and mathematically clean for **embedding and
+out-of-sample extension**, but it does **not** implement cryo-EM 3D pre-image
+reconstruction. The useful takeaways are therefore in normalization contracts,
+not in map reconstruction logic.
+
+**Reusable ideas (high value):**
+
+1. **Explicit Coifman-Lafon alpha normalization in both fit and Nyström paths**
+   - The implementation computes raw degree on `K`, applies alpha scaling
+     (`K/(d_i^alpha d_j^alpha)`), then re-normalizes with symmetric degree
+     factors for eigendecomposition.
+   - For out-of-sample points it mirrors that contract with mixed degrees
+     (`d_mix` against `d_old`) before Nyström.
+   - This supports our policy direction that geometry and density effects should
+     be controllable rather than conflated.
+
+2. **Nyström extension written in its canonical form**
+   - New eigenvectors are formed as `phi_new = A_mix * phi / lambda` using the
+     same eigenpairs computed on the training set.
+   - SIMPLE already retains both in-sample spectral outputs and Nyström-style
+     outputs; this reference confirms the normalization sequence we should keep
+     internally consistent when using those coordinates for downstream weights.
+
+3. **Stationary-measure handling is explicit**
+   - The code derives `pi` directly from degree normalization and for transformed
+     points approximates stationary mass from the trivial mode.
+   - This reinforces the recommendation to expose/use stationary density when
+     forming diffusion-space neighborhoods or weighted trajectory summaries.
+
+**Not reusable directly (important):**
+
+1. No cryo-EM reconstruction stage, no CTF/noise weighted 3D solve.
+2. No manifold pre-image algorithm for volumetric state maps.
+3. No adaptive local bandwidth/per-state neighborhood control for state
+   reconstruction.
+
+**Concrete implication for flex_analysis:**
+
+Use this repo as a normalization and Nyström-consistency check, not as a
+pre-image reconstruction template. In practical terms, the next robust
+improvement remains: maintain a stable diffusion metric contract and tune
+state kernel neighborhoods (effective sample size targets) in the weighted 3D
+reconstruction path.
 
 ---
 

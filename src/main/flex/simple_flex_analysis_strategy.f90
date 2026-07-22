@@ -11,8 +11,9 @@ use simple_diffusion_maps,        only: embed_graph
 use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part, &
     &assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts, flex_projection_directions, &
     &write_flex_mean_projection_stack
-use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages
-use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, &
+use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages, build_flex_preimage_kernel_weights
+use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, reconstruct_flex_diffmap_weighted_states, &
+    &write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts, canonicalize_flex_preimage_coordinates
 use simple_image,                 only: image
 use simple_parameters,            only: parameters
@@ -142,11 +143,13 @@ contains
         if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
         if( .not.cline%defined('nstates') ) call cline%set('nstates',1)
         if( .not.cline%defined('npreimages') ) call cline%set('npreimages',8)
-        if( .not.cline%defined('neigs') ) call cline%set('neigs',20)
+        if( .not.cline%defined('neigs') ) call cline%set('neigs',15)
         if( .not.cline%defined('icm') ) call cline%set('icm','yes')
-        if( .not.cline%defined('k_nn') ) call cline%set('k_nn',10)
-        if( .not.cline%defined('nang_nbrs') ) call cline%set('nang_nbrs',100)
-        if( .not.cline%defined('lp') ) call cline%set('lp',8.0)
+        if( .not.cline%defined('k_nn') ) call cline%set('k_nn',100)
+        if( .not.cline%defined('nang_nbrs') ) call cline%set('nang_nbrs',1000)
+        if( .not.cline%defined('lp') ) call cline%set('lp',6.0)
+        if( .not.cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','ferguson')
+        if( .not.cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',3.0)
         if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
         call cline%set('ml_reg','no')
     end subroutine apply_defaults
@@ -177,7 +180,8 @@ contains
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         integer, allocatable :: pinds(:)
-        real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
+        real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),state_weights(:,:), &
+            &state_bandwidths(:),state_neff(:)
         integer, allocatable :: medoids(:),labels(:)
         type(string) :: registered_stack,registered_project
         type(builder) :: model_build
@@ -187,14 +191,16 @@ contains
         call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
-        call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
+        call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
-        call reconstruct_flex_diffmap_states(model_params,model_build,pinds,spectral_z,target_coeffs,size(medoids))
+        call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
+            &fsc_projfile=params%projfile)
         call model_build%kill_general_tbox
         call model_cline%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,state_weights,state_bandwidths,state_neff, &
+            &medoids,labels)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
@@ -285,7 +291,8 @@ contains
         class(cmdline), intent(inout) :: cline
         type(string) :: registered_stack,registered_project,worker_program
         integer, allocatable :: pinds(:),medoids(:),labels(:)
-        real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
+        real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),state_weights(:,:), &
+            &state_bandwidths(:),state_neff(:)
         type(diffmap_graph) :: graph
         type(builder) :: model_build
         type(parameters) :: model_params
@@ -327,30 +334,20 @@ contains
         call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,raw_coords, &
             &spectral_z,nystrom_coords,nmodes)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
-        call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
+        call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
         call graph%kill()
-        call prepare_reconstruction_partitions(self,params,pinds,spectral_z)
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
-
-        call model_cline%gen_job_descr(self%job_descr,prg=worker_program)
-        call self%job_descr%set('stage','3')
-        call self%job_descr%set('mkdir','no')
-        call self%job_descr%set('npreimages',int2str(size(medoids)))
-        call self%job_descr%set('neigs',int2str(nmodes))
-        call self%job_descr%set('nparts',int2str(self%nparts_run))
-        call self%job_descr%set('numlen',int2str(params%numlen))
         t_step=tic()
-        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
-            &array=L_USE_SLURM_ARR,extra_params=params)
-        call reduce_flex_diffmap_rec_parts(model_params,model_build,self%nparts_run,nmodes,target_coeffs,size(medoids))
+        call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
+            &fsc_projfile=params%projfile)
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_reconstruction_seconds=',toc(t_step)
-        call cleanup_flex_diffmap_rec_parts(self%nparts_run,params%numlen)
         call model_build%kill_general_tbox
         call model_cline%kill
         call worker_program%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,state_weights,state_bandwidths,state_neff, &
+            &medoids,labels)
     end subroutine master_execute
 
     subroutine init_model_context( source_cline, model_project, model_cline, model_params, model_build )
@@ -478,7 +475,7 @@ contains
         call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
-        call collect_target_coefficients(nystrom_coords,medoids,target_raw)
+        call collect_target_coefficients(spectral_z,nystrom_coords,medoids,target_raw)
         allocate(z_canonical(size(spectral_z,1),nmodes),target_canonical(size(target_raw,1),nmodes), &
             &transform(nmodes,nmodes))
         call canonicalize_flex_preimage_coordinates(spectral_z,target_raw,z_canonical,target_canonical,transform, &
@@ -577,7 +574,7 @@ contains
             &' feature_values=',size(features,kind=8)
         t_step=tic()
         call build_gated_euclidean_knn_graph(features,proj_ids,proj_dirs,params%k_nn,params%nang_nbrs,graph, &
-            &cand_min,cand_max,cand_mean)
+            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune)
         write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cand_min, &
             &' max=',cand_max,' mean=',cand_mean,' directed_nnz=',graph%nnz
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP graph_seconds=',toc(t_step)
@@ -640,18 +637,42 @@ contains
             &THROW_HARD('invalid flex reconstruction assignment values')
     end subroutine read_flex_reconstruction_assignment
 
-    subroutine collect_target_coefficients( nystrom_coords, medoids, target_coeffs )
-        real, intent(in) :: nystrom_coords(:,:)
+    subroutine collect_target_coefficients( spectral_z, nystrom_coords, medoids, target_coeffs )
+        real, intent(in) :: spectral_z(:,:), nystrom_coords(:,:)
         integer, intent(in) :: medoids(:)
         real, allocatable, intent(out) :: target_coeffs(:,:)
-        integer :: state
+        real(dp) :: spec_rms, nys_rms, mode_scale, mode_min_scale, mode_max_scale
+        integer :: state, q
+        logical :: used_fallback
+        if( any(shape(spectral_z)/=shape(nystrom_coords)) ) THROW_HARD('flex spectral/Nystrom table shape mismatch')
         allocate(target_coeffs(size(medoids),size(nystrom_coords,2)))
-        do state=1,size(medoids)
-            if( medoids(state)<1 .or. medoids(state)>size(nystrom_coords,1) ) &
-                &THROW_HARD('flex pre-image medoid outside spectral table')
-            target_coeffs(state,:)=nystrom_coords(medoids(state),:)
+        mode_min_scale=huge(1.d0)
+        mode_max_scale=0.d0
+        used_fallback=.false.
+        do q=1,size(nystrom_coords,2)
+            spec_rms=sqrt(sum(real(spectral_z(:,q),dp)**2)/real(max(1,size(spectral_z,1)),dp))
+            nys_rms=sqrt(sum(real(nystrom_coords(:,q),dp)**2)/real(max(1,size(nystrom_coords,1)),dp))
+            if( nys_rms>DTINY )then
+                mode_scale=spec_rms/nys_rms
+            else
+                mode_scale=1.d0
+                used_fallback=.true.
+            endif
+            mode_min_scale=min(mode_min_scale,mode_scale)
+            mode_max_scale=max(mode_max_scale,mode_scale)
+            do state=1,size(medoids)
+                if( medoids(state)<1 .or. medoids(state)>size(nystrom_coords,1) ) &
+                    &THROW_HARD('flex pre-image medoid outside spectral table')
+                if( nys_rms>DTINY )then
+                    target_coeffs(state,q)=real(mode_scale*nystrom_coords(medoids(state),q))
+                else
+                    target_coeffs(state,q)=spectral_z(medoids(state),q)
+                endif
+            end do
         end do
         if( .not.all(ieee_is_finite(target_coeffs)) ) THROW_HARD('invalid flex Nystrom target coefficient')
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,L1)') '>>> FLEX PRE-IMAGE target_scale min=',mode_min_scale, &
+            &' max=',mode_max_scale,' fallback_to_spectral=',used_fallback
     end subroutine collect_target_coefficients
 
     subroutine read_int_file( fname, vals )
@@ -743,7 +764,8 @@ contains
             if( nread<1 ) THROW_HARD('empty flex graph part')
         end do
         if( any(.not.covered) ) THROW_HARD('distributed flex graph parts do not cover every particle')
-        call build_gated_euclidean_graph_from_neighbors(nptcls,nbrs,d2s,ncandidates,graph)
+        call build_gated_euclidean_graph_from_neighbors(nptcls,nbrs,d2s,ncandidates,graph, &
+            &params%bandwidth_mode,params%bandwidth_tune)
         cmin=minval(ncandidates); cmax=maxval(ncandidates)
         cmean=real(sum(int(ncandidates,kind=8)),kind=sp)/real(nptcls,kind=sp)
         deallocate(nbrs,ncandidates,d2s,covered,row_nbrs,row_d2s)
@@ -863,6 +885,10 @@ contains
         max_modes=params%neigs
         params%k_nn=max(1,params%k_nn)
         params%nang_nbrs=max(params%k_nn,params%nang_nbrs)
+        params%bandwidth_mode=lowercase(trim(params%bandwidth_mode))
+        if( params%bandwidth_mode/='median' .and. params%bandwidth_mode/='ferguson' ) &
+            &THROW_HARD('flex_analysis bandwidth_mode must be median|ferguson')
+        params%bandwidth_tune=max(params%bandwidth_tune,0.)
     end subroutine validate_inputs
 
     subroutine select_particles( params, build, pinds, nptcls )

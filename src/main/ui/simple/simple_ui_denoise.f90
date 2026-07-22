@@ -125,6 +125,14 @@ contains
         call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
         call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}', .false., 'ppca')
         call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0)
+            call ppca_denoise%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
+                'Diffusion-map bandwidth mode', &
+                'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
+                '(median|ferguson){median}', .false., 'median')
+            call ppca_denoise%add_input(UI_FILT, 'bandwidth_tune', 'num', &
+                'Ferguson tune multiplier (default 3)', &
+                'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
+                'tune >= 0', .false., 3.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
@@ -246,6 +254,14 @@ contains
         call cls_split%add_input(UI_FILT, 'graph', 'multi', &
             'Class split graph', 'Class split graph(euc|ori){euc}', &
             '(euc|ori){euc}', .false., 'euc')
+        call cls_split%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
+            'Diffusion-map bandwidth mode', &
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
+            '(median|ferguson){median}', .false., 'median')
+        call cls_split%add_input(UI_FILT, 'bandwidth_tune', 'num', &
+            'Ferguson tune multiplier (default 3)', &
+            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
+            'tune >= 0', .false., 3.0)
         call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
@@ -270,6 +286,14 @@ contains
             '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT))
         call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
             'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
+        call denoise_project%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
+            'Diffusion-map bandwidth mode', &
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
+            '(median|ferguson){median}', .false., 'median')
+        call denoise_project%add_input(UI_FILT, 'bandwidth_tune', 'num', &
+            'Ferguson tune multiplier (default 3)', &
+            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
+            'tune >= 0', .false., 3.0)
         call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
         call denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
             'SO3 mixture subspace size', 'SO3 mixture subspace size', &
@@ -310,25 +334,33 @@ contains
         call flex_analysis%add_input(UI_IMG, outvol, required_override=.false.)
         call flex_analysis%add_input(UI_SRCH, nspace, required_override=.true.)
         call flex_analysis%add_input(UI_FILT, 'neigs', 'num', &
-            'Maximum number of diffusion modes (default 20)', &
+            'Maximum number of diffusion modes (default 15)', &
             'Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no', &
-            '# modes >=1', .false., 20.0)
+            '# modes >=1', .false., 15.0)
         call flex_analysis%add_input(UI_FILT, 'icm', 'binary', &
             'Automatic diffusion-mode selection', &
             'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan', &
             '(yes|no){yes}', .false., 'yes')
         call flex_analysis%add_input(UI_FILT, 'k_nn', 'num', &
-            'Nearest neighbors (default 10)', &
-            'Registered-residual neighbors retained per particle', '# neighbors', .false., 10.0)
+            'Nearest neighbors (default 100)', &
+            'Registered-residual neighbors retained per particle', '# neighbors', .false., 100.0)
         call flex_analysis%add_input(UI_FILT, 'nang_nbrs', 'num', &
-            'Angular candidate cap (default 100)', &
-            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 100.0)
+            'Angular candidate cap (default 1000)', &
+            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0)
+        call flex_analysis%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
+            'Diffusion-map bandwidth mode', &
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}', &
+            '(median|ferguson){ferguson}', .false., 'ferguson')
+        call flex_analysis%add_input(UI_FILT, 'bandwidth_tune', 'num', &
+            'Ferguson tune multiplier (default 3)', &
+            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
+            'tune >= 0', .false., 3.0)
         call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &
             '# state volumes', .false., 8.0)
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
-            descr_placeholder_override='Graph-feature low-pass limit in Angstroms{8}; generative volumes are unfiltered', &
+            descr_placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
             gui_submenu="regularization", gui_advanced=.false.)
         call flex_analysis%add_input(UI_ALT, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &

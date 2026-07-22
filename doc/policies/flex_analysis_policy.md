@@ -153,76 +153,67 @@ The coordinate and spectrum outputs are:
 - `flex_diffmap_spectrum.txt`;
 - `flex_diffmap_graph.txt`.
 
-## 5. Manifold targets and residual Nyström 3D pre-images
+## 5. Manifold targets and kernel-weighted 3D pre-images
 
 The normalized coordinates written for users and embedding consumers are not
 used to place reconstruction targets. `embed_graph` also returns the raw
-diffusion coordinates `lambda_q psi_q`; this preserves diffusion-eigenvalue
-scaling when distances are evaluated.
+diffusion coordinates `lambda_q psi_q`; these coordinates define the manifold
+metric used for state-descriptor spacing and kernel weighting.
 
 Representative targets are selected from actual particles with the same
 `cluster_dmat(...,'kmed',...)` path used by `cls_split`. The distance matrix is
 formed from the retained raw diffusion coordinates. The requested count is
 controlled by `npreimages` and defaults to eight. It is clamped only when more
-representatives than particles are requested; the workflow does not use
-silhouette selection or claim that the requested representatives are physical
-discrete conformational classes.
+representatives than particles are requested.
 
-The eigensolve also retains the nontrivial graph eigenfunctions `psi_q`. The
-training design for the 3D residual model is `z_iq = psi_q(i)`, matching the
-residual-mode coefficients used by the `denoise_project` Nyström pre-image.
-For every graph node, the corresponding evaluation coefficient is calculated
-with the same normalized graph operator:
+The medoids are **manifold descriptors only**. They are not interpreted as
+single-particle states and are not used as hard reconstruction exemplars.
+
+For each descriptor state `s`, the workflow builds a soft particle-weight
+vector with a diffusion-kernel model centered at the medoid coordinate:
 
 ```text
-phi_q(i) = sum_j Wnorm(i,j) psi_q(j) / lambda_q
+w_is ∝ exp(-||x_i - x_medoid(s)||^2 / eps_s) / q_i
 ```
 
-The representative target coefficient is `phi_q` at its medoid node. There is
-no Gaussian distance kernel, fitted bandwidth, soft cluster-membership table,
-or independent reconstruction of common signal for each representative.
+where `x_i` are raw diffusion coordinates, `eps_s` is a local bandwidth, and
+`q_i` is a kernel-density proxy. Weights are normalized per state so
+`sum_i w_is = 1`.
 
-The 2D-to-3D translation uses `simple_flex_projected_latent_model`. It projects the
-fixed supplied mean, subtracts that prediction from every prepared particle
-Fourier plane, and reconstructs each Nyström residual mode independently. The
-right-hand side for mode `q` is weighted by `z_iq`, and its diagonal
-normal-equation density is weighted by `z_iq^2`. There is no voxelwise
-cross-mode latent Gram matrix or coupled multi-mode inversion. This is the 3D
-counterpart of `denoise_project`'s residual Nyström pre-image: a linear
-backprojection is performed for each graph eigenfunction and the Nyström
-coefficient is applied only when representative states are synthesized. The
-fitted residual basis volumes retain the existing spatial-mask policy. As in refine3D restoration, each basis is
-transformed to real space, normalized for the reconstruction-box scaling,
-multiplied once by the inverse 3D Kaiser-Bessel instrument function, and
-soft-masked once before it is returned to Fourier space for projection and
-state synthesis. Flex explicitly disables the projected model's `lp`-controlled
-Fourier-plane truncation and final `bp` operation. The public `lp` parameter
-affects graph features only. No FSC-derived weighting, cutoff, or filtering is
-applied to the residual basis or synthesized states.
+To avoid sparse-state collapse, the implementation applies adaptive global
+bandwidth inflation: per-state local bandwidth seeds are estimated first, then
+a shared scale factor is increased until the minimum state effective sample
+size reaches a floor (or an iteration cap is reached). This preserves relative
+state locality while preventing extremely peaky weights that produce unstable
+"noisy ball" reconstructions.
 
-Pre-image state `s` is synthesized as
+The 2D-to-3D translation then performs direct weighted reconstruction for each
+state (independent state volumes, no residual-basis synthesis):
 
 ```text
-V_s = V_mean + sum_q phi_q(s) B_q
+V_s = argmin_V  sum_i w_is ||A_i V - y_i||^2
 ```
 
-where the original supplied mean is fixed and `B_q` are the fitted residual
-3D basis volumes. The basis volumes are an internal representation; the
-representative state volumes, not linear one-mode trajectories, are the
-diagnostic outputs. Setting every target coefficient to zero reproduces the
-supplied mean by construction.
+Operationally, each particle contributes to every state with the same scalar
+weight in both the Fourier numerator and CTF/sampling density denominator.
+This keeps the inversion mathematically consistent with weighted least-squares
+reconstruction while preserving SIMPLE's established reconstruction operators.
 
-The residual basis fit reads `flex_registered_particles.simple` through the
+This policy is aligned with state-of-the-art diffusion-map pre-image practice:
+manifold points are sampled by diverse descriptors (medoids), but state volume
+estimation uses soft neighborhoods on the manifold rather than hard exemplar
+coefficients.
+
+The weighted reconstruction reads `flex_registered_particles.simple` through the
 projected-model matcher batch reader. Its selected `ptcl3D` orientations have
 zero in-plane angle and shift, matching the registered images used to train the
-diffusion model. Spectral coordinates remain in the caller-owned row table (or
-the distributed worker assignment), rather than project metadata. The original
-input project is never edited.
+diffusion model. Kernel weights remain caller-owned tables and are not written
+to project metadata. The original input project is never edited.
 
-There is no alternating latent-coordinate refinement, PCA canonicalization,
-trajectory-volume fan-out, duplicate difference-map output, or sigma-derived
-scaling. Diffusion eigenfunctions remain fixed after the graph eigensolve; the
-projected residual basis is fitted once.
+There is no alternating latent-coordinate refinement, trajectory-volume fan-out,
+or sigma-derived latent scaling. Diffusion coordinates remain fixed after the
+graph eigensolve; pre-image states are obtained by one weighted reconstruction
+pass from those coordinates.
 
 ### Reconstruction identity diagnostic
 
@@ -429,17 +420,20 @@ constructing trajectory chunks.
 | Iterative PCA/PPCA and sigma estimation | Removed from flex workflow |
 | Even/odd maps and FSC per pre-image state | Forward-facing development |
 | Posterior covariance/model-variance map | Forward-facing development |
-| Project-FSC shrinkage of pre-image states | Forward-facing development |
+| Project-FSC shrinkage of pre-image states | Implemented for weighted-state reconstruction |
 
 A spatial variance map derived from posterior covariance or model variance
 would also be valuable, but it requires a clearly specified likelihood and
 calibrated uncertainty model. It must not be inferred from diffusion
 eigenvalues alone.
 
-Project FSCs are already two-fold cross-validated. Once the pre-image model and
-representative generation are otherwise settled, a future shrinkage method can
-use those independently validated FSC estimates directly—preferably
-state-specific FSCs when available—to shrink Fourier coefficients continuously.
-This is distinct from applying a hard or soft FSC cutoff as an output filter.
-Until that work is implemented and validated, the generative volumes remain
-free of FSC-derived weighting, cutoff, and filtering.
+Project FSCs are already two-fold cross-validated. The weighted-state
+reconstruction path now applies continuous FSC-based shrinkage in Fourier space
+before writing each state volume, using the original input project's
+state-1 FSC (from its `out` segment) for all states. Shrinkage uses the
+existing `fsc2optlp_sub(..., merged=.false.)`
+mapping rather than a hard cutoff.
+
+If no compatible FSC metadata/file is available, or if FSC shell count is
+incompatible with the reconstruction Nyquist, shrinkage is skipped with an
+explicit log message and unshrunk volumes are written.

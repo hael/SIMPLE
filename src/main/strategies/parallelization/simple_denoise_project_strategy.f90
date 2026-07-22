@@ -129,6 +129,8 @@ contains
         if( .not. cline%defined('oritype')  ) call cline%set('oritype',  'ptcl2D')
         if( .not. cline%defined('pca_mode') ) call cline%set('pca_mode', 'diffusion_maps')
         if( .not. cline%defined('graph')    ) call cline%set('graph',    'euc')
+        if( .not. cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','median')
+        if( .not. cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',3.0)
         if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
         if( .not. cline%defined('k_nn')     ) call cline%set('k_nn',      DIFFMAP_GRAPH_KNN_DEFAULT)
         if( .not. cline%defined('neigs')    ) call cline%set('neigs',     DIFFMAP_NEIGS_SCAN_DEFAULT)
@@ -403,6 +405,7 @@ contains
         integer, allocatable, intent(out)   :: cls_inds(:), cls_pops(:)
         logical,              intent(out)   :: l_phflip, l_ctf_no
         type(string) :: ctfstr
+        character(len=STDLEN) :: bandwidth_mode
         integer, allocatable :: pinds(:), stk_offsets(:), stk_nptcls(:)
         logical, allocatable :: seen_slots(:)
         integer :: iptcl, istk, icls, nptcls, nstks, cls, stkind, indstk, slot, ctf_mode, nptcls_slots, nptcls_active
@@ -430,6 +433,10 @@ contains
             endif
         endif
         if( params%k_nn < 1 ) THROW_HARD('denoise_project requires k_nn >= 1')
+        bandwidth_mode=lowercase(trim(params%bandwidth_mode))
+        if( bandwidth_mode/='median' .and. bandwidth_mode/='ferguson' ) &
+            &THROW_HARD('denoise_project bandwidth_mode must be median|ferguson')
+        if( params%bandwidth_tune < 0. ) THROW_HARD('denoise_project requires bandwidth_tune >= 0')
         nptcls = spproj%os_ptcl2D%get_noris()
         if( nptcls < 1 ) THROW_HARD('empty ptcl2D field; denoise_project')
         if( spproj%os_ptcl3D%get_noris() /= nptcls )then
