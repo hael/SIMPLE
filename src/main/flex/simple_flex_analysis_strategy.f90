@@ -186,8 +186,7 @@ contains
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
-        call store_project_spectral_model(registered_project,pinds,spectral_z,nmodes,labels,medoids)
-        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds,nmodes, &
+        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds, &
             &native_model_project,native_pinds, &
             &'flex_native_registered_correspondence.txt')
         call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
@@ -234,11 +233,12 @@ contains
         real, allocatable :: coords(:,:),features(:,:),proj_dirs(:,:),d2s(:,:)
         integer, allocatable :: proj_ids(:),rows(:),nbrs(:,:),ncandidates(:)
         integer :: i
-        call read_int_file(params%infile,pinds)
         select case(params%stage)
             case(1)
+                call read_int_file(params%infile,pinds)
                 call prepare_flex_diffmap_feature_part(params,build,pinds,params%part)
             case(2)
+                call read_int_file(params%infile,pinds)
                 call read_flex_diffmap_feature_parts(params,params%nparts,features,proj_ids)
                 call flex_projection_directions(build,proj_dirs)
                 if( size(pinds)/=params%top-params%fromp+1 ) THROW_HARD('flex graph row assignment size mismatch')
@@ -248,7 +248,9 @@ contains
                 call write_graph_part(params,rows,nbrs,d2s,ncandidates)
                 deallocate(features,proj_ids,proj_dirs,rows,nbrs,d2s,ncandidates)
             case(3)
-                call read_project_spectral_coordinates(build%spproj,pinds,params%neigs,coords)
+                call read_flex_reconstruction_assignment(params%infile,params%neigs,pinds,coords)
+                if( any(pinds>build%spproj%os_ptcl3D%get_noris()) ) &
+                    &THROW_HARD('flex reconstruction assignment particle outside native project')
                 call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%neigs,params%part)
                 deallocate(coords)
         end select
@@ -329,13 +331,10 @@ contains
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
         call graph%kill()
-        call store_project_coordinates(registered_project,pinds,coords,nmodes)
-        call store_project_spectral_model(registered_project,pinds,spectral_z,nmodes,labels,medoids)
-        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds,nmodes, &
+        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds, &
             &native_model_project,native_pinds, &
             &'flex_native_registered_correspondence.txt')
-        if( any(native_pinds/=pinds) ) &
-            &THROW_HARD('distributed flex registered-to-native mapping disagrees with particle assignments')
+        call prepare_reconstruction_partitions(self,params,native_pinds,spectral_z)
         call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE MODEL PROJECT: ',model_params%projfile%to_char()
 
@@ -416,6 +415,37 @@ contains
         end do
     end subroutine prepare_particle_partitions
 
+    ! Stage 3 uses the normal qsys assignment file, extended with the
+    ! per-particle spectral vector.  Particle auxiliary metadata is not a
+    ! persistent project transport: SIMPLE serializes only the fixed particle
+    ! parameters.  Keeping the vector in the assignment makes the worker
+    ! handoff explicit and preserves the selected-row ordering.
+    subroutine prepare_reconstruction_partitions( self, params, native_pinds, spectral_z )
+        class(flex_analysis_master_strategy), intent(inout) :: self
+        type(parameters), intent(in) :: params
+        integer, intent(in) :: native_pinds(:)
+        real, intent(in) :: spectral_z(:,:)
+        type(string) :: fname
+        integer :: ipart,first,last,i,u
+        if( size(native_pinds)<1 .or. size(spectral_z,1)/=size(native_pinds) .or. size(spectral_z,2)<1 ) &
+            &THROW_HARD('invalid flex reconstruction partition table')
+        if( .not.allocated(self%part_params) .or. size(self%part_params)/=self%nparts_run ) &
+            &THROW_HARD('flex reconstruction partitions were not initialized')
+        do ipart=1,self%nparts_run
+            first=self%qenv%parts(ipart,1); last=self%qenv%parts(ipart,2)
+            if( first<1 .or. last<first .or. last>size(native_pinds) ) &
+                &THROW_HARD('invalid flex reconstruction partition bounds')
+            fname=string('flex_particles_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
+            open(newunit=u,file=fname%to_char(),status='replace',action='write')
+            write(u,'(A)') '# native_particle_index spectral_coordinates'
+            do i=first,last
+                write(u,*) native_pinds(i),spectral_z(i,:)
+            end do
+            close(u)
+            call fname%kill
+        end do
+    end subroutine prepare_reconstruction_partitions
+
     subroutine fit_flex_analysis_embedding( params, build, cline, fit_result )
         class(parameters), intent(inout) :: params
         class(builder), intent(inout) :: build
@@ -492,75 +522,41 @@ contains
         deallocate(coords_mode_major,raw_mode_major,spectral_mode_major,nystrom_mode_major,eigvals)
     end subroutine run_flex_analysis
 
-    subroutine store_project_coordinates( project_fname, pinds, coords, nmodes )
-        type(string), intent(in) :: project_fname
-        integer, intent(in) :: pinds(:),nmodes
-        real, intent(in) :: coords(:,:)
-        type(sp_project) :: spproj
-        type(string) :: label
-        integer :: i,q
-        call spproj%read(project_fname)
-        do q=1,nmodes
-            label=string('flex_coord')//int2str(q)
-            do i=1,size(pinds)
-                call spproj%os_ptcl3D%set(pinds(i),label%to_char(),coords(i,q))
-            end do
-            call label%kill
-        end do
-        call spproj%write(project_fname)
-        call spproj%kill
-    end subroutine store_project_coordinates
-
-    subroutine store_project_spectral_model( project_fname, pinds, spectral_z, nmodes, labels, medoids )
-        type(string), intent(in) :: project_fname
-        integer, intent(in) :: pinds(:),nmodes
-        real, intent(in) :: spectral_z(:,:)
-        integer, intent(in) :: labels(:),medoids(:)
-        type(sp_project) :: spproj
-        type(string) :: label
-        integer :: i,state,q
-        if( size(spectral_z,1)/=size(pinds) .or. size(spectral_z,2)/=nmodes .or. &
-            &size(labels)/=size(pinds) ) THROW_HARD('invalid flex spectral model for project storage')
-        call spproj%read(project_fname)
-        do i=1,size(pinds)
-            call spproj%os_ptcl3D%set(pinds(i),'flex_cluster',real(labels(i)))
-            call spproj%os_ptcl3D%set(pinds(i),'flex_medoid',0.)
-        end do
-        do state=1,size(medoids)
-            call spproj%os_ptcl3D%set(pinds(medoids(state)),'flex_medoid',real(state))
-        end do
-        do q=1,nmodes
-            label=string('flex_spectral')//int2str(q)
-            do i=1,size(pinds)
-                call spproj%os_ptcl3D%set(pinds(i),label%to_char(),spectral_z(i,q))
-            end do
-            call label%kill
-        end do
-        call spproj%write(project_fname)
-        call spproj%kill
-    end subroutine store_project_spectral_model
-
-    subroutine read_project_spectral_coordinates( spproj, pinds, nmodes, spectral_z )
-        type(sp_project), intent(inout) :: spproj
-        integer, intent(in) :: pinds(:),nmodes
+    subroutine read_flex_reconstruction_assignment( fname, nmodes, pinds, spectral_z )
+        type(string), intent(in) :: fname
+        integer, intent(in) :: nmodes
+        integer, allocatable, intent(out) :: pinds(:)
         real, allocatable, intent(out) :: spectral_z(:,:)
-        type(string) :: label
-        integer :: i,q,nall
-        nall=spproj%os_ptcl3D%get_noris()
-        if( size(pinds)<1 .or. nmodes<1 ) THROW_HARD('invalid flex residual-model worker assignment')
-        allocate(spectral_z(size(pinds),nmodes))
-        do q=1,nmodes
-            label=string('flex_spectral')//int2str(q)
-            do i=1,size(pinds)
-                if( pinds(i)<1 .or. pinds(i)>nall ) THROW_HARD('flex assignment particle outside project')
-                if( .not.spproj%os_ptcl3D%isthere(pinds(i),label%to_char()) ) &
-                    &THROW_HARD('flex spectral coordinate missing from registered project')
-                spectral_z(i,q)=spproj%os_ptcl3D%get(pinds(i),label%to_char())
-            end do
-            call label%kill
+        character(len=XLONGSTRLEN) :: line
+        integer :: nvals,funit,ios,i
+        if( nmodes<1 ) THROW_HARD('invalid flex reconstruction spectral rank')
+        nvals=0
+        open(newunit=funit,file=fname%to_char(),status='old',action='read',iostat=ios)
+        call fileiochk('opening flex reconstruction assignment '//fname%to_char(),ios)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios/=0 ) exit
+            if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+            nvals=nvals+1
         end do
-        if( .not.all(ieee_is_finite(spectral_z)) ) THROW_HARD('invalid flex spectral coordinate in registered project')
-    end subroutine read_project_spectral_coordinates
+        close(funit)
+        if( nvals<1 ) THROW_HARD('empty flex reconstruction assignment file')
+        allocate(pinds(nvals),spectral_z(nvals,nmodes))
+        open(newunit=funit,file=fname%to_char(),status='old',action='read',iostat=ios)
+        call fileiochk('opening flex reconstruction assignment '//fname%to_char(),ios)
+        i=0
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios/=0 ) exit
+            if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+            i=i+1
+            read(line,*,iostat=ios) pinds(i),spectral_z(i,:)
+            if( ios/=0 ) THROW_HARD('invalid flex reconstruction assignment row')
+        end do
+        close(funit)
+        if( any(pinds<1) .or. .not.all(ieee_is_finite(spectral_z)) ) &
+            &THROW_HARD('invalid flex reconstruction assignment values')
+    end subroutine read_flex_reconstruction_assignment
 
     subroutine collect_target_coefficients( nystrom_coords, medoids, target_coeffs )
         real, intent(in) :: nystrom_coords(:,:)

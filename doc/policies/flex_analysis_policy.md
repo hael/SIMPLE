@@ -40,14 +40,14 @@ preparation by the inverse of its stored in-plane shift and in-plane angle.
 Feature preparation includes the standard particle normalization performed by
 `transform_ptcls`. The residual 3D fit separately reads native images through
 the projected-model batch path; it does not interpolate them into the
-registered 2D frame. Before that fit, registered-frame `ptcl3D` parameters are
-mapped onto a copy of the native project with the established
-`map_params_from_den` convention: rows are joined by stable `ptcl2D:pind`, then
-the registered `ptcl3D` orientation is composed with the native `ptcl2D`
-transform using `compose3d2d`. As in `map_params_from_den`, row identity is a
-legacy fallback only when the registered project has no `pind` field and both
-projects have the same particle count. Missing, duplicate, inactive, or
-out-of-range correspondences are hard errors. The implementation extends and
+registered 2D frame. The registered project is a row-preserving copy of the
+native `ptcl3D` field with its selected in-plane angle and shift set to zero.
+Before the native fit, each canonical registered view is composed only with
+the corresponding native `ptcl3D` in-plane transform. `ptcl2D` is not read,
+modified, or used for this mapping. The implementation hard-fails if the two
+projects do not have the same `ptcl3D` row count, if a selected row is inactive,
+if the registered row is not canonical, or if their viewing directions
+disagree. The implementation extends and
 uses `transform_ptcls` with an explicit
 particle-index batch, following the matcher batch policy
 `min(nptcls,nthr*BATCHTHRSZ)` and the established project-aware particle
@@ -66,7 +66,7 @@ outputs are:
   `flex_registered_particles_partNNN.mrcs` stacks in distributed mode;
 - `flex_registered_particles.simple`;
 - `flex_native_model.simple`, which retains native stack/CTF metadata and
-  carries mapped `ptcl3D` geometry plus flex spectral metadata;
+  carries the native-frame `ptcl3D` geometry required for reconstruction;
 - `flex_registered_particle_map.txt`.
 
 Each stack is written incrementally with one process-level `stack_io` open and
@@ -77,19 +77,19 @@ stack, and feature workers read it with buffered `stack_io`; workers do not
 repeat the reprojection calculation.
 
 The registered stack or part stacks are compact and collectively contain only
-the selected particles in feature-row order. The copied project maps those
-particles to compact stack indices, marks unselected rows inactive, validates
-the resulting ptcl2D and ptcl3D mappings, records every stack as `ctf=flip`,
-and stores zero in-plane angle and shift. Defocus, phase shift, and other CTF
+the selected particles in feature-row order. The copied project maps selected
+`ptcl3D` rows to compact stack indices, marks unselected `ptcl3D` rows inactive,
+records every stack as `ctf=flip`, and stores zero in-plane angle and shift in
+the registered `ptcl3D` field. The `ptcl2D` field remains untouched. Defocus,
+phase shift, and other CTF
 metadata remain available. For
 astigmatic CTFs, `angast` is rotated into the canonical registered frame by
 adding the removed particle `e3` modulo 180 degrees; leaving the raw
 astigmatism axis unchanged would be incorrect. An existing `frc3D` record is
 preserved when available.
 
-Parameters obtained later in the registered frame must be mapped back to raw
-particles using the established `denoise_project`/`map_params_from_den`
-composition convention.
+Parameters obtained in the registered frame are mapped back to native images by
+restoring only the corresponding source `ptcl3D` in-plane transform.
 
 ## 3. Graph feature and sparse candidate policy
 
@@ -221,10 +221,11 @@ The residual basis fit reads `flex_native_model.simple` through the established
 projected-model matcher batch reader. That project is a copy of the native
 project, so its images, stack addresses, CTF mode, defocus parameters, and
 astigmatism axes remain native. Its selected `ptcl3D` orientations and shifts
-are the explicit `map_params_from_den` composition described above, and its
-spectral coordinates are copied from the corresponding registered rows. This
-avoids reconstructing interpolated `transform_ptcls` output while still using
-the geometry in the frame in which the model was trained. Feeding the
+are formed by restoring the source `ptcl3D` in-plane transform onto the
+canonical registered view. Spectral coordinates remain in the caller-owned
+row table (or the distributed worker assignment), rather than project
+metadata. This avoids reconstructing interpolated `transform_ptcls` output
+while still using the geometry in the frame in which the model was trained. Feeding the
 registered stack directly to the kernel would instead normalize and
 interpolate those images a second time. The original input project is never
 edited.
@@ -267,25 +268,27 @@ barriers behind the same `flex_analysis` program:
 2. Graph workers read the residual part stacks through buffered `stack_io`,
    calculate only their assigned source rows of the angularly gated kNN table,
    and write those sparse neighbor rows for master assembly.
-3. The master maps registered parameters and spectral values onto
-   `flex_native_model.simple`. Residual-model workers read that project, obtain
-   `flex_spectralN` from its native-row `ptcl3D` metadata, read native particle
+3. The master maps registered geometry onto `flex_native_model.simple`.
+   Residual-model workers receive native project row indices together with their
+   spectral vectors in the standard text assignment files, read native particle
    images, and accumulate their assigned coupled projected-latent M-step
    statistics with the composed native-frame orientations.
 
 The master constructs the normal `qsys_env` job description and writes one
-text particle-assignment file per worker with `arr2txtfile`. After feature
+text particle-assignment file per worker. Feature and graph assignments are
+written with `arr2txtfile`; stage-3 assignments additionally carry the spectral
+vector needed by that worker. After feature
 workers finish, it follows the distributed `denoise_project` convention by
 building `flex_registered_particles.simple` over the registered part stacks;
 it does not concatenate or rewrite them. After graph workers finish, the
 master validates complete, nonoverlapping row coverage, assembles and
 normalizes the sparse graph, and owns the global sparse eigensolve, ICM
-selection, k-medoid selection, and Nyström target evaluation. It writes
-coordinates, hard `flex_cluster` assignments, `flex_medoid` markers, and
-`flex_spectralN` values into the registered project's `ptcl3D` metadata before
-mapping them by `pind` into `flex_native_model.simple` and launching the
-residual-model workers. The standard text assignment files contain native
-project row indices. There is no custom flex worker-state file.
+selection, k-medoid selection, and Nyström target evaluation. It maps
+registered geometry by `ptcl3D` row into `flex_native_model.simple` and launches
+residual-model workers with standard text assignments containing each native
+project row index and its spectral vector. Particle auxiliary metadata is not
+used as a transport because it is not persistent project state. There is no
+custom flex worker-state file.
 
 The workflow-specific implementation is collected in `src/main/flex`; its
 `README.md` maps the stages and their dependencies. The thin commander, UI and
