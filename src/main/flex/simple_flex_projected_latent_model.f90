@@ -1346,17 +1346,28 @@ contains
         complex(dp) :: rhs(ncomp), sol(ncomp)
         real(dp)    :: amat(ncomp,ncomp)
         real(dp)    :: diag_sum, diag_max, ridge, denom
-        integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag
+        integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag, shell, nyq
         lb = lbound(basis_recs(1)%cmat_exp)
         ub = ubound(basis_recs(1)%cmat_exp)
+        nyq = basis_recs(1)%get_lfny(1)
         !$omp parallel do collapse(3) default(shared) schedule(static) &
-        !$omp private(h,k,m,ih,ik,im,q,r,amat,rhs,sol,diag_sum,diag_max,ridge,denom,flag) proc_bind(close)
+        !$omp private(h,k,m,ih,ik,im,q,r,amat,rhs,sol,diag_sum,diag_max,ridge,denom,flag,shell) proc_bind(close)
         do m = lb(3), ub(3)
             do k = lb(2), ub(2)
                 do h = lb(1), ub(1)
                     ih = h - lb(1) + 1
                     ik = k - lb(2) + 1
                     im = m - lb(3) + 1
+                    ! Match reconstructor%sampl_dens_correct: values outside
+                    ! the spherical Nyquist support are not reconstructable,
+                    ! even though they lie inside the Cartesian FFT cube.
+                    shell = nint(sqrt(real(h*h+k*k+m*m)))
+                    if( shell > nyq )then
+                        do q = 1, ncomp
+                            basis_recs(q)%cmat_exp(h,k,m) = CMPLX_ZERO
+                        end do
+                        cycle
+                    endif
                     rhs  = DCMPLX_ZERO
                     diag_sum = 0.d0
                     diag_max = 0.d0
