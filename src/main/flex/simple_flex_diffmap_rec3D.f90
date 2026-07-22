@@ -8,7 +8,9 @@ use simple_matcher_3Drec,          only: init_rec, prep_imgs4rec, cleanup_rec_bu
 use simple_matcher_ptcl_io,        only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch
 use simple_parameters,             only: parameters
 use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
-    &update_basis_from_mstep_stats_part_files, cleanup_planes, test_projected_model_plane_preparation
+    &update_basis_from_mstep_stats_part_files, cleanup_planes, test_projected_model_plane_preparation, &
+    &prep_imgs4projected_model
+use simple_flex_reconstructor_latent_ops, only: project_fplane_mean
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
@@ -21,6 +23,8 @@ public :: test_fake_preimage_against_reconstruct3D
 character(len=*), parameter :: TEST_FAKE_VOL = 'flex_fake_preimage_test.mrc'
 character(len=*), parameter :: TEST_REF_VOL  = 'flex_reconstruct3D_reference_test.mrc'
 character(len=*), parameter :: TEST_DIFF_VOL = 'flex_fake_preimage_difference_test.mrc'
+character(len=*), parameter :: TEST_STANDARD_RESIDUAL_VOL = 'flex_standard_residual_identity_test.mrc'
+character(len=*), parameter :: TEST_STANDARD_RESIDUAL_DIFF_VOL = 'flex_standard_residual_difference_test.mrc'
 character(len=*), parameter :: TEST_FSC_FILE = 'flex_fake_preimage_fsc_test.txt'
 character(len=*), parameter :: TEST_METRICS_FILE = 'flex_fake_preimage_metrics_test.txt'
 real(dp), parameter :: TEST_MIN_CC = 0.995d0
@@ -40,10 +44,12 @@ contains
         integer,           intent(in)    :: pinds(:)
         type(parameters) :: test_params
         type(reconstructor) :: reference_rec
-        type(image) :: fake_img, diff_img, reference_ft, fake_ft
-        real, allocatable :: z(:,:), target_coeffs(:,:), ref_data(:,:,:), fake_data(:,:,:)
+        type(image) :: fake_img, diff_img, reference_ft, fake_ft, standard_residual_img, standard_residual_diff_img
+        real, allocatable :: z(:,:), target_coeffs(:,:), ref_data(:,:,:), fake_data(:,:,:), standard_residual_data(:,:,:)
         real, allocatable :: fsc(:), resolutions(:)
         real(dp) :: dot_rf, norm_ref2, norm_fake2, scale_fake, raw_rel_l2, scaled_rel_l2, cc
+        real(dp) :: dot_rs, norm_standard_residual2, scale_standard_residual, standard_residual_raw_rel_l2
+        real(dp) :: standard_residual_scaled_rel_l2, standard_residual_cc
         integer :: funit, k
         if( size(pinds)<3 ) THROW_HARD('fake pre-image reconstruction test requires at least three particles')
         test_params = params
@@ -59,6 +65,24 @@ contains
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: ORDINARY RECONSTRUCT3D REFERENCE'
         call reconstruct3D_reference(test_params,build,pinds,reference_rec)
         call reference_rec%write(string(TEST_REF_VOL),del_if_exists=.true.)
+        ref_data = reference_rec%get_rmat()
+        norm_ref2 = sum(real(ref_data,dp)*real(ref_data,dp))
+        if( norm_ref2<=DTINY ) THROW_HARD('ordinary reconstruct3D reference produced an empty volume')
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: STANDARD RESIDUAL CONTROL'
+        call reconstruct3D_standard_residual_control(test_params,build,pinds,standard_residual_img)
+        call standard_residual_img%write(string(TEST_STANDARD_RESIDUAL_VOL),del_if_exists=.true.)
+        call standard_residual_diff_img%copy(standard_residual_img)
+        call standard_residual_diff_img%subtr(reference_rec)
+        call standard_residual_diff_img%write(string(TEST_STANDARD_RESIDUAL_DIFF_VOL),del_if_exists=.true.)
+        standard_residual_data = standard_residual_img%get_rmat()
+        dot_rs = sum(real(ref_data,dp)*real(standard_residual_data,dp))
+        norm_standard_residual2 = sum(real(standard_residual_data,dp)*real(standard_residual_data,dp))
+        if( norm_standard_residual2<=DTINY ) THROW_HARD('standard flex residual control produced an empty volume')
+        scale_standard_residual = dot_rs/norm_standard_residual2
+        standard_residual_raw_rel_l2 = sqrt(sum((real(standard_residual_data,dp)-real(ref_data,dp))**2)/norm_ref2)
+        standard_residual_scaled_rel_l2 = sqrt(sum((scale_standard_residual*real(standard_residual_data,dp)- &
+            &real(ref_data,dp))**2)/norm_ref2)
+        standard_residual_cc = reference_rec%corr(standard_residual_img)
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: CONSTANT z=1 PRE-IMAGE'
         call reconstruct_flex_diffmap_states(test_params,build,pinds,z,target_coeffs,1)
         call fake_img%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
@@ -66,10 +90,8 @@ contains
         call diff_img%copy(fake_img)
         call diff_img%subtr(reference_rec)
         call diff_img%write(string(TEST_DIFF_VOL),del_if_exists=.true.)
-        ref_data  = reference_rec%get_rmat()
         fake_data = fake_img%get_rmat()
         dot_rf     = sum(real(ref_data,dp)*real(fake_data,dp))
-        norm_ref2  = sum(real(ref_data,dp)*real(ref_data,dp))
         norm_fake2 = sum(real(fake_data,dp)*real(fake_data,dp))
         if( norm_ref2<=DTINY .or. norm_fake2<=DTINY ) &
             &THROW_HARD('fake pre-image reconstruction test produced an empty volume')
@@ -92,6 +114,10 @@ contains
         close(funit)
         open(newunit=funit,file=TEST_METRICS_FILE,status='replace',action='write')
         write(funit,'(A,I0)') 'particles=',size(pinds)
+        write(funit,'(A,ES16.8)') 'standard_residual_cc=',standard_residual_cc
+        write(funit,'(A,ES16.8)') 'standard_residual_optimal_scale=',scale_standard_residual
+        write(funit,'(A,ES16.8)') 'standard_residual_relative_l2_raw=',standard_residual_raw_rel_l2
+        write(funit,'(A,ES16.8)') 'standard_residual_relative_l2_after_scale=',standard_residual_scaled_rel_l2
         write(funit,'(A,ES16.8)') 'fourier_cc=',cc
         write(funit,'(A,ES16.8)') 'optimal_fake_scale=',scale_fake
         write(funit,'(A,ES16.8)') 'relative_l2_raw=',raw_rel_l2
@@ -103,14 +129,25 @@ contains
         write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
             &'>>> FLEX PRE-IMAGE IDENTITY METRICS cc=',cc,' optimal_scale=',scale_fake, &
             &' raw_relative_l2=',raw_rel_l2,' scaled_relative_l2=',scaled_rel_l2
-        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY OUTPUTS: '//TEST_REF_VOL//', '//TEST_FAKE_VOL//', '//TEST_DIFF_VOL
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
+            &'>>> FLEX STANDARD RESIDUAL CONTROL cc=',standard_residual_cc, &
+            &' optimal_scale=',scale_standard_residual,' raw_relative_l2=',standard_residual_raw_rel_l2, &
+            &' scaled_relative_l2=',standard_residual_scaled_rel_l2
+        write(logfhandle,'(A,5(1X,A))') '>>> FLEX PRE-IMAGE IDENTITY OUTPUTS:', TEST_REF_VOL, &
+            &TEST_STANDARD_RESIDUAL_VOL, TEST_STANDARD_RESIDUAL_DIFF_VOL, TEST_FAKE_VOL, TEST_DIFF_VOL
         call reference_rec%dealloc_rho
         call reference_rec%kill
         call fake_img%kill
         call diff_img%kill
+        call standard_residual_img%kill
+        call standard_residual_diff_img%kill
         call reference_ft%kill
         call fake_ft%kill
-        deallocate(z,target_coeffs,ref_data,fake_data,fsc,resolutions)
+        deallocate(z,target_coeffs,ref_data,fake_data,standard_residual_data,fsc,resolutions)
+        if( standard_residual_cc<TEST_MIN_CC .or. standard_residual_raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
+            &standard_residual_scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. scale_standard_residual<=0.d0 )then
+            THROW_HARD('standard residual control does not reproduce reconstruct3D; mean projection/subtraction is inconsistent')
+        endif
         if( cc<TEST_MIN_CC .or. raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
             &scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. scale_fake<=0.d0 )then
             THROW_HARD('constant flex pre-image does not reproduce reconstruct3D; inspect flex_fake_preimage_*_test outputs')
@@ -159,6 +196,80 @@ contains
         call recvol%mul(gridcorr_img)
         call gridcorr_img%kill
     end subroutine reconstruct3D_reference
+
+    !> Reconstruct the residual against the supplied mean through the ordinary
+    !! refine3D plane/insertion path.  For a constant latent z=1, adding this
+    !! residual back to the mean must reproduce reconstruct3D.  This control
+    !! deliberately does not use the coupled latent accumulator or solver.
+    subroutine reconstruct3D_standard_residual_control( params, build, pinds, outvol )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: pinds(:)
+        type(image),       intent(inout) :: outvol
+        type(reconstructor) :: residual_rec, mean_rec
+        type(fplane_type), allocatable :: standard_fpls(:), model_fpls(:), mean_fpls(:)
+        type(image) :: gridcorr_img, mean_img
+        type(ori) :: orientation
+        integer :: batchlims(2), batchsz, ibatch, i, iptcl
+        call init_basis_reconstructor(params,build,residual_rec)
+        call init_mean_reconstructor(params,build,mean_rec)
+        call init_rec(params,build,MAXIMGBATCHSZ,standard_fpls)
+        allocate(model_fpls(MAXIMGBATCHSZ),mean_fpls(1))
+        call prepimgbatch(params,build,MAXIMGBATCHSZ)
+        do ibatch=1,size(pinds),MAXIMGBATCHSZ
+            batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz=batchlims(2)-batchlims(1)+1
+            if( params%l_ptcl_src_den )then
+                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
+                    &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+            endif
+            call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)),standard_fpls(:batchsz))
+            ! The preparation routines modify their images.  Re-read before
+            ! generating the model/operator plane used for the subtraction.
+            if( params%l_ptcl_src_den )then
+                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
+                    &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+            endif
+            call prep_imgs4projected_model(params,build,batchsz,build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)),model_fpls(:batchsz))
+            do i=1,batchsz
+                iptcl=pinds(batchlims(1)+i-1)
+                call build%spproj_field%get_ori(iptcl,orientation)
+                if( orientation%isstatezero() ) cycle
+                if( .not.allocated(model_fpls(i)%transfer_plane) ) &
+                    &THROW_HARD('standard residual control lacks a forward transfer plane')
+                call project_fplane_mean(mean_rec,orientation,model_fpls(i),mean_fpls(1),apply_ctf_amp=.true.)
+                standard_fpls(i)%cmplx_plane = standard_fpls(i)%cmplx_plane - &
+                    &conjg(model_fpls(i)%transfer_plane)*mean_fpls(1)%cmplx_plane
+                call residual_rec%insert_plane_oversamp(build%pgrpsyms,orientation,standard_fpls(i))
+            end do
+        end do
+        call orientation%kill
+        call cleanup_planes(model_fpls)
+        call cleanup_planes(mean_fpls)
+        call cleanup_rec_buffers(build,standard_fpls)
+        call residual_rec%compress_exp
+        call residual_rec%sampl_dens_correct
+        call residual_rec%ifft
+        call residual_rec%div(real(params%box))
+        gridcorr_img=prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
+            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        call residual_rec%mul(gridcorr_img)
+        call gridcorr_img%kill
+        call mean_img%read_and_crop(params%vols(1),params%smpd,params%box_crop,params%smpd_crop)
+        call residual_rec%add(mean_img)
+        call outvol%copy(residual_rec)
+        call mean_img%kill
+        call residual_rec%dealloc_rho
+        call residual_rec%kill
+        call mean_rec%dealloc_rho
+        call mean_rec%kill
+    end subroutine reconstruct3D_standard_residual_control
 
     subroutine reconstruct_flex_diffmap_states( params, build, pinds, z, target_coeffs, nstates )
         class(parameters), intent(inout) :: params
