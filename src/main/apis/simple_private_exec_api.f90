@@ -48,7 +48,7 @@ use simple_commanders_project_ptcl, only: commander_prune_project, commander_sca
 use simple_commanders_refine3D, only: commander_refine3D_distr_worker
 use simple_commanders_prob,     only: commander_prob_tab, commander_prob_tab_neigh, commander_prob_align,&
                                       commander_prob_align_neigh, commander_prob_tab2D, commander_prob_align2D
-use simple_commanders_flex,     only: commander_flex_eigenvol
+use simple_commanders_flex_analysis,     only: commander_flex_analysis
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
 use simple_commanders_euclid,       only: commander_calc_pspec,commander_calc_group_sigmas
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble

@@ -1,5 +1,5 @@
-!@descr: sparse diffusion-map 3D variability analysis from fixed particle poses
-module simple_flex_eigenvol_strategy
+!@descr: shmem/worker/master sparse diffusion-map 3D variability analysis
+module simple_flex_analysis_strategy
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,               only: builder
@@ -15,42 +15,54 @@ use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages
 use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
 use simple_parameters,            only: parameters
-use simple_flex_embedding_result, only: flex_embedding_result
 use simple_qsys_env,              only: qsys_env
 use simple_sp_project,            only: sp_project
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: flex_eigenvol_strategy, flex_eigenvol_shmem_strategy
-public :: flex_eigenvol_worker_strategy, flex_eigenvol_master_strategy
-public :: create_flex_eigenvol_strategy, fit_flex_eigenvol_embedding
+public :: flex_analysis_strategy, flex_analysis_shmem_strategy
+public :: flex_analysis_worker_strategy, flex_analysis_master_strategy
+public :: create_flex_analysis_strategy, fit_flex_analysis_embedding, flex_embedding_result
 
-type, abstract :: flex_eigenvol_strategy
+! The embedding API is produced by this strategy and consumed by nano3D.
+! Keeping the small value type here avoids a one-type transport module.
+type :: flex_embedding_result
+    character(len=32) :: method = 'none'
+    integer :: nptcls = 0
+    integer :: ncomp  = 0
+    integer, allocatable :: pinds(:)
+    real(dp), allocatable :: z(:,:)
+    real(dp), allocatable :: eigvals(:)
+contains
+    procedure :: kill => kill_flex_embedding_result
+end type flex_embedding_result
+
+type, abstract :: flex_analysis_strategy
 contains
     procedure(init_interface),     deferred :: initialize
     procedure(exec_interface),     deferred :: execute
     procedure(finalize_interface), deferred :: finalize_run
     procedure(cleanup_interface),  deferred :: cleanup
-end type flex_eigenvol_strategy
+end type flex_analysis_strategy
 
-type, extends(flex_eigenvol_strategy) :: flex_eigenvol_shmem_strategy
+type, extends(flex_analysis_strategy) :: flex_analysis_shmem_strategy
 contains
     procedure :: initialize   => shmem_initialize
     procedure :: execute      => shmem_execute
     procedure :: finalize_run => shmem_finalize_run
     procedure :: cleanup      => shmem_cleanup
-end type flex_eigenvol_shmem_strategy
+end type flex_analysis_shmem_strategy
 
-type, extends(flex_eigenvol_strategy) :: flex_eigenvol_worker_strategy
+type, extends(flex_analysis_strategy) :: flex_analysis_worker_strategy
 contains
     procedure :: initialize   => worker_initialize
     procedure :: execute      => worker_execute
     procedure :: finalize_run => worker_finalize_run
     procedure :: cleanup      => worker_cleanup
-end type flex_eigenvol_worker_strategy
+end type flex_analysis_worker_strategy
 
-type, extends(flex_eigenvol_strategy) :: flex_eigenvol_master_strategy
+type, extends(flex_analysis_strategy) :: flex_analysis_master_strategy
     type(qsys_env)           :: qenv
     type(chash)              :: job_descr
     type(chash), allocatable :: part_params(:)
@@ -60,42 +72,50 @@ contains
     procedure :: execute      => master_execute
     procedure :: finalize_run => master_finalize_run
     procedure :: cleanup      => master_cleanup
-end type flex_eigenvol_master_strategy
+end type flex_analysis_master_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
-        import :: flex_eigenvol_strategy, parameters, builder, cmdline
-        class(flex_eigenvol_strategy), intent(inout) :: self
+        import :: flex_analysis_strategy, parameters, builder, cmdline
+        class(flex_analysis_strategy), intent(inout) :: self
         type(parameters),              intent(inout) :: params
         type(builder),                 intent(inout) :: build
         class(cmdline),                intent(inout) :: cline
     end subroutine init_interface
     subroutine exec_interface(self, params, build, cline)
-        import :: flex_eigenvol_strategy, parameters, builder, cmdline
-        class(flex_eigenvol_strategy), intent(inout) :: self
+        import :: flex_analysis_strategy, parameters, builder, cmdline
+        class(flex_analysis_strategy), intent(inout) :: self
         type(parameters),              intent(inout) :: params
         type(builder),                 intent(inout) :: build
         class(cmdline),                intent(inout) :: cline
     end subroutine exec_interface
     subroutine finalize_interface(self, params, build, cline)
-        import :: flex_eigenvol_strategy, parameters, builder, cmdline
-        class(flex_eigenvol_strategy), intent(inout) :: self
+        import :: flex_analysis_strategy, parameters, builder, cmdline
+        class(flex_analysis_strategy), intent(inout) :: self
         type(parameters),              intent(in)    :: params
         type(builder),                 intent(inout) :: build
         class(cmdline),                intent(inout) :: cline
     end subroutine finalize_interface
     subroutine cleanup_interface(self, params)
-        import :: flex_eigenvol_strategy, parameters
-        class(flex_eigenvol_strategy), intent(inout) :: self
+        import :: flex_analysis_strategy, parameters
+        class(flex_analysis_strategy), intent(inout) :: self
         type(parameters),              intent(in)    :: params
     end subroutine cleanup_interface
 end interface
 
 contains
 
-    function create_flex_eigenvol_strategy( cline ) result(strategy)
+    subroutine kill_flex_embedding_result( self )
+        class(flex_embedding_result), intent(inout) :: self
+        if( allocated(self%pinds) ) deallocate(self%pinds)
+        if( allocated(self%z) ) deallocate(self%z)
+        if( allocated(self%eigvals) ) deallocate(self%eigvals)
+        self%method='none'; self%nptcls=0; self%ncomp=0
+    end subroutine kill_flex_embedding_result
+
+    function create_flex_analysis_strategy( cline ) result(strategy)
         class(cmdline), intent(in) :: cline
-        class(flex_eigenvol_strategy), allocatable :: strategy
+        class(flex_analysis_strategy), allocatable :: strategy
         integer :: nparts
         logical :: is_worker,is_master
         nparts=1
@@ -103,16 +123,16 @@ contains
         is_worker=cline%defined('part')
         is_master=(nparts>1).and.(.not.is_worker)
         if( is_master )then
-            allocate(flex_eigenvol_master_strategy::strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED FLEX_EIGENVOL (MASTER)'
+            allocate(flex_analysis_master_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED FLEX_ANALYSIS (MASTER)'
         else if( is_worker )then
-            allocate(flex_eigenvol_worker_strategy::strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_EIGENVOL (WORKER)'
+            allocate(flex_analysis_worker_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_ANALYSIS (WORKER)'
         else
-            allocate(flex_eigenvol_shmem_strategy::strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_EIGENVOL (SHARED-MEMORY)'
+            allocate(flex_analysis_shmem_strategy::strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FLEX_ANALYSIS (SHARED-MEMORY)'
         endif
-    end function create_flex_eigenvol_strategy
+    end function create_flex_analysis_strategy
 
     subroutine apply_defaults( cline )
         class(cmdline), intent(inout) :: cline
@@ -134,13 +154,13 @@ contains
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         if( .not.cline%defined('nspace') ) &
-            &THROW_HARD('flex_eigenvol requires nspace=<projection grid size>; it cannot be inferred from populated project rows')
+            &THROW_HARD('flex_analysis requires nspace=<projection grid size>; it cannot be inferred from populated project rows')
         call apply_defaults(cline)
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
     end subroutine init_common
 
     subroutine shmem_initialize( self, params, build, cline )
-        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        class(flex_analysis_shmem_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -150,7 +170,7 @@ contains
     end subroutine shmem_initialize
 
     subroutine shmem_execute( self, params, build, cline )
-        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        class(flex_analysis_shmem_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -170,32 +190,32 @@ contains
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
-        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        class(flex_analysis_shmem_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup( self, params )
-        class(flex_eigenvol_shmem_strategy), intent(inout) :: self
+        class(flex_analysis_shmem_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize( self, params, build, cline )
-        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        class(flex_analysis_worker_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         call init_common(params,build,cline)
-        if( .not.cline%defined('part') ) THROW_HARD('PART must be defined for flex_eigenvol worker execution')
-        if( .not.cline%defined('infile') ) THROW_HARD('INFILE assignment must be defined for flex_eigenvol worker execution')
-        if( params%stage<1 .or. params%stage>3 ) THROW_HARD('invalid flex_eigenvol worker stage')
-        if( params%stage==3 .and. params%npreimages<2 ) THROW_HARD('invalid flex_eigenvol worker pre-image count')
+        if( .not.cline%defined('part') ) THROW_HARD('PART must be defined for flex_analysis worker execution')
+        if( .not.cline%defined('infile') ) THROW_HARD('INFILE assignment must be defined for flex_analysis worker execution')
+        if( params%stage<1 .or. params%stage>3 ) THROW_HARD('invalid flex_analysis worker stage')
+        if( params%stage==3 .and. params%npreimages<2 ) THROW_HARD('invalid flex_analysis worker pre-image count')
     end subroutine worker_initialize
 
     subroutine worker_execute( self, params, build, cline )
         use simple_qsys_funs, only: qsys_job_finished
-        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        class(flex_analysis_worker_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -225,24 +245,24 @@ contains
                 call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%neigs,params%part)
                 deallocate(coords)
         end select
-        call qsys_job_finished(params,string('simple_flex_eigenvol_strategy :: worker_execute'))
+        call qsys_job_finished(params,string('simple_flex_analysis_strategy :: worker_execute'))
         deallocate(pinds)
     end subroutine worker_execute
 
     subroutine worker_finalize_run( self, params, build, cline )
-        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        class(flex_analysis_worker_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup( self, params )
-        class(flex_eigenvol_worker_strategy), intent(inout) :: self
+        class(flex_analysis_worker_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize( self, params, build, cline )
-        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -252,7 +272,7 @@ contains
     end subroutine master_initialize
 
     subroutine master_execute( self, params, build, cline )
-        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -272,7 +292,7 @@ contains
         write(logfhandle,'(A)') 'Flex partition unit: contiguous selected-particle rows for features, graph rows, and reconstruction.'
         call self%qenv%new(params,self%nparts_run,numlen=params%numlen,nptcls=size(pinds))
         call prepare_particle_partitions(self,params,pinds)
-        worker_program='flex_eigenvol'
+        worker_program='flex_analysis'
         call cline%gen_job_descr(self%job_descr,prg=worker_program)
         call self%job_descr%set('mkdir','no')
         call self%job_descr%set('nparts',int2str(self%nparts_run))
@@ -322,7 +342,7 @@ contains
     end subroutine master_execute
 
     subroutine master_finalize_run( self, params, build, cline )
-        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -330,7 +350,7 @@ contains
 
     subroutine master_cleanup( self, params )
         use simple_qsys_funs, only: qsys_cleanup
-        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
         type(string) :: fname
         integer :: ipart
@@ -348,7 +368,7 @@ contains
     end subroutine master_cleanup
 
     subroutine prepare_particle_partitions( self, params, pinds )
-        class(flex_eigenvol_master_strategy), intent(inout) :: self
+        class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
         integer, intent(in) :: pinds(:)
         type(string) :: fname
@@ -364,7 +384,7 @@ contains
         end do
     end subroutine prepare_particle_partitions
 
-    subroutine fit_flex_eigenvol_embedding( params, build, cline, fit_result )
+    subroutine fit_flex_analysis_embedding( params, build, cline, fit_result )
         class(parameters), intent(inout) :: params
         class(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
@@ -378,7 +398,7 @@ contains
         write(logfhandle,'(A)') '>>> FLEX DIFFMAP reconstruction=skipped (embedding-only caller)'
         call finish_analysis_outputs(registered_stack,registered_project)
         deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords)
-    end subroutine fit_flex_eigenvol_embedding
+    end subroutine fit_flex_analysis_embedding
 
     subroutine run_flex_analysis( params, build, cline, pinds, coords, raw_coords, spectral_z, nystrom_coords, &
         &nmodes, registered_stack, &
@@ -701,11 +721,11 @@ contains
         class(parameters), intent(inout) :: params
         class(cmdline), intent(inout) :: cline
         integer, intent(out) :: max_modes
-        if( params%oritype/='ptcl3D' ) THROW_HARD('flex_eigenvol requires oritype=ptcl3D')
-        if( .not.cline%defined('vol1') ) THROW_HARD('flex_eigenvol requires vol1=<mean map>')
-        if( params%nstates/=1 ) THROW_HARD('flex_eigenvol supports one ptcl3D state')
-        if( params%npreimages<2 ) THROW_HARD('flex_eigenvol requires npreimages>=2')
-        if( params%neigs<1 ) THROW_HARD('flex_eigenvol requires neigs>=1')
+        if( params%oritype/='ptcl3D' ) THROW_HARD('flex_analysis requires oritype=ptcl3D')
+        if( .not.cline%defined('vol1') ) THROW_HARD('flex_analysis requires vol1=<mean map>')
+        if( params%nstates/=1 ) THROW_HARD('flex_analysis supports one ptcl3D state')
+        if( params%npreimages<2 ) THROW_HARD('flex_analysis requires npreimages>=2')
+        if( params%neigs<1 ) THROW_HARD('flex_analysis requires neigs>=1')
         max_modes=params%neigs
         params%k_nn=max(1,params%k_nn)
         params%nang_nbrs=max(params%k_nn,params%nang_nbrs)
@@ -717,7 +737,7 @@ contains
         integer, allocatable, intent(out) :: pinds(:)
         integer, intent(out) :: nptcls
         call build%spproj_field%sample4rec([params%fromp,params%top],nptcls,pinds)
-        if( nptcls<3 ) THROW_HARD('flex_eigenvol found fewer than three active particles')
+        if( nptcls<3 ) THROW_HARD('flex_analysis found fewer than three active particles')
     end subroutine select_particles
 
     subroutine validate_selected_particles( spproj, pinds )
@@ -727,9 +747,9 @@ contains
         logical, allocatable :: seen_slots(:)
         integer :: nptcls,nstks,nslots,istk,i,iptcl,stkind,indstk,slot,ctf_mode
         nptcls=spproj%os_ptcl3D%get_noris()
-        if( spproj%os_ptcl2D%get_noris()/=nptcls ) THROW_HARD('flex_eigenvol requires matching ptcl2D/ptcl3D fields')
+        if( spproj%os_ptcl2D%get_noris()/=nptcls ) THROW_HARD('flex_analysis requires matching ptcl2D/ptcl3D fields')
         nstks=spproj%os_stk%get_noris()
-        if( nstks<1 ) THROW_HARD('flex_eigenvol project has no particle stacks')
+        if( nstks<1 ) THROW_HARD('flex_analysis project has no particle stacks')
         allocate(stk_sizes(nstks),stk_offsets(nstks),source=0)
         nslots=0
         do istk=1,nstks
@@ -739,13 +759,13 @@ contains
             else if( spproj%os_stk%isthere(istk,'fromp').and.spproj%os_stk%isthere(istk,'top') )then
                 stk_sizes(istk)=spproj%os_stk%get_top(istk)-spproj%os_stk%get_fromp(istk)+1
             endif
-            if( stk_sizes(istk)<1 ) THROW_HARD('flex_eigenvol requires valid stack particle counts')
+            if( stk_sizes(istk)<1 ) THROW_HARD('flex_analysis requires valid stack particle counts')
             nslots=nslots+stk_sizes(istk)
         end do
         allocate(seen_slots(nslots),source=.false.)
         ctf_mode=spproj%get_ctfflag_type('ptcl3D',pinds(1))
         if( ctf_mode/=CTFFLAG_YES .and. ctf_mode/=CTFFLAG_FLIP ) &
-            &THROW_HARD('flex_eigenvol requires ctf=yes or ctf=flip particle images')
+            &THROW_HARD('flex_analysis requires ctf=yes or ctf=flip particle images')
         do i=1,size(pinds)
             iptcl=pinds(i)
             if( iptcl<1 .or. iptcl>nptcls ) THROW_HARD('selected flex particle index outside project')
@@ -758,7 +778,7 @@ contains
             if( seen_slots(slot) ) THROW_HARD('selected flex particles alias the same stack image')
             seen_slots(slot)=.true.
             if( spproj%get_ctfflag_type('ptcl3D',iptcl)/=ctf_mode ) &
-                &THROW_HARD('flex_eigenvol does not support mixed ctf=yes and ctf=flip particle stacks')
+                &THROW_HARD('flex_analysis does not support mixed ctf=yes and ctf=flip particle stacks')
         end do
         deallocate(stk_sizes,stk_offsets,seen_slots)
     end subroutine validate_selected_particles
@@ -825,4 +845,4 @@ contains
         close(u)
     end subroutine write_graph_summary
 
-end module simple_flex_eigenvol_strategy
+end module simple_flex_analysis_strategy

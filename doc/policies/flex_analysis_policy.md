@@ -1,12 +1,12 @@
-# `flex_eigenvol` Policy: Sparse Diffusion-Manifold 3D Pre-Images
+# `flex_analysis` Policy: Sparse Diffusion-Manifold 3D Pre-Images
 
 This policy records the implemented scientific and software contract for
-`flex_eigenvol`. Forward-facing developments are separated explicitly from
+`flex_analysis`. Forward-facing developments are separated explicitly from
 the production behavior.
 
 ## 1. Production model
 
-`flex_eigenvol` is a diffusion-map workflow. It does not fit PCA, probabilistic
+`flex_analysis` is a diffusion-map workflow. It does not fit PCA, probabilistic
 PCA, alternating E/M updates, a Gaussian latent prior, an external sigma array,
 or a model noise variance.
 
@@ -180,7 +180,7 @@ The representative target coefficient is `phi_q` at its medoid node. There is
 no Gaussian distance kernel, fitted bandwidth, soft cluster-membership table,
 or independent reconstruction of common signal for each representative.
 
-The 2D-to-3D translation uses `simple_projected_latent_model`. It projects the
+The 2D-to-3D translation uses `simple_flex_projected_latent_model`. It projects the
 fixed supplied mean, subtracts that prediction from every prepared particle
 Fourier plane, and accumulates the coupled residual normal equations. The
 right-hand side is weighted by `z_iq`; the density contains every cross-term
@@ -227,18 +227,18 @@ projected residual basis is fitted once.
 ## 6. Shared- and distributed-memory execution
 
 The executable uses the same strategy lifecycle as `cls_split` and
-`denoise_project`: an abstract `flex_eigenvol_strategy` exposes `initialize`,
+`denoise_project`: an abstract `flex_analysis_strategy` exposes `initialize`,
 `execute`, `finalize_run`, and `cleanup`; a factory selects its `shmem`,
 `worker`, or `master` extension from `part` and `nparts`. The public
-`flex_eigenvol` is the single workflow program name for all three strategy
+`flex_analysis` is the single workflow program name for all three strategy
 modes, but distributed workers do use SIMPLE's normal private-executable path.
 The user-facing invocation is dispatched by `simple_exec`; `qsys_env` launches
-`simple_private_exec prg=flex_eigenvol ...` for each part. Both executable
-dispatch tables invoke `commander_flex_eigenvol`, and the strategy factory
+`simple_private_exec prg=flex_analysis ...` for each part. Both executable
+dispatch tables invoke `commander_flex_analysis`, and the strategy factory
 selects master, worker, or shared-memory execution from `nparts` and `part`.
 Thus flex has a private-dispatch registration, but no second worker-specific
 program name or reconstruction-only commander such as the removed
-`flex_eigenvol_reconstruct` entrypoint. This is the same single-program-name
+`flex_analysis_reconstruct` entrypoint. This is the same single-program-name
 factory pattern currently used by `cls_split` and `denoise_project`.
 
 The shared strategy performs registered feature preparation, sparse graph
@@ -249,7 +249,7 @@ caller uses a separate in-process embedding API and deliberately skips
 reconstruction; this is not a second executable path.
 
 The distributed path has the same scientific result and uses three worker
-barriers behind the same `flex_eigenvol` program:
+barriers behind the same `flex_analysis` program:
 
 1. Feature workers register assigned particles and write registered-particle
    and residual-feature part stacks. Each output stack has one worker-level
@@ -273,6 +273,13 @@ coordinates, hard `flex_cluster` assignments, `flex_medoid` markers, and
 `flex_spectralN` values into the registered project's `ptcl3D` metadata before
 launching the residual-model workers. There is no custom flex worker-state
 file.
+
+The workflow-specific implementation is collected in `src/main/flex`; its
+`README.md` maps the stages and their dependencies. The thin commander, UI and
+executable dispatch registrations remain in their normal architectural layers.
+The generic diffusion-graph engines remain in `src/main/pca`, and the generic
+reconstructor remains in `src/main/volume`, because those components are shared
+with established SIMPLE workflows.
 
 The deliberate scheduling unit is a contiguous range of selected-particle
 rows, not class. Feature preparation, graph source-row evaluation, and coupled
@@ -301,6 +308,13 @@ Kaiser-Bessel gather and are regression-tested against
 subject to an adjointness test. Coupled 3D insertion keeps one OpenMP team alive
 for the complete particle batch and uses the reconstructor's scalarized
 three-point Kaiser-Bessel gridding pattern.
+The expanded reconstruction lattice retains SIMPLE's nonredundant `h >= 0`
+Friedel half. A gather whose rotated first coordinate is negative is evaluated
+at the reflected coordinate and complex-conjugated; negative-`h` cells are
+interpolation halo only and never receive independent projection samples.
+OpenMP insertion colours source lines by at least
+`ceil(sqrt(3)*interpolation_width)`, so concurrently updated rotated 3D
+interpolation windows cannot overlap.
 Each particle's symmetric `z*z^T` coefficients are packed once in contiguous
 pair order; the full packed cross-density vector is updated without dropping
 off-diagonal terms. The voxel solve first rejects empty expanded cells from
@@ -308,7 +322,7 @@ their diagonal density and right-hand side before materializing the full local
 normal matrix. These are execution optimizations only: shared and distributed
 paths retain the same complete coupled normal equations.
 
-The former `flex_eigenvol_mstep` and `flex_eigenvol_estep` programs and their
+The former `flex_analysis_mstep` and `flex_analysis_estep` programs and their
 iterative PCA state are not part of this policy.
 
 ## 7. Output and logging policy
@@ -334,7 +348,7 @@ row and particle, and hard population.
 Embedding-only execution writes no state volumes.
 
 The nano3D latent trajectory integration is an embedding-only caller. It uses
-the rank already selected by `flex_eigenvol`; it does not run a second ICM rank
+the rank already selected by `flex_analysis`; it does not run a second ICM rank
 selection and does not reconstruct otherwise-unused flex state volumes before
 constructing trajectory chunks.
 

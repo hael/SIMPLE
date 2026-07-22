@@ -1,7 +1,7 @@
 !@descr: time-constrained flex-latent segmentation for nanoparticle trajectories
 module simple_trajectory_chunker
 use simple_core_module_api
-use simple_flex_embedding_result, only: flex_embedding_result
+use simple_flex_analysis_strategy, only: flex_embedding_result
 use simple_srch_sort_loc,          only: hpsort
 implicit none
 

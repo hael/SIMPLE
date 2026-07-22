@@ -10,7 +10,7 @@ type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
 type(ui_program), target :: denoise_project
 type(ui_program), target :: map_params_from_den
-type(ui_program), target :: flex_eigenvol
+type(ui_program), target :: flex_analysis
 type(ui_program), target :: ppca_volvar
 
 contains
@@ -24,7 +24,7 @@ contains
         call new_cls_split(prgtab)
         call new_denoise_project(prgtab)
         call new_map_params_from_den(prgtab)
-        call new_flex_eigenvol(prgtab)
+        call new_flex_analysis(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
@@ -38,7 +38,7 @@ contains
         write(logfhandle,'(A)') cls_split%name%to_char()
         write(logfhandle,'(A)') denoise_project%name%to_char()
         write(logfhandle,'(A)') map_params_from_den%name%to_char()
-        write(logfhandle,'(A)') flex_eigenvol%name%to_char()
+        write(logfhandle,'(A)') flex_analysis%name%to_char()
         write(logfhandle,'(A)') ppca_volvar%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_denoise_programs
@@ -296,49 +296,49 @@ contains
         call add_ui_program('map_params_from_den', map_params_from_den, prgtab)
     end subroutine new_map_params_from_den
 
-    subroutine new_flex_eigenvol( prgtab )
+    subroutine new_flex_analysis( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call flex_eigenvol%new(&
-        &'flex_eigenvol',&
+        call flex_analysis%new(&
+        &'flex_analysis',&
         &'Diffusion-manifold representative 3D states',&
         &'builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean',&
         &'simple_exec',&
         &.true.)
-        call flex_eigenvol%add_input(UI_IMG, 'vol1', 'file', &
+        call flex_analysis%add_input(UI_IMG, 'vol1', 'file', &
             'Mean volume', 'Fixed mean volume used by the projection-aware residual model', &
             'input volume e.g. vol1.mrc', .true., '')
-        call flex_eigenvol%add_input(UI_IMG, outvol, required_override=.false.)
-        call flex_eigenvol%add_input(UI_SRCH, nspace, required_override=.true.)
-        call flex_eigenvol%add_input(UI_FILT, 'neigs', 'num', &
+        call flex_analysis%add_input(UI_IMG, outvol, required_override=.false.)
+        call flex_analysis%add_input(UI_SRCH, nspace, required_override=.true.)
+        call flex_analysis%add_input(UI_FILT, 'neigs', 'num', &
             'Maximum number of diffusion modes (default 20)', &
             'Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no', &
             '# modes >=1', .false., 20.0)
-        call flex_eigenvol%add_input(UI_FILT, 'icm', 'binary', &
+        call flex_analysis%add_input(UI_FILT, 'icm', 'binary', &
             'Automatic diffusion-mode selection', &
             'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan', &
             '(yes|no){yes}', .false., 'yes')
-        call flex_eigenvol%add_input(UI_FILT, 'k_nn', 'num', &
+        call flex_analysis%add_input(UI_FILT, 'k_nn', 'num', &
             'Nearest neighbors (default 10)', &
             'Registered-residual neighbors retained per particle', '# neighbors', .false., 10.0)
-        call flex_eigenvol%add_input(UI_FILT, 'nang_nbrs', 'num', &
+        call flex_analysis%add_input(UI_FILT, 'nang_nbrs', 'num', &
             'Angular candidate cap (default 100)', &
             'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 100.0)
-        call flex_eigenvol%add_input(UI_FILT, 'npreimages', 'num', &
+        call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &
             '# state volumes', .false., 8.0)
-        call flex_eigenvol%add_input(UI_FILT, lp, required_override=.false., &
+        call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Graph-feature low-pass limit in Angstroms{8}; generative volumes are unfiltered', &
             gui_submenu="regularization", gui_advanced=.false.)
-        call flex_eigenvol%add_input(UI_ALT, 'oritype', 'str', &
+        call flex_analysis%add_input(UI_ALT, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
             'ptcl3D', .false., 'ptcl3D')
-        call flex_eigenvol%add_input(UI_MASK, mskdiam, required_override=.false., &
+        call flex_analysis%add_input(UI_MASK, mskdiam, required_override=.false., &
             gui_submenu="mask", gui_advanced=.false.)
-        call flex_eigenvol%add_input(UI_COMP, nparts, required_override=.false., &
+        call flex_analysis%add_input(UI_COMP, nparts, required_override=.false., &
             gui_submenu="compute", gui_advanced=.false.)
-        call flex_eigenvol%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('flex_eigenvol', flex_eigenvol, prgtab)
-    end subroutine new_flex_eigenvol
+        call flex_analysis%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call add_ui_program('flex_analysis', flex_analysis, prgtab)
+    end subroutine new_flex_analysis
 
 end module simple_ui_denoise

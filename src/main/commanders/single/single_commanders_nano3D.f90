@@ -6,8 +6,7 @@ use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_cluster2D
 use simple_nanoparticle
-use simple_flex_eigenvol_strategy, only: fit_flex_eigenvol_embedding
-use simple_flex_embedding_result, only: flex_embedding_result
+use simple_flex_analysis_strategy, only: fit_flex_analysis_embedding, flex_embedding_result
 use simple_trajectory_chunker, only: trajectory_chunk_plan, make_trajectory_chunk_plan, &
     &select_trajectory_chunk_plan, trajectory_chunks_to_parts, write_trajectory_chunks_csv
 use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
@@ -375,7 +374,7 @@ contains
                 nchunks_eff = max(1, nint(real(nptcls) / real(max(1,params%stepsz))))
             endif
             call chunk_build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            call fit_flex_eigenvol_embedding(params, chunk_build, cline, latent_fit)
+            call fit_flex_analysis_embedding(params, chunk_build, cline, latent_fit)
             allocate(frame_inds(latent_fit%nptcls), source=0)
             do i = 1, latent_fit%nptcls
                 frame_inds(i) = nint(spproj%os_ptcl3D%get(latent_fit%pinds(i), 'pind'))

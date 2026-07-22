@@ -1,4 +1,4 @@
-!@descr: representative diffusion-manifold targets selected with SIMPLE k-medoids
+!@descr: flex-analysis diffusion-manifold targets selected with SIMPLE k-medoids
 module simple_flex_diffmap_preimage
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

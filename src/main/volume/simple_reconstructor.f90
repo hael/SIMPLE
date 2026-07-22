@@ -231,9 +231,10 @@ contains
         logical   :: l_compact_source
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
-        ! stride along h dimension for interpolation: all threads are at least
-        ! wdim pixels away from each other to avoid race conditions
-        stride = self%wdim
+        ! After rotation, source h-lines separated by only wdim can still
+        ! update the same 3-D interpolation cell.  sqrt(3)*wdim guarantees
+        ! separation by a full window width along at least one target axis.
+        stride = ceiling(sqrt(3.0) * real(self%wdim))
         ! setup rotation matrices
         nsym = se%get_nsym()
         rotmats(1,:,:) = o%get_mat()
@@ -647,7 +648,7 @@ contains
     !! sqrt(ctf^2) only for legacy fplanes that do not carry the transfer.
     subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div
-        class(reconstructor), intent(inout) :: self
+        class(reconstructor), intent(in)    :: self
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl_ref
         type(fplane_type),    intent(inout) :: fpl_out
@@ -750,26 +751,33 @@ contains
         class(reconstructor), intent(in) :: self
         real,                 intent(in) :: loc(3)
         complex :: comp
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), loc_friedel(3)
         integer :: iwinsz, win(2,3)
+        logical :: l_conjg
+        l_conjg    = loc(1) < 0.
+        loc_friedel = loc
+        if( l_conjg ) loc_friedel = -loc_friedel
         iwinsz   = ceiling(KBWINSZ - 0.5)
-        win(1,:) = nint(loc)
+        win(1,:) = nint(loc_friedel)
         win(2,:) = win(1,:) + iwinsz
         win(1,:) = win(1,:) - iwinsz
-        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
+        call self%kbwin%apod_mat_3d(loc_friedel, iwinsz, self%wdim, w)
         comp = sum(w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
+        if( l_conjg ) comp = conjg(comp)
     end function interp_cmat_exp
 
     pure real function interp_rho_exp( self, loc ) result( rho )
         class(reconstructor), intent(in) :: self
         real,                 intent(in) :: loc(3)
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), loc_friedel(3)
         integer :: iwinsz, win(2,3)
+        loc_friedel = loc
+        if( loc_friedel(1) < 0. ) loc_friedel = -loc_friedel
         iwinsz   = ceiling(KBWINSZ - 0.5)
-        win(1,:) = nint(loc)
+        win(1,:) = nint(loc_friedel)
         win(2,:) = win(1,:) + iwinsz
         win(1,:) = win(1,:) - iwinsz
-        call self%kbwin%apod_mat_3d(loc, iwinsz, self%wdim, w)
+        call self%kbwin%apod_mat_3d(loc_friedel, iwinsz, self%wdim, w)
         rho = sum(w * self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
     end function interp_rho_exp
 

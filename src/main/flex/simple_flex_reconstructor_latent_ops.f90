@@ -1,5 +1,5 @@
-!@descr: Latent-volume projection/backprojection helpers for flex workflows
-module simple_reconstructor_latent_ops
+!@descr: Latent-volume projection/backprojection helpers for flex_analysis
+module simple_flex_reconstructor_latent_ops
 use simple_core_module_api
 use simple_reconstructor, only: reconstructor
 implicit none
@@ -14,6 +14,9 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: LATENT_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
+! cmat_exp stores h>=0 as the independent Friedel half; h<0 is only
+! interpolation halo and must not receive independent projection samples.
+integer, parameter :: NONREDUNDANT_HMIN = 0
 ! Source h-lines in one OpenMP colour must map to non-overlapping 3-D
 ! interpolation windows for every rotation. A separation of LATENT_WDIM in
 ! the source plane is not sufficient after rotation; sqrt(3)*LATENT_WDIM
@@ -114,6 +117,7 @@ contains
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
+                        if( win(2,1) < NONREDUNDANT_HMIN ) cycle
                         if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
                         comp_base = pf2 * cmplx_raw
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
@@ -284,6 +288,7 @@ contains
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
+                        if( win(2,1) < NONREDUNDANT_HMIN ) cycle
                         if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
                         comp_base = pf2 * cmplx_raw
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
@@ -475,6 +480,7 @@ contains
                             if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw))<=TINY .and. ctfsq_raw<=TINY ) cycle
                             win(1,:) = nint(loc)-iwinsz
                             win(2,:) = nint(loc)+iwinsz
+                            if( win(2,1) < NONREDUNDANT_HMIN ) cycle
                             if( any(win(1,:)<exp_lb) .or. any(win(2,:)>exp_ub) ) cycle
                             comp_base = pf2*cmplx_raw
                             call kb_apod_vecs_3d_fast(loc,wx,wy,wz)
@@ -660,7 +666,11 @@ contains
         params%smpd      = 1.
         params%smpd_crop = 1.
         params%oritype   = 'ptcl3D'
+        call spproj%os_stk%new(1,is_ptcl=.false.)
+        call spproj%os_stk%set(1,'ctf','no')
         call spproj%os_ptcl3D%new(1,is_ptcl=.true.)
+        call spproj%os_ptcl3D%set(1,'stkind',1)
+        call spproj%os_ptcl3D%set(1,'indstk',1)
         call mean_rec%new([TEST_BOX,TEST_BOX,TEST_BOX],1.)
         call mean_rec%alloc_rho(params,spproj,expand=.true.)
         do q=1,TEST_NBASIS
@@ -705,6 +715,8 @@ contains
         if( err>3.e-5 ) THROW_HARD('latent mean projector differs from reconstructor projector')
         call project_fplanes_mean_basis(mean_rec,basis_recs,orientation,fpl_ref,mean_fpl,basis_fpls, &
             &apply_ctf_amp=.true.)
+        err=maxval(abs(mean_fpl%cmplx_plane-mean_fpl_std%cmplx_plane))
+        if( err>3.e-5 ) THROW_HARD('fused latent mean projector differs from reconstructor projector')
         do q=1,TEST_NBASIS
             call basis_recs(q)%project_fplane(orientation,fpl_ref,basis_fpls_std(q),apply_ctf_amp=.true.)
             err=maxval(abs(basis_fpls(q)%cmplx_plane-basis_fpls_std(q)%cmplx_plane))
@@ -715,6 +727,8 @@ contains
         call splat_std%alloc_rho(params,spproj,expand=.true.)
         call splat_latent(1)%new([TEST_BOX,TEST_BOX,TEST_BOX],1.)
         call splat_latent(1)%alloc_rho(params,spproj,expand=.true.)
+        fpl_ref%cmplx_plane = conjg(fpl_ref%transfer_plane) * fpl_ref%cmplx_plane
+        fpl_ref%transfer_plane = cmplx(1.,0.)
         allocate(rho_cross(1,size(splat_latent(1)%cmat_exp,1),size(splat_latent(1)%cmat_exp,2), &
             &size(splat_latent(1)%cmat_exp,3)),source=0.)
         unit_scale=1.d0
@@ -723,6 +737,7 @@ contains
         call insert_plane_oversamp_coupled_scaled(splat_latent,rho_cross,se,orientation,fpl_ref, &
             &unit_scale,unit_second)
         err=maxval(abs(splat_std%cmat_exp-splat_latent(1)%cmat_exp))
+        if( err>3.e-5 ) write(logfhandle,'(A,ES12.4)') 'latent splat numerator max_abs_error=',err
         if( err>3.e-5 ) THROW_HARD('latent splat numerator differs from reconstructor insertion')
         err=maxval(abs(splat_std%rho_exp-rho_cross(1,:,:,:)))
         if( err>3.e-5 ) THROW_HARD('latent splat density differs from reconstructor insertion')
@@ -883,6 +898,7 @@ contains
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
+                        if( win(2,1) < NONREDUNDANT_HMIN ) cycle
                         if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
                         comp_base = pf2 * cmplx_raw
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
@@ -1068,6 +1084,7 @@ contains
                             if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw))<=TINY .and. ctfsq_raw<=TINY ) cycle
                             win(1,:)=nint(loc)-iwinsz
                             win(2,:)=nint(loc)+iwinsz
+                            if( win(2,1)<NONREDUNDANT_HMIN ) cycle
                             if( any(win(1,:)<exp_lb) .or. any(win(2,:)>exp_ub) ) cycle
                             comp_base=pf2*cmplx_raw
                             call kb_apod_vecs_3d_fast(loc,wx,wy,wz)
@@ -1127,74 +1144,18 @@ contains
     end subroutine accumulate_planes_oversamp_coupled_stats_batch
 
     subroutine project_fplane_mean( mean_rec, o, fpl_ref, mean_fpl, apply_ctf_amp )
-        use simple_math, only: ceil_div, floor_div
         type(reconstructor), intent(in)    :: mean_rec
         class(ori),          intent(inout) :: o
         class(fplane_type),  intent(in)    :: fpl_ref
         type(fplane_type),   intent(inout) :: mean_fpl
         logical, optional,   intent(in)    :: apply_ctf_amp
-        type(kbinterpol) :: kbwin
-        complex :: transfer
-        real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
-        real    :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf
-        integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
-        logical :: l_apply_ctf_amp
-        if( .not. allocated(mean_rec%cmat_exp) )then
-            THROW_HARD('expanded mean matrix does not exist; project_fplane_mean')
-        endif
-        if( .not. allocated(fpl_ref%cmplx_plane) )then
-            THROW_HARD('reference Fourier plane does not exist; project_fplane_mean')
-        endif
-        l_apply_ctf_amp = .false.
-        if( present(apply_ctf_amp) ) l_apply_ctf_amp = apply_ctf_amp
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        call ensure_latent_projection_plane(fpl_ref, mean_fpl)
-        rotmat      = o%get_mat()
-        pf          = OSMPL_PAD_FAC
-        fpllims_pd  = fpl_ref%frlims
-        fpllims     = fpllims_pd
-        fpllims(1,1)= ceil_div (fpllims_pd(1,1), pf)
-        fpllims(1,2)= floor_div(fpllims_pd(1,2), pf)
-        fpllims(2,1)= ceil_div (fpllims_pd(2,1), pf)
-        fpllims(2,2)= floor_div(fpllims_pd(2,2), pf)
-        nyq_eff = mean_rec%get_lfny(1)
-        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
-        nyq_disk = nyq_eff * (nyq_eff + 1)
-        do h = fpllims(1,1), fpllims(1,2)
-            h_sq = h*h
-            if( h_sq > nyq_disk ) cycle
-            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-            k_lo    = max(fpllims(2,1), -k_max_h)
-            k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hp      = h * pf
-            hrow(1) = real(h) * rotmat(1,1)
-            hrow(2) = real(h) * rotmat(1,2)
-            hrow(3) = real(h) * rotmat(1,3)
-            do k = k_lo, k_hi
-                kp     = k * pf
-                loc(1) = hrow(1) + real(k) * rotmat(2,1)
-                loc(2) = hrow(2) + real(k) * rotmat(2,2)
-                loc(3) = hrow(3) + real(k) * rotmat(2,3)
-                call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
-                transfer = cmplx(1., 0.)
-                if( l_apply_ctf_amp )then
-                    if( allocated(fpl_ref%transfer_plane) )then
-                        transfer = fpl_ref%transfer_plane(hp,kp)
-                    else
-                        ctfamp   = sqrt(max(0., fpl_ref%ctfsq_plane(hp,kp)))
-                        transfer = cmplx(ctfamp, 0.)
-                    endif
-                endif
-                mean_fpl%cmplx_plane(hp,kp) = transfer * weighted_expanded_cmat(mean_rec, win, wx, wy, wz)
-            end do
-        end do
+        call mean_rec%project_fplane(o, fpl_ref, mean_fpl, apply_ctf_amp)
     end subroutine project_fplane_mean
 
     subroutine project_fplanes_mean_basis( mean_rec, basis_recs, o, fpl_ref, mean_fpl, basis_fpls, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div
-        type(reconstructor), intent(inout) :: mean_rec
-        type(reconstructor), intent(inout) :: basis_recs(:)
+        type(reconstructor), intent(in)    :: mean_rec
+        type(reconstructor), intent(in)    :: basis_recs(:)
         class(ori),          intent(inout) :: o
         class(fplane_type),  intent(in)    :: fpl_ref
         type(fplane_type),   intent(inout) :: mean_fpl
@@ -1206,7 +1167,7 @@ contains
         real    :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
         integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf, q, ncomp
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
-        logical :: l_apply_ctf_amp
+        logical :: l_apply_ctf_amp, l_conjg
         if( .not. allocated(mean_rec%cmat_exp) )then
             THROW_HARD('expanded mean matrix does not exist; project_fplanes_mean_basis')
         endif
@@ -1255,6 +1216,8 @@ contains
                 loc(1) = hrow(1) + real(k) * rotmat(2,1)
                 loc(2) = hrow(2) + real(k) * rotmat(2,2)
                 loc(3) = hrow(3) + real(k) * rotmat(2,3)
+                l_conjg = loc(1) < 0.
+                if( l_conjg ) loc = -loc
                 call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
                 transfer = cmplx(1., 0.)
                 if( l_apply_ctf_amp )then
@@ -1266,9 +1229,11 @@ contains
                     endif
                 endif
                 mean_val = weighted_expanded_cmat(mean_rec, win, wx, wy, wz)
+                if( l_conjg ) mean_val = conjg(mean_val)
                 mean_fpl%cmplx_plane(hp,kp) = transfer * mean_val
                 do q = 1, ncomp
                     basis_val = weighted_expanded_cmat(basis_recs(q), win, wx, wy, wz)
+                    if( l_conjg ) basis_val = conjg(basis_val)
                     basis_fpls(q)%cmplx_plane(hp,kp) = transfer * basis_val
                 end do
             end do
@@ -1312,7 +1277,7 @@ contains
         win_lo   = win(1,:)
         base     = real(win_lo) - loc
         do i = 1, LATENT_WDIM
-            ww3   = kbwin%apod_fast(base + real(i-1))
+            ww3   = kbwin%apod(base + real(i-1))
             wx(i) = ww3(1)
             wy(i) = ww3(2)
             wz(i) = ww3(3)
@@ -1363,4 +1328,4 @@ contains
         end do
     end function weighted_expanded_cmat
 
-end module simple_reconstructor_latent_ops
+end module simple_flex_reconstructor_latent_ops

@@ -1,4 +1,4 @@
-!@descr: registered residual feature preparation for flex_eigenvol diffusion maps
+!@descr: registered residual feature preparation for flex_analysis diffusion maps
 module simple_flex_diffmap_features
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
@@ -48,18 +48,18 @@ contains
         integer :: i, j, iptcl, iproj, row, ithr, map_unit, ctf_mode, ibatch, batch_start, batch_end,part_here
         logical :: do_phaseflip,l_part,l_retain
         nptcls = size(pinds)
-        if( nptcls < 1 ) THROW_HARD('flex_eigenvol feature preparation received no particles')
+        if( nptcls < 1 ) THROW_HARD('flex_analysis feature preparation received no particles')
         l_part=present(part)
         l_retain=.true.
         if( present(retain_features) ) l_retain=retain_features
         part_here=0
         if( l_part ) part_here=part
         nall = build%spproj%os_ptcl3D%get_noris()
-        if( nall < 1 ) THROW_HARD('flex_eigenvol project has no ptcl3D records')
+        if( nall < 1 ) THROW_HARD('flex_analysis project has no ptcl3D records')
         allocate(p2row(nall), source=0)
         allocate(processed(nall), source=.false.)
         nproj = build%eulspace%get_noris()
-        if( nproj < 1 ) THROW_HARD('flex_eigenvol requires the builder projection-direction grid')
+        if( nproj < 1 ) THROW_HARD('flex_analysis requires the builder projection-direction grid')
         allocate(proj_ids(nptcls),source=0)
         do i = 1,nptcls
             if( pinds(i) < 1 .or. pinds(i) > nall ) THROW_HARD('invalid active particle index in flex feature preparation')
@@ -124,11 +124,11 @@ contains
             case(CTFFLAG_FLIP)
                 do_phaseflip = .false.
             case DEFAULT
-                THROW_HARD('flex_eigenvol requires ctf=yes or ctf=flip particle images')
+                THROW_HARD('flex_analysis requires ctf=yes or ctf=flip particle images')
         end select
         do i=2,nptcls
             if( build%spproj%get_ctfflag_type('ptcl3D',pinds(i)) /= ctf_mode )then
-                THROW_HARD('flex_eigenvol does not support mixed ctf=yes and ctf=flip particle stacks')
+                THROW_HARD('flex_analysis does not support mixed ctf=yes and ctf=flip particle stacks')
             endif
         end do
 
@@ -295,7 +295,7 @@ contains
         real :: rotmat(3,3)
         integer :: iproj,nproj
         nproj=build%eulspace%get_noris()
-        if( nproj<1 ) THROW_HARD('flex_eigenvol requires the builder projection-direction grid')
+        if( nproj<1 ) THROW_HARD('flex_analysis requires the builder projection-direction grid')
         allocate(proj_dirs(3,nproj))
         do iproj=1,nproj
             call build%eulspace%get_ori(iproj,o)

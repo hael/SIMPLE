@@ -1,5 +1,5 @@
-!@descr: Projection-aware latent volume model kernels
-module simple_projected_latent_model
+!@descr: Projection-aware latent volume model kernels for flex_analysis
+module simple_flex_projected_latent_model
 use simple_core_module_api
 use simple_builder,          only: builder
 use simple_image,            only: image
@@ -11,7 +11,7 @@ use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatc
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
-use simple_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, &
+use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, &
     &accumulate_planes_oversamp_coupled_stats_batch, project_fplane_mean, project_fplanes_mean_basis
 use simple_map_reduce,       only: split_nobjs_even
 implicit none
@@ -1683,4 +1683,4 @@ contains
         call flush(logfhandle)
     end subroutine log_comp_seconds
 
-end module simple_projected_latent_model
+end module simple_flex_projected_latent_model

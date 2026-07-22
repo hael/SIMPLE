@@ -208,7 +208,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
-        &'Mean volume used by flex_eigenvol when chunk_mode=latent', 'input mean volume e.g. vol.mrc', .false., '')
+        &'Mean volume used by flex_analysis when chunk_mode=latent', 'input mean volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         call trajectory_reconstruct3D%add_input(UI_PARM, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
@@ -238,7 +238,7 @@ contains
         ! search controls
         call trajectory_reconstruct3D%add_input(UI_SRCH, pgrp)
         call trajectory_reconstruct3D%add_input(UI_SRCH, 'neigs', 'num', 'Flex latent dimensions', &
-        &'Maximum flex_eigenvol latent dimensions used for chunking{20}', '# modes', .false., 20.)
+        &'Maximum flex_analysis latent dimensions used for chunking{20}', '# modes', .false., 20.)
         call trajectory_reconstruct3D%add_input(UI_SRCH, maxits, required_override=.false.)
         ! filter controls
         call trajectory_reconstruct3D%add_input(UI_FILT, lp, required_override=.false.)

@@ -8,7 +8,7 @@
 Combine two particle-level descriptions of conformational variation:
 
 - local 2D diffusion coordinates from groups of nearby projection directions;
-- global 3D coordinates and uncertainties from `flex_eigenvol`.
+- global 3D coordinates and uncertainties from `flex_analysis`.
 
 The result should be one conformational label per particle and one validated 3D
 map per state. SIMPLE's existing affinity-propagation (AP) implementation
@@ -75,12 +75,12 @@ and the particle is counted once in reconstruction.
 
 For particle `i`:
 
-- `m_i`: canonical `flex_eigenvol` coordinate;
+- `m_i`: canonical `flex_analysis` coordinate;
 - `S_i`: posterior covariance of `m_i`;
 - `u_ig`: diffusion coordinate in angular patch `g`;
 - `pind_i`: stable project particle index.
 
-The `flex_eigenvol` basis volumes `B_q` and consensus map `V_mean` are also
+The `flex_analysis` basis volumes `B_q` and consensus map `V_mean` are also
 required to map state coordinates back to volumes.
 
 All joins use project particle index, never row order.
@@ -96,7 +96,7 @@ Within a patch:
 
 1. align/transport particles to the patch center;
 2. subtract the projected consensus map;
-3. use the same CTF/noise convention as `flex_eigenvol`;
+3. use the same CTF/noise convention as `flex_analysis`;
 4. construct a diffusion map from the residual images.
 
 Orientation should select candidate neighbors, but residual-image similarity
@@ -118,7 +118,7 @@ D_g(i,j) = alpha_2 D_2g(i,j) + alpha_3 D_3(i,j)
 ```
 
 - `D_2g` is diffusion distance inside patch `g`.
-- `D_3` is a distance between `flex_eigenvol` coordinates, preferably using
+- `D_3` is a distance between `flex_analysis` coordinates, preferably using
   `S_i + S_j` so uncertain particles contribute less strongly.
 
 Run the existing AP wrapper:
@@ -275,7 +275,7 @@ record-activation `state` field. Updating project assignments must be explicit.
 
 ## Minimal Implementation Sequence
 
-1. Preserve/export local diffusion charts and `flex_eigenvol` covariance.
+1. Preserve/export local diffusion charts and `flex_analysis` covariance.
 2. Implement local joint AP and write exemplars without changing the project.
 3. Implement global exemplar AP and final particle labels.
 4. Write eigenvolume-predicted maps.
@@ -309,7 +309,7 @@ The method is cluster tracking with a global 3D anchor:
 1. overlapping angular patches supply local diffusion features;
 2. local AP selects particle exemplars using joint 2D/3D distance;
 3. global AP groups those exemplars into conformational states;
-4. the `flex_eigenvol` basis maps each state into 3D;
+4. the `flex_analysis` basis maps each state into 3D;
 5. particle reconstructions validate the maps.
 
 Particles may appear in several angular analyses, but each particle has one

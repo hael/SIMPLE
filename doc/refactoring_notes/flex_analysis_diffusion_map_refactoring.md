@@ -1,10 +1,10 @@
-# `flex_eigenvol`: Cartesian diffusion-map replacement
+# `flex_analysis`: Cartesian diffusion-map replacement
 
 **Status:** implemented initial replacement; validation and performance benchmarking in progress  
 **Date:** July 21, 2026  
 **Scope:** replace the iterative PCA machinery in the shared- and
-distributed-memory `flex_eigenvol` workflows.  
-**Policy:** `doc/policies/flex_eigenvol_policy.md` describes the implemented
+distributed-memory `flex_analysis` workflows.  
+**Policy:** `doc/policies/flex_analysis_policy.md` describes the implemented
 diffusion-map workflow and separates current behavior from later developments.
 
 The initial implementation keeps registered preparation, sparse graph
@@ -29,7 +29,7 @@ the numerical operations.
 PFTC is not part of the scientific representation proposed here. The graph is
 defined on Cartesian registered images. Polar code may be consulted for
 optimization patterns such as memoization, preallocated thread workspaces, and
-batched ownership, but `flex_eigenvol` must not convert the problem to polar
+batched ownership, but `flex_analysis` must not convert the problem to polar
 coordinates.
 
 The essential observation is that SIMPLE's search space is discrete and almost
@@ -89,7 +89,7 @@ The workflow takes the following as fixed:
 - particle CTF metadata;
 - the configured mask and low-pass support.
 
-`flex_eigenvol` does not refine poses, shifts, CTF parameters, or the mean map.
+`flex_analysis` does not refine poses, shifts, CTF parameters, or the mean map.
 
 ### 2.2 Canonical particle frame
 
@@ -299,7 +299,7 @@ Use the `ptcl3D` transform convention already implemented by
 
 The required refactor is small: split the current routine into a group-selection
 wrapper and an index-driven batch kernel. Existing callers keep the group
-wrapper; `flex_eigenvol` supplies the current batch's particle indices. The
+wrapper; `flex_analysis` supplies the current batch's particle indices. The
 mathematics and interpolation code remain single-source.
 
 The registered Cartesian particle images are a durable workflow product, not
@@ -542,7 +542,7 @@ explained-variance fraction and must not be labeled as one in the output table.
 
 ICM is the denoising/model-selection step. The flex call must set a minimum
 retained rank of one: returning zero modes is not a meaningful public
-`flex_eigenvol` result. A homogeneous control may produce a weak diagnostic
+`flex_analysis` result. A homogeneous control may produce a weak diagnostic
 mode and a spectrum without a convincing separation, but the command still
 emits at least one mode. No posterior variance or PPCA noise term is required.
 
@@ -722,14 +722,14 @@ accumulates Hermitian numerator and density parts for a bounded block of
 retained modes and writes versioned reconstruction statistics. The master
 reduces and restores one mode block at a time.
 
-This stage replaces both current `flex_eigenvol_mstep` and
-`flex_eigenvol_estep` workers. Proposed private stage names should describe the
+This stage replaces both current `flex_analysis_mstep` and
+`flex_analysis_estep` workers. Proposed private stage names should describe the
 new responsibilities, for example:
 
 ```text
-flex_eigenvol_prepare
-flex_eigenvol_graph
-flex_eigenvol_reconstruct
+flex_analysis_prepare
+flex_analysis_graph
+flex_analysis_reconstruct
 ```
 
 The final names should follow existing private-program conventions. The old
@@ -831,7 +831,7 @@ coordinates into Hermitian 3D mode-reconstruction statistics and restored
 volumes. It does not own the generic diffusion embedding or imply that the
 graph machinery itself is specific to 3D data.
 
-### `simple_flex_eigenvol_strategy`
+### `simple_flex_analysis_strategy`
 
 Remains the orchestration boundary for the public command. It sequences
 Cartesian reprojection, matcher-style batch registration, graph construction,
@@ -839,8 +839,8 @@ embedding, ICM, reconstruction, and output stages and selects shared or
 distributed execution. It must not contain low-level rotation, graph, or
 gridding kernels.
 
-The public routine should be renamed from `run_flex_eigenvol_linear` to a
-model-neutral name such as `run_flex_eigenvol`, with all in-process callers
+The public routine should be renamed from `run_flex_analysis_linear` to a
+model-neutral name such as `run_flex_analysis`, with all in-process callers
 updated.
 
 ### Result and trajectory consumers
@@ -858,12 +858,13 @@ variance.
 
 ### Commanders and private dispatch
 
-`simple_commanders_flex` remains orchestration-only. Replace M/E worker
+`simple_commanders_flex_analysis` remains orchestration-only. Replace M/E worker
 commanders with prepare/graph/reconstruction worker commanders, then update:
 
 - `simple_private_exec_api.f90`;
 - `production/simple_private_exec_driver.f90`;
-- `src/utils/simple_private_prgs.f90`;
+- `src/main/exec/simple_exec_denoise.f90`;
+- `src/main/ui/simple/simple_ui_denoise.f90`;
 - private-program tests and generated dispatch surfaces as required.
 
 ## 11. Parameter policy
@@ -872,17 +873,17 @@ Proposed public parameters are:
 
 | parameter | proposed meaning | default |
 | --- | --- | ---: |
-| `neigs` | maximum reconstructed diffusion modes | 20, hard maximum 20 |
+| `neigs` | maximum diffusion modes requested from the graph eigensolve | 20, with no workflow-specific hard maximum |
 | `k_nn` | retained particle neighbors in sparse graph | 10 |
 | `nang_nbrs` | maximum angularly gated candidate particles per particle | 100 |
-| `lp` | common graph-feature and mode-reconstruction low-pass limit | existing flex default |
+| `lp` | graph-feature low-pass limit; it does not filter generated volumes | existing flex default |
 | `mskdiam` | particle/model support used during feature construction | existing project convention |
 | `nparts`, `nthr` | execution controls only | existing conventions |
 
 `nang_nbrs` must be added to `simple_parameters.f90`, initialized through the
 normal parameter defaults, parsed through the typed parameter path, and
-registered as an input of `new_flex_eigenvol` in
-`src/main/ui/simple/simple_ui_denoise.f90`. Its first UI default is 1000. It
+registered as an input of `new_flex_analysis` in
+`src/main/ui/simple/simple_ui_denoise.f90`. Its UI default is 100. It
 must not be read ad hoc from `cmdline` after parameter initialization.
 
 The first implementation uses the same `lp` for graph features and Hermitian
@@ -945,7 +946,7 @@ summary, one completion line per major phase, one retained-mode table, and one
 final output summary. The intended shape is:
 
 ```text
-FLEX_EIGENVOL DIFFUSION MAP
+FLEX_ANALYSIS DIFFUSION MAP
 particles=... projections=... lp=... k_nn=10 nang_nbrs=100 max_modes=20
 [1/6] reprojections and particle registration ... done (... s)
 [2/6] residual features                    ... done (... s)
@@ -980,11 +981,11 @@ Once the replacement is validated, remove:
 - temporary basis maps passed from M-step to E-step workers;
 - E-step per-particle Hermitian solves;
 - PCA canonicalization based on the observation metric and latent covariance;
-- `flex_eigenvol_mstep` and `flex_eigenvol_estep` private programs;
+- `flex_analysis_mstep` and `flex_analysis_estep` private programs;
 - PCA-specific tests that have no remaining consumer.
 
-`simple_projected_latent_model.f90` is currently consumed only by
-`flex_eigenvol` and its dedicated test. It can be removed from production once
+`simple_flex_projected_latent_model.f90` is currently consumed only by
+`flex_analysis` and its dedicated test. It can be removed from production once
 the new workflow and tests replace those references. General Hermitian
 reconstruction helpers that are useful to the new path should be moved to the
 nearest reconstruction or flex-diffusion module rather than retaining the
@@ -1064,11 +1065,11 @@ entire obsolete model.
 
 ### Phase 7: cutover and cleanup
 
-- switch the public `flex_eigenvol` command to diffusion maps;
+- switch the public `flex_analysis` command to diffusion maps;
 - remove the public `maxits` input;
 - remove PCA M/E workers, formats, APIs, private-program entries, and tests;
 - update in-process trajectory consumers to the model-neutral result;
-- rewrite `flex_eigenvol_policy.md` to describe the implemented diffusion
+- rewrite `flex_analysis_policy.md` to describe the implemented diffusion
   contract and clearly retain forward-facing variance-map/FSC developments;
 - regenerate any affected documentation or dispatch products.
 

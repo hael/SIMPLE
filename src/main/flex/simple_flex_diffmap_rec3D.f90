@@ -1,10 +1,10 @@
-!@descr: projection-aware residual Nyström pre-images for flex_eigenvol
+!@descr: projection-aware residual Nyström pre-images for flex_analysis
 module simple_flex_diffmap_rec3D
 use simple_core_module_api
 use simple_builder,                only: builder
 use simple_image,                  only: image
 use simple_parameters,             only: parameters
-use simple_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
+use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
     &update_basis_from_mstep_stats_part_files, cleanup_planes
 use simple_reconstructor,          only: reconstructor
 implicit none
