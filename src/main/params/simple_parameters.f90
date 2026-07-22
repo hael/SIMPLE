@@ -320,6 +320,7 @@ type :: parameters
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
+    character(len=STDLEN)     :: system=''            !< embedded molecular system for simulated workflow tests(6vxx|1jxy)
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
     ! special integer kinds

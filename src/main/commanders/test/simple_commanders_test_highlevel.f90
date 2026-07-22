@@ -454,15 +454,13 @@ end subroutine exec_test_reproject
 
 subroutine exec_test_simulated_workflow( self, cline )
     use simple_atoms,         only: atoms
-    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_string_utils,  only: lowercase
     use simple_ui,            only: make_ui
     class(commander_test_simulated_workflow), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    character(len=*), parameter :: WORKDIR         = 'test_simulated_workflow'
     character(len=*), parameter :: PROJNAME        = 'simulated_workflow'
     character(len=*), parameter :: PROJFILE        = PROJNAME//'.simple'
-    character(len=*), parameter :: VOL_FILE        = '6VXX.mrc'
-    character(len=*), parameter :: REPROJ_FILE     = 'reprojs_6VXX.mrcs'
     character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
     character(len=*), parameter :: SUBSET_FILE     = 'random_reprojections.mrcs'
     character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
@@ -510,6 +508,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(image)                         :: projection
     type(sp_project)                    :: spproj
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
+    type(string)                        :: system_name, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
@@ -520,42 +519,62 @@ subroutine exec_test_simulated_workflow( self, cline )
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
     call make_ui
+    if( .not. cline%defined('system') ) THROW_HARD('The system keyword is required; expected 6vxx or 1jxy')
+    system_name = cline%get_carg('system')
+    system_name = lowercase(system_name%to_char())
+    select case(system_name%to_char())
+        case('6vxx')
+            vol_file    = '6VXX.mrc'
+            reproj_file = 'reprojs_6VXX.mrcs'
+        case('1jxy')
+            vol_file    = '1JXY.mrc'
+            reproj_file = 'reprojs_1JXY.mrcs'
+        case default
+            THROW_HARD('Unsupported simulated-workflow system: '//system_name%to_char()//'; expected 6vxx or 1jxy')
+    end select
+    test_workdir = 'test_simulated_workflow_'//system_name%to_char()
     call simple_getcwd(cwd_root)
-    if( file_exists(WORKDIR) )then
-        call simple_rmdir(WORKDIR, status)
-        if( status /= 0 ) THROW_HARD('Could not reset '//WORKDIR)
+    if( file_exists(test_workdir%to_char()) )then
+        call simple_rmdir(test_workdir%to_char(), status)
+        if( status /= 0 ) THROW_HARD('Could not reset '//test_workdir%to_char())
     endif
-    call simple_mkdir(WORKDIR)
-    call simple_chdir(WORKDIR, status)
-    if( status /= 0 ) THROW_HARD('Could not enter '//WORKDIR)
+    call simple_mkdir(test_workdir%to_char())
+    call simple_chdir(test_workdir%to_char(), status)
+    if( status /= 0 ) THROW_HARD('Could not enter '//test_workdir%to_char())
     call simple_getcwd(workflow_root)
     workflow_root_path = workflow_root%to_char()
 
-    ! 6VXX atomic coordinates are embedded in SIMPLE, so this test has no network dependency.
-    write(logfhandle,'(a)') '>>> Step 1: create a volume from 6VXX'
+    ! Both coordinate sets are embedded in SIMPLE, so this test has no network dependency.
+    write(logfhandle,'(a,a)') '>>> Step 1: create a volume from ', system_name%to_char()
     call simple_mkdir(VOL_DIR)
     call simple_chdir(VOL_DIR, status)
     if( status /= 0 ) THROW_HARD('Could not enter the volume-generation directory')
-    mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(volfile=string(VOL_FILE), smpd=SMPD, mol=mol, center_pdb=.true.)
+    select case(system_name%to_char())
+        case('6vxx')
+            mol = sars_cov2_spkgp_6vxx()
+        case('1jxy')
+            ! SIMPLE's embedded provider uses the underlying 1JYX PDB identifier.
+            mol = betagal_1jyx()
+    end select
+    call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true.)
     call molecule%kill()
     call simple_chdir(workflow_root, status)
     if( status /= 0 ) THROW_HARD('Could not leave the volume-generation directory')
 
     write(logfhandle,'(a)') '>>> Step 2: generate well-spaced spiral reprojections'
-    call cline_projection%set('prg',             'reproject')
-    call cline_projection%set('mkdir',                 'yes')
-    call cline_projection%set('vol1', VOL_DIR//'/'//VOL_FILE)
-    call cline_projection%set('outstk',          REPROJ_FILE)
-    call cline_projection%set('smpd',                   SMPD)
-    call cline_projection%set('pgrp',                   'c1')
-    call cline_projection%set('mskdiam',             MSKDIAM)
-    call cline_projection%set('nspace',               NPROJS)
-    call cline_projection%set('nthr',                   NTHR)
+    call cline_projection%set('prg',                       'reproject')
+    call cline_projection%set('mkdir',                           'yes')
+    call cline_projection%set('vol1', VOL_DIR//'/'//vol_file%to_char())
+    call cline_projection%set('outstk',                    reproj_file)
+    call cline_projection%set('smpd',                             SMPD)
+    call cline_projection%set('pgrp',                             'c1')
+    call cline_projection%set('mskdiam',                       MSKDIAM)
+    call cline_projection%set('nspace',                         NPROJS)
+    call cline_projection%set('nthr',                             NTHR)
     call xreproject%execute(cline_projection)
     call cline_projection%kill()
     call return_to_stage_root('reproject')
-    reproj_path = simple_abspath(string(REPROJ_DIR//'/'//REPROJ_FILE))
+    reproj_path = simple_abspath(string(REPROJ_DIR//'/'//reproj_file%to_char()))
     call find_ldim_nptcls(reproj_path, ldim, nprojs_stk)
     if( nprojs_stk /= NPROJS ) THROW_HARD('Unexpected number of generated reprojections')
     reproj_box = ldim(1)
@@ -731,8 +750,6 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio2D%set('mkdir',                     'yes')
     call cline_abinitio2D%set('mskdiam',                 MSKDIAM)
     call cline_abinitio2D%set('ncls',                       ncls)
-    call cline_abinitio2D%set('nstages',                       1)
-    call cline_abinitio2D%set('nits_per_stage',                1)
     call cline_abinitio2D%set('nthr',                       NTHR)
     call xabinitio2D%execute(cline_abinitio2D)
     call cline_abinitio2D%kill()
@@ -748,15 +765,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%set('projfile',           project_path)
     call cline_abinitio3D%set('mkdir',                     'yes')
     call cline_abinitio3D%set('pgrp',                       'c1')
-    call cline_abinitio3D%set('pgrp_start',                 'c1')
     call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
-    call cline_abinitio3D%set('nstates',                       1)
-    call cline_abinitio3D%set('multivol_mode',          'single')
-    call cline_abinitio3D%set('filt_mode',                'none')
-    call cline_abinitio3D%set('automsk',                    'no')
-    call cline_abinitio3D%set('nstages',                       1)
-    call cline_abinitio3D%set('nsample',     min(nptcls, NPROJS))
-    call cline_abinitio3D%set('nparts',                        1)
     call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
     call cline_abinitio3D%kill()

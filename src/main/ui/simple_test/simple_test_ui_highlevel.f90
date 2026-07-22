@@ -104,7 +104,9 @@ contains
         ! image input/output
         !call simulated_workflow%add_input(UI_IO, )
         ! parameter input/output
-        !call simulated_workflow%add_input(UI_IMG, )
+        call simulated_workflow%add_input(UI_PARM, 'system', 'multi', 'Embedded molecular system', &
+            &'Embedded coordinates used to generate the simulated data(6vxx|1jxy)', &
+            &'(6vxx|1jxy)', .true., '')
         ! alternative inputs
         !call simulated_workflow%add_input(UI_PARM, )
         ! search controls
