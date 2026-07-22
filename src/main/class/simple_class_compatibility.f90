@@ -35,7 +35,7 @@ real,    parameter :: DEFAULT_QLO                = 0.08                         
 real,    parameter :: DEFAULT_QHI                = 0.93                           ! Default quantile candidates for c/a axis estimation
 real,    parameter :: CONV_ABS_EPS               = 0.5                            ! Absolute tolerance (pixels) for axis stability
 real,    parameter :: CONV_REL_EPS               = 0.01                           ! Relative tolerance for axis stability
-real,    parameter :: RESCUE_EDGE_FRAC           = 0.00                           ! Extra margin for boundary rescue in size compatibility
+real,    parameter :: RESCUE_EDGE_FRAC           = 0.10                           ! Extra margin for boundary rescue in size compatibility
 real,    parameter :: SUPPORT_EDGE_SOFT_FRAC_MAX = 0.10                           ! Initial soft edge slack (10%) for c/a bounds during support check
 real,    parameter :: RELAX_GRID(NRELAX)         = [0.03, 0.05, 0.07, 0.10, 0.15] ! Relative interval expansion candidates
 real,    parameter :: QLOW_GRID(NQ)              = [0.05, 0.10, 0.15]             ! Lower-quantile candidates for c-axis estimate
@@ -301,7 +301,7 @@ contains
         do j = 1, ny
             do i = 1, nx
             r2 = (real(i) - cx)**2 + (real(j) - cy)**2
-            radial_w = 0.2 + 0.8 * max(0.0, 1.0 - min(1.0, r2 / r2max))
+            radial_w = 0.1 + 0.9 * max(0.0, 1.0 - min(1.0, r2 / r2max))
             weight_vals(i,j,1) = weight_vals(i,j,1) * radial_w
             end do
         end do
