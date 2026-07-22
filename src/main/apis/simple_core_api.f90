@@ -41,7 +41,7 @@ use simple_ori_utils,       only: euler2m, m2euler, dm2euler, euler_dist, euler_
 use simple_oris,            only: oris
 use simple_ran_tabu,        only: ran_tabu
 use simple_rnd,             only: ran3arr, gasdev, greedy_sampling, seed_rnd, ran3, irnd_uni, irnd_uni_pair, shcloc, rnd_inds, mnorm_smp,&
-                                 &multinomal
+                                 &multinomal, shuffle, partial_shuffle
 use simple_edges_sqwins,    only: cosedge, cosedge_inner, hardedge, hardedge_inner, sqwin_1d, sqwin_2d, sqwin_3d, hardedge_r2_2d, hardedge_r2_3d,&
                                  &cosedge_r2_3d, cosedge_r2_2d
 use simple_srch_sort_loc,   only: find, hpsort, locate, reverse, maxnloc, min3, minnloc, scores2order, dists2order, mask2inds, reorder, selec,&

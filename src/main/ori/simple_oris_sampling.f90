@@ -11,7 +11,6 @@ contains
         class(oris),          intent(in)    :: self
         integer,              intent(in)    :: nptcls
         integer, allocatable, intent(inout) :: inds(:)
-        type(ran_tabu) :: rt
         integer        :: i,n
         if( allocated(inds) ) deallocate(inds)
         inds = (/(i,i=1,self%n)/)
@@ -20,9 +19,7 @@ contains
         if( n < nptcls )then
             ! if less than desired particles select all
         else
-            rt   = ran_tabu(n)
-            call rt%shuffle(inds)
-            call rt%kill
+            call partial_shuffle(inds, nptcls)
             inds = inds(1:nptcls)
             call hpsort(inds)
         endif
@@ -84,7 +81,6 @@ contains
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
-        type(ran_tabu) :: rt
         integer, allocatable :: states(:)
         integer :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
@@ -101,9 +97,7 @@ contains
         if( nptcls == 0 ) THROW_HARD('no active particles to sample')
         inds     = pack(inds, mask=states > 0)
         nsamples = min(nptcls, max(1, nint(update_frac * real(nptcls))))
-        rt       = ran_tabu(nptcls)
-        call rt%shuffle(inds)
-        call rt%kill
+        call partial_shuffle(inds, nsamples)
         inds = inds(1:nsamples)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
@@ -116,7 +110,6 @@ contains
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
-        type(ran_tabu)       :: rt
         integer, allocatable :: states(:), updatecnts(:)
         integer              :: i, cnt, nptcls, ucnt, ucnt_min, ucnt_max, ucnt_lim
         nptcls = fromto(2) - fromto(1) + 1
@@ -150,9 +143,7 @@ contains
             inds   = pack(inds, mask=updatecnts < ucnt_lim)
             nptcls = size(inds)
         endif
-        rt = ran_tabu(nptcls)
-        call rt%shuffle(inds)
-        call rt%kill
+        call partial_shuffle(inds, nsamples)
         inds = inds(1:nsamples)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
@@ -171,7 +162,6 @@ contains
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
         integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max
-        type(ran_tabu) :: rt
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
@@ -205,9 +195,7 @@ contains
                 if( size(inds_pool) >= clssmp(i)%nsample ) exit
                 inds_fill = pack(eligible, mask=updatecnts == ucnt)
                 if( size(inds_fill) == 0 ) cycle
-                rt = ran_tabu(size(inds_fill))
-                call rt%shuffle(inds_fill)
-                call rt%kill
+                call shuffle(inds_fill)
                 nfill = min(clssmp(i)%nsample - size(inds_pool), size(inds_fill))
                 inds_pool = [inds_pool, inds_fill(1:nfill)]
             end do
@@ -289,7 +277,6 @@ contains
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
-        type(ran_tabu)       :: rt
         integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
         integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt
         nptcls = fromto(2) - fromto(1) + 1
@@ -313,9 +300,7 @@ contains
             if( size(inds_pool) >= nsamples ) exit
             inds_fill = pack(inds, mask=states > 0 .and. updatecnts == ucnt)
             if( size(inds_fill) == 0 ) cycle
-            rt = ran_tabu(size(inds_fill))
-            call rt%shuffle(inds_fill) ! random tie-break within this updatecnt tier
-            call rt%kill
+            call shuffle(inds_fill)
             nfill = min(nsamples - size(inds_pool), size(inds_fill))
             inds_pool = [inds_pool, inds_fill(1:nfill)]
         enddo
@@ -357,7 +342,6 @@ contains
         logical,            intent(in)    :: l_greedy
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds_left(:)
-        type(ran_tabu) :: rt
         integer        :: i, j
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
@@ -373,9 +357,7 @@ contains
         else
             do i = 1, size(clssmp)
                 allocate(pinds_left(clssmp(i)%pop), source=clssmp(i)%pinds)
-                rt = ran_tabu(clssmp(i)%pop)
-                call rt%shuffle(pinds_left)
-                call rt%kill
+                call shuffle(pinds_left)
                 do j = 1, clssmp(i)%nsample
                     states(pinds_left(j)) = 1
                 end do
@@ -391,7 +373,6 @@ contains
         real,               intent(in)    :: frac_best
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds2sample(:)
-        type(ran_tabu) :: rt
         integer        :: i, j, nbest
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
@@ -406,9 +387,7 @@ contains
                 end do
             else
                 allocate(pinds2sample(nbest), source=clssmp(i)%pinds(:nbest))
-                rt = ran_tabu(nbest)
-                call rt%shuffle(pinds2sample)
-                call rt%kill
+                call shuffle(pinds2sample)
                 do j = 1, clssmp(i)%nsample
                     states(pinds2sample(j)) = 1
                 end do
@@ -424,7 +403,6 @@ contains
         real,               intent(in)    :: frac_worst
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds_rev(:), pinds2sample(:)
-        type(ran_tabu) :: rt
         integer        :: i, j, nworst
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
@@ -441,9 +419,7 @@ contains
                 allocate(pinds_rev(clssmp(i)%pop), source=clssmp(i)%pinds)
                 call reverse(pinds_rev)
                 allocate(pinds2sample(nworst), source=pinds_rev(:nworst))
-                rt = ran_tabu(nworst)
-                call rt%shuffle(pinds2sample)
-                call rt%kill
+                call shuffle(pinds2sample)
                 do j = 1, clssmp(i)%nsample
                     states(pinds2sample(j)) = 1
                 end do

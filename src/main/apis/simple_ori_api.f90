@@ -17,7 +17,7 @@ use simple_math_ft,         only: calc_fourier_index
 use simple_math,            only: otsu
 use simple_nrtxtfile,       only: nrtxtfile
 use simple_ran_tabu,        only: ran_tabu
-use simple_rnd,             only: gasdev, ran3, irnd_uni
+use simple_rnd,             only: gasdev, ran3, irnd_uni, shuffle, partial_shuffle
 use simple_srch_sort_loc,   only: hpsort, min3, reverse
 use simple_stat,            only: z_scores, median_nocopy, pearsn, moment, robust_scaling
 use simple_string_utils,    only: real2str, int2str, uppercase

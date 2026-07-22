@@ -7,6 +7,7 @@ implicit none
 
 public :: seed_rnd, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
+public :: shuffle, partial_shuffle
 private
 #include "simple_local_flags.inc"
 
@@ -24,6 +25,16 @@ end interface
 interface randn
     module procedure randn_1
     module procedure randn_2
+end interface
+
+interface shuffle
+    module procedure shuffle_1
+    module procedure shuffle_2
+end interface
+
+interface partial_shuffle
+    module procedure partial_shuffle_1
+    module procedure partial_shuffle_2
 end interface
 
 interface greedy_sampling
@@ -125,6 +136,68 @@ contains
         call random_number(a)
         a = a * 2. - 1.
     end function randn_2
+
+    !>  \brief  shuffles an integer array using Fisher-Yates
+    subroutine shuffle_1( shuffled )
+        integer, intent(inout) :: shuffled(:)
+        integer :: tmp, irnd, i
+        do i=size(shuffled),2,-1
+            irnd           = irnd_uni(i)
+            tmp            = shuffled(i)
+            shuffled(i)    = shuffled(irnd)
+            shuffled(irnd) = tmp
+        enddo
+    end subroutine shuffle_1
+
+    !>  \brief  shuffles a real array using Fisher-Yates
+    subroutine shuffle_2( shuffled )
+        real, intent(inout) :: shuffled(:)
+        real    :: tmp
+        integer :: irnd, i
+        do i=size(shuffled),2,-1
+            irnd           = irnd_uni(i)
+            tmp            = shuffled(i)
+            shuffled(i)    = shuffled(irnd)
+            shuffled(irnd) = tmp
+        enddo
+    end subroutine shuffle_2
+
+    !>  \brief  partially shuffles an integer array using Fisher-Yates
+    !!  The first nshuffle positions form a uniformly ordered sample without
+    !!  replacement. The unselected elements remain in the trailing positions.
+    subroutine partial_shuffle_1( shuffled, nshuffle )
+        integer, intent(inout) :: shuffled(:)
+        integer, intent(in)    :: nshuffle
+        integer :: tmp, irnd, i, n
+        n = size(shuffled)
+        if( nshuffle < 0 .or. nshuffle > n )&
+        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_1')
+        do i=1,min(nshuffle,n-1)
+            irnd           = i - 1 + irnd_uni(n - i + 1)
+            tmp            = shuffled(i)
+            shuffled(i)    = shuffled(irnd)
+            shuffled(irnd) = tmp
+        enddo
+    end subroutine partial_shuffle_1
+
+    !>  \brief  partially shuffles a real array using Fisher-Yates
+    !!  The first nshuffle positions form a uniformly ordered sample without
+    !!  replacement. The unselected elements remain in the trailing positions.
+    subroutine partial_shuffle_2( shuffled, nshuffle )
+        real,    intent(inout) :: shuffled(:)
+        integer, intent(in)    :: nshuffle
+        real    :: tmp
+        integer :: irnd, i, n
+        n = size(shuffled)
+        if( nshuffle < 0 .or. nshuffle > n )&
+        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_2')
+        do i=1,min(nshuffle,n-1)
+            irnd           = i - 1 + irnd_uni(n - i + 1)
+            tmp            = shuffled(i)
+            shuffled(i)    = shuffled(irnd)
+            shuffled(irnd) = tmp
+        enddo
+    end subroutine partial_shuffle_2
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
