@@ -4,14 +4,15 @@ use simple_core_module_api
 use simple_builder,          only: builder
 use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
+use simple_gridding,         only: prep3D_inv_instrfun4mul
 use simple_linalg,           only: eigsrt, hermitian_solve, jacobi
 use simple_matcher_3Drec,    only: init_rec
 use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
-use simple_reconstructor_latent_ops, only: insert_plane_oversamp_coupled_scaled, accumulate_plane_oversamp_coupled_stats, &
-    &project_fplane_mean, project_fplanes_mean_basis
+use simple_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, &
+    &accumulate_planes_oversamp_coupled_stats_batch, project_fplane_mean, project_fplanes_mean_basis
 use simple_map_reduce,       only: split_nobjs_even
 implicit none
 
@@ -79,14 +80,16 @@ contains
         integer,             intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         character(len=*), optional, intent(in) :: log_label
-        type(fplane_type) :: mean_fpl
+        type(fplane_type), allocatable :: mean_fpls(:)
+        type(image) :: gridcorr_img
         type(projected_latent_mstep_2d_block) :: mstep_block
         real,    allocatable :: rho_cross_exp(:,:,:,:)
         integer, allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
         integer              :: exp_shape(3), npairs
-        integer           :: batchlims(2), batchsz, ibatch, ipart, nparts_eff, partlims(2), q, progress_stride
-        integer(timer_int_kind) :: t_total, t_phase, t_comp
+        integer           :: batchlims(2), batchsz, ibatch, ipart, ithr, nparts_eff, partlims(2), q
+        integer(timer_int_kind) :: t_total, t_phase, t_comp, t_batch
+        real(dp) :: read_prep_seconds, mean_project_seconds, insert_seconds
         t_total = tic()
         if( present(log_label) )then
             log_prefix = projected_model_log_prefix(log_label)
@@ -95,7 +98,9 @@ contains
         endif
         write(logfhandle,'(A)') log_prefix//' M-STEP: UPDATING EIGENVOLUMES WITH COUPLED BLOCK SOLVE'
         call flush(logfhandle)
-        progress_stride = max(1, 5 * MAXIMGBATCHSZ)
+        read_prep_seconds    = 0.
+        mean_project_seconds = 0.
+        insert_seconds       = 0.
         nparts_eff      = max(1, min(max(1, params%nparts), nptcls))
         parts           = split_nobjs_even(nptcls, nparts_eff)
         if( nparts_eff > 1 )then
@@ -112,42 +117,58 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
+        allocate(mean_fpls(nthr_glob))
         t_phase = tic()
         do ipart = 1, nparts_eff
             partlims = parts(ipart,:)
             do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
+                t_batch = tic()
                 call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
                 call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
                     &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                read_prep_seconds = read_prep_seconds + toc(t_batch)
+                t_batch = tic()
                 call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, &
-                    &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
+                    &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpls)
+                mean_project_seconds = mean_project_seconds + toc(t_batch)
+                t_batch = tic()
                 call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
                     &mstep_block, fpls(:batchsz))
-                if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
-                    write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
-                    call flush(logfhandle)
-                endif
+                insert_seconds = insert_seconds + toc(t_batch)
+                write(logfhandle,'(A,I0,A,I0,A,F9.3,A,F9.3,A,F9.3)') log_prefix//' M-STEP BATCH: ', &
+                    &batchlims(2), ' / ', nptcls, ' read_prep_total_s=', read_prep_seconds, &
+                    &' mean_project_total_s=', mean_project_seconds, ' insert_total_s=', insert_seconds
+                call flush(logfhandle)
             end do
         end do
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
+        call log_seconds(log_prefix//' M-STEP READ/PREP SECONDS', read_prep_seconds)
+        call log_seconds(log_prefix//' M-STEP MEAN PROJECT SECONDS', mean_project_seconds)
+        call log_seconds(log_prefix//' M-STEP COUPLED ACCUMULATE SECONDS', insert_seconds)
         call kill_projected_latent_mstep_2d_block(mstep_block)
         if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
-        call cleanup_plane(mean_fpl)
+        do ithr = 1, size(mean_fpls)
+            call cleanup_plane(mean_fpls(ithr))
+        end do
+        deallocate(mean_fpls)
         t_phase = tic()
         call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
         call log_seconds(log_prefix//' M-STEP COUPLED SOLVE SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
         t_phase = tic()
+        gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
+            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         do q = 1, ncomp
             write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
             t_comp = tic()
-            call finalize_basis_for_projection(params, basis_recs(q), density_corrected=.true.)
+            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img, density_corrected=.true.)
             call log_comp_seconds(log_prefix//' M-STEP FINALIZE SECONDS', q, toc(t_comp))
         end do
+        call gridcorr_img%kill
         call log_seconds(log_prefix//' M-STEP FINALIZE TOTAL SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP TOTAL SECONDS', toc(t_total))
     end subroutine update_basis_from_latents
@@ -204,7 +225,7 @@ contains
     end subroutine reset_projected_latent_mstep_2d_block
 
     subroutine prepare_projected_latent_mstep_2d_block( params, build, mean_rec, fpls_batch, z, &
-        &pinds, batchlims, batchsz, ncomp, block, mean_fpl )
+        &pinds, batchlims, batchsz, ncomp, block, mean_fpls )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -213,18 +234,20 @@ contains
         real(dp),            intent(in)    :: z(:,:)
         integer,             intent(in)    :: pinds(:)
         type(projected_latent_mstep_2d_block), intent(inout) :: block
-        type(fplane_type), intent(inout) :: mean_fpl
-        integer :: i, iptcl, q, r, row
+        type(fplane_type), intent(inout) :: mean_fpls(nthr_glob)
+        integer :: i, iptcl, q, r, row, ithr
         call reset_projected_latent_mstep_2d_block(block, batchsz)
+        !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
         do i = 1, batchsz
             row   = batchlims(1) + i - 1
             iptcl = pinds(row)
+            ithr  = omp_get_thread_num() + 1
             block%rows(i)  = row
             block%pinds(i) = iptcl
             call build%spproj_field%get_ori(iptcl, block%orientations(i))
             if( block%orientations(i)%isstatezero() ) cycle
-            call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpl, apply_ctf_amp=.true.)
-            call subtract_plane(fpls_batch(i), mean_fpl)
+            call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpls(ithr), apply_ctf_amp=.true.)
+            call subtract_plane(fpls_batch(i), mean_fpls(ithr))
             block%zrows(:,i) = z(row,:)
             block%latent_second(:,:,i) = 0.d0
             do q = 1, ncomp
@@ -234,6 +257,7 @@ contains
             end do
             block%valid(i) = .true.
         end do
+        !$omp end parallel do
     end subroutine prepare_projected_latent_mstep_2d_block
 
     subroutine insert_projected_latent_mstep_2d_block( build, basis_recs, rho_cross_exp, ncomp, block, fpls_batch )
@@ -243,12 +267,8 @@ contains
         real,                intent(inout) :: rho_cross_exp(:,:,:,:)
         type(projected_latent_mstep_2d_block), intent(inout) :: block
         type(fplane_type),   intent(in)    :: fpls_batch(:)
-        integer :: i
-        do i = 1, block%nrecords
-            if( .not. block%valid(i) ) cycle
-            call insert_plane_oversamp_coupled_scaled(basis_recs, rho_cross_exp, build%pgrpsyms, &
-                &block%orientations(i), fpls_batch(i), block%zrows(:,i), block%latent_second(:,:,i))
-        end do
+        call insert_planes_oversamp_coupled_batch_scaled(basis_recs,rho_cross_exp,build%pgrpsyms, &
+            &block%orientations,fpls_batch,block%zrows,block%latent_second,block%valid,block%nrecords)
     end subroutine insert_projected_latent_mstep_2d_block
 
     subroutine init_projected_latent_mstep_stats( stats, exp_lb, exp_ub, model_nyq, ncomp )
@@ -300,15 +320,11 @@ contains
         type(projected_latent_mstep_stats), intent(inout) :: stats
         type(projected_latent_mstep_2d_block), intent(inout) :: block
         type(fplane_type), intent(in) :: fpls_batch(:)
-        integer :: i
         if( block%ncomp /= stats%ncomp ) THROW_HARD('M-step block/statistics component mismatch')
-        do i = 1, block%nrecords
-            if( .not. block%valid(i) ) cycle
-            call accumulate_plane_oversamp_coupled_stats(stats%basis_rhs, stats%rho_cross, stats%exp_lb, &
-                &stats%model_nyq, build%pgrpsyms, block%orientations(i), fpls_batch(i), &
-                &block%zrows(:,i), block%latent_second(:,:,i))
-            stats%nrecords = stats%nrecords + 1
-        end do
+        call accumulate_planes_oversamp_coupled_stats_batch(stats%basis_rhs,stats%rho_cross,stats%exp_lb, &
+            &stats%model_nyq,build%pgrpsyms,block%orientations,fpls_batch,block%zrows, &
+            &block%latent_second,block%valid,block%nrecords)
+        stats%nrecords=stats%nrecords+count(block%valid(:block%nrecords))
     end subroutine accumulate_projected_latent_mstep_2d_block
 
     subroutine write_projected_latent_mstep_stats( fname, stats )
@@ -349,12 +365,13 @@ contains
         class(string),       intent(in)    :: fname
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         character(len=*), optional, intent(in) :: log_label
-        type(fplane_type) :: mean_fpl
+        type(fplane_type), allocatable :: mean_fpls(:)
         type(projected_latent_mstep_2d_block) :: mstep_block
         type(projected_latent_mstep_stats) :: stats
         character(len=:), allocatable :: log_prefix
-        integer :: batchlims(2), batchsz, ibatch, progress_stride
-        integer(timer_int_kind) :: t_total
+        integer :: batchlims(2), batchsz, ibatch, ithr
+        integer(timer_int_kind) :: t_total, t_batch
+        real(dp) :: read_prep_seconds, mean_project_seconds, insert_seconds
         t_total = tic()
         if( present(log_label) )then
             log_prefix = projected_model_log_prefix(log_label)
@@ -367,10 +384,13 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,A)') log_prefix//' M-STEP WORKER ROWS: ', partlims(1), ' / ', partlims(2), &
             &' -> ', fname%to_char()
         call flush(logfhandle)
-        progress_stride = max(1, 5 * MAXIMGBATCHSZ)
+        read_prep_seconds    = 0.
+        mean_project_seconds = 0.
+        insert_seconds       = 0.
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
+        allocate(mean_fpls(nthr_glob))
         call init_projected_latent_mstep_stats(stats, lbound(mean_rec%cmat_exp), ubound(mean_rec%cmat_exp), &
             &mean_rec%get_lfny(1), ncomp)
         write(logfhandle,'(A,I0)') log_prefix//' M-STEP WORKER STATISTICS BYTES: ', &
@@ -379,23 +399,32 @@ contains
         do ibatch = partlims(1), partlims(2), MAXIMGBATCHSZ
             batchlims = [ibatch, min(partlims(2), ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
+            t_batch = tic()
             call read_particles(params, build, nptcls, pinds, batchlims, batchsz)
             call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
                 &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+            read_prep_seconds = read_prep_seconds + toc(t_batch)
+            t_batch = tic()
             call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, &
-                &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpl)
+                &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpls)
+            mean_project_seconds = mean_project_seconds + toc(t_batch)
+            t_batch = tic()
             call accumulate_projected_latent_mstep_2d_block(build, stats, mstep_block, fpls(:batchsz))
-            if( batchlims(2) == partlims(2) .or. mod(batchlims(2) - partlims(1) + 1, progress_stride) == 0 )then
-                write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP WORKER PARTICLES: ', &
-                    &batchlims(2) - partlims(1) + 1, ' / ', partlims(2) - partlims(1) + 1
-                call flush(logfhandle)
-            endif
+            insert_seconds = insert_seconds + toc(t_batch)
+            write(logfhandle,'(A,I0,A,I0,A,F9.3,A,F9.3,A,F9.3)') log_prefix//' M-STEP WORKER BATCH: ', &
+                &batchlims(2) - partlims(1) + 1, ' / ', partlims(2) - partlims(1) + 1, &
+                &' read_prep_total_s=', read_prep_seconds, ' mean_project_total_s=', mean_project_seconds, &
+                &' insert_total_s=', insert_seconds
+            call flush(logfhandle)
         end do
         call write_projected_latent_mstep_stats(fname, stats)
         call kill_projected_latent_mstep_2d_block(mstep_block)
         call kill_projected_latent_mstep_stats(stats)
         call cleanup_runtime_batch(build, fpls)
-        call cleanup_plane(mean_fpl)
+        do ithr = 1, size(mean_fpls)
+            call cleanup_plane(mean_fpls(ithr))
+        end do
+        deallocate(mean_fpls)
         call log_seconds(log_prefix//' M-STEP WORKER TOTAL SECONDS', toc(t_total))
     end subroutine write_mstep_stats_part_file
 
@@ -406,6 +435,7 @@ contains
         class(string),       intent(in)    :: part_fnames(nparts)
         character(len=*), optional, intent(in) :: log_label
         real, allocatable :: rho_cross_exp(:,:,:,:)
+        type(image) :: gridcorr_img
         character(len=:), allocatable :: log_prefix
         integer :: exp_shape(3), npairs, ipart, q
         integer(timer_int_kind) :: t_total, t_phase
@@ -438,11 +468,14 @@ contains
         call log_seconds(log_prefix//' M-STEP MASTER COUPLED SOLVE SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
         t_phase = tic()
+        gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
+            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         do q = 1, ncomp
             write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP MASTER FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
-            call finalize_basis_for_projection(params, basis_recs(q), density_corrected=.true.)
+            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img, density_corrected=.true.)
         end do
+        call gridcorr_img%kill
         call log_seconds(log_prefix//' M-STEP MASTER FINALIZE SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP MASTER TOTAL SECONDS', toc(t_total))
     end subroutine update_basis_from_mstep_stats_part_files
@@ -993,7 +1026,7 @@ contains
         real(dp) :: zrow_work(ncomp)
         real(dp) :: signs(ncomp)
         character(len=:), allocatable :: log_prefix
-        integer :: i, q, r, anchor
+        integer :: i, q, anchor
         if( nptcls <= 0 .or. ncomp <= 0 ) THROW_HARD('canonicalization requires a nonempty projected latent model')
         if( present(log_label) )then
             log_prefix = projected_model_log_prefix(log_label)
@@ -1226,16 +1259,12 @@ contains
                     ih = h - lb(1) + 1
                     ik = k - lb(2) + 1
                     im = m - lb(3) + 1
-                    amat = 0.d0
                     rhs  = DCMPLX_ZERO
                     diag_sum = 0.d0
                     do q = 1, ncomp
                         rhs(q) = cmplx(basis_recs(q)%cmat_exp(h,k,m), kind=dp)
-                        do r = q, ncomp
-                            amat(q,r) = real(rho_cross_exp(pair_index(q,r),ih,ik,im), dp)
-                            amat(r,q) = amat(q,r)
-                        end do
-                        diag_sum = diag_sum + max(0.d0, amat(q,q))
+                        diag_sum = diag_sum + max(0.d0, &
+                            &real(rho_cross_exp(pair_index(q,q),ih,ik,im),dp))
                     end do
                     if( diag_sum <= DTINY .and. sum(abs(rhs)) <= DTINY )then
                         do q = 1, ncomp
@@ -1243,6 +1272,13 @@ contains
                         end do
                         cycle
                     endif
+                    amat = 0.d0
+                    do q = 1, ncomp
+                        do r = q, ncomp
+                            amat(q,r) = real(rho_cross_exp(pair_index(q,r),ih,ik,im), dp)
+                            amat(r,q) = amat(q,r)
+                        end do
+                    end do
                     ridge = max(COUPLED_MSTEP_RIDGE_ABS, COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp))
                     do q = 1, ncomp
                         amat(q,q) = amat(q,q) + ridge
@@ -1328,9 +1364,10 @@ contains
         end do
     end subroutine solve_real_spd_complex
 
-    subroutine finalize_basis_for_projection( params, basis_rec, density_corrected )
+    subroutine finalize_basis_for_projection( params, basis_rec, gridcorr_img, density_corrected )
         class(parameters),   intent(in)    :: params
         type(reconstructor), intent(inout) :: basis_rec
+        class(image),        intent(in)    :: gridcorr_img
         logical, optional,   intent(in)    :: density_corrected
         logical :: l_density_corrected
         l_density_corrected = .false.
@@ -1339,6 +1376,7 @@ contains
         if( .not. l_density_corrected ) call basis_rec%sampl_dens_correct
         call basis_rec%ifft
         call basis_rec%div(real(params%box))
+        call basis_rec%mul(gridcorr_img)
         call regularize_basis_volume(params, basis_rec)
         call basis_rec%fft
         call basis_rec%expand_exp
@@ -1348,9 +1386,6 @@ contains
         class(parameters),   intent(in)    :: params
         type(reconstructor), intent(inout) :: basis_rec
         if( basis_rec%is_ft() ) call basis_rec%ifft
-        if( params%msk_crop > TINY )then
-            call basis_rec%mask3D_soft(params%msk_crop, backgr=0.)
-        endif
         if( params%lp > 2.0 * params%smpd_crop + TINY )then
             call basis_rec%bp(0., params%lp)
         endif

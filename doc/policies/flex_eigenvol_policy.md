@@ -187,10 +187,14 @@ right-hand side is weighted by `z_iq`; the density contains every cross-term
 `z_iq*z_ir`. The established coupled block solver therefore accounts for
 correlation between retained graph eigenfunctions instead of reconstructing
 each component independently. The fitted residual basis volumes retain the
-existing spatial-mask policy, but flex explicitly disables the projected
-model's `lp`-controlled Fourier-plane truncation and final `bp` operation. The
-public `lp` parameter affects graph features only. No FSC-derived weighting,
-cutoff, or filtering is applied to the residual basis or synthesized states.
+existing spatial-mask policy. As in refine3D restoration, each solved basis is
+transformed to real space, normalized for the reconstruction-box scaling,
+multiplied once by the inverse 3D Kaiser-Bessel instrument function, and
+soft-masked once before it is returned to Fourier space for projection and
+state synthesis. Flex explicitly disables the projected model's `lp`-controlled
+Fourier-plane truncation and final `bp` operation. The public `lp` parameter
+affects graph features only. No FSC-derived weighting, cutoff, or filtering is
+applied to the residual basis or synthesized states.
 
 Pre-image state `s` is synthesized as
 
@@ -288,6 +292,22 @@ requested Nyström representatives. Successful reduction removes the temporary
 statistics files; standard strategy cleanup removes assignment files and
 invokes queue-system cleanup.
 
+Shared and worker M-step batches use the same optimized execution policy. Mean
+reprojections are particle-parallel with one projection workspace per OpenMP
+thread, following the established projected-model E-step pattern. Mean-only and
+fused mean-plus-basis projection use the same normalized three-point Cartesian
+Kaiser-Bessel gather and are regression-tested against
+`reconstructor%project_fplane`; the corresponding gather/splat weights are also
+subject to an adjointness test. Coupled 3D insertion keeps one OpenMP team alive
+for the complete particle batch and uses the reconstructor's scalarized
+three-point Kaiser-Bessel gridding pattern.
+Each particle's symmetric `z*z^T` coefficients are packed once in contiguous
+pair order; the full packed cross-density vector is updated without dropping
+off-diagonal terms. The voxel solve first rejects empty expanded cells from
+their diagonal density and right-hand side before materializing the full local
+normal matrix. These are execution optimizations only: shared and distributed
+paths retain the same complete coupled normal equations.
+
 The former `flex_eigenvol_mstep` and `flex_eigenvol_estep` programs and their
 iterative PCA state are not part of this policy.
 
@@ -300,8 +320,10 @@ Standard output is stage-oriented and concise. It reports:
 - candidate-count range/mean, graph edge count, and graph time;
 - retained rank, whether ICM was enabled, and its convergence summary when used;
 - representative count, medoid particle, and hard population;
-- coupled projected-residual fit and reduction progress when state
-  reconstruction is enabled;
+- cumulative read/preparation, mean-projection, and coupled-accumulation times
+  after every M-step batch;
+- coupled projected-residual solve, finalization, and distributed reduction
+  progress when state reconstruction is enabled;
 - an explicit reconstruction-skipped message for embedding-only callers;
 - registered stack/project names.
 
