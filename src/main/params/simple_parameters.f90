@@ -33,7 +33,7 @@ module simple_parameters
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_ui_program, only: ui_program
-use simple_ui,         only: get_prg_ptr
+use simple_ui,         only: get_prg_ptr, get_test_prg_ptr
 use simple_atoms,      only: atoms
 use simple_decay_funs
 use simple_parameters_registry, only: param_registry

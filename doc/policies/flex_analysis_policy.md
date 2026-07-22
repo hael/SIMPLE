@@ -228,7 +228,7 @@ Before native-image mapping is reconsidered, the registered-project path has a
 supported regression diagnostic:
 
 ```text
-simple_test_exec prg=flex_preimage_identity \
+simple_test_exec test=flex_preimage_identity \
   projfile=<flex-run>/flex_registered_particles.simple \
   vol1=<fixed-mean-volume> nspace=<projection-grid-size> nthr=<threads>
 ```

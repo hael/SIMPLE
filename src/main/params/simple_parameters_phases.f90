@@ -60,7 +60,12 @@ contains
             part_glob = 1
         endif
         l_distr_worker_glob = self%l_distr_worker
+        ! Test commands use the same parameters lifecycle as production
+        ! commands, including mkdir=yes project copying and input-path
+        ! resolution.  Their UI records live in the test table rather than
+        ! the production table, so fall back to that table when needed.
         call get_prg_ptr(self%prg, self%ptr2prg)
+        if( .not.associated(self%ptr2prg) ) call get_test_prg_ptr(self%prg, self%ptr2prg)
         call self%last_prev_dir%kill
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         if( .not. cline%defined('projfile') )then

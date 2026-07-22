@@ -35,6 +35,11 @@ if( .not. associated(ptr2prg) )then
 endif
 ! parse command line into cline object
 call cline%parse
+! The parameter lifecycle is shared with production commands and keys its
+! execution context from prg.  simple_test_exec accepts test=<name>, so carry
+! that name into the standard program field before any commander constructs
+! parameters.
+call cline%set('prg', trim(prg))
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_test_exec'))
 call mem_monitor_init(cline, 'simple_test_exec:'//trim(prg))
