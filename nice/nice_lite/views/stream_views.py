@@ -204,7 +204,7 @@ def view_stream_terminate_stream_process(request):
     term_generate_pickrefs = string_present(request.POST, "terminate_generate_pickrefs", silent=True)
     streamjob.terminate_process(term_preprocess, term_optics_assignment, term_generate_pickrefs)
     if term_preprocess:
-        response = redirect("nice_lite:view_stream_preprocess", jobid=jobid)
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif term_optics_assignment:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_optics", query={"selected_job_id": jobid}))
     elif term_generate_pickrefs:
@@ -229,14 +229,14 @@ def view_stream_restart_stream_process(request):
     restart_generate_pickrefs = string_present(request.POST, "restart_generate_pickrefs", silent=True)
     streamjob.restart_process(restart_preprocess, restart_optics_assignment, restart_generate_pickrefs)
     if restart_preprocess:
-        response = redirect("nice_lite:view_stream_preprocess", jobid=jobid)
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif restart_optics_assignment:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_optics", query={"selected_job_id": jobid}))
     elif restart_generate_pickrefs:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_generate_pickrefs", query={"selected_job_id": jobid}))
     else:
         print_error(f"restart_stream_process: no process flag provided for job {jobid}")
-        response = redirect("nice_lite:view_stream", jobid=jobid)
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream", query={"selected_job_id": jobid}))
     return response
 
 

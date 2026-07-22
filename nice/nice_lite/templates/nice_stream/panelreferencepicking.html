@@ -34,7 +34,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/includes/_panel_header.html' with panel_title="particle picking" zoom_url="nice_lite:view_stream_reference_picking_zoom" terminate_field="terminate_reference_picking" restart_field="restart_reference_picking" last_import=jobstats.last_micrograph_imported use_js=True %}
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="particle picking" zoom_url="nice_lite:view_stream_reference_picking_zoom" terminate_field="terminate_reference_picking" restart_field="restart_reference_picking" last_import=jobstats.last_micrograph_imported %}
 
         <!-- Waiting gauze: shown until picking references arrive (below header) -->
         {% if "micrographs_imported" not in jobstats or jobstats.micrographs_imported == 0 %}

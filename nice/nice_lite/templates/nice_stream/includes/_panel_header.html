@@ -19,9 +19,6 @@
                       (e.g. jobstats.last_movie_imported)
     has_skipped     — truthy if this stage can be skipped; shows a green dot
                       for status == "skipped" (default falsy — omit for most panels)
-    use_js          — truthy if stop/restart use JS handlers (stopProcess /
-                      restartProcess) instead of native confirm dialogs
-                      (default falsy — omit for panels that use confirm)
     hide_actions    — optional; when truthy, hides stop/restart controls in
                       the header (default falsy)
     user_input_url   — URL name for user-input zoom view; when set, shows a
@@ -94,13 +91,8 @@
                     {% csrf_token %}
                     <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                     <input name="{{ terminate_field }}" type="hidden">
-                    {% if use_js %}
-                        <button type="button" class="text-streamicon hover:text-streamerror transition-colors"
-                                onclick="stopProcess(this)" title="stop">
-                    {% else %}
-                        <button type="submit" class="text-streamicon hover:text-streamerror transition-colors"
-                                onclick="return confirm('please confirm that you wish to terminate this process')" title="stop">
-                    {% endif %}
+                    <button type="submit" class="text-streamicon hover:text-streamerror transition-colors"
+                            onclick="return confirm('please confirm that you wish to terminate this process');" title="stop">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-3 h-3">
                             <rect x="3" y="3" width="10" height="10" rx="1.5"/>
                         </svg>
@@ -113,13 +105,8 @@
                     {% csrf_token %}
                     <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                     <input name="{{ restart_field }}" type="hidden">
-                    {% if use_js %}
-                        <button type="button" class="text-streamicon hover:text-streamaccent transition-colors"
-                                onclick="restartProcess(this)" title="restart">
-                    {% else %}
-                        <button type="submit" class="text-streamicon hover:text-streamaccent transition-colors"
-                                onclick="return confirm('please confirm that you wish to restart this process')" title="restart">
-                    {% endif %}
+                    <button type="submit" class="text-streamicon hover:text-streamaccent transition-colors"
+                            onclick="return confirm('please confirm that you wish to restart this process');" title="restart">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4">
                             <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm-.847-9.766A.75.75 0 0 0 6 5.866v4.268a.75.75 0 0 0 1.153.633l3.353-2.134a.75.75 0 0 0 0-1.266L7.153 5.234Z" clip-rule="evenodd" />
                         </svg>

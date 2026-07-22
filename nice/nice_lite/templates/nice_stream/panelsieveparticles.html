@@ -34,7 +34,7 @@
     <div class="flex flex-col h-full">
 
         <!-- Header: status · title · zoom · stop/restart -->
-        {% include 'nice_stream/includes/_panel_header.html' with panel_title="particle sieving" zoom_url="nice_lite:view_stream_sieve_particles_zoom" terminate_field="terminate_particle_sieving" restart_field="restart_particle_sieving" last_import=jobstats.last_micrograph_imported use_js=True user_input_url="nice_lite:view_stream_sieve_particles_zoom" user_input_title="update reference selection" %}
+        {% include 'nice_stream/includes/_panel_header.html' with panel_title="particle sieving" zoom_url="nice_lite:view_stream_sieve_particles_zoom" terminate_field="terminate_particle_sieving" restart_field="restart_particle_sieving" last_import=jobstats.last_micrograph_imported user_input_url="nice_lite:view_stream_sieve_particles_zoom" user_input_title="update reference selection" %}
 
         <!-- Waiting gauze: shown until particles arrive (below header) -->
         {% if "particles_imported" not in jobstats or jobstats.particles_imported == 0 %}
