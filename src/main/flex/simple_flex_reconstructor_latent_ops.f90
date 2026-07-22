@@ -387,11 +387,13 @@ contains
         integer   :: hp, kp, pf, ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
         integer   :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
         integer   :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
+        logical   :: shared_density, diagonal_density
         real      :: pf2, eps_norm, inv_wdim
         ncomp = size(recs)
         if( ncomp <= 0 .or. nrecords <= 0 ) return
         npairs = (ncomp * (ncomp + 1)) / 2
-        shared_density = size(rho_cross_exp,1) == 1
+        diagonal_density = size(rho_cross_exp,1) == ncomp
+        shared_density = size(rho_cross_exp,1) == 1 .and. .not.diagonal_density
         if( size(orientations)<nrecords .or. size(fpls)<nrecords .or. size(valid)<nrecords )then
             THROW_HARD('record array smaller than batch; insert_planes_oversamp_coupled_batch_scaled')
         endif
@@ -406,7 +408,7 @@ contains
         exp_lb    = lbound(recs(1)%cmat_exp)
         exp_ub    = ubound(recs(1)%cmat_exp)
         exp_shape = shape(recs(1)%cmat_exp)
-        if( (.not.shared_density .and. size(rho_cross_exp,1)<npairs) .or. &
+        if( (.not.shared_density .and. .not.diagonal_density .and. size(rho_cross_exp,1)<npairs) .or. &
             &size(rho_cross_exp,2)<exp_shape(1) .or. &
             &size(rho_cross_exp,3)<exp_shape(2) .or. size(rho_cross_exp,4)<exp_shape(3) )then
             THROW_HARD('cross-density array shape mismatch; insert_planes_oversamp_coupled_batch_scaled')
@@ -424,7 +426,7 @@ contains
         ! sampled Fourier cells.
         kbwin = recs(1)%get_kbwin()
         allocate(rotmats(3,3,nsym,nrecords), data_scale_sp(ncomp,nrecords), source=0.)
-        if( .not.shared_density ) allocate(density_scale_packed(npairs,nrecords), source=0.)
+        if( .not.shared_density .and. .not.diagonal_density ) allocate(density_scale_packed(npairs,nrecords), source=0.)
         allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), source=0)
         do i = 1, nrecords
             if( .not.valid(i) ) cycle
@@ -448,7 +450,7 @@ contains
             do q = 1, ncomp
                 data_scale_sp(q,i) = real(data_scales(q,i))
             end do
-            if( .not.shared_density )then
+            if( .not.shared_density .and. .not.diagonal_density )then
                 do r = 1, ncomp
                     do q = 1, r
                         density_scale_packed(pair_index(q,r),i) = real(density_scales(q,r,i))
@@ -509,6 +511,11 @@ contains
                                         end do
                                         if( shared_density )then
                                             rho_cross_exp(1,ih,ik,im) = rho_cross_exp(1,ih,ik,im) + ctfsq_raw*ww
+                                        else if( diagonal_density )then
+                                            do q = 1, ncomp
+                                                rho_cross_exp(q,ih,ik,im) = rho_cross_exp(q,ih,ik,im) + &
+                                                    &real(density_scales(q,q,i))*ctfsq_raw*ww
+                                            end do
                                         else
                                             !$omp simd
                                             do ipair = 1, npairs
@@ -1010,11 +1017,12 @@ contains
         integer :: win(2,3),fpllims_pd(3,2),exp_ub(3),exp_shape(3)
         integer :: h,k,l,isym,nsym,iwinsz,stride,hp,kp,pf,ix,iy,iz,hx,ky,mz
         integer :: q,r,i,ncomp,npairs,ipair,h_sq,k_max_h,k_lo,k_hi,ih,ik,im,nyq_eff
-        logical :: shared_density
+        logical :: shared_density, diagonal_density
         ncomp=size(basis_rhs,4)
         if( ncomp<=0 .or. nrecords<=0 ) return
         npairs=(ncomp*(ncomp+1))/2
-        shared_density=size(rho_cross_exp,1)==1
+        diagonal_density=size(rho_cross_exp,1)==ncomp
+        shared_density=size(rho_cross_exp,1)==1 .and. .not.diagonal_density
         exp_shape=shape(basis_rhs(:,:,:,1))
         exp_ub=exp_lb+exp_shape-1
         if( model_nyq<1 ) THROW_HARD('invalid model Nyquist; accumulate_planes_oversamp_coupled_stats_batch')
@@ -1026,7 +1034,7 @@ contains
             &size(density_scales,3)<nrecords )then
             THROW_HARD('scale array smaller than batch; accumulate_planes_oversamp_coupled_stats_batch')
         endif
-        if( (.not.shared_density .and. size(rho_cross_exp,1)<npairs) .or. &
+        if( (.not.shared_density .and. .not.diagonal_density .and. size(rho_cross_exp,1)<npairs) .or. &
             &size(rho_cross_exp,2)<exp_shape(1) .or. &
             &size(rho_cross_exp,3)<exp_shape(2) .or. size(rho_cross_exp,4)<exp_shape(3) )then
             THROW_HARD('cross-density shape mismatch; accumulate_planes_oversamp_coupled_stats_batch')
@@ -1040,7 +1048,7 @@ contains
         inv_wdim=1.0/real(LATENT_WDIM)
         kbwin=kbinterpol(KBWINSZ,KBALPHA)
         allocate(rotmats(3,3,nsym,nrecords),data_scale_sp(ncomp,nrecords),source=0.)
-        if( .not.shared_density ) allocate(density_scale_packed(npairs,nrecords),source=0.)
+        if( .not.shared_density .and. .not.diagonal_density ) allocate(density_scale_packed(npairs,nrecords),source=0.)
         allocate(fpllims(3,2,nrecords),nyq_disks(nrecords),source=0)
         do i=1,nrecords
             if( .not.valid(i) ) cycle
@@ -1064,7 +1072,7 @@ contains
             do q=1,ncomp
                 data_scale_sp(q,i)=real(data_scales(q,i))
             end do
-            if( .not.shared_density )then
+            if( .not.shared_density .and. .not.diagonal_density )then
                 do r=1,ncomp
                     do q=1,r
                         density_scale_packed(pair_index(q,r),i)=real(density_scales(q,r,i))
@@ -1122,6 +1130,11 @@ contains
                                         end do
                                         if( shared_density )then
                                             rho_cross_exp(1,ih,ik,im)=rho_cross_exp(1,ih,ik,im)+ctfsq_raw*ww
+                                        else if( diagonal_density )then
+                                            do q=1,ncomp
+                                                rho_cross_exp(q,ih,ik,im)=rho_cross_exp(q,ih,ik,im)+ &
+                                                    &real(density_scales(q,q,i))*ctfsq_raw*ww
+                                            end do
                                         else
                                             !$omp simd
                                             do ipair=1,npairs

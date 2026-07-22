@@ -20,6 +20,7 @@ private
 public :: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, reduce_flex_diffmap_rec_parts
 public :: cleanup_flex_diffmap_rec_parts
 public :: test_fake_preimage_against_reconstruct3D
+public :: canonicalize_flex_preimage_coordinates
 
 character(len=*), parameter :: TEST_FAKE_VOL = 'flex_fake_preimage_test.mrc'
 character(len=*), parameter :: TEST_REF_VOL  = 'flex_reconstruct3D_reference_test.mrc'
@@ -452,6 +453,86 @@ contains
         if( size(z,1)/=size(pinds) ) THROW_HARD('flex residual-model particle coordinate mismatch')
         if( any(shape(target_coeffs)/=[nstates,ncomp]) ) THROW_HARD('flex residual-model target mismatch')
     end subroutine validate_model_tables
+
+    !> Build a full-rank, zero-mean-preserving-free coordinate whitening for
+    !! the pre-image A/B diagnostic.  This is deliberately *not* the generic
+    !! projected-model canonicalization: the diffusion residual model has no
+    !! intercept mode, so subtracting a column mean would alter its span.
+    !!
+    !! The returned coordinates obey z_canonical = z_raw * transform.  A
+    !! state coefficient must therefore obey transform * phi_canonical =
+    !! phi_raw.  Applying the inverse transform to targets is essential: using
+    !! the same transform on both tables would compare different states.
+    subroutine canonicalize_flex_preimage_coordinates( z_raw, target_raw, z_canonical, target_canonical, &
+        &transform, transform_condition, gram_error, target_error )
+        real, intent(in)  :: z_raw(:,:), target_raw(:,:)
+        real, intent(out) :: z_canonical(size(z_raw,1),size(z_raw,2))
+        real, intent(out) :: target_canonical(size(target_raw,1),size(target_raw,2))
+        real(dp), intent(out) :: transform(size(z_raw,2),size(z_raw,2))
+        real(dp), intent(out) :: transform_condition, gram_error, target_error
+        real(dp), allocatable :: zwork(:,:)
+        real(dp) :: coeff, normq, target_work(size(z_raw,2)), target_sol(size(z_raw,2))
+        integer :: nptcls, ncomp, q, r, state
+        if( size(z_raw,1)<1 .or. size(z_raw,2)<1 ) THROW_HARD('empty flex pre-image coordinate table')
+        if( size(target_raw,2)/=size(z_raw,2) ) THROW_HARD('flex pre-image target/component mismatch')
+        nptcls=size(z_raw,1)
+        ncomp=size(z_raw,2)
+        allocate(zwork(nptcls,ncomp),source=real(z_raw,dp))
+        transform=0.d0
+        do q=1,ncomp
+            transform(q,q)=1.d0
+            do r=1,q-1
+                coeff=dot_product(zwork(:,r),zwork(:,q))/max(dot_product(zwork(:,r),zwork(:,r)),DTINY)
+                zwork(:,q)=zwork(:,q)-coeff*zwork(:,r)
+                transform(:,q)=transform(:,q)-coeff*transform(:,r)
+            end do
+            normq=sqrt(dot_product(zwork(:,q),zwork(:,q)))
+            if( normq<=sqrt(DTINY)*sqrt(real(nptcls,dp)) )then
+                THROW_HARD('flex pre-image canonicalization is rank deficient; reduce neigs')
+            endif
+            zwork(:,q)=sqrt(real(nptcls,dp))*zwork(:,q)/normq
+            transform(:,q)=sqrt(real(nptcls,dp))*transform(:,q)/normq
+        end do
+        transform_condition=maxval(abs(transform))/max(minval(abs([(transform(q,q),q=1,ncomp)])),DTINY)
+        target_error=0.d0
+        do state=1,size(target_raw,1)
+            target_work=real(target_raw(state,:),dp)
+            call solve_upper_triangular(transform,target_work,target_sol,ncomp)
+            target_canonical(state,:)=real(target_sol)
+            target_error=max(target_error,maxval(abs(matmul(transform,real(target_canonical(state,:),dp))-target_work)))
+        end do
+        z_canonical=real(zwork)
+        gram_error=maxval(abs(matmul(transpose(real(z_canonical,dp)),real(z_canonical,dp))/real(nptcls,dp)- &
+            &identity_matrix(ncomp)))
+        deallocate(zwork)
+    contains
+        function identity_matrix(n) result(identity)
+            integer, intent(in) :: n
+            real(dp) :: identity(n,n)
+            integer :: iq
+            identity=0.d0
+            do iq=1,n
+                identity(iq,iq)=1.d0
+            end do
+        end function identity_matrix
+
+        subroutine solve_upper_triangular( upper, rhs, sol, n )
+            integer, intent(in) :: n
+            real(dp), intent(in) :: upper(n,n), rhs(n)
+            real(dp), intent(out) :: sol(n)
+            real(dp) :: sumv
+            integer :: iq, ir
+            sol=0.d0
+            do iq=n,1,-1
+                sumv=rhs(iq)
+                do ir=iq+1,n
+                    sumv=sumv-upper(iq,ir)*sol(ir)
+                end do
+                if( abs(upper(iq,iq))<=DTINY ) THROW_HARD('singular flex pre-image canonical transform')
+                sol(iq)=sumv/upper(iq,iq)
+            end do
+        end subroutine solve_upper_triangular
+    end subroutine canonicalize_flex_preimage_coordinates
 
     subroutine prepare_unfiltered_model_params( params, model_params )
         class(parameters), intent(in) :: params

@@ -185,9 +185,9 @@ or independent reconstruction of common signal for each representative.
 The 2D-to-3D translation uses `simple_flex_projected_latent_model`. It projects the
 fixed supplied mean, subtracts that prediction from every prepared particle
 Fourier plane, and reconstructs each Nyström residual mode independently. The
-right-hand side for mode `q` is weighted by `z_iq`; every mode uses the same
-ordinary CTF-squared sampling density as `reconstruct3D`. There is no
-voxelwise latent Gram matrix or coupled multi-mode inversion. This is the 3D
+right-hand side for mode `q` is weighted by `z_iq`, and its diagonal
+normal-equation density is weighted by `z_iq^2`. There is no voxelwise
+cross-mode latent Gram matrix or coupled multi-mode inversion. This is the 3D
 counterpart of `denoise_project`'s residual Nyström pre-image: a linear
 backprojection is performed for each graph eigenfunction and the Nyström
 coefficient is applied only when representative states are synthesized. The
@@ -249,6 +249,25 @@ and scalar metrics as `flex_*_preimage_*_test` outputs. A failure is therefore
 localized to plane preparation or to the residual density correction / synthesis;
 it is not interpreted as a native-to-registered mapping failure.
 
+The separate basis-conditioning diagnostic is:
+
+```text
+simple_test_exec test=flex_preimage_basis_ab \
+  projfile=<input-project> vol1=<fixed-mean-volume> \
+  nspace=<projection-grid-size> neigs=<rank> nthr=<threads>
+```
+
+It runs the graph and registered-frame setup once, then reconstructs identical
+medoid targets twice: arm A uses the raw graph eigenfunctions; arm B applies a
+full-rank, non-centering whitening to the training eigenfunctions and the
+inverse transform to the Nyström targets. The no-centering rule matters because
+there is no intercept residual mode. The test records transform/Gram/target
+invariants and each raw-versus-canonical state correlation in
+`flex_preimage_basis_ab_metrics.txt`, with both volume sets retained for visual
+inspection. Because the two arms describe the same states, a material map
+difference is a numerical/model-covariance defect, not evidence of a different
+representative selection.
+
 ## 6. Shared- and distributed-memory execution
 
 The executable uses the same strategy lifecycle as `cls_split` and
@@ -285,7 +304,7 @@ barriers behind the same `flex_analysis` program:
 3. Residual-model workers receive registered project row indices together with
    their spectral vectors in the standard text assignment files, read registered
    particle images, and accumulate their assigned modal residual numerators and
-   one ordinary sampling-density volume with canonical registered-frame
+   one self-density volume per mode with canonical registered-frame
    orientations.
 
 The master constructs the normal `qsys_env` job description and writes one
@@ -322,8 +341,9 @@ Each worker processes its assigned particles in the established projected
 latent-model matcher batches and writes one
 `write_mstep_stats_part_file` result. The master calls
 `update_basis_from_mstep_stats_part_files`, which validates and sums the modal
-right-hand sides plus the shared ordinary density, then applies the normal
-`reconstructor%sampl_dens_correct` path independently to every residual mode.
+right-hand sides plus the diagonal self-density for every mode, then applies
+the normal `reconstructor%sampl_dens_correct` path independently to every
+residual mode.
 The master alone adds the fixed mean and synthesizes the
 requested Nyström representatives. Successful reduction removes the temporary
 statistics files; standard strategy cleanup removes assignment files and
@@ -346,9 +366,12 @@ OpenMP insertion colours source lines by at least
 `ceil(sqrt(3)*interpolation_width)`, so concurrently updated rotated 3D
 interpolation windows cannot overlap.
 For every particle, the residual numerator is added once per retained mode
-with its `z` coefficient, while the unweighted CTF-squared density is added
-once. Shared and distributed paths use the same batched Cartesian
-Kaiser-Bessel insertion and the same ordinary per-mode density correction.
+with its `z` coefficient, while that mode's density receives `z^2` times the
+CTF-squared contribution. This diagonal regression is required to preserve
+the amplitude of L2-normalized diffusion eigenfunctions; a shared density
+would suppress every synthesized residual by approximately the particle count.
+Shared and distributed paths use the same batched Cartesian Kaiser-Bessel
+insertion and the same per-mode density correction.
 
 The former `flex_analysis_mstep` and `flex_analysis_estep` programs and their
 iterative PCA state are not part of this policy.

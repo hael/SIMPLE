@@ -53,6 +53,11 @@ type, extends(commander_base) :: commander_test_flex_preimage_identity
         procedure :: execute      => exec_test_flex_preimage_identity
 end type commander_test_flex_preimage_identity
 
+type, extends(commander_base) :: commander_test_flex_preimage_basis_ab
+    contains
+        procedure :: execute      => exec_test_flex_preimage_basis_ab
+end type commander_test_flex_preimage_basis_ab
+
 contains
 
 subroutine exec_test_flex_preimage_identity( self, cline )
@@ -79,6 +84,33 @@ subroutine exec_test_flex_preimage_identity( self, cline )
     call build%kill_general_tbox
     call simple_end('**** SIMPLE_TEST_FLEX_PREIMAGE_IDENTITY NORMAL STOP ****')
 end subroutine exec_test_flex_preimage_identity
+
+subroutine exec_test_flex_preimage_basis_ab( self, cline )
+    use simple_builder,                only: builder
+    use simple_flex_analysis_strategy, only: flex_analysis_strategy, create_flex_analysis_strategy, &
+        &run_flex_preimage_basis_ab_test
+    use simple_parameters,             only: parameters
+    class(commander_test_flex_preimage_basis_ab), intent(inout) :: self
+    class(cmdline),                                intent(inout) :: cline
+    type(parameters) :: params
+    type(builder) :: build
+    class(flex_analysis_strategy), allocatable :: strategy
+    if( .not.cline%defined('projfile') ) THROW_HARD('flex_preimage_basis_ab requires projfile=<input project>')
+    if( .not.cline%defined('vol1') ) THROW_HARD('flex_preimage_basis_ab requires vol1=<fixed mean volume>')
+    if( .not.cline%defined('nspace') ) THROW_HARD('flex_preimage_basis_ab requires nspace=<projection grid size>')
+    if( .not.cline%defined('neigs') ) THROW_HARD('flex_preimage_basis_ab requires neigs=<diffusion rank>')
+    if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
+    if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
+    call cline%set('nparts','1')
+    strategy=create_flex_analysis_strategy(cline)
+    call strategy%initialize(params,build,cline)
+    call run_flex_preimage_basis_ab_test(params,build,cline)
+    call strategy%finalize_run(params,build,cline)
+    call strategy%cleanup(params)
+    deallocate(strategy)
+    call build%kill_general_tbox
+    call simple_end('**** SIMPLE_TEST_FLEX_PREIMAGE_BASIS_AB NORMAL STOP ****')
+end subroutine exec_test_flex_preimage_basis_ab
 
 subroutine exec_test_mini_stream( self, cline )
     class(commander_test_mini_stream),  intent(inout) :: self
