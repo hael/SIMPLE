@@ -367,7 +367,6 @@ contains
     subroutine insert_planes_oversamp_coupled_batch_scaled( recs, rho_cross_exp, se, orientations, fpls, &
         &data_scales, density_scales, valid, nrecords )
         use simple_math, only: ceil_div, floor_div
-        use simple_kbinterpol, only: apod_kb15_a2
         type(reconstructor), intent(inout) :: recs(:)
         real,                intent(inout) :: rho_cross_exp(:,:,:,:)
         class(sym),          intent(inout) :: se
@@ -377,6 +376,7 @@ contains
         logical,             intent(in)    :: valid(:)
         integer,             intent(in)    :: nrecords
         type(ori) :: o_sym
+        type(kbinterpol) :: kbwin
         complex   :: comp_base, cmplx_raw
         real, allocatable :: rotmats(:,:,:,:), data_scale_sp(:,:), density_scale_packed(:,:)
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
@@ -416,6 +416,11 @@ contains
         pf2      = real(pf*pf)
         eps_norm = epsilon(1.0)
         inv_wdim = 1.0 / real(LATENT_WDIM)
+        ! Use the reconstructor's own interpolation window.  The previous
+        ! hand-inlined approximation is close in raw accumulation, but its
+        ! small differences become large after density correction in weakly
+        ! sampled Fourier cells.
+        kbwin = recs(1)%get_kbwin()
         allocate(rotmats(3,3,nsym,nrecords), data_scale_sp(ncomp,nrecords), &
             &density_scale_packed(npairs,nrecords), source=0.)
         allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), source=0)
@@ -526,13 +531,14 @@ contains
             real, intent(in)  :: loc(3)
             real, intent(out) :: wx(:), wy(:), wz(:)
             integer :: j, win_lo(3)
-            real :: base(3), sx, sy, sz
+            real :: base(3), ww3(3), sx, sy, sz
             win_lo = nint(loc)-iwinsz
             base = real(win_lo)-loc
             do j = 1, LATENT_WDIM
-                wx(j)=apod_kb15_a2(base(1)+real(j-1))
-                wy(j)=apod_kb15_a2(base(2)+real(j-1))
-                wz(j)=apod_kb15_a2(base(3)+real(j-1))
+                ww3=kbwin%apod_fast(base+real(j-1))
+                wx(j)=ww3(1)
+                wy(j)=ww3(2)
+                wz(j)=ww3(3)
             end do
             sx=sum(wx); sy=sum(wy); sz=sum(wz)
             if( abs(sx)>eps_norm )then; wx=wx/sx; else; wx=inv_wdim; endif
