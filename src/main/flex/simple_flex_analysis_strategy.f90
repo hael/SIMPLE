@@ -10,7 +10,7 @@ use simple_diff_map_graphs,       only: diffmap_graph, build_gated_euclidean_knn
 use simple_diffusion_maps,        only: embed_graph
 use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part, &
     &assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts, flex_projection_directions, &
-    &write_flex_mean_projection_stack, map_flex_registered_to_native_project
+    &write_flex_mean_projection_stack
 use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages
 use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
@@ -174,10 +174,10 @@ contains
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
-        integer, allocatable :: pinds(:),native_pinds(:)
+        integer, allocatable :: pinds(:)
         real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
         integer, allocatable :: medoids(:),labels(:)
-        type(string) :: registered_stack,registered_project,native_model_project
+        type(string) :: registered_stack,registered_project
         type(builder) :: model_build
         type(parameters) :: model_params
         type(cmdline) :: model_cline
@@ -186,17 +186,13 @@ contains
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
-        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds, &
-            &native_model_project,native_pinds, &
-            &'flex_native_registered_correspondence.txt')
-        call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
-        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE MODEL PROJECT: ',model_params%projfile%to_char()
-        call reconstruct_flex_diffmap_states(model_params,model_build,native_pinds,spectral_z,target_coeffs,size(medoids))
+        call init_model_context(cline,registered_project,model_cline,model_params,model_build)
+        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
+        call reconstruct_flex_diffmap_states(model_params,model_build,pinds,spectral_z,target_coeffs,size(medoids))
         call model_build%kill_general_tbox
         call model_cline%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        call native_model_project%kill
-        deallocate(pinds,native_pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
@@ -285,8 +281,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
-        type(string) :: registered_stack,registered_project,native_model_project,worker_program
-        integer, allocatable :: pinds(:),native_pinds(:),medoids(:),labels(:)
+        type(string) :: registered_stack,registered_project,worker_program
+        integer, allocatable :: pinds(:),medoids(:),labels(:)
         real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
         type(diffmap_graph) :: graph
         type(builder) :: model_build
@@ -331,12 +327,9 @@ contains
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
         call graph%kill()
-        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds, &
-            &native_model_project,native_pinds, &
-            &'flex_native_registered_correspondence.txt')
-        call prepare_reconstruction_partitions(self,params,native_pinds,spectral_z)
-        call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
-        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE MODEL PROJECT: ',model_params%projfile%to_char()
+        call prepare_reconstruction_partitions(self,params,pinds,spectral_z)
+        call init_model_context(cline,registered_project,model_cline,model_params,model_build)
+        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
 
         call model_cline%gen_job_descr(self%job_descr,prg=worker_program)
         call self%job_descr%set('stage','3')
@@ -353,10 +346,9 @@ contains
         call cleanup_flex_diffmap_rec_parts(self%nparts_run,params%numlen)
         call model_build%kill_general_tbox
         call model_cline%kill
-        call native_model_project%kill
         call worker_program%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,native_pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
     end subroutine master_execute
 
     subroutine init_model_context( source_cline, model_project, model_cline, model_params, model_build )
@@ -420,26 +412,26 @@ contains
     ! persistent project transport: SIMPLE serializes only the fixed particle
     ! parameters.  Keeping the vector in the assignment makes the worker
     ! handoff explicit and preserves the selected-row ordering.
-    subroutine prepare_reconstruction_partitions( self, params, native_pinds, spectral_z )
+    subroutine prepare_reconstruction_partitions( self, params, model_pinds, spectral_z )
         class(flex_analysis_master_strategy), intent(inout) :: self
         type(parameters), intent(in) :: params
-        integer, intent(in) :: native_pinds(:)
+        integer, intent(in) :: model_pinds(:)
         real, intent(in) :: spectral_z(:,:)
         type(string) :: fname
         integer :: ipart,first,last,i,u
-        if( size(native_pinds)<1 .or. size(spectral_z,1)/=size(native_pinds) .or. size(spectral_z,2)<1 ) &
+        if( size(model_pinds)<1 .or. size(spectral_z,1)/=size(model_pinds) .or. size(spectral_z,2)<1 ) &
             &THROW_HARD('invalid flex reconstruction partition table')
         if( .not.allocated(self%part_params) .or. size(self%part_params)/=self%nparts_run ) &
             &THROW_HARD('flex reconstruction partitions were not initialized')
         do ipart=1,self%nparts_run
             first=self%qenv%parts(ipart,1); last=self%qenv%parts(ipart,2)
-            if( first<1 .or. last<first .or. last>size(native_pinds) ) &
+            if( first<1 .or. last<first .or. last>size(model_pinds) ) &
                 &THROW_HARD('invalid flex reconstruction partition bounds')
             fname=string('flex_particles_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
             open(newunit=u,file=fname%to_char(),status='replace',action='write')
-            write(u,'(A)') '# native_particle_index spectral_coordinates'
+            write(u,'(A)') '# registered_particle_index spectral_coordinates'
             do i=first,last
-                write(u,*) native_pinds(i),spectral_z(i,:)
+                write(u,*) model_pinds(i),spectral_z(i,:)
             end do
             close(u)
             call fname%kill
