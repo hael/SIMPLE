@@ -66,6 +66,8 @@ module simple_persistent_worker_server
     integer, parameter :: KILL_WAIT_TIME_US   = 2000000 !< wait time after kill() before closing socket (us)
     integer, parameter :: POLL_TIMEOUT_MS     = 100     !< timeout for poll() in milliseconds
     integer, parameter :: SWEEP_PERIOD        = 1       !< sweep dead fds every N poll wakeups (1 = every wakeup)
+    integer, parameter :: SCALE_DOWN_COOLDOWN_S = 300   !< queue-pressure cooldown before idle worker scale-down (seconds)
+    integer, parameter :: SCALE_UP_COOLDOWN_S   = 15    !< queue-pressure cooldown before requesting worker warm-up (seconds)
     logical, parameter :: DEBUG               = .false. !< set to .true. to enable verbose debug logging in the listener thread
 
     !> Module-level singleton tracking the persistent worker pool.
@@ -82,8 +84,16 @@ module simple_persistent_worker_server
     !> Shared state accessed by both the caller thread (via queue_task)
     !> and the listener pthread — always under mutex protection.
     type persistent_worker_data
-        integer :: n_workers   = 0       !< highest worker_id registered so far
-        logical :: l_terminate = .false. !< set .true. by kill(); listener sends TERMINATE to all workers
+        integer :: n_workers                        = 0       !< highest worker_id registered so far
+        integer :: nthr_per_worker                  = 1       !< configured thread capacity per worker process
+        integer :: queue_pressure_workers_required  = 0       !< estimated workers needed to execute the queued task backlog
+        integer :: queue_pressure_below_since       = 0       !< first heartbeat_time where pressure stayed below active workers
+        integer :: queue_pressure_above_since       = 0       !< first heartbeat_time where pressure exceeded active workers
+        integer :: n_warmup_worker_ids              = 0       !< number of worker slots requested for warm-up relaunch
+        integer :: warmup_worker_ids(TASK_QUEUE_SIZE) = 0      !< 1-based worker slot ids requested for warm-up relaunch
+        logical :: launch_pending_worker_ids(TASK_QUEUE_SIZE) = .false. !< .true. when a warm-up launch has been submitted for slot and worker has not connected yet
+        logical :: enable_warmup_cooldown           = .false. !< .true. enables queue-pressure warmup/cooldown autoscaling
+        logical :: l_terminate                      = .false. !< set .true. by kill(); listener sends TERMINATE to all workers
     end type persistent_worker_data
 
     !> TCP accept-loop server that receives worker heartbeats and dispatches
@@ -105,6 +115,10 @@ module simple_persistent_worker_server
         procedure :: queue_task   !< submit a task request to the listener thread
         procedure :: get_port     !< return the TCP port being listened on
         procedure :: get_host_ips !< return the local IP address list
+        procedure :: get_queue_pressure_workers_required !< estimated workers needed for queued backlog
+        procedure :: set_warmup_cooldown_enabled !< enable/disable listener-side warmup/cooldown autoscaling
+        procedure :: claim_warmup_worker_ids !< claim and clear pending warm-up worker slot requests
+        procedure :: mark_worker_slots_launch_pending !< mark worker slots as launch-pending prior to scheduler submission
         procedure :: is_running   !< .true. while the listener thread is active
     end type persistent_worker_server
 
@@ -113,11 +127,12 @@ contains
     !> Initialise the server: allocate shared state, initialise the mutex,
     !> bind a TCP socket, and spawn the listener pthread.  No-op if already running.
     !> \param[in] nthr_workers  number of worker thread slots to support (must be > 0)
-    subroutine new( self, n_workers, nthr_workers, client_only )
+    subroutine new( self, n_workers, nthr_workers, client_only, enable_warmup_cooldown )
         class(persistent_worker_server), intent(inout) :: self
         integer,                            intent(in) :: n_workers
         integer,                            intent(in) :: nthr_workers
         type(string), optional,             intent(in) :: client_only
+        logical, optional,                  intent(in) :: enable_warmup_cooldown
         integer(kind=c_int)                            :: rc
         character(len=STDLEN)                          :: addr_char, host_part, port_part
         integer                                        :: sep, ios
@@ -147,6 +162,22 @@ contains
             return
         end if
         self%worker_data%n_workers  = n_workers      
+        self%worker_data%nthr_per_worker = nthr_workers
+        self%worker_data%queue_pressure_workers_required = 0
+        self%worker_data%queue_pressure_below_since = 0
+        self%worker_data%queue_pressure_above_since = 0
+        self%worker_data%n_warmup_worker_ids = 0
+        self%worker_data%warmup_worker_ids = 0
+        self%worker_data%launch_pending_worker_ids = .false.
+        if( n_workers > TASK_QUEUE_SIZE ) then
+            write(logfhandle,'(A,I0,A,I0)') '>>> PERSISTENT_WORKER_SERVER new: n_workers exceeds warmup slot tracking capacity, n_workers=', &
+                n_workers, ' max=', TASK_QUEUE_SIZE
+        end if
+        if( present(enable_warmup_cooldown) ) then
+            self%worker_data%enable_warmup_cooldown = enable_warmup_cooldown
+        else
+            self%worker_data%enable_warmup_cooldown = .false.
+        end if
         self%n_workers              = n_workers
         self%nthr_workers           = nthr_workers
         self%listener_args%data_ptr = c_loc(self%worker_data)
@@ -275,6 +306,107 @@ contains
         type(string)                           :: host_ips
         host_ips = self%host_ips
     end function get_host_ips
+
+    !> Return estimated number of workers required to execute all currently
+    !> queued tasks, based on queued thread demand and configured
+    !> nthr_per_worker. Returns 0 when server state is unavailable.
+    function get_queue_pressure_workers_required( self ) result( n_workers_required )
+        class(persistent_worker_server), intent(in) :: self
+        integer                                 :: n_workers_required
+        integer(kind=c_int)                     :: rc
+        n_workers_required = 0
+        if( .not. associated(self%listener_args) .or. .not. associated(self%worker_data) ) return
+        rc = c_pthread_mutex_lock(self%listener_args%mutex)
+        if( rc /= 0 ) then
+            write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER get_queue_pressure_workers_required: mutex_lock failed, rc=', rc
+            return
+        end if
+        n_workers_required = self%worker_data%queue_pressure_workers_required
+        rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+        if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER get_queue_pressure_workers_required: mutex_unlock failed, rc=', rc
+    end function get_queue_pressure_workers_required
+
+    !> Enable or disable listener-side warmup/cooldown autoscaling.
+    subroutine set_warmup_cooldown_enabled( self, enabled )
+        class(persistent_worker_server), intent(inout) :: self
+        logical,                         intent(in)    :: enabled
+        integer(kind=c_int)                            :: rc
+        if( .not. associated(self%listener_args) .or. .not. associated(self%worker_data) ) return
+        rc = c_pthread_mutex_lock(self%listener_args%mutex)
+        if( rc /= 0 ) then
+            write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER set_warmup_cooldown_enabled: mutex_lock failed, rc=', rc
+            return
+        end if
+        self%worker_data%enable_warmup_cooldown = enabled
+        if( .not. enabled ) then
+            self%worker_data%queue_pressure_below_since = 0
+            self%worker_data%queue_pressure_above_since = 0
+            self%worker_data%n_warmup_worker_ids        = 0
+            self%worker_data%warmup_worker_ids          = 0
+        end if
+        rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+        if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER set_warmup_cooldown_enabled: mutex_unlock failed, rc=', rc
+    end subroutine set_warmup_cooldown_enabled
+
+    !> Claim and clear pending warm-up slot requests generated by the listener.
+    !> Returns the requested worker slot ids in \\p worker_ids and count in \\p n_claimed.
+    subroutine claim_warmup_worker_ids( self, worker_ids, n_claimed )
+        class(persistent_worker_server), intent(inout) :: self
+        integer, allocatable,            intent(inout) :: worker_ids(:)
+        integer,                         intent(out)   :: n_claimed
+        integer                                      :: i_claim
+        integer(kind=c_int)                            :: rc
+        n_claimed = 0
+        if( allocated(worker_ids) ) deallocate(worker_ids)
+        if( .not. associated(self%listener_args) .or. .not. associated(self%worker_data) ) then
+            allocate(worker_ids(0))
+            return
+        end if
+        rc = c_pthread_mutex_lock(self%listener_args%mutex)
+        if( rc /= 0 ) then
+            write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER claim_warmup_worker_ids: mutex_lock failed, rc=', rc
+            allocate(worker_ids(0))
+            return
+        end if
+        n_claimed = self%worker_data%n_warmup_worker_ids
+        allocate(worker_ids(n_claimed))
+        if( n_claimed > 0 ) then
+            worker_ids = self%worker_data%warmup_worker_ids(1:n_claimed)
+            do i_claim = 1, n_claimed
+                if( worker_ids(i_claim) >= 1 .and. worker_ids(i_claim) <= size(self%worker_data%launch_pending_worker_ids) ) then
+                    self%worker_data%launch_pending_worker_ids(worker_ids(i_claim)) = .true.
+                end if
+            end do
+            self%worker_data%warmup_worker_ids(1:n_claimed) = 0
+        end if
+        self%worker_data%n_warmup_worker_ids = 0
+        rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+        if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER claim_warmup_worker_ids: mutex_unlock failed, rc=', rc
+    end subroutine claim_warmup_worker_ids
+
+    !> Mark worker slots as launch-pending (submitted but not yet connected).
+    !! Used to prevent duplicate warm-up submissions while scheduler queueing is delayed.
+    subroutine mark_worker_slots_launch_pending( self, worker_ids )
+        class(persistent_worker_server), intent(inout) :: self
+        integer,                         intent(in)    :: worker_ids(:)
+        integer                                      :: i_mark, wid
+        integer(kind=c_int)                          :: rc
+        if( .not. associated(self%listener_args) .or. .not. associated(self%worker_data) ) return
+        if( size(worker_ids) < 1 ) return
+        rc = c_pthread_mutex_lock(self%listener_args%mutex)
+        if( rc /= 0 ) then
+            write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER mark_worker_slots_launch_pending: mutex_lock failed, rc=', rc
+            return
+        end if
+        do i_mark = 1, size(worker_ids)
+            wid = worker_ids(i_mark)
+            if( wid >= 1 .and. wid <= size(self%worker_data%launch_pending_worker_ids) ) then
+                self%worker_data%launch_pending_worker_ids(wid) = .true.
+            end if
+        end do
+        rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+        if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER mark_worker_slots_launch_pending: mutex_unlock failed, rc=', rc
+    end subroutine mark_worker_slots_launch_pending
 
     !> Return .true. while the listener thread is active (port > 0).
     function is_running( self ) result ( running )
@@ -414,6 +546,7 @@ contains
                 nr = c_read(conn_fd, c_loc(buf), int(TCP_BUFSZ, c_size_t))
                 if( nr == 0 ) then  ! EOF: peer closed connection gracefully
                     if( DEBUG ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER worker_listener_thread: EOF on fd ', conn_fd
+                    call clear_registry_entry_by_fd(conn_fd)
                     rc = c_close(conn_fd)
                     fds(i) = fds(nfds)
                     nfds   = nfds - 1
@@ -421,6 +554,7 @@ contains
                 end if
                 if( nr > int(TCP_BUFSZ, c_size_t) ) then  ! ssize_t -1 wraps to HUGE (error)
                     write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER worker_listener_thread: c_read error on fd ', conn_fd
+                    call clear_registry_entry_by_fd(conn_fd)
                     rc = c_close(conn_fd)
                     fds(i) = fds(nfds)
                     nfds   = nfds - 1
@@ -462,6 +596,7 @@ contains
                         i = i + 1   ! has data — skip health check, handle below
                     else if( .not. fd_is_healthy(fds(i)%fd) ) then
                         if( DEBUG ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER worker_listener_thread: closing dead fd ', fds(i)%fd
+                        call clear_registry_entry_by_fd(fds(i)%fd)
                         rc = c_close(fds(i)%fd)
                         fds(i) = fds(nfds)   ! compact: overwrite with last entry
                         nfds   = nfds - 1
@@ -508,6 +643,36 @@ contains
             end do
             n_active = jj
         end subroutine pack_task_queue
+
+        !> Recompute queue pressure as workers required to run all queued jobs.
+        !> Uses queued task thread demand divided by configured nthr_per_worker.
+        !> Caller must hold args%mutex.
+        subroutine update_queue_pressure()
+            integer :: k, nthr_total_queued, nthr_per_worker_cfg
+            nthr_total_queued = 0
+            do k = 1, n_high
+                if( tasks_priority_high(k)%job_id > 0 .and. tasks_priority_high(k)%end_time == 0 ) then
+                    nthr_total_queued = nthr_total_queued + max(1, tasks_priority_high(k)%nthr)
+                end if
+            end do
+            do k = 1, n_norm
+                if( tasks_priority_norm(k)%job_id > 0 .and. tasks_priority_norm(k)%end_time == 0 ) then
+                    nthr_total_queued = nthr_total_queued + max(1, tasks_priority_norm(k)%nthr)
+                end if
+            end do
+            do k = 1, n_low
+                if( tasks_priority_low(k)%job_id > 0 .and. tasks_priority_low(k)%end_time == 0 ) then
+                    nthr_total_queued = nthr_total_queued + max(1, tasks_priority_low(k)%nthr)
+                end if
+            end do
+            nthr_per_worker_cfg = max(1, status%nthr_per_worker)
+            if( nthr_total_queued > 0 ) then
+                status%queue_pressure_workers_required = (nthr_total_queued + nthr_per_worker_cfg - 1) / nthr_per_worker_cfg
+            else
+                status%queue_pressure_workers_required = 0
+            end if
+            
+        end subroutine update_queue_pressure
 
         !> Return the index of the first pending, unsubmitted task in \p queue
         !> (among the first \p n_active entries) that fits within \p nthr_avail threads.
@@ -576,7 +741,7 @@ contains
         !> All variables accessed via host association from worker_listener_thread.
         subroutine handle_new_task_msg()
             type(qsys_persistent_worker_message_task) :: new_task
-            integer                                   :: slot
+            integer                                   :: slot, n_effective_workers, warmup_deficit
             logical                                   :: enqueued_high
             new_task = transfer(buf, new_task)
             slot     = 0
@@ -617,6 +782,22 @@ contains
                     end if
                 end if
             end if
+            rc = c_pthread_mutex_lock(args%mutex)
+            if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER handle_new_task_msg: mutex_lock failed, rc=', rc
+            call update_queue_pressure()
+            if( status%enable_warmup_cooldown ) then
+                n_effective_workers = count_effective_workers()
+                warmup_deficit = status%queue_pressure_workers_required - n_effective_workers
+                if( warmup_deficit > 0 ) then
+                    call set_warmup_request(warmup_deficit)
+                    status%queue_pressure_above_since = 0
+                    write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PERSISTENT_WORKER_SERVER enqueue-triggered warmup request workers=', &
+                        status%n_warmup_worker_ids, ' effective_workers=', n_effective_workers, ' required_workers=', &
+                        status%queue_pressure_workers_required
+                end if
+            end if
+            rc = c_pthread_mutex_unlock(args%mutex)
+            if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER handle_new_task_msg: mutex_unlock failed, rc=', rc
             ! Reply with idle only when enqueued; queue-full returns error so queue_task can fail.
             call status_msg%new()
             if( slot > 0 ) then
@@ -659,6 +840,62 @@ contains
             end do
         end subroutine clear_stale_registry_entry
 
+        !> Clear a worker registry entry by server-side fd when a connection drops.
+        subroutine clear_registry_entry_by_fd(fd_to_clear)
+            integer, intent(in) :: fd_to_clear
+            integer :: k
+            do k = 1, size(workers)
+                if( workers(k)%fd == fd_to_clear .and. workers(k)%worker_uid /= '' ) then
+                    if( DEBUG ) write(logfhandle,'(A,I0,A,I0,A)') '>>> PERSISTENT_WORKER_SERVER: clearing registry entry fd=', &
+                        fd_to_clear, ' (worker slot ', k, ')'
+                    workers(k) = qsys_persistent_worker_message_heartbeat()
+                    status%launch_pending_worker_ids(k) = .false.
+                end if
+            end do
+        end subroutine clear_registry_entry_by_fd
+
+        !> Count currently registered workers with a live identity.
+        integer function count_active_workers()
+            integer :: k
+            count_active_workers = 0
+            do k = 1, size(workers)
+                if( workers(k)%worker_uid /= '' ) count_active_workers = count_active_workers + 1
+            end do
+        end function count_active_workers
+
+        !> Count effective worker capacity as active + launch-pending slots.
+        integer function count_effective_workers()
+            integer :: k
+            count_effective_workers = 0
+            do k = 1, size(workers)
+                if( workers(k)%worker_uid /= '' ) then
+                    count_effective_workers = count_effective_workers + 1
+                else if( status%launch_pending_worker_ids(k) ) then
+                    count_effective_workers = count_effective_workers + 1
+                end if
+            end do
+        end function count_effective_workers
+
+        !> Build warm-up request list from currently inactive worker slots.
+        !> Caller must hold args%mutex.
+        subroutine set_warmup_request( n_needed )
+            integer, intent(in) :: n_needed
+            integer :: k, nset
+            nset = 0
+            status%warmup_worker_ids = 0
+            do k = 1, size(workers)
+                if( workers(k)%worker_uid == '' .and. .not. status%launch_pending_worker_ids(k) ) then
+                    nset = nset + 1
+                    if( nset <= min(n_needed, size(status%warmup_worker_ids)) ) then
+                        status%warmup_worker_ids(nset) = k
+                    else
+                        exit
+                    end if
+                end if
+            end do
+            status%n_warmup_worker_ids = min(nset, min(n_needed, size(status%warmup_worker_ids)))
+        end subroutine set_warmup_request
+
         !> Register or validate the heartbeating worker in the local workers array.
         !> Sets send_terminate=.true. if the worker_id is out of range or the
         !> worker_uid does not match an existing registration (stale slot).
@@ -674,6 +911,7 @@ contains
                     end if
                     workers(worker_id)    = heartbeat_msg
                     workers(worker_id)%fd = conn_fd  ! record server-side fd; client-supplied value is ignored
+                    status%launch_pending_worker_ids(worker_id) = .false.
                 end if
             else
                 send_terminate = .true. ! worker_id is out of range
@@ -684,11 +922,14 @@ contains
         !> All variables accessed via host association from worker_listener_thread.
         !> Sets worker_id, replied; may set send_terminate, has_task.
         subroutine handle_heartbeat_msg()
+            integer :: n_active_workers, n_effective_workers, warmup_deficit
+            logical :: send_scale_down_terminate, cooldown_elapsed
             heartbeat_msg  = transfer(buf, heartbeat_msg)
             worker_id      = heartbeat_msg%worker_id
             replied        = .false.
             send_terminate = .false.
             has_task       = .false.
+            send_scale_down_terminate = .false.
 
             ! --- Critical section: read/update status and pick a task ---
             rc = c_pthread_mutex_lock(args%mutex)
@@ -738,6 +979,39 @@ contains
                 call pack_task_queue(tasks_priority_norm, n_norm)
                 call pack_task_queue(tasks_priority_low, n_low)
             end if
+            call update_queue_pressure()
+
+            if( .not. send_terminate .and. status%enable_warmup_cooldown ) then
+                n_active_workers = count_active_workers()
+                n_effective_workers = count_effective_workers()
+
+                ! Cooldown scale-down path (require sustained surplus before terminate).
+                if( status%queue_pressure_workers_required < n_active_workers ) then
+                    if( status%queue_pressure_below_since <= 0 ) status%queue_pressure_below_since = heartbeat_msg%heartbeat_time
+                    cooldown_elapsed = (heartbeat_msg%heartbeat_time - status%queue_pressure_below_since) >= SCALE_DOWN_COOLDOWN_S
+                    if( cooldown_elapsed .and. .not. has_task .and. heartbeat_msg%nthr_used == 0 ) then
+                        send_terminate = .true.
+                        send_scale_down_terminate = .true.
+                    end if
+                else
+                    status%queue_pressure_below_since = 0
+                end if
+
+                ! Warm-up path: request relaunch of inactive worker slots after a short cooldown.
+                if( status%queue_pressure_workers_required > n_effective_workers ) then
+                    if( status%queue_pressure_above_since <= 0 ) status%queue_pressure_above_since = heartbeat_msg%heartbeat_time
+                    cooldown_elapsed = (heartbeat_msg%heartbeat_time - status%queue_pressure_above_since) >= SCALE_UP_COOLDOWN_S
+                    if( cooldown_elapsed ) then
+                        warmup_deficit = status%queue_pressure_workers_required - n_effective_workers
+                        call set_warmup_request(warmup_deficit)
+                        status%queue_pressure_above_since = heartbeat_msg%heartbeat_time
+                    end if
+                else
+                    status%queue_pressure_above_since = 0
+                    status%n_warmup_worker_ids        = 0
+                    status%warmup_worker_ids           = 0
+                end if
+            end if
 
             rc = c_pthread_mutex_unlock(args%mutex)
             ! --- End of critical section ---
@@ -756,6 +1030,11 @@ contains
 
             call terminate_msg%new()
             if( send_terminate ) then
+                if( send_scale_down_terminate ) then
+                    write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> PERSISTENT_WORKER_SERVER cooldown scale-down terminating worker ', &
+                        worker_id, ' after ', SCALE_DOWN_COOLDOWN_S, 's; active_workers=', n_active_workers, &
+                        ' required_workers=', status%queue_pressure_workers_required
+                end if
                 if( DEBUG ) write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER sending TERMINATE to worker ', int2str(worker_id)
                 terminate_msg%msg_type = WORKER_TERMINATE_MSG
                 call terminate_msg%serialise(send_buffer)

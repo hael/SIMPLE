@@ -242,7 +242,7 @@ contains
                     end do
                 end if
                 ! are these qsys lines needed?
-                call qsys%new(params, NPARTS2D)
+                call qsys%new(params, NPARTS2D, stream=.true.)
                 call qsys%kill()
                 call run_extract(spproj, cycle_projfile, string('extract'), box_in_pix)
                 call send_meta(string('complete'))

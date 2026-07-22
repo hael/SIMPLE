@@ -257,7 +257,7 @@ contains
         ! start persistent worker server if requested by params
         params%qsys_name = '' ! force qsys_env to read from env vars so we can control with params
         params%ncunits   = 8  ! set to 8 for now to ensure enough threads for stream processes; can be overridden by env var or compenv
-        call qsys%new(params, 1, qsys_nthr=16)
+        call qsys%new(params, 1, qsys_nthr=16, stream=.true.)
         ! init update metadata
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         ! init metadata 
@@ -468,6 +468,7 @@ contains
             endif
             ! clean up
             if( associated(json_response_ptr) ) call json%destroy(json_response_ptr)
+            call qsys%service_persistent_worker_warmup()
             ! exit if l_last_loop
             if( l_last_loop ) exit
             ! exit if terminate received all processes stopped

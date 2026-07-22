@@ -48,12 +48,15 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue_async
     procedure :: exec_simple_prgs_in_queue_async
     procedure :: start_persistent_workers
+    procedure :: service_persistent_worker_warmup
     procedure :: get_persistent_worker_server_address
     procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
     procedure :: kill
 end type qsys_env
+
+type(qsys_env), pointer, save :: active_persistent_worker_env => null()
 
 contains
 
@@ -108,7 +111,7 @@ contains
     !! TCP persistent-worker dispatch path; all other names use the standard backend directly.
     subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition )
         use simple_sp_project, only: sp_project
-        class(qsys_env),         intent(inout) :: self
+        class(qsys_env), target, intent(inout) :: self
         class(parameters),       intent(in)    :: params             !< run-time parameter set
         integer,                 intent(in)    :: nparts             !< number of parallel job partitions
         logical,       optional, intent(in)    :: stream             !< .true. for streaming / continuous mode
@@ -225,8 +228,17 @@ contains
                 call self%qsys_fac_base%new(qsnam, self%base_qsys)
                 call self%qsys_fac_dispatch%new(string('persistent_worker'), self%dispatch_qsys)
                 ! qscripts dispatches through the TCP worker path.
-                call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
-                    &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, worker_priority=self%worker_priority)
+                ! Client-only worker_server users do not own listener state and
+                ! therefore must not service warmup callbacks locally.
+                if( params%worker_server%strlen() > 0 ) then
+                    call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
+                        &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, &
+                        worker_priority=self%worker_priority)
+                else
+                    call self%qscripts%new(self%simple_exec_bin, self%dispatch_qsys, self%parts,&
+                        &[1, self%nparts], params%ncunits, sstream, numlen, nthr_worker=nthr_workers, &
+                        worker_priority=self%worker_priority, warmup_callback=persistent_worker_warmup_callback)
+                end if
                 call diagnose_parallelism(params, qsnam_requested, qsnam, self%nparts, params%ncunits, &
                     &nthr_workers, n_workers, nthr_workers, .true.)
                 ! base_qscripts submits directly via the base scheduler (used to launch worker processes).
@@ -238,15 +250,20 @@ contains
                     if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
                     if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
                 !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
+                    call persistent_worker%server%set_warmup_cooldown_enabled(sstream)
+                    active_persistent_worker_env => self
                 else
                     persistent_worker%launch_backend  = qsnam
                     persistent_worker%nthr_per_worker = nthr_workers
                     persistent_worker%n_workers       = n_workers
                     allocate(persistent_worker%server)
+                    active_persistent_worker_env => self
                     if( params%worker_server%strlen() > 0 ) then
-                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, client_only=params%worker_server)
+                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, &
+                            client_only=params%worker_server, enable_warmup_cooldown=sstream)
                     else
-                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker)
+                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, &
+                            enable_warmup_cooldown=sstream)
                         call self%start_persistent_workers()
                     end if
                 end if
@@ -282,6 +299,32 @@ contains
         end subroutine validate_requested_qsys
 
     end subroutine new
+
+    !> Callback invoked by qsys_ctrl when the worker server requests warm-up.
+    subroutine persistent_worker_warmup_callback( worker_ids, n_worker_ids )
+        integer, intent(in) :: worker_ids(:)
+        integer, intent(in) :: n_worker_ids
+        if( n_worker_ids < 1 ) return
+        if( .not. associated(active_persistent_worker_env) ) return
+        write(logfhandle,'(A,I0)') '>>> QSYS_ENV persistent-worker warmup requested workers=', n_worker_ids
+        call active_persistent_worker_env%start_persistent_workers(worker_ids=worker_ids(1:n_worker_ids))
+    end subroutine persistent_worker_warmup_callback
+
+    !> Claim and service warm-up requests from a locally owned persistent-worker listener.
+    !! No-op for client-only worker_server users.
+    subroutine service_persistent_worker_warmup( self )
+        class(qsys_env), intent(inout) :: self
+        integer, allocatable           :: worker_ids(:)
+        integer                        :: n_worker_ids
+        if( .not. associated(persistent_worker%server) ) return
+        if( .not. persistent_worker%server%is_running() ) return
+        call persistent_worker%server%claim_warmup_worker_ids(worker_ids, n_worker_ids)
+        if( n_worker_ids > 0 ) then
+            write(logfhandle,'(A,I0)') '>>> QSYS_ENV servicing persistent-worker warmup workers=', n_worker_ids
+            call self%start_persistent_workers(worker_ids=worker_ids(1:n_worker_ids))
+        end if
+        if( allocated(worker_ids) ) deallocate(worker_ids)
+    end subroutine service_persistent_worker_warmup
 
     subroutine diagnose_parallelism(params, qsys_requested, qsys_backend, nparts_run, dispatch_slots, cpus_per_task, &
         &worker_slots, worker_threads, worker_backend)
@@ -510,18 +553,31 @@ contains
     !> Submit one simple_persistent_worker process per slot through the base scheduler.
     !! Each worker is given the server host/port at launch so it can connect back.
     !! Scripts and logs are placed under WORKER_DIR for easy monitoring.
-    subroutine start_persistent_workers( self )
+    subroutine start_persistent_workers( self, worker_ids )
         class(qsys_env), intent(inout) :: self
         type(cmdline)                  :: cline
         type(string)                   :: script_name, outfile, executable, host_ips
-        integer                        :: iworker, ncunits, nthr, port
+        integer, optional, intent(in)  :: worker_ids(:)
+        integer                        :: iworker, ireq, nlaunch, nthr, port
+        integer, allocatable           :: launch_ids(:)
         if( .not. associated(persistent_worker%server) ) THROW_HARD('cannot start persistent workers without an allocated server;')
         ! Cache server properties so each worker script can connect back.
-        ncunits  = persistent_worker%n_workers
         nthr     = persistent_worker%nthr_per_worker
         port     = persistent_worker%server%get_port()
         host_ips = persistent_worker%server%get_host_ips()
-        write(*,*) 'STARTING # WORKERS: ', ncunits
+        if( present(worker_ids) ) then
+            nlaunch = size(worker_ids)
+            allocate(launch_ids(nlaunch))
+            launch_ids = worker_ids
+        else
+            nlaunch = persistent_worker%n_workers
+            allocate(launch_ids(nlaunch))
+            do ireq = 1, nlaunch
+                launch_ids(ireq) = ireq
+            end do
+        end if
+        call persistent_worker%server%mark_worker_slots_launch_pending(launch_ids)
+        write(*,*) 'STARTING # WORKERS: ', nlaunch
         ! Ensure per-worker output directories exist before submitting scripts.
         call simple_mkdir(WORKER_DIR)
         call simple_mkdir(WORKER_DIR//STDERROUT_DIR)
@@ -531,12 +587,14 @@ contains
         call cline%set('port',   int2str(port))
         call cline%set('server', host_ips%to_char())
         ! Submit one script per worker slot via the base (non-dispatch) controller.
-        do iworker = 1, ncunits
+        do ireq = 1, nlaunch
+            iworker = launch_ids(ireq)
             call cline%set('worker_id', int2str(iworker))
             script_name = WORKER_DIR//WORKER_SCRIPT_PREFIX//int2str_pad(iworker, 4)//SCRIPT_EXT
             outfile     = WORKER_DIR//STDERROUT_DIR//int2str_pad(iworker, 4)//LOG_EXT
             call self%exec_simple_prg_in_queue_async(cline, script_name, outfile, executable, base=.true.)
         end do
+        deallocate(launch_ids)
         call cline%kill
     end subroutine start_persistent_workers
 
@@ -604,7 +662,7 @@ contains
 
     !> Release scripts/controllers and reset internal state.
     subroutine kill( self )
-        class(qsys_env) :: self
+        class(qsys_env), target :: self
         if( self%existence ) then
             if( allocated(self%parts) ) deallocate(self%parts)
             call self%qscripts%kill
@@ -615,6 +673,7 @@ contains
             self%base_qsys => null()
             self%dispatch_qsys => null()
             self%existence = .false.
+            if( associated(active_persistent_worker_env, self) ) nullify(active_persistent_worker_env)
         end if
     end subroutine kill
 

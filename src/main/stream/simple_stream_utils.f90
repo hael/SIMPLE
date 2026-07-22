@@ -47,9 +47,9 @@ contains
         integer                         :: envlen
         call get_environment_variable(envvar%to_char(), chunk_part_env, envlen)
         if(envlen > 0) then
-            call qenv%new(params, 1, exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
+            call qenv%new(params, 1, stream=.true., exec_bin=string('simple_exec'), qsys_partition=string(trim(chunk_part_env)))
         else
-            call qenv%new(params, 1, exec_bin=string('simple_exec'))
+            call qenv%new(params, 1, stream=.true., exec_bin=string('simple_exec'))
         end if
     end subroutine init_stream_qenv 
 

@@ -45,6 +45,9 @@ contains
     call test_new_client_only_invalid_address_rejected()
     call test_new_and_kill_lifecycle()
     call test_new_is_idempotent_while_running()
+    call test_mark_worker_slots_launch_pending_sets_flags()
+    call test_claim_warmup_marks_launch_pending_and_clears_requests()
+    call test_startup_pending_prevents_duplicate_warmup_claim()
     call test_queue_task_priority_requests()
     call test_queue_task_eventually_rejects_when_full()
 
@@ -150,6 +153,62 @@ contains
     call assert_int(TEST_NTHR_WORKERS, server%nthr_workers, 'second new() call should keep original nthr_workers')
     call server%kill()
   end subroutine test_new_is_idempotent_while_running
+
+  subroutine test_mark_worker_slots_launch_pending_sets_flags()
+    type(persistent_worker_server) :: server
+    integer, allocatable           :: worker_ids(:)
+    write(*,'(A)') 'test_mark_worker_slots_launch_pending_sets_flags'
+    call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS, string('127.0.0.1:34567'))
+    call assert_true(associated(server%worker_data), 'client_only new() should allocate worker_data')
+    call assert_false(server%worker_data%launch_pending_worker_ids(1), 'slot 1 should not be pending before marking')
+    allocate(worker_ids(2))
+    worker_ids = [1, TEST_NWORKERS + 10]
+    call server%mark_worker_slots_launch_pending(worker_ids)
+    call assert_true(server%worker_data%launch_pending_worker_ids(1), 'slot 1 should be pending after marking')
+    call server%kill()
+    deallocate(worker_ids)
+  end subroutine test_mark_worker_slots_launch_pending_sets_flags
+
+  subroutine test_claim_warmup_marks_launch_pending_and_clears_requests()
+    type(persistent_worker_server) :: server
+    integer, allocatable           :: claimed_ids(:)
+    integer                        :: n_claimed
+    write(*,'(A)') 'test_claim_warmup_marks_launch_pending_and_clears_requests'
+    call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS, string('127.0.0.1:34567'))
+    call assert_true(associated(server%worker_data), 'client_only new() should allocate worker_data')
+    server%worker_data%n_warmup_worker_ids = 1
+    server%worker_data%warmup_worker_ids(1) = 1
+    call server%claim_warmup_worker_ids(claimed_ids, n_claimed)
+    call assert_int(1, n_claimed, 'claim_warmup_worker_ids should return one claimed worker')
+    call assert_int(1, claimed_ids(1), 'claimed worker id should match queued warmup slot')
+    call assert_true(server%worker_data%launch_pending_worker_ids(1), 'claimed warmup slot should become launch-pending')
+    call assert_int(0, server%worker_data%n_warmup_worker_ids, 'warmup request count should be cleared after claim')
+    call assert_int(0, server%worker_data%warmup_worker_ids(1), 'claimed warmup slot should be cleared after claim')
+    call server%kill()
+    if( allocated(claimed_ids) ) deallocate(claimed_ids)
+  end subroutine test_claim_warmup_marks_launch_pending_and_clears_requests
+
+  subroutine test_startup_pending_prevents_duplicate_warmup_claim()
+    type(persistent_worker_server)            :: server
+    type(qsys_persistent_worker_message_task) :: task
+    integer, allocatable                      :: startup_ids(:), claimed_ids(:)
+    integer                                   :: n_claimed
+    logical                                   :: queued
+    write(*,'(A)') 'test_startup_pending_prevents_duplicate_warmup_claim'
+    call server%new(TEST_NWORKERS, TEST_NTHR_WORKERS, enable_warmup_cooldown=.true.)
+    call assert_true(server%is_running(), 'server must be running for startup pending warmup regression test')
+    allocate(startup_ids(1))
+    startup_ids = [1]
+    call server%mark_worker_slots_launch_pending(startup_ids)
+    call build_test_task(task, '/tmp/pw_startup_pending.sh', 1)
+    queued = server%queue_task(task, string('norm'))
+    call assert_true(queued, 'queue_task should accept work while startup slot is pending')
+    call server%claim_warmup_worker_ids(claimed_ids, n_claimed)
+    call assert_int(0, n_claimed, 'startup pending slots should suppress duplicate warmup requests before first heartbeat')
+    call server%kill()
+    deallocate(startup_ids)
+    if( allocated(claimed_ids) ) deallocate(claimed_ids)
+  end subroutine test_startup_pending_prevents_duplicate_warmup_claim
 
   subroutine test_queue_task_priority_requests()
     type(persistent_worker_server)            :: server

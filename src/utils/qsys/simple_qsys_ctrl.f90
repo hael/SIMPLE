@@ -18,6 +18,13 @@ public :: qsys_ctrl
 private
 #include "simple_local_flags.inc"
 
+abstract interface
+    subroutine worker_warmup_callback(worker_ids, n_worker_ids)
+        integer, intent(in) :: worker_ids(:)
+        integer, intent(in) :: n_worker_ids
+    end subroutine worker_warmup_callback
+end interface
+
 !> Poll interval (seconds) used by blocking scheduler loops.
 integer, parameter :: SHORTTIME = 1
 
@@ -54,6 +61,7 @@ type qsys_ctrl
     logical                       :: stream          = .false.     !< .true. when running in streaming (continuous) mode
     logical                       :: existence       = .false.     !< .true. after new(); .false. after kill()
     logical                       :: worker_priority = .false.     !< .true. for high priority workers (persistent worker backend only)
+    procedure(worker_warmup_callback), pointer, nopass :: warmup_callback => null() !< optional callback used to relaunch workers on warm-up requests
     contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -76,6 +84,7 @@ type qsys_ctrl
     procedure          :: submit_scripts
     procedure          :: submit_script
     procedure          :: dispatch_task_to_persistent_worker
+    procedure, private :: service_persistent_worker_warmup
     procedure, private :: declare_coarray_jobs_finished
     ! QUERIES
     procedure, private :: update_queue
@@ -119,7 +128,7 @@ contains
 
     !> Initialise (or reinitialise) the controller: wire scheduler pointers, allocate
     !! tracking arrays, and pre-compute script and sentinel file names.
-    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker, worker_priority )
+    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker, worker_priority, warmup_callback )
         class(qsys_ctrl),         intent(inout) :: self             !< this instance
         class(string),            intent(in)    :: exec_binary      !< executable launched by generated scripts
         class(qsys_base), target, intent(in)    :: qsys_obj         !< scheduler backend (not owned)
@@ -130,6 +139,7 @@ contains
         integer, optional,        intent(in)    :: numlen           !< explicit zero-padding width; derived from nparts_tot when absent
         integer, optional,        intent(in)    :: nthr_worker      !< thread slots per job for persistent worker backend (default 1)
         logical, optional,        intent(in)    :: worker_priority  !< .true. for high priority workers (default .false.)
+        procedure(worker_warmup_callback), optional :: warmup_callback !< callback invoked when server requests worker warm-up
         integer :: ipart
         call self%kill
         ! Wire scheduler state.
@@ -143,6 +153,7 @@ contains
         self%ncomputing_units_avail =  ncomputing_units
         if( present(nthr_worker)     ) self%nthr_worker     = nthr_worker
         if( present(worker_priority) ) self%worker_priority = worker_priority
+        if( present(warmup_callback) ) self%warmup_callback => warmup_callback
         ! Streaming mode uses fixed 5-digit padding; batch mode derives it from nparts_tot.
         if( self%stream ) then
             self%numlen = 5
@@ -877,8 +888,27 @@ contains
                 write(logfhandle,'(A,A)') '>>> QSYS_CTRL dispatch_task_to_persistent_worker: normal-priority queue full; dropped job_id ', int2str(task_msg%job_id)
             end if
         end if
+        call self%service_persistent_worker_warmup()
         call task_msg%kill
     end subroutine dispatch_task_to_persistent_worker
+
+    !> Claim warm-up requests from the persistent worker server and invoke
+    !> the configured callback to relaunch those worker slots.
+    subroutine service_persistent_worker_warmup( self )
+        class(qsys_ctrl), intent(inout) :: self
+        integer, allocatable            :: worker_ids(:)
+        integer                         :: n_worker_ids
+        if( .not. associated(self%warmup_callback) ) return
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_persistent_worker)
+                if( .not. associated(persistent_worker%server) ) return
+                call persistent_worker%server%claim_warmup_worker_ids(worker_ids, n_worker_ids)
+                if( n_worker_ids > 0 ) call self%warmup_callback(worker_ids, n_worker_ids)
+                if( allocated(worker_ids) ) deallocate(worker_ids)
+            class default
+                return
+        end select
+    end subroutine service_persistent_worker_warmup
 
     ! QUERIES
 
@@ -935,6 +965,7 @@ contains
             if( all(self%jobs_done) ) exit
             call self%update_queue
             call self%submit_scripts
+            call self%service_persistent_worker_warmup()
             call sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
@@ -946,6 +977,7 @@ contains
             if( all(self%jobs_done) ) exit
             call self%update_queue
             call self%submit_scripts
+            call self%service_persistent_worker_warmup()
             call sleep(SHORTTIME)
         end do
     end subroutine schedule_subproject_jobs
@@ -1004,6 +1036,7 @@ contains
                 end do
             end if
         end if
+        call self%service_persistent_worker_warmup()
         ! Restore working directory if changed.
         if( present(path) ) then
             call simple_chdir(cwd_old)
@@ -1159,6 +1192,7 @@ contains
         self%nthr_worker            = 1
         self%numlen                 = 0
         self%cline_stacksz          = 0
+        nullify(self%warmup_callback)
         ! Deallocate tracking arrays.
         deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
                    self%jobs_exit_code_fnames, self%jobs_submitted, self%coarray_job_args)
