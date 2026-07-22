@@ -73,38 +73,25 @@ contains
     subroutine extract_trajectory()
         type(oris)            :: track_os
         integer, allocatable  :: track_totrack(:), track2frame(:)
-        integer :: ldim_sc(2), iframe, xind,yind, i, cnt, nrange, noutside, nl
-        integer :: first_frame, last_frame, ntrack, first, last, fromt, tot
-        real    :: x, y, xp, yp, xscale, yscale
+        integer :: ldim_sc(2), iframe, xind,yind, i,  cnt, nrange, noutside, nl
+        integer :: first_frame, last_frame, ntrack, first, last
+        real    :: x, y, xp, yp, xscale, yscale, delta, T
         write(logfhandle,'(A)') ">>> READING TRAJECTORY"
         nl = nlines(p_ptr%infile)
         call track_os%new(nl, is_ptcl=.false.)
         call track_os%read(p_ptr%infile)
-        ntrack     = track_os%get_noris()
+        ntrack = track_os%get_noris()
+        ! dimensions
         ldim_sc(1) = track_os%get_int(1,'xdim')
         ldim_sc(2) = track_os%get_int(1,'ydim')
         xscale     = real(ldim_sc(1))/real(ldim(1))
         yscale     = real(ldim_sc(2))/real(ldim(2))
-        ! build frame to track image mapping
-        allocate(track2frame(ntrack),track_totrack(ntrack))
-        first_frame = nframes+1
-        last_frame  = 0
-        cnt         = 0
-        do iframe = 1,nframes
-            if( p_spproj%os_mic%isthere(iframe,'track_fname') )then
-                cnt   = cnt + 1
-                if( cnt > ntrack ) THROW_HARD('Inconsistent number of coordinates! 1')
-                fromt = p_spproj%os_mic%get_int(iframe,'fromt')
-                tot   = p_spproj%os_mic%get_int(iframe,'tot')
-                first_frame = min(first_frame, fromt)
-                last_frame  = max(last_frame,  tot)
-                track2frame(cnt)   = fromt
-                track_totrack(cnt) = tot
-            endif
-        enddo
-        if( cnt < ntrack ) THROW_HARD('Inconsistent number of coordinates! 2')
+        call build_mapping(track_os, track2frame, track_totrack)
+        first_frame = minval(track2frame)
+        last_frame  = maxval(track_totrack)
         write(logfhandle,'(A)') ">>> GENERATING PARTICLES COORDINATES"
         allocate(particle_locations(2,first_frame:last_frame))
+        T = 0.5*real(box)
         do i = 1,ntrack
             first = track2frame(i)
             if( first < first_frame .or. first > last_frame )then
@@ -112,21 +99,22 @@ contains
             endif
             last = track_totrack(i)
             ! 0-based center coordinates -> EMAN 0-based upper left corner coordinates
-            x    = track_os%get(i,'x') / xscale - 0.5*real(box)
-            y    = track_os%get(i,'y') / yscale - 0.5*real(box)
+            x = track_os%get(i,'x') / xscale - T
+            y = track_os%get(i,'y') / yscale - T
             if( i == ntrack ) then
                 particle_locations(1, first:last) = nint(x)
                 particle_locations(2, first:last) = nint(y)
             else
                 nrange = last - first + 1
-                xp = track_os%get(i+1,'x') / xscale - 0.5*real(box)
-                yp = track_os%get(i+1,'y') / yscale - 0.5*real(box)
+                particle_locations(1, first) = nint(x)
+                particle_locations(2, first) = nint(y)
                 if( nrange > 1 )then
-                    particle_locations(1, first) = nint(x)
-                    particle_locations(2, first) = nint(y)
+                    xp = track_os%get(i+1,'x') / xscale - T
+                    yp = track_os%get(i+1,'y') / yscale - T
                     do iframe = first, last
-                        particle_locations(1, iframe) = nint(x + (xp-x) * (real(iframe-first)/real(nrange-1)))
-                        particle_locations(2, iframe) = nint(y + (yp-y) * (real(iframe-first)/real(nrange-1)))
+                        delta = real(iframe-first)/real(nrange-1)
+                        particle_locations(1, iframe) = nint(x + (xp-x) * delta)
+                        particle_locations(2, iframe) = nint(y + (yp-y) * delta)
                     enddo
                     particle_locations(1, last) = nint(xp)
                     particle_locations(2, last) = nint(yp)
@@ -140,29 +128,28 @@ contains
         write(logfhandle,'(A)') ">>> GENERATING PARTICLES AND BACKGROUND POWER SPECTRA"
         call pspec%zero_and_unflag_ft
         call ptcl_target%zero_and_unflag_ft
-        stkname = dir%to_char()//'/'//fbody%to_char()//'.mrc'
-        cnt = 0
+        stkname = dir%to_char()//'/'//fbody%to_char()//MRC_EXT
+        nrange  = last_frame - first_frame + 1
+        cnt     = 0
         do iframe = first_frame, last_frame
-            cnt = cnt + 1
+            cnt  = cnt + 1
             xind = particle_locations(1,iframe)
             yind = particle_locations(2,iframe)
             if( xind<0 .and. xind>-10 ) xind = 0
             if( yind<0 .and. yind>-10 ) yind = 0
             if( xind>ldim(1)-1 .and. xind<ldim(1)+10 ) xind = ldim(1)-1
             if( yind>ldim(2)-1 .and. yind<ldim(2)+10 ) yind = ldim(2)-1
-            ! read frame
+            ! read frame, extract, normalize, flip signs, write particle
             call frame_img%read(frame_names(iframe),1)
-            ! particle
-            noutside = 0
             call frame_img%window([xind,yind,1], box, ptcl_target, noutside)
             call ptcl_target%norm
             if( l_neg ) call ptcl_target%neg()
             call ptcl_target%write(stkname, cnt)
             ! neighbors & spectrum
             call update_background_pspec([xind,yind])
-            call pspec%add(pspec_nn, w=1./real(nframes))
+            call pspec%add(pspec_nn, w=1./real(nrange))
             call pspec_nn%write(string(dir%to_char()//'/'//fbody%to_char()//'_background_pspec.mrc'),cnt)
-            call progress_gfortran( iframe, nframes)
+            call progress_gfortran( iframe, nrange)
         end do
         ! average and write power spectrum for CTF estimation
         call pspec%dampen_pspec_central_cross
@@ -171,6 +158,37 @@ contains
         call track_os%kill
         deallocate(track2frame, track_totrack)
     end subroutine extract_trajectory
+
+    subroutine build_mapping( track_os, track2frame, track_totrack )
+        type(oris),           intent(in)    :: track_os
+        integer, allocatable, intent(inout) :: track2frame(:), track_totrack(:)
+        type(string)              :: absfname, fname, trackfname
+        character(len=LONGSTRLEN) :: str, extstr, numstr
+        integer                   :: i, j, iframe, fromt, tot, n
+        n = track_os%get_noris()
+        allocate(track2frame(n), track_totrack(n))
+        do i = 1, n
+            j = track_os%get_int(i,'index')
+            absfname  = track_os%get_str(i,'filename')
+            fname     = basename(absfname)
+            extstr    = fname%to_char()
+            call split_str(extstr, MRC_EXT, numstr)
+            call split_str(numstr, '_', str)
+            iframe = str2int(numstr)
+            if( p_spproj%os_mic%isthere(iframe,'track_fname') )then
+                fromt = p_spproj%os_mic%get_int(iframe,'fromt')
+                if( iframe /= fromt ) THROW_HARD('frame index in coordinates file is out of range')
+                trackfname = p_spproj%os_mic%get_str(iframe,'track_fname')
+                if( trackfname /= absfname ) THROW_HARD('frame names are different')
+            else
+                THROW_HARD('Fatal frame indexing error')
+            endif
+            tot = p_spproj%os_mic%get_int(iframe,'tot')
+            if( tot < fromt .or. tot > nframes ) THROW_HARD('TOT frame index in coordinates file is out of range')
+            track2frame(i)   = fromt
+            track_totrack(i) = tot
+        enddo
+    end subroutine build_mapping
 
     subroutine update_background_pspec( pos )
         integer, intent(in) :: pos(2)
