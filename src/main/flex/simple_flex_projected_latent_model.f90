@@ -29,7 +29,11 @@ private
 #include "simple_local_flags.inc"
 
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
-real(dp), parameter :: COUPLED_MSTEP_RIDGE_ABS = 1.0d-10
+! Keep the same Fourier-cell observability convention as
+! simple_image_arith::div_cmat_at_1, which zeroes a reconstruction cell when
+! its sampling/CTF density is at or below 1.e-6.  The coupled solve must not
+! turn those unobserved cells into high-amplitude noise by dividing by DTINY.
+real(dp), parameter :: COUPLED_DENSITY_FLOOR = 1.0d-6
 real(dp), parameter :: CANON_METRIC_REL_TOL = 1.0d-8
 real(dp), parameter :: CANON_CHECK_TOL      = 5.0d-8
 integer,  parameter :: MSTEP_STATS_MAGIC = 1180053581
@@ -1341,12 +1345,12 @@ contains
         real,                intent(in)    :: rho_cross_exp(:,:,:,:)
         complex(dp) :: rhs(ncomp), sol(ncomp)
         real(dp)    :: amat(ncomp,ncomp)
-        real(dp)    :: diag_sum, ridge, denom
+        real(dp)    :: diag_sum, diag_max, ridge, denom
         integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag
         lb = lbound(basis_recs(1)%cmat_exp)
         ub = ubound(basis_recs(1)%cmat_exp)
         !$omp parallel do collapse(3) default(shared) schedule(static) &
-        !$omp private(h,k,m,ih,ik,im,q,r,amat,rhs,sol,diag_sum,ridge,denom,flag) proc_bind(close)
+        !$omp private(h,k,m,ih,ik,im,q,r,amat,rhs,sol,diag_sum,diag_max,ridge,denom,flag) proc_bind(close)
         do m = lb(3), ub(3)
             do k = lb(2), ub(2)
                 do h = lb(1), ub(1)
@@ -1355,12 +1359,14 @@ contains
                     im = m - lb(3) + 1
                     rhs  = DCMPLX_ZERO
                     diag_sum = 0.d0
+                    diag_max = 0.d0
                     do q = 1, ncomp
                         rhs(q) = cmplx(basis_recs(q)%cmat_exp(h,k,m), kind=dp)
-                        diag_sum = diag_sum + max(0.d0, &
-                            &real(rho_cross_exp(pair_index(q,q),ih,ik,im),dp))
+                        denom = max(0.d0,real(rho_cross_exp(pair_index(q,q),ih,ik,im),dp))
+                        diag_sum = diag_sum + denom
+                        diag_max = max(diag_max,denom)
                     end do
-                    if( diag_sum <= DTINY .and. sum(abs(rhs)) <= DTINY )then
+                    if( diag_max <= COUPLED_DENSITY_FLOOR )then
                         do q = 1, ncomp
                             basis_recs(q)%cmat_exp(h,k,m) = CMPLX_ZERO
                         end do
@@ -1373,7 +1379,7 @@ contains
                             amat(r,q) = amat(q,r)
                         end do
                     end do
-                    ridge = max(COUPLED_MSTEP_RIDGE_ABS, COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp))
+                    ridge = COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp)
                     do q = 1, ncomp
                         amat(q,q) = amat(q,q) + ridge
                     end do
