@@ -37,7 +37,10 @@ real(dp), parameter :: COUPLED_DENSITY_FLOOR = 1.0d-6
 real(dp), parameter :: CANON_METRIC_REL_TOL = 1.0d-8
 real(dp), parameter :: CANON_CHECK_TOL      = 5.0d-8
 integer,  parameter :: MSTEP_STATS_MAGIC = 1180053581
-integer,  parameter :: MSTEP_STATS_VERSION = 1
+! Version 2 changes the distributed M-step payload from a packed latent
+! Gram matrix to the one ordinary reconstruction density shared by all
+! independently reconstructed residual modes.
+integer,  parameter :: MSTEP_STATS_VERSION = 2
 integer,  parameter :: ESTEP_PART_MAGIC = 1180053580
 integer,  parameter :: ESTEP_PART_VERSION = 3
 integer(longer), parameter :: MSTEP_STATS_IO_TARGET_BYTES = 64_longer * 1024_longer * 1024_longer
@@ -184,7 +187,7 @@ contains
         real,    allocatable :: rho_cross_exp(:,:,:,:)
         integer, allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
-        integer              :: exp_shape(3), npairs
+        integer              :: exp_shape(3)
         integer           :: batchlims(2), batchsz, ibatch, ipart, ithr, nparts_eff, partlims(2), q
         integer(timer_int_kind) :: t_total, t_phase, t_comp, t_batch
         real(dp) :: read_prep_seconds, mean_project_seconds, insert_seconds
@@ -194,7 +197,7 @@ contains
         else
             log_prefix = projected_model_log_prefix()
         endif
-        write(logfhandle,'(A)') log_prefix//' M-STEP: UPDATING EIGENVOLUMES WITH COUPLED BLOCK SOLVE'
+        write(logfhandle,'(A)') log_prefix//' M-STEP: UPDATING NYSTROM RESIDUAL EIGENVOLUMES'
         call flush(logfhandle)
         read_prep_seconds    = 0.
         mean_project_seconds = 0.
@@ -209,9 +212,11 @@ contains
             call basis_recs(q)%reset
             call basis_recs(q)%reset_exp
         end do
-        npairs    = (ncomp * (ncomp + 1)) / 2
         exp_shape = shape(basis_recs(1)%cmat_exp)
-        allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        ! Nyström modal pre-image: each eigenvolume is an independently
+        ! weighted residual reconstruction.  All modes share the ordinary
+        ! sampling/CTF density; no per-voxel latent Gram matrix is formed.
+        allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
@@ -244,7 +249,7 @@ contains
         call log_seconds(log_prefix//' M-STEP INSERT SECONDS', toc(t_phase))
         call log_seconds(log_prefix//' M-STEP READ/PREP SECONDS', read_prep_seconds)
         call log_seconds(log_prefix//' M-STEP MEAN PROJECT SECONDS', mean_project_seconds)
-        call log_seconds(log_prefix//' M-STEP COUPLED ACCUMULATE SECONDS', insert_seconds)
+        call log_seconds(log_prefix//' M-STEP MODAL ACCUMULATE SECONDS', insert_seconds)
         call kill_projected_latent_mstep_2d_block(mstep_block)
         if( allocated(parts) ) deallocate(parts)
         call cleanup_runtime_batch(build, fpls)
@@ -253,8 +258,10 @@ contains
         end do
         deallocate(mean_fpls)
         t_phase = tic()
-        call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
-        call log_seconds(log_prefix//' M-STEP COUPLED SOLVE SECONDS', toc(t_phase))
+        do q = 1, ncomp
+            basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
+        end do
+        call log_seconds(log_prefix//' M-STEP MODAL DENSITY HANDOFF SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
         t_phase = tic()
         gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
@@ -263,7 +270,7 @@ contains
             write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
             t_comp = tic()
-            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img, density_corrected=.true.)
+            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img)
             call log_comp_seconds(log_prefix//' M-STEP FINALIZE SECONDS', q, toc(t_comp))
         end do
         call gridcorr_img%kill
@@ -333,9 +340,9 @@ contains
         integer,             intent(in)    :: pinds(:)
         type(projected_latent_mstep_2d_block), intent(inout) :: block
         type(fplane_type), intent(inout) :: mean_fpls(nthr_glob)
-        integer :: i, iptcl, q, r, row, ithr
+        integer :: i, iptcl, row, ithr
         call reset_projected_latent_mstep_2d_block(block, batchsz)
-        !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,row,iptcl,ithr) schedule(static) proc_bind(close)
         do i = 1, batchsz
             row   = batchlims(1) + i - 1
             iptcl = pinds(row)
@@ -347,12 +354,9 @@ contains
             call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpls(ithr), apply_ctf_amp=.true.)
             call subtract_plane(fpls_batch(i), mean_fpls(ithr))
             block%zrows(:,i) = z(row,:)
-            block%latent_second(:,:,i) = 0.d0
-            do q = 1, ncomp
-                do r = 1, ncomp
-                    block%latent_second(q,r,i) = block%latent_second(q,r,i) + z(row,q) * z(row,r)
-                end do
-            end do
+            ! The modal Nyström pre-image has one ordinary density for all
+            ! residual modes.  Keep this compatibility buffer zeroed: the
+            ! accumulator ignores it when passed a single density volume.
             block%valid(i) = .true.
         end do
         !$omp end parallel do
@@ -379,7 +383,7 @@ contains
             THROW_HARD('invalid projected latent M-step statistics dimensions')
         endif
         stats%ncomp     = ncomp
-        stats%npairs    = (ncomp * (ncomp + 1)) / 2
+        stats%npairs    = 1
         stats%exp_lb    = exp_lb
         stats%exp_ub    = exp_ub
         stats%model_nyq = model_nyq
@@ -535,7 +539,7 @@ contains
         real, allocatable :: rho_cross_exp(:,:,:,:)
         type(image) :: gridcorr_img
         character(len=:), allocatable :: log_prefix
-        integer :: exp_shape(3), npairs, ipart, q
+        integer :: exp_shape(3), ipart, q
         integer(timer_int_kind) :: t_total, t_phase
         t_total = tic()
         if( present(log_label) )then
@@ -549,9 +553,8 @@ contains
             call basis_recs(q)%reset
             call basis_recs(q)%reset_exp
         end do
-        npairs    = (ncomp * (ncomp + 1)) / 2
         exp_shape = shape(basis_recs(1)%cmat_exp)
-        allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
         t_phase = tic()
         do ipart = 1, nparts
             if( .not. file_exists(part_fnames(ipart)) )then
@@ -562,8 +565,10 @@ contains
         end do
         call log_seconds(log_prefix//' M-STEP MASTER REDUCE SECONDS', toc(t_phase))
         t_phase = tic()
-        call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
-        call log_seconds(log_prefix//' M-STEP MASTER COUPLED SOLVE SECONDS', toc(t_phase))
+        do q = 1, ncomp
+            basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
+        end do
+        call log_seconds(log_prefix//' M-STEP MASTER MODAL DENSITY HANDOFF SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
         t_phase = tic()
         gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
@@ -571,7 +576,7 @@ contains
         do q = 1, ncomp
             write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP MASTER FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
-            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img, density_corrected=.true.)
+            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img)
         end do
         call gridcorr_img%kill
         call log_seconds(log_prefix//' M-STEP MASTER FINALIZE SECONDS', toc(t_phase))
@@ -597,8 +602,9 @@ contains
         if( header(2) /= MSTEP_STATS_VERSION ) THROW_HARD('bad M-step statistics version: '//fname%to_char())
         if( header(3) < 0 ) THROW_HARD('negative M-step statistics record count: '//fname%to_char())
         if( header(4) /= ncomp ) THROW_HARD('M-step statistics component mismatch: '//fname%to_char())
-        npairs = (ncomp * (ncomp + 1)) / 2
-        if( header(5) /= npairs ) THROW_HARD('M-step statistics pair-count mismatch: '//fname%to_char())
+        npairs = 1
+        if( header(5) /= npairs ) THROW_HARD('M-step statistics density-count mismatch: '//fname%to_char())
+        if( size(rho_cross_exp,1) /= npairs ) THROW_HARD('M-step reduction requires one shared density volume')
         exp_lb    = header(6:8)
         exp_ub    = header(9:11)
         exp_shape = exp_ub - exp_lb + 1
@@ -654,12 +660,11 @@ contains
         type(string) :: fname
         character(len=256) :: padded_fname
         real, allocatable :: rho_cross(:,:,:,:)
-        integer :: exp_lb(3), exp_ub(3), exp_shape(3), npairs, q, ipair, i, j, k
+        integer :: exp_lb(3), exp_ub(3), exp_shape(3), q, i, j, k
         real :: rhs_err, rho_err
         exp_lb    = [-3, -TEST_BOX/2-2, -TEST_BOX/2-2]
         exp_ub    = [ TEST_BOX/2+2, TEST_BOX/2+2, TEST_BOX/2+2]
         exp_shape = exp_ub - exp_lb + 1
-        npairs    = (TEST_NCOMP * (TEST_NCOMP + 1)) / 2
         do q = 1, TEST_NCOMP
             call basis_recs(q)%new([TEST_BOX,TEST_BOX,TEST_BOX], 1.)
             allocate(basis_recs(q)%cmat_exp(exp_lb(1):exp_ub(1),exp_lb(2):exp_ub(2),exp_lb(3):exp_ub(3)), &
@@ -676,10 +681,8 @@ contains
                 end do
             end do
         end do
-        do ipair = 1, npairs
-            stats%rho_cross(ipair,:,:,:) = 0.01 * real(ipair)
-        end do
-        allocate(rho_cross(npairs,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
+        stats%rho_cross(1,:,:,:) = 0.01
+        allocate(rho_cross(1,exp_shape(1),exp_shape(2),exp_shape(3)), source=0.)
         padded_fname = 'test_projected_latent_mstep_stats_io.bin'
         fname = padded_fname
         call write_projected_latent_mstep_stats(fname, stats)

@@ -391,6 +391,7 @@ contains
         ncomp = size(recs)
         if( ncomp <= 0 .or. nrecords <= 0 ) return
         npairs = (ncomp * (ncomp + 1)) / 2
+        shared_density = size(rho_cross_exp,1) == 1
         if( size(orientations)<nrecords .or. size(fpls)<nrecords .or. size(valid)<nrecords )then
             THROW_HARD('record array smaller than batch; insert_planes_oversamp_coupled_batch_scaled')
         endif
@@ -405,7 +406,8 @@ contains
         exp_lb    = lbound(recs(1)%cmat_exp)
         exp_ub    = ubound(recs(1)%cmat_exp)
         exp_shape = shape(recs(1)%cmat_exp)
-        if( size(rho_cross_exp,1)<npairs .or. size(rho_cross_exp,2)<exp_shape(1) .or. &
+        if( (.not.shared_density .and. size(rho_cross_exp,1)<npairs) .or. &
+            &size(rho_cross_exp,2)<exp_shape(1) .or. &
             &size(rho_cross_exp,3)<exp_shape(2) .or. size(rho_cross_exp,4)<exp_shape(3) )then
             THROW_HARD('cross-density array shape mismatch; insert_planes_oversamp_coupled_batch_scaled')
         endif
@@ -421,8 +423,8 @@ contains
         ! small differences become large after density correction in weakly
         ! sampled Fourier cells.
         kbwin = recs(1)%get_kbwin()
-        allocate(rotmats(3,3,nsym,nrecords), data_scale_sp(ncomp,nrecords), &
-            &density_scale_packed(npairs,nrecords), source=0.)
+        allocate(rotmats(3,3,nsym,nrecords), data_scale_sp(ncomp,nrecords), source=0.)
+        if( .not.shared_density ) allocate(density_scale_packed(npairs,nrecords), source=0.)
         allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), source=0)
         do i = 1, nrecords
             if( .not.valid(i) ) cycle
@@ -446,11 +448,13 @@ contains
             do q = 1, ncomp
                 data_scale_sp(q,i) = real(data_scales(q,i))
             end do
-            do r = 1, ncomp
-                do q = 1, r
-                    density_scale_packed(pair_index(q,r),i) = real(density_scales(q,r,i))
+            if( .not.shared_density )then
+                do r = 1, ncomp
+                    do q = 1, r
+                        density_scale_packed(pair_index(q,r),i) = real(density_scales(q,r,i))
+                    end do
                 end do
-            end do
+            endif
         end do
         call o_sym%kill
         !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,ctfsq_raw,&
@@ -503,11 +507,15 @@ contains
                                             recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
                                                 &(data_scale_sp(q,i)*comp_base)*ww
                                         end do
-                                        !$omp simd
-                                        do ipair = 1, npairs
-                                            rho_cross_exp(ipair,ih,ik,im) = rho_cross_exp(ipair,ih,ik,im) + &
-                                                &(density_scale_packed(ipair,i)*ctfsq_raw)*ww
-                                        end do
+                                        if( shared_density )then
+                                            rho_cross_exp(1,ih,ik,im) = rho_cross_exp(1,ih,ik,im) + ctfsq_raw*ww
+                                        else
+                                            !$omp simd
+                                            do ipair = 1, npairs
+                                                rho_cross_exp(ipair,ih,ik,im) = rho_cross_exp(ipair,ih,ik,im) + &
+                                                    &(density_scale_packed(ipair,i)*ctfsq_raw)*ww
+                                            end do
+                                        endif
                                     end do
                                 end do
                             end do
@@ -518,7 +526,8 @@ contains
             end do
         end do
         !$omp end parallel
-        deallocate(rotmats,data_scale_sp,density_scale_packed,fpllims,nyq_disks)
+        deallocate(rotmats,data_scale_sp,fpllims,nyq_disks)
+        if( allocated(density_scale_packed) ) deallocate(density_scale_packed)
 
     contains
 
@@ -983,7 +992,6 @@ contains
     subroutine accumulate_planes_oversamp_coupled_stats_batch( basis_rhs, rho_cross_exp, exp_lb, model_nyq, &
         &se, orientations, fpls, data_scales, density_scales, valid, nrecords )
         use simple_math, only: ceil_div, floor_div
-        use simple_kbinterpol, only: apod_kb15_a2
         complex,            intent(inout) :: basis_rhs(:,:,:,:)
         real,               intent(inout) :: rho_cross_exp(:,:,:,:)
         integer,            intent(in)    :: exp_lb(3), model_nyq, nrecords
@@ -993,6 +1001,7 @@ contains
         real(dp),           intent(in)    :: data_scales(:,:), density_scales(:,:,:)
         logical,            intent(in)    :: valid(:)
         type(ori) :: o_sym
+        type(kbinterpol) :: kbwin
         complex :: comp_base,cmplx_raw
         real, allocatable :: rotmats(:,:,:,:),data_scale_sp(:,:),density_scale_packed(:,:)
         integer, allocatable :: fpllims(:,:,:),nyq_disks(:)
@@ -1001,9 +1010,11 @@ contains
         integer :: win(2,3),fpllims_pd(3,2),exp_ub(3),exp_shape(3)
         integer :: h,k,l,isym,nsym,iwinsz,stride,hp,kp,pf,ix,iy,iz,hx,ky,mz
         integer :: q,r,i,ncomp,npairs,ipair,h_sq,k_max_h,k_lo,k_hi,ih,ik,im,nyq_eff
+        logical :: shared_density
         ncomp=size(basis_rhs,4)
         if( ncomp<=0 .or. nrecords<=0 ) return
         npairs=(ncomp*(ncomp+1))/2
+        shared_density=size(rho_cross_exp,1)==1
         exp_shape=shape(basis_rhs(:,:,:,1))
         exp_ub=exp_lb+exp_shape-1
         if( model_nyq<1 ) THROW_HARD('invalid model Nyquist; accumulate_planes_oversamp_coupled_stats_batch')
@@ -1015,7 +1026,8 @@ contains
             &size(density_scales,3)<nrecords )then
             THROW_HARD('scale array smaller than batch; accumulate_planes_oversamp_coupled_stats_batch')
         endif
-        if( size(rho_cross_exp,1)<npairs .or. size(rho_cross_exp,2)<exp_shape(1) .or. &
+        if( (.not.shared_density .and. size(rho_cross_exp,1)<npairs) .or. &
+            &size(rho_cross_exp,2)<exp_shape(1) .or. &
             &size(rho_cross_exp,3)<exp_shape(2) .or. size(rho_cross_exp,4)<exp_shape(3) )then
             THROW_HARD('cross-density shape mismatch; accumulate_planes_oversamp_coupled_stats_batch')
         endif
@@ -1026,8 +1038,9 @@ contains
         pf2=real(pf*pf)
         eps_norm=epsilon(1.0)
         inv_wdim=1.0/real(LATENT_WDIM)
-        allocate(rotmats(3,3,nsym,nrecords),data_scale_sp(ncomp,nrecords), &
-            &density_scale_packed(npairs,nrecords),source=0.)
+        kbwin=kbinterpol(KBWINSZ,KBALPHA)
+        allocate(rotmats(3,3,nsym,nrecords),data_scale_sp(ncomp,nrecords),source=0.)
+        if( .not.shared_density ) allocate(density_scale_packed(npairs,nrecords),source=0.)
         allocate(fpllims(3,2,nrecords),nyq_disks(nrecords),source=0)
         do i=1,nrecords
             if( .not.valid(i) ) cycle
@@ -1051,11 +1064,13 @@ contains
             do q=1,ncomp
                 data_scale_sp(q,i)=real(data_scales(q,i))
             end do
-            do r=1,ncomp
-                do q=1,r
-                    density_scale_packed(pair_index(q,r),i)=real(density_scales(q,r,i))
+            if( .not.shared_density )then
+                do r=1,ncomp
+                    do q=1,r
+                        density_scale_packed(pair_index(q,r),i)=real(density_scales(q,r,i))
+                    end do
                 end do
-            end do
+            endif
         end do
         call o_sym%kill
         !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,ctfsq_raw,&
@@ -1105,11 +1120,15 @@ contains
                                             basis_rhs(ih,ik,im,q)=basis_rhs(ih,ik,im,q)+ &
                                                 &(data_scale_sp(q,i)*comp_base)*ww
                                         end do
-                                        !$omp simd
-                                        do ipair=1,npairs
-                                            rho_cross_exp(ipair,ih,ik,im)=rho_cross_exp(ipair,ih,ik,im)+ &
-                                                &(density_scale_packed(ipair,i)*ctfsq_raw)*ww
-                                        end do
+                                        if( shared_density )then
+                                            rho_cross_exp(1,ih,ik,im)=rho_cross_exp(1,ih,ik,im)+ctfsq_raw*ww
+                                        else
+                                            !$omp simd
+                                            do ipair=1,npairs
+                                                rho_cross_exp(ipair,ih,ik,im)=rho_cross_exp(ipair,ih,ik,im)+ &
+                                                    &(density_scale_packed(ipair,i)*ctfsq_raw)*ww
+                                            end do
+                                        endif
                                     end do
                                 end do
                             end do
@@ -1120,7 +1139,8 @@ contains
             end do
         end do
         !$omp end parallel
-        deallocate(rotmats,data_scale_sp,density_scale_packed,fpllims,nyq_disks)
+        deallocate(rotmats,data_scale_sp,fpllims,nyq_disks)
+        if( allocated(density_scale_packed) ) deallocate(density_scale_packed)
 
     contains
 
@@ -1133,13 +1153,14 @@ contains
             real,intent(in)::loc(3)
             real,intent(out)::wx(:),wy(:),wz(:)
             integer::j,win_lo(3)
-            real::base(3),sx,sy,sz
+            real::base(3),ww3(3),sx,sy,sz
             win_lo=nint(loc)-iwinsz
             base=real(win_lo)-loc
             do j=1,LATENT_WDIM
-                wx(j)=apod_kb15_a2(base(1)+real(j-1))
-                wy(j)=apod_kb15_a2(base(2)+real(j-1))
-                wz(j)=apod_kb15_a2(base(3)+real(j-1))
+                ww3=kbwin%apod_fast(base+real(j-1))
+                wx(j)=ww3(1)
+                wy(j)=ww3(2)
+                wz(j)=ww3(3)
             end do
             sx=sum(wx); sy=sum(wy); sz=sum(wz)
             if( abs(sx)>eps_norm )then; wx=wx/sx; else; wx=inv_wdim; endif

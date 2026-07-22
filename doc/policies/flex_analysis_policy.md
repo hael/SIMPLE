@@ -184,12 +184,14 @@ or independent reconstruction of common signal for each representative.
 
 The 2D-to-3D translation uses `simple_flex_projected_latent_model`. It projects the
 fixed supplied mean, subtracts that prediction from every prepared particle
-Fourier plane, and accumulates the coupled residual normal equations. The
-right-hand side is weighted by `z_iq`; the density contains every cross-term
-`z_iq*z_ir`. The established coupled block solver therefore accounts for
-correlation between retained graph eigenfunctions instead of reconstructing
-each component independently. The fitted residual basis volumes retain the
-existing spatial-mask policy. As in refine3D restoration, each solved basis is
+Fourier plane, and reconstructs each Nyström residual mode independently. The
+right-hand side for mode `q` is weighted by `z_iq`; every mode uses the same
+ordinary CTF-squared sampling density as `reconstruct3D`. There is no
+voxelwise latent Gram matrix or coupled multi-mode inversion. This is the 3D
+counterpart of `denoise_project`'s residual Nyström pre-image: a linear
+backprojection is performed for each graph eigenfunction and the Nyström
+coefficient is applied only when representative states are synthesized. The
+fitted residual basis volumes retain the existing spatial-mask policy. As in refine3D restoration, each basis is
 transformed to real space, normalized for the reconstruction-box scaling,
 multiplied once by the inverse 3D Kaiser-Bessel instrument function, and
 soft-masked once before it is returned to Fourier space for projection and
@@ -244,7 +246,7 @@ passes does it run a one-component constant-latent test (`z_i=1`, target `1`):
 an ordinary reconstruction and `mean + fitted residual` must agree. It writes
 the reference, flex result, difference map, Fourier-shell correlation table,
 and scalar metrics as `flex_*_preimage_*_test` outputs. A failure is therefore
-localized to plane preparation or to the residual coupled solve / synthesis;
+localized to plane preparation or to the residual density correction / synthesis;
 it is not interpreted as a native-to-registered mapping failure.
 
 ## 6. Shared- and distributed-memory execution
@@ -265,7 +267,7 @@ program name or reconstruction-only commander such as the removed
 factory pattern currently used by `cls_split` and `denoise_project`.
 
 The shared strategy performs registered feature preparation, sparse graph
-construction, embedding, ICM selection, representative selection, one coupled
+construction, embedding, ICM selection, representative selection, one modal
 projected-residual basis fit, and Nyström state synthesis in the main process
 using the established OpenMP kernels. The nano3D latent
 caller uses a separate in-process embedding API and deliberately skips
@@ -282,8 +284,9 @@ barriers behind the same `flex_analysis` program:
    and write those sparse neighbor rows for master assembly.
 3. Residual-model workers receive registered project row indices together with
    their spectral vectors in the standard text assignment files, read registered
-   particle images, and accumulate their assigned coupled projected-latent
-   M-step statistics with canonical registered-frame orientations.
+   particle images, and accumulate their assigned modal residual numerators and
+   one ordinary sampling-density volume with canonical registered-frame
+   orientations.
 
 The master constructs the normal `qsys_env` job description and writes one
 text particle-assignment file per worker. Feature and graph assignments are
@@ -308,8 +311,8 @@ reconstructor remains in `src/main/volume`, because those components are shared
 with established SIMPLE workflows.
 
 The deliberate scheduling unit is a contiguous range of selected-particle
-rows, not class. Feature preparation, graph source-row evaluation, and coupled
-normal-equation accumulation are particle-separable. The fitted residual basis
+rows, not class. Feature preparation, graph source-row evaluation, and modal
+residual accumulation are particle-separable. The fitted residual basis
 and all representative volumes are global outputs; there are no independent
 per-class outputs to schedule. The effective worker count is capped by the
 selected particle count, and the `qsys_env` ranges are materialized exactly in
@@ -318,9 +321,10 @@ the assignment files.
 Each worker processes its assigned particles in the established projected
 latent-model matcher batches and writes one
 `write_mstep_stats_part_file` result. The master calls
-`update_basis_from_mstep_stats_part_files`, which validates and sums those
-coupled sufficient statistics, solves the global basis system, and finalizes
-the residual basis. The master alone adds the fixed mean and synthesizes the
+`update_basis_from_mstep_stats_part_files`, which validates and sums the modal
+right-hand sides plus the shared ordinary density, then applies the normal
+`reconstructor%sampl_dens_correct` path independently to every residual mode.
+The master alone adds the fixed mean and synthesizes the
 requested Nyström representatives. Successful reduction removes the temporary
 statistics files; standard strategy cleanup removes assignment files and
 invokes queue-system cleanup.
@@ -331,7 +335,7 @@ thread, following the established projected-model E-step pattern. Mean-only and
 fused mean-plus-basis projection use the same normalized three-point Cartesian
 Kaiser-Bessel gather and are regression-tested against
 `reconstructor%project_fplane`; the corresponding gather/splat weights are also
-subject to an adjointness test. Coupled 3D insertion keeps one OpenMP team alive
+subject to an adjointness test. Modal 3D insertion keeps one OpenMP team alive
 for the complete particle batch and uses the reconstructor's scalarized
 three-point Kaiser-Bessel gridding pattern.
 The expanded reconstruction lattice retains SIMPLE's nonredundant `h >= 0`
@@ -341,12 +345,10 @@ interpolation halo only and never receive independent projection samples.
 OpenMP insertion colours source lines by at least
 `ceil(sqrt(3)*interpolation_width)`, so concurrently updated rotated 3D
 interpolation windows cannot overlap.
-Each particle's symmetric `z*z^T` coefficients are packed once in contiguous
-pair order; the full packed cross-density vector is updated without dropping
-off-diagonal terms. The voxel solve first rejects empty expanded cells from
-their diagonal density and right-hand side before materializing the full local
-normal matrix. These are execution optimizations only: shared and distributed
-paths retain the same complete coupled normal equations.
+For every particle, the residual numerator is added once per retained mode
+with its `z` coefficient, while the unweighted CTF-squared density is added
+once. Shared and distributed paths use the same batched Cartesian
+Kaiser-Bessel insertion and the same ordinary per-mode density correction.
 
 The former `flex_analysis_mstep` and `flex_analysis_estep` programs and their
 iterative PCA state are not part of this policy.
@@ -360,9 +362,9 @@ Standard output is stage-oriented and concise. It reports:
 - candidate-count range/mean, graph edge count, and graph time;
 - retained rank, whether ICM was enabled, and its convergence summary when used;
 - representative count, medoid particle, and hard population;
-- cumulative read/preparation, mean-projection, and coupled-accumulation times
+- cumulative read/preparation, mean-projection, and modal-accumulation times
   after every M-step batch;
-- coupled projected-residual solve, finalization, and distributed reduction
+- modal projected-residual density correction, finalization, and distributed reduction
   progress when state reconstruction is enabled;
 - an explicit reconstruction-skipped message for embedding-only callers;
 - registered stack/project names.
@@ -391,7 +393,7 @@ constructing trajectory chunks.
 | `icm=no` retention of every eigenpair returned by the `neigs` scan | Implemented |
 | Existing `cluster_dmat` k-medoids in raw diffusion distance | Implemented |
 | Denoise-style graph eigenfunction/Nyström coefficients | Implemented |
-| Coupled projection-aware residual 3D basis fit | Implemented |
+| Independent modal projection-aware residual 3D basis fit | Implemented |
 | Fixed-mean Nyström representative synthesis | Implemented |
 | Generative volumes without FSC or low-pass filtering | Implemented |
 | Shared-memory execution | Implemented |
