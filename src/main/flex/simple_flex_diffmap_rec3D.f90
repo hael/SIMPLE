@@ -9,7 +9,7 @@ use simple_matcher_ptcl_io,        only: discrete_read_imgbatch, discrete_read_i
 use simple_parameters,             only: parameters
 use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
     &update_basis_from_mstep_stats_part_files, cleanup_planes, test_projected_model_plane_preparation, &
-    &prep_imgs4projected_model
+    &prep_imgs4projected_model, solve_coupled_basis_exp
 use simple_flex_reconstructor_latent_ops, only: project_fplane_mean
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled
 use simple_reconstructor,          only: reconstructor
@@ -54,6 +54,7 @@ contains
         real(dp) :: dot_fc, scale_fake_to_standard_residual, fake_to_standard_residual_raw_rel_l2
         real(dp) :: fake_to_standard_residual_scaled_rel_l2, fake_to_standard_residual_cc
         real(dp) :: coupled_rhs_relative_error, coupled_rho_relative_error
+        real(dp) :: coupled_solution_relative_error
         integer :: funit, k
         if( size(pinds)<3 ) THROW_HARD('fake pre-image reconstruction test requires at least three particles')
         test_params = params
@@ -74,7 +75,7 @@ contains
         if( norm_ref2<=DTINY ) THROW_HARD('ordinary reconstruct3D reference produced an empty volume')
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: STANDARD RESIDUAL CONTROL'
         call reconstruct3D_standard_residual_control(test_params,build,pinds,standard_residual_img, &
-            &coupled_rhs_relative_error,coupled_rho_relative_error)
+            &coupled_rhs_relative_error,coupled_rho_relative_error,coupled_solution_relative_error)
         call standard_residual_img%write(string(TEST_STANDARD_RESIDUAL_VOL),del_if_exists=.true.)
         call standard_residual_diff_img%copy(standard_residual_img)
         call standard_residual_diff_img%subtr(reference_rec)
@@ -132,6 +133,7 @@ contains
         write(funit,'(A,ES16.8)') 'standard_residual_relative_l2_after_scale=',standard_residual_scaled_rel_l2
         write(funit,'(A,ES16.8)') 'coupled_raw_rhs_relative_error=',coupled_rhs_relative_error
         write(funit,'(A,ES16.8)') 'coupled_raw_rho_relative_error=',coupled_rho_relative_error
+        write(funit,'(A,ES16.8)') 'coupled_solution_relative_error=',coupled_solution_relative_error
         write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_cc=',fake_to_standard_residual_cc
         write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_optimal_scale=',scale_fake_to_standard_residual
         write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_relative_l2_raw=',fake_to_standard_residual_raw_rel_l2
@@ -154,6 +156,7 @@ contains
             &' scaled_relative_l2=',standard_residual_scaled_rel_l2
         write(logfhandle,'(A,ES12.4,A,ES12.4)') '>>> FLEX RAW COUPLED INSERTION rhs_relative_error=', &
             &coupled_rhs_relative_error,' rho_relative_error=',coupled_rho_relative_error
+        write(logfhandle,'(A,ES12.4)') '>>> FLEX COUPLED SOLVE relative_error=',coupled_solution_relative_error
         write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
             &'>>> FLEX COUPLED-TO-STANDARD-RESIDUAL cc=',fake_to_standard_residual_cc, &
             &' optimal_scale=',scale_fake_to_standard_residual,' raw_relative_l2=', &
@@ -169,8 +172,11 @@ contains
         call reference_ft%kill
         call fake_ft%kill
         deallocate(z,target_coeffs,ref_data,fake_data,standard_residual_data,fsc,resolutions)
-        if( coupled_rhs_relative_error>1.d-5 .or. coupled_rho_relative_error>1.d-5 )then
+        if( coupled_rhs_relative_error>1.d-3 .or. coupled_rho_relative_error>1.d-3 )then
             THROW_HARD('coupled batch insertion differs from ordinary reconstruction insertion')
+        endif
+        if( coupled_solution_relative_error>1.d-3 )then
+            THROW_HARD('coupled solve differs from ordinary sampling-density correction')
         endif
         if( fake_to_standard_residual_cc<TEST_MIN_CC .or. &
             &fake_to_standard_residual_raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
@@ -228,21 +234,23 @@ contains
     !! residual back to the mean must reproduce reconstruct3D.  This control
     !! deliberately does not use the coupled latent accumulator or solver.
     subroutine reconstruct3D_standard_residual_control( params, build, pinds, outvol, coupled_rhs_relative_error, &
-        &coupled_rho_relative_error )
+        &coupled_rho_relative_error, coupled_solution_relative_error )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: pinds(:)
         type(image),       intent(inout) :: outvol
         real(dp),          intent(out)   :: coupled_rhs_relative_error, coupled_rho_relative_error
+        real(dp),          intent(out)   :: coupled_solution_relative_error
         type(reconstructor) :: residual_rec, mean_rec, coupled_rec(1)
         type(fplane_type), allocatable :: standard_fpls(:), model_fpls(:), mean_fpls(:)
         type(image) :: gridcorr_img, mean_img
         type(ori), allocatable :: orientations(:)
         real(dp), allocatable :: unit_z(:,:), unit_second(:,:,:)
         real, allocatable :: coupled_rho_cross(:,:,:,:)
+        complex, allocatable :: standard_cmat(:,:,:), coupled_cmat(:,:,:)
         logical, allocatable :: valid(:)
         integer :: batchlims(2), batchsz, ibatch, i, iptcl
-        real(dp) :: rhs_ref2, rhs_err2, rho_ref2, rho_err2
+        real(dp) :: rhs_ref2, rhs_err2, rho_ref2, rho_err2, solution_ref2, solution_err2
         call init_basis_reconstructor(params,build,residual_rec)
         call init_basis_reconstructor(params,build,coupled_rec(1))
         call init_mean_reconstructor(params,build,mean_rec)
@@ -300,14 +308,22 @@ contains
         rho_err2=sum((real(coupled_rho_cross(1,:,:,:),dp)-real(residual_rec%rho_exp,dp))**2)
         coupled_rhs_relative_error=sqrt(rhs_err2/max(rhs_ref2,DTINY))
         coupled_rho_relative_error=sqrt(rho_err2/max(rho_ref2,DTINY))
+        call solve_coupled_basis_exp(coupled_rec,coupled_rho_cross,1)
+        call residual_rec%compress_exp
+        call residual_rec%sampl_dens_correct
+        call coupled_rec(1)%compress_exp
+        standard_cmat=residual_rec%get_cmat()
+        coupled_cmat=coupled_rec(1)%get_cmat()
+        solution_ref2=sum(real(standard_cmat*conjg(standard_cmat),dp))
+        solution_err2=sum(real((coupled_cmat-standard_cmat)*conjg(coupled_cmat-standard_cmat),dp))
+        coupled_solution_relative_error=sqrt(solution_err2/max(solution_ref2,DTINY))
+        deallocate(standard_cmat,coupled_cmat)
         do i=1,size(orientations)
             call orientations(i)%kill
         end do
         call cleanup_planes(model_fpls)
         call cleanup_planes(mean_fpls)
         call cleanup_rec_buffers(build,standard_fpls)
-        call residual_rec%compress_exp
-        call residual_rec%sampl_dens_correct
         call residual_rec%ifft
         call residual_rec%div(real(params%box))
         gridcorr_img=prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &

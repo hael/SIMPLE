@@ -21,6 +21,7 @@ public :: write_mstep_stats_part_file, update_basis_from_mstep_stats_part_files
 public :: write_estep_latent_part_file, reduce_estep_latent_part_files
 public :: initialize_latents, orthonormalize_latents, latent_sdev, latent_covariance
 public :: basis_fourier_energy, cleanup_planes, projected_model_kfromto, prep_imgs4projected_model
+public :: solve_coupled_basis_exp
 public :: canonicalize_projected_latent_basis
 public :: test_projected_latent_mstep_stats_io, test_projected_latent_canonicalization
 public :: test_projected_model_plane_preparation
