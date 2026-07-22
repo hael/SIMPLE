@@ -140,8 +140,11 @@ contains
             call outproj%os_ptcl3D%set(inative,'state',registered_spproj%os_ptcl3D%get_state(ireg))
             if( registered_spproj%os_ptcl3D%isthere(ireg,'proj') ) &
                 &call outproj%os_ptcl3D%set(inative,'proj',registered_spproj%os_ptcl3D%get_int(ireg,'proj'))
-            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_cluster',required=nmodes>0)
-            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_medoid',required=nmodes>0)
+            ! Cluster labels and medoid markers are diagnostics only.  They
+            ! must never gate construction of the native reconstruction model;
+            ! flex_spectralN below is the sole M-step input.
+            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_cluster',required=.false.)
+            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_medoid',required=.false.)
             do q=1,nmodes
                 label=string('flex_spectral')//int2str(q)
                 call copy_real_key(registered_spproj,outproj,ireg,inative,label%to_char(),required=.true.)
