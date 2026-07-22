@@ -48,7 +48,7 @@ contains
             if( rms > TINY ) features(:,iframe) = features(:,iframe) / rms
         end do
         !$omp end parallel do
-        call build_euclidean_knn_graph(features, min(max(2, k_nn_eff), nframes_here - 1), 'none', graph)
+        call build_euclidean_knn_graph(features, min(max(2, k_nn_eff), nframes_here - 1), graph)
         if( graph%n /= nframes_here ) THROW_HARD('frame-stack graph size mismatch')
         rank_scan = frame_diffmap_rank_scan(nframes_here)
         call embed_graph(graph, rank_scan, coords, eigvals)

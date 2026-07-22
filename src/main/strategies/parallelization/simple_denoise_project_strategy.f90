@@ -417,9 +417,6 @@ contains
             case DEFAULT
                 THROW_HARD('denoise_project supports graph=euc|ori for pca_mode=diffusion_maps')
         end select
-        if( trim(params%steering) /= 'none' )then
-            THROW_HARD('denoise_project supports non-steerable diffusion maps only; use steering=none')
-        endif
         if( trim(params%pca_mode) == 'diffusion_maps' )then
             if( trim(lowercase(params%graph)) == 'ori' )then
                 if( params%nspace < 2 ) THROW_HARD('denoise_project graph=ori requires nspace >= 2')
@@ -623,7 +620,7 @@ contains
         call make_pcavecs(imgs_ppca, npix, avg, pcavecs, transp=.false.)
         call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
         if( graph%n /= nptcls ) THROW_HARD('diffusion-map graph size mismatch; denoise_project')
-        if( trim(graph%metric) /= 'euc' .or. trim(graph%steering) /= 'none' )then
+        if( trim(graph%metric) /= 'euc' )then
             THROW_HARD('denoise_project expected a non-steerable Euclidean graph')
         endif
         k_nn_eff = graph%k_nn
@@ -776,7 +773,7 @@ contains
             endif
             call build_cls_split_graph(params=params, spproj=spproj, pinds=mix_pinds(fromp:top), graph=graph)
             if( graph%n /= nptcls ) THROW_HARD('SO3 mixture graph size mismatch; denoise_project')
-            if( trim(graph%metric) /= 'ori' .or. trim(graph%steering) /= 'none' )then
+            if( trim(graph%metric) /= 'ori' )then
                 THROW_HARD('denoise_project expected a non-steerable orientation graph')
             endif
             write(logfhandle,'(A,I8,A,I10,A,A,A,I8,A,I10)') &

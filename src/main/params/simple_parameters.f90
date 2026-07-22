@@ -289,8 +289,7 @@ type :: parameters
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|steerable_diff_map|diff_map_so3){ppca}
-    character(len=STDLEN)     :: steering='none' !< Orientation graph steering representation(none|so2|se2){none}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -396,7 +395,6 @@ type :: parameters
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=5               !< local nearest-neighbor count for graph-based diffusion splitting
     integer :: nang_nbrs=100        !< angularly gated candidate-particle cap for flex diffusion maps
-    integer :: steerable_nmodes=4   !< angular Fourier modes for cls_split steerable diffusion maps
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image

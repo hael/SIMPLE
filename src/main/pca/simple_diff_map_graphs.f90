@@ -20,7 +20,6 @@ public :: find_gated_euclidean_neighbors_rows
 public :: build_gated_euclidean_graph_from_neighbors
 public :: build_orientation_knn_graph
 public :: graph_matvec
-public :: estimate_graph_shift_scale
 public :: graph_directed_edges
 
 type :: diffmap_graph
@@ -28,94 +27,57 @@ type :: diffmap_graph
     integer :: nnz = 0
     integer :: k_nn = 0
     character(len=16) :: metric   = 'euc'
-    character(len=16) :: steering = 'none'
     integer, allocatable :: rowptr(:)
     integer, allocatable :: colind(:)
     real,    allocatable :: w(:)
     real,    allocatable :: wnorm(:)
-    real,    allocatable :: theta(:)
-    real,    allocatable :: shift_x(:)
-    real,    allocatable :: shift_y(:)
 contains
     procedure :: kill      => kill_diffmap_graph
     procedure :: normalize => normalize_diffmap_graph
     procedure :: degree    => diffmap_graph_degree
-    procedure :: has_theta => diffmap_graph_has_theta
-    procedure :: has_shift => diffmap_graph_has_shift
 end type diffmap_graph
 
 contains
 
-    subroutine build_cls_split_graph( params, spproj, pinds, pcavecs, graph, algninfo )
+    subroutine build_cls_split_graph( params, spproj, pinds, pcavecs, graph )
         type(parameters),           intent(in)    :: params
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: pinds(:)
         real, optional,             intent(in)    :: pcavecs(:,:)
         type(diffmap_graph),        intent(out)   :: graph
-        type(inpl_struct), optional, intent(in)   :: algninfo(:)
-        character(len=16) :: metric, steering
-        logical :: need_algninfo
+        character(len=16) :: metric
         metric = lowercase(trim(params%graph))
         if( trim(metric) /= 'euc' .and. trim(metric) /= 'ori' )then
             THROW_HARD('graph must be euc or ori in build_cls_split_graph')
         endif
-        steering = lowercase(trim(params%steering))
-        if( trim(steering) == '' .or. trim(steering) == 'auto' ) steering = 'none'
-        select case(trim(steering))
-            case('none', 'so2', 'se2')
-            case DEFAULT
-                THROW_HARD('unsupported graph steering in build_cls_split_graph')
-        end select
-        if( trim(metric) == 'euc' .and. trim(steering) /= 'none' )then
-            THROW_HARD('graph=euc supports steering=none only in class splitting')
-        endif
-        need_algninfo = trim(metric) == 'ori' .and. trim(steering) /= 'none'
-        if( need_algninfo )then
-            if( .not. present(algninfo) ) THROW_HARD('steered orientation graph requires alignment info')
-            if( size(algninfo) /= size(pinds) ) THROW_HARD('alignment info size mismatch in build_cls_split_graph')
-        endif
         select case(trim(metric))
             case('ori')
-                if( present(algninfo) )then
-                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph, algninfo)
-                else
-                    call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), steering, graph)
-                endif
+                call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), graph)
             case DEFAULT
                 if( .not. present(pcavecs) ) THROW_HARD('Euclidean graph requires pcavecs')
-                call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), 'none', graph)
+                call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), graph)
         end select
     end subroutine build_cls_split_graph
 
-    subroutine build_euclidean_knn_graph( pcavecs, k_nn, steering, graph, algninfo )
+    subroutine build_euclidean_knn_graph( pcavecs, k_nn, graph )
         real,                 intent(in)  :: pcavecs(:,:)
         integer,              intent(in)  :: k_nn
-        character(len=*),     intent(in)  :: steering
         type(diffmap_graph),  intent(out) :: graph
-        type(inpl_struct), optional, intent(in) :: algninfo(:)
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
         n = size(pcavecs, 2)
         if( n < 1 ) THROW_HARD('empty Euclidean graph')
         if( n == 1 )then
-            call make_singleton_graph('euc', steering, graph)
+            call make_singleton_graph('euc', graph)
             return
-        endif
-        if( trim(steering) /= 'none' )then
-            if( .not. present(algninfo) ) THROW_HARD('steered Euclidean graph requires alignment info')
-            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in build_euclidean_knn_graph')
         endif
         k_used = min(max(1, k_nn), n - 1)
         allocate(nbrs(k_used,n), source=0)
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_euclidean_neighbors(pcavecs, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        if( present(algninfo) )then
-            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', steering, graph, algninfo)
-        else
-            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', steering, graph)
-        endif
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', graph)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_euclidean_knn_graph
 
@@ -144,7 +106,7 @@ contains
         if( size(proj_dirs,1) /= 3 .or. nproj < 1 ) THROW_HARD('invalid projection directions in gated Euclidean graph')
         if( any(proj_ids < 1) .or. any(proj_ids > nproj) ) THROW_HARD('projection id outside direction table')
         if( n == 1 )then
-            call make_singleton_graph('euc_gated', 'none', graph)
+            call make_singleton_graph('euc_gated', graph)
             if( present(ncandidates_min)  ) ncandidates_min  = 0
             if( present(ncandidates_max)  ) ncandidates_max  = 0
             if( present(ncandidates_mean) ) ncandidates_mean = 0.
@@ -246,40 +208,30 @@ contains
         if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
         allocate(kth_d2(n))
         kth_d2=d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated','none',graph)
+        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph)
         deallocate(kth_d2)
     end subroutine build_gated_euclidean_graph_from_neighbors
 
-    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, steering, graph, algninfo )
+    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph )
         type(parameters),      intent(in)    :: params
         type(sp_project),      intent(inout) :: spproj
         integer,               intent(in)    :: pinds(:), k_nn
-        character(len=*),      intent(in)    :: steering
         type(diffmap_graph),   intent(out)   :: graph
-        type(inpl_struct), optional, intent(in) :: algninfo(:)
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
         n = size(pinds)
         if( n < 1 ) THROW_HARD('empty orientation graph')
         if( n == 1 )then
-            call make_singleton_graph('ori', steering, graph)
+            call make_singleton_graph('ori', graph)
             return
-        endif
-        if( trim(steering) /= 'none' )then
-            if( .not. present(algninfo) ) THROW_HARD('steered orientation graph requires alignment info')
-            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in build_orientation_knn_graph')
         endif
         k_used = min(max(1, k_nn), n - 1)
         allocate(nbrs(k_used,n), source=0)
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_orientation_neighbors(spproj, pinds, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        if( present(algninfo) )then
-            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', steering, graph, algninfo)
-        else
-            call pack_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', steering, graph)
-        endif
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', graph)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_orientation_knn_graph
 
@@ -352,83 +304,10 @@ contains
         end do
     end subroutine find_orientation_neighbors
 
-    subroutine pack_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph, algninfo )
+    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph )
         integer,              intent(in)  :: n, k_used, nbrs(:,:)
         real,                 intent(in)  :: d2s(:,:), kth_d2(:)
-        character(len=*),     intent(in)  :: metric, steering
-        type(diffmap_graph),  intent(out) :: graph
-        type(inpl_struct), optional, intent(in) :: algninfo(:)
-        integer, allocatable :: rows(:), cols(:)
-        real,    allocatable :: weights(:), theta(:), sx(:), sy(:)
-        real :: eps, w, th, dx, dy
-        integer :: max_edges, pos, i, m, j
-        logical :: use_theta, use_shift
-        use_theta = trim(steering) == 'so2' .or. trim(steering) == 'se2'
-        use_shift = trim(steering) == 'se2'
-        if( use_theta )then
-            if( .not. present(algninfo) ) THROW_HARD('steered graph requires alignment info in pack_knn_to_csr')
-            if( size(algninfo) /= n ) THROW_HARD('alignment info size mismatch in pack_knn_to_csr')
-        endif
-        if( .not. use_theta )then
-            call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, metric, steering, graph)
-            return
-        endif
-        max_edges = 2 * n * k_used
-        allocate(rows(max_edges), cols(max_edges), source=0)
-        allocate(weights(max_edges), source=0.)
-        if( use_theta ) allocate(theta(max_edges), source=0.)
-        if( use_shift ) allocate(sx(max_edges), sy(max_edges), source=0.)
-        eps = median_positive(kth_d2)
-        if( eps < DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
-        pos = 0
-        do i = 1,n
-            do m = 1,k_used
-                j = nbrs(m,i)
-                if( j < 1 ) cycle
-                w = exp(-max(d2s(m,i), 0.) / eps)
-                call add_edge(i, j, w, 1.)
-                call add_edge(j, i, w, -1.)
-            end do
-        end do
-        if( use_theta .and. use_shift )then
-            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph, &
-                                     theta(:pos), sx(:pos), sy(:pos))
-        else if( use_theta )then
-            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph, theta(:pos))
-        else
-            call coalesce_coo_to_csr(n, rows(:pos), cols(:pos), weights(:pos), metric, steering, graph)
-        endif
-        graph%k_nn = k_used
-        call graph%normalize()
-        deallocate(rows, cols, weights)
-        if( allocated(theta) ) deallocate(theta)
-        if( allocated(sx)    ) deallocate(sx)
-        if( allocated(sy)    ) deallocate(sy)
-    contains
-        subroutine add_edge( ii, jj, ww, sign )
-            integer, intent(in) :: ii, jj
-            real,    intent(in) :: ww, sign
-            pos = pos + 1
-            rows(pos) = ii
-            cols(pos) = jj
-            weights(pos) = ww
-            if( use_theta )then
-                th = deg2rad(wrap_angle_pm180(algninfo(jj)%e3 - algninfo(ii)%e3))
-                theta(pos) = sign * th
-            endif
-            if( use_shift )then
-                dx = algninfo(jj)%x - algninfo(ii)%x
-                dy = algninfo(jj)%y - algninfo(ii)%y
-                sx(pos) = sign * dx
-                sy(pos) = sign * dy
-            endif
-        end subroutine add_edge
-    end subroutine pack_knn_to_csr
-
-    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, steering, graph )
-        integer,              intent(in)  :: n, k_used, nbrs(:,:)
-        real,                 intent(in)  :: d2s(:,:), kth_d2(:)
-        character(len=*),     intent(in)  :: metric, steering
+        character(len=*),     intent(in)  :: metric
         type(diffmap_graph),  intent(out) :: graph
         integer, allocatable :: counts(:), cursor(:)
         real :: eps, w
@@ -448,7 +327,6 @@ contains
         graph%n        = n
         graph%nnz      = nnz
         graph%metric   = metric
-        graph%steering = steering
         graph%k_nn     = k_used
         allocate(graph%rowptr(n+1), graph%colind(nnz), graph%w(nnz))
         graph%rowptr(1) = 1
@@ -491,101 +369,18 @@ contains
         end function neighbor_contains
     end subroutine pack_scalar_knn_to_csr
 
-    subroutine coalesce_coo_to_csr( n, rows, cols, weights, metric, steering, graph, theta, sx, sy )
-        integer,              intent(in)  :: n, rows(:), cols(:)
-        real,                 intent(in)  :: weights(:)
-        character(len=*),     intent(in)  :: metric, steering
-        type(diffmap_graph),  intent(out) :: graph
-        real, optional,       intent(in)  :: theta(:), sx(:), sy(:)
-        integer, allocatable :: out_rows(:), out_cols(:), counts(:), cursor(:)
-        real,    allocatable :: out_w(:), out_theta(:), out_sx(:), out_sy(:)
-        integer :: e, f, nnz, p, i
-        logical :: found, with_theta, with_shift
-        if( size(rows) /= size(cols) .or. size(rows) /= size(weights) ) THROW_HARD('COO graph size mismatch')
-        with_theta = present(theta)
-        with_shift = present(sx) .and. present(sy)
-        allocate(out_rows(size(rows)), out_cols(size(cols)), source=0)
-        allocate(out_w(size(weights)), source=0.)
-        if( with_theta ) allocate(out_theta(size(rows)), source=0.)
-        if( with_shift ) allocate(out_sx(size(rows)), out_sy(size(rows)), source=0.)
-        nnz = 0
-        do e = 1,size(rows)
-            if( rows(e) < 1 .or. rows(e) > n .or. cols(e) < 1 .or. cols(e) > n ) THROW_HARD('COO graph index out of range')
-            if( weights(e) <= DTINY .or. .not. ieee_is_finite(weights(e)) ) cycle
-            found = .false.
-            do f = 1,nnz
-                if( out_rows(f) /= rows(e) .or. out_cols(f) /= cols(e) ) cycle
-                found = .true.
-                if( weights(e) > out_w(f) )then
-                    out_w(f) = weights(e)
-                    if( with_theta ) out_theta(f) = theta(e)
-                    if( with_shift )then
-                        out_sx(f) = sx(e)
-                        out_sy(f) = sy(e)
-                    endif
-                endif
-                exit
-            end do
-            if( .not. found )then
-                nnz = nnz + 1
-                out_rows(nnz) = rows(e)
-                out_cols(nnz) = cols(e)
-                out_w(nnz)    = weights(e)
-                if( with_theta ) out_theta(nnz) = theta(e)
-                if( with_shift )then
-                    out_sx(nnz) = sx(e)
-                    out_sy(nnz) = sy(e)
-                endif
-            endif
-        end do
-        graph%n        = n
-        graph%nnz      = nnz
-        graph%metric   = metric
-        graph%steering = steering
-        allocate(graph%rowptr(n+1), graph%colind(nnz), graph%w(nnz))
-        if( with_theta ) allocate(graph%theta(nnz), source=0.)
-        if( with_shift ) allocate(graph%shift_x(nnz), graph%shift_y(nnz), source=0.)
-        allocate(counts(n), cursor(n), source=0)
-        do e = 1,nnz
-            counts(out_rows(e)) = counts(out_rows(e)) + 1
-        end do
-        graph%rowptr(1) = 1
-        do i = 1,n
-            graph%rowptr(i+1) = graph%rowptr(i) + counts(i)
-        end do
-        cursor = graph%rowptr(1:n)
-        do e = 1,nnz
-            p = cursor(out_rows(e))
-            graph%colind(p) = out_cols(e)
-            graph%w(p)      = out_w(e)
-            if( with_theta ) graph%theta(p) = out_theta(e)
-            if( with_shift )then
-                graph%shift_x(p) = out_sx(e)
-                graph%shift_y(p) = out_sy(e)
-            endif
-            cursor(out_rows(e)) = cursor(out_rows(e)) + 1
-        end do
-        deallocate(out_rows, out_cols, out_w, counts, cursor)
-        if( allocated(out_theta) ) deallocate(out_theta)
-        if( allocated(out_sx)    ) deallocate(out_sx)
-        if( allocated(out_sy)    ) deallocate(out_sy)
-    end subroutine coalesce_coo_to_csr
-
-    subroutine make_singleton_graph( metric, steering, graph )
-        character(len=*),    intent(in)  :: metric, steering
+    subroutine make_singleton_graph( metric, graph )
+        character(len=*),    intent(in)  :: metric
         type(diffmap_graph), intent(out) :: graph
-        graph%n        = 1
-        graph%nnz      = 1
-        graph%k_nn     = 0
-        graph%metric   = metric
-        graph%steering = steering
+        graph%n      = 1
+        graph%nnz    = 1
+        graph%k_nn   = 0
+        graph%metric = metric
         allocate(graph%rowptr(2), graph%colind(1), graph%w(1), graph%wnorm(1))
         graph%rowptr = [1,2]
         graph%colind = [1]
         graph%w      = [1.]
         graph%wnorm  = [1.]
-        if( trim(steering) == 'so2' .or. trim(steering) == 'se2' ) allocate(graph%theta(1), source=0.)
-        if( trim(steering) == 'se2' ) allocate(graph%shift_x(1), graph%shift_y(1), source=0.)
     end subroutine make_singleton_graph
 
     subroutine normalize_diffmap_graph( self )
@@ -655,48 +450,17 @@ contains
         nedges = graph%nnz
     end function graph_directed_edges
 
-    logical function diffmap_graph_has_theta( self ) result(l_has)
-        class(diffmap_graph), intent(in) :: self
-        l_has = allocated(self%theta)
-    end function diffmap_graph_has_theta
-
-    logical function diffmap_graph_has_shift( self ) result(l_has)
-        class(diffmap_graph), intent(in) :: self
-        l_has = allocated(self%shift_x) .and. allocated(self%shift_y)
-    end function diffmap_graph_has_shift
-
     subroutine kill_diffmap_graph( self )
         class(diffmap_graph), intent(inout) :: self
-        if( allocated(self%rowptr)  ) deallocate(self%rowptr)
-        if( allocated(self%colind)  ) deallocate(self%colind)
-        if( allocated(self%w)       ) deallocate(self%w)
-        if( allocated(self%wnorm)   ) deallocate(self%wnorm)
-        if( allocated(self%theta)   ) deallocate(self%theta)
-        if( allocated(self%shift_x) ) deallocate(self%shift_x)
-        if( allocated(self%shift_y) ) deallocate(self%shift_y)
-        self%n = 0
-        self%nnz = 0
-        self%k_nn = 0
+        if( allocated(self%rowptr) ) deallocate(self%rowptr)
+        if( allocated(self%colind) ) deallocate(self%colind)
+        if( allocated(self%w)      ) deallocate(self%w)
+        if( allocated(self%wnorm)  ) deallocate(self%wnorm)
+        self%n      = 0
+        self%nnz    = 0
+        self%k_nn   = 0
         self%metric = 'euc'
-        self%steering = 'none'
     end subroutine kill_diffmap_graph
-
-    real function estimate_graph_shift_scale( graph ) result(scale)
-        type(diffmap_graph), intent(in) :: graph
-        real :: acc, r
-        integer :: p, n
-        scale = 1.
-        if( .not. graph%has_shift() ) return
-        acc = 0.
-        n   = 0
-        do p = 1,graph%nnz
-            r = sqrt(graph%shift_x(p)**2 + graph%shift_y(p)**2)
-            if( r <= DTINY .or. .not. ieee_is_finite(r) ) cycle
-            acc = acc + r
-            n = n + 1
-        end do
-        if( n > 0 ) scale = max(acc / real(n), 1.e-3)
-    end function estimate_graph_shift_scale
 
     subroutine insert_neighbor( ind, dist, inds, dists )
         integer, intent(in)    :: ind
@@ -743,10 +507,5 @@ contains
         endif
         deallocate(work)
     end function median_positive
-
-    real function wrap_angle_pm180( angle_deg ) result(wrapped)
-        real, intent(in) :: angle_deg
-        wrapped = modulo(angle_deg + 180., 360.) - 180.
-    end function wrap_angle_pm180
 
 end module simple_diff_map_graphs

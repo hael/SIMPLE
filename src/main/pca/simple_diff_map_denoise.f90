@@ -19,16 +19,10 @@ public :: calc_diffmap_reconstruction_error
 public :: calc_diffmap_residual_energy_ratio
 public :: select_spectral_rank_icm
 
-integer, parameter :: SE2_NTRANS_MODES                         = 2
 integer, parameter :: DIFFMAP_DENOISE_ICM_RANK_MAXITS          = 16
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_BETA_FRAC       = 0.35
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_COMPLEXITY_FRAC = 0.10
 real,    parameter :: DIFFMAP_DENOISE_ICM_RANK_LOWER_SEED_FRAC = 0.50
-
-type :: graph_mode_context
-    type(diffmap_graph), pointer :: graph => null()
-    integer :: mode = 0
-end type graph_mode_context
 
 contains
 
@@ -40,20 +34,8 @@ contains
         type(image), allocatable, intent(out) :: coeff_ptcls(:)
         integer, optional,        intent(in)  :: rank_keep_override
         logical, optional,        intent(in)  :: verbose
-        select case(lowercase(trim(graph%steering)))
-            case('none')
-                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta=.true., &
-                                           rank_keep_override=rank_keep_override, verbose=verbose)
-            case('so2')
-                call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override, &
-                                           verbose=verbose)
-            case('se2')
-                call se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override=rank_keep_override, &
-                                                verbose=verbose)
-            case DEFAULT
-                write(logfhandle,'(A,A)') 'Graph coefficient denoising skipped: unknown steering=', trim(graph%steering)
-                call flush(logfhandle)
-        end select
+        call so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta=.true., &
+                                   rank_keep_override=rank_keep_override, verbose=verbose)
     end subroutine graph_coeffproj_denoise
 
     subroutine so2_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, force_zero_theta, rank_keep_override, verbose)
@@ -82,7 +64,7 @@ contains
         if( present(force_zero_theta) ) zero_theta = force_zero_theta
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
-        if( .not. zero_theta .and. .not. graph%has_theta() ) return
+        if( .not. zero_theta .and. .not. graph%n > 0 ) return
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         if( size(avg) /= product(ldim) ) return
@@ -97,7 +79,7 @@ contains
         pftsz     = pftc%get_pftsz()
         nrots     = pftc%get_nrots()
         nk        = kfromto(2) - kfromto(1) + 1
-        mode_max  = min(max(0, params%steerable_nmodes), max(0, pftsz - 1))
+        mode_max  = 0
         if( present(rank_keep_override) )then
             rank_keep = min(max(1, rank_keep_override), nptcls)
         else
@@ -125,11 +107,6 @@ contains
             call extract_pft_angular_mode(pfts, kfromto, nrots, mode, mode_coeff)
             call project_pft_angular_mode(graph, mode, mode_coeff, mode_hat, rank_keep, zero_theta)
             call accumulate_pft_angular_mode(pfts_hat, kfromto, nrots, mode, mode_hat)
-            if( mode > 0 )then
-                call extract_pft_angular_mode(pfts, kfromto, nrots, -mode, mode_coeff)
-                call project_pft_angular_mode(graph, -mode, mode_coeff, mode_hat, rank_keep, zero_theta)
-                call accumulate_pft_angular_mode(pfts_hat, kfromto, nrots, -mode, mode_hat)
-            endif
         end do
         coeff_ptcls = copy_imgarr(imgs)
         call synth_img%new(ldim, smpd, wthreads=.false.)
@@ -147,131 +124,6 @@ contains
         call avg_img%kill
         deallocate(pfts, pfts_hat, pft_tmp, mode_coeff, mode_hat)
     end subroutine so2_coeffproj_denoise
-
-    subroutine se2_sync_coeffproj_denoise(params, imgs, avg, graph, coeff_ptcls, rank_keep_override, verbose)
-        type(parameters),         intent(in)  :: params
-        class(image),             intent(in)  :: imgs(:)
-        real,                     intent(in)  :: avg(:)
-        type(diffmap_graph), target, intent(in) :: graph
-        type(image), allocatable, intent(out) :: coeff_ptcls(:)
-        integer, optional,        intent(in)  :: rank_keep_override
-        logical, optional,        intent(in)  :: verbose
-        type(image), allocatable :: imgs_sync(:), den_sync(:)
-        type(image) :: avg_img, tmp_img
-        real, allocatable :: phi(:), sx(:), sy(:), rmat_rot(:,:,:)
-        integer :: nptcls, ldim(3), i
-        real :: smpd, angle_deg
-        logical :: l_verbose
-        nptcls = size(imgs)
-        if( nptcls < 2 ) return
-        l_verbose = .true.
-        if( present(verbose) ) l_verbose = verbose
-        if( graph%n /= nptcls .or. .not. graph%has_theta() .or. .not. graph%has_shift() ) return
-        ldim = imgs(1)%get_ldim()
-        smpd = imgs(1)%get_smpd()
-        if( size(avg) /= product(ldim) ) return
-        call synchronize_graph_potential(graph, 'theta', phi)
-        call synchronize_graph_potential(graph, 'shift_x', sx)
-        call synchronize_graph_potential(graph, 'shift_y', sy)
-        allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
-        imgs_sync = copy_imgarr(imgs)
-        call avg_img%new(ldim, smpd)
-        call tmp_img%new(ldim, smpd)
-        call avg_img%unserialize(avg)
-        do i = 1,nptcls
-            call tmp_img%copy(imgs(i))
-            call tmp_img%subtr(avg_img)
-            call tmp_img%fft()
-            call tmp_img%shift2Dserial([-sx(i), -sy(i)])
-            call tmp_img%ifft()
-            angle_deg = rad2deg(phi(i))
-            call tmp_img%rtsq_serial(angle_deg, 0., 0., rmat_rot)
-            call tmp_img%set_rmat(rmat_rot, .false.)
-            call imgs_sync(i)%copy(avg_img)
-            call imgs_sync(i)%add(tmp_img)
-        end do
-        call so2_coeffproj_denoise(params, imgs_sync, avg, graph, den_sync, force_zero_theta=.true., &
-                                   rank_keep_override=rank_keep_override, verbose=verbose)
-        if( .not. allocated(den_sync) )then
-            call dealloc_imgarr(imgs_sync)
-            call avg_img%kill
-            call tmp_img%kill
-            deallocate(phi, sx, sy, rmat_rot)
-            return
-        endif
-        coeff_ptcls = copy_imgarr(imgs)
-        do i = 1,nptcls
-            call tmp_img%copy(den_sync(i))
-            call tmp_img%subtr(avg_img)
-            angle_deg = -rad2deg(phi(i))
-            call tmp_img%rtsq_serial(angle_deg, 0., 0., rmat_rot)
-            call tmp_img%set_rmat(rmat_rot, .false.)
-            call tmp_img%fft()
-            call tmp_img%shift2Dserial([sx(i), sy(i)])
-            call tmp_img%ifft()
-            call coeff_ptcls(i)%copy(avg_img)
-            call coeff_ptcls(i)%add(tmp_img)
-        end do
-        if( l_verbose )then
-            write(logfhandle,'(A,I8,A,I8,A,F8.3,A,F8.3)') 'SE2 graph coefficient denoising: n=', nptcls, &
-                ' directed_edges=', graph%nnz, ' phi_span_deg=', rad2deg(maxval(phi) - minval(phi)), &
-                ' shift_span_px=', max(maxval(sx)-minval(sx), maxval(sy)-minval(sy))
-            call flush(logfhandle)
-        endif
-        call dealloc_imgarr(imgs_sync)
-        call dealloc_imgarr(den_sync)
-        call avg_img%kill
-        call tmp_img%kill
-        deallocate(phi, sx, sy, rmat_rot)
-    end subroutine se2_sync_coeffproj_denoise
-
-    subroutine synchronize_graph_potential(graph, field, potential)
-        type(diffmap_graph), intent(in) :: graph
-        character(len=*),    intent(in) :: field
-        real, allocatable,   intent(out) :: potential(:)
-        logical, allocatable :: known(:)
-        integer :: seed, i, j, p, nknown
-        allocate(potential(graph%n), source=0.)
-        allocate(known(graph%n), source=.false.)
-        known = .false.
-        seed = 1
-        do while( seed <= graph%n )
-            if( .not. known(seed) )then
-                known(seed) = .true.
-                do
-                    nknown = count(known)
-                    do i = 1,graph%n
-                        if( .not. known(i) ) cycle
-                        do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                            j = graph%colind(p)
-                            if( known(j) ) cycle
-                            potential(j) = potential(i) + edge_delta(graph, p, field)
-                            known(j) = .true.
-                        end do
-                    end do
-                    if( count(known) == nknown ) exit
-                end do
-            endif
-            seed = seed + 1
-        end do
-        deallocate(known)
-    end subroutine synchronize_graph_potential
-
-    real function edge_delta(graph, p, field) result(delta)
-        type(diffmap_graph), intent(in) :: graph
-        integer,             intent(in) :: p
-        character(len=*),    intent(in) :: field
-        select case(trim(field))
-            case('theta')
-                delta = graph%theta(p)
-            case('shift_x')
-                delta = graph%shift_x(p)
-            case('shift_y')
-                delta = graph%shift_y(p)
-            case DEFAULT
-                delta = 0.
-        end select
-    end function edge_delta
 
     subroutine prepare_steerable_pft_params(params, ldim, smpd, params_pft)
         type(parameters), intent(in)  :: params
@@ -296,104 +148,32 @@ contains
         complex(sp), intent(in)  :: mode_coeff(:,:)
         complex(sp), intent(out) :: mode_hat(:,:)
         logical,     intent(in)  :: zero_theta
-        type(graph_mode_context) :: ctx
-        real, allocatable :: evals(:), evecs(:,:), y(:,:), yhat(:,:)
+        real, allocatable :: evals(:), evecs(:,:)
         complex(sp) :: coeff_ck
-        real :: coeff_rk
-        integer :: n, n2, nk, nkeep, a, i, k, info, max_basis
+        integer :: n, nk, nkeep, a, i, k, info, max_basis
         n  = size(mode_coeff,1)
         nk = size(mode_coeff,2)
         mode_hat = cmplx(0.,0.,kind=sp)
         if( n < 1 .or. nk < 1 ) return
-        if( mode == 0 .or. zero_theta )then
-            nkeep = min(max(1, rank_keep), n)
-            allocate(evals(nkeep), evecs(n,nkeep))
-            max_basis = min(n, max(160, 8 * nkeep + 80))
-            call sparse_eigh(graph_matvec, graph, n, nkeep, evals, evecs, tol=1.e-5, max_basis=max_basis, info=info)
-            !$omp parallel do default(shared) private(k,a,i,coeff_ck) schedule(static) proc_bind(close)
-            do k = 1,nk
-                do a = 1,nkeep
-                    coeff_ck = cmplx(0.,0.,kind=sp)
-                    do i = 1,n
-                        coeff_ck = coeff_ck + real(evecs(i,a), kind=sp) * mode_coeff(i,k)
-                    end do
-                    do i = 1,n
-                        mode_hat(i,k) = mode_hat(i,k) + real(evecs(i,a), kind=sp) * coeff_ck
-                    end do
+        nkeep = min(max(1, rank_keep), n)
+        allocate(evals(nkeep), evecs(n,nkeep))
+        max_basis = min(n, max(160, 8 * nkeep + 80))
+        call sparse_eigh(graph_matvec, graph, n, nkeep, evals, evecs, tol=1.e-5, max_basis=max_basis, info=info)
+        !$omp parallel do default(shared) private(k,a,i,coeff_ck) schedule(static) proc_bind(close)
+        do k = 1,nk
+            do a = 1,nkeep
+                coeff_ck = cmplx(0.,0.,kind=sp)
+                do i = 1,n
+                    coeff_ck = coeff_ck + real(evecs(i,a), kind=sp) * mode_coeff(i,k)
                 end do
-            end do
-            !$omp end parallel do
-            deallocate(evals, evecs)
-        else
-            n2 = 2 * n
-            nkeep = min(max(2, 2 * rank_keep), n2)
-            ctx%graph => graph
-            ctx%mode  = mode
-            allocate(evals(nkeep), evecs(n2,nkeep), y(n2,nk), yhat(n2,nk))
-            max_basis = min(n2, max(160, 8 * nkeep + 80))
-            call sparse_eigh(so2_graph_matvec, ctx, n2, nkeep, evals, evecs, tol=1.e-5, max_basis=max_basis, info=info)
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-            do i = 1,n
-                y(i,:)   = real(mode_coeff(i,:))
-                y(n+i,:) = aimag(mode_coeff(i,:))
-            end do
-            !$omp end parallel do
-            yhat = 0.
-            !$omp parallel do default(shared) private(k,a,i,coeff_rk) schedule(static) proc_bind(close)
-            do k = 1,nk
-                do a = 1,nkeep
-                    coeff_rk = 0.
-                    do i = 1,n2
-                        coeff_rk = coeff_rk + evecs(i,a) * y(i,k)
-                    end do
-                    do i = 1,n2
-                        yhat(i,k) = yhat(i,k) + evecs(i,a) * coeff_rk
-                    end do
+                do i = 1,n
+                    mode_hat(i,k) = mode_hat(i,k) + real(evecs(i,a), kind=sp) * coeff_ck
                 end do
-            end do
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-            do i = 1,n
-                mode_hat(i,:) = cmplx(yhat(i,:), yhat(n+i,:), kind=sp)
-            end do
-            !$omp end parallel do
-            deallocate(evals, evecs, y, yhat)
-        endif
-    end subroutine project_pft_angular_mode
-
-    subroutine so2_graph_matvec(ctx_any, x, y)
-        class(*), intent(in)  :: ctx_any
-        real,     intent(in)  :: x(:)
-        real,     intent(out) :: y(:)
-        type(diffmap_graph), pointer :: graph
-        real :: w, phase, c, s
-        integer :: n, i, j, p, mode
-        select type(ctx => ctx_any)
-        type is (graph_mode_context)
-            graph => ctx%graph
-            mode = ctx%mode
-        class default
-            THROW_HARD('invalid SO2 graph matvec context')
-        end select
-        n = graph%n
-        if( size(x) /= 2*n .or. size(y) /= 2*n ) THROW_HARD('SO2 graph matvec shape mismatch')
-        y = 0.
-        do i = 1,n
-            do p = graph%rowptr(i), graph%rowptr(i+1) - 1
-                j = graph%colind(p)
-                if( allocated(graph%wnorm) )then
-                    w = graph%wnorm(p)
-                else
-                    w = graph%w(p)
-                endif
-                phase = real(mode) * graph%theta(p)
-                c = cos(phase)
-                s = sin(phase)
-                y(i)   = y(i)   + w * ( c * x(j) - s * x(n+j) )
-                y(n+i) = y(n+i) + w * ( s * x(j) + c * x(n+j) )
             end do
         end do
-    end subroutine so2_graph_matvec
+        !$omp end parallel do
+        deallocate(evals, evecs)
+    end subroutine project_pft_angular_mode
 
     subroutine extract_pft_angular_mode(pfts, kfromto, nrots, mode, mode_coeff)
         complex(sp), intent(in)  :: pfts(:,:,:)

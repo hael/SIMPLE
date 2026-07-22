@@ -50,7 +50,7 @@ do i=1,size(features_many,2)
     angle=2.*acos(-1.)*real(i-1)/real(size(features_many,2))
     features_many(:,i)=[cos(angle),sin(angle)]
 end do
-call build_euclidean_knn_graph(features_many,6,'none',graph_many)
+call build_euclidean_knn_graph(features_many,6,graph_many)
 call embed_graph(graph_many,21,coords,eigvals)
 if( size(eigvals)/=21 .or. any(shape(coords)/=[21,24]) ) stop 'diffusion scan was capped below requested rank'
 deallocate(coords,eigvals)

@@ -135,7 +135,6 @@ contains
                 call cline%set('graph', 'euc')
             endif
         endif
-        if( .not. cline%defined('steering') ) call cline%set('steering', 'none')
         call set_automask2D_defaults(cline)
     end subroutine apply_defaults
 
@@ -170,13 +169,6 @@ contains
             case('euc','ori')
             case DEFAULT
                 THROW_HARD('cls_split supports graph=euc|ori only')
-        end select
-        select case(trim(lowercase(params%steering)))
-            case('none')
-            case('so2','se2')
-                THROW_HARD('cls_split currently requires steering=none')
-            case DEFAULT
-                THROW_HARD('cls_split supports steering=none only')
         end select
         if( params%k_nn < 1 ) THROW_HARD('cls_split requires k_nn >= 1')
         if( params%neigs < 0 ) THROW_HARD('cls_split requires neigs >= 0; use neigs=0 for auto scan')
@@ -692,8 +684,8 @@ contains
 
     subroutine make_split_embedding(params, spproj, pinds, cls_id, nptcls, npix, pcavecs, imgs_ppca, coords, eigvals, &
                                     graph)
-        use simple_diff_map_graphs, only: diffmap_graph, build_cls_split_graph, estimate_graph_shift_scale
-        use simple_diffusion_maps,  only: embed_graph, embed_so2_graph, embed_se2_graph
+        use simple_diff_map_graphs, only: diffmap_graph, build_cls_split_graph
+        use simple_diffusion_maps,  only: embed_graph
         use simple_kpca_svd,        only: kpca_svd
         type(parameters),  intent(inout) :: params
         type(sp_project),  intent(inout) :: spproj
@@ -705,7 +697,6 @@ contains
         type(diffmap_graph), intent(inout) :: graph
         type(kpca_svd) :: kpca_model
         real, allocatable :: feat(:)
-        real :: se2_shift_scale
         integer :: neigs, neigs_scan, neigs_used, i
         call graph%kill()
         if( params%neigs > 0 )then
@@ -722,21 +713,7 @@ contains
         select case(trim(params%pca_mode))
             case('diffusion_maps')
                 call build_cls_split_graph(params, spproj, pinds, pcavecs, graph)
-                select case(trim(graph%steering))
-                    case('none')
-                        call embed_graph(graph, neigs, coords, eigvals)
-                    case('so2')
-                        call embed_so2_graph(graph, neigs, params%steerable_nmodes, coords, eigvals)
-                    case('se2')
-                        se2_shift_scale = estimate_graph_shift_scale(graph)
-                        if( params%trs > 0. ) se2_shift_scale = max(se2_shift_scale, params%trs)
-                        write(logfhandle,'(A,I8,A,F10.4)') 'Cls split SE2 steering: class=', cls_id, &
-                            ' shift_scale=', se2_shift_scale
-                        call flush(logfhandle)
-                        call embed_se2_graph(graph, neigs, params%steerable_nmodes, se2_shift_scale, coords, eigvals)
-                    case DEFAULT
-                        THROW_HARD('unsupported graph steering in class-split embedding')
-                end select
+                call embed_graph(graph, neigs, coords, eigvals)
             case('kpca')
                 call kpca_model%new(nptcls, npix, neigs)
                 call kpca_model%set_params(params%nthr, params%kpca_ker, params%kpca_backend, params%kpca_nystrom_npts, &
@@ -761,8 +738,8 @@ contains
             call flush(logfhandle)
         endif
         if( graph%n > 0 )then
-            write(logfhandle,'(A,A,A,A,A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', &
-                trim(params%pca_mode), ' metric=', trim(graph%metric), ' steering=', trim(graph%steering), &
+            write(logfhandle,'(A,A,A,A,A,I8,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', &
+                trim(params%pca_mode), ' metric=', trim(graph%metric), &
                 ' class=', cls_id, ' size=', nptcls, ' dims=', size(coords,1), ' nnz=', graph%nnz
         else
             write(logfhandle,'(A,A,A,I8,A,I8,A,I8)') 'Cls split embedding: mode=', trim(params%pca_mode), &

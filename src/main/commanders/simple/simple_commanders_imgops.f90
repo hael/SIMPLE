@@ -441,7 +441,7 @@ contains
         neigs = params%neigs
         if( l_diffmap )then
             call system_clock(t0)
-            call build_euclidean_knn_graph(pcavecs, min(max(2, params%k_nn), max(2, params%nptcls-1)), 'none', steer_graph)
+            call build_euclidean_knn_graph(pcavecs, min(max(2, params%k_nn), max(2, params%nptcls-1)), steer_graph)
             call estimate_diffmap_denoise_rank(params, steer_graph, 0, params%nptcls, den_rank, &
                                                icm_converged, icm_iters, icm_score)
             call system_clock(t1)
