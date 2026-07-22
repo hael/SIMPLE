@@ -2,7 +2,10 @@
 module simple_flex_diffmap_rec3D
 use simple_core_module_api
 use simple_builder,                only: builder
+use simple_gridding,               only: prep3D_inv_instrfun4mul
 use simple_image,                  only: image
+use simple_matcher_3Drec,          only: init_rec, prep_imgs4rec, cleanup_rec_buffers
+use simple_matcher_ptcl_io,        only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch
 use simple_parameters,             only: parameters
 use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
     &update_basis_from_mstep_stats_part_files, cleanup_planes
@@ -13,8 +16,147 @@ private
 
 public :: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, reduce_flex_diffmap_rec_parts
 public :: cleanup_flex_diffmap_rec_parts
+public :: test_fake_preimage_against_reconstruct3D
+
+character(len=*), parameter :: TEST_FAKE_VOL = 'flex_fake_preimage_test.mrc'
+character(len=*), parameter :: TEST_REF_VOL  = 'flex_reconstruct3D_reference_test.mrc'
+character(len=*), parameter :: TEST_DIFF_VOL = 'flex_fake_preimage_difference_test.mrc'
+character(len=*), parameter :: TEST_FSC_FILE = 'flex_fake_preimage_fsc_test.txt'
+character(len=*), parameter :: TEST_METRICS_FILE = 'flex_fake_preimage_metrics_test.txt'
+real(dp), parameter :: TEST_MIN_CC = 0.995d0
+real(dp), parameter :: TEST_MAX_RAW_REL_L2 = 0.10d0
+real(dp), parameter :: TEST_MAX_SCALED_REL_L2 = 0.05d0
 
 contains
+
+    !> Data-driven reconstruction identity test.  With one constant latent
+    !! coordinate z_i=1 and target coefficient 1, the projection-aware model
+    !! must satisfy mean + residual == the ordinary reconstruct3D solution.
+    !! Output-side masking and filtering are disabled so this is an algebraic
+    !! reconstruction test rather than a policy/postprocessing comparison.
+    subroutine test_fake_preimage_against_reconstruct3D( params, build, pinds )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: pinds(:)
+        type(parameters) :: test_params
+        type(reconstructor) :: reference_rec
+        type(image) :: fake_img, diff_img, reference_ft, fake_ft
+        real, allocatable :: z(:,:), target_coeffs(:,:), ref_data(:,:,:), fake_data(:,:,:)
+        real, allocatable :: fsc(:), resolutions(:)
+        real(dp) :: dot_rf, norm_ref2, norm_fake2, scale_fake, raw_rel_l2, scaled_rel_l2, cc
+        integer :: funit, k
+        if( size(pinds)<3 ) THROW_HARD('fake pre-image reconstruction test requires at least three particles')
+        test_params = params
+        test_params%lp       = 0.
+        test_params%msk_crop = 0.
+        test_params%ml_reg   = 'no'
+        test_params%l_ml_reg = .false.
+        test_params%outvol   = TEST_FAKE_VOL
+        allocate(z(size(pinds),1),source=1.0)
+        allocate(target_coeffs(1,1),source=1.0)
+        write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE IDENTITY TEST PARTICLES: ',size(pinds)
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: ORDINARY RECONSTRUCT3D REFERENCE'
+        call reconstruct3D_reference(test_params,build,pinds,reference_rec)
+        call reference_rec%write(string(TEST_REF_VOL),del_if_exists=.true.)
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: CONSTANT z=1 PRE-IMAGE'
+        call reconstruct_flex_diffmap_states(test_params,build,pinds,z,target_coeffs,1)
+        call fake_img%read(string(TEST_FAKE_VOL))
+        call diff_img%copy(fake_img)
+        call diff_img%subtr(reference_rec)
+        call diff_img%write(string(TEST_DIFF_VOL),del_if_exists=.true.)
+        ref_data  = reference_rec%get_rmat()
+        fake_data = fake_img%get_rmat()
+        dot_rf     = sum(real(ref_data,dp)*real(fake_data,dp))
+        norm_ref2  = sum(real(ref_data,dp)*real(ref_data,dp))
+        norm_fake2 = sum(real(fake_data,dp)*real(fake_data,dp))
+        if( norm_ref2<=DTINY .or. norm_fake2<=DTINY ) &
+            &THROW_HARD('fake pre-image reconstruction test produced an empty volume')
+        scale_fake = dot_rf/norm_fake2
+        raw_rel_l2 = sqrt(sum((real(fake_data,dp)-real(ref_data,dp))**2)/norm_ref2)
+        scaled_rel_l2 = sqrt(sum((scale_fake*real(fake_data,dp)-real(ref_data,dp))**2)/norm_ref2)
+        cc = reference_rec%corr(fake_img)
+        call reference_ft%copy(reference_rec)
+        call fake_ft%copy(fake_img)
+        call reference_ft%fft
+        call fake_ft%fft
+        allocate(fsc(fdim(params%box_crop)-1),source=0.)
+        call reference_ft%fsc(fake_ft,fsc)
+        resolutions=get_resarr(params%box_crop,params%smpd_crop)
+        open(newunit=funit,file=TEST_FSC_FILE,status='replace',action='write')
+        write(funit,'(A)') '# shell resolution_A correlation'
+        do k=1,min(size(fsc),size(resolutions))
+            write(funit,'(I8,1X,F12.5,1X,F12.7)') k,resolutions(k),fsc(k)
+        end do
+        close(funit)
+        open(newunit=funit,file=TEST_METRICS_FILE,status='replace',action='write')
+        write(funit,'(A,I0)') 'particles=',size(pinds)
+        write(funit,'(A,ES16.8)') 'fourier_cc=',cc
+        write(funit,'(A,ES16.8)') 'optimal_fake_scale=',scale_fake
+        write(funit,'(A,ES16.8)') 'relative_l2_raw=',raw_rel_l2
+        write(funit,'(A,ES16.8)') 'relative_l2_after_scale=',scaled_rel_l2
+        write(funit,'(A,ES16.8)') 'minimum_required_cc=',TEST_MIN_CC
+        write(funit,'(A,ES16.8)') 'maximum_allowed_raw_relative_l2=',TEST_MAX_RAW_REL_L2
+        write(funit,'(A,ES16.8)') 'maximum_allowed_scaled_relative_l2=',TEST_MAX_SCALED_REL_L2
+        close(funit)
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
+            &'>>> FLEX PRE-IMAGE IDENTITY METRICS cc=',cc,' optimal_scale=',scale_fake, &
+            &' raw_relative_l2=',raw_rel_l2,' scaled_relative_l2=',scaled_rel_l2
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY OUTPUTS: '//TEST_REF_VOL//', '//TEST_FAKE_VOL//', '//TEST_DIFF_VOL
+        call reference_rec%dealloc_rho
+        call reference_rec%kill
+        call fake_img%kill
+        call diff_img%kill
+        call reference_ft%kill
+        call fake_ft%kill
+        deallocate(z,target_coeffs,ref_data,fake_data,fsc,resolutions)
+        if( cc<TEST_MIN_CC .or. raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
+            &scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. scale_fake<=0.d0 )then
+            THROW_HARD('constant flex pre-image does not reproduce reconstruct3D; inspect flex_fake_preimage_*_test outputs')
+        endif
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST PASSED'
+    end subroutine test_fake_preimage_against_reconstruct3D
+
+    subroutine reconstruct3D_reference( params, build, pinds, recvol )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: pinds(:)
+        type(reconstructor), intent(inout) :: recvol
+        type(fplane_type), allocatable :: fpls(:)
+        type(image) :: gridcorr_img
+        type(ori) :: orientation
+        integer :: batchlims(2), batchsz, ibatch, i, iptcl
+        call init_basis_reconstructor(params,build,recvol)
+        call init_rec(params,build,MAXIMGBATCHSZ,fpls)
+        call prepimgbatch(params,build,MAXIMGBATCHSZ)
+        do ibatch=1,size(pinds),MAXIMGBATCHSZ
+            batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz=batchlims(2)-batchlims(1)+1
+            if( params%l_ptcl_src_den )then
+                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
+                    &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
+            else
+                call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+            endif
+            call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)),fpls(:batchsz))
+            do i=1,batchsz
+                iptcl=pinds(batchlims(1)+i-1)
+                call build%spproj_field%get_ori(iptcl,orientation)
+                if( orientation%isstatezero() ) cycle
+                call recvol%insert_plane_oversamp(build%pgrpsyms,orientation,fpls(i))
+            end do
+        end do
+        call orientation%kill
+        call cleanup_rec_buffers(build,fpls)
+        call recvol%compress_exp
+        call recvol%sampl_dens_correct
+        call recvol%ifft
+        call recvol%div(real(params%box))
+        gridcorr_img=prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
+            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        call recvol%mul(gridcorr_img)
+        call gridcorr_img%kill
+    end subroutine reconstruct3D_reference
 
     subroutine reconstruct_flex_diffmap_states( params, build, pinds, z, target_coeffs, nstates )
         class(parameters), intent(inout) :: params

@@ -10,7 +10,7 @@ use simple_diff_map_graphs,       only: diffmap_graph, build_gated_euclidean_knn
 use simple_diffusion_maps,        only: embed_graph
 use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part, &
     &assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts, flex_projection_directions, &
-    &write_flex_mean_projection_stack
+    &write_flex_mean_projection_stack, map_flex_registered_to_native_project
 use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages
 use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
@@ -174,19 +174,30 @@ contains
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
-        integer, allocatable :: pinds(:)
+        integer, allocatable :: pinds(:),native_pinds(:)
         real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
         integer, allocatable :: medoids(:),labels(:)
-        type(string) :: registered_stack,registered_project
+        type(string) :: registered_stack,registered_project,native_model_project
+        type(builder) :: model_build
+        type(parameters) :: model_params
+        type(cmdline) :: model_cline
         integer :: nmodes
         call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call collect_target_coefficients(nystrom_coords,medoids,target_coeffs)
         call store_project_spectral_model(registered_project,pinds,spectral_z,nmodes,labels,medoids)
-        call reconstruct_flex_diffmap_states(params,build,pinds,spectral_z,target_coeffs,size(medoids))
+        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds,nmodes, &
+            &native_model_project,native_pinds, &
+            &'flex_native_registered_correspondence.txt')
+        call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
+        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE MODEL PROJECT: ',model_params%projfile%to_char()
+        call reconstruct_flex_diffmap_states(model_params,model_build,native_pinds,spectral_z,target_coeffs,size(medoids))
+        call model_build%kill_general_tbox
+        call model_cline%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        call native_model_project%kill
+        deallocate(pinds,native_pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
@@ -222,7 +233,6 @@ contains
         integer, allocatable :: pinds(:)
         real, allocatable :: coords(:,:),features(:,:),proj_dirs(:,:),d2s(:,:)
         integer, allocatable :: proj_ids(:),rows(:),nbrs(:,:),ncandidates(:)
-        type(sp_project) :: spectral_project
         integer :: i
         call read_int_file(params%infile,pinds)
         select case(params%stage)
@@ -238,10 +248,7 @@ contains
                 call write_graph_part(params,rows,nbrs,d2s,ncandidates)
                 deallocate(features,proj_ids,proj_dirs,rows,nbrs,d2s,ncandidates)
             case(3)
-                if( params%projfile_den=='' ) THROW_HARD('flex residual-model worker requires projfile_den')
-                call spectral_project%read(params%projfile_den)
-                call read_project_spectral_coordinates(spectral_project,pinds,params%neigs,coords)
-                call spectral_project%kill
+                call read_project_spectral_coordinates(build%spproj,pinds,params%neigs,coords)
                 call write_flex_diffmap_rec_parts(params,build,pinds,coords,params%neigs,params%part)
                 deallocate(coords)
         end select
@@ -276,10 +283,13 @@ contains
         type(parameters), intent(inout) :: params
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
-        type(string) :: registered_stack,registered_project,worker_program
-        integer, allocatable :: pinds(:),medoids(:),labels(:)
+        type(string) :: registered_stack,registered_project,native_model_project,worker_program
+        integer, allocatable :: pinds(:),native_pinds(:),medoids(:),labels(:)
         real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),target_coeffs(:,:)
         type(diffmap_graph) :: graph
+        type(builder) :: model_build
+        type(parameters) :: model_params
+        type(cmdline) :: model_cline
         integer :: nmodes,nptcls,max_modes,cand_min,cand_max
         real :: cand_mean
         integer(timer_int_kind) :: t_step
@@ -321,11 +331,17 @@ contains
         call graph%kill()
         call store_project_coordinates(registered_project,pinds,coords,nmodes)
         call store_project_spectral_model(registered_project,pinds,spectral_z,nmodes,labels,medoids)
+        call map_flex_registered_to_native_project(build%spproj,registered_project,pinds,nmodes, &
+            &native_model_project,native_pinds, &
+            &'flex_native_registered_correspondence.txt')
+        if( any(native_pinds/=pinds) ) &
+            &THROW_HARD('distributed flex registered-to-native mapping disagrees with particle assignments')
+        call init_model_context(cline,native_model_project,model_cline,model_params,model_build)
+        write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE MODEL PROJECT: ',model_params%projfile%to_char()
 
-        call cline%gen_job_descr(self%job_descr,prg=worker_program)
+        call model_cline%gen_job_descr(self%job_descr,prg=worker_program)
         call self%job_descr%set('stage','3')
         call self%job_descr%set('mkdir','no')
-        call self%job_descr%set('projfile_den',registered_project%to_char())
         call self%job_descr%set('npreimages',int2str(size(medoids)))
         call self%job_descr%set('neigs',int2str(nmodes))
         call self%job_descr%set('nparts',int2str(self%nparts_run))
@@ -333,13 +349,29 @@ contains
         t_step=tic()
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
             &array=L_USE_SLURM_ARR,extra_params=params)
-        call reduce_flex_diffmap_rec_parts(params,build,self%nparts_run,nmodes,target_coeffs,size(medoids))
+        call reduce_flex_diffmap_rec_parts(model_params,model_build,self%nparts_run,nmodes,target_coeffs,size(medoids))
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_reconstruction_seconds=',toc(t_step)
         call cleanup_flex_diffmap_rec_parts(self%nparts_run,params%numlen)
+        call model_build%kill_general_tbox
+        call model_cline%kill
+        call native_model_project%kill
         call worker_program%kill
         call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
+        deallocate(pinds,native_pinds,coords,raw_coords,spectral_z,nystrom_coords,target_coeffs,medoids,labels)
     end subroutine master_execute
+
+    subroutine init_model_context( source_cline, model_project, model_cline, model_params, model_build )
+        class(cmdline), intent(in) :: source_cline
+        type(string), intent(in) :: model_project
+        type(cmdline), intent(inout) :: model_cline
+        type(parameters), intent(inout) :: model_params
+        type(builder), intent(inout) :: model_build
+        model_cline=source_cline
+        call model_cline%set('projfile',model_project%to_char())
+        call model_cline%set('ptcl_src','raw')
+        call model_cline%set('mkdir','no')
+        call init_common(model_params,model_build,model_cline)
+    end subroutine init_model_context
 
     subroutine master_finalize_run( self, params, build, cline )
         class(flex_analysis_master_strategy), intent(inout) :: self

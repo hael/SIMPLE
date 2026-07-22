@@ -20,8 +20,191 @@ private
 public :: prepare_flex_diffmap_features, prepare_flex_diffmap_feature_part
 public :: assemble_flex_diffmap_feature_parts, read_flex_diffmap_feature_parts
 public :: flex_projection_directions, write_flex_mean_projection_stack
+public :: map_flex_registered_to_native_project
 
 contains
+
+    !> Map the registered-frame flex model back onto native particle images.
+    !! This follows map_params_from_den: selected registered rows are joined to
+    !! native rows by stable pind and the registered ptcl3D orientation is
+    !! composed with the native ptcl2D transform.  The output therefore keeps
+    !! the native stack/CTF metadata while carrying the geometry and spectral
+    !! coordinates associated with the registered-frame graph.
+    subroutine map_flex_registered_to_native_project( native_spproj, registered_project, registered_pinds, &
+        &nmodes, native_project, native_pinds, manifest_fname, native_project_name )
+        type(sp_project), intent(inout) :: native_spproj
+        type(string), intent(in) :: registered_project
+        integer, intent(in) :: registered_pinds(:),nmodes
+        type(string), intent(out) :: native_project
+        integer, allocatable, intent(out) :: native_pinds(:)
+        character(len=*), optional, intent(in) :: manifest_fname
+        character(len=*), optional, intent(in) :: native_project_name
+        type(sp_project) :: registered_spproj,outproj
+        type(ori) :: native_2d,registered_3d,mapped_3d
+        type(string) :: label
+        integer, allocatable :: pind2native(:)
+        logical, allocatable :: mapped_native(:)
+        integer :: nraw,nraw3d,nregistered,nregistered3d,max_pind
+        integer :: i,q,ireg,inative,native_pind,registered_pind
+        integer :: native_stkind,native_indstk,registered_stkind,registered_indstk
+        integer :: u
+        logical :: use_pind,write_manifest
+        character(len=4) :: mapping_mode
+
+        if( size(registered_pinds)<1 ) THROW_HARD('cannot map an empty flex particle selection to native images')
+        if( nmodes<0 ) THROW_HARD('invalid flex spectral rank during native-image mapping')
+        call registered_spproj%read(registered_project)
+        nraw=native_spproj%os_ptcl2D%get_noris()
+        nraw3d=native_spproj%os_ptcl3D%get_noris()
+        nregistered=registered_spproj%os_ptcl2D%get_noris()
+        nregistered3d=registered_spproj%os_ptcl3D%get_noris()
+        if( nraw<1 .or. nraw3d/=nraw ) &
+            &THROW_HARD('flex native project requires congruent ptcl2D and ptcl3D fields')
+        if( nregistered<1 .or. nregistered3d/=nregistered ) &
+            &THROW_HARD('flex registered project requires congruent ptcl2D and ptcl3D fields')
+
+        use_pind=registered_spproj%os_ptcl2D%isthere('pind')
+        if( use_pind )then
+            mapping_mode='pind'
+        else
+            mapping_mode='row '
+        endif
+        if( .not.use_pind .and. nregistered/=nraw ) &
+            &THROW_HARD('registered flex particles require ptcl2D:pind mapping to native rows')
+        allocate(native_pinds(size(registered_pinds)),source=0)
+        allocate(mapped_native(nraw),source=.false.)
+        if( use_pind )then
+            max_pind=0
+            do i=1,nraw
+                native_pind=row_pind(native_spproj%os_ptcl2D,i,.false.,'native flex project')
+                max_pind=max(max_pind,native_pind)
+            end do
+            do i=1,size(registered_pinds)
+                ireg=registered_pinds(i)
+                if( ireg<1 .or. ireg>nregistered ) THROW_HARD('registered flex particle row outside project')
+                registered_pind=row_pind(registered_spproj%os_ptcl2D,ireg,.true.,'registered flex project')
+                max_pind=max(max_pind,registered_pind)
+            end do
+            allocate(pind2native(max_pind),source=0)
+            do i=1,nraw
+                native_pind=row_pind(native_spproj%os_ptcl2D,i,.false.,'native flex project')
+                if( pind2native(native_pind)/=0 ) THROW_HARD('duplicate pind in native flex project')
+                pind2native(native_pind)=i
+            end do
+            do i=1,size(registered_pinds)
+                ireg=registered_pinds(i)
+                registered_pind=row_pind(registered_spproj%os_ptcl2D,ireg,.true.,'registered flex project')
+                if( registered_pind>size(pind2native) .or. pind2native(registered_pind)==0 ) &
+                    &THROW_HARD('registered flex pind is absent from native project')
+                native_pinds(i)=pind2native(registered_pind)
+            end do
+        else
+            native_pinds=registered_pinds
+        endif
+
+        if( present(native_project_name) )then
+            native_project=native_project_name
+        else
+            native_project='flex_native_model.simple'
+        endif
+        call del_file(native_project)
+        call outproj%copy(native_spproj)
+        call outproj%update_projinfo(native_project)
+        do inative=1,nraw
+            call outproj%os_ptcl2D%set(inative,'state',0)
+            call outproj%os_ptcl3D%set(inative,'state',0)
+        end do
+        write_manifest=present(manifest_fname)
+        if( write_manifest )then
+            open(newunit=u,file=manifest_fname,status='replace',action='write')
+            write(u,'(A,A)') '# mapping=',trim(mapping_mode)
+            write(u,'(A)') '# model_row registered_row native_row pind native_stkind native_indstk '// &
+                &'registered_stkind registered_indstk mapped_e1 mapped_e2 mapped_e3 mapped_x mapped_y'
+        endif
+        do i=1,size(registered_pinds)
+            ireg=registered_pinds(i)
+            inative=native_pinds(i)
+            if( mapped_native(inative) ) THROW_HARD('duplicate registered-to-native flex particle mapping')
+            if( registered_spproj%os_ptcl3D%get_state(ireg)<=0 ) &
+                &THROW_HARD('inactive registered particle selected for flex native mapping')
+            if( native_spproj%os_ptcl3D%get_state(inative)<=0 ) &
+                &THROW_HARD('registered flex particle maps to an inactive native particle')
+            call native_spproj%os_ptcl2D%get_ori(inative,native_2d)
+            call registered_spproj%os_ptcl3D%get_ori(ireg,registered_3d)
+            call registered_3d%compose3d2d(native_2d,mapped_3d)
+            call outproj%os_ptcl3D%e1set(inative,mapped_3d%e1get())
+            call outproj%os_ptcl3D%e2set(inative,mapped_3d%e2get())
+            call outproj%os_ptcl3D%e3set(inative,mapped_3d%e3get())
+            call outproj%os_ptcl3D%set_shift(inative,mapped_3d%get_2Dshift())
+            call outproj%os_ptcl2D%set(inative,'state',registered_spproj%os_ptcl2D%get_state(ireg))
+            call outproj%os_ptcl3D%set(inative,'state',registered_spproj%os_ptcl3D%get_state(ireg))
+            if( registered_spproj%os_ptcl3D%isthere(ireg,'proj') ) &
+                &call outproj%os_ptcl3D%set(inative,'proj',registered_spproj%os_ptcl3D%get_int(ireg,'proj'))
+            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_cluster',required=nmodes>0)
+            call copy_real_key(registered_spproj,outproj,ireg,inative,'flex_medoid',required=nmodes>0)
+            do q=1,nmodes
+                label=string('flex_spectral')//int2str(q)
+                call copy_real_key(registered_spproj,outproj,ireg,inative,label%to_char(),required=.true.)
+                call label%kill
+                label=string('flex_coord')//int2str(q)
+                call copy_real_key(registered_spproj,outproj,ireg,inative,label%to_char(),required=.false.)
+                call label%kill
+            end do
+            call native_spproj%map_ptcl_ind2stk_ind('ptcl3D',inative,native_stkind,native_indstk)
+            call registered_spproj%map_ptcl_ind2stk_ind('ptcl3D',ireg,registered_stkind,registered_indstk)
+            if( native_stkind<1 .or. native_indstk<1 .or. registered_stkind<1 .or. registered_indstk<1 ) &
+                &THROW_HARD('invalid stack address in registered-to-native flex particle mapping')
+            if( use_pind )then
+                registered_pind=row_pind(registered_spproj%os_ptcl2D,ireg,.true.,'registered flex project')
+            else
+                registered_pind=ireg
+            endif
+            if( write_manifest ) write(u,'(8(I10,1X),5(F12.5,1X))') i,ireg,inative,registered_pind, &
+                &native_stkind,native_indstk,registered_stkind,registered_indstk,mapped_3d%e1get(), &
+                &mapped_3d%e2get(),mapped_3d%e3get(),mapped_3d%get_2Dshift()
+            mapped_native(inative)=.true.
+        end do
+        if( write_manifest ) close(u)
+        call outproj%write(native_project)
+        write(logfhandle,'(A,I0,A,A,A,A)') '>>> FLEX REGISTERED-TO-NATIVE MAP VERIFIED: ',size(native_pinds), &
+            &' mapping=',trim(mapping_mode),' project=',native_project%to_char()
+        call native_2d%kill; call registered_3d%kill; call mapped_3d%kill
+        call registered_spproj%kill; call outproj%kill
+        if( allocated(pind2native) ) deallocate(pind2native)
+        deallocate(mapped_native)
+
+        contains
+
+            integer function row_pind( os, irow, require_pind, context ) result(pind)
+                use simple_oris, only: oris
+                class(oris), intent(in) :: os
+                integer, intent(in) :: irow
+                logical, intent(in) :: require_pind
+                character(len=*), intent(in) :: context
+                if( os%isthere(irow,'pind') )then
+                    pind=os%get_int(irow,'pind')
+                else if( require_pind )then
+                    THROW_HARD(trim(context)//' row missing pind')
+                else
+                    pind=irow
+                endif
+                if( pind<1 ) THROW_HARD(trim(context)//' has non-positive pind')
+            end function row_pind
+
+            subroutine copy_real_key( src, dst, isrc, idst, key, required )
+                type(sp_project), intent(in) :: src
+                type(sp_project), intent(inout) :: dst
+                integer, intent(in) :: isrc,idst
+                character(len=*), intent(in) :: key
+                logical, intent(in) :: required
+                if( src%os_ptcl3D%isthere(isrc,key) )then
+                    call dst%os_ptcl3D%set(idst,key,src%os_ptcl3D%get(isrc,key))
+                else if( required )then
+                    THROW_HARD('registered flex project is missing '//trim(key))
+                endif
+            end subroutine copy_real_key
+
+    end subroutine map_flex_registered_to_native_project
 
     subroutine prepare_flex_diffmap_features( params, build, pinds, features, proj_ids, proj_dirs, &
         &registered_stack, registered_project, part, retain_features )
