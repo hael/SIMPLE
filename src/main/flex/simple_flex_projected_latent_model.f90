@@ -6,7 +6,7 @@ use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
 use simple_gridding,         only: prep3D_inv_instrfun4mul
 use simple_linalg,           only: eigsrt, hermitian_solve, jacobi
-use simple_matcher_3Drec,    only: init_rec
+use simple_matcher_3Drec,    only: init_rec, prep_imgs4rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,       only: parameters
@@ -23,6 +23,7 @@ public :: initialize_latents, orthonormalize_latents, latent_sdev, latent_covari
 public :: basis_fourier_energy, cleanup_planes, projected_model_kfromto
 public :: canonicalize_projected_latent_basis
 public :: test_projected_latent_mstep_stats_io, test_projected_latent_canonicalization
+public :: test_projected_model_plane_preparation
 private
 #include "simple_local_flags.inc"
 
@@ -69,6 +70,98 @@ type :: projected_latent_estep_part
 end type projected_latent_estep_part
 
 contains
+
+    !> Verify that the observation/operator representation used by the
+    !! projected latent model is algebraically identical to the standard
+    !! refine3D reconstruction plane representation.  In particular,
+    !! observation * transfer must equal the standard CTF-weighted numerator
+    !! and both paths must have the same CTF-squared denominator.
+    subroutine test_projected_model_plane_preparation( params, build, pinds )
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: pinds(:)
+        type(parameters) :: test_params
+        type(fplane_type), allocatable :: standard_fpls(:), projected_fpls(:)
+        integer :: batchlims(2), batchsz, ibatch, i
+        integer :: funit, nplanes
+        real(dp) :: numerator_err2, numerator_ref2, density_err2, density_ref2
+        real(dp) :: numerator_rel, density_rel, numerator_max, density_max
+        complex, allocatable :: numerator_diff(:,:)
+        real,    allocatable :: density_diff(:,:)
+        real(dp), parameter :: REL_TOL = 1.0d-5
+        character(len=*), parameter :: METRICS_FILE = 'flex_preimage_plane_preparation_metrics_test.txt'
+        if( size(pinds)<1 ) THROW_HARD('flex plane-preparation test requires at least one particle')
+        test_params = params
+        test_params%lp       = 0.
+        test_params%ml_reg   = 'no'
+        test_params%l_ml_reg = .false.
+        numerator_err2 = 0.d0
+        numerator_ref2 = 0.d0
+        density_err2   = 0.d0
+        density_ref2   = 0.d0
+        numerator_max  = 0.d0
+        density_max    = 0.d0
+        nplanes        = 0
+        write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE PLANE CONTRACT TEST PARTICLES: ',size(pinds)
+        call init_rec(test_params, build, MAXIMGBATCHSZ, standard_fpls)
+        allocate(projected_fpls(MAXIMGBATCHSZ))
+        call prepimgbatch(test_params, build, MAXIMGBATCHSZ)
+        do ibatch = 1,size(pinds),MAXIMGBATCHSZ
+            batchlims = [ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz   = batchlims(2)-batchlims(1)+1
+            call read_particles(test_params, build, size(pinds), pinds, batchlims, batchsz)
+            call prep_imgs4rec(test_params, build, batchsz, build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)), standard_fpls(:batchsz))
+            ! norm_noise_taper_edge_pad_fft intentionally modifies its image
+            ! input, so re-read the batch before preparing the flex planes.
+            call read_particles(test_params, build, size(pinds), pinds, batchlims, batchsz)
+            call prep_imgs4projected_model(test_params, build, batchsz, build%imgbatch(:batchsz), &
+                &pinds(batchlims(1):batchlims(2)), projected_fpls(:batchsz))
+            do i = 1,batchsz
+                if( .not.allocated(standard_fpls(i)%cmplx_plane) .or. &
+                    &.not.allocated(projected_fpls(i)%cmplx_plane) .or. &
+                    &.not.allocated(projected_fpls(i)%transfer_plane) )then
+                    THROW_HARD('flex plane-preparation test found an incomplete Fourier plane')
+                endif
+                if( any(shape(standard_fpls(i)%cmplx_plane)/=shape(projected_fpls(i)%cmplx_plane)) .or. &
+                    &any(shape(standard_fpls(i)%ctfsq_plane)/=shape(projected_fpls(i)%ctfsq_plane)) )then
+                    THROW_HARD('flex plane-preparation test found incompatible Fourier-plane shapes')
+                endif
+                numerator_diff = projected_fpls(i)%cmplx_plane * projected_fpls(i)%transfer_plane - &
+                    &standard_fpls(i)%cmplx_plane
+                density_diff = projected_fpls(i)%ctfsq_plane - standard_fpls(i)%ctfsq_plane
+                numerator_err2 = numerator_err2 + sum(real(numerator_diff*conjg(numerator_diff),dp))
+                numerator_ref2 = numerator_ref2 + sum(real(standard_fpls(i)%cmplx_plane * &
+                    &conjg(standard_fpls(i)%cmplx_plane),dp))
+                density_err2 = density_err2 + sum(real(density_diff,dp)*real(density_diff,dp))
+                density_ref2 = density_ref2 + sum(real(standard_fpls(i)%ctfsq_plane,dp) * &
+                    &real(standard_fpls(i)%ctfsq_plane,dp))
+                numerator_max = max(numerator_max,maxval(abs(numerator_diff)))
+                density_max   = max(density_max,real(maxval(abs(density_diff)),dp))
+                nplanes = nplanes + 1
+                deallocate(numerator_diff,density_diff)
+            end do
+        end do
+        numerator_rel = sqrt(numerator_err2/max(numerator_ref2,DTINY))
+        density_rel   = sqrt(density_err2/max(density_ref2,DTINY))
+        open(newunit=funit,file=METRICS_FILE,status='replace',action='write')
+        write(funit,'(A,I0)') 'planes=',nplanes
+        write(funit,'(A,ES16.8)') 'numerator_relative_l2=',numerator_rel
+        write(funit,'(A,ES16.8)') 'numerator_max_abs=',numerator_max
+        write(funit,'(A,ES16.8)') 'ctfsq_relative_l2=',density_rel
+        write(funit,'(A,ES16.8)') 'ctfsq_max_abs=',density_max
+        write(funit,'(A,ES16.8)') 'relative_tolerance=',REL_TOL
+        close(funit)
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
+            &'>>> FLEX PRE-IMAGE PLANE CONTRACT numerator_rel=',numerator_rel, &
+            &' numerator_max=',numerator_max,' ctfsq_rel=',density_rel,' ctfsq_max=',density_max
+        call cleanup_planes(projected_fpls)
+        call cleanup_rec_buffers(build,standard_fpls)
+        if( numerator_rel>REL_TOL .or. density_rel>REL_TOL )then
+            THROW_HARD('flex observation/operator planes differ from standard refine3D preparation; inspect '//METRICS_FILE)
+        endif
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE PLANE CONTRACT TEST PASSED'
+    end subroutine test_projected_model_plane_preparation
 
     subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, pinds, nptcls, ncomp, fpls, log_label )
         class(parameters),   intent(in)    :: params

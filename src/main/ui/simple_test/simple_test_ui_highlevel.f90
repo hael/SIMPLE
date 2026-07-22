@@ -9,6 +9,7 @@ type(ui_program), target :: simulate_particles
 type(ui_program), target :: reproject
 type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
+type(ui_program), target :: flex_preimage_identity
 
 contains
 
@@ -20,6 +21,7 @@ contains
         call new_reproject(tsttab)
         call new_subproject_distr(tsttab)
         call new_ptcls_ppca_subproject_distr(tsttab)
+        call new_flex_preimage_identity(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -31,6 +33,7 @@ contains
         write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') subproject_distr%name%to_char()
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
+        write(logfhandle,'(A)') flex_preimage_identity%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -145,5 +148,22 @@ contains
         call ptcls_ppca_subproject_distr%add_input(UI_COMP, 'nparts', 'integer', 'Number of parts', 'Number of parts to split the particle files into', 'e.g. 4', .true., '')
         call add_ui_program('ptcls_ppca_subproject_distr', ptcls_ppca_subproject_distr, tsttab)
     end subroutine new_ptcls_ppca_subproject_distr
+
+    subroutine new_flex_preimage_identity( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call flex_preimage_identity%new(&
+        &'flex_preimage_identity',&
+        &'flex pre-image reconstruction identity diagnostic',&
+        &'Compares flex observation/operator planes with refine3D planes, then checks that constant z=1 reproduces reconstruct3D from the registered project',&
+        &'simple_test_exec',&
+        &.true.)
+        call flex_preimage_identity%add_input(UI_IMG, 'vol1', 'file', &
+            'Mean volume', 'Fixed mean volume used for the residual identity reconstruction', &
+            'input volume e.g. rec_final_state01.mrc', .true., '')
+        call flex_preimage_identity%add_input(UI_PARM, projfile, required_override=.true.)
+        call flex_preimage_identity%add_input(UI_PARM, nspace, required_override=.true.)
+        call flex_preimage_identity%add_input(UI_COMP, nthr, required_override=.false.)
+        call add_ui_program('flex_preimage_identity', flex_preimage_identity, tsttab)
+    end subroutine new_flex_preimage_identity
 
 end module simple_test_ui_highlevel

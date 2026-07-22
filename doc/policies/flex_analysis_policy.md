@@ -222,6 +222,31 @@ trajectory-volume fan-out, duplicate difference-map output, or sigma-derived
 scaling. Diffusion eigenfunctions remain fixed after the graph eigensolve; the
 projected residual basis is fitted once.
 
+### Reconstruction identity diagnostic
+
+Before native-image mapping is reconsidered, the registered-project path has a
+supported regression diagnostic:
+
+```text
+simple_test_exec prg=flex_preimage_identity \
+  projfile=<flex-run>/flex_registered_particles.simple \
+  vol1=<fixed-mean-volume> nspace=<projection-grid-size> nthr=<threads>
+```
+
+The diagnostic disables ML regularization, output low-pass filtering, and
+output masking. First it prepares every selected registered particle both with
+the standard `prep_imgs4rec` path and with the projected-model observation /
+forward-transfer path. It requires `observation * transfer` to reproduce the
+standard CTF-weighted numerator and requires matching CTF-squared denominators.
+It records the result in
+`flex_preimage_plane_preparation_metrics_test.txt`. Only after that contract
+passes does it run a one-component constant-latent test (`z_i=1`, target `1`):
+an ordinary reconstruction and `mean + fitted residual` must agree. It writes
+the reference, flex result, difference map, Fourier-shell correlation table,
+and scalar metrics as `flex_*_preimage_*_test` outputs. A failure is therefore
+localized to plane preparation or to the residual coupled solve / synthesis;
+it is not interpreted as a native-to-registered mapping failure.
+
 ## 6. Shared- and distributed-memory execution
 
 The executable uses the same strategy lifecycle as `cls_split` and

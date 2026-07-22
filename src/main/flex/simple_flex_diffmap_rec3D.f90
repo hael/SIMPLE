@@ -8,7 +8,7 @@ use simple_matcher_3Drec,          only: init_rec, prep_imgs4rec, cleanup_rec_bu
 use simple_matcher_ptcl_io,        only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch
 use simple_parameters,             only: parameters
 use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
-    &update_basis_from_mstep_stats_part_files, cleanup_planes
+    &update_basis_from_mstep_stats_part_files, cleanup_planes, test_projected_model_plane_preparation
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
@@ -55,6 +55,7 @@ contains
         allocate(z(size(pinds),1),source=1.0)
         allocate(target_coeffs(1,1),source=1.0)
         write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE IDENTITY TEST PARTICLES: ',size(pinds)
+        call test_projected_model_plane_preparation(test_params,build,pinds)
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: ORDINARY RECONSTRUCT3D REFERENCE'
         call reconstruct3D_reference(test_params,build,pinds,reference_rec)
         call reference_rec%write(string(TEST_REF_VOL),del_if_exists=.true.)

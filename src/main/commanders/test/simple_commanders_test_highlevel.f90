@@ -48,7 +48,37 @@ type, extends(commander_base) :: commander_test_ptcls_ppca_subproject_distr
         procedure :: execute      => exec_test_ptcls_ppca_subproject_distr
 end type commander_test_ptcls_ppca_subproject_distr
 
+type, extends(commander_base) :: commander_test_flex_preimage_identity
+    contains
+        procedure :: execute      => exec_test_flex_preimage_identity
+end type commander_test_flex_preimage_identity
+
 contains
+
+subroutine exec_test_flex_preimage_identity( self, cline )
+    use simple_builder,                 only: builder
+    use simple_flex_diffmap_rec3D,      only: test_fake_preimage_against_reconstruct3D
+    use simple_parameters,              only: parameters
+    class(commander_test_flex_preimage_identity), intent(inout) :: self
+    class(cmdline),                                  intent(inout) :: cline
+    type(parameters) :: params
+    type(builder)    :: build
+    integer, allocatable :: pinds(:)
+    integer :: nptcls
+    if( .not.cline%defined('projfile') ) THROW_HARD('flex_preimage_identity requires projfile=flex_registered_particles.simple')
+    if( .not.cline%defined('vol1') ) THROW_HARD('flex_preimage_identity requires vol1=<fixed mean volume>')
+    if( .not.cline%defined('nspace') ) THROW_HARD('flex_preimage_identity requires nspace=<projection grid size>')
+    if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
+    if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
+    call cline%set('ml_reg','no')
+    call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+    call build%spproj_field%sample4rec([params%fromp,params%top],nptcls,pinds)
+    if( nptcls<3 ) THROW_HARD('flex_preimage_identity requires at least three active ptcl3D particles')
+    call test_fake_preimage_against_reconstruct3D(params,build,pinds)
+    deallocate(pinds)
+    call build%kill_general_tbox
+    call simple_end('**** SIMPLE_TEST_FLEX_PREIMAGE_IDENTITY NORMAL STOP ****')
+end subroutine exec_test_flex_preimage_identity
 
 subroutine exec_test_mini_stream( self, cline )
     class(commander_test_mini_stream),  intent(inout) :: self
