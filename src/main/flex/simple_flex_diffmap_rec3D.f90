@@ -61,6 +61,7 @@ contains
         call reference_rec%write(string(TEST_REF_VOL),del_if_exists=.true.)
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST: CONSTANT z=1 PRE-IMAGE'
         call reconstruct_flex_diffmap_states(test_params,build,pinds,z,target_coeffs,1)
+        call fake_img%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
         call fake_img%read(string(TEST_FAKE_VOL))
         call diff_img%copy(fake_img)
         call diff_img%subtr(reference_rec)
