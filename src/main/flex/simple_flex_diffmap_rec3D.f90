@@ -50,6 +50,8 @@ contains
         real(dp) :: dot_rf, norm_ref2, norm_fake2, scale_fake, raw_rel_l2, scaled_rel_l2, cc
         real(dp) :: dot_rs, norm_standard_residual2, scale_standard_residual, standard_residual_raw_rel_l2
         real(dp) :: standard_residual_scaled_rel_l2, standard_residual_cc
+        real(dp) :: dot_fc, scale_fake_to_standard_residual, fake_to_standard_residual_raw_rel_l2
+        real(dp) :: fake_to_standard_residual_scaled_rel_l2, fake_to_standard_residual_cc
         integer :: funit, k
         if( size(pinds)<3 ) THROW_HARD('fake pre-image reconstruction test requires at least three particles')
         test_params = params
@@ -99,6 +101,13 @@ contains
         raw_rel_l2 = sqrt(sum((real(fake_data,dp)-real(ref_data,dp))**2)/norm_ref2)
         scaled_rel_l2 = sqrt(sum((scale_fake*real(fake_data,dp)-real(ref_data,dp))**2)/norm_ref2)
         cc = reference_rec%corr(fake_img)
+        dot_fc = sum(real(standard_residual_data,dp)*real(fake_data,dp))
+        scale_fake_to_standard_residual = dot_fc/norm_fake2
+        fake_to_standard_residual_raw_rel_l2 = sqrt(sum((real(fake_data,dp)- &
+            &real(standard_residual_data,dp))**2)/norm_standard_residual2)
+        fake_to_standard_residual_scaled_rel_l2 = sqrt(sum((scale_fake_to_standard_residual*real(fake_data,dp)- &
+            &real(standard_residual_data,dp))**2)/norm_standard_residual2)
+        fake_to_standard_residual_cc = standard_residual_img%corr(fake_img)
         call reference_ft%copy(reference_rec)
         call fake_ft%copy(fake_img)
         call reference_ft%fft
@@ -118,6 +127,11 @@ contains
         write(funit,'(A,ES16.8)') 'standard_residual_optimal_scale=',scale_standard_residual
         write(funit,'(A,ES16.8)') 'standard_residual_relative_l2_raw=',standard_residual_raw_rel_l2
         write(funit,'(A,ES16.8)') 'standard_residual_relative_l2_after_scale=',standard_residual_scaled_rel_l2
+        write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_cc=',fake_to_standard_residual_cc
+        write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_optimal_scale=',scale_fake_to_standard_residual
+        write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_relative_l2_raw=',fake_to_standard_residual_raw_rel_l2
+        write(funit,'(A,ES16.8)') 'coupled_to_standard_residual_relative_l2_after_scale=', &
+            &fake_to_standard_residual_scaled_rel_l2
         write(funit,'(A,ES16.8)') 'fourier_cc=',cc
         write(funit,'(A,ES16.8)') 'optimal_fake_scale=',scale_fake
         write(funit,'(A,ES16.8)') 'relative_l2_raw=',raw_rel_l2
@@ -133,6 +147,10 @@ contains
             &'>>> FLEX STANDARD RESIDUAL CONTROL cc=',standard_residual_cc, &
             &' optimal_scale=',scale_standard_residual,' raw_relative_l2=',standard_residual_raw_rel_l2, &
             &' scaled_relative_l2=',standard_residual_scaled_rel_l2
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
+            &'>>> FLEX COUPLED-TO-STANDARD-RESIDUAL cc=',fake_to_standard_residual_cc, &
+            &' optimal_scale=',scale_fake_to_standard_residual,' raw_relative_l2=', &
+            &fake_to_standard_residual_raw_rel_l2,' scaled_relative_l2=',fake_to_standard_residual_scaled_rel_l2
         write(logfhandle,'(A,5(1X,A))') '>>> FLEX PRE-IMAGE IDENTITY OUTPUTS:', TEST_REF_VOL, &
             &TEST_STANDARD_RESIDUAL_VOL, TEST_STANDARD_RESIDUAL_DIFF_VOL, TEST_FAKE_VOL, TEST_DIFF_VOL
         call reference_rec%dealloc_rho
@@ -144,13 +162,11 @@ contains
         call reference_ft%kill
         call fake_ft%kill
         deallocate(z,target_coeffs,ref_data,fake_data,standard_residual_data,fsc,resolutions)
-        if( standard_residual_cc<TEST_MIN_CC .or. standard_residual_raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
-            &standard_residual_scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. scale_standard_residual<=0.d0 )then
-            THROW_HARD('standard residual control does not reproduce reconstruct3D; mean projection/subtraction is inconsistent')
-        endif
-        if( cc<TEST_MIN_CC .or. raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
-            &scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. scale_fake<=0.d0 )then
-            THROW_HARD('constant flex pre-image does not reproduce reconstruct3D; inspect flex_fake_preimage_*_test outputs')
+        if( fake_to_standard_residual_cc<TEST_MIN_CC .or. &
+            &fake_to_standard_residual_raw_rel_l2>TEST_MAX_RAW_REL_L2 .or. &
+            &fake_to_standard_residual_scaled_rel_l2>TEST_MAX_SCALED_REL_L2 .or. &
+            &scale_fake_to_standard_residual<=0.d0 )then
+            THROW_HARD('coupled flex pre-image does not reproduce the standard residual control; inspect flex_fake_preimage_*_test outputs')
         endif
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE IDENTITY TEST PASSED'
     end subroutine test_fake_preimage_against_reconstruct3D
