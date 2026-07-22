@@ -122,25 +122,29 @@ contains
         endif
     end subroutine refpick
 
-    subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, ndev, roi, nboxes_max )
+    subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, ndev, roi, nboxes_max, thres )
         class(pickref),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast, pdensity
         real,              intent(in)    :: smpd_shrink
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        real,    optional, intent(in)    :: thres   !< distance threshold in A for peak separation
         logical, optional, intent(in)    :: roi
         integer, optional, intent(in)    :: nboxes_max
-        real    :: scale, lp
+        real    :: scale, lp, threshold
         integer :: iref, box
         if( self%exists ) call self%kill
         self%l_roi = .false.
         if( present(roi) ) self%l_roi = roi
+        threshold = 0.0
+        if( present(thres) ) threshold = thres
         self%ldim_raw_box = imgs(1)%get_ldim()
         if( self%ldim_raw_box(3) /= 1 ) THROW_HARD('box references must be 2D')
         box = self%ldim_raw_box(1)
         ! pixel size after downscaling
         self%smpd_shrink = max(smpd_raw,smpd_shrink)
+        if ( self%smpd_shrink <= 0. ) THROW_HARD('Sampling distance smpd_shrink must be positive')
         ! set shrunken logical dimensions
         scale             = smpd_raw / self%smpd_shrink
         self%ldim(1)      = round2even(real(ldim_raw(1)) * scale)
@@ -152,7 +156,13 @@ contains
         self%ldim_box(3)  = 1
         self%nx           = self%ldim(1) - box
         self%ny           = self%ldim(2) - box
-        self%dist_thres   = (self%maxdiam/3.)/self%smpd_shrink
+        if( threshold > 0.0 ) then
+            self%dist_thres = threshold / self%smpd_shrink
+            write(logfhandle,'(a,1x,f5.2)') 'distance threshold (user-defined):       ', self%dist_thres
+        else
+            self%dist_thres = (self%maxdiam/3.)/self%smpd_shrink
+            write(logfhandle,'(a,1x,f5.2)') 'distance threshold (default):            ', self%dist_thres
+        end if
         ! take care of matching references
         self%nrefs = size(imgs)
         ! set # pixels in x/y for both box sizes

@@ -46,11 +46,11 @@ contains
         l_backgr_subtr  = l_roi .or. (trim(params%backgr_subtr).eq.'yes')
         call read_mic_raw_pickref(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( present(nboxes_max) )then
-            call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max)
+            call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max, thres=params%thres)
         else
-            call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
+            call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, thres=params%thres)
         endif
-        call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1)
+        call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1, thres=params%thres)
         call refp%refpick(refp_refine)
         ! write
         maxdiam = refp%get_maxdiam() + refp%get_maxdiam() * BOX_EXP_FAC

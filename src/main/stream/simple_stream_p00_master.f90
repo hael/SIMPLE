@@ -990,6 +990,7 @@ contains
                 call cline_reference_picking%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
             end if
             if( l_existing_box ) call cline_reference_picking%set('box_extract', params%box_extract)
+            if( params%thres > 0.0 ) call cline_reference_picking%set('thres', params%thres)
         end subroutine init_cline_reference_picking
 
         subroutine init_metadata_reference_picking()
