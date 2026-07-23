@@ -671,6 +671,11 @@ contains
         is_virgin_field = .true.
     end function is_virgin_field
 
+    module logical function has_valid_ptcl3D_alignment( self )
+        class(sp_project), target, intent(inout) :: self
+        has_valid_ptcl3D_alignment = .not. self%is_virgin_field('ptcl3D')
+    end function has_valid_ptcl3D_alignment
+
     module integer function count_state_gt_zero( self )
         class(sp_project), target, intent(inout) :: self
         integer :: iori, cnt_s_gt_zero_ptcl2D, cnt_s_gt_zero_ptcl3D

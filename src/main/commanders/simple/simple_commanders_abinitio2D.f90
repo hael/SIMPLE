@@ -110,11 +110,15 @@ contains
             call execute_cluster2D
         enddo
         call execute_terminal_prob_pass
-        ! transfer 2D shifts to 3D field
+        ! transfer 2D shifts to 3D field only when no prior valid 3D alignment exists
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
-        call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
-        call spproj%write_segment_inside('ptcl3D', params%projfile)
+        if( spproj%has_valid_ptcl3D_alignment() )then
+            write(logfhandle,'(A)') '>>> ABINITIO2D: prior ptcl3D alignment detected; preserving ptcl3D shifts'
+        else
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj_field)
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
+        endif
         ! weights & final mapping of particles
         if( trim(params%stats).eq.'yes' ) call output_stats('final')
         ! final class generation & ranking

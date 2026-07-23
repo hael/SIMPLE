@@ -127,6 +127,7 @@ contains
     procedure          :: scale_projfile
     ! PTCL2D/3D - getters
     procedure          :: is_virgin_field
+    procedure          :: has_valid_ptcl3D_alignment
     procedure          :: count_state_gt_zero
     procedure          :: set_ptcl2D_thumb
     procedure          :: get_nptcls
@@ -582,6 +583,10 @@ interface
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
     end function is_virgin_field
+
+    module logical function has_valid_ptcl3D_alignment( self )
+        class(sp_project), target, intent(inout) :: self
+    end function has_valid_ptcl3D_alignment
 
     module integer function count_state_gt_zero( self )
         class(sp_project), target, intent(inout) :: self
