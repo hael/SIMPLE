@@ -110,8 +110,9 @@ contains
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
-        integer, allocatable :: states(:), updatecnts(:)
-        integer              :: i, cnt, nptcls, ucnt, ucnt_min, ucnt_max, ucnt_lim
+        integer, allocatable :: states(:), updatecnts(:), candidates(:), selected(:)
+        integer :: i, cnt, nptcls, ucnt
+        integer :: ncandidates, nfill, nselected
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
@@ -125,26 +126,27 @@ contains
             if( states(cnt) > 0 ) nptcls = nptcls + 1
         end do
         if( nptcls == 0 ) THROW_HARD('no active particles to sample')
-        inds        = pack(inds,       mask=states > 0)
-        updatecnts  = pack(updatecnts, mask=states > 0)
-        ucnt_min    = minval(updatecnts)
-        ucnt_max    = maxval(updatecnts)
-        nsamples    = min(nptcls, max(1, nint(update_frac * real(nptcls))))
-        ucnt_lim    = 0
-        if( ucnt_max > ucnt_min )then
-            do ucnt = ucnt_min,ucnt_max
-                if( count(updatecnts < ucnt) >= nsamples )then
-                    ucnt_lim = ucnt
-                    exit
-                endif
-            end do
-        endif
-        if( ucnt_lim > 0 )then
-            inds   = pack(inds, mask=updatecnts < ucnt_lim)
-            nptcls = size(inds)
-        endif
-        call partial_shuffle(inds, nsamples)
-        inds = inds(1:nsamples)
+        inds       = pack(inds,       mask=states > 0)
+        updatecnts = pack(updatecnts, mask=states > 0)
+        deallocate(states)
+        nsamples   = min(nptcls, max(1, nint(update_frac * real(nptcls))))
+        allocate(selected(nsamples), source=0)
+        nselected = 0
+        ! Exhaust lower update-count tiers first. At the cutoff tier, draw
+        ! uniformly without replacement.
+        ucnt = minval(updatecnts)
+        do
+            candidates  = pack(inds, mask=updatecnts == ucnt)
+            ncandidates = size(candidates)
+            nfill = min(nsamples - nselected, ncandidates)
+            if( nfill < ncandidates ) call partial_shuffle(candidates, nfill)
+            selected(nselected + 1:nselected + nfill) = candidates(:nfill)
+            nselected = nselected + nfill
+            if( nselected == nsamples ) exit
+            ucnt = minval(updatecnts, mask=updatecnts > ucnt)
+        end do
+        if( nselected /= nsamples ) THROW_HARD('insufficient update-count sampling candidates')
+        call move_alloc(selected, inds)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt

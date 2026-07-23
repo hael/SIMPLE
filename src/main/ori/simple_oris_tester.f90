@@ -201,10 +201,20 @@ contains
         call os%set_all2single('updatecnt', 0.0)
         call os%sample4update_rnd([1, n], frac, nsamp, inds, .true.)
         call assert_true(nsamp <= n, 'sample4update_rnd nsamp<=n')
-        ! sample4update_cnt (prefers low updatecnt)
-        call os%set_all2single('updatecnt', 0.0)
+        ! sample4update_cnt exhausts lower updatecnt tiers and samples
+        ! uniformly only within the cutoff tier.
+        call os%set_all2single('updatecnt', 1.0)
+        do i = 1, 3
+            call os%set(i, 'updatecnt', 0.)
+        end do
+        do i = 9, 10
+            call os%set(i, 'updatecnt', 2.)
+        end do
         call os%sample4update_cnt([1, n], frac, nsamp, inds, .true.)
-        call assert_true(nsamp <= n, 'sample4update_cnt nsamp<=n')
+        call assert_int(5, nsamp, 'sample4update_cnt nsamp')
+        call assert_int(3, count(inds <= 3), 'sample4update_cnt exhausts lowest tier')
+        call assert_int(2, count(inds >= 4 .and. inds <= 8), 'sample4update_cnt cutoff tier')
+        call assert_int(0, count(inds >= 9), 'sample4update_cnt excludes higher tier')
         ! sample4update_class prefers never-updated particles inside each class quota
         allocate(clssmp(2))
         clssmp(1)%clsind = 1
@@ -264,7 +274,63 @@ contains
         call assert_true(updfrac > 0.0, 'get_update_frac>0')
         call os%kill
         if (allocated(inds)) deallocate(inds)
+        call test_sample4update_cnt_large()
     end subroutine test_sampling_and_updatecnt
+
+    !---------------------------------------------------------------
+    ! Large-population regression and timing test.
+    !---------------------------------------------------------------
+    subroutine test_sample4update_cnt_large()
+        integer, parameter :: n = 500001
+        real,    parameter :: update_frac = 0.005
+        real,    parameter :: zero_frac   = 0.9 * update_frac
+        type(oris) :: os
+        integer, allocatable :: candidate_inds(:), zero_inds(:), inds(:)
+        integer :: i, nzero, nsamples, nexpected
+        integer :: nzero_sampled, nselected_sampled
+        integer(timer_int_kind) :: tstart
+        real(timer_int_kind)    :: elapsed
+        write(*,'(A)') 'test_sample4update_cnt_large'
+        nzero     = nint(zero_frac * real(n))
+        nexpected = min(n, max(1, nint(update_frac * real(n))))
+        call os%new(n, .true.)
+        call os%set_all2single('state',     1)
+        call os%set_all2single('updatecnt', 1)
+        call os%set_all2single('sampled',   0)
+        ! Randomly position an exact 0.9 * update_frac population at updatecnt=0.
+        allocate(candidate_inds(n))
+        do i = 1, n
+            candidate_inds(i) = i
+        end do
+        call partial_shuffle(candidate_inds, nzero)
+        allocate(zero_inds(nzero), source=candidate_inds(:nzero))
+        deallocate(candidate_inds)
+        do i = 1, nzero
+            call os%set(zero_inds(i), 'updatecnt', 0)
+        end do
+        tstart = tic()
+        call os%sample4update_cnt([1, n], update_frac, nsamples, inds, .true.)
+        elapsed           = toc(tstart)
+        nzero_sampled     = 0
+        nselected_sampled = 0
+        do i = 1, nzero
+            if( os%get_sampled(zero_inds(i)) > 0 ) nzero_sampled = nzero_sampled + 1
+        end do
+        do i = 1, size(inds)
+            if( os%get_sampled(inds(i)) > 0 ) nselected_sampled = nselected_sampled + 1
+        end do
+        call assert_int(nexpected, nsamples, 'large sample4update_cnt sample count')
+        call assert_int(nexpected, size(inds), 'large sample4update_cnt returned index count')
+        call assert_int(nexpected, nselected_sampled, 'large sample4update_cnt marks every selected particle sampled')
+        call assert_int(nzero, nzero_sampled, 'large sample4update_cnt samples every updatecnt=0 particle')
+        write(*,'(A,I0)')       '  N:                         ', n
+        write(*,'(A,F7.4)')     '  update_frac:               ', update_frac
+        write(*,'(A,I0)')       '  updatecnt=0 particles:     ', nzero
+        write(*,'(A,I0,A,I0)')  '  zero-count coverage:       ', nzero_sampled, '/', nzero
+        call os%kill
+        if( allocated(inds) )      deallocate(inds)
+        if( allocated(zero_inds) ) deallocate(zero_inds)
+    end subroutine test_sample4update_cnt_large
 
     !---------------------------------------------------------------
     ! 6. Randomization helpers and symmetry / merge / partition_eo
