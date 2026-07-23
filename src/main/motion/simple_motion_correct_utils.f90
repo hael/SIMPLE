@@ -1,4 +1,3 @@
-
 !@descr: utility functions for motion correction
 module simple_motion_correct_utils
 use simple_core_module_api
@@ -6,7 +5,7 @@ use simple_image,       only: image
 use simple_eer_factory, only: eer_decoder
 implicit none
 
-public :: correct_gain, flip_gain, calc_eer_fraction
+public :: correct_gain, flip_gain, calc_eer_fraction, extract_outliers
 private
 #include "simple_local_flags.inc"
 
@@ -118,5 +117,101 @@ contains
         dose_per_eer_frame = tot_dose / real(n_eer_frames)
         tot_dose           = dose_per_eer_frame * real(eerfraction) * real(nfractions)
     end subroutine calc_eer_fraction
+
+    subroutine extract_outliers(movie_fname, smpd, low_outliers_out, high_outliers_out)
+        class(string), intent(in)  :: movie_fname
+        real,          intent(in)  :: smpd
+        logical, allocatable, optional, intent(out) :: low_outliers_out(:,:), high_outliers_out(:,:)
+        type(image)                :: movie_sum, frame
+        type(string)               :: sum_fname, ext
+        real,          allocatable :: sum_rmat(:,:,:)
+        integer                    :: ldim(3), nframes, iframe
+        integer                    :: n_low, n_high
+        real, parameter            :: NSIGMAS = 4.
+        real, parameter            :: LOW_ZERO_EPS = 1.0e-6
+        real                       :: ave, sdev, var, lthresh, uthresh
+        logical                    :: err
+        logical, allocatable       :: low_outliers(:,:), high_outliers(:,:)
+        select case(fname2format(movie_fname))
+        case('K')
+            write(logfhandle,'(a)') '>>> EER MOVIES NOT YET SUPPORTED FOR DEAD PIXEL EXTRACTION'
+            return
+        case DEFAULT
+            call find_ldim_nptcls(movie_fname, ldim, nframes)
+        end select
+        if( nframes < 1 )then
+            THROW_HARD('No frames in movie stack: '//movie_fname%to_char())
+        endif
+        ldim(3) = 1
+
+        write(logfhandle,'(a)') '>>> SUMMING MOVIE FRAMES FOR DEAD PIXEL EXTRACTION'
+        call movie_sum%new(ldim, smpd, wthreads=.false.)
+        call frame%new(ldim, smpd, wthreads=.false.)
+
+        call movie_sum%read(movie_fname, 1)
+        do iframe=2,nframes
+            call frame%read(movie_fname, iframe)
+            call movie_sum%add_workshare(frame)
+        enddo
+
+        sum_rmat = movie_sum%get_rmat()
+        call moment(sum_rmat(:,:,1), ave, sdev, var, err)
+        if( err )then
+            THROW_HARD('Failed to compute statistics for movie sum: '//movie_fname%to_char())
+        endif
+        if( sdev < TINY )then
+            write(logfhandle,'(a)') '>>> Movie sum has near-zero variance; no outliers detected'
+            n_low  = 0
+            n_high = 0
+            allocate(low_outliers(ldim(1), ldim(2)), source=.false.)
+            allocate(high_outliers(ldim(1), ldim(2)), source=.false.)
+        else
+            lthresh = ave - NSIGMAS * sdev
+            uthresh = ave + NSIGMAS * sdev
+            allocate(low_outliers(ldim(1), ldim(2)), source=.false.)
+            allocate(high_outliers(ldim(1), ldim(2)), source=.false.)
+            !$omp workshare
+            where(abs(sum_rmat(:,:,1)) <= LOW_ZERO_EPS)
+                low_outliers = .true.
+            elsewhere
+                low_outliers = .false.
+            end where
+            where(sum_rmat(:,:,1) > uthresh)
+                high_outliers = .true.
+            elsewhere
+                high_outliers = .false.
+            end where
+            !$omp end workshare
+            n_low  = count(low_outliers)
+            n_high = count(high_outliers)
+            write(logfhandle,'(a,1x,i0,1x,a,1x,i0,1x,a,f12.6,1x,a,f12.3)') &
+                '>>> LOW/HIGH OUTLIERS:', n_low, '/', n_high, ' LOW|x|<=', LOW_ZERO_EPS, ' HIGH>x:', uthresh
+        endif
+
+        if( present(low_outliers_out) ) then
+            if( allocated(low_outliers_out) ) deallocate(low_outliers_out)
+            allocate(low_outliers_out(ldim(1), ldim(2)), source=low_outliers)
+        endif
+        if( present(high_outliers_out) ) then
+            if( allocated(high_outliers_out) ) deallocate(high_outliers_out)
+            allocate(high_outliers_out(ldim(1), ldim(2)), source=high_outliers)
+        endif
+
+        
+        
+        ! ext       = fname2ext(movie_fname)
+        ! sum_fname = get_fbody(basename(movie_fname), ext, separator=.true.)
+        ! sum_fname = sum_fname%to_char()//'_sum.mrc'
+        ! call movie_sum%write(sum_fname)
+        ! write(logfhandle,'(a)') '>>> Wrote movie-frame sum to: '//sum_fname%to_char()
+
+        if( allocated(low_outliers) )  deallocate(low_outliers)
+        if( allocated(high_outliers) ) deallocate(high_outliers)
+        if( allocated(sum_rmat) ) deallocate(sum_rmat)
+        call movie_sum%kill()
+        call frame%kill()
+        call sum_fname%kill()
+        call ext%kill()
+    end subroutine extract_outliers
 
 end module simple_motion_correct_utils
