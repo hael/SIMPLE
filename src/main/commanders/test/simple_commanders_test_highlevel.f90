@@ -58,6 +58,11 @@ type, extends(commander_base) :: commander_test_flex_preimage_basis_ab
         procedure :: execute      => exec_test_flex_preimage_basis_ab
 end type commander_test_flex_preimage_basis_ab
 
+type, extends(commander_base) :: commander_test_pcg_recon_ctf_free
+  contains
+    procedure :: execute      => exec_test_pcg_recon_ctf_free
+end type commander_test_pcg_recon_ctf_free
+
 contains
 
 subroutine exec_test_flex_preimage_identity( self, cline )
@@ -1084,5 +1089,184 @@ subroutine exec_test_ptcls_ppca_subproject_distr( self, cline )
     call qenv%kill
     call simple_end('**** TEST_PTCLS_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
 end subroutine exec_test_ptcls_ppca_subproject_distr
+
+!>  \brief  Milestone 0 of doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md:
+!  CTF-free (T_i=1), fully in-memory validation of the matrix-free PCG reconstruction
+!  operator. Three ordered, fail-fast stages mirroring the note's section 9 sequence:
+!    1. adjoint dot-product test on forward_plane/adjoint_plane_add (section 5 gate)
+!    2. normal-operator test on apply_normal (Hermitian symmetry, positive-definiteness)
+!    3. no-CTF/no-noise synthetic recovery: PCG must recover a known phantom
+!  Does not touch reconstructor, reconstructor_eo, or volassemble.
+subroutine exec_test_pcg_recon_ctf_free( self, cline )
+    use simple_pcg_reconstruction, only: pcg_reconstruction
+    class(commander_test_pcg_recon_ctf_free), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
+    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4
+    real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
+    real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
+    real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
+    real,             parameter :: CTRS(3,NBLOBS) = reshape([&
+        &-5.0,-3.0, 2.0,&
+        &4.0, 5.0,-3.0,&
+        &0.0,-6.0,-5.0,&
+        &3.0,-2.0, 6.0], [3,NBLOBS])
+    real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
+    real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
+    type(pcg_reconstruction) :: pcgop
+    type(image)               :: volimg
+    type(oris)                :: projdirs
+    type(ori)                 :: e
+    real,    allocatable      :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
+    real,    allocatable      :: hp(:,:,:), hq(:,:,:), recon(:,:,:), rel_res_hist(:)
+    real,    allocatable      :: qplane_re(:,:), qplane_im(:,:)
+    complex, allocatable      :: gx_plane(:,:), qplane(:,:), adj_out(:,:,:), y_planes(:,:,:)
+    integer :: lims2(2,2), lims3(3,2), i, j, k, b, niters, iseed_n
+    integer, allocatable :: iseed(:)
+    real    :: ctr, dx, dy, dz, adjoint_err, meanA, meanB, corr_num, corr_denA, corr_denB, corr
+    real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
+    logical :: all_ok
+    all_ok = .true.
+
+    ! ---- deterministic RNG seed ----
+    call random_seed(size=iseed_n)
+    allocate(iseed(iseed_n), source=42)
+    call random_seed(put=iseed)
+
+    ! ---- build deterministic, asymmetric phantom (sum of off-center Gaussian blobs) ----
+    write(logfhandle,'(a)') '>>> TEST_PCG_RECON_CTF_FREE: building deterministic phantom'
+    allocate(phantom(BOX,BOX,BOX), source=0.0)
+    ctr = real(BOX)/2.0 + 0.5
+    do k = 1,BOX
+        do j = 1,BOX
+            do i = 1,BOX
+                do b = 1,NBLOBS
+                    dx = real(i)-ctr-CTRS(1,b); dy = real(j)-ctr-CTRS(2,b); dz = real(k)-ctr-CTRS(3,b)
+                    phantom(i,j,k) = phantom(i,j,k) + AMPS(b)*exp(-(dx*dx+dy*dy+dz*dz)/(2.0*SIGMAS(b)**2))
+                end do
+            end do
+        end do
+    end do
+    call volimg%new([BOX,BOX,BOX], SMPD)
+    call volimg%set_rmat(phantom, .false.)
+    call volimg%fft()
+
+    call pcgop%new(BOX, SMPD, LAMBDA)
+    lims2 = pcgop%get_lims2()
+    lims3 = pcgop%get_lims3()
+
+    ! ---- STAGE 1: adjoint dot-product test on forward_plane/adjoint_plane_add ----
+    write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product test'
+    call e%new(.false.)
+    call e%set_euler([30.,55.,70.])
+    allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+    call pcgop%forward_plane(volimg, e, gx_plane)
+    allocate(qplane_re(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+    allocate(qplane_im(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+    call random_number(qplane_re); call random_number(qplane_im)
+    allocate(qplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+    qplane = cmplx(qplane_re-0.5, qplane_im-0.5)
+    lhs = sum(real(conjg(gx_plane)*qplane, dp))
+    allocate(adj_out(lims3(1,1):lims3(1,2), lims3(2,1):lims3(2,2), lims3(3,1):lims3(3,2)), source=cmplx(0.,0.))
+    call pcgop%adjoint_plane_add(qplane, e, adj_out)
+    rhs = 0.0_dp
+    block
+        integer :: h,kk,m,phys(3)
+        complex :: xv
+        do m = lims3(3,1), lims3(3,2)
+            do kk = lims3(2,1), lims3(2,2)
+                do h = lims3(1,1), lims3(1,2)
+                    phys = volimg%comp_addr_phys(h,kk,m)
+                    xv = volimg%get_fcomp([h,kk,m], phys)
+                    rhs = rhs + real(conjg(xv)*adj_out(h,kk,m), dp)
+                end do
+            end do
+        end do
+    end block
+    adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
+    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <Gx,q>=', real(lhs), ' <x,G^Tq>=', real(rhs), &
+        &' rel_err=', adjoint_err
+    if( adjoint_err > ADJOINT_RELTOL )then
+        write(logfhandle,'(a)') '    FAIL: adjoint dot-product identity violated'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: adjoint dot-product identity holds'
+    endif
+
+    ! ---- STAGE 2: normal-operator test on apply_normal (only if stage 1 passed) ----
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 2: normal-operator test'
+        call projdirs%new(NPROJS, .false.)
+        call projdirs%spiral
+        allocate(p_probe(BOX,BOX,BOX), q_probe(BOX,BOX,BOX))
+        call random_number(p_probe); call random_number(q_probe)
+        p_probe = p_probe - 0.5; q_probe = q_probe - 0.5
+        hp = pcgop%apply_normal(p_probe, projdirs)
+        hq = pcgop%apply_normal(q_probe, projdirs)
+        dp_p_hq = pcgop%dot_real_volume(p_probe, hq)
+        dp_hp_q = pcgop%dot_real_volume(hp, q_probe)
+        dp_p_hp = pcgop%dot_real_volume(p_probe, hp)
+        adjoint_err = real(abs(dp_p_hq-dp_hp_q) / max(1.0_dp, abs(dp_p_hq), abs(dp_hp_q)))
+        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_p_hq), &
+            &' dot(Hp,q)=', real(dp_hp_q), ' rel_err=', adjoint_err
+        if( adjoint_err > NORMAL_OP_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: normal operator is not symmetric'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: normal operator is symmetric'
+        endif
+        write(logfhandle,'(a,es14.6)') '    dot(p,Hp)=', real(dp_p_hp)
+        if( dp_p_hp <= 0.0_dp )then
+            write(logfhandle,'(a)') '    FAIL: normal operator is not positive-definite'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: normal operator is positive-definite'
+        endif
+    else
+        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 (adjoint test) failed'
+    endif
+
+    ! ---- STAGE 3: no-CTF/no-noise synthetic recovery (only if stages 1-2 passed) ----
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 3: no-CTF/no-noise synthetic recovery'
+        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(volimg, e, y_planes(:,:,i))
+        end do
+        allocate(recon(BOX,BOX,BOX), source=0.0)
+        call pcgop%solve(y_planes, projdirs, recon, maxits=40, rtol=1.0e-3, &
+            &rel_res_hist=rel_res_hist, niters=niters)
+        write(logfhandle,'(a,i0,a)') '    PCG ran ', niters, ' iterations'
+        do i = 1, niters
+            write(logfhandle,'(a,i3,a,es14.6)') '      iter ', i, ' rel_resid=', rel_res_hist(i)
+        end do
+        do i = 2, niters
+            if( rel_res_hist(i) > rel_res_hist(i-1) + MONOTONIC_SLACK )then
+                write(logfhandle,'(a,i0)') '    FAIL: relative residual increased at iteration ', i
+                all_ok = .false.
+            endif
+        end do
+        meanA = sum(recon)/real(size(recon)); meanB = sum(phantom)/real(size(phantom))
+        corr_num  = sum((recon-meanA)*(phantom-meanB))
+        corr_denA = sum((recon-meanA)**2); corr_denB = sum((phantom-meanB)**2)
+        corr = corr_num / sqrt(corr_denA*corr_denB)
+        write(logfhandle,'(a,f8.5)') '    recon-vs-phantom correlation = ', corr
+        if( corr < RECON_CORR_THRES )then
+            write(logfhandle,'(a)') '    FAIL: recovered volume does not correlate with the known phantom'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: recovered volume correlates with the known phantom'
+        endif
+    else
+        write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
+    endif
+
+    ! ---- final verdict ----
+    if( all_ok )then
+        call simple_end('**** SIMPLE_TEST_PCG_RECON_CTF_FREE NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_PCG_RECON_CTF_FREE FAILED')
+    endif
+end subroutine exec_test_pcg_recon_ctf_free
 
 end module simple_commanders_test_highlevel

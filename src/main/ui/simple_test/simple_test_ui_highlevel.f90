@@ -11,6 +11,7 @@ type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: flex_preimage_identity
 type(ui_program), target :: flex_preimage_basis_ab
+type(ui_program), target :: pcg_recon_ctf_free
 
 contains
 
@@ -24,6 +25,7 @@ contains
         call new_ptcls_ppca_subproject_distr(tsttab)
         call new_flex_preimage_identity(tsttab)
         call new_flex_preimage_basis_ab(tsttab)
+        call new_pcg_recon_ctf_free(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -37,6 +39,7 @@ contains
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') flex_preimage_identity%name%to_char()
         write(logfhandle,'(A)') flex_preimage_basis_ab%name%to_char()
+        write(logfhandle,'(A)') pcg_recon_ctf_free%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -193,5 +196,20 @@ contains
         call flex_preimage_basis_ab%add_input(UI_COMP, nthr, required_override=.false.)
         call add_ui_program('flex_preimage_basis_ab', flex_preimage_basis_ab, tsttab)
     end subroutine new_flex_preimage_basis_ab
+
+    subroutine new_pcg_recon_ctf_free( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call pcg_recon_ctf_free%new(&
+        &'pcg_recon_ctf_free',&                      ! name
+        &'CTF-free PCG reconstruction operator validation',&
+        &'Milestone 0 of the CTF/sigma-weighted PCG reconstruction design note: in-memory '&
+        &'adjoint dot-product test, normal-operator test, and no-CTF/no-noise synthetic '&
+        &'recovery test against a deterministic phantom. Self-contained, no project required.',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('pcg_recon_ctf_free', pcg_recon_ctf_free, tsttab)
+    end subroutine new_pcg_recon_ctf_free
 
 end module simple_test_ui_highlevel
