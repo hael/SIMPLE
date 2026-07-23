@@ -334,25 +334,23 @@ contains
                 integer, intent(in)           :: npos, xdim, ydim
                 integer, intent(in), optional :: box
                 integer, allocatable          :: pos(:,:)
-                logical                       :: occupied(xdim,ydim)
+                logical                       :: occupied(xdim,ydim), skip
                 integer                       :: ix, iy, cnt, i, j
                 allocate( pos(npos,2) )
                 occupied = .false.
                 cnt = 0
                 do
+                    skip = .false.
                     ix = irnd_uni(xdim)
                     iy = irnd_uni(ydim)
                     if( present(box) )then
                         if( ix < box/2+1 .or. ix > xdim-box/2-1 ) cycle
                         if( iy < box/2+1 .or. iy > ydim-box/2-1 ) cycle
-                        do i=ix-box/2,ix+box/2-1
-                            do j=iy-box/2,iy+box/2-1
-                                if( occupied(i,j) ) cycle
-                            end do
-                        end do
+                        skip = any(occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1))
                     else
-                        if(occupied(ix,iy)) cycle
+                        skip = occupied(ix,iy)
                     endif
+                    if( skip ) cycle
                     if( present(box) )then
                         occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1) = .true.
                     else
