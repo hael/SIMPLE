@@ -267,7 +267,7 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_timeplots_ptr)
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%preprocess_hash ) then
@@ -304,7 +304,7 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_optics_groups_ptr)
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%optics_assignment_hash ) then
@@ -341,7 +341,7 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%initial_picking_hash ) then
@@ -390,7 +390,7 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%reference_picking_hash ) then
@@ -438,7 +438,7 @@ contains
       enddo
       if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%opening2D_hash ) then
@@ -497,7 +497,7 @@ contains
         nullify(json_cavgs2D_ptr)
       end if
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%particle_sieving_hash ) then
@@ -549,7 +549,7 @@ contains
         nullify(json_cavgs2D_ptr)
       end if
     endif
-    call self%json%print_to_string(json_ptr, buffer)
+    call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%pool2D_hash ) then
@@ -573,7 +573,7 @@ contains
     class(gui_assembler),     intent(inout) :: self
     type(string)                            :: str
     character(kind=CK,len=:), allocatable   :: buffer
-    call self%json%print_to_string(self%json_root, buffer)
+    call self%json%print_to_string_fast(self%json_root, buffer)
     str = buffer
     if( allocated(buffer) ) deallocate(buffer)
   end function to_string

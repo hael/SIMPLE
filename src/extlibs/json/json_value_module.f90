@@ -460,7 +460,9 @@
         procedure,public :: print_to_string => json_value_to_string !! Print the [[json_value]]
                                                                     !! structure to an allocatable
                                                                     !! string
-
+        procedure,public :: print_to_string_fast => json_value_to_string_fast !! Print the [[json_value]]     
+                                                                              !! structure to an allocatable
+                                                                              !! string using fats routines
         !>
         !  Print the [[json_value]] to a file.
         !
@@ -724,6 +726,7 @@
         procedure        :: name_equal
         procedure        :: name_strings_equal
         procedure        :: json_value_print
+        procedure        :: json_print_value_fast
         procedure        :: string_to_int
         procedure        :: string_to_dble
         procedure        :: parse_value
@@ -5249,6 +5252,415 @@
     call json%json_value_print(p, iunit=unit2str, str=str, indent=1_IK, colon=.true.)
 
     end subroutine json_value_to_string
+!*****************************************************************************************
+
+!*****************************************************************************************
+!> author: Joseph Caesar
+!  date: 23/7/2026
+!
+!  Print the [[json_value]] structure to an allocatable string.
+
+    subroutine json_value_to_string_fast(json,p,str)
+
+    implicit none
+
+    class(json_core),intent(inout)                   :: json
+    type(json_value),pointer,intent(in)              :: p
+    character(kind=CK,len=:),intent(out),allocatable :: str  !! prints structure to this string
+
+    str = CK_''
+    call json%json_print_value_fast(p, iunit=unit2str, str=str, indent=1_IK, colon=.true.)
+
+    end subroutine json_value_to_string_fast
+!*****************************************************************************************
+
+!*****************************************************************************************
+!>author: Joseph Caesar
+!  date: 23/7/2026
+!  Fast string-only serializer for a [[json_value]] structure.
+!  Uses a growable output buffer to avoid repeated reallocation/copying.
+
+    subroutine json_print_value_fast(json,p,iunit,str,indent,need_comma,colon,is_array_element,is_compressed_vector)
+
+    implicit none
+
+    class(json_core),intent(inout)                   :: json
+    type(json_value),pointer,intent(in)              :: p
+    integer(IK),intent(in)                           :: iunit
+    character(kind=CK,len=:),intent(inout),allocatable :: str
+    integer(IK),intent(in),optional                  :: indent
+    logical(LK),intent(in),optional                  :: is_array_element
+    logical(LK),intent(in),optional                  :: need_comma
+    logical(LK),intent(in),optional                  :: colon
+    logical(LK),intent(in),optional                  :: is_compressed_vector
+
+    character(kind=CK,len=:),allocatable :: buf
+    character(kind=CK,len=:),allocatable :: dummy
+    integer(IK) :: buf_len, buf_cap
+
+    if (iunit/=unit2str) then
+        call json%json_value_print(p, iunit=iunit, str=dummy, indent=indent, need_comma=need_comma, &
+                                   colon=colon, is_array_element=is_array_element, &
+                                   is_compressed_vector=is_compressed_vector)
+        return
+    end if
+
+    buf_cap = 4096_IK
+    allocate(character(kind=CK,len=buf_cap) :: buf)
+    buf_len = 0_IK
+
+    call json_print_value_fast_impl(json,p,buf,buf_len,buf_cap,indent,need_comma,colon,is_array_element,is_compressed_vector)
+
+    if (json%exception_thrown) then
+        str = CK_''
+    else
+        if (buf_len > 0_IK) then
+            str = buf(1:buf_len)
+        else
+            str = CK_''
+        end if
+    end if
+
+    if (allocated(buf)) deallocate(buf)
+
+    end subroutine json_print_value_fast
+!*****************************************************************************************
+
+!*****************************************************************************************
+!>
+!  Implementation for [[json_print_value_fast]].
+
+    recursive subroutine json_print_value_fast_impl(json,p,buf,buf_len,buf_cap,indent,&
+                                                    need_comma,colon,is_array_element,&
+                                                    is_compressed_vector)
+
+    implicit none
+
+    class(json_core),intent(inout)       :: json
+    type(json_value),pointer,intent(in)  :: p
+    character(kind=CK,len=:),allocatable,intent(inout) :: buf
+    integer(IK),intent(inout)            :: buf_len
+    integer(IK),intent(inout)            :: buf_cap
+    integer(IK),intent(in),optional      :: indent
+    logical(LK),intent(in),optional      :: is_array_element
+    logical(LK),intent(in),optional      :: need_comma
+    logical(LK),intent(in),optional      :: colon
+    logical(LK),intent(in),optional      :: is_compressed_vector
+
+    character(kind=CK,len=max_numeric_str_len) :: tmp
+    character(kind=CK,len=:),allocatable :: s
+    type(json_value),pointer :: element
+    integer(IK) :: tab, spaces, i, count
+    logical(LK) :: print_comma, is_array, is_vector
+    integer(IK) :: var_type, var_type_prev
+    character(kind=CK,len=:),allocatable :: str_escaped
+
+    if (.not. json%exception_thrown) then
+
+        if (.not. associated(p)) then
+            call json%throw_exception('Error in json_print_value_fast_impl: '//&
+                                      'the pointer is not associated')
+            return
+        end if
+
+        if (present(is_compressed_vector)) then
+            is_vector = is_compressed_vector
+        else
+            is_vector = .false.
+        end if
+
+        if (present(need_comma)) then
+            print_comma = need_comma
+        else
+            print_comma = .false.
+        end if
+
+        if (present(indent) .and. .not. json%no_whitespace) then
+            tab = indent
+        else
+            tab = 0_IK
+        end if
+        spaces = tab*json%spaces_per_tab
+
+        if (present(is_array_element)) then
+            is_array = is_array_element
+        else
+            is_array = .false.
+        end if
+
+        if (present(colon)) then
+            s = CK_''
+        else
+            s = repeat(space, spaces)
+        end if
+
+        select case (p%var_type)
+
+        case (json_object)
+
+            count = json%count(p)
+
+            if (count==0) then
+                call write_it_fast( s//start_object//end_object, comma=print_comma )
+            else
+                call write_it_fast( s//start_object )
+
+                if (is_array) then
+                    if ( .not. json%no_whitespace) tab = tab+1_IK
+                    spaces = tab*json%spaces_per_tab
+                end if
+
+                nullify(element)
+                element => p%children
+                do i = 1, count
+
+                    if (.not. associated(element)) then
+                        call json%throw_exception('Error in json_print_value_fast_impl: '//&
+                                                  'Malformed JSON linked list')
+                        return
+                    end if
+
+                    if (allocated(element%name)) then
+                        call escape_string(element%name,str_escaped,json%escape_solidus)
+                        if (json%no_whitespace) then
+                            call write_it_fast(repeat(space, spaces)//quotation_mark//&
+                                               str_escaped//quotation_mark//colon_char,&
+                                               advance=.false.)
+                        else
+                            call write_it_fast(repeat(space, spaces)//quotation_mark//&
+                                               str_escaped//quotation_mark//colon_char//space,&
+                                               advance=.false.)
+                        end if
+                    else
+                        call json%throw_exception('Error in json_print_value_fast_impl:'//&
+                                                  ' element%name not allocated')
+                        nullify(element)
+                        return
+                    end if
+
+                    call json_print_value_fast_impl(json,element,buf,buf_len,buf_cap,indent=tab + 1_IK, &
+                                                    need_comma=i<count, colon=.true.)
+                    if (json%exception_thrown) return
+
+                    element => element%next
+                end do
+
+                if (.not. is_array) s = repeat(space, max(0_IK,spaces-json%spaces_per_tab))
+                call write_it_fast( s//end_object, comma=print_comma )
+                nullify(element)
+
+            end if
+
+        case (json_array)
+
+            count = json%count(p)
+
+            if (json%compress_vectors) then
+                is_vector = .true.
+                var_type_prev = -1_IK
+                nullify(element)
+                element => p%children
+                do i = 1, count
+                    if (.not. associated(element)) then
+                        call json%throw_exception('Error in json_print_value_fast_impl: '//&
+                                                  'Malformed JSON linked list')
+                        return
+                    end if
+                    call json%info(element,var_type=var_type)
+                    if (var_type==json_object .or. &
+                        var_type==json_array .or. &
+                        (i>1 .and. var_type/=var_type_prev)) then
+                        is_vector = .false.
+                        exit
+                    end if
+                    var_type_prev = var_type
+                    element => element%next
+                end do
+            else
+                is_vector = .false.
+            end if
+
+            if (count==0) then
+                call write_it_fast( s//start_array//end_array, comma=print_comma )
+            else
+                call write_it_fast( s//start_array, advance=(.not. is_vector) )
+
+                if (is_array) then
+                    if ( .not. json%no_whitespace) tab = tab+1_IK
+                    spaces = tab*json%spaces_per_tab
+                end if
+
+                nullify(element)
+                element => p%children
+                do i = 1, count
+
+                    if (.not. associated(element)) then
+                        call json%throw_exception('Error in json_print_value_fast_impl: '//&
+                                                  'Malformed JSON linked list')
+                        return
+                    end if
+
+                    if (is_vector) then
+                        call json_print_value_fast_impl(json,element,buf,buf_len,buf_cap,indent=0_IK, &
+                                                        need_comma=i<count, is_array_element=.false., &
+                                                        is_compressed_vector=.true.)
+                    else
+                        call json_print_value_fast_impl(json,element,buf,buf_len,buf_cap,indent=tab, &
+                                                        need_comma=i<count, is_array_element=.true.)
+                    end if
+                    if (json%exception_thrown) return
+
+                    element => element%next
+                end do
+
+                if (is_vector) then
+                    call write_it_fast( end_array,comma=print_comma )
+                else
+                    call write_it_fast( repeat(space, max(0_IK,spaces-json%spaces_per_tab))//end_array,&
+                                        comma=print_comma )
+                end if
+                nullify(element)
+
+            end if
+
+        case (json_null)
+
+            call write_it_fast( s//null_str, comma=print_comma, &
+                                advance=(.not. is_vector),&
+                                space_after_comma=is_vector )
+
+        case (json_string)
+
+            if (allocated(p%str_value)) then
+                call escape_string(p%str_value,str_escaped,json%escape_solidus)
+                call write_it_fast( s//quotation_mark// &
+                                    str_escaped//quotation_mark, &
+                                    comma=print_comma, &
+                                    advance=(.not. is_vector),&
+                                    space_after_comma=is_vector )
+            else
+                call json%throw_exception('Error in json_print_value_fast_impl:'//&
+                                          ' p%value_string not allocated')
+                return
+            end if
+
+        case (json_logical)
+
+            if (p%log_value) then
+                call write_it_fast( s//true_str, comma=print_comma, &
+                                    advance=(.not. is_vector),&
+                                    space_after_comma=is_vector )
+            else
+                call write_it_fast( s//false_str, comma=print_comma, &
+                                    advance=(.not. is_vector),&
+                                    space_after_comma=is_vector )
+            end if
+
+        case (json_integer)
+
+            call integer_to_string(p%int_value,int_fmt,tmp)
+            call write_it_fast( s//trim(tmp), comma=print_comma, &
+                                advance=(.not. is_vector),&
+                                space_after_comma=is_vector )
+
+        case (json_double)
+
+            if (allocated(json%real_fmt)) then
+                call real_to_string(p%dbl_value,json%real_fmt,json%compact_real,tmp)
+            else
+                call real_to_string(p%dbl_value,default_real_fmt,json%compact_real,tmp)
+            end if
+
+            call write_it_fast( s//trim(tmp), comma=print_comma, &
+                                advance=(.not. is_vector),&
+                                space_after_comma=is_vector )
+
+        case default
+
+            call json%throw_exception('Error in json_print_value_fast_impl: unknown data type')
+
+        end select
+
+        if (allocated(s)) deallocate(s)
+
+    end if
+
+    contains
+
+        subroutine ensure_capacity(extra)
+        implicit none
+        integer(IK),intent(in) :: extra
+        character(kind=CK,len=:),allocatable :: tmpbuf
+        integer(IK) :: needed, new_cap
+
+        needed = buf_len + max(0_IK, extra)
+        if (needed <= buf_cap) return
+
+        new_cap = max(needed, max(1_IK, 2_IK*buf_cap))
+        allocate(character(kind=CK,len=new_cap) :: tmpbuf)
+        if (buf_len > 0_IK) tmpbuf(1:buf_len) = buf(1:buf_len)
+        call move_alloc(tmpbuf, buf)
+        buf_cap = new_cap
+        end subroutine ensure_capacity
+
+        subroutine append_text(txt)
+        implicit none
+        character(kind=CK,len=*),intent(in) :: txt
+        integer(IK) :: n
+        n = len(txt, kind=IK)
+        if (n <= 0_IK) return
+        call ensure_capacity(n)
+        buf(buf_len+1_IK:buf_len+n) = txt
+        buf_len = buf_len + n
+        end subroutine append_text
+
+        subroutine write_it_fast(s,advance,comma,space_after_comma)
+
+        implicit none
+
+        character(kind=CK,len=*),intent(in) :: s
+        logical(LK),intent(in),optional :: advance
+        logical(LK),intent(in),optional :: comma
+        logical(LK),intent(in),optional :: space_after_comma
+
+        logical(LK) :: add_comma
+        logical(LK) :: add_line_break
+        logical(LK) :: add_space
+
+        if (present(comma)) then
+            add_comma = comma
+        else
+            add_comma = .false.
+        end if
+        if (json%no_whitespace) then
+            add_space = .false.
+        else
+            if (present(space_after_comma)) then
+                add_space = space_after_comma
+            else
+                add_space = .false.
+            end if
+        end if
+        if (present(advance)) then
+            if (json%no_whitespace) then
+                add_line_break = .false.
+            else
+                add_line_break = advance
+            end if
+        else
+            add_line_break = .not. json%no_whitespace
+        end if
+
+        call append_text(s)
+        if (add_comma) then
+            call append_text(delimiter)
+            if (add_space) call append_text(space)
+        end if
+        if (add_line_break) call append_text(newline)
+
+        end subroutine write_it_fast
+
+    end subroutine json_print_value_fast_impl
 !*****************************************************************************************
 
 !*****************************************************************************************
