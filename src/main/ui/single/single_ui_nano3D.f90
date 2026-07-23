@@ -85,6 +85,7 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call autorefine3D_nano%add_input(UI_FILT, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
+        call autorefine3D_nano%add_input(UI_FILT, icm)
         ! mask controls
         call autorefine3D_nano%add_input(UI_MASK, mskdiam)
         call autorefine3D_nano%add_input(UI_MASK, 'mskdiam_detect', 'num', 'Detect-atoms mask diameter', 'Optional mask diameter in Angstroms passed only to detect_atoms', 'mask diameter in Angstroms{0}', .false., 0.)
@@ -129,6 +130,7 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call refine3D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
+        call refine3D_nano%add_input(UI_FILT, icm)
         ! mask controls
         call refine3D_nano%add_input(UI_MASK, mskdiam)
         ! computer controls

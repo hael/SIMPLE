@@ -7,6 +7,7 @@ use simple_classaverager,    only: transform_ptcls
 use simple_ctf,              only: ctf
 use simple_image,            only: image
 use simple_imgarr_utils,     only: dealloc_imgarr
+use simple_math_ft,          only: upsample_sigma2
 use simple_memoize_ft_maps,  only: memoize_ft_maps, forget_ft_maps
 use simple_ori,              only: ori
 use simple_parameters,       only: parameters
@@ -303,6 +304,7 @@ contains
                 call registered_crops(j)%fft
                 call registered_crops(j)%subtr(mean_ctfs(ithr))
                 if( params%lp > 2. * params%smpd_crop + TINY ) call registered_crops(j)%bp(0.,params%lp)
+                call apply_sigma_shell_whitening(registered_crops(j),params,build,iptcl)
                 call registered_crops(j)%ifft
                 call registered_crops(j)%mask2D_softavg(params%msk_crop)
                 if( l_retain )then
@@ -739,6 +741,30 @@ contains
         call outproj%write(project_fname)
         deallocate(active)
     end subroutine write_registered_project
+
+    subroutine apply_sigma_shell_whitening( residual_img, params, build, iptcl )
+        class(image),      intent(inout) :: residual_img
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: iptcl
+        real, allocatable :: sigma_shells(:), sigma_filter(:)
+        integer :: kfromto(2), nyq, sigma_nyq, sh
+        real :: sigma_floor
+        if( .not. allocated(build%esig%sigma2_noise) ) return
+        if( iptcl < lbound(build%esig%sigma2_noise,2) .or. iptcl > ubound(build%esig%sigma2_noise,2) ) return
+        kfromto = build%esig%get_kfromto()
+        nyq = residual_img%get_nyq()
+        if( nyq < 1 ) return
+        sigma_nyq = fdim(params%box_crop) - 1
+        allocate(sigma_shells(0:nyq), sigma_filter(nyq))
+        call upsample_sigma2(kfromto(1), sigma_nyq, build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), nyq, sigma_shells)
+        sigma_floor = max(TINY, minval(sigma_shells(1:nyq), mask=sigma_shells(1:nyq) > TINY))
+        do sh=1,nyq
+            sigma_filter(sh) = 1. / sqrt(max(sigma_shells(sh), sigma_floor))
+        end do
+        call residual_img%apply_filter(sigma_filter)
+        deallocate(sigma_shells, sigma_filter)
+    end subroutine apply_sigma_shell_whitening
 
     pure elemental real function registered_angast( angast, e3 ) result(canonical_angast)
         real, intent(in) :: angast,e3

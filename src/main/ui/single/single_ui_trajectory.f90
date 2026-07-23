@@ -53,6 +53,7 @@ contains
         call extract_substk%add_input(UI_PARM, projfile)
         call extract_substk%add_input(UI_PARM, 'fromp', 'num', 'From index', 'Start index for stack copy', 'start index', .false., 1.0)
         call extract_substk%add_input(UI_PARM, 'top',   'num', 'To index', 'Stop index for stack copy', 'stop index', .false., 1.0)
+        call extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}; use state<0 for legacy include-all behavior', 'state index', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls

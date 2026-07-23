@@ -394,14 +394,14 @@ contains
         type(image) :: gridcorr_img, state_img
         type(ori) :: orientation
         real(dp), allocatable :: scales(:)
-        real, allocatable :: shrink_filters(:,:)
-        logical, allocatable :: has_shrink_filter(:)
-        integer, allocatable :: shrink_source_state(:)
+        real, allocatable :: lowpass_filters(:,:)
+        logical, allocatable :: has_lowpass_filter(:)
+        integer, allocatable :: lowpass_source_state(:)
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, state
         if( size(pinds)<1 .or. nstates<1 ) THROW_HARD('invalid flex weighted state reconstruction dimensions')
         if( any(shape(state_weights)/=[size(pinds),nstates]) ) THROW_HARD('flex weighted state table mismatch')
         allocate(state_recs(nstates),scales(nstates))
-        call prepare_project_fsc_shrinkage_filters(params,build,nstates,shrink_filters,has_shrink_filter,shrink_source_state, &
+        call prepare_project_fsc_lowpass_filters(params,build,nstates,lowpass_filters,has_lowpass_filter,lowpass_source_state, &
             &fsc_projfile)
         do state=1,nstates
             call init_basis_reconstructor(params,build,state_recs(state))
@@ -438,10 +438,10 @@ contains
             call state_recs(state)%div(real(params%box))
             call state_recs(state)%mul(gridcorr_img)
             call state_img%copy(state_recs(state))
-            if( has_shrink_filter(state) )then
-                call state_img%apply_filter(shrink_filters(:,state))
-                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC shrinkage to state=',state, &
-                    &' using_source_state=',shrink_source_state(state)
+            if( has_lowpass_filter(state) )then
+                call state_img%apply_filter(lowpass_filters(:,state))
+                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
+                    &' using_source_state=',lowpass_source_state(state)
             endif
             call write_state(params,state_img,state)
             call state_img%kill
@@ -449,15 +449,15 @@ contains
             call state_recs(state)%kill
         end do
         call gridcorr_img%kill
-        deallocate(state_recs,scales,shrink_filters,has_shrink_filter,shrink_source_state)
+        deallocate(state_recs,scales,lowpass_filters,has_lowpass_filter,lowpass_source_state)
     end subroutine reconstruct_flex_diffmap_weighted_states
 
-    subroutine prepare_project_fsc_shrinkage_filters( params, build, nstates, shrink_filters, has_filter, source_state, &
+    subroutine prepare_project_fsc_lowpass_filters( params, build, nstates, lowpass_filters, has_filter, source_state, &
         &fsc_projfile )
         class(parameters), intent(in) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in) :: nstates
-        real, allocatable, intent(out) :: shrink_filters(:,:)
+        real, allocatable, intent(out) :: lowpass_filters(:,:)
         logical, allocatable, intent(out) :: has_filter(:)
         integer, allocatable, intent(out) :: source_state(:)
         type(string), optional, intent(in) :: fsc_projfile
@@ -467,8 +467,8 @@ contains
         integer :: filtsz, state, fsc_box, i, state1_fsc_count
         logical :: out_loaded
         filtsz=fdim(params%box_crop)-1
-        allocate(shrink_filters(filtsz,nstates),has_filter(nstates),source_state(nstates))
-        shrink_filters=0.
+        allocate(lowpass_filters(filtsz,nstates),has_filter(nstates),source_state(nstates))
+        lowpass_filters=0.
         has_filter=.false.
         source_state=0
         if( filtsz<1 ) return
@@ -477,14 +477,14 @@ contains
             if( len_trim(fsc_projfile%to_char())>0 ) proj_for_fsc=fsc_projfile
         endif
         if( .not.file_exists(proj_for_fsc) )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: projfile not found'
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass filtering skipped: projfile not found'
             call proj_for_fsc%kill
             return
         endif
         call spproj%read_segment('out',proj_for_fsc)
         out_loaded=spproj%os_out%get_noris()>0
         if( .not.out_loaded )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: empty out segment'
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass filtering skipped: empty out segment'
             call proj_for_fsc%kill
             call spproj%kill
             return
@@ -497,7 +497,7 @@ contains
             if( spproj%os_out%get_state(i)==1 ) state1_fsc_count=state1_fsc_count+1
         end do
         if( state1_fsc_count/=1 )then
-            write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: expected exactly one state=1 FSC in out segment, found=', &
+            write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE project-FSC low-pass filtering skipped: expected exactly one state=1 FSC in out segment, found=', &
                 &state1_fsc_count
             call imgkind_here%kill
             call proj_for_fsc%kill
@@ -506,7 +506,7 @@ contains
         endif
         call spproj%get_fsc(1,fsc_fname,fsc_box)
         if( .not.file_exists(fsc_fname) )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: state=1 FSC file missing'
+            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass filtering skipped: state=1 FSC file missing'
             call imgkind_here%kill
             call proj_for_fsc%kill
             call spproj%kill
@@ -514,7 +514,7 @@ contains
         endif
         fsc=file2rarr(fsc_fname)
         if( size(fsc)/=filtsz )then
-            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE project-FSC shrinkage skipped: state=1 FSC size mismatch; fsc_nyq=', &
+            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE project-FSC low-pass filtering skipped: state=1 FSC size mismatch; fsc_nyq=', &
                 &size(fsc),' model_nyq=',filtsz
             deallocate(fsc)
             call fsc_fname%kill
@@ -524,8 +524,8 @@ contains
             return
         endif
         do state=1,nstates
-            call fsc2optlp_sub(filtsz,fsc,shrink_filters(:,state),merged=.false.)
-            has_filter(state)=any(shrink_filters(:,state)>0.)
+            call fsc2optlp_sub(filtsz,fsc,lowpass_filters(:,state),merged=.false.)
+            has_filter(state)=any(lowpass_filters(:,state)>0.)
             source_state(state)=1
         end do
         deallocate(fsc)
@@ -533,7 +533,7 @@ contains
         call imgkind_here%kill
         call proj_for_fsc%kill
         call spproj%kill
-    end subroutine prepare_project_fsc_shrinkage_filters
+    end subroutine prepare_project_fsc_lowpass_filters
 
     subroutine write_flex_diffmap_rec_parts( params, build, pinds, z, ncomp, part )
         class(parameters), intent(inout) :: params

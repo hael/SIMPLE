@@ -420,7 +420,7 @@ constructing trajectory chunks.
 | Iterative PCA/PPCA and sigma estimation | Removed from flex workflow |
 | Even/odd maps and FSC per pre-image state | Forward-facing development |
 | Posterior covariance/model-variance map | Forward-facing development |
-| Project-FSC shrinkage of pre-image states | Implemented for weighted-state reconstruction |
+| Project-FSC low-pass filtering of pre-image states | Implemented for weighted-state reconstruction |
 
 A spatial variance map derived from posterior covariance or model variance
 would also be valuable, but it requires a clearly specified likelihood and
@@ -428,12 +428,12 @@ calibrated uncertainty model. It must not be inferred from diffusion
 eigenvalues alone.
 
 Project FSCs are already two-fold cross-validated. The weighted-state
-reconstruction path now applies continuous FSC-based shrinkage in Fourier space
+reconstruction path now applies FSC-based low-pass filtering in Fourier space
 before writing each state volume, using the original input project's
-state-1 FSC (from its `out` segment) for all states. Shrinkage uses the
+state-1 FSC (from its `out` segment) for all states. Filtering uses the
 existing `fsc2optlp_sub(..., merged=.false.)`
 mapping rather than a hard cutoff.
 
 If no compatible FSC metadata/file is available, or if FSC shell count is
-incompatible with the reconstruction Nyquist, shrinkage is skipped with an
-explicit log message and unshrunk volumes are written.
+incompatible with the reconstruction Nyquist, low-pass filtering is skipped with
+an explicit log message and unfiltered volumes are written.

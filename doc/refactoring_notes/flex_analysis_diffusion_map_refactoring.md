@@ -600,7 +600,7 @@ The resulting mode maps are CTF-density-corrected Hermitian least-squares
 reconstructions. They should not be called strictly Wiener-restored maps unless
 a defined signal/noise or FSC reliability term is also applied. The first
 replacement deliberately has no external sigma model; project-FSC-driven,
-already cross-validated shrinkage remains the forward-facing regularization
+already cross-validated low-pass filtering remains the forward-facing regularization
 development described in Section 17.
 
 There are only `Q` numerators and `Q` densities. There are no `Q(Q+1)/2`
@@ -1211,7 +1211,7 @@ replacement:
 
 - posterior covariance or probabilistic uncertainty estimates;
 - a spatial model-variance or predictive-variance map;
-- project-FSC-based, already two-fold cross-validated shrinkage/filtering of
+- project-FSC-based, already two-fold cross-validated low-pass filtering of
   reconstructed modes;
 - local/self-tuning diffusion kernels;
 - kernel-weighted nonlinear state maps along the diffusion manifold;

@@ -423,13 +423,39 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        integer, allocatable :: pinds(:)
+        integer :: fromto(2), nptcls
         call cline%set('mkdir', 'no')
         ! init params
         call params%new(cline)
         ! read the project file
         call spproj%read(params%projfile)
         call spproj%write_segment_inside('projinfo')
-        call spproj%write_substk(params%fromp, params%top, params%outstk)
+        if( params%state < 0 )then
+            call spproj%write_substk(params%fromp, params%top, params%outstk)
+        else
+            nptcls = spproj%get_nptcls()
+            fromto(1) = params%fromp
+            fromto(2) = params%top
+            if( fromto(1) < 1 ) fromto(1) = 1
+            if( fromto(2) < 1 ) fromto(2) = nptcls
+            if( fromto(1) > fromto(2) )then
+                THROW_HARD('Invalid extraction range: fromp > top')
+            endif
+            if( .not. spproj%os_ptcl2D%isthere('state') )then
+                call spproj%write_substk(params%fromp, params%top, params%outstk)
+            else
+                call spproj%os_ptcl2D%get_pinds(params%state, 'state', pinds)
+                if( size(pinds) == 0 )then
+                    THROW_HARD('No particles with state='//int2str(params%state)//' found in project')
+                endif
+                pinds = pack(pinds, mask=pinds >= fromto(1) .and. pinds <= fromto(2))
+                if( size(pinds) == 0 )then
+                    THROW_HARD('No particles with state='//int2str(params%state)//' in the requested range')
+                endif
+                call spproj%write_substk(pinds, params%outstk)
+            endif
+        endif
         ! end gracefully
         call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')
     end subroutine exec_extract_substk

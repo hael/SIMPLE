@@ -4,6 +4,8 @@ use simple_cmdline,                 only: cmdline
 use simple_commanders_relion,       only: commander_export_relion
 use simple_commanders_starproject,  only: commander_import_starproject, commander_export_starproject, &
     commander_export_manifoldem_starproject
+use simple_commanders_starproject,  only: commander_import_starproject, commander_export_starproject
+use single_commanders_trajectory,   only: commander_extract_substk
 use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info,&
 commander_print_project_field, commander_replace_project_field, commander_selection, commander_merge_projects,&
 commander_extract_subproj, commander_validate_projfile, commander_ptcl3D_state_consensus
@@ -19,6 +21,7 @@ private
 type(commander_export_relion)         :: xexport_relion
 type(commander_export_starproject)    :: xexport_starproject
 type(commander_export_manifoldem_starproject) :: xexport_manifoldem_starproject
+type(commander_extract_substk)        :: xextract_substk
 type(commander_extract_subproj)       :: xextract_subproj
 type(commander_import_boxes)          :: ximport_boxes
 type(commander_import_cavgs)          :: ximport_cavgs
@@ -58,6 +61,8 @@ contains
                 call xexport_manifoldem_starproject%execute(cline)
             case( 'extract_subproj' )
                 call xextract_subproj%execute(cline)
+            case( 'extract_substk' )
+                call xextract_substk%execute(cline)
             case( 'import_boxes' )
                 call ximport_boxes%execute(cline)
             case( 'import_cavgs' )

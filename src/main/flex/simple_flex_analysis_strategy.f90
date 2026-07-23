@@ -16,6 +16,7 @@ use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, reconst
     &write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts, canonicalize_flex_preimage_coordinates
 use simple_image,                 only: image
+use simple_euclid_sigma2,         only: sigma2_star_from_iter
 use simple_parameters,            only: parameters
 use simple_qsys_env,              only: qsys_env
 use simple_sp_project,            only: sp_project
@@ -151,7 +152,6 @@ contains
         if( .not.cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','ferguson')
         if( .not.cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',3.0)
         if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
-        call cline%set('ml_reg','no')
     end subroutine apply_defaults
 
     subroutine init_common( params, build, cline )
@@ -188,12 +188,14 @@ contains
         type(parameters) :: model_params
         type(cmdline) :: model_cline
         integer :: nmodes
+        call ensure_flex_sigma_support(params,build,cline,for_graph=.true.)
         call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
         call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
+        call ensure_flex_sigma_support(model_params,model_build,model_cline,for_graph=.false.)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
         call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
             &fsc_projfile=params%projfile)
@@ -238,6 +240,9 @@ contains
         real, allocatable :: coords(:,:),features(:,:),proj_dirs(:,:),d2s(:,:)
         integer, allocatable :: proj_ids(:),rows(:),nbrs(:,:),ncandidates(:)
         integer :: i
+        if( params%stage == 1 .or. params%stage == 3 )then
+            call ensure_flex_sigma_support(params,build,cline,for_graph=params%stage==1)
+        endif
         select case(params%stage)
             case(1)
                 call read_int_file(params%infile,pinds)
@@ -301,6 +306,7 @@ contains
         integer :: nmodes,nptcls,max_modes,cand_min,cand_max
         real :: cand_mean
         integer(timer_int_kind) :: t_step
+        call ensure_flex_sigma_support(params,build,cline,for_graph=.true.)
         call validate_inputs(params,cline,max_modes)
         call select_particles(params,build,pinds,nptcls)
         call validate_selected_particles(build%spproj,pinds)
@@ -347,6 +353,7 @@ contains
         call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call graph%kill()
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
+        call ensure_flex_sigma_support(model_params,model_build,model_cline,for_graph=.false.)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
         t_step=tic()
         call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
@@ -372,6 +379,177 @@ contains
         call model_cline%set('mkdir','no')
         call init_common(model_params,model_build,model_cline)
     end subroutine init_model_context
+
+    subroutine ensure_flex_sigma_support( params, build, cline, for_graph )
+        type(parameters), intent(inout) :: params
+        type(builder), intent(inout) :: build
+        class(cmdline), intent(inout) :: cline
+        logical, intent(in) :: for_graph
+        type(string) :: sigma_part_fname, sigma_group_fname
+        integer :: fromp_saved, top_saved, noris
+        logical :: has_group, loaded
+        call carry_over_prior_sigma_files(params)
+        call pick_sigma_group_file(params,sigma_group_fname,has_group)
+        if( params%cc_objfun == OBJFUN_EUCLID )then
+            sigma_part_fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+        endif
+        loaded=.false.
+        if( has_group .and. params%cc_objfun == OBJFUN_EUCLID )then
+            fromp_saved=params%fromp
+            top_saved=params%top
+            noris=build%spproj_field%get_noris()
+            if( noris > 0 )then
+                ! Reused sigma-star files from upstream refine/abinitio runs are
+                ! often global (single-group). Force global sigma dispatch to
+                ! avoid indexing group-by-stkind against a 1-group table.
+                params%sigma_est='global'
+                params%l_sigma_glob=.true.
+                call cline%set('sigma_est','global')
+                params%fromp=1
+                params%top=noris
+                call build%esig%new(params,build%pftc,sigma_part_fname,params%box)
+                call build%esig%read_groups(build%spproj_field,fname=sigma_group_fname)
+                call build%esig%allocate_ptcls()
+                loaded=allocated(build%esig%sigma2_noise)
+                params%fromp=fromp_saved
+                params%top=top_saved
+            endif
+        endif
+        if( loaded .and. params%cc_objfun == OBJFUN_EUCLID )then
+            params%ml_reg='yes'
+            params%l_ml_reg=.true.
+            call cline%set('ml_reg','yes')
+            write(logfhandle,'(A)') '>>> FLEX SIGMA SUPPORT: enabling ml_reg (reused sigma files found)'
+        else
+            params%ml_reg='no'
+            params%l_ml_reg=.false.
+            call cline%set('ml_reg','no')
+            write(logfhandle,'(A)') '>>> FLEX SIGMA SUPPORT: disabling ml_reg (no reusable sigma files found)'
+        endif
+        if( for_graph )then
+            if( loaded )then
+                write(logfhandle,'(A)') '>>> FLEX SIGMA SUPPORT: graph distances will use sigma-scaled residuals'
+            else
+                write(logfhandle,'(A)') '>>> FLEX SIGMA SUPPORT: graph distances use unscaled residuals (current behavior fallback)'
+            endif
+        endif
+        call sigma_part_fname%kill
+        call sigma_group_fname%kill
+    end subroutine ensure_flex_sigma_support
+
+    subroutine carry_over_prior_sigma_files( params )
+        type(parameters), intent(in) :: params
+        type(sp_project) :: inproj
+        type(string), allocatable :: siblings(:)
+        type(string) :: proj_dir,parent_dir,proj_cwd,proj_base,sibling_dir
+        logical :: have_proj_cwd
+        integer :: i
+        proj_dir=get_fpath(params%projfile)
+        parent_dir=string(PATH_PARENT)
+        proj_base=basename(params%projfile)
+        proj_cwd=''
+        have_proj_cwd=.false.
+        ! Prefer sibling-run discovery from ../, e.g. ../5_abinitio3D/<projfile>.
+        if( parent_dir /= '' .and. proj_base /= '' )then
+            call simple_list_files(parent_dir%to_char()//'*/'//proj_base%to_char(), siblings)
+            do i=1,size(siblings)
+                sibling_dir=get_fpath(siblings(i))
+                if( sibling_dir /= '' ) call copy_sigma_files_from_dir(sibling_dir)
+                call sibling_dir%kill
+            end do
+            if( allocated(siblings) ) deallocate(siblings)
+        endif
+        if( file_exists(params%projfile) )then
+            call inproj%read_non_data_segments(params%projfile)
+            if( inproj%projinfo%isthere('cwd') )then
+                call inproj%projinfo%getter(1,'cwd',proj_cwd)
+                have_proj_cwd = proj_cwd /= ''
+            endif
+            call inproj%kill
+        endif
+        if( have_proj_cwd ) call copy_sigma_files_from_dir(proj_cwd)
+        if( proj_dir /= '' ) call copy_sigma_files_from_dir(proj_dir)
+        if( parent_dir /= '' ) call copy_sigma_files_from_dir(parent_dir)
+        call proj_base%kill
+        call proj_cwd%kill
+        call proj_dir%kill
+        call parent_dir%kill
+    end subroutine carry_over_prior_sigma_files
+
+    subroutine copy_sigma_files_from_dir( src_dir )
+        type(string), intent(in) :: src_dir
+        type(string), allocatable :: list(:)
+        type(string) :: target_name
+        character(len=:), allocatable :: src_prefix
+        integer :: i
+        src_prefix=trim(src_dir%to_char())
+        if( len_trim(src_prefix) < 1 ) return
+        if( src_prefix(len_trim(src_prefix):len_trim(src_prefix)) /= '/' ) src_prefix=src_prefix//'/'
+        call simple_list_files(src_prefix//SIGMA2_FBODY//'*', list)
+        do i=1,size(list)
+            target_name=string(PATH_HERE)//basename(list(i))
+            if( .not. file_exists(target_name) ) call simple_copy_file(list(i),target_name)
+            call target_name%kill
+        end do
+        if( allocated(list) ) deallocate(list)
+        call simple_list_files(src_prefix//SIGMA2_GROUP_FBODY//'*'//STAR_EXT, list)
+        do i=1,size(list)
+            target_name=string(PATH_HERE)//basename(list(i))
+            if( .not. file_exists(target_name) ) call simple_copy_file(list(i),target_name)
+            call target_name%kill
+        end do
+        if( allocated(list) ) deallocate(list)
+    end subroutine copy_sigma_files_from_dir
+
+    subroutine pick_sigma_group_file( params, sigma_group_fname, found )
+        type(parameters), intent(in) :: params
+        type(string), intent(out) :: sigma_group_fname
+        logical, intent(out) :: found
+        type(string), allocatable :: list(:)
+        integer :: i,best_iter,iter_here
+        sigma_group_fname=''
+        found=.false.
+        sigma_group_fname=sigma2_star_from_iter(params%which_iter)
+        if( file_exists(sigma_group_fname) )then
+            found=.true.
+            return
+        endif
+        call sigma_group_fname%kill
+        call simple_list_files(SIGMA2_GROUP_FBODY//'*'//STAR_EXT, list)
+        if( .not. allocated(list) ) return
+        if( size(list) < 1 )then
+            deallocate(list)
+            return
+        endif
+        best_iter=-1
+        do i=1,size(list)
+            iter_here = trailing_iter_from_sigma_group_name(basename(list(i)))
+            if( iter_here >= best_iter )then
+                best_iter=iter_here
+                sigma_group_fname=basename(list(i))
+                found=.true.
+            endif
+        end do
+        deallocate(list)
+    end subroutine pick_sigma_group_file
+
+    integer function trailing_iter_from_sigma_group_name( fname ) result(iter)
+        type(string), intent(in) :: fname
+        character(len=:), allocatable :: raw
+        integer :: i,scale,d
+        raw=fname%to_char()
+        iter=0
+        scale=1
+        do i=len_trim(raw),1,-1
+            if( raw(i:i) >= '0' .and. raw(i:i) <= '9' )then
+                d=iachar(raw(i:i))-iachar('0')
+                iter=iter+d*scale
+                scale=scale*10
+            else if( scale > 1 )then
+                exit
+            endif
+        end do
+    end function trailing_iter_from_sigma_group_name
 
     subroutine master_finalize_run( self, params, build, cline )
         class(flex_analysis_master_strategy), intent(inout) :: self
