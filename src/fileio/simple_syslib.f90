@@ -474,20 +474,15 @@ contains
     !! return logical true=dir exists, false=dir does not exist
     logical function dir_exists( dname )
         class(*), intent(in) :: dname
-        integer :: status
-        character(kind=c_char, len=:), allocatable :: d1
         dir_exists=.false.
         select type(dname)
             type is(string)
-                allocate(d1,source=dname%to_char()//achar(0))
+                inquire(file=dname%to_char(),exist=dir_exists)
             type is(character(*))
-                allocate(d1,source=trim(adjustl(dname))//achar(0))
+                inquire(file=trim(adjustl(dname)),exist=dir_exists)
             class default
                 call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
         end select
-        status = isdir(trim(d1), len_trim(d1))
-        deallocate(d1)
-        if (status == 1) dir_exists = .true.
     end function dir_exists
 
     !>  \brief  check if a file exists on disk

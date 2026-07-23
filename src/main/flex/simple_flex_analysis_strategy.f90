@@ -192,6 +192,7 @@ contains
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
+        call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
         call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
@@ -290,9 +291,9 @@ contains
         type(builder), intent(inout) :: build
         class(cmdline), intent(inout) :: cline
         type(string) :: registered_stack,registered_project,worker_program
-        integer, allocatable :: pinds(:),medoids(:),labels(:)
+        integer, allocatable :: pinds(:),medoids(:),labels(:),proj_ids(:)
         real, allocatable :: coords(:,:),raw_coords(:,:),spectral_z(:,:),nystrom_coords(:,:),state_weights(:,:), &
-            &state_bandwidths(:),state_neff(:)
+            &state_bandwidths(:),state_neff(:),features(:,:),proj_dirs(:,:)
         type(diffmap_graph) :: graph
         type(builder) :: model_build
         type(parameters) :: model_params
@@ -326,15 +327,24 @@ contains
 
         call self%job_descr%set('stage','2')
         t_step=tic()
-        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr,part_params=self%part_params, &
-            &array=L_USE_SLURM_ARR,extra_params=params)
-        call read_graph_parts(params,size(pinds),self%nparts_run,graph,cand_min,cand_max,cand_mean)
+        ! The gated graph requires all residual features as candidates.  Keep
+        ! the registration stage distributed, but assemble and evaluate this
+        ! global table once in the master: this avoids both duplicated worker
+        ! allocations and a second qsys launch over the same part assignments.
+        write(logfhandle,'(A)') '>>> FLEX DIFFMAP graph evaluation: master (one global feature table)'
+        call flush(logfhandle)
+        call read_flex_diffmap_feature_parts(params,self%nparts_run,features,proj_ids,build,pinds)
+        call flex_projection_directions(build,proj_dirs)
+        call build_gated_euclidean_knn_graph(features,proj_ids,proj_dirs,params%k_nn,params%nang_nbrs,graph, &
+            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune)
+        deallocate(features,proj_ids,proj_dirs)
         call cleanup_distributed_analysis_parts(params,self%nparts_run)
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_graph_seconds=',toc(t_step)
         call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,raw_coords, &
             &spectral_z,nystrom_coords,nmodes)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
         call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
+        call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call graph%kill()
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
@@ -970,6 +980,39 @@ contains
         end do
         close(u)
     end subroutine write_coordinates
+
+    subroutine write_preimage_particle_map( spproj, pinds, coords, labels, weights )
+        type(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: pinds(:), labels(:)
+        real, intent(in) :: coords(:,:), weights(:,:)
+        integer :: u,i,q,s,iptcl,iproj
+        real :: hard_weight
+        if( size(pinds)<1 ) THROW_HARD('cannot write an empty flex preimage particle map')
+        if( size(labels)/=size(pinds) .or. size(coords,1)/=size(pinds) .or. size(weights,1)/=size(pinds) ) &
+            &THROW_HARD('flex preimage particle-map row mismatch')
+        if( size(coords,2)<1 .or. size(weights,2)<1 ) THROW_HARD('invalid flex preimage particle-map columns')
+        call del_file('flex_registered_particle_preimage_map.txt')
+        open(newunit=u,file='flex_registered_particle_preimage_map.txt',status='replace',action='write')
+        write(u,'(A)',advance='no') '# feature_row raw_particle_index projection_index preimage_index preimage_weight'
+        do q=1,size(coords,2); write(u,'(A,I0)',advance='no') ' psi',q; end do
+        do s=1,size(weights,2); write(u,'(A,I3.3)',advance='no') ' preimage_weight_',s; end do
+        write(u,*)
+        do i=1,size(pinds)
+            iptcl=pinds(i)
+            if( iptcl<1 .or. iptcl>spproj%os_ptcl3D%get_noris() ) THROW_HARD('flex preimage particle index outside project')
+            if( labels(i)<1 .or. labels(i)>size(weights,2) ) THROW_HARD('invalid flex preimage index')
+            iproj=0
+            if( spproj%os_ptcl3D%isthere(iptcl,'proj') ) iproj=spproj%os_ptcl3D%get_int(iptcl,'proj')
+            hard_weight=weights(i,labels(i))
+            write(u,'(I10,1X,I10,1X,I8,1X,I8,1X,ES16.8)',advance='no') i,iptcl,iproj,labels(i),hard_weight
+            do q=1,size(coords,2); write(u,'(1X,ES16.8)',advance='no') coords(i,q); end do
+            do s=1,size(weights,2); write(u,'(1X,ES16.8)',advance='no') weights(i,s); end do
+            write(u,*)
+        end do
+        close(u)
+        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE particle map: flex_registered_particle_preimage_map.txt'
+        call flush(logfhandle)
+    end subroutine write_preimage_particle_map
 
     subroutine write_spectrum( eigvals, nmodes, icm_enabled, converged, niters, score )
         real, intent(in) :: eigvals(:),score

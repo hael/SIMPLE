@@ -145,6 +145,7 @@ contains
         type(image), allocatable :: mean_reprojs(:), registered(:), registered_crops(:), mean_ctfs(:)
         type(ctfparams)  :: ctfparms
         type(ctf)        :: tfun
+        type(ori)        :: ptcl_ori
         real, allocatable :: vec(:)
         integer, allocatable :: batch_pinds(:), p2row(:), batches(:,:)
         logical, allocatable :: processed(:), used_proj(:)
@@ -171,7 +172,11 @@ contains
             if( pinds(i) < 1 .or. pinds(i) > nall ) THROW_HARD('invalid active particle index in flex feature preparation')
             if( p2row(pinds(i)) /= 0 ) THROW_HARD('duplicate active particle index in flex feature preparation')
             p2row(pinds(i)) = i
-            proj_ids(i)=build%spproj%os_ptcl3D%get_int(pinds(i),'proj')
+            ! Stored proj values may have been assigned on a different
+            ! nspace during refinement.  The graph must instead use bins on
+            ! this run's explicit eulspace grid.
+            call build%spproj_field%get_ori(pinds(i),ptcl_ori)
+            proj_ids(i)=build%eulspace%find_closest_proj(ptcl_ori)
             if( proj_ids(i)<1 .or. proj_ids(i)>nproj ) &
                 &THROW_HARD('active particle projection index outside explicit nspace grid')
         end do
@@ -335,6 +340,7 @@ contains
         if( allocated(mean_reprojs) ) call dealloc_imgarr(mean_reprojs)
         call dealloc_imgarr(mean_ctfs)
         call dealloc_imgarr(registered_crops)
+        call ptcl_ori%kill
         deallocate(p2row, processed, used_proj, batches)
         call residual_stack%kill; call map_fname%kill
     end subroutine prepare_flex_diffmap_features
@@ -361,7 +367,7 @@ contains
         type(image), allocatable :: mean_reprojs(:)
         type(stack_io) :: proj_io
         type(string) :: fname
-        integer :: iproj,nproj
+        integer :: iproj,nproj,nproj_written,ldim(3)
         nproj=build%eulspace%get_noris()
         if( nproj<1 ) THROW_HARD('cannot prepare flex mean projections without eulspace')
         fname='flex_mean_projections.mrcs'; call del_file(fname)
@@ -373,6 +379,11 @@ contains
             call proj_io%write(iproj,mean_reprojs(iproj))
         end do
         call proj_io%close; call mean_vol%kill
+        if( .not.file_exists(fname) ) THROW_HARD('flex mean projection stack was not written')
+        call find_ldim_nptcls(fname,ldim,nproj_written)
+        if( nproj_written/=nproj ) THROW_HARD('flex mean projection stack count mismatch after write')
+        write(logfhandle,'(A,I0)') '>>> FLEX mean projection stack ready: projections=',nproj
+        call flush(logfhandle)
         call dealloc_imgarr(mean_reprojs); call fname%kill
     end subroutine write_flex_mean_projection_stack
 
@@ -412,18 +423,24 @@ contains
         call o%kill
     end subroutine flex_projection_directions
 
-    subroutine read_flex_diffmap_feature_parts( params, nparts, features, proj_ids )
+    subroutine read_flex_diffmap_feature_parts( params, nparts, features, proj_ids, build, pinds )
         class(parameters), intent(in) :: params
         integer, intent(in) :: nparts
         real, allocatable, intent(out) :: features(:,:)
         integer, allocatable, intent(out) :: proj_ids(:)
+        class(builder), optional, intent(inout) :: build
+        integer, optional, intent(in) :: pinds(:)
         type(stack_io) :: residual_io
         type(image) :: residual
+        type(ori) :: ptcl_ori
         type(string) :: stack_fname,map_fname
-        real, allocatable :: vec(:)
+        real, allocatable :: rmat(:,:,:)
         integer, allocatable :: counts(:)
         integer :: ipart,nlocal,total,row,local_row,u,ios,map_local,pind,iproj,stack_ind,ldim(3)
+        integer :: graph_step,graph_side,ix,iy,ixhi,iyhi,ifeat
         character(len=XLONGSTRLEN) :: line
+        integer, parameter :: GRAPH_FEATURE_MAX_BOX=96
+        integer, parameter :: GRAPH_FEATURE_BUFSZ=8
         allocate(counts(nparts),source=0)
         total=0
         do ipart=1,nparts
@@ -434,31 +451,121 @@ contains
             call stack_fname%kill
         end do
         if( total<1 ) THROW_HARD('distributed flex feature preparation produced no residuals')
-        allocate(features(params%box_crop*params%box_crop,total),source=0.)
+        if( present(build) .neqv. present(pinds) ) THROW_HARD('flex graph particle metadata must be supplied together')
+        if( present(pinds) ) then
+            if( size(pinds)/=total ) THROW_HARD('flex graph particle metadata size mismatch')
+        endif
+        ! A graph worker needs every particle as a candidate, but retaining
+        ! every crop-box pixel makes the distributed feature table several
+        ! gigabytes.  Average-pool the already low-pass residuals onto a
+        ! bounded grid before assembling them.  This is an anti-aliased
+        ! compact graph descriptor; particle rows and angular gating remain
+        ! unchanged.
+        graph_step=max(1,(params%box_crop+GRAPH_FEATURE_MAX_BOX-1)/GRAPH_FEATURE_MAX_BOX)
+        graph_side=(params%box_crop+graph_step-1)/graph_step
+        allocate(features(graph_side*graph_side,total),source=0.)
         allocate(proj_ids(total),source=0)
+        call residual%new([params%box_crop,params%box_crop,1],params%smpd_crop,wthreads=.false.)
+        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX GRAPH compact features raw_box=',params%box_crop, &
+            &' compact_box=',graph_side,' values_per_particle=',graph_side*graph_side
+        call flush(logfhandle)
         row=0
         do ipart=1,nparts
             stack_fname=string('flex_residual_features_part')//int2str_pad(ipart,params%numlen)//'.mrcs'
             map_fname=string('flex_registered_particle_map_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
-            call residual_io%open(stack_fname,params%smpd_crop,'read',bufsz=min(counts(ipart),BUFSZ_DEFAULT))
-            open(newunit=u,file=map_fname%to_char(),status='old',action='read',iostat=ios)
-            call fileiochk('opening flex feature part map '//map_fname%to_char(),ios)
+            ! The graph descriptor is assembled one image at a time; a large
+            ! stack buffer only duplicates hundreds of megabytes alongside
+            ! the compact global feature table.
+            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX GRAPH loading feature part=',ipart,' rows=',counts(ipart)
+            call flush(logfhandle)
+            call residual_io%open(stack_fname,params%smpd_crop,'read',bufsz=min(counts(ipart),GRAPH_FEATURE_BUFSZ))
+            write(logfhandle,'(A,I0)') '>>> FLEX GRAPH feature stack open part=',ipart
+            call flush(logfhandle)
             local_row=0
-            do
-                read(u,'(A)',iostat=ios) line
-                if( ios/=0 ) exit
-                if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
-                read(line,*) map_local,pind,iproj,stack_ind
+            if( present(build) ) then
+                do while( local_row<counts(ipart) )
+                    local_row=local_row+1
+                    row=row+1
+                    if( local_row==1 ) then
+                        write(logfhandle,'(A)') '>>> FLEX GRAPH feature first-row orientation lookup'
+                        call flush(logfhandle)
+                    endif
+                    call build%spproj_field%get_ori(pinds(row),ptcl_ori)
+                    if( local_row==1 ) then
+                        write(logfhandle,'(A)') '>>> FLEX GRAPH feature first-row Euler-bin lookup'
+                        call flush(logfhandle)
+                    endif
+                    iproj=build%eulspace%find_closest_proj(ptcl_ori)
+                    if( iproj<1 .or. iproj>build%eulspace%get_noris() ) &
+                        &THROW_HARD('flex graph projection index outside explicit eulspace grid')
+                    if( local_row==1 ) then
+                        write(logfhandle,'(A)') '>>> FLEX GRAPH feature first-row residual read'
+                        call flush(logfhandle)
+                    endif
+                    call residual_io%read(local_row,residual)
+                    if( local_row==1 ) then
+                        write(logfhandle,'(A)') '>>> FLEX GRAPH feature first-row residual copied'
+                        call flush(logfhandle)
+                    endif
+                    rmat=residual%get_rmat()
+                    if( any(shape(rmat)/=[params%box_crop,params%box_crop,1]) ) &
+                        &THROW_HARD('flex residual feature image dimensions mismatch')
+                    ifeat=0
+                    do iy=1,params%box_crop,graph_step
+                        iyhi=min(params%box_crop,iy+graph_step-1)
+                        do ix=1,params%box_crop,graph_step
+                            ixhi=min(params%box_crop,ix+graph_step-1)
+                            ifeat=ifeat+1
+                            features(ifeat,row)=sum(rmat(ix:ixhi,iy:iyhi,1))/real((ixhi-ix+1)*(iyhi-iy+1))
+                        end do
+                    end do
+                    if( ifeat/=size(features,1) ) THROW_HARD('invalid compact flex feature size')
+                    proj_ids(row)=iproj
+                    deallocate(rmat)
+                    if( mod(local_row,1024)==0 ) then
+                        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX GRAPH feature progress part=',ipart, &
+                            &' local_row=',local_row,' global_row=',row
+                        call flush(logfhandle)
+                    endif
+                end do
+            else
+                open(newunit=u,file=map_fname%to_char(),status='old',action='read',iostat=ios)
+                call fileiochk('opening flex feature part map '//map_fname%to_char(),ios)
+                do
+                    read(u,'(A)',iostat=ios) line
+                    if( ios/=0 ) exit
+                    if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
+                    read(line,*) map_local,pind,iproj,stack_ind
                 local_row=local_row+1; row=row+1
                 if( map_local/=local_row .or. stack_ind/=local_row ) THROW_HARD('invalid flex feature part map ordering')
                 call residual_io%read(local_row,residual)
-                vec=residual%serialize()
-                if( size(vec)/=size(features,1) ) THROW_HARD('flex residual feature size mismatch')
-                features(:,row)=vec; proj_ids(row)=iproj
-                deallocate(vec)
-            end do
-            close(u); call residual_io%close
+                rmat=residual%get_rmat()
+                if( any(shape(rmat)/=[params%box_crop,params%box_crop,1]) ) &
+                    &THROW_HARD('flex residual feature image dimensions mismatch')
+                ifeat=0
+                do iy=1,params%box_crop,graph_step
+                    iyhi=min(params%box_crop,iy+graph_step-1)
+                    do ix=1,params%box_crop,graph_step
+                        ixhi=min(params%box_crop,ix+graph_step-1)
+                        ifeat=ifeat+1
+                        features(ifeat,row)=sum(rmat(ix:ixhi,iy:iyhi,1))/real((ixhi-ix+1)*(iyhi-iy+1))
+                    end do
+                end do
+                if( ifeat/=size(features,1) ) THROW_HARD('invalid compact flex feature size')
+                proj_ids(row)=iproj
+                deallocate(rmat)
+                if( mod(local_row,1024)==0 ) then
+                    write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX GRAPH feature progress part=',ipart, &
+                        &' local_row=',local_row,' global_row=',row
+                    call flush(logfhandle)
+                endif
+                end do
+                close(u)
+            endif
+            call residual_io%close
             if( local_row/=counts(ipart) ) THROW_HARD('flex feature part map/stack count mismatch')
+            write(logfhandle,'(A,I0)') '>>> FLEX GRAPH feature part complete=',ipart
+            call flush(logfhandle)
             call stack_fname%kill; call map_fname%kill
         end do
         call residual%kill
