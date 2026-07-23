@@ -219,11 +219,11 @@ contains
         type(string),    allocatable :: framenames(:)
         type(image),     allocatable :: frames(:), frames_sc(:), denoised_frames_sc(:)
         type(string)     :: fname, abs_fname
-        type(image)      :: avgimg
+        type(image)      :: avgimg, global_avgimg
         type(sp_project) :: spproj
         type(parameters) :: params
         real             :: smpd_sc
-        integer          :: ldim(3), ldim_sc(3), i,j,n,s, iframe, nframes, end, numlen_nframes
+        integer          :: ldim(3), ldim_sc(3), i,j,n,s, iframe, nframes, end, numlen
         call cline%set('mkdir',   'yes')
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -231,8 +231,8 @@ contains
         nframes = spproj%get_nframes()
         if( nframes == 0 ) THROW_HARD('no movie frames to process!')
         call simple_mkdir(FILT_DIR)
-        numlen_nframes = len(int2str(nframes))
-        params%smpd    = spproj%os_mic%get(1,'smpd')
+        numlen      = len(int2str(nframes))
+        params%smpd = spproj%get_smpd()
         allocate(framenames(nframes))
         do i = 1,nframes
             framenames(i) = spproj%os_mic%get_str(i,'frame')
@@ -250,6 +250,7 @@ contains
         call alloc_imgarr( BATCHSZ, ldim, params%smpd, frames, wthreads=.false.)
         call alloc_imgarr( BATCHSZ, ldim_sc, smpd_sc, frames_sc, wthreads=.false.)
         call avgimg%new(ldim_sc, smpd_sc)
+        call global_avgimg%new(ldim, params%smpd)
         do iframe = 1, nframes, BATCHSZ
             end = min(iframe+BATCHSZ-1, nframes)
             n   = end - iframe + 1
@@ -264,14 +265,14 @@ contains
             ! filtered average
             do i = 1, n, GRPFREQ
                 call avgimg%zero
-                do j = i, min(i+NFRAMESGRP-1, nframes)
+                do j = i, min(i+NFRAMESGRP-1, n)
                     call avgimg%add(denoised_frames_sc(j))
                 end do
                 call avgimg%NLMean2D(patch_size=7, search_radius=11, gaussian_patch=.true.)
                 call avgimg%bp(45.0, 2.*params%smpd)
                 call avgimg%norm
                 ! write
-                fname = trim(FILT_DIR)//'frame_'//int2str_pad(iframe+i-1,numlen_nframes)//MRC_EXT
+                fname = trim(FILT_DIR)//'frame_'//int2str_pad(iframe+i-1,numlen)//MRC_EXT
                 call avgimg%write(fname)
                 ! book-keeping
                 abs_fname = simple_abspath(fname)
@@ -283,11 +284,13 @@ contains
             call dealloc_imgarr(denoised_frames_sc)
         enddo
         call spproj%write_segment_inside('mic', params%projfile)
+        call find_outliers
         ! cleanup
         call spproj%kill
         call dealloc_imgarr(frames)
         call dealloc_imgarr(frames_sc)
         call avgimg%kill
+        call global_avgimg%kill
         call framenames(:)%kill
         deallocate(framenames)
         call qsys_job_finished(params, string('single_commanders_tseries :: exec_tseries_prep4tracking'))
@@ -300,6 +303,7 @@ contains
                 e = iend - istart + 1
                 do i = 1,e
                     call frames(i)%read(framenames(istart+i-1))
+                    call global_avgimg%add(frames(i), w=1./real(BATCHSZ))
                 end do
                 !$omp parallel do schedule(guided) proc_bind(close) private(i) default(shared)
                 do i = 1,e
@@ -310,6 +314,41 @@ contains
                 end do
                 !$omp end parallel do
             end subroutine downscale_frames
+
+            subroutine find_outliers
+                real,    parameter   :: MAHALABONIS_T = 6.0
+                integer, allocatable :: x(:), y(:)
+                real                 :: ave, sdev, maxv, minv, v, dead_t, hot_t
+                integer              :: ndead, nhot, funit,io_stat
+                call global_avgimg%div(real(nframes)/real(BATCHSZ))
+                call global_avgimg%write(string('global_avgimg.mrc'))
+                call global_avgimg%stats(ave, sdev, maxv, minv)
+                dead_t = ave - MAHALABONIS_T*sdev
+                hot_t  = ave + MAHALABONIS_T*sdev
+                allocate(x(0), y(0))
+                ndead = 0
+                nhot  = 0
+                do j = 1,ldim(2)
+                    do i = 1,ldim(1)
+                        v = global_avgimg%get([i,j,1])
+                        if( v < dead_t ) then
+                            ndead = ndead + 1
+                            x = [x, i]; y = [y, j]
+                        elseif( v > hot_t ) then
+                            nhot = nhot + 1
+                            x = [x, i]; y = [y, j]
+                        endif
+                    end do
+                end do
+                call fopen(funit, string('outliers.txt'),'replace', 'unknown', iostat=io_stat, form='formatted')
+                call fileiochk('I/O issue in tseries_prep4tracking',io_stat)
+                do i = 1,size(x)
+                    write(funit,'(3I6)') i, x(i), y(i)
+                end do
+                call fclose(funit)
+                write(logfhandle,'(A,I6)')'>>> # DEAD PIXELS: ', ndead
+                write(logfhandle,'(A,I6)')'>>> # HOT PIXELS : ',  nhot
+            end subroutine find_outliers
 
     end subroutine exec_tseries_prep4tracking
 

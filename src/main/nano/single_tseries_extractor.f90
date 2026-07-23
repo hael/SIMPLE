@@ -122,7 +122,7 @@ contains
             endif
             call progress_gfortran( i, ntrack)
         enddo
-        ! outputs to be provided
+        ! outputs to be provided?
         ! write(funit,'(I7,I7,I7,I7,I7)') xind, yind, p_ptr%box, p_ptr%box, -3
         ! write(funit2,'(2F12.6)') particle_locations(1:2,iframe) * p_ptr%smpd ! in angstroms
         write(logfhandle,'(A)') ">>> GENERATING PARTICLES AND BACKGROUND POWER SPECTRA"
@@ -149,7 +149,7 @@ contains
             call update_background_pspec([xind,yind])
             call pspec%add(pspec_nn, w=1./real(nrange))
             call pspec_nn%write(string(dir%to_char()//'/'//fbody%to_char()//'_background_pspec.mrc'),cnt)
-            call progress_gfortran( iframe, nrange)
+            call progress_gfortran(cnt, nrange)
         end do
         ! average and write power spectrum for CTF estimation
         call pspec%dampen_pspec_central_cross
