@@ -16,6 +16,11 @@ type, extends(commander_base) :: commander_export_starproject
     procedure :: execute      => exec_export_starproject
 end type commander_export_starproject
 
+type, extends(commander_base) :: commander_export_manifoldem_starproject
+  contains
+    procedure :: execute      => exec_export_manifoldem_starproject
+end type commander_export_manifoldem_starproject
+
 type, extends(commander_base) :: commander_assign_optics_groups
   contains
     procedure :: execute      => exec_assign_optics_groups
@@ -193,6 +198,27 @@ contains
         call nice_comm%terminate()
         call simple_end('**** EXPORT_STARPROJECT NORMAL STOP ****')
     end subroutine exec_export_starproject
+
+    subroutine exec_export_manifoldem_starproject( self, cline )
+        class(commander_export_manifoldem_starproject), intent(inout) :: self
+        class(cmdline),                                 intent(inout) :: cline
+        type(simple_nice_comm) :: nice_comm
+        type(parameters)       :: params
+        type(sp_project)       :: spproj
+        type(starproject)      :: starproj
+        if(.not. cline%defined("mkdir")) then
+            call cline%set('mkdir', 'yes')
+        end if
+        call params%new(cline)
+        call nice_comm%init(params%niceprocid, params%niceserver)
+        call nice_comm%cycle()
+        call spproj%read(params%projfile)
+        call starproj%export_manifoldem_ptcls3D(cline, spproj)
+        call spproj%kill
+        call starproj%kill
+        call nice_comm%terminate()
+        call simple_end('**** EXPORT_MANIFOLDEM_STARPROJECT NORMAL STOP ****')
+    end subroutine exec_export_manifoldem_starproject
 
     subroutine exec_assign_optics_groups( self, cline )
         class(commander_assign_optics_groups), intent(inout) :: self

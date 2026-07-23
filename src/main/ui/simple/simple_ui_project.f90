@@ -5,6 +5,7 @@ implicit none
 
 type(ui_program), target :: export_relion
 type(ui_program), target :: export_starproject
+type(ui_program), target :: export_manifoldem_starproject
 type(ui_program), target :: extract_subproj
 type(ui_program), target :: import_boxes
 type(ui_program), target :: import_cavgs
@@ -31,6 +32,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_export_relion(prgtab)
         call new_export_starproject(prgtab)
+        call new_export_manifoldem_starproject(prgtab)
         call new_extract_subproj(prgtab)
         call new_import_boxes(prgtab)
         call new_import_cavgs(prgtab)
@@ -57,6 +59,7 @@ contains
         write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)
         write(logfhandle,'(A)') export_relion%name%to_char()
         write(logfhandle,'(A)') export_starproject%name%to_char()
+        write(logfhandle,'(A)') export_manifoldem_starproject%name%to_char()
         write(logfhandle,'(A)') extract_subproj%name%to_char()
         write(logfhandle,'(A)') import_boxes%name%to_char()
         write(logfhandle,'(A)') import_cavgs%name%to_char()
@@ -140,6 +143,33 @@ contains
         ! add to ui_hash
         call add_ui_program('export_starproject', export_starproject, prgtab)
     end subroutine new_export_starproject
+
+    subroutine new_export_manifoldem_starproject( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call export_manifoldem_starproject%new(&
+        &'export_manifoldem_starproject', &                                      ! name
+        &'Export ManifoldEM-compatible STAR file',&                              ! descr_short
+        &'is a program to export ptcl3D orientations in the STAR subset parsed by ManifoldEM',& ! descr long
+        &'simple_exec',&                                                         ! executable
+        &.true.)                                                                 ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call export_manifoldem_starproject%add_input(UI_PARM, starfile, required_override=.false.)
+        ! parameter input/output
+        call export_manifoldem_starproject%add_input(UI_PARM, projfile)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! add to ui_hash
+        call add_ui_program('export_manifoldem_starproject', export_manifoldem_starproject, prgtab)
+    end subroutine new_export_manifoldem_starproject
 
     subroutine new_extract_subproj( prgtab )
         class(ui_hash), intent(inout) :: prgtab

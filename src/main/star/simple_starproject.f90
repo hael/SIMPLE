@@ -38,6 +38,7 @@ contains
     procedure          :: export_iter3D
     procedure          :: export_ptcls2D
     procedure          :: export_ptcls3D
+    procedure          :: export_manifoldem_ptcls3D
     procedure          :: export_stream2D
     procedure, private :: export_stardata
     ! tilt
@@ -962,6 +963,97 @@ contains
         call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics")
         call self%export_stardata(spproj, self%starfile%particles3D%flags, spproj%os_ptcl3D, "particles", mapstks=.true., exclude="rlnAmplitudeContrast")
     end subroutine export_ptcls3D
+
+    subroutine export_manifoldem_ptcls3D(self, cline, spproj)
+        class(starproject), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
+        class(sp_project),  intent(inout) :: spproj
+        type(string)    :: stkname
+        type(ctfparams) :: ctfvars
+        integer         :: fhandle, ok, iori, stkindex, end, n_written
+        real            :: xshift, yshift
+        logical         :: has_inactive
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
+        if( cline%defined("starfile") )then
+            self%starfile%filename = cline%get_carg("starfile")
+            if( self%starfile%filename%strlen_trim() == 0 ) self%starfile%filename = "particles3D_manifoldem.star"
+        else
+            self%starfile%filename = "particles3D_manifoldem.star"
+        endif
+        if( VERBOSE_OUTPUT )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'exporting ManifoldEM particles3D to ' // self%starfile%filename%to_char()
+            write(logfhandle,*) ''
+        endif
+        if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
+        if(.not. self%starfile%initialised) call self%initialise()
+        call self%propagate_optics_box(spproj)
+        call self%propagate_optics3D(spproj)
+        call fopen(fhandle,file=self%starfile%filename, status='new', iostat=ok)
+        write(fhandle, '(A)') "data_"
+        write(fhandle, '(A)') ""
+        write(fhandle, '(A)') "loop_"
+        write(fhandle, '(A)') "_rlnImageName #1"
+        write(fhandle, '(A)') "_rlnAnglePsi #2"
+        write(fhandle, '(A)') "_rlnAngleTilt #3"
+        write(fhandle, '(A)') "_rlnAngleRot #4"
+        write(fhandle, '(A)') "_rlnDetectorPixelSize #5"
+        write(fhandle, '(A)') "_rlnMagnification #6"
+        write(fhandle, '(A)') "_rlnVoltage #7"
+        write(fhandle, '(A)') "_rlnSphericalAberration #8"
+        write(fhandle, '(A)') "_rlnAmplitudeContrast #9"
+        write(fhandle, '(A)') "_rlnDefocusU #10"
+        write(fhandle, '(A)') "_rlnDefocusV #11"
+        write(fhandle, '(A)') "_rlnDefocusAngle #12"
+        write(fhandle, '(A)') "_rlnPhaseShift #13"
+        write(fhandle, '(A)') "_rlnOriginXAngst #14"
+        write(fhandle, '(A)') "_rlnOriginYAngst #15"
+        n_written   = 0
+        has_inactive = .false.
+        do iori=1, spproj%os_ptcl3D%get_noris()
+            if( spproj%os_ptcl3D%get_state(iori) <= 0 ) has_inactive = .true.
+        end do
+        do iori=1, spproj%os_ptcl3D%get_noris()
+            if( spproj%os_ptcl3D%get_state(iori) <= 0 ) cycle
+            if( .not.spproj%os_ptcl3D%isthere(iori, 'e1') .or. &
+                &.not.spproj%os_ptcl3D%isthere(iori, 'e2') .or. &
+                &.not.spproj%os_ptcl3D%isthere(iori, 'e3') )then
+                write(logfhandle,*) 'iptcl: ', iori
+                THROW_HARD('ptcl3D STAR export requires e1/e2/e3 Euler angles')
+            endif
+            ctfvars = spproj%get_ctfparams('ptcl3D', iori)
+            if( has_inactive .and. .not.spproj%os_ptcl3D%isthere(iori, 'indstk') )then
+                write(logfhandle,*) 'iptcl: ', iori
+                THROW_HARD('ptcl3D STAR export requires indstk to preserve indices into the full particle stack')
+            endif
+            call spproj%get_stkname_and_ind('ptcl3D', iori, stkname, stkindex)
+            if( spproj%os_ptcl3D%isthere(iori, 'x') )then
+                xshift = spproj%os_ptcl3D%get(iori, 'x')
+            else
+                xshift = 0.
+            endif
+            if( spproj%os_ptcl3D%isthere(iori, 'y') )then
+                yshift = spproj%os_ptcl3D%get(iori, 'y')
+            else
+                yshift = 0.
+            endif
+            if(stkname%substr_ind('../') == 1) then
+                end = stkname%strlen_trim()
+                write(fhandle, "(I7,A,A)", advance="no") int(stkindex), '@', stkname%to_char([4,end])
+            else
+                write(fhandle, "(I7,A,A)", advance="no") int(stkindex), '@', stkname%to_char()
+            endif
+            write(fhandle, "(1X,14(F12.4,1X))") &
+                spproj%os_ptcl3D%get(iori, 'e3'), spproj%os_ptcl3D%get(iori, 'e2'), &
+                spproj%os_ptcl3D%get(iori, 'e1'), ctfvars%smpd, 10000., ctfvars%kv, &
+                ctfvars%cs, ctfvars%fraca, ctfvars%dfx / 0.0001, ctfvars%dfy / 0.0001, &
+                ctfvars%angast, ctfvars%phshift / RELION_PHASE_DEG2RAD, xshift, yshift
+            n_written = n_written + 1
+        end do
+        call fclose(fhandle)
+        call stkname%kill
+        if( n_written == 0 ) THROW_HARD('No active ptcl3D rows written to particles3D.star')
+    end subroutine export_manifoldem_ptcls3D
 
     subroutine export_stardata(self, spproj, flags, sporis, blockname, mapstks, exclude)
         class(starproject),         intent(inout) :: self
