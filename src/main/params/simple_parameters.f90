@@ -281,6 +281,7 @@ type :: parameters
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: graph='euc'          !< class split graph metric(euc|ori){euc}
     character(len=STDLEN)     :: bandwidth_mode='median' !< diffusion-map bandwidth mode(median|ferguson){median}
+    character(len=STDLEN)     :: preimage_mode='constant' !< diffusion-map pre-image estimator(constant|linear){constant}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -420,6 +421,7 @@ type :: parameters
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: npreimages=8        !< # representative manifold pre-image volumes
+    integer :: preimage_ndim=2     !< diffusion-map local-linear pre-image design dimension cap; d=min(preimage_ndim,neigs){2}
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}

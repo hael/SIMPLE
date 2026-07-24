@@ -375,6 +375,14 @@ contains
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &
             '# state volumes', .false., 8.0)
+        call flex_analysis%add_input(UI_FILT, 'preimage_mode', 'multi', &
+            'Diffusion-map pre-image estimator', &
+            'constant=local-constant (Nadaraya-Watson) kernel-weighted average; linear=local-linear WLS intercept that removes O(h^2) curvature bias', &
+            '(constant|linear){constant}', .false., 'constant')
+        call flex_analysis%add_input(UI_FILT, 'preimage_ndim', 'num', &
+            'Local-linear pre-image design dimension (default 2)', &
+            'Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)', &
+            '# local dimensions >=1', .false., 2.0)
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
             gui_submenu="regularization", gui_advanced=.false.)

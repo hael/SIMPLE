@@ -13,7 +13,7 @@ use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_f
     &write_flex_mean_projection_stack
 use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages, build_flex_preimage_kernel_weights
 use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, reconstruct_flex_diffmap_weighted_states, &
-    &write_flex_diffmap_rec_parts, &
+    &reconstruct_flex_diffmap_local_linear_states, write_flex_diffmap_rec_parts, &
     &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts, canonicalize_flex_preimage_coordinates
 use simple_image,                 only: image
 use simple_euclid_sigma2,         only: sigma2_star_from_iter
@@ -197,8 +197,13 @@ contains
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
         call ensure_flex_sigma_support(model_params,model_build,model_cline,for_graph=.false.)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
-        call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
-            &fsc_projfile=params%projfile)
+        if( trim(params%preimage_mode) == 'linear' )then
+            call reconstruct_flex_diffmap_local_linear_states(model_params,model_build,pinds,raw_coords,medoids, &
+                &state_weights,params%preimage_ndim,size(medoids),fsc_projfile=params%projfile)
+        else
+            call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
+                &fsc_projfile=params%projfile)
+        endif
         call model_build%kill_general_tbox
         call model_cline%kill
         call finish_analysis_outputs(registered_stack,registered_project)
@@ -356,8 +361,13 @@ contains
         call ensure_flex_sigma_support(model_params,model_build,model_cline,for_graph=.false.)
         write(logfhandle,'(A,A)') '>>> FLEX PRE-IMAGE DIAGNOSTIC PROJECT (REGISTERED): ',model_params%projfile%to_char()
         t_step=tic()
-        call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
-            &fsc_projfile=params%projfile)
+        if( trim(params%preimage_mode) == 'linear' )then
+            call reconstruct_flex_diffmap_local_linear_states(model_params,model_build,pinds,raw_coords,medoids, &
+                &state_weights,params%preimage_ndim,size(medoids),fsc_projfile=params%projfile)
+        else
+            call reconstruct_flex_diffmap_weighted_states(model_params,model_build,pinds,state_weights,size(medoids), &
+                &fsc_projfile=params%projfile)
+        endif
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_reconstruction_seconds=',toc(t_step)
         call model_build%kill_general_tbox
         call model_cline%kill

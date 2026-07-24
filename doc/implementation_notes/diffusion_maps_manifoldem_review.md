@@ -68,26 +68,10 @@ would be applied.
 
 #### 3.2.1 Ferguson / tanh data-adaptive bandwidth (HIGH PRIORITY)
 
-**Implemented in SIMPLE (2026-07-22)**:
-
-- `src/main/pca/simple_diff_map_graphs.f90` now supports
-  `bandwidth_mode=(median|ferguson)` and `bandwidth_tune` in kNN graph
-  construction (`build_euclidean_knn_graph`,
-  `build_gated_euclidean_knn_graph`, `build_orientation_knn_graph`).
-- A Ferguson-style tanh fit is applied over a log-bandwidth scan when
-  `bandwidth_mode=ferguson`; if the fit is not usable, the code falls back to
-  the legacy median-kth-neighbor bandwidth.
-- New CLI-visible parameters were added for diffusion-map programs:
-  `bandwidth_mode` and `bandwidth_tune` (default `3.0`) in
-  `ppca_denoise`, `cls_split`, `denoise_project`, and `flex_analysis`.
-  `flex_analysis` now defaults to `bandwidth_mode=ferguson`; the other
-  programs keep `bandwidth_mode=median` unless overridden.
-
-Enable with, for example:
-
-```bash
-simple_exec prg=flex_analysis ... bandwidth_mode=ferguson bandwidth_tune=3
-```
+> **Implemented.** The production behavior, parameters, defaults, and safety
+> fallbacks now live in the
+> [`flex_analysis` policy, §3.1](../policies/flex_analysis_policy.md).
+> The review rationale below is retained for historical context.
 
 **ManifoldEM location**: `core.py`, function `fergusonE` (~line 182);
 called from `DMembeddingII.py`, function `op` (~line 576):
@@ -141,46 +125,10 @@ utility).
 
 #### 3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)
 
-**Implemented in SIMPLE (2026-07-24)**:
-
-- `normalize_diffmap_graph` in `src/main/pca/simple_diff_map_graphs.f90` now takes
-  an optional `alpha` argument. When `alpha > 0` it applies the Coifman–Lafon
-  density normalization `w_ij <- w_ij / (d_i^alpha d_j^alpha)` on the raw degree,
-  then recomputes the symmetric `1/sqrt(d_i d_j)` normalization on the rescaled
-  weights. `alpha = 0` (default) reproduces the previous plain graph Laplacian.
-- `alpha` is threaded through `pack_scalar_knn_to_csr`,
-  `build_euclidean_knn_graph`, `build_gated_euclidean_knn_graph`,
-  `build_gated_euclidean_graph_from_neighbors`, `build_orientation_knn_graph`,
-  and `build_cls_split_graph`. It is optional everywhere (default `0.0`), so
-  callers that do not pass it keep the current behavior.
-- New CLI-visible parameter `dm_alpha` (default `0.0`) exposed for
-  `ppca_denoise`, `cls_split`, `denoise_project`, and `flex_analysis`. Enable
-  the Laplace–Beltrami operator with, for example:
-
-```bash
-simple_exec prg=flex_analysis ... dm_alpha=1
-```
-
-The α default remains `0` everywhere (backward compatible); `alpha = 1` is
-recommended for cryo-EM because orientation coverage is non-uniform.
-
-> **Note on `bandwidth_mode`/`bandwidth_tune` (Ferguson) — corrected and
-> re-enabled (2026-07-24)**: the Ferguson estimator originally derived the
-> kernel bandwidth as `eps = tune^2 * 2 * exp(logeps*)`, mixing ManifoldEM's
-> `sigma`/`exp(-d^2/2 sigma^2)` convention into SIMPLE's `exp(-d^2/eps)` kernel,
-> and never clamped the tanh inflection `logeps* = -b/a` to the scanned range.
-> With the old default `bandwidth_tune=3` this produced an ~18x (or, on a
-> degenerate fit, unbounded) bandwidth that collapsed the embedding and crashed
-> k-medoids pre-image selection in `flex_analysis`.  The estimator now uses the
-> scan-consistent optimum `eps = tune * exp(logeps*)` with `tune` a **linear**
-> multiplier (`tune=1` == optimum), clamps `logeps*` to the scanned bandwidth
-> range, and rejects results outside `[d2med/100, 100*d2med]` (falling back to
-> the median kth-NN scale).  `bandwidth_mode` and `bandwidth_tune` are now
-> registered in `bind_input_carg`/`bind_input_rarg`, and defaults were changed to
-> `bandwidth_tune=1.0`.  `flex_analysis` again defaults to
-> `bandwidth_mode=ferguson`, now backed by a safe estimate.
-
-The remaining discussion below records the original review rationale.
+> **Implemented.** The production behavior, parameters, defaults, and the
+> Ferguson-bandwidth correction history now live in the
+> [`flex_analysis` policy, §3.1](../policies/flex_analysis_policy.md).
+> The review rationale below is retained for historical context.
 
 **ManifoldEM location**: `DMembeddingII.py`, function `slaplacian` (~line 97):
 
