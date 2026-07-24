@@ -368,9 +368,9 @@ contains
             'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
             'tune >= 0', .false., 1.0)
         call flex_analysis%add_input(UI_FILT, 'dm_alpha', 'num', &
-            'Diffusion-map density normalization (default 0)', &
+            'Diffusion-map density normalization (default 1)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-            '0 <= alpha <= 1', .false., 0.0)
+            '0 <= alpha <= 1', .false., 1.0)
         call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &
@@ -378,7 +378,7 @@ contains
         call flex_analysis%add_input(UI_FILT, 'preimage_mode', 'multi', &
             'Diffusion-map pre-image estimator', &
             'constant=local-constant (Nadaraya-Watson) kernel-weighted average; linear=local-linear WLS intercept that removes O(h^2) curvature bias', &
-            '(constant|linear){constant}', .false., 'constant')
+            '(constant|linear){linear}', .false., 'linear')
         call flex_analysis%add_input(UI_FILT, 'preimage_ndim', 'num', &
             'Local-linear pre-image design dimension (default 2)', &
             'Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)', &
