@@ -1,0 +1,5072 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/flex_analysis_diffusion_map_refactoring.html">
+      
+      
+        <link rel="prev" href="cavg_gabor_feature_expansion_plan.html">
+      
+      
+        <link rel="next" href="phase_plate_support_reintroduction_plan.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>flex_analysis: Cartesian diffusion-map replacement - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#flex_analysis-cartesian-diffusion-map-replacement" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              flex_analysis: Cartesian diffusion-map replacement
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="flex_analysis_diffusion_map_refactoring.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-scientific-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Scientific contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Scientific contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-fixed-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Fixed information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-canonical-particle-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Canonical particle frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-why-angularly-distant-particles-are-excluded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Why angularly distant particles are excluded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-residual-feature-used-for-graph-distances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Residual feature used for graph distances
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-existing-simple-machinery-to-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Existing SIMPLE machinery to reuse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Existing SIMPLE machinery to reuse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-cartesian-mean-reprojection-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Cartesian mean-reprojection model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-existing-particle-batching-and-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Existing particle batching and I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-existing-cartesian-in-plane-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Existing Cartesian in-plane registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-reuse-first-optimize-second" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Reuse first, optimize second
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-working-set-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 Working-set estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-sparse-angular-candidate-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Sparse angular candidate index
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Sparse angular candidate index">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-direction-level-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Direction-level table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-particle-bins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Particle bins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-do-not-materialize-n-nang_nbrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Do not materialize N * nang_nbrs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-registered-residual-k-nearest-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Registered-residual k-nearest graph
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-diffusion-embedding-and-icm-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Diffusion embedding and ICM selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-hermitian-3d-mode-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Hermitian 3D mode reconstruction
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Hermitian 3D mode reconstruction">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-coordinate-and-map-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Coordinate and map semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-linear-interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Linear interpretation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-shared-memory-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Shared-memory execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-distributed-memory-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Distributed-memory execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Distributed-memory execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-stage-a-registered-particlefeature-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Stage A: registered-particle/feature parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-stage-b-graph-edge-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Stage B: graph edge parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-stage-c-reconstruction-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Stage C: reconstruction parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#94-artifact-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.4 Artifact lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-proposed-module-boundaries-and-reuse-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Proposed module boundaries and reuse map
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Proposed module boundaries and reuse map">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#simple_classaverager-simple_classaverager_restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_classaverager / simple_classaverager_restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_projector-and-simple_simple_volinterp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_projector and simple_simple_volinterp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_matcher_ptcl_io-and-simple_matcher_ptcl_batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_matcher_ptcl_io and simple_matcher_ptcl_batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#small-new-simple_flex_diffmap_features-under-srcmainpca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small new simple_flex_diffmap_features under src/main/pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_diff_map_graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_diff_map_graphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_diffusion_maps-and-simple_diff_map_denoise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_diffusion_maps and simple_diff_map_denoise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-simple_flex_diffmap_rec3d-under-srcmainpca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New simple_flex_diffmap_rec3D under src/main/pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_flex_analysis_strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_flex_analysis_strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result-and-trajectory-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result and trajectory consumers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#commanders-and-private-dispatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commanders and private dispatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-parameter-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Parameter policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-output-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Output contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Output contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-standard-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Standard output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-work-explicitly-removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Work explicitly removed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-refactoring-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Refactoring sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Refactoring sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-freeze-evidence-and-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: freeze evidence and benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-registration-and-reprojection-reference-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: registration and reprojection reference path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-gated-shared-memory-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: gated shared-memory graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-diffusion-embedding-and-icm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: diffusion embedding and ICM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-hermitian-mode-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Hermitian mode reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-measured-cartesian-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: measured Cartesian optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: distributed execution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-cutover-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: cutover and cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Validation matrix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. Validation matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-registration-and-reprojection-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.1 Registration and reprojection tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-graph-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.2 Graph tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-diffusion-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.3 Diffusion tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#154-reconstruction-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.4 Reconstruction tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#155-workflow-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.5 Workflow tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-performance-measurements-and-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Performance measurements and acceptance criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-forward-facing-items-not-part-of-this-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Forward-facing items, not part of this refactor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-resolved-implementation-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. Resolved implementation decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-scientific-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Scientific contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Scientific contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-fixed-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Fixed information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-canonical-particle-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Canonical particle frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-why-angularly-distant-particles-are-excluded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Why angularly distant particles are excluded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-residual-feature-used-for-graph-distances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Residual feature used for graph distances
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-existing-simple-machinery-to-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Existing SIMPLE machinery to reuse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Existing SIMPLE machinery to reuse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-cartesian-mean-reprojection-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Cartesian mean-reprojection model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-existing-particle-batching-and-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Existing particle batching and I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-existing-cartesian-in-plane-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Existing Cartesian in-plane registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-reuse-first-optimize-second" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Reuse first, optimize second
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-working-set-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 Working-set estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-sparse-angular-candidate-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Sparse angular candidate index
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Sparse angular candidate index">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-direction-level-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Direction-level table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-particle-bins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Particle bins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-do-not-materialize-n-nang_nbrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Do not materialize N * nang_nbrs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-registered-residual-k-nearest-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Registered-residual k-nearest graph
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-diffusion-embedding-and-icm-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Diffusion embedding and ICM selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-hermitian-3d-mode-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Hermitian 3D mode reconstruction
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Hermitian 3D mode reconstruction">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-coordinate-and-map-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Coordinate and map semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-linear-interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Linear interpretation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-shared-memory-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Shared-memory execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-distributed-memory-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Distributed-memory execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Distributed-memory execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-stage-a-registered-particlefeature-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Stage A: registered-particle/feature parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-stage-b-graph-edge-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Stage B: graph edge parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-stage-c-reconstruction-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Stage C: reconstruction parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#94-artifact-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.4 Artifact lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-proposed-module-boundaries-and-reuse-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Proposed module boundaries and reuse map
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Proposed module boundaries and reuse map">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#simple_classaverager-simple_classaverager_restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_classaverager / simple_classaverager_restore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_projector-and-simple_simple_volinterp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_projector and simple_simple_volinterp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_matcher_ptcl_io-and-simple_matcher_ptcl_batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_matcher_ptcl_io and simple_matcher_ptcl_batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#small-new-simple_flex_diffmap_features-under-srcmainpca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small new simple_flex_diffmap_features under src/main/pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_diff_map_graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_diff_map_graphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_diffusion_maps-and-simple_diff_map_denoise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_diffusion_maps and simple_diff_map_denoise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-simple_flex_diffmap_rec3d-under-srcmainpca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New simple_flex_diffmap_rec3D under src/main/pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simple_flex_analysis_strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        simple_flex_analysis_strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result-and-trajectory-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result and trajectory consumers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#commanders-and-private-dispatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commanders and private dispatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-parameter-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Parameter policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-output-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Output contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Output contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-standard-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Standard output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-work-explicitly-removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Work explicitly removed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-refactoring-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Refactoring sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Refactoring sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-freeze-evidence-and-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: freeze evidence and benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-registration-and-reprojection-reference-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: registration and reprojection reference path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-gated-shared-memory-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: gated shared-memory graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-diffusion-embedding-and-icm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: diffusion embedding and ICM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-hermitian-mode-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Hermitian mode reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-measured-cartesian-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: measured Cartesian optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: distributed execution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-cutover-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: cutover and cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Validation matrix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. Validation matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-registration-and-reprojection-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.1 Registration and reprojection tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-graph-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.2 Graph tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-diffusion-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.3 Diffusion tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#154-reconstruction-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.4 Reconstruction tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#155-workflow-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.5 Workflow tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-performance-measurements-and-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Performance measurements and acceptance criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-forward-facing-items-not-part-of-this-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Forward-facing items, not part of this refactor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-resolved-implementation-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. Resolved implementation decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="flex_analysis-cartesian-diffusion-map-replacement"><code>flex_analysis</code>: Cartesian diffusion-map replacement<a class="headerlink" href="#flex_analysis-cartesian-diffusion-map-replacement" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> implemented initial replacement; validation and performance benchmarking in progress<br />
+<strong>Date:</strong> July 21, 2026<br />
+<strong>Scope:</strong> replace the iterative PCA machinery in the shared- and
+distributed-memory <code>flex_analysis</code> workflows.<br />
+<strong>Policy:</strong> <code>doc/policies/flex_analysis_policy.md</code> describes the implemented
+diffusion-map workflow and separates current behavior from later developments.</p>
+<p>The initial implementation keeps registered preparation, sparse graph
+construction, embedding, and ICM on the master. Its distributed path divides
+Hermitian reconstruction statistics by particle interval and reduces them on
+the master. Distributed feature/edge preparation remains the next performance
+extension, not part of the initial cutover.</p>
+<h2 id="1-executive-decision">1. Executive decision<a class="headerlink" href="#1-executive-decision" title="Permanent link">&para;</a></h2>
+<p>Replace projected EM-PCA with a sparse diffusion-map workflow built from
+particles that have first been placed in the in-plane frame supplied by the
+fixed 3D alignment.</p>
+<p>This refactor must assemble existing SIMPLE components. It must not introduce a
+parallel particle-I/O, reprojection, image-registration, batching, or worker
+framework. The mature <code>abinitio2D</code> and <code>refine3D</code> workflows provide the
+execution template; the existing Cartesian <code>projector</code>, <code>reproject</code>,
+<code>transform_ptcls</code>, matcher particle-I/O, and reconstruction machinery provide
+the numerical operations.</p>
+<p>PFTC is not part of the scientific representation proposed here. The graph is
+defined on Cartesian registered images. Polar code may be consulted for
+optimization patterns such as memoization, preallocated thread workspaces, and
+batched ownership, but <code>flex_analysis</code> must not convert the problem to polar
+coordinates.</p>
+<p>The essential observation is that SIMPLE's search space is discrete and almost
+all expensive geometry can be materialized once:</p>
+<ul>
+<li>roughly 5,000 zero-shift, zero-in-plane-angle reprojections of the supplied
+  mean volume, one for each sampled projection direction;</li>
+<li>one registered, band-limited particle record per active particle, roughly
+  100,000 records for a representative large data set;</li>
+<li>one symmetry-aware angular-neighborhood table over the approximately 5,000
+  projection directions;</li>
+<li>one sparse particle graph with approximately 10 retained neighbors per
+  particle.</li>
+</ul>
+<p>After those products exist, graph construction, sparse eigendecomposition,
+ICM rank selection, and mode reconstruction require no alternating fit and no
+repeated projection of evolving eigenvolumes.</p>
+<p>The proposed production pipeline is:</p>
+<pre><code class="language-text">fixed mean volume + fixed ptcl3D poses
+                    |
+                    v
+      discrete Cartesian mean-reprojection stack
+                    |
+raw particles --&gt; one-time in-plane registration --&gt; registered particle stack/features
+                    |                                  |
+                    +------ CTF-matched residuals &lt;----+
+                                      |
+                         angular candidate gating
+                                      |
+                      registered-image k-nearest graph
+                                      |
+                       sparse diffusion eigensolver
+                                      |
+                            ICM rank selection
+                                      |
+             signed Hermitian residual backprojection, O(Q)
+                                      |
+                   at most 20 reconstructed eigenvolumes
+</code></pre>
+<p>This is a deliberate algorithm replacement, not another modification of the
+probabilistic or iterative PCA model.</p>
+<h2 id="2-scientific-contract">2. Scientific contract<a class="headerlink" href="#2-scientific-contract" title="Permanent link">&para;</a></h2>
+<h3 id="21-fixed-information">2.1 Fixed information<a class="headerlink" href="#21-fixed-information" title="Permanent link">&para;</a></h3>
+<p>The workflow takes the following as fixed:</p>
+<ul>
+<li>the supplied mean volume;</li>
+<li>the active <code>ptcl3D</code> particle set;</li>
+<li>each particle's 3D orientation, in-plane angle, and 2D shift;</li>
+<li>the SIMPLE projection-direction grid and point-group symmetry;</li>
+<li>particle CTF metadata;</li>
+<li>the configured mask and low-pass support.</li>
+</ul>
+<p><code>flex_analysis</code> does not refine poses, shifts, CTF parameters, or the mean map.</p>
+<h3 id="22-canonical-particle-frame">2.2 Canonical particle frame<a class="headerlink" href="#22-canonical-particle-frame" title="Permanent link">&para;</a></h3>
+<p>For particle <code>i</code>, let its stored pose be decomposed into:</p>
+<ul>
+<li>a projection direction <code>p_i</code>;</li>
+<li>an in-plane rotation <code>e3_i</code>;</li>
+<li>a 2D shift <code>s_i</code>.</li>
+</ul>
+<p>The canonical image is obtained by applying <code>-s_i</code> and <code>-e3_i</code>. The result has
+zero shift and zero in-plane rotation and is associated with the discrete
+projection direction <code>p_i</code>.</p>
+<p>This is already the behavior of the <code>ptcl3D</code> branch of <code>transform_ptcls</code> in
+<code>simple_classaverager_restore.f90</code>: it groups by <code>proj</code>, applies the negative
+stored shift, and rotates by the negative stored <code>e3</code>. The new workflow must
+reuse that convention exactly; it must not create a second interpretation of
+the Euler angles or shift sign.</p>
+<p>This creates the central implementation invariant:</p>
+<pre><code class="language-text">registered_particle(i) is in the same 2D frame as mean_reprojs(proj_i)
+</code></pre>
+<p>Once <code>registered_particle(i)</code> has been produced, its geometric preparation is
+complete. Comparing it with the model requires only the integer lookup</p>
+<pre><code class="language-text">mean_reprojs(proj_i)
+</code></pre>
+<p>There is no shift application, in-plane rotation, Euler-matrix construction,
+or volume projection in the comparison loop. Those operations have already
+been completed once during particle registration or once during construction
+of the approximately 5,000-entry reprojection stack.</p>
+<h3 id="23-why-angularly-distant-particles-are-excluded">2.3 Why angularly distant particles are excluded<a class="headerlink" href="#23-why-angularly-distant-particles-are-excluded" title="Permanent link">&para;</a></h3>
+<p>The graph is not an all-particle similarity graph. Orientation supplies a
+physical gate. Only particles whose projection directions lie within an
+allowed angular neighborhood are candidates for an image comparison.</p>
+<p>The neighborhood may be limited by both:</p>
+<ol>
+<li>a resolution/diameter-derived angular cutoff; and</li>
+<li>a computational cap on the number of candidate particles.</li>
+</ol>
+<p>A useful starting heuristic is</p>
+<pre><code class="language-text">angular_cutoff_radians ~= target_resolution / particle_diameter
+</code></pre>
+<p>The exact constant should be validated rather than embedded as an unexplained
+formula. The implementation must report the resulting angular cutoff, the
+median candidate count, and the number of particles that reached the cap.</p>
+<p>The first implementation uses the following computational cap:</p>
+<pre><code class="language-text">nang_nbrs = 100
+</code></pre>
+<p>Here <code>nang_nbrs</code> means the maximum number of candidate <strong>particles</strong> considered
+for one particle after expanding through nearby projection-direction bins. It
+does not mean 1,000 retained graph edges. The final graph default remains:</p>
+<pre><code class="language-text">k_nn = 10
+</code></pre>
+<p>For the first release, <code>nang_nbrs=100</code> is a hard per-particle candidate cap
+applied after the resolution-derived angular cutoff. It is also a normal public
+UI parameter so larger or smaller data sets can change the computational bound
+without changing code. The implementation must report how often the cap is
+reached; experience can later determine whether a different adaptive policy is
+worth introducing.</p>
+<p>Thus orientation decides which comparisons are meaningful; registered
+residual-image distance decides which approximately 10 edges survive.</p>
+<h3 id="24-residual-feature-used-for-graph-distances">2.4 Residual feature used for graph distances<a class="headerlink" href="#24-residual-feature-used-for-graph-distances" title="Permanent link">&para;</a></h3>
+<p>Let <code>R_p</code> be the cached reprojection of the supplied mean map at discrete
+direction <code>p</code>, with zero in-plane angle and zero shift. Let <code>T_i</code> be the
+canonical in-plane transform for particle <code>i</code>, let <code>C_i^c</code> be its real signed
+CTF expressed in that canonical frame, and let <code>S_i^c = sign(C_i^c)</code>.</p>
+<p>The graph feature should represent a CTF-consistent, registered residual:</p>
+<pre><code class="language-text">x_i = graph_preprocess(S_i^c T_i y_i)
+    - graph_preprocess(abs(C_i^c) R_p_i)
+</code></pre>
+<p>For an input stack already marked <code>ctf=flip</code>, the first term is already
+phase-flipped and <code>S_i^c</code> must not be applied again. For astigmatic CTFs, the
+astigmatism axis must rotate with the particle image; merely changing <code>e3</code>
+while leaving the CTF frame unchanged is incorrect.</p>
+<p>Any CTF preparation in this expression belongs to the one-time particle
+feature-construction pass. It does not alter the geometric invariant above and
+must not introduce a rotation or shift into pairwise graph comparisons.</p>
+<p>The correctness-first baseline should mirror the successful
+<code>denoise_project</code> convention:</p>
+<ul>
+<li>normalize the particle noise using the existing image preprocessing;</li>
+<li>phase-flip consistently;</li>
+<li>apply the established soft mask;</li>
+<li>restrict both particle and mean projection to the same low-pass support;</li>
+<li>compare serialized registered residuals with squared Euclidean distance.</li>
+</ul>
+<p>When phase-flipped particles are used, the corresponding mean reprojection
+must receive the particle-specific <code>abs(CTF)</code> amplitude before subtraction.
+The model reprojection itself is cached once; applying the particle transfer
+is an inexpensive per-particle multiplication, not a new reprojection.</p>
+<p>This phase-flipped representation defines the graph feature and the persistent
+registered stack, but it does not imply unit-transfer 3D reconstruction. The
+registered project must retain the particle CTF parameters and mark the stack
+as already phase-flipped (<code>ctf=flip</code>). The reconstruction path must therefore
+use <code>abs(CTF)</code> as the effective forward transfer and <code>CTF^2</code> as its density. It
+must never relabel the registered stack as <code>ctf=no</code>, apply the signed CTF a
+second time, or backproject the phase-flipped residual with unit density.</p>
+<p>No external sigma array, fitted noise variance, posterior covariance, or
+probabilistic latent prior is part of this definition. The diffusion-kernel
+bandwidth is a graph scale and must not be described as a model noise sigma.</p>
+<h2 id="3-existing-simple-machinery-to-reuse">3. Existing SIMPLE machinery to reuse<a class="headerlink" href="#3-existing-simple-machinery-to-reuse" title="Permanent link">&para;</a></h2>
+<h3 id="31-cartesian-mean-reprojection-model">3.1 Cartesian mean-reprojection model<a class="headerlink" href="#31-cartesian-mean-reprojection-model" title="Permanent link">&para;</a></h3>
+<p>Materialize the supplied mean map once on the exact discrete orientation grid
+used by the particle <code>proj</code> labels:</p>
+<pre><code class="language-text">mean_reprojs(p), p = 1 ... nspace
+</code></pre>
+<p>Use the established Cartesian path:</p>
+<ul>
+<li><code>simple_projector</code> owns padded Fourier-volume expansion and Cartesian central
+  section extraction through <code>fproject</code>/<code>fproject_serial</code>;</li>
+<li><code>simple_simple_volinterp::reproject</code> already creates a complete stack of
+  reprojections for an <code>oris</code> object with thread-local padded planes;</li>
+<li><code>commander_reproject</code> demonstrates project/eulspace construction, masking,
+  stack writing, and lifecycle cleanup.</li>
+</ul>
+<p>The flex workflow should call or narrowly extend those routines. It should not
+implement another central-section interpolator or introduce a flex-specific
+reprojection file format.</p>
+<p>Required invariants are:</p>
+<ul>
+<li><code>nspace</code> and projection ordering match the project <code>proj</code> labels exactly;</li>
+<li>the point-group symmetry and reference spiral are the same as those used to
+  assign <code>proj</code>;</li>
+<li>every reprojection has <code>e3=0</code> and zero shift;</li>
+<li>box, sampling, mask, and low-pass support match the registered particles;</li>
+<li>the reprojection stack is generated once from the supplied <code>vol1</code>.</li>
+</ul>
+<p>For approximately 5,000 projections it is acceptable to retain the Cartesian
+reprojection stack in memory at the analysis box, or write/read it using the
+normal image-stack machinery if the memory budget requires that. This is an
+ordinary SIMPLE image stack, not a new cache abstraction.</p>
+<h3 id="32-existing-particle-batching-and-io">3.2 Existing particle batching and I/O<a class="headerlink" href="#32-existing-particle-batching-and-io" title="Permanent link">&para;</a></h3>
+<p>Follow the matcher batch policy already used by both <code>cluster2D</code> and
+<code>refine3D</code>:</p>
+<pre><code class="language-fortran">batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+batches     = split_nobjs_even(nptcls, nbatches)
+</code></pre>
+<p>Reuse:</p>
+<ul>
+<li><code>prepimgbatch</code>/<code>killimgbatch</code> for builder-owned batch images;</li>
+<li><code>discrete_read_imgbatch</code> and <code>discrete_read_imgbatch_source</code> for project-aware
+  batched reads, sorted stack runs, bounded file handles, and alternate particle
+  sources;</li>
+<li><code>alloc_ptcl_imgs</code> and the matcher pattern of one workspace per thread rather
+  than one workspace per particle;</li>
+<li><code>build%imgbatch</code> as the owner of the current raw batch.</li>
+</ul>
+<p>The important policy inherited from abinitio2D/refine3D is a single-read batch:
+read a particle once, perform all graph preparation that needs the raw image,
+and release the batch. Do not add a new whole-particle reader inside the flex
+strategy.</p>
+<h3 id="33-existing-cartesian-in-plane-registration">3.3 Existing Cartesian in-plane registration<a class="headerlink" href="#33-existing-cartesian-in-plane-registration" title="Permanent link">&para;</a></h3>
+<p>Use the <code>ptcl3D</code> transform convention already implemented by
+<code>transform_ptcls</code>:</p>
+<ul>
+<li>obtain the stored <code>ptcl3D</code> shift and <code>e3</code>;</li>
+<li>apply the negative shift;</li>
+<li>rotate by negative <code>e3</code> with the established Cartesian Kaiser-Bessel
+  interpolation;</li>
+<li>apply the same normalization, phase-flip, masking, and grid-correction
+  conventions as the validated <code>denoise_project</code> path.</li>
+</ul>
+<p>The required refactor is small: split the current routine into a group-selection
+wrapper and an index-driven batch kernel. Existing callers keep the group
+wrapper; <code>flex_analysis</code> supplies the current batch's particle indices. The
+mathematics and interpolation code remain single-source.</p>
+<p>The registered Cartesian particle images are a durable workflow product, not
+disposable graph scratch. Write them to ordinary project-owned particle stacks
+as soon as each batch has been transformed. There is no requirement to keep
+100,000 <code>image</code> objects resident simultaneously. Reconstruction and later
+developments must consume the preserved registered stacks through the same
+<code>discrete_read_imgbatch</code> pattern; they must not reread and re-register the raw
+particles.</p>
+<p>The registered project representation must follow the established
+<code>denoise_project</code>/<code>map_params_from_den</code> contract:</p>
+<ul>
+<li>the registered particle image has zero stored in-plane angle and zero stored
+  shift;</li>
+<li>the registered stack is recorded as <code>ctf=flip</code> when phase flipping was
+  applied, while the per-particle defocus, astigmatism, phase-shift, and other
+  CTF metadata remain available;</li>
+<li>its projection direction (<code>proj</code>, equivalently the fixed out-of-plane part
+  of the <code>ptcl3D</code> orientation) remains attached to the particle;</li>
+<li>project particle index and source-particle identity are preserved through a
+  strict registered-to-raw mapping;</li>
+<li>the original raw project remains the authority for the transform that was
+  removed during registration;</li>
+<li>parameters learned later in the registered frame are mapped back by
+  composing them with the original raw-particle 2D transform, as
+  <code>map_params_from_den</code> does with <code>compose3d2d</code>, rather than by copying the
+  registered-frame angle and shift directly onto the raw particle;</li>
+<li>if a later workflow writes transformed particle images back in the raw
+  frame, it applies the inverse of the canonical registration transform.</li>
+</ul>
+<p>This preservation and inverse-mapping contract is required even though the
+first diffusion-map replacement reconstructs only 3D modes. It allows later
+state assignment, local reconstruction, or refinement developments to build on
+the registered representation without repeating interpolation or losing the
+route back to the raw images.</p>
+<h3 id="34-reuse-first-optimize-second">3.4 Reuse first, optimize second<a class="headerlink" href="#34-reuse-first-optimize-second" title="Permanent link">&para;</a></h3>
+<p>The initial implementation should consist almost entirely of existing calls:</p>
+<ol>
+<li>build the discrete eulspace through the builder/symmetry machinery;</li>
+<li>call the Cartesian reprojection machinery once for <code>vol1</code>;</li>
+<li>split active particle indices with the normal matcher batch policy;</li>
+<li>read each batch through the existing discrete stack I/O;</li>
+<li>call the index-driven form of <code>transform_ptcls</code>;</li>
+<li>subtract the matching Cartesian mean reprojection and create graph features;</li>
+<li>write/release the batch.</li>
+</ol>
+<p>After step 6, graph construction consumes only:</p>
+<pre><code class="language-text">particle feature
+projection-direction index (`proj`)
+precomputed angular-neighborhood table indexed by `proj`
+</code></pre>
+<p>It must not call <code>transform_ptcls</code>, <code>reproject</code>, <code>fproject</code>, <code>shift2Dserial</code>, or
+<code>rotmat2d</code>. This is the hot-path boundary that makes the comparison stage fast.</p>
+<p>Only profiling may justify a new optimized kernel. If needed, borrow the mature
+polar implementation patterns—precomputed address maps, reusable thread
+workspaces, fused normalization/FFT/shift operations, and explicit memoization—
+while retaining Cartesian images and the exact Cartesian metric. An optimization
+must be numerically compared against <code>transform_ptcls</code>; it must not change the
+scientific representation to PFTs.</p>
+<h3 id="35-working-set-estimates">3.5 Working-set estimates<a class="headerlink" href="#35-working-set-estimates" title="Permanent link">&para;</a></h3>
+<p>For single-precision real square images, the uncropped storage estimates are:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">analysis box</th>
+<th style="text-align: right;">100,000 particles</th>
+<th style="text-align: right;">5,000 reprojections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">1.64 GB</td>
+<td style="text-align: right;">81.9 MB</td>
+</tr>
+<tr>
+<td style="text-align: right;">96</td>
+<td style="text-align: right;">3.69 GB</td>
+<td style="text-align: right;">184 MB</td>
+</tr>
+<tr>
+<td style="text-align: right;">128</td>
+<td style="text-align: right;">6.55 GB</td>
+<td style="text-align: right;">328 MB</td>
+</tr>
+<tr>
+<td style="text-align: right;">300</td>
+<td style="text-align: right;">36.0 GB</td>
+<td style="text-align: right;">1.80 GB</td>
+</tr>
+</tbody>
+</table>
+<p>These figures explain why particle images are processed in the existing bounded
+batches and written incrementally to ordinary persistent registered-particle
+stacks rather than retained as 100,000 resident <code>image</code> objects.
+The approximately 5,000 model reprojections are the smaller working set and can
+usually stay resident at the analysis box.</p>
+<p>Every run must log:</p>
+<ul>
+<li>bytes for the reprojection stack;</li>
+<li>bytes for resident graph features;</li>
+<li>batch size and bytes for registered particle images;</li>
+<li>bytes for graph CSR arrays and diffusion vectors;</li>
+<li>bytes written/read for the registered-particle stack, if present.</li>
+</ul>
+<h2 id="4-sparse-angular-candidate-index">4. Sparse angular candidate index<a class="headerlink" href="#4-sparse-angular-candidate-index" title="Permanent link">&para;</a></h2>
+<h3 id="41-direction-level-table">4.1 Direction-level table<a class="headerlink" href="#41-direction-level-table" title="Permanent link">&para;</a></h3>
+<p>Compute the symmetry-aware nearest projection directions once for the
+approximately 5,000-element eulspace. Use the existing point-group-aware
+<code>nearest_proj_neighbors</code> behavior rather than raw Euler-coordinate distance.</p>
+<p>Store the result as a small direction-level adjacency table ordered by angular
+distance. This table is independent of particles and can be reused for every
+particle assigned to the same <code>proj</code> bin.</p>
+<h3 id="42-particle-bins">4.2 Particle bins<a class="headerlink" href="#42-particle-bins" title="Permanent link">&para;</a></h3>
+<p>Build a counting-sort/prefix-sum index:</p>
+<pre><code class="language-text">proj_counts(p)
+proj_rowptr(p:p+1)
+proj_particles(:)
+</code></pre>
+<p>This makes all particles for one projection direction contiguous without
+changing their global project indices.</p>
+<p>For each owner particle, expand through its ordered direction neighbors until
+one of the following occurs:</p>
+<ul>
+<li>the resolution-derived angular cutoff is exceeded;</li>
+<li><code>nang_nbrs</code> candidate particles have been collected;</li>
+<li>all permitted neighboring bins have been exhausted.</li>
+</ul>
+<p>The particle itself is excluded. Candidate ordering and cap behavior must be
+deterministic. If one projection bin alone contains more than the cap, use a
+documented deterministic subsampling policy rather than dependence on worker
+or thread order.</p>
+<h3 id="43-do-not-materialize-n-nang_nbrs">4.3 Do not materialize <code>N * nang_nbrs</code><a class="headerlink" href="#43-do-not-materialize-n-nang_nbrs" title="Permanent link">&para;</a></h3>
+<p>For <code>N=100,000</code> and <code>nang_nbrs=1,000</code>, a dense candidate matrix contains 100
+million integers before any distances are stored. That is avoidable.</p>
+<p>Graph construction should stream direction-bin pairs and maintain only the
+best <code>k_nn</code> distances for each particle. Candidate bin pairs should be visited
+once where possible, updating both endpoint neighbor lists. This also permits
+blocked or BLAS-backed distance evaluation for populated bin pairs.</p>
+<p>The production graph builder must therefore be gated from the start. It must
+not call the current all-pairs <code>find_euclidean_neighbors</code>, which evaluates
+every particle pair before retaining a sparse graph.</p>
+<h2 id="5-registered-residual-k-nearest-graph">5. Registered-residual k-nearest graph<a class="headerlink" href="#5-registered-residual-k-nearest-graph" title="Permanent link">&para;</a></h2>
+<p>Add a narrow graph API, conceptually:</p>
+<pre><code class="language-fortran">subroutine build_gated_euclidean_knn_graph(features, proj_index, &amp;
+                                           proj_neighbors, nang_nbrs, &amp;
+                                           k_nn, graph, diagnostics)
+</code></pre>
+<p>The exact signature should use derived types where that clarifies ownership,
+but the graph routine must receive all dependencies explicitly.</p>
+<p>For each particle:</p>
+<ol>
+<li>obtain angularly permitted candidate bins;</li>
+<li>evaluate squared Euclidean distances between registered residual features;</li>
+<li>retain the nearest <code>k_nn</code> candidates;</li>
+<li>union-symmetrize directed neighbor choices;</li>
+<li>convert once to <code>diffmap_graph</code> CSR;</li>
+<li>normalize using the existing diffusion-map convention.</li>
+</ol>
+<p>The initial kernel weighting should preserve the currently validated scalar
+graph convention:</p>
+<pre><code class="language-text">w_ij = exp(-d_ij^2 / epsilon)
+</code></pre>
+<p>with <code>epsilon</code> derived from retained-neighbor distances. A self-tuning local
+kernel can be considered later, but should not be mixed into the first
+scientific replacement.</p>
+<p>Required graph diagnostics are:</p>
+<ul>
+<li>minimum, median, 95th percentile, and maximum candidate counts;</li>
+<li>minimum, median, and maximum retained degree before and after
+  symmetrization;</li>
+<li>total <code>nnz</code>;</li>
+<li>number of isolated vertices;</li>
+<li>number and sizes of connected components;</li>
+<li>distance and weight quantiles;</li>
+<li>fraction of edges crossing discrete projection bins;</li>
+<li>angular-distance quantiles of retained edges.</li>
+</ul>
+<p>An isolated vertex is a hard construction error unless the workflow explicitly
+removes that particle and records why. A graph split into major disconnected
+components must be reported before eigendecomposition; it must not silently
+produce component-indicator eigenvectors interpreted as conformational modes.</p>
+<p>For <code>N=100,000</code> and <code>k_nn=10</code>, the symmetrized graph should be on the order of
+one to two million directed CSR entries, not <code>N^2</code>. Integer columns plus weight
+and normalized-weight arrays are only on the order of a few tens of megabytes.</p>
+<h2 id="6-diffusion-embedding-and-icm-selection">6. Diffusion embedding and ICM selection<a class="headerlink" href="#6-diffusion-embedding-and-icm-selection" title="Permanent link">&para;</a></h2>
+<p>Reuse <code>diffmap_graph</code>, <code>embed_graph</code>, <code>sparse_eigh</code>, and the existing ICM
+spectral-rank selection. Do not create a second diffusion eigensolver inside
+the flex strategy.</p>
+<p>The eigensolver must:</p>
+<ul>
+<li>consume the sparse normalized graph;</li>
+<li>exclude the trivial stationary eigenvector;</li>
+<li>scan enough of the spectrum for ICM to distinguish retained modes from the
+  tail;</li>
+<li>reconstruct no more than 20 modes;</li>
+<li>present nontrivial modes to the existing ICM selector in descending
+  diffusion-eigenvalue order;</li>
+<li>impose a deterministic sign based on the largest-magnitude coordinate, with
+  project particle index as the tie breaker.</li>
+</ul>
+<p>The descending order is an internal precondition of the existing ICM
+implementation: it uses adjacent eigengaps and returns a retained prefix. It is
+not a claim that mode 1 has the greatest PCA variance or is biologically more
+important than mode 2. Outside satisfying ICM and providing stable file
+indices, the workflow assigns no scientific significance to mode order.</p>
+<p>The public <code>neigs</code> parameter should retain a simple meaning:</p>
+<pre><code class="language-text">neigs = maximum number of reconstructed diffusion modes, clamped to 1..20
+</code></pre>
+<p>The internal spectral scan may exceed <code>neigs</code> so that ICM sees a noise tail.
+The scan limit should be a named constant or a separately reviewed typed
+parameter, not another interpretation of <code>neigs</code>.</p>
+<p>For retained mode <code>q</code>, standardize the coordinate over active particles:</p>
+<pre><code class="language-text">z_iq = (phi_iq - mean(phi_q)) / sdev(phi_q)
+</code></pre>
+<p>The diffusion eigenvalue remains spectral evidence used by ICM; it is not an
+explained-variance fraction and must not be labeled as one in the output table.</p>
+<p>ICM is the denoising/model-selection step. The flex call must set a minimum
+retained rank of one: returning zero modes is not a meaningful public
+<code>flex_analysis</code> result. A homogeneous control may produce a weak diagnostic
+mode and a spectrum without a convincing separation, but the command still
+emits at least one mode. No posterior variance or PPCA noise term is required.</p>
+<h2 id="7-hermitian-3d-mode-reconstruction">7. Hermitian 3D mode reconstruction<a class="headerlink" href="#7-hermitian-3d-mode-reconstruction" title="Permanent link">&para;</a></h2>
+<p>Removing PCA does not remove the Hermitian Fourier formulation.</p>
+<p>For canonical particle <code>i</code>, let:</p>
+<ul>
+<li><code>r_i^pf</code> be its phase-flipped canonical Fourier residual after subtracting
+  the cached mean reprojection multiplied by <code>abs(C_i^c)</code>;</li>
+<li><code>C_i^c</code> be its real signed CTF in the canonical frame;</li>
+<li><code>H_i^pf = sign(C_i^c) C_i^c = abs(C_i^c)</code> be the effective transfer of the
+  phase-flipped observation;</li>
+<li><code>P_p_i</code> insert/backproject the zero-in-plane-angle plane for projection bin
+  <code>p_i</code>;</li>
+<li><code>z_iq</code> be standardized diffusion coordinate <code>q</code>.</li>
+</ul>
+<p>Reconstruct mode <code>q</code> from:</p>
+<pre><code class="language-text">numerator_q = sum_i z_iq * P_p_i^H * conjugate(H_i^pf) * r_i^pf
+
+density_q   = sum_i z_iq^2 * P_p_i^H * |H_i^pf|^2 * P_p_i
+
+B_q         = restore(numerator_q, density_q)
+</code></pre>
+<p>For SIMPLE's real signed CTF, this is algebraically identical to constructing
+the normal equations from the unflipped residual
+<code>r_i = y_i - C_i^c R_p_i</code>, because
+<code>r_i^pf = sign(C_i^c) r_i</code>:</p>
+<pre><code class="language-text">conjugate(H_i^pf) * r_i^pf
+    = abs(C_i^c) * sign(C_i^c) * r_i
+    = C_i^c * r_i
+
+|H_i^pf|^2 = |C_i^c|^2
+</code></pre>
+<p>Phase flipping therefore does not prevent CTF-amplitude restoration. The
+adjoint still uses the conjugate effective transfer and the density still uses
+its squared magnitude. This is the Hermitian normal-equation convention and
+must be tested with an adjoint check.</p>
+<p>Use the established <code>gen_fplane4rec</code> handling rather than reimplementing this
+logic. Its <code>CTFFLAG_FLIP</code> branch already multiplies the phase-flipped Fourier
+signal by <code>abs(CTF)</code> for the numerator and stores <code>CTF^2</code> for the denominator.
+This also prevents a duplicate raw registered stack: the preserved
+phase-flipped registered images are sufficient for both graph construction and
+proper CTF-density reconstruction when their project metadata are correct.</p>
+<p>The resulting mode maps are CTF-density-corrected Hermitian least-squares
+reconstructions. They should not be called strictly Wiener-restored maps unless
+a defined signal/noise or FSC reliability term is also applied. The first
+replacement deliberately has no external sigma model; project-FSC-driven,
+already cross-validated low-pass filtering remains the forward-facing regularization
+development described in Section 17.</p>
+<p>There are only <code>Q</code> numerators and <code>Q</code> densities. There are no <code>Q(Q+1)/2</code>
+cross-density volumes and no alternating E/M loop. ICM runs before this phase,
+so only retained modes are reconstructed.</p>
+<p>Use the existing reconstructor, gridding, masking, and low-pass restoration
+machinery. Do not reproduce interpolation or Fourier indexing inside the
+diffusion module.</p>
+<h3 id="71-coordinate-and-map-semantics">7.1 Coordinate and map semantics<a class="headerlink" href="#71-coordinate-and-map-semantics" title="Permanent link">&para;</a></h3>
+<p>Diffusion eigenvectors are orthogonal over graph vertices, but their separately
+reconstructed 3D maps need not be exactly orthogonal under a 3D Fourier metric.</p>
+<p>The first implementation does not reorder the reconstructed maps and does not
+apply a post-reconstruction Gram rotation or orthogonalization. Each output map
+remains paired one-to-one with the standardized diffusion coordinate from
+which it was reconstructed. This preserves the learned continuous state
+coordinates as the low-dimensional particle features rather than replacing
+them with a second, Fourier-map-derived coordinate system.</p>
+<p>Map norms and the small Hermitian Fourier Gram matrix may be reported as
+diagnostics. Non-orthogonality of the restored 3D maps is not itself a failure.
+A nonfinite or numerically empty reconstruction is a hard diagnostic problem
+and must not be hidden by rotating it into other modes.</p>
+<h3 id="72-linear-interpretation">7.2 Linear interpretation<a class="headerlink" href="#72-linear-interpretation" title="Permanent link">&para;</a></h3>
+<p>Because each retained coordinate is standardized, a user-requested linear
+diagnostic trajectory has a direct scale:</p>
+<pre><code class="language-text">mean + a * B_q,  a = -3, -2, -1, 0, 1, 2, 3
+</code></pre>
+<p>Such maps are linear visualizations of a nonlinear embedding direction. They
+are not written by default and must not be described as a complete
+parameterization of the manifold. Kernel- or neighborhood-weighted state
+reconstructions along the diffusion manifold are a valuable later development
+but are outside this first replacement.</p>
+<h2 id="8-shared-memory-execution">8. Shared-memory execution<a class="headerlink" href="#8-shared-memory-execution" title="Permanent link">&para;</a></h2>
+<p>The shared-memory workflow should have explicit, noniterative phases:</p>
+<ol>
+<li>validate inputs and select active particles;</li>
+<li>construct the exact discrete eulspace and symmetry-aware direction table;</li>
+<li>generate the Cartesian mean-reprojection stack once;</li>
+<li>use the matcher batch policy and existing discrete I/O to register each
+   particle once;</li>
+<li>form residual graph features;</li>
+<li>build the gated sparse kNN graph;</li>
+<li>run the sparse diffusion eigensolver;</li>
+<li>select the retained rank with ICM;</li>
+<li>reconstruct retained 3D modes in memory-budgeted mode blocks;</li>
+<li>write the paired maps, coordinates, project outputs, and diagnostics.</li>
+</ol>
+<p>The particle loop should mirror <code>refine3D_exec</code>/<code>cluster2D_exec</code>: derive
+<code>batchsz_max</code> from <code>nthr * BATCHTHRSZ</code>, allocate builder/thread workspaces once,
+iterate <code>split_nobjs_even</code> batches, and clean the batch toolbox once at the end.
+Particle preprocessing should be parallel over the current batch. Graph distance work
+should be parallel over owner bins or rows with thread-local top-<code>k_nn</code> state.
+No two threads should update one mutable top-k list without explicit ownership.</p>
+<p>Mode reconstruction can process all retained modes in one particle pass if
+memory permits. Otherwise use a small mode block selected from an explicit
+memory budget. The run must log the block size and expected reconstructor
+bytes. It must never silently allocate one expanded reconstruction object per
+mode per thread.</p>
+<h2 id="9-distributed-memory-execution">9. Distributed-memory execution<a class="headerlink" href="#9-distributed-memory-execution" title="Permanent link">&para;</a></h2>
+<p>The distributed path must implement the same graph and reconstruction model as
+the shared path. Distribution changes ownership, not scientific semantics.</p>
+<h3 id="91-stage-a-registered-particlefeature-parts">9.1 Stage A: registered-particle/feature parts<a class="headerlink" href="#91-stage-a-registered-particlefeature-parts" title="Permanent link">&para;</a></h3>
+<p>Use the normal SIMPLE distributed particle partition and <code>qsys_env</code> scheduling
+pattern. Each worker owns its <code>fromp:top</code> range, applies the same local matcher
+batch loop used in shared memory, and writes ordinary part-local products:</p>
+<ul>
+<li>registered Cartesian particle stack part, retained for reconstruction and
+  later registered-frame workflows;</li>
+<li>a compact graph-feature part;</li>
+<li>particle-index and projection-bin mapping using the established part-file
+  header/version pattern.</li>
+</ul>
+<p>Workers use <code>discrete_read_imgbatch</code>, <code>build%imgbatch</code>, thread-local transform
+workspaces, and standard stack I/O. They do not own a new cache service. The
+master generates the common Cartesian mean-reprojection stack once; workers
+read it as a normal reference stack or receive the same in-process product when
+running locally.</p>
+<h3 id="92-stage-b-graph-edge-parts">9.2 Stage B: graph edge parts<a class="headerlink" href="#92-stage-b-graph-edge-parts" title="Permanent link">&para;</a></h3>
+<p>Assign each graph row to exactly one worker. That worker reads only feature
+parts needed by the angular bins for its rows, computes its nearest neighbors,
+and writes a versioned edge part keyed by global graph row.</p>
+<p>The master must validate:</p>
+<ul>
+<li>every expected row appears exactly once;</li>
+<li>no row is duplicated or omitted;</li>
+<li>all particle indices and projection bins match the feature-part manifest;</li>
+<li>every column index is in range;</li>
+<li>edge distances are finite;</li>
+<li>part headers are mutually compatible.</li>
+</ul>
+<p>The master then symmetrizes, normalizes, and constructs the global CSR graph.
+The sparse eigensolve remains a shared-memory operation on the assembled graph;
+for approximately 100,000 vertices and roughly one to two million entries this
+is the simpler and expected design.</p>
+<h3 id="93-stage-c-reconstruction-parts">9.3 Stage C: reconstruction parts<a class="headerlink" href="#93-stage-c-reconstruction-parts" title="Permanent link">&para;</a></h3>
+<p>After ICM rank selection, distribute particle subsets again. Each worker
+accumulates Hermitian numerator and density parts for a bounded block of
+retained modes and writes versioned reconstruction statistics. The master
+reduces and restores one mode block at a time.</p>
+<p>This stage replaces both current <code>flex_analysis_mstep</code> and
+<code>flex_analysis_estep</code> workers. Proposed private stage names should describe the
+new responsibilities, for example:</p>
+<pre><code class="language-text">flex_analysis_prepare
+flex_analysis_graph
+flex_analysis_reconstruct
+</code></pre>
+<p>The final names should follow existing private-program conventions. The old
+M-step/E-step programs, private-program registrations, APIs, state files, and
+temporary basis-volume protocol must be removed after the new distributed path
+passes equivalence tests. Do not leave dead PCA workers as an undocumented
+fallback.</p>
+<h3 id="94-artifact-lifecycle">9.4 Artifact lifecycle<a class="headerlink" href="#94-artifact-lifecycle" title="Permanent link">&para;</a></h3>
+<p>Any new compact feature/edge/statistics part format requires:</p>
+<ul>
+<li>magic and format version;</li>
+<li>stage and part number;</li>
+<li>particle count and expected global row interval;</li>
+<li>box, sampling, Fourier limits, <code>nspace</code>, symmetry, and mode count;</li>
+<li>source project, registered stack, and mean-reprojection identity;</li>
+<li>write-to-temporary followed by atomic rename.</li>
+</ul>
+<p>Successful stages remove obsolete temporary artifacts. Failed stages preserve
+them and print their paths for diagnosis.
+The registered particle stacks, their project records, and the
+registered-to-raw map are successful-run products and are never classified as
+temporary stage artifacts.</p>
+<h2 id="10-proposed-module-boundaries-and-reuse-map">10. Proposed module boundaries and reuse map<a class="headerlink" href="#10-proposed-module-boundaries-and-reuse-map" title="Permanent link">&para;</a></h2>
+<h3 id="simple_classaverager-simple_classaverager_restore"><code>simple_classaverager</code> / <code>simple_classaverager_restore</code><a class="headerlink" href="#simple_classaverager-simple_classaverager_restore" title="Permanent link">&para;</a></h3>
+<p>Extend the registration utility without changing existing callers:</p>
+<ul>
+<li>retain the current group-based <code>transform_ptcls</code> wrapper;</li>
+<li>add an arbitrary-index registration entry point;</li>
+<li>make both delegate to one implementation of shift, <code>e3</code>, interpolation, CTF,
+  and gridding conventions.</li>
+</ul>
+<p>This layer owns particle-image registration, not diffusion policy.</p>
+<h3 id="simple_projector-and-simple_simple_volinterp"><code>simple_projector</code> and <code>simple_simple_volinterp</code><a class="headerlink" href="#simple_projector-and-simple_simple_volinterp" title="Permanent link">&para;</a></h3>
+<p>Continue to own Cartesian volume projection. Flex may add a narrow batched or
+preallocated entry point only if the existing <code>reproject</code> allocation pattern is
+measured as limiting. Central-section interpolation remains here and is not
+copied into a flex module.</p>
+<h3 id="simple_matcher_ptcl_io-and-simple_matcher_ptcl_batch"><code>simple_matcher_ptcl_io</code> and <code>simple_matcher_ptcl_batch</code><a class="headerlink" href="#simple_matcher_ptcl_io-and-simple_matcher_ptcl_batch" title="Permanent link">&para;</a></h3>
+<p>Continue to own project-aware particle reads, builder batch images, alternate
+particle sources, batch allocation, and thread-local image workspaces. Flex
+should reuse these public helpers or extract a genuinely common Cartesian batch
+helper. It must not create its own stack-reader implementation.</p>
+<h3 id="small-new-simple_flex_diffmap_features-under-srcmainpca">Small new <code>simple_flex_diffmap_features</code> under <code>src/main/pca</code><a class="headerlink" href="#small-new-simple_flex_diffmap_features-under-srcmainpca" title="Permanent link">&para;</a></h3>
+<p>Owns only flex-specific operations that do not already exist:</p>
+<ul>
+<li>mapping registered particles to their cached Cartesian mean reprojection;</li>
+<li>forming the graph residual feature;</li>
+<li>serializing/deserializing compact feature parts;</li>
+<li>feature diagnostics.</li>
+</ul>
+<p>It does not own particle I/O, image registration, projection, distributed
+scheduling, or reconstruction.</p>
+<h3 id="simple_diff_map_graphs"><code>simple_diff_map_graphs</code><a class="headerlink" href="#simple_diff_map_graphs" title="Permanent link">&para;</a></h3>
+<p>Owns:</p>
+<ul>
+<li>gated Euclidean kNN construction;</li>
+<li>top-k retention;</li>
+<li>CSR symmetrization and normalization;</li>
+<li>graph structural diagnostics.</li>
+</ul>
+<p>Keep the existing all-pairs graph builder for small class workflows. Do not
+silently change <code>cls_split</code> or <code>denoise_project</code> behavior as part of this
+refactor.</p>
+<h3 id="simple_diffusion_maps-and-simple_diff_map_denoise"><code>simple_diffusion_maps</code> and <code>simple_diff_map_denoise</code><a class="headerlink" href="#simple_diffusion_maps-and-simple_diff_map_denoise" title="Permanent link">&para;</a></h3>
+<p>Continue to own sparse embedding and ICM spectral selection. Add only narrow
+reusable interfaces required to avoid recomputing the same eigensystem twice.
+In particular, the flex path should obtain coordinates, eigenvalues, and the
+selected rank from one sparse solve rather than calling a rank helper that
+discards coordinates and then solving again.</p>
+<h3 id="new-simple_flex_diffmap_rec3d-under-srcmainpca">New <code>simple_flex_diffmap_rec3D</code> under <code>src/main/pca</code><a class="headerlink" href="#new-simple_flex_diffmap_rec3d-under-srcmainpca" title="Permanent link">&para;</a></h3>
+<p>Owns:</p>
+<ul>
+<li>diffusion-coordinate standardization;</li>
+<li>Hermitian signed residual accumulation;</li>
+<li>mode-block sufficient-statistics I/O;</li>
+<li>final map norms and Hermitian Gram diagnostics;</li>
+<li>deterministic mode signs and output spectral metadata.</li>
+</ul>
+<p>It uses reconstruction domain objects but does not own workflow scheduling.
+The <code>rec3D</code> suffix is intentional: this module converts selected diffusion
+coordinates into Hermitian 3D mode-reconstruction statistics and restored
+volumes. It does not own the generic diffusion embedding or imply that the
+graph machinery itself is specific to 3D data.</p>
+<h3 id="simple_flex_analysis_strategy"><code>simple_flex_analysis_strategy</code><a class="headerlink" href="#simple_flex_analysis_strategy" title="Permanent link">&para;</a></h3>
+<p>Remains the orchestration boundary for the public command. It sequences
+Cartesian reprojection, matcher-style batch registration, graph construction,
+embedding, ICM, reconstruction, and output stages and selects shared or
+distributed execution. It must not contain low-level rotation, graph, or
+gridding kernels.</p>
+<p>The public routine should be renamed from <code>run_flex_analysis_linear</code> to a
+model-neutral name such as <code>run_flex_analysis</code>, with all in-process callers
+updated.</p>
+<h3 id="result-and-trajectory-consumers">Result and trajectory consumers<a class="headerlink" href="#result-and-trajectory-consumers" title="Permanent link">&para;</a></h3>
+<p>The implementation uses the model-neutral <code>flex_embedding_result</code>, containing:</p>
+<ul>
+<li>project particle indices;</li>
+<li>retained standardized coordinates;</li>
+<li>diffusion eigenvalues;</li>
+<li>a method identifier naming diffusion maps.</li>
+</ul>
+<p><code>simple_trajectory_chunker</code> and the <code>trajectory_make_projavgs</code> caller consume
+this model-neutral result. A diffusion eigenvalue is not labeled as explained
+variance.</p>
+<h3 id="commanders-and-private-dispatch">Commanders and private dispatch<a class="headerlink" href="#commanders-and-private-dispatch" title="Permanent link">&para;</a></h3>
+<p><code>simple_commanders_flex_analysis</code> remains orchestration-only. Replace M/E worker
+commanders with prepare/graph/reconstruction worker commanders, then update:</p>
+<ul>
+<li><code>simple_private_exec_api.f90</code>;</li>
+<li><code>production/simple_private_exec_driver.f90</code>;</li>
+<li><code>src/main/exec/simple_exec_denoise.f90</code>;</li>
+<li><code>src/main/ui/simple/simple_ui_denoise.f90</code>;</li>
+<li>private-program tests and generated dispatch surfaces as required.</li>
+</ul>
+<h2 id="11-parameter-policy">11. Parameter policy<a class="headerlink" href="#11-parameter-policy" title="Permanent link">&para;</a></h2>
+<p>Proposed public parameters are:</p>
+<table>
+<thead>
+<tr>
+<th>parameter</th>
+<th>proposed meaning</th>
+<th style="text-align: right;">default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>neigs</code></td>
+<td>maximum diffusion modes requested from the graph eigensolve</td>
+<td style="text-align: right;">20, with no workflow-specific hard maximum</td>
+</tr>
+<tr>
+<td><code>k_nn</code></td>
+<td>retained particle neighbors in sparse graph</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>nang_nbrs</code></td>
+<td>maximum angularly gated candidate particles per particle</td>
+<td style="text-align: right;">100</td>
+</tr>
+<tr>
+<td><code>lp</code></td>
+<td>graph-feature low-pass limit; it does not filter generated volumes</td>
+<td style="text-align: right;">existing flex default</td>
+</tr>
+<tr>
+<td><code>mskdiam</code></td>
+<td>particle/model support used during feature construction</td>
+<td style="text-align: right;">existing project convention</td>
+</tr>
+<tr>
+<td><code>nparts</code>, <code>nthr</code></td>
+<td>execution controls only</td>
+<td style="text-align: right;">existing conventions</td>
+</tr>
+</tbody>
+</table>
+<p><code>nang_nbrs</code> must be added to <code>simple_parameters.f90</code>, initialized through the
+normal parameter defaults, parsed through the typed parameter path, and
+registered as an input of <code>new_flex_analysis</code> in
+<code>src/main/ui/simple/simple_ui_denoise.f90</code>. Its UI default is 100. It
+must not be read ad hoc from <code>cmdline</code> after parameter initialization.</p>
+<p>The first implementation uses the same <code>lp</code> for graph features and Hermitian
+mode reconstruction. It does not introduce a second graph-specific low-pass
+parameter.</p>
+<p>The first implementation should avoid exposing analysis box, feature dimension,
+kernel epsilon, eigensolver tolerance, or mode block size as casual user knobs.
+Derive them from physical support and memory budgets, log the derivation, and
+promote them to typed parameters only if experiments demonstrate a real need.</p>
+<p><code>maxits</code> has no meaning in the diffusion workflow and should be removed from
+the public UI when the replacement becomes production. It must not remain as a
+no-op compatibility parameter.</p>
+<h2 id="12-output-contract">12. Output contract<a class="headerlink" href="#12-output-contract" title="Permanent link">&para;</a></h2>
+<p>No backward compatibility with the PCA output set is required. The replacement
+should produce a small, explicit output set derived from one <code>outvol</code> stem:</p>
+<ul>
+<li><code>&lt;prefix&gt;_mode001.mrc</code> through <code>&lt;prefix&gt;_modeQQQ.mrc</code>, exactly one final 3D
+  map for each ICM-retained diffusion coordinate;</li>
+<li><code>&lt;prefix&gt;_coordinates.txt</code>, one row per active particle;</li>
+<li><code>&lt;prefix&gt;_spectrum.txt</code>, one row per scanned nontrivial diffusion mode;</li>
+<li><code>&lt;prefix&gt;_graph.txt</code>, one compact graph/connectivity summary;</li>
+<li>the normal execution-directory SIMPLE project, updated to reference the
+  preserved registered particle stack or distributed stack parts and the
+  registered-to-raw particle mapping.</li>
+</ul>
+<p>The supplied mean volume is not copied. The command does not write automatic
+<code>mean + a * mode</code> trajectory volumes, duplicate difference volumes, a second
+alias for mode 1, PCA residual volumes, or temporary reprojection volumes as
+successful-run products. A user can form a linear diagnostic trajectory from
+the mean and a mode when needed without multiplying the default volume output
+count by seven.</p>
+<p>The spectral table contains:</p>
+<pre><code class="language-text">MODE  DIFFUSION_EIGENVALUE  ICM_RETAINED  COORDINATE_SD  MAP_FOURIER_NORM
+</code></pre>
+<p>Do not report diffusion eigenvalues as PCA variance fractions or cumulative
+explained variance.</p>
+<p>The coordinate table should include at least:</p>
+<pre><code class="language-text">PROJECT_PARTICLE_INDEX  PROJECTION_BIN  Z1 ... ZQ
+</code></pre>
+<p>Optional diagnostics may include graph degree, distance to the <code>k_nn</code>th
+neighbor, and component identifier. These are preferable to carrying obsolete
+PCA residual-energy fields whose semantics no longer apply.</p>
+<h3 id="121-standard-output">12.1 Standard output<a class="headerlink" href="#121-standard-output" title="Permanent link">&para;</a></h3>
+<p>Only the master process writes normal progress to STDOUT. Use one short startup
+summary, one completion line per major phase, one retained-mode table, and one
+final output summary. The intended shape is:</p>
+<pre><code class="language-text">FLEX_ANALYSIS DIFFUSION MAP
+particles=... projections=... lp=... k_nn=10 nang_nbrs=100 max_modes=20
+[1/6] reprojections and particle registration ... done (... s)
+[2/6] residual features                    ... done (... s)
+[3/6] sparse graph                         ... done (... s)
+      candidates=... nnz=... degree[min/median/max]=... components=...
+[4/6] diffusion embedding and ICM          ... done (... s)
+      scanned=... retained=...
+[5/6] Hermitian 3D reconstruction          ... done (... s)
+      input=phase-flipped transfer=abs(CTF) density=CTF^2
+      mode  eigenvalue  map
+         1  ...         &lt;prefix&gt;_mode001.mrc
+[6/6] outputs                              ... done (... s)
+      project=... coordinates=... spectrum=... graph=...
+</code></pre>
+<p>Do not print per-particle, per-candidate, or per-edge messages. Distributed
+workers write at most one concise part-completion summary during normal
+operation; detailed worker timings belong in benchmark/diagnostic files.
+Warnings must identify an actionable condition such as a capped candidate
+list, isolated vertex, disconnected graph, failed eigensolve, or invalid mode
+reconstruction. Internal temporary filenames are printed only on failure when
+they are intentionally preserved for diagnosis.</p>
+<h2 id="13-work-explicitly-removed">13. Work explicitly removed<a class="headerlink" href="#13-work-explicitly-removed" title="Permanent link">&para;</a></h2>
+<p>Once the replacement is validated, remove:</p>
+<ul>
+<li>iterative latent initialization and orthonormalization;</li>
+<li>alternating M- and E-step loops;</li>
+<li>coupled eigenvolume M-step statistics;</li>
+<li><code>Q(Q+1)/2</code> cross-density arrays and files;</li>
+<li>temporary basis maps passed from M-step to E-step workers;</li>
+<li>E-step per-particle Hermitian solves;</li>
+<li>PCA canonicalization based on the observation metric and latent covariance;</li>
+<li><code>flex_analysis_mstep</code> and <code>flex_analysis_estep</code> private programs;</li>
+<li>PCA-specific tests that have no remaining consumer.</li>
+</ul>
+<p><code>simple_flex_projected_latent_model.f90</code> is currently consumed only by
+<code>flex_analysis</code> and its dedicated test. It can be removed from production once
+the new workflow and tests replace those references. General Hermitian
+reconstruction helpers that are useful to the new path should be moved to the
+nearest reconstruction or flex-diffusion module rather than retaining the
+entire obsolete model.</p>
+<h2 id="14-refactoring-sequence">14. Refactoring sequence<a class="headerlink" href="#14-refactoring-sequence" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-freeze-evidence-and-benchmark">Phase 0: freeze evidence and benchmark<a class="headerlink" href="#phase-0-freeze-evidence-and-benchmark" title="Permanent link">&para;</a></h3>
+<ul>
+<li>preserve the failing current output statistics and representative volume
+  comparisons;</li>
+<li>record wall time, peak RSS, worker count, box, sampling, and particle count;</li>
+<li>define one small synthetic data set and one representative PfCRT-scale run;</li>
+<li>do not optimize before phase timings exist.</li>
+</ul>
+<h3 id="phase-1-registration-and-reprojection-reference-path">Phase 1: registration and reprojection reference path<a class="headerlink" href="#phase-1-registration-and-reprojection-reference-path" title="Permanent link">&para;</a></h3>
+<ul>
+<li>split <code>transform_ptcls</code> into its existing group wrapper and an index-driven
+  Cartesian batch kernel;</li>
+<li>materialize the exact discrete Cartesian mean-reprojection stack through
+  <code>reproject</code>/<code>projector</code>;</li>
+<li>drive particle reads with <code>prepimgbatch</code>, <code>discrete_read_imgbatch</code>,
+  <code>build%imgbatch</code>, and the matcher batch sizing policy;</li>
+<li>produce CTF-consistent registered residuals in real space;</li>
+<li>write persistent registered particle stacks and the registered-to-raw project
+  mapping while each batch is resident;</li>
+<li>compare them against direct on-demand transforms and projections;</li>
+<li>add unit tests for shift sign, <code>e3</code> sign, symmetry, and astigmatic CTF frame.</li>
+</ul>
+<h3 id="phase-2-gated-shared-memory-graph">Phase 2: gated shared-memory graph<a class="headerlink" href="#phase-2-gated-shared-memory-graph" title="Permanent link">&para;</a></h3>
+<ul>
+<li>build direction bins and the symmetry-aware direction-neighbor table;</li>
+<li>implement streamed gated Euclidean top-k selection;</li>
+<li>construct and validate CSR without an all-pairs particle loop;</li>
+<li>compare against brute force on small data using the same angular gate;</li>
+<li>add graph diagnostics and connectivity checks.</li>
+</ul>
+<h3 id="phase-3-diffusion-embedding-and-icm">Phase 3: diffusion embedding and ICM<a class="headerlink" href="#phase-3-diffusion-embedding-and-icm" title="Permanent link">&para;</a></h3>
+<ul>
+<li>run one sparse eigensolve;</li>
+<li>sort nontrivial eigenpairs into the descending spectral order required by the
+  existing ICM prefix selector;</li>
+<li>select at least one retained coordinate with ICM;</li>
+<li>standardize and sign-fix coordinates;</li>
+<li>write graph, spectrum, and coordinate diagnostics before reconstructing any
+  volume;</li>
+<li>validate repeatability across thread counts.</li>
+</ul>
+<h3 id="phase-4-hermitian-mode-reconstruction">Phase 4: Hermitian mode reconstruction<a class="headerlink" href="#phase-4-hermitian-mode-reconstruction" title="Permanent link">&para;</a></h3>
+<ul>
+<li>implement one-mode signed numerator/density accumulation first;</li>
+<li>add the adjoint and synthetic one-mode tests;</li>
+<li>extend to at most 20 modes with memory-budgeted blocks;</li>
+<li>retain the one-to-one pairing between each diffusion coordinate and its 3D
+  map without a post-reconstruction Gram rotation;</li>
+<li>validate map scale, signs, Gram diagnostics, and shared-memory repeatability.</li>
+</ul>
+<h3 id="phase-5-measured-cartesian-optimization">Phase 5: measured Cartesian optimization<a class="headerlink" href="#phase-5-measured-cartesian-optimization" title="Permanent link">&para;</a></h3>
+<ul>
+<li>profile reprojection, particle registration, stack I/O, and feature
+  serialization independently;</li>
+<li>first reuse existing fused image operations and memoized address maps;</li>
+<li>if a new kernel is still required, borrow workspace/memoization templates
+  from mature polar code without introducing a PFTC dependency;</li>
+<li>compare registered images, residuals, distances, edges, and final maps against
+  the phase-1 Cartesian reference before enabling the optimized path.</li>
+</ul>
+<h3 id="phase-6-distributed-execution">Phase 6: distributed execution<a class="headerlink" href="#phase-6-distributed-execution" title="Permanent link">&para;</a></h3>
+<ul>
+<li>use normal <code>qsys_env</code> particle partitions and matcher-style local batch loops;</li>
+<li>write ordinary registered-stack/feature parts with strict versioned metadata;</li>
+<li>add owner-row graph edge workers and strict reduction checks;</li>
+<li>add mode-block reconstruction workers and reduction;</li>
+<li>compare graph edges, diffusion subspaces, coordinates, and maps against the
+  shared path;</li>
+<li>add cleanup and failed-artifact preservation policy.</li>
+</ul>
+<h3 id="phase-7-cutover-and-cleanup">Phase 7: cutover and cleanup<a class="headerlink" href="#phase-7-cutover-and-cleanup" title="Permanent link">&para;</a></h3>
+<ul>
+<li>switch the public <code>flex_analysis</code> command to diffusion maps;</li>
+<li>remove the public <code>maxits</code> input;</li>
+<li>remove PCA M/E workers, formats, APIs, private-program entries, and tests;</li>
+<li>update in-process trajectory consumers to the model-neutral result;</li>
+<li>rewrite <code>flex_analysis_policy.md</code> to describe the implemented diffusion
+  contract and clearly retain forward-facing variance-map/FSC developments;</li>
+<li>regenerate any affected documentation or dispatch products.</li>
+</ul>
+<p>The implementation branch may temporarily contain both paths for comparison,
+but production should not expose a permanent <code>pca_mode</code> switch for this
+command. The purpose of the refactor is to replace the failing machinery, not
+maintain two scientific workflows indefinitely.</p>
+<h2 id="15-validation-matrix">15. Validation matrix<a class="headerlink" href="#15-validation-matrix" title="Permanent link">&para;</a></h2>
+<h3 id="151-registration-and-reprojection-tests">15.1 Registration and reprojection tests<a class="headerlink" href="#151-registration-and-reprojection-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>zero shift and zero <code>e3</code> are identity operations;</li>
+<li>known shifts and in-plane rotations are removed with the existing sign
+  convention;</li>
+<li>arbitrary-index and group-based <code>transform_ptcls</code> agree;</li>
+<li>precomputed and on-demand model reprojections agree;</li>
+<li>raw <code>ctf=yes</code> and phase-flipped <code>ctf=flip</code> preparation of the same synthetic
+  observations produce equivalent Hermitian numerators, <code>CTF^2</code> densities, and
+  restored maps within tolerance;</li>
+<li>the registered project retains particle CTF metadata and advertises
+  phase-flipped stacks as <code>ctf=flip</code>, never <code>ctf=no</code>;</li>
+<li>C1 and nontrivial point-group direction lookup agree with existing symmetry
+  helpers;</li>
+<li>astigmatic CTF orientation is correct after canonical rotation;</li>
+<li>any optimized Cartesian transform agrees with <code>transform_ptcls</code> within the
+  defined tolerance;</li>
+<li>part headers reject altered model, box, sampling, low-pass, symmetry,
+  eulspace, or particle assignment.</li>
+</ul>
+<h3 id="152-graph-tests">15.2 Graph tests<a class="headerlink" href="#152-graph-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>gated graph equals a brute-force gated reference for a small set;</li>
+<li>final neighbor lists contain no self edges, invalid indices, duplicates, or
+  nonfinite distances;</li>
+<li>symmetrization is deterministic;</li>
+<li><code>k_nn</code> and <code>nang_nbrs</code> limits are respected;</li>
+<li>results are stable across thread counts and distributed row partitions;</li>
+<li>graph connectivity and component diagnostics are correct on constructed
+  examples.</li>
+</ul>
+<h3 id="153-diffusion-tests">15.3 Diffusion tests<a class="headerlink" href="#153-diffusion-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>known clustered and continuous synthetic manifolds recover expected
+  nontrivial coordinates up to sign or degenerate-subspace rotation;</li>
+<li>the stationary eigenvector is never emitted as a flex coordinate;</li>
+<li>eigenpairs are supplied to ICM in descending diffusion-eigenvalue order;</li>
+<li>ICM retains the same rank when the same graph is supplied through shared and
+  distributed assembly;</li>
+<li>at least one coordinate is retained;</li>
+<li>coordinate signs and file indices are deterministic outside degenerate
+  eigenspaces, without assigning biological importance to their order.</li>
+</ul>
+<h3 id="154-reconstruction-tests">15.4 Reconstruction tests<a class="headerlink" href="#154-reconstruction-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>projection/backprojection adjoint test with complex Fourier data;</li>
+<li>homogeneous particles produce at least one diagnostic mode but no falsely
+  well-separated diffusion spectrum or strong structural interpretation;</li>
+<li>a simulated one-coordinate deformation recovers the mode and coordinates up
+  to the documented normalization/sign convention;</li>
+<li>two independent simulated modes recover the correct subspace;</li>
+<li>nonzero shifts, nonzero <code>e3</code>, varied defocus, astigmatism, and symmetry are
+  included;</li>
+<li>each reconstructed map remains paired with the diffusion coordinate used in
+  its Hermitian accumulation;</li>
+<li>shared and distributed numerator/density parts reduce to the same maps.</li>
+</ul>
+<h3 id="155-workflow-tests">15.5 Workflow tests<a class="headerlink" href="#155-workflow-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>nparts=1</code> and <code>nparts&gt;1</code> produce equivalent graph spectra and mode
+  subspaces;</li>
+<li>raw and supported alternate particle sources follow their established I/O
+  conventions;</li>
+<li>the registered particle stacks and registered-to-raw map persist after a
+  successful run;</li>
+<li>registered-frame test parameters composed back through the
+  <code>map_params_from_den</code> convention recover the corresponding raw-frame
+  transforms;</li>
+<li>trajectory chunking consumes diffusion coordinates without PCA variance
+  assumptions;</li>
+<li>output maps are visibly distinct when the data contain heterogeneity;</li>
+<li>repeated runs with the same inputs are deterministic within documented
+  eigenspace degeneracy.</li>
+</ul>
+<h2 id="16-performance-measurements-and-acceptance-criteria">16. Performance measurements and acceptance criteria<a class="headerlink" href="#16-performance-measurements-and-acceptance-criteria" title="Permanent link">&para;</a></h2>
+<p>Measure every phase separately:</p>
+<pre><code class="language-text">mean reprojections
+particle read/normalize/register/write
+residual feature construction
+angular candidate traversal
+distance/top-k selection
+CSR assembly/normalization
+sparse eigensolve
+ICM selection
+Hermitian reconstruction per retained mode
+output
+</code></pre>
+<p>Record wall time, CPU time, peak RSS, bytes read/written, candidate comparisons,
+and graph <code>nnz</code> for shared and distributed runs.</p>
+<p>The replacement is accepted only when:</p>
+<ol>
+<li>every particle is read and registered once during particle preparation;</li>
+<li>every discrete Cartesian mean reprojection is generated once;</li>
+<li>comparison/graph construction performs no particle rotation, particle
+   shift, or model reprojection and uses <code>proj</code> only for reference lookup and
+   angular candidate gating;</li>
+<li>graph construction evaluates only angularly permitted candidate pairs and
+   contains no <code>N^2</code> particle loop;</li>
+<li>the final graph has approximately <code>k_nn</code> local support and no unexplained
+   isolated particles;</li>
+<li>only the ICM-retained modes, at most 20, are reconstructed;</li>
+<li>reconstruction storage is <code>O(Q)</code> and contains no coupled <code>Q^2</code> density
+   volumes;</li>
+<li>no alternating PCA iterations or per-particle latent solves remain;</li>
+<li>the Hermitian adjoint and shared/distributed equivalence tests pass;</li>
+<li>synthetic heterogeneous data produce distinct, recoverable modes; a
+    homogeneous control still emits at least one diagnostic mode but does not
+    show a misleadingly separated diffusion spectrum;</li>
+<li>the representative PfCRT-scale run is substantially faster and uses less
+    peak memory than the current iterative PCA workflow;</li>
+<li>output semantics and policy documentation no longer describe diffusion
+    eigenvalues as PCA explained variance.</li>
+</ol>
+<p>No fixed speedup factor should be promised before the phase-0 benchmark is
+captured. The structural expectation is nevertheless strong: the expensive
+registration and reprojection work becomes one-time, graph storage is sparse,
+the eigensolver operates on CSR, and 3D reconstruction is performed once for
+only the selected modes.</p>
+<h2 id="17-forward-facing-items-not-part-of-this-refactor">17. Forward-facing items, not part of this refactor<a class="headerlink" href="#17-forward-facing-items-not-part-of-this-refactor" title="Permanent link">&para;</a></h2>
+<p>The following remain worthwhile but must not delay or silently enter the first
+replacement:</p>
+<ul>
+<li>posterior covariance or probabilistic uncertainty estimates;</li>
+<li>a spatial model-variance or predictive-variance map;</li>
+<li>project-FSC-based, already two-fold cross-validated low-pass filtering of
+  reconstructed modes;</li>
+<li>local/self-tuning diffusion kernels;</li>
+<li>kernel-weighted nonlinear state maps along the diffusion manifold;</li>
+<li>joint pose or shift refinement;</li>
+<li>multi-state mean models;</li>
+<li>accelerator-specific graph or reconstruction kernels.</li>
+</ul>
+<p>The existing policy's forward-facing variance-map note should be retained when
+the policy is rewritten. A deterministic structural variance map derived from
+retained modes must be distinguished from posterior uncertainty.</p>
+<h2 id="18-resolved-implementation-decisions">18. Resolved implementation decisions<a class="headerlink" href="#18-resolved-implementation-decisions" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>nang_nbrs</code> is a public typed UI parameter with an initial default of 100.
+   For the first implementation it is a hard per-particle candidate cap applied
+   after the resolution-derived angular cutoff. Cap-hit statistics are
+   reported so this policy can be revisited with evidence.</li>
+<li>The initial graph metric is the phase-flipped, CTF-matched registered
+   residual described in Section 2.4.</li>
+<li>Graph feature construction and 3D mode reconstruction use the same <code>lp</code>.
+   There is no second graph-specific low-pass parameter.</li>
+<li>Registered Cartesian particle stacks are preserved as project products and
+   reused directly. The project retains a strict registered-to-raw mapping and
+   later registered-frame parameters are composed back to the raw frame using
+   the established <code>denoise_project</code>/<code>map_params_from_den</code> convention.</li>
+<li>The first release does not perform ordered map orthogonalization or a
+   compensating coordinate rotation. It preserves the diffusion coordinates as
+   the continuous low-dimensional state features and reconstructs one paired 3D
+   map per retained coordinate. Descending eigenvalue order is maintained only
+   because the existing ICM selector assumes an ordered spectrum and returns a
+   retained prefix.</li>
+<li>Zero retained modes is not a valid public result. Flex invokes ICM with a
+   minimum rank of one and always emits at least one diagnostic mode.</li>
+<li>The sparse eigensolve is centralized on the master after distributed graph
+   assembly for the initial approximately 100,000-particle target. Workers
+   distribute particle preparation, graph-row comparison, and reconstruction
+   statistics; the master owns the assembled sparse CSR graph and its
+   eigensolve. This avoids adding a distributed eigensolver while the expected
+   one-to-two-million-entry graph fits comfortably in shared memory. Revisit
+   only if measured graph size or eigensolve memory demonstrates a need.</li>
+<li>No PCA-output filename or column compatibility is required. Section 12 is
+   the authoritative minimal output and STDOUT contract; obsolete trajectory,
+   difference, residual, and explained-variance products are removed rather
+   than renamed.</li>
+</ol>
+<p>The review questions are therefore resolved. Implementation starts with the
+phase-0 benchmark and validation data set so the replacement has a measured
+correctness and performance baseline.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

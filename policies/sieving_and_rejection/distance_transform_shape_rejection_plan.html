@@ -1,0 +1,3404 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html">
+      
+      
+        <link rel="prev" href="class_compatibility_policy.html">
+      
+      
+        <link rel="next" href="model_cavgs_rejection.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Distance-Transform Shape Metrics for Class-Average Rejection - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#distance-transform-shape-metrics-for-class-average-rejection" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Distance-Transform Shape Metrics for Class-Average Rejection
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="distance_transform_shape_rejection_plan.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-simple-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current SIMPLE Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-of-the-idea" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review of the Idea
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-direction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Direction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-shape-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed Shape Signature
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposed Shape Signature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mask-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mask Preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distance-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distance Transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#histogram-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histogram Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shape-and-topology-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shape and Topology Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#radial-distance-transform-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Radial Distance-Transform Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-calibrated-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference-Calibrated Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-documentation-and-validation-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Documentation and Validation Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-shape-helper-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Shape Helper Design
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-feature-bank-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Feature-Bank Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-reference-library-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Reference Library Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-diagnostics-and-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Diagnostics and Outputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-optional-stream-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Optional Stream Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-simple-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current SIMPLE Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-of-the-idea" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review of the Idea
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-direction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Direction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-shape-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed Shape Signature
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposed Shape Signature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mask-preparation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mask Preparation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distance-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distance Transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#histogram-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histogram Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shape-and-topology-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shape and Topology Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#radial-distance-transform-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Radial Distance-Transform Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-calibrated-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference-Calibrated Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-documentation-and-validation-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Documentation and Validation Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-shape-helper-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Shape Helper Design
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-feature-bank-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Feature-Bank Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-reference-library-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Reference Library Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-diagnostics-and-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Diagnostics and Outputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-optional-stream-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Optional Stream Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="distance-transform-shape-metrics-for-class-average-rejection">Distance-Transform Shape Metrics for Class-Average Rejection<a class="headerlink" href="#distance-transform-shape-metrics-for-class-average-rejection" title="Permanent link">&para;</a></h1>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>This is a design and implementation-plan note for adding rotationally invariant
+shape evidence to SIMPLE class-average rejection. It does not specify an
+immediate code change.</p>
+<p>The natural integration point is the existing <code>model_cavgs_rejection</code> backend in
+<code>src/main/cavg_quality</code>, not the streaming <code>simple_cluster2D_rejector</code> path. The
+current model backend already owns class-average feature extraction, robust
+normalization, learned feature weights, thresholding, analysis output, learning,
+and promotion.</p>
+<h2 id="current-simple-context">Current SIMPLE Context<a class="headerlink" href="#current-simple-context" title="Permanent link">&para;</a></h2>
+<p><code>model_cavgs_rejection</code> currently extracts a 12-feature bank:</p>
+<ul>
+<li>class population and resolution metadata;</li>
+<li>Otsu foreground centering and connected-component geometry;</li>
+<li>foreground/background local variance;</li>
+<li>optional stored class score evidence;</li>
+<li>center/edge signal and presence evidence;</li>
+<li>medium-frequency interior/boundary texture evidence.</li>
+</ul>
+<p>The existing foreground path already performs the most important preprocessing
+for distance-transform shape features:</p>
+<ul>
+<li>low-pass filter the class average;</li>
+<li>zero the edge average;</li>
+<li>threshold with Otsu;</li>
+<li>identify connected components;</li>
+<li>discard image-spanning components;</li>
+<li>keep the main foreground component;</li>
+<li>measure centroid displacement and foreground area relative to the expected
+  mask disc.</li>
+</ul>
+<p>That means the distance-transform proposal should reuse the current segmentation
+path rather than introduce a parallel thresholding policy.</p>
+<p>Relevant implementation anchors:</p>
+<ul>
+<li><code>src/main/cavg_quality/simple_cavg_quality_feats.f90</code>: feature definitions,
+  current foreground segmentation, hard rejects, and normalization.</li>
+<li><code>src/main/cavg_quality/simple_cavg_quality_types.f90</code>: fixed feature count and
+  shared model/result types.</li>
+<li><code>src/main/cavg_quality/simple_cavg_quality_model.f90</code>: built-in models, model
+  file I/O, feature weights, scoring, clustering, and thresholding.</li>
+<li><code>src/main/cavg_quality/simple_cavg_quality_analysis.f90</code>: feature tables,
+  analysis report, feature AUC, and threshold scans.</li>
+<li><code>src/main/cavg_quality/simple_cavg_quality_learn.f90</code>: feature-policy search
+  and learned-model generation.</li>
+<li><code>src/main/image/simple_image_bin.f90</code>: connected components, binary
+  morphology, border masks, and hole/background helpers.</li>
+<li><code>src/main/commanders/simple/simple_commanders_reproject.f90</code> and
+  <code>src/main/volume/simple_volinterp.f90</code>: existing volume reprojection path for
+  building reference projection stacks.</li>
+</ul>
+<h2 id="review-of-the-idea">Review of the Idea<a class="headerlink" href="#review-of-the-idea" title="Permanent link">&para;</a></h2>
+<p>A binary foreground mask from a high-SNR 2D class
+average is often stable enough to support shape descriptors, and the interior
+distance transform is a useful way to summarize thickness, support, and gross
+geometry without in-plane alignment.</p>
+<p>The distance-transform histogram is the best first descriptor. If the binary
+mask is rotated without changing its foreground support, the count of pixels at
+each distance from the boundary is unchanged except for pixel-grid and
+interpolation effects. This makes the histogram naturally invariant to in-plane
+rotation and translation. Normalizing distances by the mask radius, expected
+molecular diameter, or pixel size also makes it robust to box-size and sampling
+differences.</p>
+<p>The proposed complementary metrics are also appropriate:</p>
+<ul>
+<li>PCA eigenvalue ratio captures elongation without depending on orientation.</li>
+<li>Compactness or circularity captures ragged boundaries and aggregates.</li>
+<li>Hole count or hole area captures simple 2D topology.</li>
+<li>Distance-transform moments and quantiles summarize thickness distribution.</li>
+</ul>
+<p>There are several important caveats:</p>
+<ul>
+<li>A distance-transform histogram is not a unique fingerprint. Different shapes
+  can share similar thickness distributions, so it should be treated as evidence
+  rather than as a standalone identity test.</li>
+<li>The histogram alone does not encode topology. Holes, component count, and
+  foreground/background connectivity should be measured separately.</li>
+<li>A min/max envelope over reference projections is usually too permissive and
+  too sensitive to outlier projections. Robust percentiles, nearest-reference
+  distances, or a low-dimensional reference distribution are safer.</li>
+<li>The proposed reference-generation workflow is not reference-free. It is a
+  reference-calibrated geometric filter. SIMPLE can still support a
+  reference-free shape feature family, but projection-library rejection is a
+  separate mode.</li>
+<li>The current learned model assumes feature weights are non-negative and that
+  larger normalized values mean better class averages. Raw descriptors like
+  aspect ratio or maximum thickness are not universally "higher is better".
+  They must either be converted into quality-oriented scores or kept out of
+  default models until reference calibration or manual learning validates them.</li>
+<li>Segmentation is the largest practical failure mode. The feature should inherit
+  the existing low-pass/Otsu/connected-component path and expose diagnostics
+  before it becomes a hard rejection criterion.</li>
+</ul>
+<h2 id="recommended-direction">Recommended Direction<a class="headerlink" href="#recommended-direction" title="Permanent link">&para;</a></h2>
+<p>Implement this in two stages.</p>
+<p>Stage 1 should add reference-free shape descriptors as diagnostics and an
+optional <code>shape</code> evidence family in <code>model_cavgs_rejection</code>. The default built-in
+models should keep zero weight on new shape features until manual
+<code>quality_mode=analyze</code> runs show that the new family improves false-positive or
+false-negative behavior.</p>
+<p>Stage 2 should add a reference-calibrated shape score. Users can generate
+reference projections with the existing <code>reproject</code> program, then pass the
+projection stack to <code>model_cavgs_rejection</code>. The rejection backend can compute
+the same distance-transform signatures for reference projections and class
+averages, then add one or more "closeness to reference envelope" scalar features.</p>
+<p>Do not wire this into the live microchunk stream rejector first. The stream path
+has stricter lifecycle and particle-state propagation requirements. The safer
+path is to validate shape evidence through <code>quality_mode=analyze</code>, learn a model,
+promote a built-in only after validation, and then consider stream integration.</p>
+<h2 id="proposed-shape-signature">Proposed Shape Signature<a class="headerlink" href="#proposed-shape-signature" title="Permanent link">&para;</a></h2>
+<h3 id="mask-preparation">Mask Preparation<a class="headerlink" href="#mask-preparation" title="Permanent link">&para;</a></h3>
+<p>For each class average or reference projection:</p>
+<ol>
+<li>Copy the image into a binary-image work object.</li>
+<li>Zero the edge average.</li>
+<li>Low-pass filter with the same foreground segmentation cutoff currently used
+   by <code>model_cavgs_rejection</code>.</li>
+<li>Apply Otsu thresholding.</li>
+<li>Identify connected components.</li>
+<li>Remove invalid full-image or image-spanning components.</li>
+<li>Keep the largest valid foreground component.</li>
+<li>Optionally fill small internal holes for thickness descriptors, while also
+   retaining hole metrics from the unfilled mask.</li>
+</ol>
+<p>This should be a shared helper used by both the existing foreground geometry
+features and the new shape features, so future segmentation changes remain
+consistent.</p>
+<h3 id="distance-transform">Distance Transform<a class="headerlink" href="#distance-transform" title="Permanent link">&para;</a></h3>
+<p>Compute the 2D Euclidean distance transform of the foreground mask: each
+foreground pixel receives its distance to the nearest background pixel.
+Background pixels are zero.</p>
+<p>Prefer an exact separable squared Euclidean distance transform over a naive
+all-pairs search or a chamfer approximation. Class-average boxes are modest, but
+the feature may run over many class averages and many reference projections.</p>
+<p>Distances should be represented in pixels internally, then normalized for
+features by one of:</p>
+<ul>
+<li>expected mask radius in pixels;</li>
+<li><code>mskdiam / smpd</code>;</li>
+<li>foreground equivalent-disc radius;</li>
+<li>explicit reference-stack scale when using calibrated mode.</li>
+</ul>
+<h3 id="histogram-features">Histogram Features<a class="headerlink" href="#histogram-features" title="Permanent link">&para;</a></h3>
+<p>Build a normalized distance-transform histogram over foreground pixels only.
+Use a fixed number of bins and fixed normalized distance bounds so class averages
+and reference projections are comparable.</p>
+<p>Useful scalar summaries:</p>
+<ul>
+<li>normalized maximum distance, the approximate inradius of the thickest support;</li>
+<li>normalized mean and median distance;</li>
+<li>upper quantiles of distance, such as 75th and 90th percentiles;</li>
+<li>entropy of the distance histogram;</li>
+<li>coefficient of variation of nonzero distances;</li>
+<li>foreground area fraction relative to the expected mask disc.</li>
+</ul>
+<p>The full histogram should be available to the reference-calibrated score, but
+the learned quality model should consume a compact set of scalar scores unless a
+deliberate high-dimensional feature-bank version is introduced.</p>
+<h3 id="shape-and-topology-features">Shape and Topology Features<a class="headerlink" href="#shape-and-topology-features" title="Permanent link">&para;</a></h3>
+<p>Add compact scalar descriptors alongside the distance-transform histogram:</p>
+<ul>
+<li>PCA aspect ratio from foreground pixel coordinates.</li>
+<li>Compactness, for example <code>4*pi*area/perimeter^2</code>.</li>
+<li>Boundary density or perimeter normalized by foreground area.</li>
+<li>Hole count and hole-area fraction, derived from connected components in the
+  background.</li>
+<li>Number of foreground components before largest-component reduction.</li>
+</ul>
+<p>Care is needed with directionality. Compactness can be "higher is better" for
+many junk-rejection cases, but aspect ratio and thickness are often
+particle-dependent. For reference-free learned models, prefer either diagnostic
+output or quality-oriented transforms such as "typicality relative to the
+dataset" rather than raw values that may be good for one target and bad for
+another.</p>
+<h3 id="radial-distance-transform-profile">Radial Distance-Transform Profile<a class="headerlink" href="#radial-distance-transform-profile" title="Permanent link">&para;</a></h3>
+<p>The centroid-based radial profile should be optional. It is useful for roughly
+centered, symmetric, spherical, or toroidal targets, but less generally robust
+for flexible, elongated, or strongly view-dependent particles. It should not be
+part of the default shape family unless validation shows it helps.</p>
+<h2 id="reference-calibrated-mode">Reference-Calibrated Mode<a class="headerlink" href="#reference-calibrated-mode" title="Permanent link">&para;</a></h2>
+<p>Reference-calibrated rejection should compare each class average against a
+library of projected reference signatures.</p>
+<p>Reference-library generation can reuse the existing <code>reproject</code> command rather
+than projecting volumes inside <code>model_cavgs_rejection</code> at first. A user would
+produce a stack of model projections over a sufficiently dense angular grid,
+using the appropriate symmetry, mask diameter, sampling distance, contrast, and
+box size. The rejection backend would then read that stack and compute the same
+shape signatures.</p>
+<p>Recommended comparison strategy:</p>
+<ul>
+<li>Compute a normalized distance-transform histogram for every reference
+  projection.</li>
+<li>Compute PCA aspect ratio, compactness, area fraction, and topology metrics for
+  every reference projection.</li>
+<li>For each class average, compute the nearest or low-percentile distance to the
+  reference library rather than applying independent min/max bounds to every
+  feature.</li>
+<li>Use robust reference statistics: median, MAD, percentile envelopes, or
+  nearest-reference distances.</li>
+<li>Convert distances into quality-oriented scalar features, for example
+  <code>shape_ref_score = -robust_z(distance_to_reference_library)</code>, so larger values
+  mean closer to expected model geometry.</li>
+</ul>
+<p>Good histogram distances for this use case:</p>
+<ul>
+<li>1D Wasserstein distance, implemented as the sum of absolute cumulative
+  histogram differences.</li>
+<li>Chi-squared distance with a small epsilon for empty bins.</li>
+<li>Hellinger or Jensen-Shannon distance, already conceptually aligned with
+  normalized histograms.</li>
+</ul>
+<p>For shape vectors, avoid raw min/max gates as the primary decision. A
+Mahalanobis distance in a low-dimensional descriptor space, a robust nearest
+neighbor distance, or a percentile envelope over the final scalar distance is
+preferable.</p>
+<h2 id="implementation-plan">Implementation Plan<a class="headerlink" href="#implementation-plan" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-documentation-and-validation-targets">Phase 0: Documentation and Validation Targets<a class="headerlink" href="#phase-0-documentation-and-validation-targets" title="Permanent link">&para;</a></h3>
+<p>Define the exact descriptors, feature names, output tables, and validation
+criteria before code changes.</p>
+<p>Acceptance criteria for this phase:</p>
+<ul>
+<li>clear distinction between reference-free shape descriptors and
+  reference-calibrated shape scores;</li>
+<li>agreement that shape evidence starts as analysis/learn evidence, not as a hard
+  reject;</li>
+<li>decision on whether initial reference support accepts a projection stack only
+  or also accepts a volume directly;</li>
+<li>expected output files and analysis columns named.</li>
+</ul>
+<h3 id="phase-1-shape-helper-design">Phase 1: Shape Helper Design<a class="headerlink" href="#phase-1-shape-helper-design" title="Permanent link">&para;</a></h3>
+<p>Introduce a small shape-analysis helper owned by <code>src/main/cavg_quality</code>.</p>
+<p>Planned responsibilities:</p>
+<ul>
+<li>build or receive the cleaned foreground mask;</li>
+<li>compute foreground area, centroid, component count, and hole metrics;</li>
+<li>compute the exact 2D Euclidean distance transform;</li>
+<li>build a normalized distance-transform histogram;</li>
+<li>compute scalar shape descriptors;</li>
+<li>expose reference-library comparison helpers.</li>
+</ul>
+<p>Keeping this helper under <code>src/main/cavg_quality</code> is lower risk than adding a
+general image API immediately. If other subsystems later need distance
+transforms, the helper can be promoted into <code>src/main/image</code>.</p>
+<h3 id="phase-2-feature-bank-integration">Phase 2: Feature-Bank Integration<a class="headerlink" href="#phase-2-feature-bank-integration" title="Permanent link">&para;</a></h3>
+<p>Add a <code>shape</code> evidence family to the quality feature bank.</p>
+<p>Required updates:</p>
+<ul>
+<li>increase the feature count in <code>simple_cavg_quality_types.f90</code>;</li>
+<li>add feature indices and definitions in <code>simple_cavg_quality_feats.f90</code>;</li>
+<li>compute shape features from the cleaned foreground mask;</li>
+<li>update built-in weight arrays in <code>simple_cavg_quality_model.f90</code>;</li>
+<li>preserve existing built-in behavior by assigning zero shape weights to current
+  defaults;</li>
+<li>bump model-file and analysis-table versions;</li>
+<li>support reading older model files by padding missing new weights with zero, or
+  explicitly require retraining for shape-aware models;</li>
+<li>update <code>simple_cavg_quality_analysis.f90</code> so raw and normalized shape columns
+  appear in analysis and feature tables;</li>
+<li>update <code>simple_cavg_quality_learn.f90</code> so feature-policy search can include
+  shape-aware policies.</li>
+</ul>
+<p>Feature-policy options should stay small. A reasonable first set is:</p>
+<ul>
+<li>current policies unchanged;</li>
+<li><code>microchunk_plus_shape</code>;</li>
+<li><code>microchunk_plus_score_shape</code>;</li>
+<li><code>microchunk_plus_score_signal_shape</code>.</li>
+</ul>
+<p>The default model should not silently start rejecting more classes because shape
+features exist. Shape-aware rejection should require a learned model, a promoted
+model, or an explicit reference-calibrated score.</p>
+<h3 id="phase-3-reference-library-support">Phase 3: Reference Library Support<a class="headerlink" href="#phase-3-reference-library-support" title="Permanent link">&para;</a></h3>
+<p>Add optional reference-stack support to <code>model_cavgs_rejection</code>.</p>
+<p>Recommended first interface:</p>
+<ul>
+<li>user supplies a reference projection stack;</li>
+<li>backend computes reference shape signatures at apply/analyze time;</li>
+<li>backend emits a reference summary file;</li>
+<li>backend adds a scalar reference-closeness feature to the shape family.</li>
+</ul>
+<p>Possible future interface:</p>
+<ul>
+<li>user supplies <code>vol1</code>, <code>nspace</code>, <code>pgrp</code>, and <code>mskdiam</code>;</li>
+<li>backend invokes or reuses the existing reprojection machinery internally.</li>
+</ul>
+<p>The projection-stack interface is preferable for the first implementation
+because it keeps volume projection, contrast handling, masking, and orientation
+sampling outside the rejection backend.</p>
+<h3 id="phase-4-diagnostics-and-outputs">Phase 4: Diagnostics and Outputs<a class="headerlink" href="#phase-4-diagnostics-and-outputs" title="Permanent link">&para;</a></h3>
+<p>Analysis output should make shape behavior inspectable.</p>
+<p>Recommended outputs:</p>
+<ul>
+<li>raw and normalized shape columns in the main analysis table;</li>
+<li>per-feature AUC, robust separation, current weight, and suggested weight, as
+  already done for current features;</li>
+<li>optional <code>cavgs_shape_reference_summary.txt</code> with reference-library
+  descriptor distributions, histogram-distance percentiles, and outlier counts;</li>
+<li>optional <code>cavgs_shape_features.txt</code> if the shape signature contains more detail
+  than the compact model feature columns can show;</li>
+<li>selected/rejected stacks unchanged.</li>
+</ul>
+<p>The report should explicitly distinguish:</p>
+<ul>
+<li>hard rejects caused by existing validity gates;</li>
+<li>soft rejects from the learned model;</li>
+<li>classes whose shape score is outside the reference envelope;</li>
+<li>classes where segmentation failed or produced degenerate shape descriptors.</li>
+</ul>
+<h3 id="phase-5-validation">Phase 5: Validation<a class="headerlink" href="#phase-5-validation" title="Permanent link">&para;</a></h3>
+<p>Validation should happen before any shape-aware built-in model is promoted.</p>
+<p>Synthetic tests:</p>
+<ul>
+<li>small binary masks with known distance-transform values;</li>
+<li>discs, rectangles, rings, and two-component masks;</li>
+<li>invariance under 90-degree rotations and approximate stability under
+  interpolated in-plane rotations;</li>
+<li>compactness and aspect-ratio sanity checks.</li>
+</ul>
+<p>Reference-projection tests:</p>
+<ul>
+<li>use SIMPLE's existing <code>reproject</code> path to generate projections of a known
+  volume;</li>
+<li>verify that projected references fall inside their own reference distribution;</li>
+<li>verify that obvious synthetic junk masks fall outside;</li>
+<li>test contrast and mask-radius sensitivity.</li>
+</ul>
+<p>Manual-data validation:</p>
+<ul>
+<li>run <code>quality_mode=analyze</code> on existing manually selected projects;</li>
+<li>compare current defaults against shape-aware learned candidates;</li>
+<li>inspect false positives and false negatives with selected/rejected stacks;</li>
+<li>check whether shape evidence removes junk aggregates without rejecting
+  legitimate rare projections;</li>
+<li>compare chunk and pool contexts separately.</li>
+</ul>
+<p>Promotion criteria:</p>
+<ul>
+<li>shape-aware model improves balanced accuracy or false-positive rejection on
+  multiple datasets;</li>
+<li>manually good hard rejects do not increase;</li>
+<li>gains survive leave-one-dataset-out diagnostics;</li>
+<li>behavior remains stable when no reference stack is supplied.</li>
+</ul>
+<h3 id="phase-6-optional-stream-integration">Phase 6: Optional Stream Integration<a class="headerlink" href="#phase-6-optional-stream-integration" title="Permanent link">&para;</a></h3>
+<p>Only after batch/analyze validation should stream integration be considered.</p>
+<p>The stream path currently uses <code>simple_cluster2D_rejector</code> directly. A future
+stream integration should decide whether to:</p>
+<ul>
+<li>replace the scalar rejector with <code>model_cavgs_rejection</code> decisions;</li>
+<li>call only the shape helper as an extra scalar rule;</li>
+<li>keep the existing stream rejector unchanged and reserve shape evidence for
+  batch/pool cleanup.</li>
+</ul>
+<p>This decision should account for stream sentinels, chunk lifecycle, selected and
+rejected stack writing, particle-state propagation, and retry behavior.</p>
+<h2 id="open-questions">Open Questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Should the first implementation expose only a reference projection stack, or
+  should it also accept a volume and generate projections internally?</li>
+<li>What distance normalization is most stable across projects: mask radius,
+  equivalent-disc radius, or <code>mskdiam / smpd</code>?</li>
+<li>Should aspect ratio be a diagnostic-only descriptor unless a reference model is
+  present?</li>
+<li>How should multi-state references be represented: one combined projection
+  library, state-specific libraries, or best score over all states?</li>
+<li>How much hole filling should be applied before the distance transform, and
+  should hole metrics be computed before or after cleanup?</li>
+<li>Should shape features be unavailable when the foreground mask area is too small
+  but not already hard rejected?</li>
+<li>Are there target classes where compactness penalizes true projections, such as
+  elongated complexes, filaments, or membrane-associated particles?</li>
+</ul>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>Distance-transform shape evidence is worth pursuing for SIMPLE, but it should be
+introduced as a measured extension of the existing class-average quality model.
+The safest path is to reuse the current segmentation machinery, add
+rotation-invariant shape diagnostics, validate them through <code>quality_mode=analyze</code>
+and <code>quality_mode=learn</code>, then add reference-calibrated scoring using projection
+stacks generated by the existing reprojection workflow.</p>
+<p>The most important design rule is to avoid turning raw geometric descriptors
+into hard rejection gates too early. Shape should first become inspectable,
+learnable evidence; only validated reference-calibrated distances should become
+strong rejection signals.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

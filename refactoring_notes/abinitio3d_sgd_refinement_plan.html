@@ -1,0 +1,4252 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/abinitio3d_sgd_refinement_plan.html">
+      
+      
+        <link rel="prev" href="../policies/sieving_and_rejection/ptcl_sieve_policy.html">
+      
+      
+        <link rel="next" href="cavg_gabor_feature_expansion_plan.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Abinitio3D SGD Refinement Implementation Plan - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#abinitio3d-sgd-refinement-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Abinitio3D SGD Refinement Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-machinery-to-preserve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Machinery To Preserve
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current Machinery To Preserve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#existing-stochastic-update-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing stochastic update flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existing-numerical-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing numerical kernels
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-design-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Design Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-facing-parameter-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User-Facing Parameter Surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ownership-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ownership Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#particle-domain-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle-domain update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-domain-sgd-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume-domain SGD update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numerical-reconstruction-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical reconstruction kernels
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-new-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed New Module
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refactor-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refactor Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Refactor Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-documentation-and-compile-time-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Documentation and compile-time guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-parameter-plumbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Parameter plumbing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-optimizer-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Optimizer helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-split-map-blending-from-trailing-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Split map blending from trailing reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-implement-mvp-sgd-update-in-volassemble" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Implement MVP SGD update in volassemble
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-learning-rate-schedules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Learning-rate schedules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-optional-momentum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Optional momentum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-8-softtop-k-stochastic-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 8: Soft/top-K stochastic gradient
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-9-continuous-pose-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 9: Continuous pose refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detailed-data-flow-for-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detailed Data Flow For MVP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detailed Data Flow For MVP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before matcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#during-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        During matcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#during-volassemble" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        During volassemble
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-iteration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next iteration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compatibility Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sgdno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=no
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-sgd_eta1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, sgd_eta=1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-sgd_etarealized_update_frac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, sgd_eta=realized_update_frac
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-update_frac1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, update_frac=1
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests And Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tests And Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unit-level-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit-level tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scientific-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scientific diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Risks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confusing-sampling-and-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confusing sampling and optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breaking-trailing-reconstruction-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking trailing reconstruction behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#overfitting-mini-batch-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overfitting mini-batch noise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#introducing-hidden-optimizer-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introducing hidden optimizer state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disrupting-polar-matching-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disrupting polar matching performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-milestone-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Milestone Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initial-mvp-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initial MVP Definition
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-machinery-to-preserve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Machinery To Preserve
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current Machinery To Preserve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#existing-stochastic-update-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing stochastic update flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existing-numerical-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing numerical kernels
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-design-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Design Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-facing-parameter-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User-Facing Parameter Surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ownership-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ownership Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#particle-domain-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle-domain update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#volume-domain-sgd-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volume-domain SGD update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numerical-reconstruction-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical reconstruction kernels
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-new-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed New Module
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refactor-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refactor Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Refactor Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-documentation-and-compile-time-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Documentation and compile-time guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-parameter-plumbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Parameter plumbing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-optimizer-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Optimizer helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-split-map-blending-from-trailing-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Split map blending from trailing reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-implement-mvp-sgd-update-in-volassemble" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Implement MVP SGD update in volassemble
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-learning-rate-schedules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Learning-rate schedules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-optional-momentum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Optional momentum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-8-softtop-k-stochastic-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 8: Soft/top-K stochastic gradient
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-9-continuous-pose-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 9: Continuous pose refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detailed-data-flow-for-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detailed Data Flow For MVP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detailed Data Flow For MVP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before matcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#during-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        During matcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#during-volassemble" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        During volassemble
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-iteration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next iteration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compatibility Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sgdno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=no
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-sgd_eta1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, sgd_eta=1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-sgd_etarealized_update_frac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, sgd_eta=realized_update_frac
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sgdyes-update_frac1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sgd=yes, update_frac=1
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests And Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tests And Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unit-level-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit-level tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scientific-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scientific diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Risks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confusing-sampling-and-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confusing sampling and optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breaking-trailing-reconstruction-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking trailing reconstruction behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#overfitting-mini-batch-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overfitting mini-batch noise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#introducing-hidden-optimizer-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introducing hidden optimizer state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disrupting-polar-matching-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disrupting polar matching performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-milestone-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Milestone Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initial-mvp-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initial MVP Definition
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="abinitio3d-sgd-refinement-implementation-plan">Abinitio3D SGD Refinement Implementation Plan<a class="headerlink" href="#abinitio3d-sgd-refinement-implementation-plan" title="Permanent link">&para;</a></h1>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>This note describes how to turn SIMPLE's existing <code>abinitio3D</code>
+importance-sampled fractional-update machinery into explicit stochastic
+gradient descent machinery while preserving the two implementation assets that
+matter most:</p>
+<ul>
+<li>Kaiser-Bessel convolution interpolation for Fourier-domain reconstruction and
+  reprojection</li>
+<li>fast polar Fourier matching for particle-domain pose, shift, state, and
+  candidate assignment</li>
+</ul>
+<p>The current <code>abinitio3D</code> pipeline already has robust stochastic data flow:
+stage-wise <code>update_frac</code>, <code>sampled</code> and <code>updatecnt</code> bookkeeping,
+probabilistic pre-alignment, exact subset reproduction, online partial
+reconstruction, and trailing reconstruction. That is not the missing piece.</p>
+<p>The missing piece is an explicit optimizer contract:</p>
+<ul>
+<li>define the stochastic objective being optimized</li>
+<li>expose the mini-batch reconstruction as a stochastic normal-equation update</li>
+<li>separate particle sampling fraction from optimizer learning rate</li>
+<li>add optimizer state, learning-rate schedules, optional momentum, and
+  diagnostics</li>
+<li>keep pose updates initially as stochastic latent-variable assignment through
+  the existing polar matcher</li>
+</ul>
+<p>The first implementation target is therefore a native SIMPLE
+preconditioned-SGD volume optimizer, not an external autodiff engine and not a
+replacement for the matcher.</p>
+<h2 id="current-machinery-to-preserve">Current Machinery To Preserve<a class="headerlink" href="#current-machinery-to-preserve" title="Permanent link">&para;</a></h2>
+<h3 id="existing-stochastic-update-flow">Existing stochastic update flow<a class="headerlink" href="#existing-stochastic-update-flow" title="Permanent link">&para;</a></h3>
+<p>The current <code>abinitio3D</code> workflow already provides the stochastic outer loop:</p>
+<ol>
+<li><code>simple_commanders_abinitio.f90</code> derives the stage/run particle target from
+   <code>nsample</code>, <code>nstates</code>, selected particles, and <code>UPDATE_FRAC_MAX</code>.</li>
+<li><code>simple_abinitio_controller.f90</code> emits per-stage <code>refine3D</code> command lines,
+   including <code>update_frac</code>, <code>fillin</code>, <code>frac_best</code>, <code>balance</code>, <code>trail_rec</code>, and
+   the active search mode.</li>
+<li><code>simple_matcher_smpl_and_lplims.f90</code> chooses the active particle subset.</li>
+<li><code>simple_oris_sampling.f90</code> records the subset through <code>sampled</code> and
+   <code>updatecnt</code>.</li>
+<li><code>simple_commanders_prob.f90</code> samples once in <code>prob_align</code> and downstream
+   <code>prob_tab</code>/<code>refine3D_exec</code> reproduce the exact same subset.</li>
+<li><code>simple_strategy3D_matcher.f90</code> updates orientations/states/shifts and
+   writes partition-local current partial reconstructions.</li>
+<li><code>simple_commanders_rec_distr.f90</code> reduces partials, restores even/odd
+   volumes, computes FSCs, postprocesses, and applies trailing reconstruction.</li>
+</ol>
+<p>This flow should remain intact.</p>
+<h3 id="existing-numerical-kernels">Existing numerical kernels<a class="headerlink" href="#existing-numerical-kernels" title="Permanent link">&para;</a></h3>
+<p>The first SGD implementation must continue to use:</p>
+<ul>
+<li><code>simple_reconstructor.f90</code></li>
+<li><code>insert_plane_oversamp_opt</code></li>
+<li><code>rho</code> / <code>rho_exp</code></li>
+<li><code>sampl_dens_correct</code></li>
+<li>Kaiser-Bessel windowing through <code>simple_kbinterpol</code></li>
+<li><code>simple_reconstructor_eo.f90</code></li>
+<li>even/odd reconstruction composition</li>
+<li>FSC and sampling-density correction</li>
+<li>previous half-map/rho compatibility</li>
+<li><code>simple_polarft_calc</code> and related <code>pftc</code> modules</li>
+<li>polar reference storage</li>
+<li>memoized objective evaluation</li>
+<li>fast in-plane and shift search</li>
+<li>existing analytic shift gradients</li>
+<li><code>simple_matcher_refvol_utils.f90</code></li>
+<li>materialization of even/odd reprojection model files</li>
+<li>active polar range handoff through reprojection model headers</li>
+</ul>
+<h2 id="mathematical-contract">Mathematical Contract<a class="headerlink" href="#mathematical-contract" title="Permanent link">&para;</a></h2>
+<p>For a mini-batch <code>B</code> and current assigned or sampled latent variables
+<code>theta_i</code>, <code>shift_i</code>, and <code>state_i</code>, define the batch objective:</p>
+<pre><code class="language-text">L_B(V) = 1/2 sum_{i in B} || A_i V - y_i ||^2 / sigma_i^2 + R(V)
+</code></pre>
+<p>where:</p>
+<ul>
+<li><code>V</code> is a state half-map in Fourier/volume representation</li>
+<li><code>A_i</code> is the current projection, CTF, shift, symmetry, and interpolation
+  operator for particle <code>i</code></li>
+<li><code>y_i</code> is the particle image</li>
+<li><code>sigma_i^2</code> is the noise model used by the Euclidean objective</li>
+<li><code>R(V)</code> represents optional regularization terms already expressed through
+  ML regularization, FSC-derived priors, or nonuniform filtering policy</li>
+</ul>
+<p>The current KB reconstruction path already computes the batch normal-equation
+terms:</p>
+<pre><code class="language-text">b_B   = A_B^* y_B
+rho_B ~= diag(A_B^* A_B)
+V_B   = rho_B^{-1} b_B
+</code></pre>
+<p>The preconditioned stochastic gradient is:</p>
+<pre><code class="language-text">g_B(V_t) = rho_B V_t - b_B
+</code></pre>
+<p>A diagonal-preconditioned SGD step is:</p>
+<pre><code class="language-text">V_{t+1} = V_t - eta_t rho_B^{-1} g_B(V_t)
+        = V_t + eta_t (V_B - V_t)
+</code></pre>
+<p>This is the key implementation bridge. The current partial reconstruction plus
+sampling-density correction already produces <code>V_B</code>. Current trailing
+reconstruction resembles the final line, but uses the realized update fraction
+as a blending factor. To make the machinery bona fide SGD, the blend weight
+must become an optimizer learning rate <code>eta_t</code>, distinct from <code>update_frac</code>.</p>
+<h2 id="core-design-decision">Core Design Decision<a class="headerlink" href="#core-design-decision" title="Permanent link">&para;</a></h2>
+<p>Keep two quantities separate:</p>
+<pre><code class="language-text">update_frac  = which particles are sampled
+sgd_eta      = how far the map moves toward the mini-batch target
+</code></pre>
+<p>The nominal or realized update fraction is sampling policy. It must remain
+owned by the existing ab initio/refine machinery.</p>
+<p>The learning rate is optimizer policy. It should be owned by a small
+volume-domain SGD optimizer object or by explicit strategy/assembly state.</p>
+<h2 id="user-facing-parameter-surface">User-Facing Parameter Surface<a class="headerlink" href="#user-facing-parameter-surface" title="Permanent link">&para;</a></h2>
+<p>Every new command-line key must have a typed field in <code>simple_parameters</code>.</p>
+<p>Proposed initial parameters:</p>
+<pre><code class="language-text">sgd               yes/no       default no
+sgd_eta           real         default 0.2
+sgd_eta_min       real         default 0.02
+sgd_eta_decay     const/cos/inv_sqrt/stage
+sgd_momentum      real         default 0.0
+sgd_precond       batch/running/shell
+sgd_pose_mode     assign/sample/soft/local
+sgd_diag          yes/no       default yes
+</code></pre>
+<p>Recommended MVP subset:</p>
+<pre><code class="language-text">sgd               yes/no
+sgd_eta           real
+sgd_eta_decay     const/cos/inv_sqrt
+sgd_diag          yes/no
+</code></pre>
+<p>Do not overload:</p>
+<ul>
+<li><code>update_frac</code></li>
+<li><code>ufrac_trec</code></li>
+<li><code>frac_best</code></li>
+<li><code>trail_rec</code></li>
+</ul>
+<p>These already have workflow meanings and should remain compatible with current
+ab initio and refine behavior.</p>
+<h2 id="ownership-boundaries">Ownership Boundaries<a class="headerlink" href="#ownership-boundaries" title="Permanent link">&para;</a></h2>
+<h3 id="stage-policy">Stage policy<a class="headerlink" href="#stage-policy" title="Permanent link">&para;</a></h3>
+<p>Owner:</p>
+<ul>
+<li><code>src/main/simple_abinitio_controller.f90</code></li>
+<li><code>src/main/commanders/simple/simple_commanders_abinitio.f90</code></li>
+</ul>
+<p>Responsibilities:</p>
+<ul>
+<li>decide whether a stage enables SGD</li>
+<li>pass <code>sgd=yes</code> and schedule parameters to child <code>refine3D</code></li>
+<li>keep stage search policy unchanged unless deliberately testing an SGD variant</li>
+<li>preserve existing <code>update_frac</code>, <code>fillin</code>, <code>frac_best</code>, and <code>trail_rec</code>
+  decisions</li>
+</ul>
+<h3 id="particle-domain-update">Particle-domain update<a class="headerlink" href="#particle-domain-update" title="Permanent link">&para;</a></h3>
+<p>Owner:</p>
+<ul>
+<li><code>src/main/strategies/search/simple_strategy3D_matcher.f90</code></li>
+<li><code>src/main/strategies/search/simple_strategy3D_*.f90</code></li>
+<li><code>src/main/commanders/simple/simple_commanders_prob.f90</code></li>
+<li><code>src/main/simple_eul_prob_tab*.f90</code></li>
+</ul>
+<p>Responsibilities:</p>
+<ul>
+<li>choose or consume the sampled subset</li>
+<li>run polar matching/probability-table assignment</li>
+<li>update particle orientations/states/shifts</li>
+<li>preserve single-read batch reconstruction</li>
+<li>write current mini-batch partial reconstruction artifacts</li>
+</ul>
+<p>The particle-domain path should not know about <code>sgd_eta</code> in the MVP.</p>
+<h3 id="volume-domain-sgd-update">Volume-domain SGD update<a class="headerlink" href="#volume-domain-sgd-update" title="Permanent link">&para;</a></h3>
+<p>Owner:</p>
+<ul>
+<li><code>src/main/commanders/simple/simple_commanders_rec_distr.f90</code></li>
+<li>new helper module, likely under <code>src/main/volume/</code></li>
+</ul>
+<p>Responsibilities:</p>
+<ul>
+<li>reduce current partials into mini-batch even/odd reconstruction targets</li>
+<li>restore <code>V_B_even</code> and <code>V_B_odd</code></li>
+<li>read previous <code>V_t_even</code> and <code>V_t_odd</code> when SGD is enabled</li>
+<li>apply <code>V_{t+1} = V_t + eta_t (V_B - V_t)</code></li>
+<li>write updated even/odd half-maps and merged state map</li>
+<li>emit SGD diagnostics</li>
+</ul>
+<h3 id="numerical-reconstruction-kernels">Numerical reconstruction kernels<a class="headerlink" href="#numerical-reconstruction-kernels" title="Permanent link">&para;</a></h3>
+<p>Owner:</p>
+<ul>
+<li><code>src/main/volume/simple_reconstructor.f90</code></li>
+<li><code>src/main/volume/simple_reconstructor_eo.f90</code></li>
+<li><code>src/main/interp/simple_kbinterpol.f90</code></li>
+<li><code>src/main/interp/simple_gridding.f90</code></li>
+</ul>
+<p>Responsibilities:</p>
+<ul>
+<li>preserve the current KB splat/gather implementation</li>
+<li>expose additional low-level state only through narrow APIs if raw-gradient
+  mode is later implemented</li>
+<li>avoid duplicating interpolation logic in commanders or strategies</li>
+</ul>
+<h2 id="proposed-new-module">Proposed New Module<a class="headerlink" href="#proposed-new-module" title="Permanent link">&para;</a></h2>
+<p>Add a small optimizer module:</p>
+<pre><code class="language-text">src/main/volume/simple_vol_sgd_optimizer.f90
+</code></pre>
+<p>Candidate public type:</p>
+<pre><code class="language-text">type :: vol_sgd_optimizer
+contains
+    procedure :: new
+    procedure :: eta
+    procedure :: apply_halfmap_update
+    procedure :: write_diag
+    procedure :: kill
+end type
+</code></pre>
+<p>MVP behavior:</p>
+<pre><code class="language-text">V_new = V_prev + eta * (V_batch - V_prev)
+</code></pre>
+<p>This module should not read project files, choose particle subsets, or know
+about probability tables. It should operate on <code>image</code> objects or narrowly
+defined volume-domain inputs supplied by <code>volassemble</code>.</p>
+<p>Future extensions can add:</p>
+<ul>
+<li>momentum half-maps</li>
+<li>shell-wise update normalization</li>
+<li>running diagonal preconditioner</li>
+<li>Adam/RMSProp-style second moments</li>
+<li>stochastic objective proxy calculations</li>
+</ul>
+<h2 id="refactor-plan">Refactor Plan<a class="headerlink" href="#refactor-plan" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-documentation-and-compile-time-guardrails">Phase 0: Documentation and compile-time guardrails<a class="headerlink" href="#phase-0-documentation-and-compile-time-guardrails" title="Permanent link">&para;</a></h3>
+<p>Add this implementation note and then add a short policy update only after the
+first code path exists.</p>
+<p>Checklist:</p>
+<ul>
+<li>no behavior changes</li>
+<li>identify current calls where <code>trail_rec</code> does map blending</li>
+<li>identify all call paths that require previous half-maps</li>
+</ul>
+<h3 id="phase-1-parameter-plumbing">Phase 1: Parameter plumbing<a class="headerlink" href="#phase-1-parameter-plumbing" title="Permanent link">&para;</a></h3>
+<p>Add typed fields and parser registration:</p>
+<ul>
+<li><code>src/main/params/simple_parameters.f90</code></li>
+<li><code>src/main/params/simple_parameters_parse.f90</code></li>
+<li><code>src/main/params/simple_parameters_phases.f90</code></li>
+<li>UI registration if desired in <code>src/main/ui/simple/simple_ui_refine3D.f90</code></li>
+</ul>
+<p>Initial fields:</p>
+<pre><code class="language-text">character(len=3) :: sgd = 'no'
+character(len=16) :: sgd_eta_decay = 'const'
+real :: sgd_eta = 0.2
+real :: sgd_eta_min = 0.02
+logical :: l_sgd = .false.
+logical :: l_sgd_diag = .true.
+</code></pre>
+<p>Validation:</p>
+<ul>
+<li><code>sgd_eta &gt; 0</code></li>
+<li><code>sgd_eta &lt;= 1</code> for MVP convex-update mode</li>
+<li><code>sgd_eta_min &gt;= 0</code></li>
+<li><code>sgd_eta_min &lt;= sgd_eta</code></li>
+<li>only allow <code>sgd=yes</code> with <code>volrec=yes</code></li>
+<li>initially require <code>trail_rec=yes</code> or explicit previous half-map availability</li>
+</ul>
+<h3 id="phase-2-optimizer-helper">Phase 2: Optimizer helper<a class="headerlink" href="#phase-2-optimizer-helper" title="Permanent link">&para;</a></h3>
+<p>Create <code>simple_vol_sgd_optimizer.f90</code>.</p>
+<p>MVP API:</p>
+<pre><code class="language-text">call sgd_opt%new(params, state, which_iter)
+eta = sgd_opt%eta()
+call sgd_opt%apply_halfmap_update(prev_even, batch_even, new_even)
+call sgd_opt%apply_halfmap_update(prev_odd,  batch_odd,  new_odd)
+call sgd_opt%write_diag(...)
+</code></pre>
+<p>The first version can be stateless except for parameters and iteration index.
+That keeps the initial integration simple and makes <code>sgd_eta=realized_fraction</code>
+easy to compare against legacy trailing reconstruction.</p>
+<h3 id="phase-3-split-map-blending-from-trailing-reconstruction">Phase 3: Split map blending from trailing reconstruction<a class="headerlink" href="#phase-3-split-map-blending-from-trailing-reconstruction" title="Permanent link">&para;</a></h3>
+<p>Current relevant routine:</p>
+<ul>
+<li><code>simple_commanders_rec_distr.f90::restore_state_from_parts</code></li>
+</ul>
+<p>Current conceptual sequence:</p>
+<pre><code class="language-text">reduce partials
+restore even/odd current batch targets
+restore merged current batch target
+read restored halfmaps into build%vol/build%vol2
+trail_restored_halves_if_needed
+postprocess
+</code></pre>
+<p>Refactor toward:</p>
+<pre><code class="language-text">reduce partials
+restore even/odd current batch targets
+restore merged current batch target
+read restored halfmaps into build%vol/build%vol2
+apply_volume_feedback_if_needed
+postprocess
+</code></pre>
+<p>where <code>apply_volume_feedback_if_needed</code> dispatches:</p>
+<pre><code class="language-text">if params%l_sgd:
+    apply_sgd_volume_update
+else:
+    trail_restored_halves_if_needed
+</code></pre>
+<p>Important: this is a behavior-changing refactor. Keep the first code change
+small and preserve the old path when <code>sgd=no</code>.</p>
+<h3 id="phase-4-implement-mvp-sgd-update-in-volassemble">Phase 4: Implement MVP SGD update in volassemble<a class="headerlink" href="#phase-4-implement-mvp-sgd-update-in-volassemble" title="Permanent link">&para;</a></h3>
+<p>When <code>sgd=yes</code>:</p>
+<ol>
+<li>Require previous even/odd half-maps.</li>
+<li>Read previous half-maps using the same compatibility logic already used by
+   trailing reconstruction.</li>
+<li>Treat the restored current half-maps as <code>V_B_even</code> and <code>V_B_odd</code>.</li>
+<li>Compute:</li>
+</ol>
+<pre><code class="language-text">V_new_even = V_prev_even + eta_t * (V_B_even - V_prev_even)
+V_new_odd  = V_prev_odd  + eta_t * (V_B_odd  - V_prev_odd)
+</code></pre>
+<ol>
+<li>Write:</li>
+</ol>
+<pre><code class="language-text">refine3D_state_halfvol_fname(state, 'even')
+refine3D_state_halfvol_fname(state, 'odd')
+refine3D_state_vol_fname(state)
+</code></pre>
+<ol>
+<li>Preserve nonuniform auxiliary source behavior by applying the same update to
+   the NU source half-map images that currently receive trailing updates.</li>
+</ol>
+<p>Comparison mode:</p>
+<pre><code class="language-text">sgd=yes sgd_eta=&lt;realized_update_frac&gt;
+</code></pre>
+<p>should closely reproduce the legacy trailing blend.</p>
+<h3 id="phase-5-diagnostics">Phase 5: Diagnostics<a class="headerlink" href="#phase-5-diagnostics" title="Permanent link">&para;</a></h3>
+<p>Add diagnostics to the existing benchmark/report style.</p>
+<p>Per state, per iteration:</p>
+<pre><code class="language-text">SGD enabled
+sgd_eta
+update_frac command target
+realized update fraction
+||V_B_even - V_prev_even||
+||V_B_odd  - V_prev_odd||
+||eta * (V_B_even - V_prev_even)||
+||eta * (V_B_odd  - V_prev_odd)||
+relative update norm
+state population
+FSC 0.5 / 0.143 after update
+</code></pre>
+<p>Output options:</p>
+<ul>
+<li>append to existing <code>refine3D_volassemble_bench_fname</code></li>
+<li>add <code>sgd_stateNN_iterMM.txt</code> only if detailed diagnostics are enabled</li>
+</ul>
+<p>MVP should avoid storing large diagnostic volumes by default.</p>
+<h3 id="phase-6-learning-rate-schedules">Phase 6: Learning-rate schedules<a class="headerlink" href="#phase-6-learning-rate-schedules" title="Permanent link">&para;</a></h3>
+<p>Implement <code>sgd_eta_decay</code>.</p>
+<p>Initial schedules:</p>
+<pre><code class="language-text">const:
+    eta_t = sgd_eta
+
+inv_sqrt:
+    eta_t = max(sgd_eta_min, sgd_eta / sqrt(t_stage))
+
+cos:
+    eta_t = sgd_eta_min + 0.5 * (sgd_eta - sgd_eta_min) *
+            (1 + cos(pi * progress))
+</code></pre>
+<p>Use existing decay helper patterns where practical, but keep optimizer policy
+localized.</p>
+<p>The stage controller may reset optimizer time at stage boundaries. That should
+be explicit:</p>
+<ul>
+<li><code>t_stage</code> for per-stage schedule</li>
+<li><code>t_global</code> for full command invocation schedule</li>
+</ul>
+<p>MVP recommendation: use per-stage <code>t_stage</code>.</p>
+<h3 id="phase-7-optional-momentum">Phase 7: Optional momentum<a class="headerlink" href="#phase-7-optional-momentum" title="Permanent link">&para;</a></h3>
+<p>Add only after MVP diagnostics are stable.</p>
+<p>Momentum update:</p>
+<pre><code class="language-text">delta_t = V_B - V_t
+m_t     = beta * m_{t-1} + (1 - beta) * delta_t
+V_{t+1} = V_t + eta_t * m_t
+</code></pre>
+<p>State storage options:</p>
+<ol>
+<li>in-memory only for shared-memory run</li>
+<li>on-disk per state/even-odd momentum volumes for distributed/resumable runs</li>
+</ol>
+<p>Do not add momentum to the first MVP unless the on-disk state contract is clear.</p>
+<h3 id="phase-8-softtop-k-stochastic-gradient">Phase 8: Soft/top-K stochastic gradient<a class="headerlink" href="#phase-8-softtop-k-stochastic-gradient" title="Permanent link">&para;</a></h3>
+<p>The MVP uses hard or sampled latent assignments. That is already a valid
+stochastic generalized-EM/preconditioned-SGD hybrid.</p>
+<p>For a stronger Bayesian-style stochastic gradient, extend probability table
+output to preserve top-K compact responsibilities:</p>
+<pre><code class="language-text">particle i:
+    candidate k:
+        state
+        projection
+        in-plane
+        shift
+        weight
+</code></pre>
+<p>Then reconstruct:</p>
+<pre><code class="language-text">b_B   = sum_i sum_k w_ik A_ik^* y_i
+rho_B = sum_i sum_k w_ik diag(A_ik^* A_ik)
+</code></pre>
+<p>This is the natural extension of existing <code>prob</code> / <code>prob_neigh</code> candidate
+machinery and avoids full posterior storage.</p>
+<p>Implementation implications:</p>
+<ul>
+<li><code>simple_eul_prob_tab*.f90</code> must emit compact top-K candidate assignments</li>
+<li><code>simple_strategy3D_matcher.f90</code> or a new reconstruction helper must be able
+  to backproject one particle into multiple candidate poses with weights</li>
+<li>the online single-read contract must still hold</li>
+</ul>
+<p>This phase is intentionally after the hard-assignment SGD MVP.</p>
+<h3 id="phase-9-continuous-pose-refinement">Phase 9: Continuous pose refinement<a class="headerlink" href="#phase-9-continuous-pose-refinement" title="Permanent link">&para;</a></h3>
+<p>Do not start here.</p>
+<p>Initial pose updates should continue to use the fast polar matcher and
+probabilistic assignment machinery.</p>
+<p>Later options:</p>
+<ol>
+<li>Use existing analytic shift gradients in <code>simple_pftc_shsrch_grad</code>.</li>
+<li>Fit local orientation tangent updates from polar-score neighborhoods around
+   the best projection direction.</li>
+<li>Add analytic derivatives through the KB projection operator for true
+   continuous viewing-direction gradients.</li>
+</ol>
+<p>The third option is a deeper research implementation. It should not be coupled
+to the first map-SGD milestone.</p>
+<h2 id="detailed-data-flow-for-mvp">Detailed Data Flow For MVP<a class="headerlink" href="#detailed-data-flow-for-mvp" title="Permanent link">&para;</a></h2>
+<h3 id="before-matcher">Before matcher<a class="headerlink" href="#before-matcher" title="Permanent link">&para;</a></h3>
+<p>Existing flow:</p>
+<pre><code class="language-text">materialize_reprojection_model
+prob_align if enabled
+read_reprojection_model
+memoize_refs
+</code></pre>
+<p>No SGD changes.</p>
+<h3 id="during-matcher">During matcher<a class="headerlink" href="#during-matcher" title="Permanent link">&para;</a></h3>
+<p>Existing flow:</p>
+<pre><code class="language-text">build_batch_particles3D
+choose_and_run_strategy
+update project orientation/state/shift
+prep_imgs4rec
+update_rec
+write_partial_recs
+</code></pre>
+<p>No SGD changes in MVP.</p>
+<p>The current partials are interpreted as the mini-batch sufficient statistics
+for the volume update.</p>
+<h3 id="during-volassemble">During volassemble<a class="headerlink" href="#during-volassemble" title="Permanent link">&para;</a></h3>
+<p>Existing flow:</p>
+<pre><code class="language-text">reduce partition-local partials
+restore current even/odd halfmaps
+restore current merged map
+optionally trail with previous halfmaps
+postprocess
+</code></pre>
+<p>SGD flow:</p>
+<pre><code class="language-text">reduce partition-local partials
+restore current even/odd halfmap targets V_B
+read previous halfmaps V_t
+apply V_{t+1} = V_t + eta_t (V_B - V_t)
+write updated even/odd halfmaps
+write updated merged map
+postprocess
+</code></pre>
+<h3 id="next-iteration">Next iteration<a class="headerlink" href="#next-iteration" title="Permanent link">&para;</a></h3>
+<p>Existing flow:</p>
+<pre><code class="language-text">materialize_reprojection_model from current Cartesian halfmaps
+write even/odd polar reprojection model files
+matcher consumes polar references
+</code></pre>
+<p>No SGD changes.</p>
+<h2 id="compatibility-requirements">Compatibility Requirements<a class="headerlink" href="#compatibility-requirements" title="Permanent link">&para;</a></h2>
+<h3 id="sgdno"><code>sgd=no</code><a class="headerlink" href="#sgdno" title="Permanent link">&para;</a></h3>
+<p>Must reproduce current behavior.</p>
+<h3 id="sgdyes-sgd_eta1"><code>sgd=yes, sgd_eta=1</code><a class="headerlink" href="#sgdyes-sgd_eta1" title="Permanent link">&para;</a></h3>
+<p>Should write the restored mini-batch target directly:</p>
+<pre><code class="language-text">V_{t+1} = V_B
+</code></pre>
+<p>This is intentionally aggressive and useful mainly for testing.</p>
+<h3 id="sgdyes-sgd_etarealized_update_frac"><code>sgd=yes, sgd_eta=realized_update_frac</code><a class="headerlink" href="#sgdyes-sgd_etarealized_update_frac" title="Permanent link">&para;</a></h3>
+<p>Should match current trailing reconstruction within numerical tolerance,
+modulo any ordering differences introduced by the refactor.</p>
+<h3 id="sgdyes-update_frac1"><code>sgd=yes, update_frac=1</code><a class="headerlink" href="#sgdyes-update_frac1" title="Permanent link">&para;</a></h3>
+<p>Becomes full-batch preconditioned gradient/fixed-point update:</p>
+<pre><code class="language-text">V_{t+1} = V_t + eta_t (V_full - V_t)
+</code></pre>
+<p>This is useful for convergence diagnostics and high-resolution polishing.</p>
+<h2 id="tests-and-validation">Tests And Validation<a class="headerlink" href="#tests-and-validation" title="Permanent link">&para;</a></h2>
+<h3 id="unit-level-tests">Unit-level tests<a class="headerlink" href="#unit-level-tests" title="Permanent link">&para;</a></h3>
+<p>Add targeted tests for <code>vol_sgd_optimizer</code>:</p>
+<ul>
+<li><code>eta</code> schedule values</li>
+<li><code>eta</code> bounds</li>
+<li>convex image update:</li>
+</ul>
+<pre><code class="language-text">prev = 10
+batch = 20
+eta = 0.25
+new = 12.5
+</code></pre>
+<ul>
+<li><code>eta=0</code> rejected or produces no-op only if explicitly allowed</li>
+<li><code>eta=1</code> returns the batch target</li>
+</ul>
+<h3 id="integration-tests">Integration tests<a class="headerlink" href="#integration-tests" title="Permanent link">&para;</a></h3>
+<p>Use a small synthetic or existing toy project:</p>
+<ol>
+<li>Run current <code>abinitio3D</code> or <code>refine3D</code> path with <code>sgd=no</code>.</li>
+<li>Run <code>sgd=yes, sgd_eta=realized_update_frac</code> and compare halfmaps after
+   <code>volassemble</code>.</li>
+<li>Run <code>sgd=yes, sgd_eta=1</code> and confirm output equals mini-batch restored
+   target.</li>
+<li>Verify:</li>
+<li>no second particle-stack read</li>
+<li>orientation table updated exactly once per active particle</li>
+<li><code>sampled</code> and <code>updatecnt</code> semantics unchanged</li>
+<li>reprojection model headers remain compatible</li>
+<li>even/odd half-map names and FSC files are still produced</li>
+</ol>
+<h3 id="scientific-diagnostics">Scientific diagnostics<a class="headerlink" href="#scientific-diagnostics" title="Permanent link">&para;</a></h3>
+<p>Track:</p>
+<ul>
+<li>FSC after each update</li>
+<li>state-local update fraction</li>
+<li>map update norm per shell</li>
+<li>pose change distribution</li>
+<li>objective proxy, if implemented</li>
+<li>convergence rate against current abinitio3D baseline</li>
+</ul>
+<p>The first success criterion is not immediate resolution gain. It is that the
+explicit optimizer reproduces current behavior under compatible settings and
+then gives stable, controllable behavior as <code>sgd_eta</code> varies.</p>
+<h2 id="risks">Risks<a class="headerlink" href="#risks" title="Permanent link">&para;</a></h2>
+<h3 id="confusing-sampling-and-optimization">Confusing sampling and optimization<a class="headerlink" href="#confusing-sampling-and-optimization" title="Permanent link">&para;</a></h3>
+<p>Risk:</p>
+<ul>
+<li>treating <code>update_frac</code> as a learning rate</li>
+</ul>
+<p>Mitigation:</p>
+<ul>
+<li>keep <code>update_frac</code> as subset selection</li>
+<li>introduce <code>sgd_eta</code> as the only map learning-rate field</li>
+<li>diagnostics must print both</li>
+</ul>
+<h3 id="breaking-trailing-reconstruction-behavior">Breaking trailing reconstruction behavior<a class="headerlink" href="#breaking-trailing-reconstruction-behavior" title="Permanent link">&para;</a></h3>
+<p>Risk:</p>
+<ul>
+<li>refactoring <code>restore_state_from_parts</code> changes legacy <code>trail_rec</code></li>
+</ul>
+<p>Mitigation:</p>
+<ul>
+<li>preserve the old path exactly under <code>sgd=no</code></li>
+<li>add comparison tests using <code>sgd_eta=realized_update_frac</code></li>
+</ul>
+<h3 id="overfitting-mini-batch-noise">Overfitting mini-batch noise<a class="headerlink" href="#overfitting-mini-batch-noise" title="Permanent link">&para;</a></h3>
+<p>Risk:</p>
+<ul>
+<li>large <code>eta</code> chases noisy mini-batch maps</li>
+</ul>
+<p>Mitigation:</p>
+<ul>
+<li>conservative default <code>sgd_eta</code></li>
+<li>decay schedules</li>
+<li>optional shell-wise update diagnostics</li>
+<li>preserve even/odd separation</li>
+</ul>
+<h3 id="introducing-hidden-optimizer-state">Introducing hidden optimizer state<a class="headerlink" href="#introducing-hidden-optimizer-state" title="Permanent link">&para;</a></h3>
+<p>Risk:</p>
+<ul>
+<li>momentum or running preconditioner becomes ambient global state</li>
+</ul>
+<p>Mitigation:</p>
+<ul>
+<li>keep optimizer state builder-owned or explicit</li>
+<li>serialize state only when resumability is deliberately implemented</li>
+</ul>
+<h3 id="disrupting-polar-matching-performance">Disrupting polar matching performance<a class="headerlink" href="#disrupting-polar-matching-performance" title="Permanent link">&para;</a></h3>
+<p>Risk:</p>
+<ul>
+<li>inserting SGD logic into matcher or reference preparation slows the hot path</li>
+</ul>
+<p>Mitigation:</p>
+<ul>
+<li>MVP does not touch polar matching kernels</li>
+<li>reference handoff remains unchanged</li>
+<li>SGD is volume-domain assembly logic</li>
+</ul>
+<h2 id="recommended-milestone-order">Recommended Milestone Order<a class="headerlink" href="#recommended-milestone-order" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add parameter plumbing and <code>sgd=no</code> no-op behavior.</li>
+<li>Add <code>vol_sgd_optimizer</code> with stateless convex half-map update.</li>
+<li>Refactor <code>volassemble</code> to dispatch legacy trailing versus SGD update.</li>
+<li>Add diagnostics and comparison mode.</li>
+<li>Validate <code>sgd_eta=realized_update_frac</code> against current trailing behavior.</li>
+<li>Tune default <code>sgd_eta</code> and schedules on small datasets.</li>
+<li>Add optional momentum only after the MVP is stable.</li>
+<li>Add compact top-K soft stochastic reconstruction.</li>
+<li>Investigate continuous orientation-gradient refinement.</li>
+</ol>
+<h2 id="initial-mvp-definition">Initial MVP Definition<a class="headerlink" href="#initial-mvp-definition" title="Permanent link">&para;</a></h2>
+<p>The first mergeable version should support:</p>
+<pre><code class="language-text">sgd=yes
+sgd_eta=&lt;0..1&gt;
+sgd_eta_decay=const
+sgd_diag=yes/no
+</code></pre>
+<p>and implement:</p>
+<pre><code class="language-text">V_new_even = V_prev_even + eta * (V_batch_even - V_prev_even)
+V_new_odd  = V_prev_odd  + eta * (V_batch_odd  - V_prev_odd)
+</code></pre>
+<p>It should not implement:</p>
+<ul>
+<li>momentum</li>
+<li>Adam/RMSProp</li>
+<li>top-K soft reconstruction</li>
+<li>continuous orientation gradients</li>
+<li>external autodiff</li>
+</ul>
+<p>That restraint is deliberate. It proves the optimizer contract while preserving
+the mature abinitio3D stochastic sampling, KB reconstruction, and polar matching
+machinery.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

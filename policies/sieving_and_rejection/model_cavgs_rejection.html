@@ -1,0 +1,3609 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/sieving_and_rejection/model_cavgs_rejection.html">
+      
+      
+        <link rel="prev" href="distance_transform_shape_rejection_plan.html">
+      
+      
+        <link rel="next" href="ptcl_sieve_policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>model_cavgs_rejection - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#model_cavgs_rejection" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              model_cavgs_rejection
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="model_cavgs_rejection.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#microchunk-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Microchunk Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hard-reject-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard-Reject Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-bank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature Bank
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extraction-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extraction Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hard-rejects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard Rejects
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normalization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-In Presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysis-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#promotion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promotion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#microchunk-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Microchunk Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hard-reject-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard-Reject Comparison
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-bank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature Bank
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extraction-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extraction Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hard-rejects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard Rejects
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normalization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-In Presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysis-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#promotion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promotion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="model_cavgs_rejection">model_cavgs_rejection<a class="headerlink" href="#model_cavgs_rejection" title="Permanent link">&para;</a></h1>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<p><code>model_cavgs_rejection</code> is the SIMPLE class-average rejection-model program. It evaluates <code>cls2D</code> class averages, applies hard validity rejects, extracts a fixed scalar feature bank, normalizes those features within the dataset, and applies a named model to partition class averages into accepted and rejected sets. The model can also abstain from additional soft rejection and report that the final decision was hard preselection only.</p>
+<p>This is a learned feature-vector model. It should be read alongside the streaming microchunk rejector, which is a cumulative rule engine. The two systems share several image-processing primitives, but they use them differently: microchunking applies fixed sequential criteria and rejects a class as soon as any criterion fires; <code>model_cavgs_rejection</code> uses hard rejects only for validity failures, then learns a weighted scalar quality score and dataset-specific thresholding behavior for the remaining class averages.</p>
+<p>The implementation lives in <code>src/main/cavg_quality</code>. The command entry point is <code>exec_model_cavgs_rejection</code> in <code>src/main/commanders/simple/simple_commanders_cavgs.f90</code>.</p>
+<h2 id="implementation-files">Implementation Files<a class="headerlink" href="#implementation-files" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>simple_cavg_quality_types.f90</code>: shared constants and derived types.</li>
+<li><code>simple_cavg_quality_feats.f90</code>: feature definitions, feature extraction, hard rejects, and robust normalization.</li>
+<li><code>simple_cavg_quality_stats.f90</code>: binary metrics, AUC, distance-matrix normalization, and statistical helpers.</li>
+<li><code>simple_cavg_quality_model.f90</code>: built-in presets, model file I/O, scoring, clustering, thresholding, and promotion snippets.</li>
+<li><code>simple_cavg_quality_analysis.f90</code>: evaluation, analysis reports, and feature tables.</li>
+<li><code>simple_cavg_quality_learn.f90</code>: analysis-table reader, feature-policy search, model search, and learn reports.</li>
+</ul>
+<h2 id="microchunk-comparison">Microchunk Comparison<a class="headerlink" href="#microchunk-comparison" title="Permanent link">&para;</a></h2>
+<p>The stream path in <code>simple_microchunked2D</code> currently calls <code>cluster2D_rejector</code>. That engine is deliberately deterministic and rule based. <code>model_cavgs_rejection</code> is a separate backend that uses a learned feature vector over class averages.</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Microchunk rejection</th>
+<th><code>model_cavgs_rejection</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decision type</td>
+<td>Cumulative rule engine.</td>
+<td>Learned feature-vector model with hard validity gates.</td>
+</tr>
+<tr>
+<td>Primary owner</td>
+<td><code>simple_cluster2D_rejector</code> called from <code>simple_microchunked2D</code>.</td>
+<td><code>src/main/cavg_quality</code> called by <code>model_cavgs_rejection</code>.</td>
+</tr>
+<tr>
+<td>Unit of evidence</td>
+<td>Individual scalar rules applied one after another.</td>
+<td>Normalized feature vector plus model weights, clustering, and score thresholding.</td>
+</tr>
+<tr>
+<td>Rejection semantics</td>
+<td>A class rejected by any rule remains rejected.</td>
+<td>Hard rejects are final; remaining classes are scored and partitioned by the model.</td>
+</tr>
+<tr>
+<td>Threshold source</td>
+<td>Fixed constants, with tier-specific population and local-variance overrides.</td>
+<td>Built-in or learned model specification; learn mode chooses feature policy, weights, and threshold controls from analysis datasets.</td>
+</tr>
+<tr>
+<td>Adaptation to dataset</td>
+<td>Robust local-variance z-scores are dataset-relative, but thresholds are fixed.</td>
+<td>Robust feature normalization, k-medoids distances, Otsu thresholds, and selected model controls are dataset-relative.</td>
+</tr>
+<tr>
+<td>Training data</td>
+<td>None.</td>
+<td>Manual selections from <code>quality_mode=analyze</code> files.</td>
+</tr>
+<tr>
+<td>Output role</td>
+<td>Online stream cleanup and particle deselection.</td>
+<td>Batch/chunk/pool class-average selection, analysis, training, and model promotion.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="evidence-comparison">Evidence Comparison<a class="headerlink" href="#evidence-comparison" title="Permanent link">&para;</a></h2>
+<p>The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed to detect fuzzy-ball overfitting in learned models. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current <code>chunk100mics</code> preset uses the <code>microchunk_plus_score_signal</code> policy: microchunk plus stored-score, overfit-family, center/edge signal, presence, and fuzzy-ball signal evidence.</p>
+<table>
+<thead>
+<tr>
+<th>Evidence</th>
+<th>Microchunk rule engine</th>
+<th><code>model_cavgs_rejection</code> feature-vector model</th>
+<th>Current chunk role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Class population</td>
+<td>Hard rule: reject below a tier-specific fraction of total population.</td>
+<td><code>log_pop</code> feature plus context-specific population hard gates.</td>
+<td>Active feature and hard gate.</td>
+</tr>
+<tr>
+<td>Resolution</td>
+<td>Hard rule: reject when <code>res &gt; 40.0</code>.</td>
+<td><code>neg_log_res</code> feature plus hard reject when <code>res &gt; 40.0</code>.</td>
+<td>Active feature and hard gate.</td>
+</tr>
+<tr>
+<td>Foreground centering</td>
+<td>Otsu foreground connected components; reject if any centroid lies outside the mask radius.</td>
+<td><code>centered</code> feature is negative normalized centroid displacement; centroid outside the mask is a hard reject.</td>
+<td>Active feature and hard gate.</td>
+</tr>
+<tr>
+<td>Foreground outside mask</td>
+<td>Reject when the largest valid foreground component has more than 10 pixels outside the mask disc.</td>
+<td><code>cc_area_frac</code> measures largest component area relative to the mask disc; outside-mask excess is a hard reject.</td>
+<td>Active feature and hard gate.</td>
+</tr>
+<tr>
+<td>Full-image component cleanup</td>
+<td>Connected components spanning the full image are removed before mask tests.</td>
+<td>Same concept is applied during feature extraction before geometry features and hard mask rejection.</td>
+<td>Hard-gate preprocessing.</td>
+</tr>
+<tr>
+<td>Foreground local variance</td>
+<td>Robust-z rule on foreground/background local variance after 10 A low-pass and Otsu masking.</td>
+<td><code>log_locvar_fg</code> feature; only both variances non-positive is a hard reject.</td>
+<td>Active feature.</td>
+</tr>
+<tr>
+<td>Background local variance</td>
+<td>Robust-z rule paired with foreground local variance.</td>
+<td><code>log_locvar_bg</code> feature; only both variances non-positive is a hard reject.</td>
+<td>Active feature.</td>
+</tr>
+<tr>
+<td>Stored score evidence</td>
+<td>Not used by the rule engine.</td>
+<td><code>corr_frc_proxy</code> reads stored class correlation or FRC-like score when present.</td>
+<td>Inactive in the current chunk preset.</td>
+</tr>
+<tr>
+<td>Center/edge signal</td>
+<td>Not used by the rule engine.</td>
+<td><code>log_center_edge_snr</code> feature in the <code>signal</code> family.</td>
+<td>Active feature.</td>
+</tr>
+<tr>
+<td>Presence</td>
+<td>Not used by the rule engine.</td>
+<td><code>presence</code> feature in the <code>signal</code> family.</td>
+<td>Active feature.</td>
+</tr>
+<tr>
+<td>Overfit local variance</td>
+<td>Not used by the rule engine.</td>
+<td><code>neg_log_locvar_fg</code>, <code>neg_log_locvar_bg</code>, and <code>log_locvar_fg_bg_ratio</code> provide low/localized variance evidence.</td>
+<td>Active features in learned policies.</td>
+</tr>
+<tr>
+<td>Overfit band-pass localization</td>
+<td>Not used by the rule engine.</td>
+<td><code>log_bp40_100_center_edge_var</code> measures center/edge variance after 100 to 40 A band-pass; low raw values can be context-specific hard gates, while ordinary low values remain learned evidence.</td>
+<td>Active feature in learned policies plus context-specific hard floors.</td>
+</tr>
+<tr>
+<td>Fuzzy-ball signal</td>
+<td>Not used by the rule engine.</td>
+<td><code>fuzzy_ball_signal</code> combines foreground texture, central presence, and 100 to 40 A center/edge localization. Low values mark the fuzzy-ball pattern as continuous learned evidence, not as an apply-time hard gate.</td>
+<td>Active feature in learned policies.</td>
+</tr>
+<tr>
+<td>Invalid pixels</td>
+<td>Not a named microchunk rule.</td>
+<td>Image values containing invalid pixels are hard rejected.</td>
+<td>Hard gate.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="hard-reject-comparison">Hard-Reject Comparison<a class="headerlink" href="#hard-reject-comparison" title="Permanent link">&para;</a></h2>
+<p>Hard rejects in <code>model_cavgs_rejection</code> are selected by <code>quality_context=chunk|pool|sieve</code>, with <code>chunk</code> as the default.</p>
+<p>The contexts represent three workflow phases:</p>
+<ul>
+<li><code>sieve</code>: very small 2D runs on small particle chunks. This phase uses conservative hard gates only and deliberately avoids learned rejection.</li>
+<li><code>chunk</code>: the next 2D stage, where sieve-cleaned particles are processed in larger chunks, typically 10-30k particles. This phase uses hard gates plus the chunk logistic model.</li>
+<li><code>pool</code>: the final 2D phase before 3D analysis, where highly clean particle sets from chunk modeling have been merged. This phase uses its own pool model.</li>
+</ul>
+<p>Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve is a separate compatibility-analysis route with its own hard-gate policy and deliberately does not inherit the shared chunk/pool validity gates.</p>
+<table>
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Microchunk rule engine</th>
+<th><code>model_cavgs_rejection</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Population</td>
+<td>Rejects <code>pop &lt; ceiling(sum(pop) * fraction)</code>. Fractions are tier-specific.</td>
+<td>Shared: reject <code>pop &lt;= 0</code>. Chunk/sieve: reject <code>pop &lt; ceiling(sum(pop) * 0.0035)</code>. Pool: reject <code>pop &lt; ceiling(sum(pop) * 5.0e-4)</code>.</td>
+</tr>
+<tr>
+<td>Resolution</td>
+<td>Rejects <code>res &gt; 40.0</code>.</td>
+<td>Chunk/pool shared validity rejects <code>res &gt; 40.0</code>; pool additionally rejects <code>res &gt; 25.0</code>.</td>
+</tr>
+<tr>
+<td>Empty or mismatched class-average stack</td>
+<td>Stream chunk is marked <code>REJECTION_FAILED</code> and <code>COMPLETE</code>.</td>
+<td>Apply/analyze require a valid project, <code>cls2D</code> entries, matching class-average stack, and <code>mskdiam</code>; invalid inputs stop the command.</td>
+</tr>
+<tr>
+<td>Invalid pixels</td>
+<td>No separate named rule.</td>
+<td>Hard rejected.</td>
+</tr>
+<tr>
+<td>No valid foreground component</td>
+<td>Rejected after full-image connected components are pruned.</td>
+<td>Hard rejected after the same style of foreground-component pruning.</td>
+</tr>
+<tr>
+<td>Foreground centroid outside mask</td>
+<td>Rejected.</td>
+<td>Hard rejected.</td>
+</tr>
+<tr>
+<td>Largest foreground component outside mask</td>
+<td>Rejected when outside pixels exceed 10.</td>
+<td>Hard rejected when outside pixels exceed 10.</td>
+</tr>
+<tr>
+<td>Local variance exactly degenerate</td>
+<td>Rejected when both inside/outside scores are near zero.</td>
+<td>Hard rejected when both foreground/background local variances are non-positive.</td>
+</tr>
+<tr>
+<td>Local variance low but not degenerate</td>
+<td>Rejected by fixed robust-z thresholds.</td>
+<td>Chunk only: reject an extreme absolute foreground local-variance floor; otherwise encoded as learned evidence. Pool does not apply this extra gate.</td>
+</tr>
+<tr>
+<td>Band-pass center/edge variance extremely low</td>
+<td>Not used by the rule engine.</td>
+<td>Chunk/sieve hard reject when raw <code>bp_center_edge_var &lt; 1.5</code>; pool hard rejects when raw <code>bp_center_edge_var &lt; 10.0</code>; less extreme values remain learned evidence.</td>
+</tr>
+</tbody>
+</table>
+<p>Microchunk tier thresholds:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th style="text-align: right;">Population fraction</th>
+<th style="text-align: right;">Local-variance strong threshold</th>
+<th style="text-align: right;">Local-variance weak threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pass 1</td>
+<td style="text-align: right;"><code>0.0050</code></td>
+<td style="text-align: right;"><code>-0.5</code></td>
+<td style="text-align: right;"><code>-0.1</code></td>
+</tr>
+<tr>
+<td>Pass 2</td>
+<td style="text-align: right;"><code>0.0035</code></td>
+<td style="text-align: right;"><code>-1.0</code></td>
+<td style="text-align: right;"><code>-1.0</code></td>
+</tr>
+<tr>
+<td>Reference chunk</td>
+<td style="text-align: right;"><code>0.0025</code></td>
+<td style="text-align: right;"><code>-2.0</code></td>
+<td style="text-align: right;"><code>-2.0</code></td>
+</tr>
+<tr>
+<td>Match chunk</td>
+<td style="text-align: right;"><code>0.0025</code></td>
+<td style="text-align: right;"><code>-2.0</code></td>
+<td style="text-align: right;"><code>-2.0</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>model_cavgs_rejection</code> uses context-specific population hard-reject fractions: <code>0.0035</code> for chunk/sieve and <code>5.0e-4</code> for pool.</p>
+<h2 id="learning-model">Learning Model<a class="headerlink" href="#learning-model" title="Permanent link">&para;</a></h2>
+<p>The rejection model is a low-dimensional, monotone feature-vector classifier with explicit hard constraints. In learning-theory terms, the hard rejects are prior validity constraints: they remove classes the model is not asked to rescue or fit. The remaining rows form a supervised training set from manual selections.</p>
+<p>The legacy linear apply-only artifact has three parts:</p>
+<ul>
+<li>a feature policy, which selects a cumulative family set;</li>
+<li>non-negative feature weights, which define a linear scalar quality score;</li>
+<li>thresholding controls, which govern how the per-dataset score boundary is chosen after k-medoids clustering and optional Otsu thresholding.</li>
+</ul>
+<p>New training fits a relational pairwise-logistic artifact. Its fitted parameters are an intercept, linear feature coefficients, pairwise base-feature interaction coefficients, the required relational coefficient, a probability threshold, and a regularization strength. The coefficients are fit from the canonical training files only. On two-class trainable datasets, the logistic loss gives manually selected classes moderately higher total weight than manually deselected classes so the probability surface learns rejection evidence without becoming an overly aggressive rejector. Manually deselected examples with the overfit/support-poor or band-pass-localization signature get an additional training-time loss multiplier, so fuzzy-ball examples influence the fit without becoming an apply-time hard reject. Learn reports also expose an internal overfit-focus loss scale for experiments; it is currently neutral.</p>
+<p>All features are robustly normalized inside the current dataset. Legacy linear
+artifacts retain their k-medoids/Otsu apply path. Relational logistic artifacts
+apply their learned probability surface and fixed probability threshold.</p>
+<p>The learning objective is empirical risk minimization over manually annotated <code>quality_mode=analyze</code> runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute specificity with a small false-negative-rate tolerance over the trainable manually good rows. Datasets where at least 20% of the trainable class averages are manually bad rows matching the fuzzy-ball signature get an additional hinge/quadratic objective penalty when the accepted fuzzy-ball-signature rate is above the tolerated rate. The signature is poor support plus either low local-variance evidence or low 100 to 40 A band-pass center/edge localization. This keeps selected-class protection global while making the objective care specifically about fuzzy-ball leakage in small-specimen chunks. The final macro score is a fixed robust score: half the mean dataset score and half the mean score over the lower tail of datasets. During pairwise-logistic fitting, manually bad rows with the same fuzzy-ball signature get extra loss weight. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.</p>
+<p>Feature-family policies act as a small structural model-selection layer. The
+relational logistic learner fits coefficients independently for each policy
+and selects the feature policy, regularization lambda, and probability
+threshold from the supplied training data.</p>
+<p>Use <code>filetab=</code> to define the target workflow scenario being trained. For example, early streaming chunk models should be fit from chunk analyses, while late pooled-refinement models should be fit from pool analyses. To inspect cross-scenario behavior without influencing the model, train the target model and then run <code>quality_mode=evaluate filetab=... infile=...</code> on the other scenario.</p>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Active families</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>microchunk</code></td>
+<td><code>microchunk</code>, <code>overfit</code></td>
+<td>Tests whether scalar analogues of the stream rejector plus overfit local-variance evidence are sufficient.</td>
+</tr>
+<tr>
+<td><code>microchunk_plus_score</code></td>
+<td><code>microchunk</code>, <code>overfit</code>, <code>score</code></td>
+<td>Adds stored class correlation/FRC-like evidence.</td>
+</tr>
+<tr>
+<td><code>microchunk_plus_signal</code></td>
+<td><code>microchunk</code>, <code>overfit</code>, <code>signal</code></td>
+<td>Adds center/edge and presence evidence without stored score evidence.</td>
+</tr>
+<tr>
+<td><code>microchunk_plus_score_signal</code></td>
+<td><code>microchunk</code>, <code>overfit</code>, <code>score</code>, <code>signal</code></td>
+<td>Uses the full compact quality feature set.</td>
+</tr>
+</tbody>
+</table>
+<p>Learn mode reports feature signal, feature-drop diagnostics, and leave-one-dataset-out feature-policy diagnostics so that the selected model can be interpreted as a compact scientific statement about which evidence family and weight structure generalized on the supplied training set.</p>
+<h2 id="command-modes">Command Modes<a class="headerlink" href="#command-modes" title="Permanent link">&para;</a></h2>
+<p><code>quality_mode=apply</code> computes quality features, applies the selected model, writes <code>cavgs_quality_features.txt</code>, writes <code>quality_selected_cavgs.mrc</code>, <code>quality_rejected_cavgs.mrc</code>, <code>hard_gate_rejections.mrc</code>, <code>quality_ranked_cavgs.mrc</code>, and <code>quality_ranked_cavgs.txt</code>, maps the selected class averages into particle states, annotates <code>cls2D</code> with <code>quality</code>, <code>quality_cluster</code>, and <code>accept</code>, annotates <code>cls3D</code> when its class count matches <code>cls2D</code>, optionally prunes particles with <code>prune=yes</code>, and writes the project.</p>
+<p><code>quality_mode=analyze</code> computes the same model output but treats the existing <code>cls2D</code> state as the manual reference. It writes the single canonical learner input <code>cavgs_quality_training.txt</code>, the selected/rejected stacks, <code>hard_gate_rejections.mrc</code>, and the score-ranked class-average stack plus rank table. The project selection is left unchanged.</p>
+<p><code>quality_mode=learn</code> reads a training file table of <code>cavgs_quality_training.txt</code> files from <code>filetab=</code> and fits the relational logistic model from a neutral <code>abinitio_learn_base</code> foundation. Every input must declare <code>relational_feature_schema=corr_knn_signal_v1</code> and contain the normalized CC-neighbour signal-statistics feature; missing or mixed relational schemas are rejected. <code>quality_context=chunk|pool</code> labels the learned version-10 model context. <code>quality_context=sieve</code> is intentionally rejected because sieve is a hard-gates-only screening phase. Learn mode does not accept <code>quality_model</code> or <code>infile</code> as a seed. It writes a learned model file controlled by <code>fname=</code> and writes <code>cavgs_quality_learn_report.txt</code>.</p>
+<p><code>quality_mode=evaluate</code> applies the selected fixed model without refitting. With <code>filetab=</code>, it evaluates one or more saved <code>cavgs_quality_training.txt</code> files. Without <code>filetab=</code>, it evaluates a single project directly using the existing <code>cls2D</code> state as the manual reference, like analyze mode. It writes <code>cavgs_quality_evaluate_report.txt</code>, or the report path controlled by <code>fname=</code>.</p>
+<p><code>quality_mode=promote</code> reads a model file from <code>infile=</code> and writes a Fortran promotion snippet controlled by <code>fname=</code>.</p>
+<p><code>apply</code> and <code>analyze</code> require <code>projfile</code> and <code>mskdiam</code>. <code>learn</code> requires <code>filetab</code>. <code>evaluate</code> requires either <code>filetab</code> or <code>projfile</code> plus <code>mskdiam</code>. <code>promote</code> requires <code>infile</code>. The commander sets <code>oritype=cls2D</code>, defaults <code>mkdir=yes</code>, and defaults <code>prune=no</code>.</p>
+<p>For <code>apply</code>, <code>analyze</code>, and project-backed <code>evaluate</code>, the command uses <code>chunk100mics</code> unless <code>quality_model</code> or <code>infile</code> is supplied. If <code>quality_context</code> is omitted, the command uses the loaded model context and also falls back to model-name inference from <code>pool</code>, <code>sieve</code>, or <code>chunk</code> substrings. Project-backed runs with <code>quality_context=sieve</code> use the hard-gates-only evaluator and skip learned model scoring. Saved-analysis <code>evaluate filetab=...</code> runs do not write image stacks because they do not load a project or class-average stack.</p>
+<h2 id="model-selection">Model Selection<a class="headerlink" href="#model-selection" title="Permanent link">&para;</a></h2>
+<p><code>quality_model</code> selects the built-in preset outside learn mode. The promoted built-in is:</p>
+<ul>
+<li><code>chunk100mics</code>: default chunk/stream-style version-10 pairwise logistic model trained from <code>/Users/elmlundho/model_cavgs_rejection/chunk_training5</code>; it includes <code>corr_knn_signal_v1</code> relational evidence.</li>
+</ul>
+<p>When <code>infile</code> is supplied, the model file is treated as a complete model and wins over the built-in preset.</p>
+<p>Relational logistic model files use <code>model_version=10</code> and explicit key-value fields:</p>
+<ul>
+<li><code>name</code></li>
+<li><code>context</code></li>
+<li><code>feature_policy</code></li>
+<li><code>feature_weights</code></li>
+<li><code>boundary_margin</code></li>
+<li><code>min_score_separation</code></li>
+<li><code>otsu_min_offset</code></li>
+<li><code>otsu_max_offset</code></li>
+<li><code>cluster_rescue_margin</code></li>
+<li><code>min_accept_frac</code></li>
+<li><code>use_lowsep_otsu</code></li>
+<li><code>use_otsu_window</code></li>
+<li><code>use_cluster_rescue</code></li>
+<li><code>enforce_min_accept_frac</code></li>
+</ul>
+<p>Unknown model-file keys are rejected.</p>
+<h2 id="feature-bank">Feature Bank<a class="headerlink" href="#feature-bank" title="Permanent link">&para;</a></h2>
+<p><code>CAVG_QUALITY_NFEATS</code> is 14. All feature directions are <code>higher_is_better</code>. The model consumes normalized <code>z_*</code> values; raw values are written for diagnostics.</p>
+<table>
+<thead>
+<tr>
+<th>Index</th>
+<th>Feature</th>
+<th>Family</th>
+<th>Source</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>log_pop</code></td>
+<td><code>microchunk</code></td>
+<td><code>cls2D</code> <code>pop</code></td>
+<td>Log class population.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>neg_log_res</code></td>
+<td><code>microchunk</code></td>
+<td><code>cls2D</code> <code>res</code></td>
+<td>Negative log class resolution estimate.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>centered</code></td>
+<td><code>microchunk</code></td>
+<td>Otsu foreground connected components</td>
+<td>Negative normalized centroid displacement of segmented signal.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>log_locvar_fg</code></td>
+<td><code>microchunk</code></td>
+<td>Foreground-mask local variance</td>
+<td>Log local variance in the foreground Otsu mask.</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>log_locvar_bg</code></td>
+<td><code>microchunk</code></td>
+<td>Background-mask local variance</td>
+<td>Log local variance outside the foreground Otsu mask.</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>corr_frc_proxy</code></td>
+<td><code>score</code></td>
+<td><code>cls2D</code> <code>corr</code> when present</td>
+<td>Stored class correlation or FRC-like quality proxy.</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>log_center_edge_snr</code></td>
+<td><code>signal</code></td>
+<td>Center/edge variance statistics</td>
+<td>Log central variance relative to edge variance.</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>cc_area_frac</code></td>
+<td><code>microchunk</code></td>
+<td>Foreground connected-component area</td>
+<td>Largest foreground component area divided by expected mask area.</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>presence</code></td>
+<td><code>signal</code></td>
+<td>Center/border statistics</td>
+<td>Central signal excess relative to border background noise.</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>neg_log_locvar_fg</code></td>
+<td><code>overfit</code></td>
+<td>Foreground-mask local variance</td>
+<td>Negative log local variance in the foreground Otsu mask; higher values indicate lower foreground variation.</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>neg_log_locvar_bg</code></td>
+<td><code>overfit</code></td>
+<td>Background-mask local variance</td>
+<td>Negative log local variance outside the foreground Otsu mask; higher values indicate quieter background.</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>log_locvar_fg_bg_ratio</code></td>
+<td><code>overfit</code></td>
+<td>Foreground/background local variance</td>
+<td>Log foreground/background local variance ratio; higher values indicate support-localized detail.</td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>log_bp40_100_center_edge_var</code></td>
+<td><code>overfit</code></td>
+<td>Band-pass center/edge variance</td>
+<td>Log center/edge variance ratio after 100 to 40 A band-pass; low raw values flag overfit fuzzy balls.</td>
+</tr>
+<tr>
+<td>14</td>
+<td><code>fuzzy_ball_signal</code></td>
+<td><code>overfit</code></td>
+<td>Combined overfit evidence</td>
+<td>Sum of <code>log_locvar_fg</code>, <code>presence</code>, and <code>log_bp40_100_center_edge_var</code>; low values indicate fuzzy-ball overfit evidence.</td>
+</tr>
+</tbody>
+</table>
+<p>Feature families are used by learn mode. Every learned policy includes <code>microchunk</code> and <code>overfit</code>; the policy variants append optional evidence families:</p>
+<ul>
+<li><code>microchunk</code></li>
+<li><code>microchunk_plus_score</code></li>
+<li><code>microchunk_plus_signal</code></li>
+<li><code>microchunk_plus_score_signal</code></li>
+</ul>
+<p>Resolution is intentionally not controlled by a separate training switch. If nominal resolution is unreliable for a particular scenario, the regularized linear or pairwise-logistic fit is expected to down-weight it or use it conditionally through interactions with other features.</p>
+<p>Features outside the selected policy are encoded by zero weights.</p>
+<h2 id="extraction-constants">Extraction Constants<a class="headerlink" href="#extraction-constants" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>FOREGROUND_SEG_LP = 30.0</code></li>
+<li><code>SIGNAL_METRIC_LP = 10.0</code></li>
+<li><code>OVERFIT_SIGNAL_BP_HP = 100.0</code></li>
+<li><code>OVERFIT_SIGNAL_BP_LP = 40.0</code></li>
+<li><code>CAVG_RES_HARD_REJECT_A = 40.0</code></li>
+<li><code>POP_FRACTION_HARD_REJECT = 0.0035</code></li>
+<li><code>BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5</code></li>
+<li><code>CHUNK_LOCVAR_FG_HARD_REJECT_MAX = exp(-4.5)</code></li>
+<li><code>POOL_RES_HARD_REJECT_A = 25.0</code></li>
+<li><code>POOL_POP_FRACTION_HARD_REJECT = 5.0e-4</code></li>
+<li><code>POOL_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 10.0</code></li>
+<li><code>LOCVAR_WINDOW = 10</code></li>
+<li><code>MASK_HARD_OUTSIDE_PIXELS = 10</code></li>
+<li><code>LOG_EPS = 1.0e-12</code></li>
+<li><code>CLIP_Z = 4.0</code></li>
+</ul>
+<h2 id="hard-rejects">Hard Rejects<a class="headerlink" href="#hard-rejects" title="Permanent link">&para;</a></h2>
+<p>Hard rejects are context-sensitive gates. For <code>chunk</code> and <code>pool</code>, they run before model fitting, clustering, and training-score calculation. For <code>sieve</code>, they are the whole rejection policy.</p>
+<p>A class average is hard rejected in <code>chunk</code> and <code>pool</code> when any shared validity condition holds:</p>
+<ul>
+<li><code>pop &lt;= 0</code>;</li>
+<li><code>res &gt; 40.0</code>;</li>
+<li>the image contains invalid pixels;</li>
+<li>foreground segmentation has no valid component after full-image connected components are pruned;</li>
+<li>a segmented foreground component centroid lies outside the mask radius;</li>
+<li>the largest foreground component has more than 10 pixels outside the mask disc;</li>
+<li>foreground and background local variance are both non-positive.</li>
+</ul>
+<p>For <code>quality_context=chunk</code>, these additional early-streaming gates also apply:</p>
+<ul>
+<li><code>pop &lt; ceiling(sum(pop) * 0.0035)</code>;</li>
+<li>raw foreground local variance is below <code>exp(-4.5)</code>;</li>
+<li>raw 100 to 40 A band-pass center/edge variance is below <code>1.5</code>.</li>
+</ul>
+<p>For <code>quality_context=pool</code>, the chunk local-variance floor is not applied. Pool instead adds stricter final pre-3D cleanup gates learned from the current pool training set:</p>
+<ul>
+<li><code>res &gt; 25.0</code>;</li>
+<li><code>pop &lt; ceiling(sum(pop) * 5.0e-4)</code>;</li>
+<li>raw 100 to 40 A band-pass center/edge variance is below <code>10.0</code>.</li>
+</ul>
+<p>For <code>quality_context=sieve</code>, the route intentionally uses a separate hard-gate policy for compatibility analysis. It does not inherit the shared chunk/pool validity gates, and it does not run a learned model. The sieve-specific gates are:</p>
+<ul>
+<li><code>pop &lt; ceiling(sum(pop) * 0.0035)</code>;</li>
+<li>raw 100 to 40 A band-pass center/edge variance is below <code>1.5</code>.</li>
+</ul>
+<p>Hard-rejected classes receive rejected state directly. Their normalized features are set to <code>-CLIP_Z</code>, their model scores are set to <code>-CLIP_Z</code>, and they remain visible in analysis and learning reports.</p>
+<p>The band-pass center/edge floor is deliberately conservative. In the v4 chunk training tables, <code>bp_center_edge_var &lt; 1.5</code> preserved all manually selected classes while still removing additional manually rejected classes beyond population and resolution. More aggressive fuzzy-ball evidence should remain in the normalized feature vector and learned model, not in the default pre-training hard rejects.</p>
+<p>Project-backed <code>apply</code>, <code>analyze</code>, and <code>evaluate</code> runs also write <code>hard_gate_rejections.mrc</code>. For <code>chunk</code> and <code>pool</code>, this is a bookkeeping stack containing classes removed before the model stage. For <code>sieve</code>, it is the rejection decision stack because the context is hard-gates-only.</p>
+<h2 id="normalization">Normalization<a class="headerlink" href="#normalization" title="Permanent link">&para;</a></h2>
+<p><code>normalize_cavg_quality_features</code> computes per-feature robust statistics over non-hard-rejected rows only. Each feature is centered by the median and scaled by the Gaussian MAD. Values are clipped to <code>[-CLIP_Z, CLIP_Z]</code>. If a feature has no robust spread, its normalized value is set to zero for trainable rows.</p>
+<h2 id="built-in-presets">Built-In Presets<a class="headerlink" href="#built-in-presets" title="Permanent link">&para;</a></h2>
+<p><code>chunk100mics</code> uses feature policy <code>microchunk_plus_score_signal</code> and the relational logistic model. It was trained from <code>/Users/elmlundho/model_cavgs_rejection/chunk_training5</code>.</p>
+<pre><code class="language-text">prob_threshold      3.500000E-01
+regularization      1.000000E-03
+feature_weights     uniform over all 14 microchunk_plus_score_signal features
+</code></pre>
+<pre><code class="language-text">boundary_margin         0.00
+min_score_separation    0.05
+otsu_min_offset         0.00
+otsu_max_offset         0.00
+cluster_rescue_margin   0.20
+min_accept_frac         0.00
+use_lowsep_otsu         false
+use_otsu_window         false
+use_cluster_rescue      false
+enforce_min_accept_frac false
+</code></pre>
+<p>On the refreshed v4 chunk-training table, this promoted preset scored <code>macro_evaluate_score=0.50847</code>, improving over the previous built-in chunk preset (<code>-0.80859</code>). The main gain was selected-class protection: soft-classification totals moved from <code>tp=297, fp=95, tn=151, fn=33</code> to <code>tp=324, fp=83, tn=163, fn=6</code>.</p>
+<h2 id="classification">Classification<a class="headerlink" href="#classification" title="Permanent link">&para;</a></h2>
+<p>For each non-hard-rejected class average, the relational logistic model computes:</p>
+<pre><code class="language-text">prob_accept = sigmoid(intercept + sum(linear_coefficients * features)
+                    + sum(interaction_coefficients * feature_i * feature_j)
+                    + relational_coefficient * relational_feature)
+</code></pre>
+<p>Every supported artifact declares the relational schema. Non-hard-rejected rows are accepted when <code>prob_accept &gt;= prob_threshold</code>.
+Standard hard gates still run before the logistic model.</p>
+<p>If there are fewer than four trainable rows, the distance matrix is degenerate, clustering fails, or the low-separation branch has no acceptable Otsu threshold, all non-hard-rejected rows are accepted as a single cluster.</p>
+<p><code>threshold_offset</code> is reported as <code>raw_threshold - threshold</code>. A positive value means the effective threshold is lower than the cluster midpoint.</p>
+<p>The classifier reports its soft decision explicitly:</p>
+<ul>
+<li><code>soft_decision=soft_threshold</code>: a learned score threshold was used to reject at least one non-hard-rejected class average.</li>
+<li><code>soft_decision=hard_only</code>: no additional soft rejection was made after hard preselection.</li>
+</ul>
+<p>Common hard-only reasons are <code>too_few_trainable</code>, <code>flat_feature_distances</code>, <code>invalid_two_cluster_result</code>, <code>low_score_separation</code>, <code>soft_threshold_accepts_all</code>, and <code>no_trainable_after_hard</code>. This is the real-world abstention path: if the post-hard feature distribution does not contain a credible low-quality partition, the model stops after hard preselection.</p>
+<h2 id="analysis-output">Analysis Output<a class="headerlink" href="#analysis-output" title="Permanent link">&para;</a></h2>
+<p><code>cavgs_quality_training.txt</code> starts with
+<code># cavg_quality_training_version=1</code>. It includes:</p>
+<ul>
+<li>dataset and model identity;</li>
+<li>selected/rejected counts;</li>
+<li><code>soft_decision</code>, <code>soft_reason</code>, and the number of trainable rows rejected by the soft model;</li>
+<li>confusion metrics against the manual <code>cls2D</code> state;</li>
+<li>relational schema and provider policy when supported by the model;</li>
+<li>model fields as comments;</li>
+<li>feature inventory;</li>
+<li>per-feature AUC, robust separation, current weight, and suggested weight;</li>
+<li>threshold scan;</li>
+<li>one row per class average containing state, hard-reject flag, quality score,
+  manual state, raw/normalized base features, and raw/normalized promoted
+  relational feature.</li>
+</ul>
+<p><code>cavgs_quality_features.txt</code> uses the same per-class row format without the analysis summary comments.</p>
+<h2 id="learning">Learning<a class="headerlink" href="#learning" title="Permanent link">&para;</a></h2>
+<p><code>quality_mode=learn</code> reads canonical files generated by the current analyze format. Required columns are:</p>
+<ul>
+<li><code>dataset_id</code></li>
+<li><code>hard_reject</code></li>
+<li><code>manual_state</code></li>
+<li>all required <code>z_*</code> feature columns for the 14-feature bank</li>
+</ul>
+<p>Every file must declare <code>relational_feature_schema=corr_knn_signal_v1</code>, contain
+<code>z_signal_stats_anchor_topk_mean</code>, and agree on <code>k</code>, high-pass, low-pass, and
+shift-range policy. Analyze guarantees this even when its scoring model is an
+older base-only artifact.</p>
+<p>Hard-rejected rows are kept in reports but excluded from feature-weight estimation, candidate scoring, feature-signal diagnostics, feature-drop diagnostics, and feature-policy diagnostics.</p>
+<p>Learn mode assigns each dataset an automatic role:</p>
+<ul>
+<li><code>balanced</code>: both manual good and manual bad rows remain after hard rejects; used for feature weights and scored by specificity with a small false-negative-rate tolerance.</li>
+<li><code>trainable_good_only</code>: only manual good rows remain after hard rejects; not used for feature weights, scored by guarded recall.</li>
+<li><code>trainable_bad_only</code>: only manual bad rows remain after hard rejects and no manually good rows were hard rejected; not used for feature weights, scored by specificity.</li>
+<li><code>skip_hard_gate_blocked</code>: only manual bad rows remain because all manually good rows were hard rejected; reported but skipped for soft-model fitting and scoring.</li>
+</ul>
+<p>Balanced datasets use specificity with a small false-negative-rate tolerance over trainable manually good rows. Overfit-focused datasets also subtract a hinge/quadratic penalty for the accepted manually bad fuzzy-ball-signature rate above the tolerated rate. The final macro score blends the mean dataset score with a fractional lower tail of the dataset scores. This makes threshold selection care about datasets where bad fuzzy-ball classes still leak through, while still penalizing candidates that reject too large a fraction of manually selected classes. Good-only datasets use a recall guard in the learn score. Raw recall is still reported in the dataset table, but the guarded learn score applies an additional shortfall penalty below the good-only recall floor. This prevents a candidate model from improving balanced datasets by rejecting a large fraction of classes from datasets that contain only trainable manual positives.</p>
+<p>The learner fits an intercept, selected base-feature coefficients, all pairwise
+interactions among those selected base features, and one relational
+coefficient. The relational feature remains a standalone term; it is not
+expanded into another interaction bank. Learn mode searches:</p>
+<ul>
+<li>feature policies: <code>microchunk</code>, <code>microchunk_plus_score</code>, <code>microchunk_plus_signal</code>, <code>microchunk_plus_score_signal</code>;</li>
+<li>L2 regularization: <code>0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1</code>;</li>
+<li>probability thresholds from <code>0.02</code> through <code>0.90</code> on the fixed grid reported
+  by the learner.</li>
+</ul>
+<p>The fit is ab initio with respect to the rejection model. Chunk, pool, and
+stage-specific behaviour is represented by the learned artifact context and
+coefficients, not by separate fitting procedures. A relational pool-context
+fit therefore produces a version-10 artifact even though the existing built-in
+pool preset remains a version-9-compatible base-only model.</p>
+<p>Each candidate is evaluated on every scoreable training dataset using the
+role-specific learn score. Objective value breaks score ties.</p>
+<p>The learn report includes the search grid, <code>macro_learn_score</code>, fitted base and
+relational coefficients, dataset-role diagnostics, and per-dataset confusion
+metrics.</p>
+<p><code>quality_mode=evaluate</code> uses the same trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out validation. It can score saved analysis tables through <code>filetab</code>, or a single manually selected project directly through <code>projfile</code> and <code>mskdiam</code>. The evaluate report includes the fixed model settings, <code>macro_evaluate_score</code>, dataset-role diagnostics, Otsu ablation diagnostics, and per-dataset confusion metrics.</p>
+<h2 id="promotion">Promotion<a class="headerlink" href="#promotion" title="Permanent link">&para;</a></h2>
+<p><code>quality_mode=promote</code> writes a Fortran snippet for adding a learned model as a built-in preset in <code>simple_cavg_quality_model.f90</code>. The snippet also lists the UI/help files that need the model name added when a new built-in is introduced.</p>
+<h2 id="example-commands">Example Commands<a class="headerlink" href="#example-commands" title="Permanent link">&para;</a></h2>
+<p>Analyze a manually selected project:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=analyze \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+</code></pre>
+<p>Apply the default chunk model:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=apply \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+</code></pre>
+<p>Train from a file table of canonical outputs:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=learn \
+  filetab=cavgs_quality_training_filetab.txt \
+  fname=cavgs_quality_model_learned.txt \
+  mkdir=yes
+</code></pre>
+<p>Evaluate a fixed built-in model on independent canonical outputs:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=evaluate \
+  quality_model=chunk100mics \
+  filetab=holdout_training_files.txt \
+  fname=cavgs_quality_evaluate_report.txt \
+  mkdir=yes
+</code></pre>
+<p>Evaluate a single manually selected project directly:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=evaluate \
+  quality_model=chunk100mics \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  fname=cavgs_quality_evaluate_report.txt \
+  mkdir=yes
+</code></pre>
+<p>Apply a learned model file:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=apply \
+  infile=cavgs_quality_model_learned.txt \
+  projfile=my_project.simple \
+  mskdiam=180 \
+  mkdir=yes
+</code></pre>
+<p>Promote a learned model:</p>
+<pre><code class="language-bash">simple_exec prg=model_cavgs_rejection \
+  quality_mode=promote \
+  infile=cavgs_quality_model_learned.txt \
+  fname=cavgs_quality_model_learned_builtin_code.txt \
+  mkdir=yes
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

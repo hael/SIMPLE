@@ -1,0 +1,3386 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/diffusion_maps_manifoldem_review.html">
+      
+      
+        <link rel="prev" href="ctf_sigma_weighted_pcg_reconstruction.html">
+      
+      
+        <link rel="next" href="../policies/KB_Interpolation_Policy.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Diffusion maps: lessons from a ManifoldEM review - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#diffusion-maps-lessons-from-a-manifoldem-review" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Diffusion maps: lessons from a ManifoldEM review
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-simple-files-reviewed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. SIMPLE files reviewed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-manifoldem-files-reviewed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. ManifoldEM files reviewed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-feature-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Feature comparison
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Feature comparison">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-simple-capabilities-not-present-in-manifoldem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 SIMPLE capabilities not present in ManifoldEM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-manifoldem-capabilities-not-present-in-simple" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 ManifoldEM capabilities not present in SIMPLE
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.2 ManifoldEM capabilities not present in SIMPLE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#321-ferguson-tanh-data-adaptive-bandwidth-high-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.1 Ferguson / tanh data-adaptive bandwidth (HIGH PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#322-coifmanlafon-normalization-high-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#323-stationary-measure-riemannian-density-medium-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.3 Stationary measure / Riemannian density (MEDIUM PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#324-iterative-manifold-trimming-medium-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.4 Iterative manifold trimming (MEDIUM PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#325-nonlinear-laplacian-spectral-analysis-delay-embedding-low-priority-high-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.5 Nonlinear Laplacian Spectral Analysis / delay embedding (LOW PRIORITY, HIGH IMPACT)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#326-where-noise-weighting-lives-in-simple-vs-manifoldem-relevant-to-flex-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.6 Where Noise Weighting Lives In SIMPLE vs ManifoldEM (RELEVANT TO FLEX WORKFLOWS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#327-what-we-can-reuse-from-diffusion-maps-with-nystrom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.7 What We Can Reuse From diffusion-maps-with-nystrom
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-implementation-priority-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Implementation priority summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-simple-files-reviewed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. SIMPLE files reviewed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-manifoldem-files-reviewed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. ManifoldEM files reviewed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-feature-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Feature comparison
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Feature comparison">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-simple-capabilities-not-present-in-manifoldem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 SIMPLE capabilities not present in ManifoldEM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-manifoldem-capabilities-not-present-in-simple" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 ManifoldEM capabilities not present in SIMPLE
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.2 ManifoldEM capabilities not present in SIMPLE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#321-ferguson-tanh-data-adaptive-bandwidth-high-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.1 Ferguson / tanh data-adaptive bandwidth (HIGH PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#322-coifmanlafon-normalization-high-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#323-stationary-measure-riemannian-density-medium-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.3 Stationary measure / Riemannian density (MEDIUM PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#324-iterative-manifold-trimming-medium-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.4 Iterative manifold trimming (MEDIUM PRIORITY)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#325-nonlinear-laplacian-spectral-analysis-delay-embedding-low-priority-high-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.5 Nonlinear Laplacian Spectral Analysis / delay embedding (LOW PRIORITY, HIGH IMPACT)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#326-where-noise-weighting-lives-in-simple-vs-manifoldem-relevant-to-flex-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.6 Where Noise Weighting Lives In SIMPLE vs ManifoldEM (RELEVANT TO FLEX WORKFLOWS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#327-what-we-can-reuse-from-diffusion-maps-with-nystrom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.7 What We Can Reuse From diffusion-maps-with-nystrom
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-implementation-priority-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Implementation priority summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="diffusion-maps-lessons-from-a-manifoldem-review">Diffusion maps: lessons from a ManifoldEM review<a class="headerlink" href="#diffusion-maps-lessons-from-a-manifoldem-review" title="Permanent link">&para;</a></h1>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p><strong>Implementation note — no code changes are implied by this document.</strong></p>
+<p>This note records a systematic comparison between SIMPLE's diffusion-map
+subsystem and the ManifoldEM Python package
+(<code>/home/elmlundho/src/ManifoldEM/ManifoldEM</code>; original MATLAB by A. Dashti /
+UWM 2016, Python port by H. Liao and E. Seitz / Columbia 2018–2020).  Its
+purpose is to document algorithmic differences that could improve the SIMPLE
+implementation and to provide exact pointers to both codebases so that any
+future developer can trace the rationale without repeating the review.</p>
+<hr />
+<h2 id="1-simple-files-reviewed">1. SIMPLE files reviewed<a class="headerlink" href="#1-simple-files-reviewed" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/main/pca/simple_diff_map_graphs.f90</code></td>
+<td>CSR graph construction, Gaussian kernel, symmetric normalization</td>
+</tr>
+<tr>
+<td><code>src/main/pca/simple_diffusion_maps.f90</code></td>
+<td>Embedding driver, steerable DM, Nyström, eigengap selection</td>
+</tr>
+<tr>
+<td><code>src/main/pca/simple_diff_map_denoise.f90</code></td>
+<td>Graph-based denoising built on the embedding</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-manifoldem-files-reviewed">2. ManifoldEM files reviewed<a class="headerlink" href="#2-manifoldem-files-reviewed" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DMembeddingII.py</code></td>
+<td>Core DM pipeline: kernel construction, <code>slaplacian</code>, <code>sembedding</code>, <code>fergusonE</code>, <code>op</code></td>
+</tr>
+<tr>
+<td><code>core.py</code></td>
+<td><code>fergusonE</code> bandwidth estimator; <code>L2_distance</code>; <code>svdRF</code></td>
+</tr>
+<tr>
+<td><code>calc_distance.py</code></td>
+<td>CTF-corrected pairwise distance computation per projection direction</td>
+</tr>
+<tr>
+<td><code>psi_analysis.py</code></td>
+<td>NLSA (delay-embedded DM) and movie generation</td>
+</tr>
+<tr>
+<td><code>manifoldTrimmingAuto.py</code></td>
+<td>Iterative radius-ball manifold trimming</td>
+</tr>
+<tr>
+<td><code>embedd.py</code></td>
+<td>Re-embedding after interactive trimming</td>
+</tr>
+<tr>
+<td><code>find_conformational_coords.py</code></td>
+<td>Global conformational coordinate propagation across projection directions</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-feature-comparison">3. Feature comparison<a class="headerlink" href="#3-feature-comparison" title="Permanent link">&para;</a></h2>
+<h3 id="31-simple-capabilities-not-present-in-manifoldem">3.1 SIMPLE capabilities not present in ManifoldEM<a class="headerlink" href="#31-simple-capabilities-not-present-in-manifoldem" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Projection-gated kNN graph</strong> — avoids O(N²) all-pairs comparisons by binning
+  particles by projection direction and searching only neighbouring angular bins
+  (<code>simple_diff_map_graphs.f90</code>, <code>build_gated_euclidean_knn_graph</code>,
+  <code>find_gated_euclidean_neighbors_rows</code>).</li>
+<li><strong>Automatic eigengap dimensionality selection</strong> — <code>auto_ndiff_from_eigengap</code>
+  in <code>simple_diffusion_maps.f90</code>.  ManifoldEM always takes a fixed
+  <code>nEigs = params.num_eigs</code>.</li>
+<li><strong>Nyström out-of-sample extension</strong> — the optional <code>nystrom_coords</code> branch in
+  <code>embed_graph</code> in <code>simple_diffusion_maps.f90</code>.  ManifoldEM does not
+  implement out-of-sample extension.</li>
+</ul>
+<blockquote>
+<p><strong>Note</strong>: SO(2)/SE(2) steerable diffusion maps (<code>embed_so2_graph</code>,
+<code>embed_se2_graph</code>, <code>connection_matvec</code>, <code>coalesce_coo_to_csr</code>,
+<code>pack_knn_to_csr</code>, and associated graph payload fields <code>theta</code>, <code>shift_x</code>,
+<code>shift_y</code>) were removed as unused code.</p>
+</blockquote>
+<hr />
+<h3 id="32-manifoldem-capabilities-not-present-in-simple">3.2 ManifoldEM capabilities not present in SIMPLE<a class="headerlink" href="#32-manifoldem-capabilities-not-present-in-simple" title="Permanent link">&para;</a></h3>
+<p>The following sections describe each capability with exact file and line
+references to ManifoldEM and to the corresponding SIMPLE location where a change
+would be applied.</p>
+<hr />
+<h4 id="321-ferguson-tanh-data-adaptive-bandwidth-high-priority">3.2.1 Ferguson / tanh data-adaptive bandwidth (HIGH PRIORITY)<a class="headerlink" href="#321-ferguson-tanh-data-adaptive-bandwidth-high-priority" title="Permanent link">&para;</a></h4>
+<blockquote>
+<p><strong>Implemented.</strong> The production behavior, parameters, defaults, and safety
+fallbacks now live in the
+<a href="../policies/flex_analysis_policy.html"><code>flex_analysis</code> policy, §3.1</a>.
+The review rationale below is retained for historical context.</p>
+</blockquote>
+<p><strong>ManifoldEM location</strong>: <code>core.py</code>, function <code>fergusonE</code> (~line 182);
+called from <code>DMembeddingII.py</code>, function <code>op</code> (~line 576):</p>
+<pre><code class="language-python">popt, logSumWij, resnorm, R_squared = fergusonE(np.sqrt(yVal), logEps)
+sigma = tune * np.sqrt(2 * np.exp(-popt[1] / popt[0]))
+</code></pre>
+<p><code>fergusonE</code> scans a range of log-scale bandwidths
+(<code>logEps = np.arange(-150, 150.2, 0.2)</code>) and for each ε computes:</p>
+<p>$$\log \sum_{ij} W_{ij}(\varepsilon) = \log \sum_{ij} \exp!\Bigl(-\frac{d_{ij}^2}{2\varepsilon}\Bigr)$$</p>
+<p>It then fits the tanh model:</p>
+<p>$$f(x) = d + c \tanh(a x + b)$$</p>
+<p>and extracts the inflection point as:</p>
+<p>$$\sigma^* = \mathtt{tune} \cdot \sqrt{2 \exp(-b/a)}$$</p>
+<p>This is the Coifman–Lafon optimal bandwidth selector (see Coifman &amp; Lafon,
+<em>Applied and Computational Harmonic Analysis</em> 21, 2006, §3.3).</p>
+<p><strong>SIMPLE current approach</strong>: <code>simple_diff_map_graphs.f90</code>,
+<code>pack_scalar_knn_to_csr</code> (~line 450) and <code>pack_knn_to_csr</code> (~line 381):</p>
+<pre><code class="language-fortran">eps = median_positive(kth_d2)
+if( eps &lt; DTINY ) eps = max(sum(kth_d2) / real(max(size(kth_d2),1)), 1.e-6)
+...
+w = exp(-max(d2s(m,i), 0.) / eps)
+</code></pre>
+<p>The bandwidth is the median of the k-th-nearest-neighbour squared distances.
+This is a reasonable heuristic but has no analytical guarantee of being in
+the correct scale for the Laplace-Beltrami operator.</p>
+<p><strong>Suggested change</strong>: add an optional <code>bandwidth_mode</code> flag to
+<code>build_euclidean_knn_graph</code> / <code>build_orientation_knn_graph</code>.  When set to
+<code>'ferguson'</code>, collect all non-zero edge distances into a flat array after the
+kNN search (before the CSR pack) and run the tanh scan to estimate <code>eps</code>.
+Keep the median default so no existing caller is affected.  The scan itself
+can be implemented compactly: the summation over distances at each trial ε is
+an inner-product loop and the tanh fit is a 4-parameter nonlinear least
+squares (e.g. Levenberg-Marquardt via <code>simple_linalg</code> or a dedicated new
+utility).</p>
+<hr />
+<h4 id="322-coifmanlafon-normalization-high-priority">3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)<a class="headerlink" href="#322-coifmanlafon-normalization-high-priority" title="Permanent link">&para;</a></h4>
+<blockquote>
+<p><strong>Implemented.</strong> The production behavior, parameters, defaults, and the
+Ferguson-bandwidth correction history now live in the
+<a href="../policies/flex_analysis_policy.html"><code>flex_analysis</code> policy, §3.1</a>.
+The review rationale below is retained for historical context.</p>
+</blockquote>
+<p><strong>ManifoldEM location</strong>: <code>DMembeddingII.py</code>, function <code>slaplacian</code> (~line 97):</p>
+<pre><code class="language-python">d = np.array(l.sum(axis=0)).T
+if options.alpha != 1:   # apply non-isotropic normalization
+    d = d**options.alpha
+yVal = yVal / (d[yRow].flatten('C') * d[yCol].flatten('C'))
+</code></pre>
+<p>ManifoldEM uses <code>alpha=1</code> by default throughout <code>op</code> (~line 594):</p>
+<pre><code class="language-python">alpha = 1   # Laplace-Beltrami operator
+</code></pre>
+<p>The three interpretations exposed by <code>slaplacian</code>:
+- <code>alpha = 0</code> — plain graph Laplacian (sampling density is retained in the
+  operator; what SIMPLE currently implements via its symmetric degree
+  normalization in <code>normalize_diffmap_graph</code>).
+- <code>alpha = 0.5</code> — Fokker-Planck diffusion.
+- <code>alpha = 1</code> — Laplace-Beltrami operator (sampling density is divided out;
+  eigenvalues reflect intrinsic geometry only).</p>
+<p><strong>SIMPLE current approach</strong>: <code>simple_diff_map_graphs.f90</code>,
+<code>normalize_diffmap_graph</code> (~line 591):</p>
+<pre><code class="language-fortran">self%wnorm(p) = self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+</code></pre>
+<p>This is a pure symmetric degree normalization — it corresponds to <code>alpha = 0</code>
+(graph Laplacian) applied to already-Gaussianized weights.  The
+sampling-density correction that <code>alpha = 1</code> would provide is absent.</p>
+<p><strong>Implication for cryo-EM</strong>: because orientation coverage in cryo-EM datasets is
+never uniform (preferred orientations, angular gaps), the plain graph Laplacian
+embeds sampling density artefacts into the leading eigenvectors.  With
+<code>alpha = 1</code> those artefacts are cancelled, and the eigenvectors reflect the
+intrinsic molecular geometry of the particle set.</p>
+<p><strong>Suggested change</strong>: add an optional <code>alpha</code> argument (default <code>0</code>, preserving
+current behaviour) to <code>normalize_diffmap_graph</code>.  When <code>alpha &gt; 0</code>, compute a
+pre-normalization step before the symmetric degree division:</p>
+<pre><code>1. Compute raw degree d_i = sum_j w_ij
+2. For alpha &gt; 0: rescale w_ij &lt;- w_ij / (d_i^alpha * d_j^alpha)
+3. Recompute rescaled degree and apply symmetric 1/sqrt(d_i d_j) normalisation
+</code></pre>
+<p>This is a two-pass change confined entirely to <code>normalize_diffmap_graph</code> and
+does not affect graph construction or the eigensolver.</p>
+<hr />
+<h4 id="323-stationary-measure-riemannian-density-medium-priority">3.2.3 Stationary measure / Riemannian density (MEDIUM PRIORITY)<a class="headerlink" href="#323-stationary-measure-riemannian-density-medium-priority" title="Permanent link">&para;</a></h4>
+<p><strong>ManifoldEM location</strong>: <code>DMembeddingII.py</code>, function <code>op</code> (~line 611):</p>
+<pre><code class="language-python">mu = v[:, 0]
+mu = mu * mu   # Riemannian measure; sum(mu)=1
+</code></pre>
+<p>After <code>sembedding</code>, the zeroth eigenvector (trivial eigenfunction,
+eigenvalue ≈ 1) is squared to give the stationary probability measure on the
+manifold.  ManifoldEM stores <code>mu</code> and uses it in NLSA to weight images:</p>
+<pre><code class="language-python"># psi_analysis.py, _NLSA, ~line 57:
+mu_psi = mu.reshape((-1,1)) * psi
+A[ind4:ind5,:] = np.matmul(tmp, mu_psi)
+</code></pre>
+<p><strong>SIMPLE current approach</strong>: <code>embed_graph</code> in <code>simple_diffusion_maps.f90</code>
+(~line 139) skips eigenvector 0 entirely:</p>
+<pre><code class="language-fortran">do k = 1,ndiff_used
+    j = nev - k          ! nev is ndiff_scan+1; k=1 takes the 2nd-largest eigenvalue
+    coords(k,i) = evals(j) * evecs(i,j)
+end do
+</code></pre>
+<p>The trivial eigenfunction is discarded without ever being exposed to callers.</p>
+<p><strong>Suggested change</strong>: add an optional output <code>stationary_measure</code> of shape
+<code>(n)</code> to <code>embed_graph</code>.  When present, fill it with <code>evecs(:, nev)**2</code> before
+the coordinate loop.  No existing caller is changed.  The measure can then be
+used for density-weighted trajectory generation or averaging, if needed.</p>
+<hr />
+<h4 id="324-iterative-manifold-trimming-medium-priority">3.2.4 Iterative manifold trimming (MEDIUM PRIORITY)<a class="headerlink" href="#324-iterative-manifold-trimming-medium-priority" title="Permanent link">&para;</a></h4>
+<p><strong>ManifoldEM location</strong>: <code>manifoldTrimmingAuto.py</code>, function <code>op</code> (~line 64):</p>
+<pre><code class="language-python">posPath1 = get_psiPath(psi, rad, 0)
+cc = 0
+while len(posPath1) &lt; nS:
+    cc += 1
+    nS = len(posPath1)
+    D1 = D[posPath1][:, posPath1]
+    lamb, psi, sigma, mu, ... = DMembeddingII.op(D1, k, tune, 600000)
+    posPath1 = posPath1[posPathInt]
+</code></pre>
+<p>The loop re-embeds only the subset of particles whose embedding coordinates
+fall inside a radius ball centred on the manifold origin, iterating until the
+included set stabilises.  The radius <code>rad</code> is a user parameter.</p>
+<p>Also called from <code>embedd.py</code> after interactive point trimming:</p>
+<pre><code class="language-python">lamb, psi, sigma, mu, logEps, logSumWij, popt, R_squared = \
+    DMembeddingII.op(D1, k, params.nlsa_tune, 60000)
+</code></pre>
+<p><strong>SIMPLE current approach</strong>: no manifold trimming is implemented.  Outlier
+particles remain in the graph and appear at the fringes of the embedding.</p>
+<p><strong>Suggested change</strong>: add a standalone utility function
+<code>trim_embedding_by_radius</code> in <code>simple_diffusion_maps.f90</code> that accepts an
+existing graph plus an embedding radius parameter and returns a logical mask of
+kept particles.  Callers that want trimming run the masking loop, rebuild the
+graph on the kept subset, and re-embed.  Keeping this as a utility (rather
+than auto-running inside <code>embed_graph</code>) preserves the existing interface and
+lets callers decide whether the cost of re-embedding is justified.</p>
+<hr />
+<h4 id="325-nonlinear-laplacian-spectral-analysis-delay-embedding-low-priority-high-impact">3.2.5 Nonlinear Laplacian Spectral Analysis / delay embedding (LOW PRIORITY, HIGH IMPACT)<a class="headerlink" href="#325-nonlinear-laplacian-spectral-analysis-delay-embedding-low-priority-high-impact" title="Permanent link">&para;</a></h4>
+<p><strong>ManifoldEM location</strong>: <code>psi_analysis.py</code>, internal function <code>_NLSA</code>
+(~line 37):</p>
+<pre><code class="language-python">ConD = np.zeros((num - ConOrder, num - ConOrder))
+for i in range(ConOrder):
+    Ind = range(i, num - ConOrder + i)
+    ConD += DD[Ind][:, Ind]
+lamb, psi, sigma, mu, ... = DMembeddingII.op(ConD, k, tune, 600000)
+</code></pre>
+<p><code>ConD</code> is the delay-embedded distance matrix: a sum of <code>ConOrder</code> shifted
+sub-matrices of the pairwise distance matrix <code>DD</code>.  This is a discrete
+analogue of Takens delay embedding.  The DM eigenvalues and eigenfunctions of
+<code>ConD</code> are smoother along the conformational trajectory than those of the
+single-shot matrix <code>DD</code>, because noise that is uncorrelated across frames
+averages out.</p>
+<p>The NLSA eigenfunctions <code>psiC</code> are used to reconstruct CTF-deconvolved image
+averages along the conformational trajectory:</p>
+<pre><code class="language-python">A[ind4:ind5,:] = np.matmul(tmp, mu_psi)
+U, S, V = svdRF(A)
+VX = np.matmul(V.T, psiC.T)
+</code></pre>
+<p>(<code>svdRF</code> is in <code>core.py</code> ~line 75; it is an SVD via eigendecomposition of
+<code>A^T A</code> or <code>A A^T</code>.)</p>
+<p><strong>SIMPLE current approach</strong>: no delay-embedding or NLSA is implemented.
+SIMPLE's conformational analysis operates on a single-shot embedding.</p>
+<p><strong>Suggested change</strong>: this is a significant addition.  The prerequisite is a
+sorted distance matrix for each particle subset (i.e., particles must carry a
+1-D ordering along the conformational coordinate before the delay matrix can
+be constructed).  For a first prototype, the ordering could come from SIMPLE's
+existing 1-D open-manifold fit (<code>fit_1D_open_manifold_3D</code> is an analogue in
+ManifoldEM at <code>fit_1D_open_manifold_3D.py</code>).  The delay summation itself is
+cheap once the ordering is known.</p>
+<hr />
+<h4 id="326-where-noise-weighting-lives-in-simple-vs-manifoldem-relevant-to-flex-workflows">3.2.6 Where Noise Weighting Lives In SIMPLE vs ManifoldEM (RELEVANT TO FLEX WORKFLOWS)<a class="headerlink" href="#326-where-noise-weighting-lives-in-simple-vs-manifoldem-relevant-to-flex-workflows" title="Permanent link">&para;</a></h4>
+<p><strong>ManifoldEM location</strong>: <code>calc_distance.py</code>, <code>get_distance_CTF_local</code>
+(~line 218):</p>
+<pre><code class="language-python">img_f = fft2(img)
+CTF_i = CTF1[ind3, :, :]
+img_f_wiener = img_f * (CTF_i / wiener_dom[i, :, :])
+img = ifft2(img_f_wiener).real
+</code></pre>
+<p>Each particle image is Wiener-deconvolved with its per-particle CTF before
+computing squared-Euclidean distances between images in the same projection
+bin. The Wiener denominator <code>wiener_dom</code> accumulates <code>sum_i CTF_i^2 + 1/SNR</code>.</p>
+<p><strong>Correction and SIMPLE-specific interpretation</strong>:</p>
+<p>The primary SIMPLE noise weighting is not ad hoc per-particle Wiener filtering
+at distance-computation time. In the ML-regularized reconstruction path
+(<code>ml_reg=yes</code>), weighting is applied in Fourier observation/operator assembly and
+in volumetric regularization, using sigma2 and SSNR-derived priors.</p>
+<p>In particular, the Fourier-plane generator supports sigma2-weighted assembly:</p>
+<ul>
+<li><code>src/main/image/simple_image_ctf.f90</code> (<code>gen_fplane4rec</code>):
+  <code>CTF*y/sigma2</code> and <code>CTF^2/sigma2</code> for reconstruction planes.</li>
+<li>The same routine also supports observation-model assembly with
+  <code>y/sqrt(sigma2)</code> and <code>CTF/sqrt(sigma2)</code> transfer planes.</li>
+</ul>
+<p>So the scientific question for SIMPLE is not "should we add ManifoldEM-style
+particle-level SNR filtering before distance calculations?" The more relevant
+question is:</p>
+<blockquote>
+<p>How do we preserve the same ML-style volumetric weighting/prior behavior in
+the flex_analysis latent residual-model reconstruction path?</p>
+</blockquote>
+<p><strong>Current flex_analysis behavior</strong>:</p>
+<ul>
+<li><code>src/main/flex/simple_flex_analysis_strategy.f90</code> sets <code>ml_reg='no'</code> in
+  <code>apply_defaults</code>.</li>
+<li><code>src/main/flex/simple_flex_projected_latent_model.f90</code>
+  (<code>prep_imgs4projected_model</code>) calls <code>gen_fplane4rec(..., observation_model=.true.)</code>
+  without sigma2 input, so no sigma2 division is applied there.</li>
+<li><code>src/main/flex/simple_flex_diffmap_rec3D.f90</code> uses
+  <code>prepare_unfiltered_model_params</code> (currently only forces <code>lp=0.</code>), i.e. the
+  pre-image reconstruction is intentionally unfiltered/unregularized relative to
+  the <code>ml_reg=yes</code> refine3D path.</li>
+</ul>
+<p><strong>Implication</strong>:</p>
+<p>The present flex_analysis path is internally coherent, but it does not mirror
+the full <code>ml_reg=yes</code> volumetric weighting contract. If parity with ML
+regularization is desired, the extension point is the latent-model plane
+preparation and coupled-basis solve path, not distance-time per-particle
+Wiener filtering.</p>
+<p><strong>Implementation draft (optional ML-reg parity for flex_analysis)</strong>:</p>
+<ol>
+<li>Add an explicit flex toggle and keep current behavior as default.</li>
+<li>Add a parameter (for example <code>flex_ml_reg</code>) with default <code>no</code>.</li>
+<li>Keep <code>apply_defaults</code> in <code>src/main/flex/simple_flex_analysis_strategy.f90</code>
+     backward-compatible (<code>ml_reg='no'</code> unless <code>flex_ml_reg=yes</code>).</li>
+<li>
+<p>When <code>flex_ml_reg=yes</code>, propagate <code>ml_reg='yes'</code> and set <code>l_ml_reg=.true.</code>
+     in the flex reconstruction parameter copies.</p>
+</li>
+<li>
+<p>Thread sigma2 into projected-model plane preparation.</p>
+</li>
+<li>Update <code>prep_imgs4projected_model</code> in
+     <code>src/main/flex/simple_flex_projected_latent_model.f90</code> to optionally pass
+     <code>sig2arr</code> into <code>gen_fplane4rec(..., observation_model=.true.)</code>.</li>
+<li>Preserve the current code path when sigma2 is unavailable.</li>
+<li>
+<p>Keep the same Fourier contract (observation plane and transfer plane)
+     while switching from unweighted to sigma2-weighted assembly.</p>
+</li>
+<li>
+<p>Define a strict data-availability contract.</p>
+</li>
+<li>If <code>flex_ml_reg=yes</code> but required sigma2/noise-model inputs are missing,
+     fail early with a clear error.</li>
+<li>
+<p>If <code>flex_ml_reg=no</code>, never require sigma2 (current behavior).</p>
+</li>
+<li>
+<p>Keep regularization ownership in the reconstruction stage.</p>
+</li>
+<li>Do not introduce distance-time particle Wiener filtering in the DM metric.</li>
+<li>
+<p>Apply weighting where SIMPLE already expects it: Fourier-plane assembly,
+     coupled basis accumulation, and volumetric solve/finalization.</p>
+</li>
+<li>
+<p>Keep low-pass policy explicit.</p>
+</li>
+<li><code>prepare_unfiltered_model_params</code> currently enforces <code>lp=0.</code> for model
+     reconstruction in <code>src/main/flex/simple_flex_diffmap_rec3D.f90</code>.</li>
+<li>
+<p>If ML parity mode is enabled, decide explicitly whether this remains
+     unfiltered for latent-basis estimation or follows refine3D-style policy.</p>
+</li>
+<li>
+<p>Add targeted regression checks before broad rollout.</p>
+</li>
+<li>Extend <code>test_projected_model_plane_preparation</code> to run both modes:
+     <code>flex_ml_reg=no</code> (legacy) and <code>flex_ml_reg=yes</code> (sigma2-weighted).</li>
+<li>Keep algebraic identity checks in
+     <code>test_fake_preimage_against_reconstruct3D</code> for both modes, with separate
+     tolerances if needed.</li>
+<li>
+<p>Add one end-to-end flex fixture demonstrating that enabling
+     <code>flex_ml_reg=yes</code> changes weighting behavior but preserves numerical
+     stability and convergence.</p>
+</li>
+<li>
+<p>Stage deployment to minimize risk.</p>
+</li>
+<li>Phase 1: plumb flags and sigma2 inputs, no default behavior change.</li>
+<li>Phase 2: enable in controlled tests/benchmarks.</li>
+<li>Phase 3: consider default changes only after quality and runtime review.</li>
+</ol>
+<p>This path preserves SIMPLE's existing theory (ML-style weighting at
+reconstruction time) while making flex_analysis capable of matching that
+contract when explicitly requested.</p>
+<hr />
+<h4 id="327-what-we-can-reuse-from-diffusion-maps-with-nystrom">3.2.7 What We Can Reuse From diffusion-maps-with-nystrom<a class="headerlink" href="#327-what-we-can-reuse-from-diffusion-maps-with-nystrom" title="Permanent link">&para;</a></h4>
+<p>An additional reference implementation was inspected at
+<code>/home/elmlundho/src/diffusion-maps-with-nystrom</code>
+(<code>src/diffusionmaps/diffusion_maps.py</code>).</p>
+<p>This codebase is compact and mathematically clean for <strong>embedding and
+out-of-sample extension</strong>, but it does <strong>not</strong> implement cryo-EM 3D pre-image
+reconstruction. The useful takeaways are therefore in normalization contracts,
+not in map reconstruction logic.</p>
+<p><strong>Reusable ideas (high value):</strong></p>
+<ol>
+<li><strong>Explicit Coifman-Lafon alpha normalization in both fit and Nyström paths</strong></li>
+<li>The implementation computes raw degree on <code>K</code>, applies alpha scaling
+     (<code>K/(d_i^alpha d_j^alpha)</code>), then re-normalizes with symmetric degree
+     factors for eigendecomposition.</li>
+<li>For out-of-sample points it mirrors that contract with mixed degrees
+     (<code>d_mix</code> against <code>d_old</code>) before Nyström.</li>
+<li>
+<p>This supports our policy direction that geometry and density effects should
+     be controllable rather than conflated.</p>
+</li>
+<li>
+<p><strong>Nyström extension written in its canonical form</strong></p>
+</li>
+<li>New eigenvectors are formed as <code>phi_new = A_mix * phi / lambda</code> using the
+     same eigenpairs computed on the training set.</li>
+<li>
+<p>SIMPLE already retains both in-sample spectral outputs and Nyström-style
+     outputs; this reference confirms the normalization sequence we should keep
+     internally consistent when using those coordinates for downstream weights.</p>
+</li>
+<li>
+<p><strong>Stationary-measure handling is explicit</strong></p>
+</li>
+<li>The code derives <code>pi</code> directly from degree normalization and for transformed
+     points approximates stationary mass from the trivial mode.</li>
+<li>This reinforces the recommendation to expose/use stationary density when
+     forming diffusion-space neighborhoods or weighted trajectory summaries.</li>
+</ol>
+<p><strong>Not reusable directly (important):</strong></p>
+<ol>
+<li>No cryo-EM reconstruction stage, no CTF/noise weighted 3D solve.</li>
+<li>No manifold pre-image algorithm for volumetric state maps.</li>
+<li>No adaptive local bandwidth/per-state neighborhood control for state
+   reconstruction.</li>
+</ol>
+<p><strong>Concrete implication for flex_analysis:</strong></p>
+<p>Use this repo as a normalization and Nyström-consistency check, not as a
+pre-image reconstruction template. In practical terms, the next robust
+improvement remains: maintain a stable diffusion metric contract and tune
+state kernel neighborhoods (effective sample size targets) in the weighted 3D
+reconstruction path.</p>
+<hr />
+<h2 id="4-implementation-priority-summary">4. Implementation priority summary<a class="headerlink" href="#4-implementation-priority-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>SIMPLE change location</th>
+<th>Effort</th>
+<th>Expected impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>α=1 Coifman-Lafon normalization</td>
+<td><code>normalize_diffmap_graph</code> in <code>simple_diff_map_graphs.f90</code> L591</td>
+<td>Low (one two-pass normalisation)</td>
+<td>High — density-invariant geometry</td>
+</tr>
+<tr>
+<td>Ferguson tanh bandwidth</td>
+<td><code>pack_scalar_knn_to_csr</code> in <code>simple_diff_map_graphs.f90</code> ~L380</td>
+<td>Medium (tanh scan + nonlinear fit)</td>
+<td>Medium — principled kernel scale</td>
+</tr>
+<tr>
+<td>Stationary measure output</td>
+<td><code>embed_graph</code> in <code>simple_diffusion_maps.f90</code> L139</td>
+<td>Low (optional output argument)</td>
+<td>Low–medium</td>
+</tr>
+<tr>
+<td>Iterative manifold trimming</td>
+<td>New utility in <code>simple_diffusion_maps.f90</code></td>
+<td>Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>NLSA / delay embedding</td>
+<td>New section in <code>simple_diffusion_maps.f90</code></td>
+<td>High</td>
+<td>High (if per-PrD movies wanted)</td>
+</tr>
+</tbody>
+</table>
+<p>The α normalization and Ferguson bandwidth are the lowest-risk and most
+self-contained changes.  Both are confined to <code>simple_diff_map_graphs.f90</code> and
+do not touch the eigensolver, the steerable path, or any caller.</p>
+<hr />
+<h2 id="5-references">5. References<a class="headerlink" href="#5-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Coifman &amp; Lafon, <em>Applied and Computational Harmonic Analysis</em> <strong>21</strong>, 5–30 (2006).
+  Original DM paper; establishes the α normalisation and the tanh bandwidth selector.</li>
+<li>Ferguson, Kollias &amp; Bharat, <em>Physical Review Letters</em> <strong>104</strong>, 118103 (2010).
+  Source of the tanh/<code>fergusonE</code> approach used in ManifoldEM.</li>
+<li>Giannakis &amp; Majda, <em>PNAS</em> <strong>109</strong>, 2222–2227 (2012).
+  Introduces NLSA (the delay-embedding extension).</li>
+<li>Dashti et al., <em>Structure</em> <strong>28</strong>, 1120–1130 (2020).
+  ManifoldEM application to cryo-EM conformational analysis.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

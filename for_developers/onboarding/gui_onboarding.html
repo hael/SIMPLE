@@ -1,0 +1,3194 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/for_developers/onboarding/gui_onboarding.html">
+      
+      
+        <link rel="prev" href="SIMPLE_developer_onboarding_slides.html">
+      
+      
+        <link rel="next" href="../../how2s/how2debug_fortran.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>SIMPLE GUI Onboarding Guide - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#simple-gui-onboarding-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SIMPLE GUI Onboarding Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="gui_onboarding.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-mental-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First Mental Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-gui-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch GUI Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream-gui-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stream GUI Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#communication-model-to-align" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Communication Model To Align
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desktop-gui-direction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desktop GUI Direction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-reading-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Reading Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-good-tickets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First Good Tickets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-the-project-lead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions For The Project Lead
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-definition-of-done-for-the-first-milestone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Definition Of Done For The First Milestone
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-mental-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First Mental Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-gui-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch GUI Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream-gui-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stream GUI Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#communication-model-to-align" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Communication Model To Align
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desktop-gui-direction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desktop GUI Direction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-reading-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Reading Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-good-tickets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First Good Tickets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-the-project-lead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions For The Project Lead
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-definition-of-done-for-the-first-milestone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Definition Of Done For The First Milestone
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="simple-gui-onboarding-guide">SIMPLE GUI Onboarding Guide<a class="headerlink" href="#simple-gui-onboarding-guide" title="Permanent link">&para;</a></h1>
+<p>This note is for a new developer starting on the batch side of the SIMPLE GUI.
+The immediate goal is to understand the existing NICE GUI, make the batch GUI
+more robust, and keep its communication model aligned with the newer stream
+work.</p>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<p>SIMPLE has three related but distinct GUI concerns:</p>
+<ul>
+<li>NICE: the Django-based web GUI under <code>nice/</code>.</li>
+<li>Batch, also called classic in the NICE code: discrete <code>simple_exec</code> or
+  <code>single_exec</code> jobs launched from a workspace.</li>
+<li>Stream: automated streaming jobs launched through <code>simple_stream</code>.</li>
+<li>Desktop: a robust local application experience around NICE and the SIMPLE
+  binaries.</li>
+</ul>
+<p>For the batch GUI work, focus first on the classic path. Use stream as the
+reference implementation for more structured job communication, status, and
+control.</p>
+<h2 id="first-mental-model">First Mental Model<a class="headerlink" href="#first-mental-model" title="Permanent link">&para;</a></h2>
+<p>The GUI is not a separate scientific engine. It is a launcher, monitor, and
+project browser around the Fortran executables.</p>
+<pre><code class="language-text">Fortran UI definitions
+        |
+        | simple_private_exec prg=print_ui_json
+        v
+Django/NICE form rendering
+        |
+        | create JobClassicModel and job.script
+        v
+simple_exec or single_exec
+        |
+        | updates workspace.simple, logs, thumbnails, and GUI status
+        v
+NICE project/job views
+</code></pre>
+<p>The stream path has the same broad idea, but the execution model is a
+multi-stage streaming pipeline with richer status and update messages.</p>
+<h2 id="repository-map">Repository Map<a class="headerlink" href="#repository-map" title="Permanent link">&para;</a></h2>
+<p>Start with these files and directories:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Path</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NICE build</td>
+<td><code>nice/CMakeLists.txt</code></td>
+<td>Optional Django/Tailwind build, venv setup, migrations, static assets.</td>
+</tr>
+<tr>
+<td>Local launcher</td>
+<td><code>nice/nice_local.py.in</code></td>
+<td>Current local GUI bootstrap; useful but not yet a robust desktop app.</td>
+</tr>
+<tr>
+<td>Django models</td>
+<td><code>nice/nice_lite/models.py</code></td>
+<td>Defines projects, datasets, workspaces, stream jobs, batch jobs, dispatch templates.</td>
+</tr>
+<tr>
+<td>URL routing</td>
+<td><code>nice/nice_lite/urls.py</code></td>
+<td>Separates global, classic, stream, and API endpoints.</td>
+</tr>
+<tr>
+<td>Classic views</td>
+<td><code>nice/nice_lite/views_classic.py</code></td>
+<td>Web entry points for batch workspaces and jobs.</td>
+</tr>
+<tr>
+<td>Classic job object</td>
+<td><code>nice/nice_lite/data_structures/jobclassic.py</code></td>
+<td>Owns batch job creation, selection jobs, status updates, deletion.</td>
+</tr>
+<tr>
+<td>SIMPLE launcher</td>
+<td><code>nice/nice_lite/data_structures/simple.py</code></td>
+<td>Bridges Django to <code>simple_exec</code>, <code>single_exec</code>, and <code>simple_stream</code>.</td>
+</tr>
+<tr>
+<td>Classic job form</td>
+<td><code>nice/nice_lite/app_views/newjobview.py</code></td>
+<td>Builds the new-job form from Fortran-generated UI JSON.</td>
+</tr>
+<tr>
+<td>Classic job panels</td>
+<td><code>nice/nice_lite/app_views/jobview.py</code></td>
+<td>Reads <code>workspace.simple</code> and renders project stats, micrographs, classes, and logs.</td>
+</tr>
+<tr>
+<td>Classic templates</td>
+<td><code>nice/nice_lite/templates/nice_classic/</code></td>
+<td>HTML for batch workspace, job, logs, micrograph, and class-average panels.</td>
+</tr>
+<tr>
+<td>Classic JS</td>
+<td><code>nice/nice_lite/static/nice_classic/</code></td>
+<td>Client-side behavior for batch views.</td>
+</tr>
+<tr>
+<td>Stream templates</td>
+<td><code>nice/nice_lite/templates/nice_stream/</code></td>
+<td>More developed stream monitoring UI.</td>
+</tr>
+<tr>
+<td>Stream JS</td>
+<td><code>nice/nice_lite/static/nice_stream/</code></td>
+<td>Useful reference for richer interactive controls.</td>
+</tr>
+<tr>
+<td>UI definitions</td>
+<td><code>src/main/ui/</code></td>
+<td>Fortran-side definitions of programs and input parameters.</td>
+</tr>
+<tr>
+<td>SIMPLE UI group</td>
+<td><code>src/main/ui/simple_ui_simple_group.f90</code></td>
+<td>Registers non-stream <code>simple_exec</code> GUI programs.</td>
+</tr>
+<tr>
+<td>Stream UI group</td>
+<td><code>src/main/ui/simple_ui_stream_group.f90</code></td>
+<td>Registers stream GUI programs.</td>
+</tr>
+<tr>
+<td>UI JSON printer</td>
+<td><code>src/main/ui/simple_ui.f90</code></td>
+<td>Implements <code>print_ui_json</code> and stream UI JSON output.</td>
+</tr>
+<tr>
+<td>Private exec</td>
+<td><code>production/simple_private_exec.f90</code></td>
+<td>Dispatches <code>print_ui_json</code> and <code>print_ui_stream</code>.</td>
+</tr>
+<tr>
+<td>GUI metadata</td>
+<td><code>src/utils/gui/metadata/</code></td>
+<td>Typed Fortran metadata objects that serialize to JSON.</td>
+</tr>
+<tr>
+<td>GUI assembler</td>
+<td><code>src/utils/gui/simple_gui_assembler.f90</code></td>
+<td>Newer stream-side JSON assembly with change detection.</td>
+</tr>
+<tr>
+<td>Stream communicator</td>
+<td><code>src/utils/comm/simple_stream_communicator.f90</code></td>
+<td>HTTP communicator used by stream stages.</td>
+</tr>
+<tr>
+<td>Legacy NICE comm</td>
+<td><code>src/utils/gui/simple_nice.f90</code></td>
+<td>Older socket/thread communication object used by several batch commanders.</td>
+</tr>
+<tr>
+<td>GUI tests</td>
+<td><code>production/tests/simple_test_gui_metadata.f90</code> and <code>production/tests/simple_test_gui_assembler.f90</code></td>
+<td>Fortran-side GUI metadata tests.</td>
+</tr>
+<tr>
+<td>Django tests</td>
+<td><code>nice/nice_lite/test/</code></td>
+<td>Existing model and data-structure tests.</td>
+</tr>
+</tbody>
+</table>
+<p>Also inspect <code>nice/nice_lite_dev/</code>. It appears to contain newer stream-facing
+work, including <code>StreamJob</code>, master heartbeat fields, and a more explicit
+stream master launch path. Before porting ideas, decide whether <code>nice_lite</code> or
+<code>nice_lite_dev</code> is the active development base for your branch.</p>
+<h2 id="batch-gui-flow">Batch GUI Flow<a class="headerlink" href="#batch-gui-flow" title="Permanent link">&para;</a></h2>
+<p>The batch side is called classic in the Django code.</p>
+<ol>
+<li>User chooses a workspace in the classic UI.</li>
+<li>User opens a new job page.</li>
+<li><code>NewJobView</code> asks <code>SIMPLE</code> for UI JSON.</li>
+<li><code>SIMPLE.loadUIJSON()</code> runs:</li>
+</ol>
+<p><code>text
+   simple_private_exec prg=print_ui_json</code></p>
+<ol>
+<li>The form is built from the JSON sections for the selected program.</li>
+<li><code>JobClassic.new()</code> creates a <code>JobClassicModel</code>, assigns a job directory, and
+   records user arguments.</li>
+<li><code>SIMPLE.dispatch()</code> writes <code>job.script</code>.</li>
+<li>The dispatch script copies the parent <code>workspace.simple</code>, runs
+   <code>simple_exec prg=update_project</code>, then executes the requested program.</li>
+<li>The job writes <code>stdout.log</code>, <code>stderr.log</code>, and an updated <code>workspace.simple</code>.</li>
+<li>Job views read <code>workspace.simple</code> using:</li>
+</ol>
+<p><code>text
+   simple_exec prg=print_project_info json=yes
+   simple_exec prg=print_project_field json=yes</code></p>
+<ol>
+<li>The GUI renders global project stats, micrograph tables, 2D class-average
+   panels, plots, histograms, selections, and logs.</li>
+</ol>
+<p>Important batch files:</p>
+<ul>
+<li><code>nice/nice_lite/data_structures/jobclassic.py</code></li>
+<li><code>nice/nice_lite/data_structures/simple.py</code></li>
+<li><code>nice/nice_lite/app_views/newjobview.py</code></li>
+<li><code>nice/nice_lite/app_views/jobview.py</code></li>
+<li><code>nice/nice_lite/templates/nice_classic/</code></li>
+<li><code>src/main/commanders/simple/</code></li>
+<li><code>src/main/ui/simple/</code></li>
+</ul>
+<h2 id="stream-gui-flow">Stream GUI Flow<a class="headerlink" href="#stream-gui-flow" title="Permanent link">&para;</a></h2>
+<p>The stream side exists both as the installed <code>nice_lite</code> version and as newer
+work in <code>nice_lite_dev</code>.</p>
+<p>The current installed <code>nice_lite</code> stream launcher starts several independent
+stream process scripts based on <code>simple_private_exec prg=print_ui_stream</code>.
+The newer <code>nice_lite_dev</code> direction launches a stream master:</p>
+<pre><code class="language-text">simple_stream prg=master
+</code></pre>
+<p>That master owns stream subprocesses, assembles GUI metadata, sends a single
+versioned JSON payload, and receives update commands from NICE. This is the
+communication direction worth learning from.</p>
+<p>Important stream files:</p>
+<ul>
+<li><code>nice/nice_lite/data_structures/job.py</code></li>
+<li><code>nice/nice_lite/data_structures/simple.py</code></li>
+<li><code>nice/nice_lite/views_stream.py</code></li>
+<li><code>nice/nice_lite/templates/nice_stream/</code></li>
+<li><code>nice/nice_lite_dev/data_structures/streamjob.py</code></li>
+<li><code>nice/nice_lite_dev/data_structures/simple.py</code></li>
+<li><code>src/main/stream/simple_stream_p00_master.f90</code></li>
+<li><code>src/utils/gui/simple_gui_assembler.f90</code></li>
+<li><code>src/utils/comm/simple_stream_communicator.f90</code></li>
+<li><code>src/utils/gui/metadata/stream/</code></li>
+</ul>
+<h2 id="communication-model-to-align">Communication Model To Align<a class="headerlink" href="#communication-model-to-align" title="Permanent link">&para;</a></h2>
+<p>The batch and stream GUIs should eventually share the same concepts:</p>
+<ul>
+<li>job id</li>
+<li>schema version</li>
+<li>status</li>
+<li>stage</li>
+<li>timestamp</li>
+<li>process id</li>
+<li>stats payload</li>
+<li>update command payload</li>
+<li>termination request</li>
+</ul>
+<p>Stream already points in this direction. Batch currently has lighter-weight
+status handling through <code>JobClassicModel.status</code>, <code>heartbeat</code>, and <code>update</code>,
+plus older <code>simple_nice_comm</code> usage in selected commanders.</p>
+<p>A useful target envelope is:</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;jobid&quot;: 123,
+  &quot;kind&quot;: &quot;batch&quot;,
+  &quot;heartbeat&quot;: {
+    &quot;status&quot;: &quot;running&quot;,
+    &quot;stage&quot;: &quot;iteration 4&quot;,
+    &quot;pid&quot;: 9999,
+    &quot;timestamp&quot;: 1779111111
+  },
+  &quot;stats&quot;: {},
+  &quot;update&quot;: {}
+}
+</code></pre>
+<p>For stream, <code>kind</code> can be <code>stream</code> and the heartbeat can contain stage-specific
+entries. For batch, it can be a single process heartbeat. The GUI should not
+need a completely different vocabulary for each.</p>
+<h2 id="desktop-gui-direction">Desktop GUI Direction<a class="headerlink" href="#desktop-gui-direction" title="Permanent link">&para;</a></h2>
+<p>The current local entry point is <code>nice_local</code>. It syncs NICE into
+<code>~/.nice/nice_4_0</code>, runs migrations, creates a local user, resets the local
+dispatch template, starts Django's development server, and opens a browser.</p>
+<p>That is useful for development, but a robust desktop experience needs more:</p>
+<ul>
+<li>deterministic app data location</li>
+<li>safe repeated startup</li>
+<li>dynamic localhost port selection</li>
+<li>clear logs</li>
+<li>supervised server process</li>
+<li>graceful shutdown</li>
+<li>browser/window ownership</li>
+<li>migration and static-asset checks</li>
+<li>packaging of Python runtime expectations</li>
+<li>clear failure messages when SIMPLE binaries or libraries are missing</li>
+</ul>
+<p>Treat the first robust desktop milestone as a hardened local NICE runtime. A
+native shell such as Tauri, Electron, or pywebview can come later; it should
+wrap a stable local runtime rather than hide fragile startup behavior.</p>
+<h2 id="suggested-reading-order">Suggested Reading Order<a class="headerlink" href="#suggested-reading-order" title="Permanent link">&para;</a></h2>
+<p>Day 1:</p>
+<ol>
+<li>Read this note.</li>
+<li>Open <code>nice/nice_lite/models.py</code>.</li>
+<li>Compare <code>JobModel</code> and <code>JobClassicModel</code>.</li>
+<li>Open <code>nice/nice_lite/data_structures/simple.py</code>.</li>
+<li>Trace <code>SIMPLE.dispatch()</code> for batch jobs.</li>
+<li>Trace <code>SIMPLEStream.dispatch()</code> for stream jobs.</li>
+</ol>
+<p>Day 2:</p>
+<ol>
+<li>Open <code>nice/nice_lite/app_views/newjobview.py</code>.</li>
+<li>Run or inspect <code>simple_private_exec prg=print_ui_json</code>.</li>
+<li>Open <code>src/main/ui/simple_ui.f90</code>.</li>
+<li>Open <code>src/main/ui/simple_ui_program.f90</code>.</li>
+<li>Open one program definition under <code>src/main/ui/simple/</code>, for example
+   <code>simple_ui_cluster2D.f90</code>.</li>
+</ol>
+<p>Day 3:</p>
+<ol>
+<li>Open <code>nice/nice_lite/data_structures/jobclassic.py</code>.</li>
+<li>Trace <code>JobClassic.new()</code> through job directory creation and parent project
+   handling.</li>
+<li>Open <code>nice/nice_lite/app_views/jobview.py</code>.</li>
+<li>Trace how global stats and field stats are read from <code>workspace.simple</code>.</li>
+<li>Open the classic templates and JavaScript for job, logs, micrographs, and
+   2D class panels.</li>
+</ol>
+<p>Day 4:</p>
+<ol>
+<li>Open <code>nice/nice_lite_dev/data_structures/streamjob.py</code>.</li>
+<li>Read <code>StreamJob.update_stats()</code>.</li>
+<li>Open <code>src/utils/gui/simple_gui_assembler.f90</code>.</li>
+<li>Open <code>src/utils/comm/simple_stream_communicator.f90</code>.</li>
+<li>Sketch which ideas should be shared with batch communication.</li>
+</ol>
+<p>Day 5:</p>
+<ol>
+<li>Run the Django tests if the local environment is available.</li>
+<li>Run the Fortran GUI metadata tests if the build is available.</li>
+<li>Pick one narrow first ticket from the list below.</li>
+</ol>
+<h2 id="first-good-tickets">First Good Tickets<a class="headerlink" href="#first-good-tickets" title="Permanent link">&para;</a></h2>
+<p>These are intentionally small enough to build confidence without changing the
+scientific behavior of SIMPLE.</p>
+<ol>
+<li>Document the difference between <code>nice_lite</code> and <code>nice_lite_dev</code>, then decide
+   which tree should receive active batch GUI work.</li>
+<li>Add a batch communication contract document and compare it with the stream
+   payload shape in <code>simple_gui_assembler</code>.</li>
+<li>Add more explicit heartbeat/status fields to <code>JobClassicModel</code>, mirroring
+   the useful parts of <code>JobModel.master_*</code> from <code>nice_lite_dev</code>.</li>
+<li>Build a small classic API test that posts a batch heartbeat and verifies the
+   database status/update response.</li>
+<li>Harden <code>nice_local</code> startup: avoid fragile rename behavior, detect occupied
+   ports, write logs, and make repeated launches idempotent.</li>
+<li>Choose one batch command, such as <code>import_movies</code>, and trace its
+   <code>simple_nice_comm</code> updates from commander to Django.</li>
+<li>Prototype a generic batch heartbeat using the same status vocabulary as the
+   stream master.</li>
+<li>Add a UI-level smoke test for new batch job form rendering from
+   <code>print_ui_json</code>.</li>
+</ol>
+<h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Keep Fortran command-line parameters registered through the typed SIMPLE
+  parameter path. Do not invent GUI-only command-line keys.</li>
+<li>Preserve the project-file contract. Batch jobs usually operate on a copied
+  <code>workspace.simple</code> in the job directory.</li>
+<li>Keep child command lines sparse. Avoid restating defaults unless the child
+  behavior actually needs to change.</li>
+<li>Do not let Django become the scientific source of truth. The project file and
+  SIMPLE executables remain authoritative for scientific state.</li>
+<li>Prefer a shared GUI communication vocabulary over separate batch and stream
+  special cases.</li>
+<li>Add tests around communication and dispatch behavior before changing launch
+  semantics.</li>
+<li>Keep desktop packaging separate from scientific workflow changes.</li>
+</ul>
+<h2 id="open-questions-for-the-project-lead">Open Questions For The Project Lead<a class="headerlink" href="#open-questions-for-the-project-lead" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Should active development happen in <code>nice_lite</code>, <code>nice_lite_dev</code>, or should
+  <code>nice_lite_dev</code> be merged back first? - Yes. We should move nice_lite_dev to 
+  nice_lite once we're ready to start active development. </li>
+<li>Should the future batch communicator use HTTP like stream, or adapt the older
+  <code>simple_nice_comm</code> socket/thread model? use HTTP like stream</li>
+<li>Which batch commands are the first-class desktop workflows? import procedures</li>
+<li>What minimum offline/local behavior is required for a desktop release? None - already implemented</li>
+<li>Should the desktop app support local-only execution first, or also configure
+  SLURM/LSF submission from day one? Local only to start.</li>
+<li>What is the expected support matrix for macOS and Linux desktop installs? All possible</li>
+</ul>
+<h2 id="practical-definition-of-done-for-the-first-milestone">Practical Definition Of Done For The First Milestone<a class="headerlink" href="#practical-definition-of-done-for-the-first-milestone" title="Permanent link">&para;</a></h2>
+<p>A useful first milestone is not a redesigned GUI. It is:</p>
+<ul>
+<li>batch jobs launch reliably from NICE,</li>
+<li>job status transitions are explicit and testable,</li>
+<li>at least one batch command reports structured heartbeat/stage information,</li>
+<li>the GUI can send a small update or terminate command and the job can consume
+  it,</li>
+<li>local desktop startup is repeatable and logs failures clearly,</li>
+<li>the stream and batch sides use the same names for common communication
+  concepts.</li>
+</ul>
+<p>That gives the batch GUI work a stable foundation while keeping it synchronized
+with the stream direction.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,3541 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.html">
+      
+      
+        <link rel="prev" href="Local-linear_diffusion-map_pre-image.html">
+      
+      
+        <link rel="next" href="diffusion_maps_manifoldem_review.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>CTF- and sigma-weighted PCG reconstruction: isolated prototype - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ctf-and-sigma-weighted-pcg-reconstruction-isolated-prototype" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CTF- and sigma-weighted PCG reconstruction: isolated prototype
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Codebase Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — implementation &amp; test spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="ctf_sigma_weighted_pcg_reconstruction.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF- and sigma-weighted PCG reconstruction: isolated prototype
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-question-being-tested" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Question being tested
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-fixed-input-prototype-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Fixed-input prototype contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-statistical-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Statistical model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Statistical model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-per-particle-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Per-particle operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-existing-simple-contracts-to-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Existing SIMPLE contracts to reuse
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-numerical-representation-and-adjoint-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Numerical representation and adjoint requirement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-proposed-isolated-module-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Proposed isolated module boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-pcg-algorithm-and-stopping-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. PCG algorithm and stopping rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-preconditioner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Preconditioner
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Preconditioner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-phase-2-option-kernelized-normal-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Phase-2 option: kernelized normal operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8.1 Phase-2 option: kernelized normal operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#boundary-and-validity-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boundary and validity limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#required-phase-2-equivalence-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required phase-2 equivalence tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-validation-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Validation sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-deliberate-non-goals-for-phase-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Deliberate non-goals for phase 1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-acceptance-decision-after-phase-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Acceptance decision after phase 1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-forward-evolution-continuous-joint-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Forward evolution: continuous joint refinement
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Forward evolution: continuous joint refinement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-intended-optimization-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Intended optimization shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#122-staged-parameter-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.2 Staged parameter expansion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#123-identifiability-and-validation-safeguards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.3 Identifiability and validation safeguards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#124-later-option-stochastic-gradient-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.4 Later option: stochastic-gradient refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/flex_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis Policy: Sparse Diffusion-Manifold 3D Pre-Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_24" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_24" id="__nav_10_24_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_24_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_24">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis: Cartesian diffusion-map replacement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_6" id="__nav_11_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-question-being-tested" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Question being tested
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-fixed-input-prototype-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Fixed-input prototype contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-statistical-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Statistical model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Statistical model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-per-particle-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Per-particle operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-existing-simple-contracts-to-reuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Existing SIMPLE contracts to reuse
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-numerical-representation-and-adjoint-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Numerical representation and adjoint requirement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-proposed-isolated-module-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Proposed isolated module boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-pcg-algorithm-and-stopping-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. PCG algorithm and stopping rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-preconditioner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Preconditioner
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Preconditioner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-phase-2-option-kernelized-normal-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Phase-2 option: kernelized normal operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8.1 Phase-2 option: kernelized normal operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#boundary-and-validity-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boundary and validity limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#required-phase-2-equivalence-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required phase-2 equivalence tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-validation-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Validation sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-deliberate-non-goals-for-phase-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Deliberate non-goals for phase 1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-acceptance-decision-after-phase-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Acceptance decision after phase 1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-forward-evolution-continuous-joint-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Forward evolution: continuous joint refinement
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Forward evolution: continuous joint refinement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-intended-optimization-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Intended optimization shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#122-staged-parameter-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.2 Staged parameter expansion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#123-identifiability-and-validation-safeguards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.3 Identifiability and validation safeguards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#124-later-option-stochastic-gradient-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.4 Later option: stochastic-gradient refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ctf-and-sigma-weighted-pcg-reconstruction-isolated-prototype">CTF- and sigma-weighted PCG reconstruction: isolated prototype<a class="headerlink" href="#ctf-and-sigma-weighted-pcg-reconstruction-isolated-prototype" title="Permanent link">&para;</a></h1>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p><strong>Proposal for review. No implementation is implied by this note.</strong></p>
+<p>This note proposes an experimental reconstruction command that solves a
+CTF- and noise-weighted least-squares problem with preconditioned conjugate
+gradients (PCG).  It is deliberately independent of the production Fourier
+gridding/<code>volassemble</code> path.  Its first purpose is to establish whether a
+more exact iterative data model gives a measurable improvement for a set of
+<em>already aligned</em> particles.</p>
+<p>It is not a replacement for the current reconstruction path and must not
+change its numerical result, artifacts, or performance characteristics.</p>
+<h2 id="1-question-being-tested">1. Question being tested<a class="headerlink" href="#1-question-being-tested" title="Permanent link">&para;</a></h2>
+<p>The current Cartesian reconstruction is efficient because it approximates the
+normal equations as diagonal on the gridded 3-D Fourier lattice.  Per-particle
+data contribute a numerator proportional to <code>CTF* y / sigma2</code> and a density
+proportional to <code>CTF**2 / sigma2</code>, after which the volume is obtained by a
+pointwise division plus regularization.</p>
+<p>The proposed prototype instead applies the complete forward model and its
+adjoint at every iteration.  The scientific question is therefore narrow:</p>
+<blockquote>
+<p>For fixed orientations, states, and shifts, does solving the weighted normal
+equations improve a controlled reconstruction enough to justify its cost?</p>
+</blockquote>
+<p>This is an operator-validation and reconstruction experiment.  It does <strong>not</strong>
+include orientation search, probabilistic assignment, online partial
+reconstruction, fractional updates, multi-state reconstruction, symmetry,
+FSC-driven prior refresh, automasking, or nonuniform postprocessing.</p>
+<h2 id="2-fixed-input-prototype-contract">2. Fixed-input prototype contract<a class="headerlink" href="#2-fixed-input-prototype-contract" title="Permanent link">&para;</a></h2>
+<p>The initial command should have a new, unambiguous name, for example
+<code>reconstruct3D_pcg</code>.  It reads a project and reconstructs exactly one volume
+from the selected particles using their current project-carried assignments:</p>
+<ul>
+<li>orientation and in-plane shift are inputs, not optimized;</li>
+<li>only one state is selected;</li>
+<li>particles are selected by the existing project/segment mechanisms;</li>
+<li>the CTF, phase shift, <code>ctfflag</code>, and per-particle Euclidean <code>sigma2</code> are
+  taken from the same metadata/estimation machinery used by reconstruction;</li>
+<li>no project orientation, shift, state, sigma, FSC, or resolution metadata is
+  written back;</li>
+<li>output is a new experimental execution directory containing the map,
+  optional density/preconditioner map, and a solver diagnostics table.</li>
+</ul>
+<p>For the first milestone, require <code>nparts=1</code>, no even/odd split, no symmetry,
+and no distributed execution.  The command may be run twice with explicit
+even/odd particle selections later, but even/odd ownership is not part of the
+first numerical kernel.</p>
+<p>The command belongs in a dedicated experimental commander/strategy route.  It
+must not enter through <code>commander_volassemble</code>, reuse its output filenames, or
+add a mode switch to the production reconstructor.  This preserves an honest
+comparison with the present Fourier-gridding implementation.</p>
+<h2 id="3-statistical-model">3. Statistical model<a class="headerlink" href="#3-statistical-model" title="Permanent link">&para;</a></h2>
+<p>Let <code>x</code> be a real-space volume and let <code>F</code> be the 3-D Fourier transform.  For
+particle <code>i</code>, define:</p>
+<ul>
+<li><code>G_i</code>: extract an oriented Cartesian Fourier plane from <code>F x</code> by the chosen
+  Kaiser--Bessel interpolation;</li>
+<li><code>S_i</code>: complex phase factor for the project-carried 2-D shift;</li>
+<li><code>C_i</code>: complex CTF transfer, including the configured phase-flip convention;</li>
+<li><code>N_i</code>: diagonal noise covariance whose radial entries are the particle's
+  <code>sigma2</code> spectrum;</li>
+<li><code>y_i</code>: the normalized, padded particle Fourier plane before CTF correction.</li>
+</ul>
+<p>The whitened observation operator is</p>
+<p>[
+K_i = N_i^{-1/2} C_i S_i G_i F.
+]</p>
+<p>The prototype solves the MAP normal equations</p>
+<p>[
+H x = b,
+\qquad
+H = \sum_i K_i^\dagger K_i + \Lambda,
+\qquad
+b = \sum_i K_i^\dagger N_i^{-1/2}y_i.
+]</p>
+<p><code>Lambda</code> is a fixed, positive semidefinite prior for the whole solve.  The
+first version should use the same radial <code>1/tau2</code> concept as the production
+reconstructor, calculated once before PCG begins.  A conical/directional prior
+is a later extension, provided it too remains fixed during a solve.</p>
+<p>No current-volume-dependent mask, FSC estimate, filter, tau update, or
+nonlinear clipping may appear inside <code>apply_normal</code>.  Any such operation would
+break the linear Hermitian positive-definite system on which PCG relies.</p>
+<h3 id="31-per-particle-operations">3.1 Per-particle operations<a class="headerlink" href="#31-per-particle-operations" title="Permanent link">&para;</a></h3>
+<p>For one trial direction <code>p</code>, the data part of <code>H p</code> is:</p>
+<pre><code class="language-text">v       = FFT3(p)
+q_i     = G_i(v)
+m_i     = T_i * q_i                       ! T_i = C_i S_i / sqrt(sigma2_i)
+a_i     = conjg(T_i) * m_i
+z       = FFT3_inverse(sum_i G_i_dagger(a_i))
+H p     = z + Lambda(p)
+</code></pre>
+<p>The right-hand side is the same adjoint path with
+<code>m_i = y_i / sqrt(sigma2_i)</code>:</p>
+<pre><code class="language-text">b = FFT3_inverse(sum_i G_i_dagger(conjg(T_i) * y_i / sqrt(sigma2_i)))
+</code></pre>
+<p>The adjoint must use <code>conjg(T_i)</code>, not <code>T_i</code>, even though many conventional
+CTFs are real.  This is necessary for shifted particles, phase shifts, and
+future complex transfer functions.</p>
+<h2 id="4-existing-simple-contracts-to-reuse">4. Existing SIMPLE contracts to reuse<a class="headerlink" href="#4-existing-simple-contracts-to-reuse" title="Permanent link">&para;</a></h2>
+<p>The prototype should reuse established data preparation rather than recreate
+CTF or sigma rules.</p>
+<p><code>image%gen_fplane4rec(..., observation_model=.true.)</code> is the intended source
+of particle planes.  In that mode it creates a whitened observation
+<code>y/sqrt(sigma2)</code> and separately stores the forward complex transfer
+<code>CTF*shift/sqrt(sigma2)</code> in <code>fplane_type%transfer_plane</code>.  This is the correct
+representation for the PCG model.  It also handles the current CTF flag and
+phase-flip convention.</p>
+<p>This differs intentionally from the ordinary reconstruction mode, where
+<code>fplane_type%cmplx_plane</code> already contains <code>conjg(CTF*shift)*y/sigma2</code> and
+<code>ctfsq_plane</code> contains <code>abs(CTF*shift)**2/sigma2</code>.  Do not use a conventionally
+preweighted plane as a PCG observation and apply the transfer again: doing so
+would double-count the CTF and sigma factors.</p>
+<p>The following current components are therefore dependencies, not templates to
+copy:</p>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Existing owner</th>
+<th>Prototype use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Particle normalization, padding, FFT, CTF/sigma plane generation</td>
+<td><code>image%gen_fplane4rec</code></td>
+<td>Generate observation-model planes once per batch.</td>
+</tr>
+<tr>
+<td>Particle CTF and assigned shift</td>
+<td><code>sp_project</code> / current reconstruction preparation</td>
+<td>Obtain exactly the current assignment metadata.</td>
+</tr>
+<tr>
+<td>Fourier-plane geometry and KB interpolation conventions</td>
+<td><code>fplane_type</code>, <code>kbinterpol</code>, <code>reconstructor</code></td>
+<td>Reuse coordinate/index conventions; establish a new tested adjoint pair.</td>
+</tr>
+<tr>
+<td><code>sigma2</code> ownership</td>
+<td><code>builder%esig</code></td>
+<td>Read the existing fixed spectra; do not estimate sigma in this command.</td>
+</tr>
+<tr>
+<td>Fixed radial prior</td>
+<td>current <code>reconstructor</code> prior logic</td>
+<td>Reuse the scientific definition, but expose it as a fixed linear operator.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="5-numerical-representation-and-adjoint-requirement">5. Numerical representation and adjoint requirement<a class="headerlink" href="#5-numerical-representation-and-adjoint-requirement" title="Permanent link">&para;</a></h2>
+<p>The solver unknown is a real volume.  Each normal-operator application may
+temporarily use Fourier storage, but both the forward and adjoint must refer to
+the same canonical grid and the same FFT normalization.</p>
+<p>This deliberately avoids calling <code>reconstructor%compress_exp</code> as the adjoint:
+that routine is a production gridding/storage conversion, not an established
+linear adjoint.  Instead, introduce a private experimental operator with two
+matched methods:</p>
+<pre><code class="language-fortran">call op%forward(volume_real, particle_index, model_plane)
+call op%adjoint_add(residual_plane, particle_index, fourier_accumulator)
+</code></pre>
+<p><code>forward</code> is <code>G_i F</code> and <code>adjoint_add</code> is <code>F^dagger G_i^dagger</code> after the
+caller has applied <code>conjg(transfer_plane)</code>.  They must use identical:</p>
+<ul>
+<li>Fourier-coordinate and Friedel-symmetry conventions;</li>
+<li>padded/native sampling conversion;</li>
+<li>KB stencil support, apodization, and normalization;</li>
+<li>particle plane inclusion mask and Nyquist rule;</li>
+<li>treatment of the <code>k = 0</code> plane and self-conjugate frequencies.</li>
+</ul>
+<p>The first implementation may use explicit full complex work planes and a full
+complex 3-D accumulation buffer if that makes the inner product unambiguous.
+That costs memory but removes packed-half-plane multiplicity ambiguity during
+validation.  Compact storage and fused kernels are optimization work only
+after the adjoint test passes.</p>
+<p>The required complex inner-product test is</p>
+<p>[
+\frac{|\langle G_i F x, q\rangle - \langle x, F^\dagger G_i^\dagger q\rangle|}
+     {\max(1,|\langle G_i F x, q\rangle|,|\langle x,F^\dagger G_i^\dagger q\rangle|)}
+\leq 10^{-5}
+]</p>
+<p>in single precision on small deterministic fixtures.  The test must be run
+with nonzero shifts and a complex transfer.  It is a release gate for all
+later PCG tests.</p>
+<h2 id="6-proposed-isolated-module-boundary">6. Proposed isolated module boundary<a class="headerlink" href="#6-proposed-isolated-module-boundary" title="Permanent link">&para;</a></h2>
+<p>Add a new numerical module in <code>src/main/volume/</code>, tentatively
+<code>simple_pcg_reconstruction.f90</code>.  It should be private by default and export
+only a focused solver type, for example <code>pcg_reconstruction</code>.</p>
+<p>Suggested responsibilities:</p>
+<pre><code class="language-text">pcg_reconstruction
+  new(params, project, selection, options)
+  prepare_observations(images_or_stack_batch)
+  build_rhs_and_preconditioner()
+  solve(result_volume, diagnostics)
+  kill()
+
+private helpers
+  apply_normal(p, hp)
+  apply_prior(p, prior_p)
+  apply_preconditioner(r, z)
+  forward_plane(volume, orientation, plane)
+  adjoint_plane_add(plane, orientation, fourier_sum)
+  dot_real_volume(a, b)
+</code></pre>
+<p>The solver owns only numerical work buffers and explicit immutable references
+to the parsed <code>parameters</code>, project/builder context, and selected particles.
+It must not use a module global for <code>parameters</code>, <code>builder</code>, sigma, FFT plans,
+or particle planes.  The commander owns file and execution-directory policy;
+the solver owns no user-facing filenames.</p>
+<p>For the first implementation, particle processing should be batched.  Prepare
+each batch once, use it for the forward and adjoint passes of that operator
+application, then release it.  Reopen neither stack nor per-particle files in
+an inner PCG loop.  A later cache policy can trade RAM for iteration time.</p>
+<h2 id="7-pcg-algorithm-and-stopping-rules">7. PCG algorithm and stopping rules<a class="headerlink" href="#7-pcg-algorithm-and-stopping-rules" title="Permanent link">&para;</a></h2>
+<p>Use standard left-preconditioned CG for the fixed system.  With <code>M</code> the
+positive diagonal approximation to <code>H</code>:</p>
+<pre><code class="language-text">x = 0                                 or a documented supplied initial map
+r = b - H x
+z = M^-1 r
+p = z
+rho = dot(r, z)
+
+for iter = 1:maxit
+    hp    = H p
+    alpha = rho / dot(p, hp)
+    x     = x + alpha * p
+    r     = r - alpha * hp
+    z     = M^-1 r
+    rho_new = dot(r, z)
+    p     = z + (rho_new / rho) * p
+    rho   = rho_new
+end for
+</code></pre>
+<p>All real-volume dots use a deterministic double-precision reduction.  Fail
+explicitly on non-finite values, non-positive <code>dot(p,hp)</code>, or a zero/invalid
+preconditioner denominator.  Do not silently continue after a broken
+Hermitian/positive-definite assumption.</p>
+<p>Initial stopping criteria:</p>
+<ul>
+<li>relative preconditioned residual <code>sqrt(rho/rho0) &lt;= rtol</code>;</li>
+<li>maximum iterations <code>maxit</code>;</li>
+<li>optional stagnation guard based on no meaningful residual decrease for a
+  fixed number of iterations.</li>
+</ul>
+<p>Record, per iteration: objective data term, fixed-prior term, total objective,
+relative residual, <code>alpha</code>, <code>beta</code>, <code>dot(p,hp)</code>, and wall time.  The objective
+must decrease to rounding tolerance for the deterministic test cases.</p>
+<h2 id="8-preconditioner">8. Preconditioner<a class="headerlink" href="#8-preconditioner" title="Permanent link">&para;</a></h2>
+<p>The initial preconditioner should be the present gridding approximation:</p>
+<p>[
+M(\mathbf{k}) = \rho(\mathbf{k}) + \lambda(\mathbf{k}),
+]</p>
+<p>where <code>rho</code> is independently accumulated from
+<code>abs(transfer_plane)**2</code> through the same KB adjoint stencil and <code>lambda</code> is
+the fixed prior on the canonical Fourier lattice.  Applying <code>M^-1</code> consists
+of FFT, elementwise guarded division, and inverse FFT.</p>
+<p>This is not merely convenient: it tests whether PCG can correct the
+off-diagonal interpolation/support effects while retaining the speed benefits
+of the gridding solution.  The direct gridded reconstruction can also be used
+as an optional initial <code>x</code>, but zero initialization is the required baseline.</p>
+<h3 id="81-phase-2-option-kernelized-normal-operator">8.1 Phase-2 option: kernelized normal operator<a class="headerlink" href="#81-phase-2-option-kernelized-normal-operator" title="Permanent link">&para;</a></h3>
+<p>After the matrix-free operator has passed every phase-1 validation gate, an
+optional acceleration may replace its repeated particle passes.  The key
+observation is that, for fixed orientations and fixed particle transfer
+functions, the data normal operator is approximately shift invariant in the
+interior of the reconstruction box:</p>
+<p>[
+H_{\mathrm{data}} = \sum_i K_i^\dagger K_i.
+]</p>
+<p>The project-carried shift is a unit-modulus Fourier phase in <code>T_i</code>.  It cancels
+between the forward and adjoint paths in <code>K_i^dagger K_i</code>; the corresponding
+normal weight is therefore</p>
+<p>[
+|T_i|^2 = |C_i|^2 / \sigma_i^2.
+]</p>
+<p>For fixed orientations, CTFs, plane limits, and sigma spectra, construct a
+3-D point-spread/normal kernel once and apply it as a <strong>linear</strong>, zero-padded
+3-D convolution:</p>
+<pre><code class="language-text">build once:
+  h_data = matrix_free_data_normal(delta_at_volume_origin)
+  Hhat   = FFT3(padded(h_data))
+
+each PCG iteration:
+  hp_data = crop(IFFT3(FFT3(padded(p)) * Hhat))
+  hp      = hp_data + Lambda(p)
+</code></pre>
+<p>The initial, safest kernel construction is the impulse response shown above.
+It reuses the already verified matrix-free <code>K^dagger K</code> path and cannot change
+the CTF/sigma convention.  A later analytic construction may sum the rotated
+Kaiser--Bessel projection autocorrelation weighted by <code>abs(T_i)**2</code>, but only
+after it agrees with the impulse kernel and the matrix-free operator.</p>
+<p>This is a normal-operator acceleration, not a new reconstruction model.  It
+does not use the current <code>rho</code> division as its operator, and it does not
+replace the fixed prior with a data-density heuristic.  The matrix-free
+operator remains the reference implementation.</p>
+<h4 id="boundary-and-validity-limits">Boundary and validity limits<a class="headerlink" href="#boundary-and-validity-limits" title="Permanent link">&para;</a></h4>
+<p>The convolution property is not automatic for a finite reconstruction:</p>
+<ul>
+<li>finite Fourier-plane masks and frequency cutoffs;</li>
+<li>finite Kaiser--Bessel support and interpolation truncation;</li>
+<li>real-space reconstruction support and output cropping; and</li>
+<li>any spatially varying particle-selection rule</li>
+</ul>
+<p>can make the normal operator non-Toeplitz, especially near boundaries.  The
+kernelized path must use enough zero padding for <strong>linear</strong>, never circular,
+convolution.  It must not be enabled if the compared matrix-free operator has
+an error above the agreed tolerance.</p>
+<p>Even if the interior is convolutional, retain PCG.  Output cropping and a
+finite-support volume make the actual system Toeplitz rather than simply
+diagonalizable by a same-size FFT; the padded convolution only makes each
+matrix-vector product inexpensive.</p>
+<h4 id="required-phase-2-equivalence-tests">Required phase-2 equivalence tests<a class="headerlink" href="#required-phase-2-equivalence-tests" title="Permanent link">&para;</a></h4>
+<p>For deterministic small fixtures, compare <code>H_data p</code> from the kernelized and
+matrix-free paths for random real vectors <code>p</code>:</p>
+<p>[
+\frac{|H_{\mathrm{kernel}}p-H_{\mathrm{matrix-free}}p|<em _mathrm_matrix-free="\mathrm{matrix-free">2}
+     {\max(1,|H</em>p|}<em _mathrm_kernel="\mathrm{kernel">2)} \leq \epsilon</em>.
+]}</p>
+<p>Report this error separately for all voxels and for an interior region whose
+margin is at least the interpolation-kernel support.  Set
+<code>epsilon_kernel</code> from measured single-precision roundoff in the phase-1
+operator test; do not choose it after observing a desired reconstruction.</p>
+<p>The phase-2 test matrix must include heterogeneous, astigmatic CTFs and
+per-particle sigma spectra.  It must additionally verify that changing only
+particle shifts leaves the normal kernel unchanged while changing a CTF or
+sigma spectrum rebuilds it.  Compare full PCG convergence, objective, output
+map, wall time, and peak memory against the matrix-free reference before
+claiming an acceleration.</p>
+<h2 id="9-validation-sequence">9. Validation sequence<a class="headerlink" href="#9-validation-sequence" title="Permanent link">&para;</a></h2>
+<p>Implement and pass these in order.  Do not proceed past a failed earlier
+stage.</p>
+<ol>
+<li><strong>Transfer convention fixture.</strong> For several Fourier pixels, verify the
+   observation-model plane stores <code>y/sqrt(sigma2)</code> and the transfer stores
+   <code>CTF*shift/sqrt(sigma2)</code>, including nonzero shift, CTF phase shift, and
+   phase-flip mode.</li>
+<li><strong>Adjoint-dot-product test.</strong> Validate <code>forward</code>/<code>adjoint_add</code> as specified
+   above using random seeded small volumes/planes.</li>
+<li><strong>Normal-operator test.</strong> Check <code>dot(p,Hq) == dot(Hp,q)</code> to tolerance and
+   <code>dot(p,Hp) &gt; 0</code> for nonzero <code>p</code> with a positive prior.</li>
+<li><strong>No-CTF/noise synthetic reconstruction.</strong> Generate noiseless projections
+   from a known small volume.  PCG must recover the expected solution and
+   converge monotonically.</li>
+<li><strong>Heterogeneous CTF and sigma synthetic reconstruction.</strong> Add distinct
+   CTFs, shifts, and noise spectra.  Compare recovered-map error and weighted
+   objective against direct gridding under the identical fixed inputs.</li>
+<li><strong>Real aligned-particle smoke test.</strong> Compare the gridding and PCG output
+   on a small, frozen selection: visual map, FSC to a frozen reference, local
+   anisotropy indicators, objective trajectory, wall time, and peak memory.</li>
+<li><strong>Reproducibility.</strong> Run the same fixture with one and several OpenMP
+   threads.  Permit documented floating-point reduction variation only; require
+   the same convergence decision and scientifically indistinguishable map.</li>
+<li><strong>Kernelized normal operator (phase 2 only).</strong> Run the equivalence tests in
+   section 8.1 before allowing the FFT-convolution operator in a solver run.
+   Compare its PCG result and diagnostics with the matrix-free reference, then
+   quantify the speed and memory trade-off.</li>
+</ol>
+<p>The experiment must report a failure if the operator test fails.  A visually
+plausible reconstruction is not evidence that the CTF/sigma adjoint is correct.</p>
+<h2 id="10-deliberate-non-goals-for-phase-1">10. Deliberate non-goals for phase 1<a class="headerlink" href="#10-deliberate-non-goals-for-phase-1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>no modification of <code>reconstructor</code>, <code>reconstructor_eo</code>, <code>volassemble</code>, or
+  online matcher partial reconstruction;</li>
+<li>no new production <code>refine3D</code> argument or mode switch;</li>
+<li>no MPI/distributed reduction;</li>
+<li>no GPU/offload path;</li>
+<li>no adaptive regularizer, automask, nonuniform filtering, or FSC feedback
+  inside PCG;</li>
+<li>no attempt to reproduce SPIDER BP-CG real-space interpolation;</li>
+<li>no code copied or translated from SPIDER.</li>
+</ul>
+<p>The last point is intentional: SPIDER is GPL-licensed.  This design is based
+on the standard weighted least-squares/PCG formulation and SIMPLE's existing
+data-model contracts, with a new implementation and independent tests.</p>
+<h2 id="11-acceptance-decision-after-phase-1">11. Acceptance decision after phase 1<a class="headerlink" href="#11-acceptance-decision-after-phase-1" title="Permanent link">&para;</a></h2>
+<p>Keep the prototype separate unless all of the following are true:</p>
+<ol>
+<li>adjoint and normal-operator tests pass robustly;</li>
+<li>CTF/sigma handling agrees with the frozen SIMPLE convention;</li>
+<li>the solver gives a reproducible benefit on at least one scientifically
+   meaningful difficult case, not only a lower algebraic residual;</li>
+<li>its cost is quantified relative to direct gridding and is acceptable for a
+   clearly defined use case.</li>
+</ol>
+<p>If those conditions hold, a separate design note can address even/odd support,
+distributed batches, a stable command-line contract, and whether any mature
+operator primitive should be shared with production reconstruction.  The
+kernelized normal operator in section 8.1 remains optional until it has passed
+its own equivalence tests; it is not part of the phase-1 acceptance decision.</p>
+<h2 id="12-forward-evolution-continuous-joint-refinement">12. Forward evolution: continuous joint refinement<a class="headerlink" href="#12-forward-evolution-continuous-joint-refinement" title="Permanent link">&para;</a></h2>
+<p>The longer-term value of the validated operator is that it provides one
+consistent weighted likelihood for both reconstruction and continuous
+parameter refinement.  With volume <code>x</code>, per-particle pose parameters
+<code>theta_i</code>, and CTF/phase parameters <code>eta_i</code>, the target is</p>
+<p>[
+\min_{x,\theta,\eta}
+\sum_i \left|
+N_i^{-1/2}\left[y_i-C_i(\eta_i)S_i(\theta_i)P_i(\theta_i)x\right]
+\right|^2
++ R_x(x) + R_\theta(\theta) + R_\eta(\eta).
+]</p>
+<p>For fixed poses and microscope parameters, the PCG system specified in this
+note is the conditional MAP volume solve.  For a fixed volume, the same
+forward model supplies the residual and derivatives needed to update poses,
+shifts, phase, or selected CTF parameters.  This avoids optimizing alignment
+under one interpolation/CTF/noise convention and reconstructing a volume under
+another.</p>
+<h3 id="121-intended-optimization-shape">12.1 Intended optimization shape<a class="headerlink" href="#121-intended-optimization-shape" title="Permanent link">&para;</a></h3>
+<p>Do not attempt fully simultaneous unconstrained optimization first.  The
+future route should be block-coordinate or variable-projection refinement:</p>
+<pre><code class="language-text">repeat until outer convergence:
+  1. hold theta and eta fixed; solve x with the validated PCG volume solver
+  2. hold x fixed; update a constrained block of theta and/or eta
+  3. accept/reject or damp the block update using the same weighted objective
+</code></pre>
+<p>The existing discrete/probabilistic search machinery remains valuable as an
+initializer and candidate generator.  Continuous updates are a local
+refinement layer after a credible discrete assignment, not a replacement for
+global pose search.</p>
+<h3 id="122-staged-parameter-expansion">12.2 Staged parameter expansion<a class="headerlink" href="#122-staged-parameter-expansion" title="Permanent link">&para;</a></h3>
+<p>Add one parameter family at a time, with its own synthetic derivative and
+recovery tests:</p>
+<ol>
+<li><strong>Continuous 2-D shifts.</strong> These are the first extension because their
+   Fourier derivatives are analytic.  If <code>S_i(f)=exp(-2*pi*i*f dot t_i)</code>,
+   then <code>dS_i/dt_x=-2*pi*i*f_x*S_i</code> and likewise for <code>t_y</code>.</li>
+<li><strong>Local rotations.</strong> Parameterize a small orientation increment in the
+   tangent space of <code>SO(3)</code>, not three unconstrained Euler-angle increments.
+   Differentiate the oriented Fourier-coordinate interpolation consistently
+   with the forward operator.</li>
+<li><strong>Restricted CTF/phase refinement.</strong> Begin with strongly regularized global
+   or optics-group parameters, such as phase shift or a defocus offset.  Only
+   then consider per-particle defocus/astigmatism corrections, with explicit
+   priors and bounds.</li>
+</ol>
+<p>For each block, use a trust-region Gauss--Newton or damped L-BFGS update, not
+an undamped Newton step.  The implementation must expose the residual,
+Jacobian-vector product, and adjoint-Jacobian-vector product as tested
+operator methods; it must not form a dense particle-parameter Hessian.</p>
+<h3 id="123-identifiability-and-validation-safeguards">12.3 Identifiability and validation safeguards<a class="headerlink" href="#123-identifiability-and-validation-safeguards" title="Permanent link">&para;</a></h3>
+<p>Joint refinement has genuine degeneracies: alignment error can resemble volume
+blur, CTF error can resemble sharpening or a changed volume prior, and an
+over-flexible per-particle CTF model can fit noise.  The future design must
+therefore include:</p>
+<ul>
+<li>fixed or tightly controlled volume priors during each outer step;</li>
+<li>parameter-specific bounds, Gaussian priors, and resolution schedules;</li>
+<li>trust-region acceptance based on an independently recomputed objective;</li>
+<li>synthetic recovery tests with known shifts, rotations, phase shifts, and
+  defocus perturbations;</li>
+<li>independent even/odd half-set volume solves and parameter updates, with no
+  cross-half fitted volume used to improve a particle's parameters; and</li>
+<li>held-out or cross-validation diagnostics before accepting additional
+  parameter freedom.</li>
+</ul>
+<p>The initial <code>reconstruct3D_pcg</code> command remains intentionally fixed-pose.
+Continuous joint refinement is a separate future command/strategy and needs a
+new design review once the phase-1 operator, PCG solver, and half-set contracts
+are established.</p>
+<h3 id="124-later-option-stochastic-gradient-refinement">12.4 Later option: stochastic-gradient refinement<a class="headerlink" href="#124-later-option-stochastic-gradient-refinement" title="Permanent link">&para;</a></h3>
+<p>The same likelihood also permits minibatch stochastic optimization.  For a
+batch <code>B</code> sampled from the fixed particle selection, an unbiased volume-gradient
+estimator is</p>
+<p>[
+g_B(x)=\frac{N}{|B|}\sum_{i\in B}K_i^\dagger(K_i x-y_i^\mathrm{white})
++\Lambda x,
+]</p>
+<p>when particles are sampled uniformly and the CTF/sigma weighting remains
+inside each <code>K_i</code>.  A preconditioned update is</p>
+<p>[
+x \leftarrow x-\gamma M^{-1}g_B(x),
+]</p>
+<p>where <code>M</code> is the fixed gridding-density-plus-prior preconditioner from section
+8.  The same batch residual provides gradients for the active pose or CTF
+parameter block.</p>
+<p>This is attractive for very large data sets and eventual continuous joint
+refinement because each batch follows the existing single-read particle I/O
+pattern.  It is not a phase-1 replacement for deterministic PCG.  PCG remains
+the reference volume solver and the periodic global correction/re-anchoring
+step against which a stochastic path is judged.</p>
+<p>An initial stochastic design should use stratified minibatches that represent
+the two half sets, orientation coverage, and optics/CTF groups.  It should use
+the interpretable Fourier preconditioner above with conservative momentum or a
+stochastic Gauss--Newton variant, rather than beginning with an unconstrained
+adaptive optimizer.  CTF zeros and sparsely represented orientations otherwise
+produce high-variance high-frequency updates.</p>
+<p>Required safeguards are:</p>
+<ul>
+<li>retain a fixed prior within each scheduled stochastic epoch;</li>
+<li>periodically evaluate the exact full-data objective and gradient norm;</li>
+<li>periodically run deterministic PCG or a full-data normal-equation check;</li>
+<li>schedule step sizes and any momentum explicitly, with rollback on an
+  independently evaluated objective increase;</li>
+<li>maintain completely independent even/odd batches and fitted volumes; and</li>
+<li>compare against deterministic PCG on every synthetic fixture before using
+  stochastic updates for continuous pose or CTF refinement.</li>
+</ul>
+<p>Stochastic refinement is therefore a phase-3 research option: useful once the
+operator is proven and the cost of full global passes becomes the limiting
+factor, but not a substitute for establishing the deterministic problem first.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
