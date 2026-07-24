@@ -282,8 +282,11 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call particle_sieving%add_input(UI_COMP, nthr,    gui_submenu="compute", gui_advanced=.false.)
-        call particle_sieving%add_input(UI_COMP, nchunks, gui_submenu="compute", gui_advanced=.false.)
+        call particle_sieving%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call particle_sieving%add_input(UI_COMP, 'nparts', 'num', 'Number of chunks classified simultaneously', &
+        &'Number of particle-subset (chunk) abinitio2D jobs run concurrently on the local machine. Each chunk job &
+        &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
+        &'# of concurrent chunks{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
         call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
