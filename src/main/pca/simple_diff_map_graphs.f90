@@ -503,9 +503,18 @@ contains
             return
         endif
         logeps_star = -b0 / a0
-        tune_eff = max(real(tune,dp), 0.d0)
-        sigma2 = tune_eff * tune_eff * 2.d0 * exp(logeps_star)
-        if( .not. ieee_is_finite(sigma2) .or. sigma2 <= real(DTINY,dp) )then
+        ! Clamp the tanh inflection to the scanned bandwidth range so a poor fit
+        ! cannot extrapolate to an astronomically large, embedding-collapsing eps.
+        logeps_star = min(max(logeps_star, logeps_min), logeps_max)
+        ! SIMPLE's graph kernel is exp(-d^2/eps) and the scan above uses the same
+        ! convention, so the Ferguson-optimal bandwidth is exp(logeps_star); tune
+        ! is a linear multiplier of that optimum (tune=1 == the raw optimum).
+        tune_eff = max(real(tune,dp), real(DTINY,dp))
+        sigma2   = tune_eff * exp(logeps_star)
+        ! Reject bandwidths far from the data scale and let the caller fall back
+        ! to the median heuristic; this guards against degenerate tanh fits.
+        if( .not. ieee_is_finite(sigma2) .or. sigma2 <= real(DTINY,dp) .or. &
+            &sigma2 < 1.d-2 * d2med .or. sigma2 > 1.d2 * d2med )then
             deallocate(d2, x, y, xz)
             return
         endif

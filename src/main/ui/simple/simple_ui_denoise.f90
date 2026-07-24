@@ -130,9 +130,9 @@ contains
                 'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
                 '(median|ferguson){median}', .false., 'median')
             call ppca_denoise%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-                'Ferguson tune multiplier (default 3)', &
-                'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
-                'tune >= 0', .false., 3.0)
+                'Ferguson bandwidth multiplier (default 1)', &
+                'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
+                'tune >= 0', .false., 1.0)
             call ppca_denoise%add_input(UI_FILT, 'dm_alpha', 'num', &
                 'Diffusion-map density normalization (default 0)', &
                 'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
@@ -263,9 +263,9 @@ contains
             'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
             '(median|ferguson){median}', .false., 'median')
         call cls_split%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-            'Ferguson tune multiplier (default 3)', &
-            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
-            'tune >= 0', .false., 3.0)
+            'Ferguson bandwidth multiplier (default 1)', &
+            'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
+            'tune >= 0', .false., 1.0)
         call cls_split%add_input(UI_FILT, 'dm_alpha', 'num', &
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
@@ -299,9 +299,9 @@ contains
             'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
             '(median|ferguson){median}', .false., 'median')
         call denoise_project%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-            'Ferguson tune multiplier (default 3)', &
-            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
-            'tune >= 0', .false., 3.0)
+            'Ferguson bandwidth multiplier (default 1)', &
+            'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
+            'tune >= 0', .false., 1.0)
         call denoise_project%add_input(UI_FILT, 'dm_alpha', 'num', &
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
@@ -364,9 +364,9 @@ contains
             'Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}', &
             '(median|ferguson){ferguson}', .false., 'ferguson')
         call flex_analysis%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-            'Ferguson tune multiplier (default 3)', &
-            'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
-            'tune >= 0', .false., 3.0)
+            'Ferguson bandwidth multiplier (default 1)', &
+            'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
+            'tune >= 0', .false., 1.0)
         call flex_analysis%add_input(UI_FILT, 'dm_alpha', 'num', &
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &

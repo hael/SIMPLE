@@ -150,7 +150,7 @@ contains
         if( .not.cline%defined('nang_nbrs') ) call cline%set('nang_nbrs',1000)
         if( .not.cline%defined('lp') ) call cline%set('lp',6.0)
         if( .not.cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','ferguson')
-        if( .not.cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',3.0)
+        if( .not.cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',1.0)
         if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
     end subroutine apply_defaults
 

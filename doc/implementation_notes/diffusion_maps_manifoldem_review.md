@@ -161,15 +161,24 @@ utility).
 simple_exec prg=flex_analysis ... dm_alpha=1
 ```
 
-- While wiring this in, the pre-existing `bandwidth_mode`/`bandwidth_tune`
-  parameters were found to be declared but **not registered** in
-  `bind_input_carg`/`bind_input_rarg` (`simple_parameters_parse.f90`), so their
-  CLI values (including the `flex_analysis` `ferguson` default) were silently
-  ignored. Registration was added for all three parameters, so `flex_analysis`
-  now genuinely uses `bandwidth_mode=ferguson` by default.
-
 The α default remains `0` everywhere (backward compatible); `alpha = 1` is
 recommended for cryo-EM because orientation coverage is non-uniform.
+
+> **Note on `bandwidth_mode`/`bandwidth_tune` (Ferguson) — corrected and
+> re-enabled (2026-07-24)**: the Ferguson estimator originally derived the
+> kernel bandwidth as `eps = tune^2 * 2 * exp(logeps*)`, mixing ManifoldEM's
+> `sigma`/`exp(-d^2/2 sigma^2)` convention into SIMPLE's `exp(-d^2/eps)` kernel,
+> and never clamped the tanh inflection `logeps* = -b/a` to the scanned range.
+> With the old default `bandwidth_tune=3` this produced an ~18x (or, on a
+> degenerate fit, unbounded) bandwidth that collapsed the embedding and crashed
+> k-medoids pre-image selection in `flex_analysis`.  The estimator now uses the
+> scan-consistent optimum `eps = tune * exp(logeps*)` with `tune` a **linear**
+> multiplier (`tune=1` == optimum), clamps `logeps*` to the scanned bandwidth
+> range, and rejects results outside `[d2med/100, 100*d2med]` (falling back to
+> the median kth-NN scale).  `bandwidth_mode` and `bandwidth_tune` are now
+> registered in `bind_input_carg`/`bind_input_rarg`, and defaults were changed to
+> `bandwidth_tune=1.0`.  `flex_analysis` again defaults to
+> `bandwidth_mode=ferguson`, now backed by a safe estimate.
 
 The remaining discussion below records the original review rationale.
 
