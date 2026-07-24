@@ -5,9 +5,15 @@
 !  reconstructor_eo, volassemble, or any production reconstruction path.
 !  Milestone 0 scope: T_i = 1 for every particle (no CTF, no sigma, no shift),
 !  a fixed scalar Tikhonov prior, and an unpreconditioned CG loop.
+!  Milestone 1 adds the full per-particle transfer T_i = C_i*S_i/sqrt(sigma2_i)
+!  (heterogeneous CTF, shift, and a shared noise-power profile) as an opt-in
+!  extension (apply_normal/apply_adjoint_all/solve's use_ctf/sig2arr
+!  arguments): omitting them reproduces milestone 0's T_i=1 behavior exactly.
+!  Still fully synthetic/in-memory -- no project I/O.
 module simple_pcg_reconstruction
 use simple_core_module_api
 use simple_image, only: image
+use simple_ctf,   only: ctf
 implicit none
 
 public :: pcg_reconstruction
@@ -38,6 +44,10 @@ type :: pcg_reconstruction
     procedure :: apply_normal
     procedure :: apply_adjoint_all
     procedure :: dot_real_volume
+    ! TRANSFER (public: the test commander builds T_i directly to verify the
+    ! weighted adjoint identity, the same way it drives forward_plane/
+    ! adjoint_plane_add directly in the T_i=1 case)
+    procedure :: build_transfer
     ! GETTERS
     procedure :: get_lims2
     procedure :: get_lims3
@@ -46,6 +56,7 @@ type :: pcg_reconstruction
     ! PRIVATE HELPERS
     procedure, private :: interp_from_volume
     procedure, private :: scatter_one
+    procedure, private :: sigma_weight
     procedure, private :: fold_and_ifft
 end type pcg_reconstruction
 
@@ -210,16 +221,28 @@ contains
     end subroutine scatter_one
 
     !>  \brief  H p = sum_i G_i^dagger G_i p + lambda * p, for a real trial volume p
-    !!          and a set of projection orientations.
-    function apply_normal( self, p, orientations ) result( hp )
+    !!          and a set of projection orientations. use_ctf/sig2arr are
+    !!          optional: omitted, this reproduces milestone 0's T_i=1 behavior
+    !!          exactly (e%get_ctfvars()/e%get_2Dshift() are never even called).
+    !!          When use_ctf=.true., each orientation's own ctfvars/shift
+    !!          (ori%set_ctfvars/set_shift) drive T_i via build_transfer.
+    function apply_normal( self, p, orientations, use_ctf, sig2arr ) result( hp )
         class(pcg_reconstruction), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
         class(oris),                 intent(inout) :: orientations
+        logical,          optional,  intent(in)    :: use_ctf
+        real,             optional,  intent(in)    :: sig2arr(0:)
         real, allocatable :: hp(:,:,:)
         complex, allocatable :: vol_accum(:,:,:), plane(:,:)
-        type(image) :: tmp
-        type(ori)   :: e
-        integer     :: i, nprojs
+        complex :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        type(image)     :: tmp
+        type(ori)       :: e
+        type(ctfparams) :: ctfparms
+        real            :: shift(2)
+        logical         :: l_use_ctf
+        integer         :: i, nprojs
+        l_use_ctf = .false.
+        if( present(use_ctf) ) l_use_ctf = use_ctf
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
                           &self%lims3(2,1):self%lims3(2,2),&
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
@@ -232,6 +255,12 @@ contains
         do i = 1, nprojs
             call orientations%get_ori(i, e)
             call self%forward_plane(tmp, e, plane)
+            if( l_use_ctf )then
+                ctfparms = e%get_ctfvars()
+                shift    = e%get_2Dshift()
+                T        = self%build_transfer(ctfparms, shift, sig2arr)
+                plane    = conjg(T) * (T * plane)
+            endif
             call self%adjoint_plane_add(plane, e, vol_accum)
         end do
         call tmp%kill
@@ -239,16 +268,30 @@ contains
         hp = hp + self%lambda * p
     end function apply_normal
 
-    !>  \brief  b = sum_i G_i^dagger y_i, the data right-hand side (no prior term).
-    function apply_adjoint_all( self, y_planes, orientations ) result( b )
+    !>  \brief  b = sum_i G_i^dagger y_i (T_i=1) or sum_i G_i^dagger(conjg(T_i)*
+    !!          y_i/sqrt(sigma2_i)) (use_ctf=.true.), the data right-hand side
+    !!          (no prior term). See build_transfer's docstring for why the
+    !!          data term needs sigma_weight's factor applied once more beyond
+    !!          what's already folded into T_i.
+    function apply_adjoint_all( self, y_planes, orientations, use_ctf, sig2arr ) result( b )
         class(pcg_reconstruction), intent(inout) :: self
         complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                &self%lims2(2,1):self%lims2(2,2), *)
         class(oris),                 intent(inout) :: orientations
+        logical,          optional,  intent(in)    :: use_ctf
+        real,             optional,  intent(in)    :: sig2arr(0:)
         real, allocatable :: b(:,:,:)
         complex, allocatable :: vol_accum(:,:,:)
-        type(ori) :: e
-        integer   :: i, nprojs
+        complex :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        complex :: weighted(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        real    :: sw(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        type(ori)       :: e
+        type(ctfparams) :: ctfparms
+        real            :: shift(2)
+        logical         :: l_use_ctf
+        integer         :: i, nprojs
+        l_use_ctf = .false.
+        if( present(use_ctf) ) l_use_ctf = use_ctf
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
                           &self%lims3(2,1):self%lims3(2,2),&
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
@@ -256,7 +299,16 @@ contains
         call e%new(.false.)
         do i = 1, nprojs
             call orientations%get_ori(i, e)
-            call self%adjoint_plane_add(y_planes(:,:,i), e, vol_accum)
+            if( l_use_ctf )then
+                ctfparms = e%get_ctfvars()
+                shift    = e%get_2Dshift()
+                T        = self%build_transfer(ctfparms, shift, sig2arr)
+                sw       = self%sigma_weight(sig2arr)
+                weighted = conjg(T) * y_planes(:,:,i) * sw
+                call self%adjoint_plane_add(weighted, e, vol_accum)
+            else
+                call self%adjoint_plane_add(y_planes(:,:,i), e, vol_accum)
+            endif
         end do
         b = self%fold_and_ifft(vol_accum)
     end function apply_adjoint_all
@@ -270,7 +322,79 @@ contains
         d = sum(real(a,dp) * real(b,dp))
     end function dot_real_volume
 
+    !>  \brief  T_i(h,k) = C_i(h,k) * S_i(h,k) / sqrt(sigma2_i(shell(h,k))), the
+    !!          full per-particle transfer (note section 3.1), over the same
+    !!          full symmetric disk forward_plane/adjoint_plane_add use.
+    !!
+    !!          CTF: evaluated directly via `ctf`/`ctfparams`
+    !!          (src/main/ctf/simple_ctf.f90), the same physics and
+    !!          reciprocal-pixel convention image%apply_ctf uses, but invoked
+    !!          per-pixel here instead of through image/fplane_type/
+    !!          gen_fplane4rec (see milestone-1 plan: gen_fplane4rec depends on
+    !!          a module-global cache, which this solver deliberately avoids).
+    !!          Raw signed value -- ctfparms%ctfflag is not consulted; this
+    !!          operator always wants the true signed transfer, never a
+    !!          phase-flipped approximation.
+    !!
+    !!          Shift: S_i(h,k) = exp(-i*2*pi*(h*shx+k*shy)/box), matching the
+    !!          sign convention traced through image%gen_fplane4rec's
+    !!          pshift=-shift*shconst and image%shift2Dserial, computed here
+    !!          directly without needing an image object.
+    !!
+    !!          Sigma: divides by sqrt(sig2arr(shell)) via sigma_weight, the
+    !!          same helper apply_adjoint_all also needs directly for the
+    !!          data term's extra N_i^{-1/2} factor (H's conjg(T_i)*T_i reaches
+    !!          the full N_i^{-1} weight by using T_i twice; b's
+    !!          conjg(T_i)*y_i/sqrt(sigma2_i) needs that same factor applied
+    !!          once more, directly to the observation).
+    function build_transfer( self, ctfparms, shift, sig2arr ) result( T )
+        class(pcg_reconstruction), intent(in) :: self
+        type(ctfparams),            intent(in) :: ctfparms
+        real,                        intent(in) :: shift(2)
+        real,             optional,  intent(in) :: sig2arr(0:)
+        complex :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        real    :: sw(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        type(ctf) :: tfun
+        real      :: spafreqsq, ang, cval, arg
+        integer   :: h, k
+        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        sw = self%sigma_weight(sig2arr)
+        T  = cmplx(0.,0.)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k > self%sqlp ) cycle
+                spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
+                ang       = atan2(real(k), real(h))
+                cval      = tfun%eval(spafreqsq, ang, ctfparms%phshift)
+                arg       = -2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
+                T(h,k)    = cval * cmplx(cos(arg), sin(arg)) * sw(h,k)
+            end do
+        end do
+    end function build_transfer
+
     ! PRIVATE HELPERS
+
+    !>  \brief  1/sqrt(sig2arr(shell(h,k))) over the full lims2 disk; sig2arr
+    !!          absent means uniform (1.0 everywhere, milestone 0's implicit
+    !!          case). Shared by build_transfer (folds this into T_i) and
+    !!          apply_adjoint_all (needs the same factor again, applied
+    !!          directly to y_i -- see build_transfer's docstring).
+    function sigma_weight( self, sig2arr ) result( w )
+        class(pcg_reconstruction), intent(in) :: self
+        real,             optional,  intent(in) :: sig2arr(0:)
+        real :: w(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        integer :: h, k, shell
+        w = 1.0
+        if( .not. present(sig2arr) ) return
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k > self%sqlp ) cycle
+                shell  = nint(sqrt(real(h*h+k*k)))
+                w(h,k) = 1.0 / sqrt(sig2arr(shell))
+            end do
+        end do
+    end function sigma_weight
 
     !>  \brief  periodic-wrap KB gather of one Fourier component directly from an
     !!          already-FFT'd volume's native (packed) storage, reading via
@@ -345,7 +469,11 @@ contains
     ! SOLVER
 
     !>  \brief  plain (unpreconditioned, M=I) CG solve of H x = b, per note section 7.
-    subroutine solve( self, y_planes, orientations, x, maxits, rtol, rel_res_hist, niters )
+    !!          use_ctf/sig2arr are optional and passed straight through to
+    !!          apply_normal/apply_adjoint_all every call; omitted, this is
+    !!          milestone 0's T_i=1 solve, unchanged.
+    subroutine solve( self, y_planes, orientations, x, maxits, rtol, rel_res_hist, niters, &
+        &use_ctf, sig2arr )
         class(pcg_reconstruction), intent(inout) :: self
         complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                &self%lims2(2,1):self%lims2(2,2), *)
@@ -355,6 +483,8 @@ contains
         real,             optional,  intent(in)    :: rtol
         real, allocatable, optional, intent(out)   :: rel_res_hist(:)
         integer,          optional,  intent(out)   :: niters
+        logical,          optional,  intent(in)    :: use_ctf
+        real,             optional,  intent(in)    :: sig2arr(0:)
         real, allocatable :: b(:,:,:), r(:,:,:), p(:,:,:), hp(:,:,:), hist(:)
         real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
         integer  :: mmaxits, iter, n_done
@@ -364,15 +494,15 @@ contains
         rrtol = 1.0e-4
         if( present(rtol) ) rrtol = rtol
         allocate(hist(mmaxits))
-        b = self%apply_adjoint_all(y_planes, orientations)
-        hp = self%apply_normal(x, orientations)
+        b = self%apply_adjoint_all(y_planes, orientations, use_ctf, sig2arr)
+        hp = self%apply_normal(x, orientations, use_ctf, sig2arr)
         r  = b - hp
         p  = r
         rho  = self%dot_real_volume(r,r)
         rho0 = rho
         n_done = 0
         do iter = 1, mmaxits
-            hp  = self%apply_normal(p, orientations)
+            hp  = self%apply_normal(p, orientations, use_ctf, sig2arr)
             pHp = self%dot_real_volume(p,hp)
             if( pHp <= 0.0_dp ) THROW_HARD('non-positive dot(p,Hp); PCG lost positive-definiteness; solve')
             if( pHp /= pHp )    THROW_HARD('non-finite dot(p,Hp); solve')

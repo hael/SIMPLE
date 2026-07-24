@@ -12,6 +12,7 @@ type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: flex_preimage_identity
 type(ui_program), target :: flex_preimage_basis_ab
 type(ui_program), target :: pcg_recon_ctf_free
+type(ui_program), target :: pcg_recon_ctf_hetero
 
 contains
 
@@ -26,6 +27,7 @@ contains
         call new_flex_preimage_identity(tsttab)
         call new_flex_preimage_basis_ab(tsttab)
         call new_pcg_recon_ctf_free(tsttab)
+        call new_pcg_recon_ctf_hetero(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -40,6 +42,7 @@ contains
         write(logfhandle,'(A)') flex_preimage_identity%name%to_char()
         write(logfhandle,'(A)') flex_preimage_basis_ab%name%to_char()
         write(logfhandle,'(A)') pcg_recon_ctf_free%name%to_char()
+        write(logfhandle,'(A)') pcg_recon_ctf_hetero%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -211,5 +214,21 @@ contains
         ! add to ui_hash
         call add_ui_program('pcg_recon_ctf_free', pcg_recon_ctf_free, tsttab)
     end subroutine new_pcg_recon_ctf_free
+
+    subroutine new_pcg_recon_ctf_hetero( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call pcg_recon_ctf_hetero%new(&
+        &'pcg_recon_ctf_hetero',&                    ! name
+        &'Heterogeneous CTF/shift/sigma PCG reconstruction operator validation',&
+        &'Milestone 1 of the CTF/sigma-weighted PCG reconstruction design note: in-memory '&
+        &'adjoint dot-product test with nonzero shift and real CTF, normal-operator test '&
+        &'across heterogeneous defocus groups and shifts, and synthetic recovery test '&
+        &'against a deterministic phantom. Self-contained, no project required.',&
+        &'simple_test_exec',&                       ! executable
+        &.false.)                                   ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('pcg_recon_ctf_hetero', pcg_recon_ctf_hetero, tsttab)
+    end subroutine new_pcg_recon_ctf_hetero
 
 end module simple_test_ui_highlevel
