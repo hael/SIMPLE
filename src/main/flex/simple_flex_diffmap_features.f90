@@ -747,9 +747,10 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: iptcl
-        real, allocatable :: sigma_shells(:), sigma_filter(:)
+        real,    allocatable :: sigma_shells(:), sigma_filter(:), spec(:)
         integer :: kfromto(2), nyq, sigma_nyq, sh
-        real :: sigma_floor
+        real(dp) :: wpow
+        real     :: nrm
         if( .not. allocated(build%esig%sigma2_noise) ) return
         if( iptcl < lbound(build%esig%sigma2_noise,2) .or. iptcl > ubound(build%esig%sigma2_noise,2) ) return
         kfromto = build%esig%get_kfromto()
@@ -758,11 +759,25 @@ contains
         sigma_nyq = fdim(params%box_crop) - 1
         allocate(sigma_shells(0:nyq), sigma_filter(nyq))
         call upsample_sigma2(kfromto(1), sigma_nyq, build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), nyq, sigma_shells)
-        sigma_floor = max(TINY, minval(sigma_shells(1:nyq), mask=sigma_shells(1:nyq) > TINY))
+        ! Per-shell amplitude whitening 1/sqrt(sigma2). The cartesian shell-pixel
+        ! count (~2*pi*k) supplies the k factor that abinitio2D adds explicitly in
+        ! polar coordinates, so the squared feature distance carries the same
+        ! k/sigma2 weighting as the abinitio2D likelihood objective. Only a TINY
+        ! guard is applied, matching abinitio2D's direct use of sigma2_noise.
         do sh=1,nyq
-            sigma_filter(sh) = 1. / sqrt(max(sigma_shells(sh), sigma_floor))
+            sigma_filter(sh) = 1. / sqrt(max(sigma_shells(sh), TINY))
         end do
         call residual_img%apply_filter(sigma_filter)
+        ! Per-particle normalization to unit sigma-weighted power. Mirrors the
+        ! abinitio2D likelihood objective, whose distance is divided by the
+        ! particle's own k/sigma2-weighted power (wsqsums_ptcls). The image is
+        ! still in Fourier space here, so the summed 'power' spectrum equals the
+        ! whitened residual's weighted power (DC excluded, as in abinitio2D).
+        call residual_img%spectrum('power', spec, norm=.false.)
+        wpow = sum(real(spec, dp))
+        nrm  = real(sqrt(wpow), sp)
+        if( nrm > 1.e-6 ) call residual_img%div(nrm)
+        if( allocated(spec) ) deallocate(spec)
         deallocate(sigma_shells, sigma_filter)
     end subroutine apply_sigma_shell_whitening
 
