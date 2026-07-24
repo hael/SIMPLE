@@ -192,9 +192,15 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        ! Reset sampling history only on the very first iteration of the run.
+        ! Guarding on startit alone re-cleans every iteration when startit==1,
+        ! which prevents updatecnt/sampled from accumulating and makes the
+        ! fractional-update subset non-progressing (see exec_prob_align2D).
+        if( params%startit == 1 .and. params%which_iter == params%startit )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
         ! sampled incremented
-        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
+        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
@@ -270,8 +276,14 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        if( params%l_fillin .and. mod(params%startit,5) == 0 )then
+        ! Reset sampling history only on the very first iteration of the run.
+        ! Guarding on startit alone re-cleans every iteration when startit==1,
+        ! which prevents updatecnt/sampled from accumulating and makes the
+        ! fractional-update subset non-progressing (see exec_prob_align2D).
+        if( params%startit == 1 .and. params%which_iter == params%startit )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
