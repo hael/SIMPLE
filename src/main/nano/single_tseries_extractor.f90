@@ -19,7 +19,7 @@ integer,           allocatable :: particle_locations(:,:)
 type(string)                   :: dir, fbody
 type(image)                    :: frame_img, ptcl_target, pspec, pspec_nn
 type(image)                    :: backgr_imgs(NNN), tmp_imgs(NNN)
-type(string)                   :: stkname
+type(string)                   :: stkname, pspec_stkname
 integer                        :: ldim(3), nframes, box
 logical                        :: l_neg
 
@@ -71,7 +71,9 @@ contains
     end subroutine init_trajectory_extractor
 
     subroutine extract_trajectory()
+        use simple_stack_io, only: stack_io
         type(oris)            :: track_os
+        type(stack_io)        :: stkio_ptcls, stkio_pspec
         integer, allocatable  :: track_totrack(:), track2frame(:)
         integer :: ldim_sc(2), iframe, xind,yind, i,  cnt, nrange, noutside, nl
         integer :: first_frame, last_frame, ntrack, first, last
@@ -126,9 +128,12 @@ contains
         ! write(funit,'(I7,I7,I7,I7,I7)') xind, yind, p_ptr%box, p_ptr%box, -3
         ! write(funit2,'(2F12.6)') particle_locations(1:2,iframe) * p_ptr%smpd ! in angstroms
         write(logfhandle,'(A)') ">>> GENERATING PARTICLES AND BACKGROUND POWER SPECTRA"
+        stkname       = dir%to_char()//'/'//fbody%to_char()//MRC_EXT
+        pspec_stkname = string(dir%to_char()//'/'//fbody%to_char()//'_background_pspec.mrc')
+        call stkio_ptcls%open(stkname,       p_ptr%smpd, 'write', box=box, is_ft=.false.)
+        call stkio_pspec%open(pspec_stkname, p_ptr%smpd, 'write', box=box, is_ft=.false.)
         call pspec%zero_and_unflag_ft
         call ptcl_target%zero_and_unflag_ft
-        stkname = dir%to_char()//'/'//fbody%to_char()//MRC_EXT
         nrange  = last_frame - first_frame + 1
         cnt     = 0
         do iframe = first_frame, last_frame
@@ -144,13 +149,15 @@ contains
             call frame_img%window([xind,yind,1], box, ptcl_target, noutside)
             call ptcl_target%norm
             if( l_neg ) call ptcl_target%neg()
-            call ptcl_target%write(stkname, cnt)
+            call stkio_ptcls%write(cnt, ptcl_target)
             ! neighbors & spectrum
             call update_background_pspec([xind,yind])
             call pspec%add(pspec_nn, w=1./real(nrange))
-            call pspec_nn%write(string(dir%to_char()//'/'//fbody%to_char()//'_background_pspec.mrc'),cnt)
+            call stkio_pspec%write(cnt, pspec_nn)
             call progress_gfortran(cnt, nrange)
         end do
+        call stkio_ptcls%close
+        call stkio_pspec%close
         ! average and write power spectrum for CTF estimation
         call pspec%dampen_pspec_central_cross
         call pspec%write(string(dir%to_char()//'/'//'pspec4ctf_estimation.mrc'))
@@ -162,27 +169,27 @@ contains
     subroutine build_mapping( track_os, track2frame, track_totrack )
         type(oris),           intent(in)    :: track_os
         integer, allocatable, intent(inout) :: track2frame(:), track_totrack(:)
-        type(string)              :: absfname, fname, trackfname
-        character(len=LONGSTRLEN) :: str, extstr, numstr
-        integer                   :: i, j, iframe, fromt, tot, n
+        type(string) :: absfname, trackfname
+        integer      :: i, j, jstart,iframe, fromt, tot, n
+        jstart = 1
         n = track_os%get_noris()
         allocate(track2frame(n), track_totrack(n))
         do i = 1, n
-            j = track_os%get_int(i,'index')
-            absfname  = track_os%get_str(i,'filename')
-            fname     = basename(absfname)
-            extstr    = fname%to_char()
-            call split_str(extstr, MRC_EXT, numstr)
-            call split_str(numstr, '_', str)
-            iframe = str2int(numstr)
-            if( p_spproj%os_mic%isthere(iframe,'track_fname') )then
-                fromt = p_spproj%os_mic%get_int(iframe,'fromt')
-                if( iframe /= fromt ) THROW_HARD('frame index in coordinates file is out of range')
-                trackfname = p_spproj%os_mic%get_str(iframe,'track_fname')
-                if( trackfname /= absfname ) THROW_HARD('frame names are different')
-            else
-                THROW_HARD('Fatal frame indexing error')
-            endif
+            absfname = track_os%get_str(i,'filename')
+            iframe   = 0
+            do j = jstart, nframes
+                if( p_spproj%os_mic%isthere(j,'track_fname') )then
+                    trackfname = p_spproj%os_mic%get_str(j,'track_fname')
+                    if( trackfname == absfname ) then
+                        iframe = j
+                        exit
+                    endif
+                endif
+            enddo
+            if( iframe == 0 ) THROW_HARD('Could not find frame: '//absfname%to_char()//' in document')
+            jstart = iframe + 1
+            fromt  = p_spproj%os_mic%get_int(iframe,'fromt')
+            if( iframe /= fromt ) THROW_HARD('FROMT frame index in coordinates file is out of range')
             tot = p_spproj%os_mic%get_int(iframe,'tot')
             if( tot < fromt .or. tot > nframes ) THROW_HARD('TOT frame index in coordinates file is out of range')
             track2frame(i)   = fromt
